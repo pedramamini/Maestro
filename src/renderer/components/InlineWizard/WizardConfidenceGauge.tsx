@@ -6,6 +6,7 @@
  * When confidence >= 80, adds a green glow effect to indicate readiness.
  */
 
+import { useTranslation } from 'react-i18next';
 import type { Theme } from '../../types';
 import { getConfidenceColor } from '../Wizard/services/wizardPrompts';
 
@@ -35,6 +36,8 @@ export function WizardConfidenceGauge({
 	confidence,
 	theme,
 }: WizardConfidenceGaugeProps): JSX.Element {
+	const { t } = useTranslation('modals');
+
 	// Clamp confidence to valid range
 	const clampedConfidence = Math.max(0, Math.min(100, Math.round(confidence)));
 	const isReady = clampedConfidence >= READY_THRESHOLD;
@@ -43,11 +46,15 @@ export function WizardConfidenceGauge({
 	return (
 		<div
 			className="flex items-center gap-2"
-			title={`Project Understanding Confidence: ${clampedConfidence}%${isReady ? ' - Ready to proceed' : ''}`}
+			title={
+				isReady
+					? t('wizard.inline_confidence.ready_tooltip', { confidence: clampedConfidence })
+					: `${t('wizard.inline_confidence.label')}: ${clampedConfidence}%`
+			}
 		>
 			{/* Label */}
 			<span className="text-[10px] uppercase tracking-wide" style={{ color: theme.colors.textDim }}>
-				Project Understanding Confidence
+				{t('wizard.inline_confidence.label')}
 			</span>
 
 			{/* Percentage display */}

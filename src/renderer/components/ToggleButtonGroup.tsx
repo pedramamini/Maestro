@@ -33,7 +33,7 @@ function ToggleButtonGroupInner<T extends string | number>({
 	labels,
 }: ToggleButtonGroupProps<T>) {
 	return (
-		<div className="flex gap-2">
+		<div className="flex gap-2" role="group">
 			{options.map((opt) => {
 				// Normalize option to object form
 				const option: ToggleButtonOption<T> =
@@ -62,6 +62,7 @@ function ToggleButtonGroupInner<T extends string | number>({
 					<button
 						key={String(optValue)}
 						onClick={() => onChange(optValue)}
+						aria-pressed={isActive}
 						className={`flex-1 py-2 px-3 rounded border transition-all ${isActive ? 'ring-2' : ''}`}
 						style={
 							{

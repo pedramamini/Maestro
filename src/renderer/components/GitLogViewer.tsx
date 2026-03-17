@@ -7,6 +7,8 @@ import { Diff, Hunk } from 'react-diff-view';
 import { parseGitDiff } from '../utils/gitDiffParser';
 import { useListNavigation } from '../hooks';
 import { generateDiffViewStyles } from '../utils/markdownConfig';
+import { getActiveLocale } from '../utils/formatters';
+import { useTranslation } from 'react-i18next';
 import 'react-diff-view/style/index.css';
 
 interface GitLogEntry {
@@ -33,6 +35,7 @@ export const GitLogViewer = memo(function GitLogViewer({
 	onClose,
 	sshRemoteId,
 }: GitLogViewerProps) {
+	const { t: tA } = useTranslation('accessibility');
 	const [entries, setEntries] = useState<GitLogEntry[]>([]);
 	const [totalCommits, setTotalCommits] = useState<number | null>(null);
 	const [loading, setLoading] = useState(true);
@@ -179,21 +182,21 @@ export const GitLogViewer = memo(function GitLogViewer({
 
 			if (isToday) {
 				// Show time for today (e.g., "2:30 PM")
-				return date.toLocaleTimeString('en-US', {
+				return date.toLocaleTimeString(getActiveLocale(), {
 					hour: 'numeric',
 					minute: '2-digit',
 					hour12: true,
 				});
 			} else if (isYesterday) {
 				// Show "Yesterday" with time
-				return `Yesterday ${date.toLocaleTimeString('en-US', {
+				return `Yesterday ${date.toLocaleTimeString(getActiveLocale(), {
 					hour: 'numeric',
 					minute: '2-digit',
 					hour12: true,
 				})}`;
 			} else {
 				// Show full date for older commits (e.g., "Nov 25, 2025")
-				return date.toLocaleDateString('en-US', {
+				return date.toLocaleDateString(getActiveLocale(), {
 					month: 'short',
 					day: 'numeric',
 					year: 'numeric',
@@ -298,7 +301,7 @@ export const GitLogViewer = memo(function GitLogViewer({
 				onClick={(e) => e.stopPropagation()}
 				role="dialog"
 				aria-modal="true"
-				aria-label="Git Log Viewer"
+				aria-label={tA('modal.git_log_viewer')}
 				tabIndex={-1}
 				ref={(el) => el?.focus()}
 			>
@@ -466,7 +469,9 @@ export const GitLogViewer = memo(function GitLogViewer({
 											{entries[selectedIndex].hash}
 										</span>
 										<span>{entries[selectedIndex].author}</span>
-										<span>{new Date(entries[selectedIndex].date).toLocaleString('en-US')}</span>
+										<span>
+											{new Date(entries[selectedIndex].date).toLocaleString(getActiveLocale())}
+										</span>
 									</div>
 								</div>
 

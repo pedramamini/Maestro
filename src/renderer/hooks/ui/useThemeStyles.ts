@@ -43,7 +43,12 @@ export interface UseThemeStylesReturn {
 export function useThemeStyles(deps: UseThemeStylesDeps): UseThemeStylesReturn {
 	const { themeColors } = deps;
 
-	// Set CSS variables for theme colors (for scrollbar styling)
+	// Set CSS variables for theme colors (for scrollbar styling).
+	// NOTE: These properties (--accent-color, --highlight-color) are intentionally
+	// non-overlapping with the RTL direction properties (--dir-start, --dir-end,
+	// --rtl-sign) set by DirectionProvider and index.css.  style.setProperty()
+	// is additive — it only touches the named property — so theme re-application
+	// never clears RTL custom properties, and vice-versa.
 	useEffect(() => {
 		document.documentElement.style.setProperty('--accent-color', themeColors.accent);
 		document.documentElement.style.setProperty('--highlight-color', themeColors.accent);

@@ -19,6 +19,7 @@
  */
 
 import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { vscDarkPlus, vs } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import { useThemeColors, useTheme } from '../components/ThemeProvider';
@@ -26,6 +27,8 @@ import type { LastResponsePreview } from '../hooks/useSessions';
 import { triggerHaptic, HAPTIC_PATTERNS } from './constants';
 import { webLogger } from '../utils/logger';
 import { stripAnsiCodes } from '../../shared/stringUtils';
+import { getActiveLocale } from '../../shared/formatters';
+import { useDirection, getDirectionalDelta } from '../utils/rtlCoordinates';
 
 /**
  * Represents a response item that can be navigated to
@@ -68,7 +71,7 @@ export interface ResponseViewerProps {
  */
 function formatTimestamp(timestamp: number): string {
 	const date = new Date(timestamp);
-	return date.toLocaleString('en-US', {
+	return date.toLocaleString(getActiveLocale(), {
 		month: 'short',
 		day: 'numeric',
 		hour: '2-digit',
@@ -239,8 +242,11 @@ export function ResponseViewer({
 	onClose,
 	sessionName,
 }: ResponseViewerProps) {
+	const { t } = useTranslation('common');
+	const { t: tA } = useTranslation('accessibility');
 	const colors = useThemeColors();
 	const { isDark } = useTheme();
+	const dir = useDirection();
 	const contentRef = useRef<HTMLDivElement>(null);
 	// Vertical swipe state (for dismiss)
 	const [touchStartY, setTouchStartY] = useState<number | null>(null);
@@ -404,12 +410,14 @@ export function ResponseViewer({
 			if (touchStartX === null || touchStartY === null) return;
 
 			const touch = e.touches[0];
-			const deltaX = touch.clientX - touchStartX;
+			const rawDeltaX = touch.clientX - touchStartX;
 			const deltaY = touch.clientY - touchStartY;
+			// Directional delta: positive = "forward" swipe (right in LTR, left in RTL)
+			const dirDeltaX = getDirectionalDelta(touchStartX, touch.clientX, dir);
 
 			// Determine swipe direction if not already set
 			if (swipeDirection === null) {
-				const absX = Math.abs(deltaX);
+				const absX = Math.abs(rawDeltaX);
 				const absY = Math.abs(deltaY);
 
 				if (absX > DIRECTION_THRESHOLD || absY > DIRECTION_THRESHOLD) {
@@ -425,12 +433,14 @@ export function ResponseViewer({
 
 			// Handle horizontal swipe for navigation
 			if (swipeDirection === 'horizontal' && isDraggingX) {
-				// Limit swipe if can't go in that direction
-				let constrainedDeltaX = deltaX;
-				if (deltaX > 0 && !canGoLeft) {
-					constrainedDeltaX = Math.min(deltaX, 50); // Elastic resistance
-				} else if (deltaX < 0 && !canGoRight) {
-					constrainedDeltaX = Math.max(deltaX, -50); // Elastic resistance
+				// Use directional delta for logic, raw delta for visual transform
+				let constrainedDeltaX = rawDeltaX;
+				if (dirDeltaX > 0 && !canGoLeft) {
+					// Forward swipe but no previous response — elastic resistance
+					constrainedDeltaX = Math.sign(rawDeltaX) * Math.min(Math.abs(rawDeltaX), 50);
+				} else if (dirDeltaX < 0 && !canGoRight) {
+					// Backward swipe but no next response — elastic resistance
+					constrainedDeltaX = Math.sign(rawDeltaX) * Math.min(Math.abs(rawDeltaX), 50);
 				}
 				setTouchDeltaX(constrainedDeltaX);
 				e.preventDefault();
@@ -455,6 +465,7 @@ export function ResponseViewer({
 			initialPinchDistance,
 			initialZoomScale,
 			getTouchDistance,
+			dir,
 		]
 	);
 
@@ -481,14 +492,16 @@ export function ResponseViewer({
 			onClose();
 		}
 
-		// Handle horizontal swipe (navigation)
+		// Handle horizontal swipe (navigation) — use directional delta
+		// so forward swipe (right in LTR, left in RTL) always goes to previous
 		if (swipeDirection === 'horizontal' && canNavigate && onNavigate) {
-			if (touchDeltaX > NAVIGATE_THRESHOLD && canGoLeft) {
-				// Swipe right to go to previous response
+			const dirDeltaX = dir === 'rtl' ? -touchDeltaX : touchDeltaX;
+			if (dirDeltaX > NAVIGATE_THRESHOLD && canGoLeft) {
+				// Forward swipe → go to previous response
 				triggerHaptic(HAPTIC_PATTERNS.tap);
 				onNavigate(currentIndex - 1);
-			} else if (touchDeltaX < -NAVIGATE_THRESHOLD && canGoRight) {
-				// Swipe left to go to next response
+			} else if (dirDeltaX < -NAVIGATE_THRESHOLD && canGoRight) {
+				// Backward swipe → go to next response
 				triggerHaptic(HAPTIC_PATTERNS.tap);
 				onNavigate(currentIndex + 1);
 			}
@@ -515,6 +528,7 @@ export function ResponseViewer({
 		isPinching,
 		zoomScale,
 		initialZoomScale,
+		dir,
 	]);
 
 	// Handle keyboard navigation (Escape to close, Arrow keys to navigate)
@@ -629,8 +643,8 @@ export function ResponseViewer({
 			style={{
 				position: 'fixed',
 				top: 0,
-				left: 0,
-				right: 0,
+				insetInlineStart: 0,
+				insetInlineEnd: 0,
 				bottom: 0,
 				zIndex: 1000,
 				display: 'flex',
@@ -644,7 +658,7 @@ export function ResponseViewer({
 			onTouchEnd={handleTouchEnd}
 			aria-modal="true"
 			role="dialog"
-			aria-label="Full response viewer"
+			aria-label={tA('mobile.full_response_viewer')}
 		>
 			{/* Header bar */}
 			<header
@@ -673,7 +687,7 @@ export function ResponseViewer({
 							whiteSpace: 'nowrap',
 						}}
 					>
-						Response
+						{t('mobile.response_header')}
 					</h2>
 					<div
 						style={{
@@ -719,10 +733,10 @@ export function ResponseViewer({
 						color: colors.textMain,
 						fontSize: '18px',
 						fontWeight: 500,
-						marginLeft: '12px',
+						marginInlineStart: '12px',
 						flexShrink: 0,
 					}}
-					aria-label="Close response viewer"
+					aria-label={tA('mobile.close_response_viewer')}
 				>
 					×
 				</button>
@@ -770,7 +784,7 @@ export function ResponseViewer({
 							fontSize: '14px',
 						}}
 					>
-						Loading full response...
+						{t('mobile.loading_full_response')}
 					</div>
 				) : (
 					<>
@@ -806,7 +820,7 @@ export function ResponseViewer({
 										fontWeight: 500,
 										cursor: 'pointer',
 									}}
-									aria-label="Reset zoom"
+									aria-label={t('mobile.reset_zoom_label')}
 								>
 									<svg
 										width="14"
@@ -876,7 +890,7 @@ export function ResponseViewer({
 												>
 													{segment.language && segment.language !== 'text'
 														? segment.language
-														: 'code'}
+														: t('mobile.code_block_label')}
 												</span>
 												{/* Copy button */}
 												<button
@@ -895,7 +909,7 @@ export function ResponseViewer({
 														cursor: 'pointer',
 														transition: 'all 0.2s ease',
 													}}
-													aria-label={isCopied ? 'Copied!' : 'Copy code'}
+													aria-label={isCopied ? t('mobile.copied_code') : t('mobile.copy_code')}
 												>
 													{isCopied ? (
 														<>
@@ -911,7 +925,7 @@ export function ResponseViewer({
 															>
 																<polyline points="20 6 9 17 4 12" />
 															</svg>
-															Copied
+															{t('mobile.copied_label')}
 														</>
 													) : (
 														<>
@@ -928,7 +942,7 @@ export function ResponseViewer({
 																<rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
 																<path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
 															</svg>
-															Copy
+															{t('copy')}
 														</>
 													)}
 												</button>
@@ -987,10 +1001,12 @@ export function ResponseViewer({
 									textAlign: 'center',
 								}}
 							>
-								Showing preview ({displayResponse.text.length} of {displayResponse.fullLength}{' '}
-								characters).
+								{t('mobile.showing_preview', {
+									current: displayResponse.text.length,
+									total: displayResponse.fullLength,
+								})}
 								<br />
-								Full response loading not available.
+								{t('mobile.full_response_unavailable')}
 							</div>
 						)}
 					</>
@@ -1020,7 +1036,10 @@ export function ResponseViewer({
 							justifyContent: 'center',
 							gap: '6px',
 						}}
-						aria-label={`Response ${currentIndex + 1} of ${allResponses.length}`}
+						aria-label={t('mobile.response_counter', {
+							current: currentIndex + 1,
+							total: allResponses.length,
+						})}
 					>
 						{allResponses.map((_, index) => (
 							<button
@@ -1041,7 +1060,7 @@ export function ResponseViewer({
 									cursor: 'pointer',
 									transition: 'all 0.2s ease',
 								}}
-								aria-label={`Go to response ${index + 1}`}
+								aria-label={t('mobile.go_to_response', { index: index + 1 })}
 								aria-current={index === currentIndex ? 'true' : undefined}
 							/>
 						))}
@@ -1057,10 +1076,10 @@ export function ResponseViewer({
 					}}
 				>
 					{zoomScale > 1
-						? 'Double-tap or tap reset to zoom out'
+						? t('mobile.zoom_out_hint')
 						: canNavigate
-							? 'Pinch to zoom • Swipe left/right to navigate • Swipe down to dismiss'
-							: 'Pinch to zoom • Swipe down to dismiss'}
+							? t('mobile.navigate_hint')
+							: t('mobile.dismiss_hint')}
 				</span>
 			</footer>
 		</div>

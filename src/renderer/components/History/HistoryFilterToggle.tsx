@@ -1,6 +1,7 @@
 import { memo } from 'react';
 import { Bot, User } from 'lucide-react';
 import type { Theme, HistoryEntryType } from '../../types';
+import { useI18n } from '../../hooks/useI18n';
 
 export interface HistoryFilterToggleProps {
 	activeFilters: Set<HistoryEntryType>;
@@ -49,6 +50,7 @@ export const HistoryFilterToggle = memo(function HistoryFilterToggle({
 	onToggleFilter,
 	theme,
 }: HistoryFilterToggleProps) {
+	const { t } = useI18n();
 	return (
 		<div className="flex gap-2 flex-shrink-0">
 			{(['AUTO', 'USER'] as HistoryEntryType[]).map((type) => {
@@ -70,7 +72,7 @@ export const HistoryFilterToggle = memo(function HistoryFilterToggle({
 						}}
 					>
 						<Icon className="w-3 h-3" />
-						{type}
+						{type === 'AUTO' ? t('history.filter.auto_label') : t('history.filter.user_label')}
 					</button>
 				);
 			})}

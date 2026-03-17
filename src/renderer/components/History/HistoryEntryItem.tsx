@@ -1,9 +1,10 @@
 import { memo } from 'react';
 import { Bot, User, ExternalLink, Check, X, Clock, Award } from 'lucide-react';
 import type { Theme, HistoryEntry, HistoryEntryType } from '../../types';
-import { formatElapsedTime } from '../../utils/formatters';
+import { formatCost, formatElapsedTime, getActiveLocale } from '../../utils/formatters';
 import { stripMarkdown } from '../../utils/textProcessing';
 import { DoubleCheck } from './historyConstants';
+import { useI18n } from '../../hooks/useI18n';
 
 // Get pill color based on entry type
 const getPillColor = (type: HistoryEntryType, theme: Theme) => {
@@ -48,12 +49,12 @@ const formatTime = (timestamp: number) => {
 	const isToday = date.toDateString() === now.toDateString();
 
 	if (isToday) {
-		return date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+		return date.toLocaleTimeString(getActiveLocale(), { hour: '2-digit', minute: '2-digit' });
 	} else {
 		return (
-			date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) +
+			date.toLocaleDateString(getActiveLocale(), { month: 'short', day: 'numeric' }) +
 			' ' +
-			date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })
+			date.toLocaleTimeString(getActiveLocale(), { hour: '2-digit', minute: '2-digit' })
 		);
 	}
 };
@@ -80,6 +81,7 @@ export const HistoryEntryItem = memo(function HistoryEntryItem({
 	onOpenAboutModal,
 	showAgentName,
 }: HistoryEntryItemProps) {
+	const { t } = useI18n();
 	const colors = getPillColor(entry.type, theme);
 	const Icon = getEntryIcon(entry.type);
 
@@ -155,9 +157,9 @@ export const HistoryEntryItem = memo(function HistoryEntryItem({
 							title={
 								entry.success
 									? entry.validated
-										? 'Task completed successfully and human-validated'
-										: 'Task completed successfully'
-									: 'Task failed'
+										? t('history.status_validated')
+										: t('history.status_success')
+									: t('history.status_failed')
 							}
 						>
 							{entry.success ? (
@@ -182,7 +184,9 @@ export const HistoryEntryItem = memo(function HistoryEntryItem({
 						}}
 					>
 						<Icon className="w-2.5 h-2.5" />
-						{entry.type}
+						{entry.type === 'AUTO'
+							? t('history.filter.auto_label')
+							: t('history.filter.user_label')}
 					</span>
 				</div>
 
@@ -202,7 +206,7 @@ export const HistoryEntryItem = memo(function HistoryEntryItem({
 					WebkitBoxOrient: 'vertical' as const,
 				}}
 			>
-				{entry.summary ? stripMarkdown(entry.summary) : 'No summary available'}
+				{entry.summary ? stripMarkdown(entry.summary) : t('history.no_summary')}
 			</p>
 
 			{/* Footer Row - Time, Cost, and Achievement Action */}
@@ -232,7 +236,7 @@ export const HistoryEntryItem = memo(function HistoryEntryItem({
 								border: `1px solid ${theme.colors.success}30`,
 							}}
 						>
-							${entry.usageStats.totalCostUsd.toFixed(2)}
+							{formatCost(entry.usageStats.totalCostUsd)}
 						</span>
 					)}
 					{/* Achievement Action Button */}
@@ -248,10 +252,10 @@ export const HistoryEntryItem = memo(function HistoryEntryItem({
 								color: theme.colors.warning,
 								border: `1px solid ${theme.colors.warning}40`,
 							}}
-							title="View achievements"
+							title={t('history.view_achievements_tooltip')}
 						>
 							<Award className="w-3 h-3" />
-							View Achievements
+							{t('history.view_achievements_button')}
 						</button>
 					)}
 				</div>

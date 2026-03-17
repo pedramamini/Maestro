@@ -16,18 +16,10 @@
  */
 
 import React from 'react';
-import {
-	Star,
-	Play,
-	Edit3,
-	Clock,
-	MessageSquare,
-	HardDrive,
-	DollarSign,
-	Search,
-} from 'lucide-react';
+import { Star, Play, Edit3, Clock, MessageSquare, HardDrive, Search } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import type { Theme } from '../types';
-import { formatSize, formatRelativeTime } from '../utils/formatters';
+import { formatCost, formatSize, formatRelativeTime } from '../utils/formatters';
 import type { ClaudeSession } from '../hooks';
 
 /**
@@ -106,6 +98,7 @@ export function SessionListItem({
 	onSubmitRename,
 	onCancelRename,
 }: SessionListItemProps) {
+	const { t } = useTranslation(['menus', 'common']);
 	const isSelected = index === selectedIndex;
 	const isRenaming = renamingSessionId === session.sessionId;
 	const isActive = activeAgentSessionId === session.sessionId;
@@ -124,7 +117,7 @@ export function SessionListItem({
 			<button
 				onClick={(e) => onToggleStar(session.sessionId, e)}
 				className="p-1 -ml-1 rounded hover:bg-white/10 transition-colors shrink-0"
-				title={isStarred ? 'Remove from favorites' : 'Add to favorites'}
+				title={isStarred ? t('menus:session.remove_favorites') : t('menus:session.add_favorites')}
 			>
 				<Star
 					className="w-4 h-4"
@@ -139,7 +132,7 @@ export function SessionListItem({
 			<button
 				onClick={(e) => onQuickResume(session, e)}
 				className="p-1 rounded hover:bg-white/10 transition-colors shrink-0 opacity-0 group-hover:opacity-100"
-				title="Resume session in new tab"
+				title={t('menus:session.resume_session')}
 			>
 				<Play className="w-4 h-4" style={{ color: theme.colors.success }} />
 			</button>
@@ -165,7 +158,7 @@ export function SessionListItem({
 							}}
 							onClick={(e) => e.stopPropagation()}
 							onBlur={() => onSubmitRename(session.sessionId)}
-							placeholder="Enter session name..."
+							placeholder={t('menus:session.enter_name_placeholder')}
 							className="flex-1 bg-transparent outline-none text-sm font-semibold px-2 py-0.5 rounded border min-w-0"
 							style={{
 								color: theme.colors.accent,
@@ -182,7 +175,7 @@ export function SessionListItem({
 						<button
 							onClick={(e) => onStartRename(session, e)}
 							className="p-0.5 rounded opacity-0 group-hover/name:opacity-100 hover:bg-white/10 transition-all"
-							title="Rename session"
+							title={t('menus:session.rename_session')}
 						>
 							<Edit3 className="w-3 h-3" style={{ color: theme.colors.accent }} />
 						</button>
@@ -197,14 +190,15 @@ export function SessionListItem({
 						className="font-medium truncate text-sm flex-1 min-w-0"
 						style={{ color: session.sessionName ? theme.colors.textDim : theme.colors.textMain }}
 					>
-						{session.firstMessage || `Session ${session.sessionId.slice(0, 8)}...`}
+						{session.firstMessage ||
+							t('menus:session.session_fallback', { id: session.sessionId.slice(0, 8) })}
 					</span>
 					{/* Rename button for sessions without a name (shows on hover) */}
 					{!session.sessionName && !isRenaming && (
 						<button
 							onClick={(e) => onStartRename(session, e)}
 							className="p-0.5 rounded opacity-0 group-hover/title:opacity-100 hover:bg-white/10 transition-all shrink-0"
-							title="Add session name"
+							title={t('menus:session.add_session_name')}
 						>
 							<Edit3 className="w-3 h-3" style={{ color: theme.colors.textDim }} />
 						</button>
@@ -218,27 +212,27 @@ export function SessionListItem({
 						<span
 							className="text-[10px] font-bold px-1.5 py-0.5 rounded"
 							style={{ backgroundColor: theme.colors.accent + '30', color: theme.colors.accent }}
-							title="User-initiated through Maestro"
+							title={t('menus:session.origin_maestro_title')}
 						>
-							MAESTRO
+							{t('menus:session.origin_maestro')}
 						</span>
 					)}
 					{session.origin === 'auto' && (
 						<span
 							className="text-[10px] font-bold px-1.5 py-0.5 rounded"
 							style={{ backgroundColor: theme.colors.warning + '30', color: theme.colors.warning }}
-							title="Auto-run session"
+							title={t('menus:session.origin_auto_title')}
 						>
-							AUTO
+							{t('menus:session.origin_auto')}
 						</span>
 					)}
 					{!session.origin && (
 						<span
 							className="text-[10px] font-bold px-1.5 py-0.5 rounded"
 							style={{ backgroundColor: theme.colors.border, color: theme.colors.textDim }}
-							title="Claude Code CLI session"
+							title={t('menus:session.origin_cli_title')}
 						>
-							CLI
+							{t('menus:session.origin_cli')}
 						</span>
 					)}
 
@@ -272,8 +266,7 @@ export function SessionListItem({
 							className="flex items-center gap-1 font-mono"
 							style={{ color: theme.colors.success }}
 						>
-							<DollarSign className="w-3 h-3" />
-							{(session.costUsd ?? 0).toFixed(2)}
+							{formatCost(session.costUsd ?? 0)}
 						</span>
 					)}
 
@@ -303,7 +296,7 @@ export function SessionListItem({
 					className="text-[10px] px-2 py-0.5 rounded-full shrink-0"
 					style={{ backgroundColor: theme.colors.success + '20', color: theme.colors.success }}
 				>
-					ACTIVE
+					{t('menus:session.active_badge')}
 				</span>
 			)}
 		</div>

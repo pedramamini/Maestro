@@ -12,6 +12,7 @@ import {
 	Trash2,
 	Edit3,
 } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import type { Group, Session, Theme } from '../../types';
 import { useClickOutside, useContextMenuPosition } from '../../hooks';
 
@@ -56,6 +57,7 @@ export function SessionContextMenu({
 	onDeleteWorktree,
 	onCreateGroup,
 }: SessionContextMenuProps) {
+	const { t } = useTranslation('menus');
 	const menuRef = useRef<HTMLDivElement>(null);
 	const moveToGroupRef = useRef<HTMLDivElement>(null);
 	const submenuTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -156,7 +158,7 @@ export function SessionContextMenu({
 				style={{ color: theme.colors.textMain }}
 			>
 				<Edit3 className="w-3.5 h-3.5" />
-				Rename
+				{t('context.rename')}
 			</button>
 
 			<button
@@ -169,7 +171,7 @@ export function SessionContextMenu({
 				style={{ color: theme.colors.textMain }}
 			>
 				<Settings className="w-3.5 h-3.5" />
-				Edit Agent...
+				{t('context.edit_agent')}
 			</button>
 
 			<button
@@ -182,7 +184,7 @@ export function SessionContextMenu({
 				style={{ color: theme.colors.textMain }}
 			>
 				<Copy className="w-3.5 h-3.5" />
-				Duplicate...
+				{t('context.duplicate')}
 			</button>
 
 			{!session.parentSessionId && (
@@ -196,7 +198,7 @@ export function SessionContextMenu({
 					style={{ color: theme.colors.textMain }}
 				>
 					<Bookmark className="w-3.5 h-3.5" fill={session.bookmarked ? 'currentColor' : 'none'} />
-					{session.bookmarked ? 'Remove Bookmark' : 'Add Bookmark'}
+					{session.bookmarked ? t('context.remove_bookmark') : t('context.add_bookmark')}
 				</button>
 			)}
 
@@ -226,7 +228,7 @@ export function SessionContextMenu({
 					>
 						<span className="flex items-center gap-2">
 							<FolderInput className="w-3.5 h-3.5" />
-							Move to Group
+							{t('context.move_to_group')}
 						</span>
 						<ChevronRight className="w-3 h-3" />
 					</button>
@@ -255,8 +257,10 @@ export function SessionContextMenu({
 								disabled={!session.groupId}
 							>
 								<Folder className="w-3.5 h-3.5" />
-								Ungrouped
-								{!session.groupId && <span className="text-[10px] opacity-50">(current)</span>}
+								{t('context.ungrouped')}
+								{!session.groupId && (
+									<span className="text-[10px] opacity-50">{t('context.current')}</span>
+								)}
 							</button>
 
 							{groups.length > 0 && (
@@ -278,7 +282,7 @@ export function SessionContextMenu({
 									<span>{group.emoji}</span>
 									<span className="truncate">{group.name}</span>
 									{session.groupId === group.id && (
-										<span className="text-[10px] opacity-50">(current)</span>
+										<span className="text-[10px] opacity-50">{t('context.current')}</span>
 									)}
 								</button>
 							))}
@@ -298,7 +302,7 @@ export function SessionContextMenu({
 									style={{ color: theme.colors.accent }}
 								>
 									<FolderPlus className="w-3.5 h-3.5" />
-									Create New Group
+									{t('context.create_new_group')}
 								</button>
 							)}
 						</div>
@@ -320,7 +324,7 @@ export function SessionContextMenu({
 							style={{ color: theme.colors.accent }}
 						>
 							<GitBranch className="w-3.5 h-3.5" />
-							Create Worktree
+							{t('context.create_worktree')}
 						</button>
 					)}
 					{onConfigureWorktrees && (
@@ -334,7 +338,7 @@ export function SessionContextMenu({
 							style={{ color: theme.colors.accent }}
 						>
 							<Settings className="w-3.5 h-3.5" />
-							Configure Worktrees
+							{t('context.configure_worktrees')}
 						</button>
 					)}
 				</>
@@ -354,7 +358,7 @@ export function SessionContextMenu({
 							style={{ color: theme.colors.accent }}
 						>
 							<GitPullRequest className="w-3.5 h-3.5" />
-							Create Pull Request
+							{t('context.create_pull_request')}
 						</button>
 					)}
 					{onDeleteWorktree && (
@@ -368,7 +372,7 @@ export function SessionContextMenu({
 							style={{ color: theme.colors.error }}
 						>
 							<Trash2 className="w-3.5 h-3.5" />
-							Remove Worktree
+							{t('context.remove_worktree')}
 						</button>
 					)}
 				</>
@@ -387,7 +391,7 @@ export function SessionContextMenu({
 						style={{ color: theme.colors.error }}
 					>
 						<Trash2 className="w-3.5 h-3.5" />
-						Remove Agent
+						{t('context.remove_agent')}
 					</button>
 				</>
 			)}

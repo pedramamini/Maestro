@@ -30,6 +30,11 @@ vi.mock('../../../renderer/stores/notificationStore', async () => {
 	return { ...actual, notifyToast: vi.fn() };
 });
 
+const mockTNotify = vi.fn();
+vi.mock('../../../renderer/utils/tNotify', () => ({
+	tNotify: (...args: unknown[]) => mockTNotify(...args),
+}));
+
 vi.mock('../../../renderer/utils/tabHelpers', async () => {
 	const actual = await vi.importActual('../../../renderer/utils/tabHelpers');
 	return {
@@ -162,7 +167,7 @@ describe('handleSummarizeAndContinue (Tier 3E)', () => {
 		});
 
 		expect(contextSummarizationService.canSummarize).not.toHaveBeenCalled();
-		expect(notifyToast).not.toHaveBeenCalled();
+		expect(mockTNotify).not.toHaveBeenCalled();
 	});
 
 	it('returns when inputMode is terminal', async () => {
@@ -175,7 +180,7 @@ describe('handleSummarizeAndContinue (Tier 3E)', () => {
 		});
 
 		expect(contextSummarizationService.canSummarize).not.toHaveBeenCalled();
-		expect(notifyToast).not.toHaveBeenCalled();
+		expect(mockTNotify).not.toHaveBeenCalled();
 	});
 
 	it('shows warning toast when canSummarize fails', async () => {
@@ -189,10 +194,10 @@ describe('handleSummarizeAndContinue (Tier 3E)', () => {
 			result.current.handleSummarizeAndContinue();
 		});
 
-		expect(notifyToast).toHaveBeenCalledWith(
+		expect(mockTNotify).toHaveBeenCalledWith(
 			expect.objectContaining({
 				type: 'warning',
-				title: 'Cannot Compact',
+				titleKey: 'notifications:compact.cannot_title',
 			})
 		);
 	});
@@ -264,10 +269,10 @@ describe('handleSummarizeAndContinue (Tier 3E)', () => {
 		await act(async () => {
 			result.current.handleSummarizeAndContinue();
 			await vi.waitFor(() => {
-				expect(notifyToast).toHaveBeenCalledWith(
+				expect(mockTNotify).toHaveBeenCalledWith(
 					expect.objectContaining({
 						type: 'success',
-						title: 'Context Compacted',
+						titleKey: 'notifications:compact.success_title',
 					})
 				);
 			});
@@ -343,10 +348,10 @@ describe('handleSummarizeAndContinue (Tier 3E)', () => {
 		await act(async () => {
 			result.current.handleSummarizeAndContinue();
 			await vi.waitFor(() => {
-				expect(notifyToast).toHaveBeenCalledWith(
+				expect(mockTNotify).toHaveBeenCalledWith(
 					expect.objectContaining({
 						type: 'error',
-						title: 'Compaction Failed',
+						titleKey: 'notifications:compact.failed_title',
 					})
 				);
 			});

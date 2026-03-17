@@ -4,6 +4,45 @@ import userEvent from '@testing-library/user-event';
 import { InputArea } from '../../../renderer/components/InputArea';
 import { formatShortcutKeys, formatEnterToSend } from '../../../renderer/utils/shortcutFormatter';
 import type { Session, Theme } from '../../../renderer/types';
+import commonEn from '../../../shared/i18n/locales/en/common.json';
+
+// Mock react-i18next with actual English translations
+vi.mock('react-i18next', () => {
+	const resolve = (key: string): string => {
+		const bareKey = key.includes(':') ? key.split(':').slice(1).join(':') : key;
+		const parts = bareKey.split('.');
+		let value: unknown = commonEn;
+		for (const part of parts) {
+			if (value && typeof value === 'object' && part in (value as Record<string, unknown>)) {
+				value = (value as Record<string, unknown>)[part];
+			} else {
+				return key;
+			}
+		}
+		return typeof value === 'string' ? value : key;
+	};
+
+	return {
+		useTranslation: () => ({
+			t: (key: string, opts?: Record<string, unknown>) => {
+				let result = resolve(key);
+				if (opts) {
+					if (opts.defaultValue && result === key) {
+						result = String(opts.defaultValue);
+					}
+					for (const [k, v] of Object.entries(opts)) {
+						if (k !== 'defaultValue') {
+							result = result.replace(new RegExp(`\\{\\{${k}\\}\\}`, 'g'), String(v));
+						}
+					}
+				}
+				return result;
+			},
+			i18n: { language: 'en' },
+			ready: true,
+		}),
+	};
+});
 
 // Mock scrollIntoView since jsdom doesn't support it
 Element.prototype.scrollIntoView = vi.fn();

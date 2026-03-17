@@ -71,6 +71,12 @@ export function registerPersistenceHandlers(deps: PersistenceHandlerDependencies
 			}
 		}
 
+		// Broadcast language changes to connected web clients (for RTL/LTR direction sync)
+		if (key === 'language' && webServer && webServer.getWebClientCount() > 0) {
+			webServer.broadcastLanguageChange(value);
+			logger.info(`Broadcasted language change to web clients: ${value}`, 'WebServer');
+		}
+
 		// Broadcast custom commands changes to connected web clients
 		if (key === 'customAICommands' && webServer && webServer.getWebClientCount() > 0) {
 			webServer.broadcastCustomCommands(value);

@@ -11,6 +11,7 @@ import { SshRemoteSelector } from './shared/SshRemoteSelector';
 import { formatShortcutKeys } from '../utils/shortcutFormatter';
 import { safeClipboardWrite } from '../utils/clipboard';
 import { isBetaAgent, getAgentDisplayName } from '../../shared/agentMetadata';
+import { useTranslation } from 'react-i18next';
 
 // Maximum character length for nudge message
 const NUDGE_MESSAGE_MAX_LENGTH = 1000;
@@ -87,6 +88,8 @@ export function NewInstanceModal({
 	existingSessions,
 	sourceSession,
 }: NewInstanceModalProps) {
+	const { t } = useTranslation('modals');
+	const { t: tA } = useTranslation('accessibility');
 	const [agents, setAgents] = useState<AgentConfig[]>([]);
 	const [selectedAgent, setSelectedAgent] = useState('');
 	const [expandedAgent, setExpandedAgent] = useState<string | null>(null);
@@ -219,14 +222,14 @@ export function NewInstanceModal({
 						checking: false,
 						valid: false,
 						isDirectory: false,
-						error: 'Path is a file, not a directory',
+						error: t('new_instance.path_is_file_error'),
 					});
 				} else {
 					setRemotePathValidation({
 						checking: false,
 						valid: false,
 						isDirectory: false,
-						error: 'Path not found or not accessible',
+						error: t('new_instance.path_not_found_error'),
 					});
 				}
 			} catch {
@@ -234,13 +237,13 @@ export function NewInstanceModal({
 					checking: false,
 					valid: false,
 					isDirectory: false,
-					error: 'Path not found or not accessible',
+					error: t('new_instance.path_not_found_error'),
 				});
 			}
 		}, 300);
 
 		return () => clearTimeout(timeoutId);
-	}, [workingDir, isSshEnabled, selectedAgent, agentSshRemoteConfigs]);
+	}, [workingDir, isSshEnabled, selectedAgent, agentSshRemoteConfigs, t]);
 
 	// Define handlers first before they're used in effects
 	const loadAgents = async (source?: Session, sshRemoteId?: string) => {
@@ -341,7 +344,7 @@ export function NewInstanceModal({
 			// Pre-fill form fields AFTER agents are loaded (ensures no race condition)
 			if (source) {
 				handleWorkingDirChange(source.cwd);
-				setInstanceName(`${source.name} (Copy)`);
+				setInstanceName(t('new_instance.copy_name_suffix', { name: source.name }));
 				setNudgeMessage(source.nudgeMessage || '');
 
 				// Pre-fill custom agent configuration
@@ -667,10 +670,10 @@ export function NewInstanceModal({
 	if (!isOpen) return null;
 
 	return (
-		<div onKeyDown={handleKeyDown} role="group" aria-label="Create new agent dialog">
+		<div onKeyDown={handleKeyDown} role="group" aria-label={tA('modal.create_agent_dialog')}>
 			<Modal
 				theme={theme}
-				title="Create New Agent"
+				title={t('new_instance.create_title')}
 				priority={MODAL_PRIORITIES.NEW_INSTANCE}
 				onClose={onClose}
 				width={600}
@@ -680,7 +683,7 @@ export function NewInstanceModal({
 						theme={theme}
 						onCancel={onClose}
 						onConfirm={handleCreate}
-						confirmLabel="Create Agent"
+						confirmLabel={t('new_instance.create_button')}
 						confirmDisabled={!isFormValid}
 					/>
 				}
@@ -691,7 +694,7 @@ export function NewInstanceModal({
 						ref={nameInputRef}
 						id="agent-name-input"
 						theme={theme}
-						label="Agent Name"
+						label={t('new_instance.agent_name_label')}
 						value={instanceName}
 						onChange={setInstanceName}
 						placeholder=""
@@ -705,10 +708,10 @@ export function NewInstanceModal({
 							className="block text-xs font-bold opacity-70 uppercase mb-2"
 							style={{ color: theme.colors.textMain }}
 						>
-							Agent Provider
+							{t('new_instance.agent_provider_label')}
 						</div>
 						{loading ? (
-							<div className="text-sm opacity-50">Loading agents...</div>
+							<div className="text-sm opacity-50">{t('new_instance.loading_agents')}</div>
 						) : sshConnectionError ? (
 							/* SSH Connection Error State */
 							<div
@@ -723,13 +726,13 @@ export function NewInstanceModal({
 									className="text-base font-semibold mb-2"
 									style={{ color: theme.colors.textMain }}
 								>
-									Unable to Connect
+									{t('new_instance.ssh_unable_to_connect_title')}
 								</h4>
 								<p className="text-sm mb-3" style={{ color: theme.colors.textDim }}>
 									{sshConnectionError}
 								</p>
 								<p className="text-xs" style={{ color: theme.colors.textDim }}>
-									Select a different remote host or switch to Local Execution.
+									{t('new_instance.ssh_unable_to_connect_description')}
 								</p>
 							</div>
 						) : (
@@ -817,7 +820,7 @@ export function NewInstanceModal({
 																color: theme.colors.warning,
 															}}
 														>
-															Beta
+															{t('new_instance.beta_badge')}
 														</span>
 													)}
 												</div>
@@ -832,7 +835,7 @@ export function NewInstanceModal({
 																		color: theme.colors.success,
 																	}}
 																>
-																	Available
+																	{t('new_instance.agent_available')}
 																</span>
 															) : (
 																<span
@@ -842,7 +845,7 @@ export function NewInstanceModal({
 																		color: theme.colors.error,
 																	}}
 																>
-																	Not Found
+																	{t('new_instance.agent_not_found')}
 																</span>
 															)}
 															<button
@@ -851,7 +854,7 @@ export function NewInstanceModal({
 																	handleRefreshAgent(agent.id);
 																}}
 																className="p-1 rounded hover:bg-white/10 transition-colors"
-																title="Refresh detection"
+																title={t('new_instance.refresh_detection_tooltip')}
 																style={{ color: theme.colors.textDim }}
 															>
 																<RefreshCw
@@ -867,7 +870,7 @@ export function NewInstanceModal({
 																color: theme.colors.warning,
 															}}
 														>
-															Coming Soon
+															{t('new_instance.coming_soon')}
 														</span>
 													)}
 												</div>
@@ -1000,7 +1003,7 @@ export function NewInstanceModal({
 
 						{/* Hook behavior note */}
 						<p className="text-xs mt-2" style={{ color: theme.colors.textDim }}>
-							Agent hooks run per-message. Use{' '}
+							{t('new_instance.hooks_note_prefix')}{' '}
 							<button
 								type="button"
 								className="underline hover:opacity-80"
@@ -1013,7 +1016,7 @@ export function NewInstanceModal({
 							>
 								MAESTRO_SESSION_RESUMED
 							</button>{' '}
-							to skip on resumed sessions.
+							{t('new_instance.hooks_note_suffix')}
 						</p>
 
 						{/* Debug Info Display */}
@@ -1027,18 +1030,20 @@ export function NewInstanceModal({
 								}}
 							>
 								<div className="font-bold mb-2" style={{ color: theme.colors.error }}>
-									Debug Info: {debugInfo.binaryName} not found
+									{t('new_instance.debug_info_title', { binaryName: debugInfo.binaryName })}
 								</div>
 								{debugInfo.error && <div className="mb-2 text-red-400">{debugInfo.error}</div>}
 								<div className="space-y-1 opacity-70">
 									<div>
-										<span className="opacity-50">Platform:</span> {debugInfo.platform}
+										<span className="opacity-50">{t('new_instance.debug_platform_label')}</span>{' '}
+										{debugInfo.platform}
 									</div>
 									<div>
-										<span className="opacity-50">Home:</span> {debugInfo.homeDir}
+										<span className="opacity-50">{t('new_instance.debug_home_label')}</span>{' '}
+										{debugInfo.homeDir}
 									</div>
 									<div>
-										<span className="opacity-50">PATH:</span>
+										<span className="opacity-50">{t('new_instance.debug_path_label')}</span>
 									</div>
 									<div className="pl-2 break-all text-[10px]">
 										{debugInfo.envPath.split(':').map((p) => (
@@ -1051,7 +1056,7 @@ export function NewInstanceModal({
 									className="mt-2 text-xs underline"
 									style={{ color: theme.colors.textDim }}
 								>
-									Dismiss
+									{t('new_instance.dismiss_button')}
 								</button>
 							</div>
 						)}
@@ -1060,13 +1065,17 @@ export function NewInstanceModal({
 					{/* Working Directory */}
 					<FormInput
 						theme={theme}
-						label="Working Directory"
+						label={t('new_instance.working_dir_label')}
 						value={workingDir}
 						onChange={handleWorkingDirChange}
 						placeholder={
 							isSshEnabled
-								? `Enter remote path${sshRemoteHost ? ` on ${sshRemoteHost}` : ''} (e.g., /home/user/project)`
-								: 'Select directory...'
+								? sshRemoteHost
+									? t('new_instance.working_dir_remote_placeholder_with_host', {
+											host: sshRemoteHost,
+										})
+									: t('new_instance.working_dir_remote_placeholder')
+								: t('new_instance.working_dir_placeholder')
 						}
 						error={validation.errorField === 'directory' ? validation.error : undefined}
 						monospace
@@ -1079,8 +1088,14 @@ export function NewInstanceModal({
 								style={{ borderColor: theme.colors.border, color: theme.colors.textMain }}
 								title={
 									isSshEnabled
-										? `Folder picker unavailable for SSH remote${sshRemoteHost ? ` (${sshRemoteHost})` : ''}. Enter the remote path manually.`
-										: `Browse folders (${formatShortcutKeys(['Meta', 'o'])})`
+										? sshRemoteHost
+											? t('new_instance.folder_picker_ssh_disabled_tooltip_with_host', {
+													host: sshRemoteHost,
+												})
+											: t('new_instance.folder_picker_ssh_disabled_tooltip')
+										: t('new_instance.browse_folders_tooltip', {
+												shortcut: formatShortcutKeys(['Meta', 'o']),
+											})
 								}
 							>
 								<Folder className="w-5 h-5" />
@@ -1097,12 +1112,16 @@ export function NewInstanceModal({
 										className="w-3 h-3 border-2 border-t-transparent rounded-full animate-spin"
 										style={{ borderColor: theme.colors.textDim, borderTopColor: 'transparent' }}
 									/>
-									<span style={{ color: theme.colors.textDim }}>Checking remote path...</span>
+									<span style={{ color: theme.colors.textDim }}>
+										{t('new_instance.checking_remote_path')}
+									</span>
 								</>
 							) : remotePathValidation.valid ? (
 								<>
 									<Check className="w-3.5 h-3.5" style={{ color: theme.colors.success }} />
-									<span style={{ color: theme.colors.success }}>Remote directory found</span>
+									<span style={{ color: theme.colors.success }}>
+										{t('new_instance.remote_directory_found')}
+									</span>
 								</>
 							) : remotePathValidation.error ? (
 								<>
@@ -1132,7 +1151,7 @@ export function NewInstanceModal({
 										{validation.warning}
 									</p>
 									<p className="text-xs mt-2" style={{ color: theme.colors.textDim }}>
-										We recommend using a unique directory for each managed agent.
+										{t('new_instance.directory_warning_recommendation')}
 									</p>
 									<label className="flex items-center gap-2 mt-3 cursor-pointer">
 										<input
@@ -1143,7 +1162,7 @@ export function NewInstanceModal({
 											style={{ accentColor: theme.colors.warning }}
 										/>
 										<span className="text-sm" style={{ color: theme.colors.textMain }}>
-											I understand the risk and want to proceed
+											{t('new_instance.directory_warning_acknowledge')}
 										</span>
 									</label>
 								</div>
@@ -1183,12 +1202,13 @@ export function NewInstanceModal({
 							className="block text-xs font-bold opacity-70 uppercase mb-2"
 							style={{ color: theme.colors.textMain }}
 						>
-							Nudge Message <span className="font-normal opacity-50">(optional)</span>
+							{t('new_instance.nudge_message_label')}{' '}
+							<span className="font-normal opacity-50">{t('new_instance.optional')}</span>
 						</div>
 						<textarea
 							value={nudgeMessage}
 							onChange={(e) => setNudgeMessage(e.target.value.slice(0, NUDGE_MESSAGE_MAX_LENGTH))}
-							placeholder="Instructions appended to every message you send..."
+							placeholder={t('new_instance.nudge_message_placeholder')}
 							className="w-full p-2 rounded border bg-transparent outline-none resize-none text-sm"
 							style={{
 								borderColor: theme.colors.border,
@@ -1198,8 +1218,10 @@ export function NewInstanceModal({
 							maxLength={NUDGE_MESSAGE_MAX_LENGTH}
 						/>
 						<p className="mt-1 text-xs" style={{ color: theme.colors.textDim }}>
-							{nudgeMessage.length}/{NUDGE_MESSAGE_MAX_LENGTH} characters. This text is added to
-							every message you send to the agent (not visible in chat).
+							{t('new_instance.nudge_message_description', {
+								current: nudgeMessage.length,
+								max: NUDGE_MESSAGE_MAX_LENGTH,
+							})}
 						</p>
 					</div>
 				</div>
@@ -1227,6 +1249,8 @@ export function EditAgentModal({
 	session,
 	existingSessions,
 }: EditAgentModalProps) {
+	const { t } = useTranslation('modals');
+	const { t: tA } = useTranslation('accessibility');
 	const [instanceName, setInstanceName] = useState('');
 	const [nudgeMessage, setNudgeMessage] = useState('');
 	const [agent, setAgent] = useState<AgentConfig | null>(null);
@@ -1414,14 +1438,14 @@ export function EditAgentModal({
 						checking: false,
 						valid: false,
 						isDirectory: false,
-						error: 'Path is a file, not a directory',
+						error: t('new_instance.path_is_file_error'),
 					});
 				} else {
 					setRemotePathValidation({
 						checking: false,
 						valid: false,
 						isDirectory: false,
-						error: 'Path not found on remote',
+						error: t('new_instance.path_not_found_remote_error'),
 					});
 				}
 			} catch {
@@ -1429,13 +1453,13 @@ export function EditAgentModal({
 					checking: false,
 					valid: false,
 					isDirectory: false,
-					error: 'Path not found on remote',
+					error: t('new_instance.path_not_found_remote_error'),
 				});
 			}
 		}, 300);
 
 		return () => clearTimeout(timeoutId);
-	}, [isSshEnabled, session, sshRemoteConfig?.remoteId]);
+	}, [isSshEnabled, session, sshRemoteConfig?.remoteId, t]);
 
 	const handleSave = useCallback(() => {
 		if (!session) return;
@@ -1550,10 +1574,10 @@ export function EditAgentModal({
 	const agentName = getAgentDisplayName(selectedToolType);
 
 	return (
-		<div onKeyDown={handleKeyDown} role="group" aria-label="Edit agent dialog">
+		<div onKeyDown={handleKeyDown} role="group" aria-label={tA('modal.edit_agent_dialog')}>
 			<Modal
 				theme={theme}
-				title={`Edit Agent: ${session.name}`}
+				title={t('new_instance.edit_title', { name: session.name })}
 				priority={MODAL_PRIORITIES.NEW_INSTANCE}
 				onClose={onClose}
 				width={600}
@@ -1564,7 +1588,7 @@ export function EditAgentModal({
 						style={{ borderColor: theme.colors.border }}
 					>
 						<h2 className="text-sm font-bold" style={{ color: theme.colors.textMain }}>
-							Edit Agent: {session.name}
+							{t('new_instance.edit_title', { name: session.name })}
 						</h2>
 						<div className="flex items-center gap-2">
 							<button
@@ -1578,7 +1602,11 @@ export function EditAgentModal({
 									color: copiedId ? theme.colors.success : theme.colors.accent,
 									border: `1px solid ${copiedId ? theme.colors.success : theme.colors.accent}40`,
 								}}
-								title={copiedId ? 'Copied!' : `Click to copy: ${session.id}`}
+								title={
+									copiedId
+										? t('new_instance.copied_tooltip')
+										: t('new_instance.copy_id_tooltip', { id: session.id })
+								}
 							>
 								{copiedId ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
 								<span>{session.id.slice(0, 8)}</span>
@@ -1588,7 +1616,7 @@ export function EditAgentModal({
 								onClick={onClose}
 								className="p-1 rounded hover:bg-white/10 transition-colors"
 								style={{ color: theme.colors.textDim }}
-								aria-label="Close modal"
+								aria-label={tA('modal.close')}
 							>
 								<X className="w-4 h-4" />
 							</button>
@@ -1600,7 +1628,7 @@ export function EditAgentModal({
 						theme={theme}
 						onCancel={onClose}
 						onConfirm={handleSave}
-						confirmLabel="Save Changes"
+						confirmLabel={t('new_instance.save_button')}
 						confirmDisabled={!isFormValid}
 					/>
 				}
@@ -1611,7 +1639,7 @@ export function EditAgentModal({
 						ref={nameInputRef}
 						id="edit-agent-name-input"
 						theme={theme}
-						label="Agent Name"
+						label={t('new_instance.agent_name_label')}
 						value={instanceName}
 						onChange={setInstanceName}
 						placeholder=""
@@ -1625,7 +1653,7 @@ export function EditAgentModal({
 							className="block text-xs font-bold opacity-70 uppercase mb-2"
 							style={{ color: theme.colors.textMain }}
 						>
-							Agent Provider
+							{t('new_instance.agent_provider_label')}
 						</div>
 						<select
 							value={selectedToolType}
@@ -1653,10 +1681,7 @@ export function EditAgentModal({
 								}}
 							>
 								<AlertTriangle className="w-3.5 h-3.5 mt-0.5 shrink-0" />
-								<span>
-									Changing the provider will clear your session list (tabs). Your history panel data
-									will persist.
-								</span>
+								<span>{t('new_instance.provider_change_warning')}</span>
 							</div>
 						)}
 					</div>
@@ -1667,7 +1692,7 @@ export function EditAgentModal({
 							className="block text-xs font-bold opacity-70 uppercase mb-2"
 							style={{ color: theme.colors.textMain }}
 						>
-							Working Directory
+							{t('new_instance.working_dir_label')}
 						</div>
 						<div
 							className="p-2 rounded border font-mono text-sm overflow-hidden text-ellipsis"
@@ -1681,7 +1706,7 @@ export function EditAgentModal({
 							{session.projectRoot}
 						</div>
 						<p className="mt-1 text-xs" style={{ color: theme.colors.textDim }}>
-							Directory cannot be changed. Create a new agent for a different directory.
+							{t('new_instance.working_dir_readonly_description')}
 						</p>
 						{/* Remote path validation status (only shown when SSH is enabled) */}
 						{isSshEnabled && (
@@ -1693,22 +1718,30 @@ export function EditAgentModal({
 											style={{ borderColor: theme.colors.textDim, borderTopColor: 'transparent' }}
 										/>
 										<span style={{ color: theme.colors.textDim }}>
-											Checking path on {sshRemoteHost || 'remote'}...
+											{t('new_instance.checking_path_on_host', {
+												host: sshRemoteHost || t('new_instance.remote_fallback'),
+											})}
 										</span>
 									</>
 								) : remotePathValidation.valid ? (
 									<>
 										<Check className="w-3.5 h-3.5" style={{ color: theme.colors.success }} />
 										<span style={{ color: theme.colors.success }}>
-											Directory found on {sshRemoteHost || 'remote'}
+											{t('new_instance.directory_found_on_host', {
+												host: sshRemoteHost || t('new_instance.remote_fallback'),
+											})}
 										</span>
 									</>
 								) : remotePathValidation.error ? (
 									<>
 										<X className="w-3.5 h-3.5" style={{ color: theme.colors.error }} />
 										<span style={{ color: theme.colors.error }}>
-											{remotePathValidation.error}
-											{sshRemoteHost ? ` (${sshRemoteHost})` : ''}
+											{sshRemoteHost
+												? t('new_instance.remote_path_error_with_host', {
+														error: remotePathValidation.error,
+														host: sshRemoteHost,
+													})
+												: remotePathValidation.error}
 										</span>
 									</>
 								) : null}
@@ -1722,12 +1755,13 @@ export function EditAgentModal({
 							className="block text-xs font-bold opacity-70 uppercase mb-2"
 							style={{ color: theme.colors.textMain }}
 						>
-							Nudge Message <span className="font-normal opacity-50">(optional)</span>
+							{t('new_instance.nudge_message_label')}{' '}
+							<span className="font-normal opacity-50">{t('new_instance.optional')}</span>
 						</div>
 						<textarea
 							value={nudgeMessage}
 							onChange={(e) => setNudgeMessage(e.target.value.slice(0, NUDGE_MESSAGE_MAX_LENGTH))}
-							placeholder="Instructions appended to every message you send..."
+							placeholder={t('new_instance.nudge_message_placeholder')}
 							className="w-full p-2 rounded border bg-transparent outline-none resize-none text-sm"
 							style={{
 								borderColor: theme.colors.border,
@@ -1737,8 +1771,10 @@ export function EditAgentModal({
 							maxLength={NUDGE_MESSAGE_MAX_LENGTH}
 						/>
 						<p className="mt-1 text-xs" style={{ color: theme.colors.textDim }}>
-							{nudgeMessage.length}/{NUDGE_MESSAGE_MAX_LENGTH} characters. This text is added to
-							every message you send to the agent (not visible in chat).
+							{t('new_instance.nudge_message_description', {
+								current: nudgeMessage.length,
+								max: NUDGE_MESSAGE_MAX_LENGTH,
+							})}
 						</p>
 					</div>
 
@@ -1750,7 +1786,7 @@ export function EditAgentModal({
 								className="block text-xs font-bold opacity-70 uppercase mb-2"
 								style={{ color: theme.colors.textMain }}
 							>
-								{agentName} Settings
+								{t('new_instance.agent_settings_label', { agent: agentName })}
 							</div>
 							<AgentConfigPanel
 								theme={theme}

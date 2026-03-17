@@ -13,6 +13,7 @@
  */
 
 import { memo, useState, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 import type { Theme } from '../../types';
 import type { StatsAggregation } from '../../hooks/stats/useStats';
 import { COLORBLIND_BINARY_PALETTE } from '../../constants/colorblindPalettes';
@@ -136,6 +137,7 @@ export const LocationDistributionChart = memo(function LocationDistributionChart
 	theme,
 	colorBlindMode = false,
 }: LocationDistributionChartProps) {
+	const { t: tA } = useTranslation('accessibility');
 	const [hoveredLocation, setHoveredLocation] = useState<'local' | 'remote' | null>(null);
 
 	// Calculate location data
@@ -211,7 +213,7 @@ export const LocationDistributionChart = memo(function LocationDistributionChart
 			className="p-4 rounded-lg"
 			style={{ backgroundColor: theme.colors.bgMain }}
 			role="figure"
-			aria-label="Location distribution chart showing breakdown between Local and SSH Remote sessions."
+			aria-label={tA('dashboard.location_distribution')}
 		>
 			{/* Header with title */}
 			<div className="flex items-center justify-between mb-4">
@@ -278,7 +280,11 @@ export const LocationDistributionChart = memo(function LocationDistributionChart
 						</div>
 
 						{/* Legend */}
-						<div className="flex flex-col gap-3" role="list" aria-label="Chart legend">
+						<div
+							className="flex flex-col gap-3"
+							role="list"
+							aria-label={tA('dashboard.chart_legend')}
+						>
 							{locationData.map((loc) => (
 								<div
 									key={loc.location}
@@ -286,7 +292,10 @@ export const LocationDistributionChart = memo(function LocationDistributionChart
 									onMouseEnter={() => setHoveredLocation(loc.location)}
 									onMouseLeave={() => setHoveredLocation(null)}
 									role="listitem"
-									aria-label={`${loc.label}: ${loc.percentage.toFixed(1)}%`}
+									aria-label={tA('dashboard.location_item_label', {
+										label: loc.label,
+										percentage: loc.percentage.toFixed(1),
+									})}
 								>
 									<div
 										className="w-3 h-3 rounded-sm flex-shrink-0"

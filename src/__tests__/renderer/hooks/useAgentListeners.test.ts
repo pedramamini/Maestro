@@ -19,6 +19,11 @@ import { useModalStore } from '../../../renderer/stores/modalStore';
 import { useGroupChatStore } from '../../../renderer/stores/groupChatStore';
 import type { Session, AITab, AgentError } from '../../../renderer/types';
 
+// Mock tNotify (module-level export can't be spied — must vi.mock)
+vi.mock('../../../renderer/utils/tNotify', () => ({
+	tNotify: vi.fn(),
+}));
+
 // ============================================================================
 // Helpers
 // ============================================================================

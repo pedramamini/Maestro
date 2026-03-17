@@ -18,6 +18,7 @@ import {
 	Check,
 	MessageCircle,
 } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import type { Theme } from '../types';
 import { MODAL_PRIORITIES } from '../constants/modalPriorities';
 import { Modal, ModalFooter } from './ui/Modal';
@@ -41,6 +42,7 @@ export function WindowsWarningModal({
 	useBetaChannel,
 	onSetUseBetaChannel,
 }: WindowsWarningModalProps) {
+	const { t } = useTranslation('modals');
 	const [suppressChecked, setSuppressChecked] = useState(false);
 	const continueButtonRef = useRef<HTMLButtonElement>(null);
 
@@ -67,7 +69,7 @@ export function WindowsWarningModal({
 	return (
 		<Modal
 			theme={theme}
-			title="Windows Support Notice"
+			title={t('windows_warning.title')}
 			headerIcon={<AlertTriangle className="w-4 h-4" style={{ color: theme.colors.warning }} />}
 			priority={MODAL_PRIORITIES.WINDOWS_WARNING}
 			onClose={handleClose}
@@ -80,7 +82,7 @@ export function WindowsWarningModal({
 					onCancel={handleClose}
 					onConfirm={handleClose}
 					cancelLabel="Cancel"
-					confirmLabel="Got it!"
+					confirmLabel={t('windows_warning.got_it_button')}
 					confirmButtonRef={continueButtonRef}
 					showCancel={false}
 				/>
@@ -96,8 +98,7 @@ export function WindowsWarningModal({
 					}}
 				>
 					<p className="text-sm leading-relaxed" style={{ color: theme.colors.textMain }}>
-						Windows support in Maestro is actively being improved. You may encounter more bugs
-						compared to Mac and Linux versions. We're working on it!
+						{t('windows_warning.message')}
 					</p>
 				</div>
 
@@ -107,7 +108,7 @@ export function WindowsWarningModal({
 						className="text-xs font-semibold uppercase tracking-wider"
 						style={{ color: theme.colors.textDim }}
 					>
-						Recommendations
+						{t('windows_warning.recommendations_title')}
 					</h3>
 
 					{/* Beta channel toggle */}
@@ -123,10 +124,10 @@ export function WindowsWarningModal({
 						<Wrench className="w-4 h-4 mt-0.5 shrink-0" style={{ color: theme.colors.accent }} />
 						<div className="flex-1 min-w-0">
 							<p className="text-sm font-medium" style={{ color: theme.colors.textMain }}>
-								Enable Beta Updates
+								{t('windows_warning.enable_beta_button')}
 							</p>
 							<p className="text-xs mt-0.5" style={{ color: theme.colors.textDim }}>
-								Get the latest bug fixes sooner by opting into the beta channel.
+								{t('windows_warning.enable_beta_description')}
 							</p>
 						</div>
 						{/* Toggle indicator */}
@@ -165,10 +166,10 @@ export function WindowsWarningModal({
 						<Bug className="w-4 h-4 mt-0.5 shrink-0" style={{ color: theme.colors.accent }} />
 						<div className="flex-1 min-w-0">
 							<p className="text-sm font-medium" style={{ color: theme.colors.textMain }}>
-								Report Issues
+								{t('windows_warning.report_issues_button')}
 							</p>
 							<p className="text-xs mt-0.5" style={{ color: theme.colors.textDim }}>
-								Help improve Windows support by reporting bugs on GitHub. Vetted PRs are welcome!
+								{t('windows_warning.report_issues_description')}
 							</p>
 						</div>
 						<ExternalLink
@@ -190,10 +191,10 @@ export function WindowsWarningModal({
 						/>
 						<div className="flex-1 min-w-0">
 							<p className="text-sm font-medium" style={{ color: theme.colors.textMain }}>
-								Join Discord
+								{t('windows_warning.join_discord_button')}
 							</p>
 							<p className="text-xs mt-0.5" style={{ color: theme.colors.textDim }}>
-								Connect with other users in our Windows-specific channel for tips and support.
+								{t('windows_warning.join_discord_description')}
 							</p>
 						</div>
 						<ExternalLink
@@ -212,7 +213,7 @@ export function WindowsWarningModal({
 						<Command className="w-4 h-4 mt-0.5 shrink-0" style={{ color: theme.colors.accent }} />
 						<div className="flex-1 min-w-0">
 							<p className="text-sm font-medium" style={{ color: theme.colors.textMain }}>
-								Create Debug Package
+								{t('windows_warning.debug_package_button')}
 							</p>
 							<p className="text-xs mt-0.5" style={{ color: theme.colors.textDim }}>
 								Accessible anytime via{' '}
@@ -263,7 +264,7 @@ export function WindowsWarningModal({
 						className="text-xs group-hover:opacity-100 transition-opacity"
 						style={{ color: theme.colors.textDim, opacity: 0.8 }}
 					>
-						Don't show this message again
+						{t('windows_warning.dont_show_checkbox')}
 					</span>
 				</label>
 			</div>

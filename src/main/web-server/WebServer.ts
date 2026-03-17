@@ -63,6 +63,7 @@ import type {
 	ReorderTabCallback,
 	ToggleBookmarkCallback,
 	GetThemeCallback,
+	GetLanguageCallback,
 	GetCustomCommandsCallback,
 	GetHistoryCallback,
 } from './types';
@@ -249,6 +250,10 @@ export class WebServer {
 		this.callbackRegistry.setGetThemeCallback(callback);
 	}
 
+	setGetLanguageCallback(callback: GetLanguageCallback): void {
+		this.callbackRegistry.setGetLanguageCallback(callback);
+	}
+
 	setGetCustomCommandsCallback(callback: GetCustomCommandsCallback): void {
 		this.callbackRegistry.setGetCustomCommandsCallback(callback);
 	}
@@ -399,6 +404,7 @@ export class WebServer {
 		this.wsRoute.setCallbacks({
 			getSessions: () => this.callbackRegistry.getSessions(),
 			getTheme: () => this.callbackRegistry.getTheme(),
+			getLanguage: () => this.callbackRegistry.getLanguage(),
 			getCustomCommands: () => this.callbackRegistry.getCustomCommands(),
 			getAutoRunStates: () => this.liveSessionManager.getAutoRunStates(),
 			getLiveSessionInfo: (sessionId) => this.liveSessionManager.getLiveSessionInfo(sessionId),
@@ -504,6 +510,10 @@ export class WebServer {
 
 	broadcastThemeChange(theme: Theme): void {
 		this.broadcastService.broadcastThemeChange(theme);
+	}
+
+	broadcastLanguageChange(language: string): void {
+		this.broadcastService.broadcastLanguageChange(language);
 	}
 
 	broadcastCustomCommands(commands: CustomAICommand[]): void {

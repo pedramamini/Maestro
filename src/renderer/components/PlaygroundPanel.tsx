@@ -21,6 +21,7 @@ import { KeyboardMasteryCelebration } from './KeyboardMasteryCelebration';
 import { CONDUCTOR_BADGES, getBadgeForTime } from '../constants/conductorBadges';
 import { KEYBOARD_MASTERY_LEVELS } from '../constants/keyboardMastery';
 import { safeClipboardWrite } from '../utils/clipboard';
+import { useTranslation } from 'react-i18next';
 
 interface PlaygroundPanelProps {
 	theme: Theme;
@@ -105,6 +106,7 @@ const DEFAULT_CONFETTI_COLORS = [
 ];
 
 export function PlaygroundPanel({ theme, themeMode, onClose }: PlaygroundPanelProps) {
+	const { t: tA } = useTranslation('accessibility');
 	const { registerLayer, unregisterLayer, updateLayerHandler } = useLayerStack();
 	const layerIdRef = useRef<string>();
 	const containerRef = useRef<HTMLDivElement>(null);
@@ -577,7 +579,7 @@ ${staggerDelays.map((delay, i) => `svg.wand-sparkle-active path:nth-child(${i + 
 				className="fixed inset-0 modal-overlay flex items-center justify-center z-[9998] animate-in fade-in duration-200"
 				role="dialog"
 				aria-modal="true"
-				aria-label="Developer Playground"
+				aria-label={tA('modal.developer_playground')}
 				tabIndex={-1}
 			>
 				<div

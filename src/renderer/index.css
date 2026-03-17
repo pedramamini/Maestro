@@ -622,6 +622,84 @@ svg.wand-sparkle-active path:nth-child(8) {
    End Header Bar Container Queries
    ========================================== */
 
+/* ==========================================
+   RTL Directional Icon Flipping
+   ==========================================
+   Icons that represent a directional flow (arrows, chevrons, etc.)
+   need to mirror horizontally in RTL layouts.  The <DirIcon> component
+   adds the `rtl-flip` class automatically for icons in the flip list
+   (see src/renderer/utils/rtlIcons.ts).
+*/
+[dir='rtl'] .rtl-flip {
+	transform: scaleX(-1);
+}
+
+/* ==========================================
+   RTL Layout Overrides
+   ==========================================
+   Explicit overrides for CSS properties that lack logical-property equivalents
+   or need sign/direction inversion in RTL layouts.
+
+   GUIDELINES FOR CONTRIBUTORS:
+   ─────────────────────────────
+   1. PREFER LOGICAL PROPERTIES — use border-inline-start/end, margin-inline-start/end,
+      padding-inline-start/end, inset-inline-start/end instead of adding overrides here.
+      Tailwind's tailwindcss-rtl plugin provides ms-*, me-*, ps-*, pe-*, start-*, end-*.
+
+   2. SCROLLBARS — Chromium/Electron automatically repositions scrollbars to the
+      inline-start side in RTL mode. No CSS override is needed. If a future browser
+      regression occurs, add a targeted fix here.
+
+   3. BOX SHADOWS — All current shadows in this codebase are non-directional (centered
+      glows, vertical-only offsets). If a directional shadow is added (e.g. casting to
+      the right), create a [dir="rtl"] override that mirrors the X offset:
+        .directional-shadow { box-shadow: 4px 2px 8px rgba(0,0,0,0.3); }
+        [dir="rtl"] .directional-shadow { box-shadow: -4px 2px 8px rgba(0,0,0,0.3); }
+
+   4. TRANSLATEX — For CSS animations using translateX(), add a [dir="rtl"] override
+      that inverts the X values. For inline-style translateX in components, use the
+      --rtl-sign custom property: calc(var(--rtl-sign, 1) * <value>).
+
+   5. KEEP MINIMAL — Only add overrides for actual visual issues. Do not pre-emptively
+      override properties that look correct in RTL.
+*/
+
+/* Custom property for translateX sign inversion in RTL.
+   Components can use: transform: translateX(calc(var(--rtl-sign, 1) * 20px))
+   LTR = 1 (default), RTL = -1 */
+[dir='ltr'] {
+	--rtl-sign: 1;
+}
+[dir='rtl'] {
+	--rtl-sign: -1;
+}
+
+/* Shimmer animation (drag-and-drop highlight) runs left-to-right.
+   In RTL, reverse direction so it follows the reading flow. */
+[dir='rtl'] .shimmer-effect,
+[dir='rtl'] [style*='animation'][style*='shimmer'] {
+	animation-direction: reverse;
+}
+
+/* Progress bar stripes lean left-to-right at 45deg.
+   Mirror the angle in RTL for visual consistency. */
+[dir='rtl'] .progress-bar-animated {
+	background-image: linear-gradient(
+		-45deg,
+		rgba(255, 255, 255, 0.15) 25%,
+		transparent 25%,
+		transparent 50%,
+		rgba(255, 255, 255, 0.15) 50%,
+		rgba(255, 255, 255, 0.15) 75%,
+		transparent 75%,
+		transparent
+	);
+}
+
+/* ==========================================
+   End RTL Layout Overrides
+   ========================================== */
+
 @media (prefers-reduced-motion: reduce) {
 	.animate-pulse,
 	.animate-spin,

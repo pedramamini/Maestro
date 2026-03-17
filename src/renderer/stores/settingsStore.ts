@@ -35,6 +35,8 @@ import { DEFAULT_CUSTOM_THEME_COLORS } from '../constants/themes';
 import { DEFAULT_SHORTCUTS, TAB_SHORTCUTS, FIXED_SHORTCUTS } from '../constants/shortcuts';
 import { getLevelIndex } from '../constants/keyboardMastery';
 import { commitCommandPrompt } from '../../prompts';
+import i18n, { LANGUAGE_STORAGE_KEY, RTL_LANGUAGES } from '../../shared/i18n/config';
+import type { SupportedLanguage } from '../../shared/i18n/config';
 
 // ============================================================================
 // Shared Type Aliases
@@ -226,6 +228,7 @@ export interface SettingsStoreState {
 	contextManagementSettings: ContextManagementSettings;
 	keyboardMasteryStats: KeyboardMasteryStats;
 	colorBlindMode: boolean;
+	language: string;
 	documentGraphShowExternalLinks: boolean;
 	documentGraphMaxNodes: number;
 	documentGraphPreviewCharLimit: number;
@@ -298,6 +301,7 @@ export interface SettingsStoreActions {
 	setWebInterfaceUseCustomPort: (value: boolean) => void;
 	setWebInterfaceCustomPort: (value: number) => void;
 	setColorBlindMode: (value: boolean) => void;
+	setLanguage: (value: string) => void;
 	setDocumentGraphShowExternalLinks: (value: boolean) => void;
 	setDocumentGraphMaxNodes: (value: number) => void;
 	setDocumentGraphPreviewCharLimit: (value: number) => void;
@@ -444,6 +448,7 @@ export const useSettingsStore = create<SettingsStore>()((set, get) => ({
 	contextManagementSettings: DEFAULT_CONTEXT_MANAGEMENT_SETTINGS,
 	keyboardMasteryStats: DEFAULT_KEYBOARD_MASTERY_STATS,
 	colorBlindMode: false,
+	language: 'en',
 	documentGraphShowExternalLinks: false,
 	documentGraphMaxNodes: 50,
 	documentGraphPreviewCharLimit: 100,
@@ -693,6 +698,28 @@ export const useSettingsStore = create<SettingsStore>()((set, get) => ({
 	setColorBlindMode: (value) => {
 		set({ colorBlindMode: value });
 		window.maestro.settings.set('colorBlindMode', value);
+	},
+
+	setLanguage: (value) => {
+		set({ language: value });
+		window.maestro.settings.set('language', value);
+		localStorage.setItem(LANGUAGE_STORAGE_KEY, value);
+		// changeLanguage returns a promise — with lazy-loaded translations,
+		// the resources are fetched on demand. Direction attributes are set
+		// after the language loads to ensure translated text and layout update together.
+		i18n.changeLanguage(value).then(() => {
+			// Notify main process so it can update native menus if needed
+			window.maestro.locale?.set(value);
+			// Direction attributes are applied reactively by DirectionProvider.
+			// We also set them here for immediate feedback before the next React render.
+			const rtl = RTL_LANGUAGES.includes(value as SupportedLanguage);
+			const dir = rtl ? 'rtl' : 'ltr';
+			document.documentElement.lang = value;
+			document.documentElement.dir = dir;
+			document.documentElement.setAttribute('data-dir', dir);
+			document.documentElement.style.setProperty('--dir-start', rtl ? 'right' : 'left');
+			document.documentElement.style.setProperty('--dir-end', rtl ? 'left' : 'right');
+		});
 	},
 
 	setDocumentGraphShowExternalLinks: (value) => {
@@ -1598,6 +1625,17 @@ export async function loadAllSettings(): Promise<void> {
 
 		if (allSettings['colorBlindMode'] !== undefined)
 			patch.colorBlindMode = allSettings['colorBlindMode'] as boolean;
+
+		if (allSettings['language'] !== undefined) {
+			const lang = allSettings['language'] as string;
+			patch.language = lang;
+			// Sync electron-store language to i18n and localStorage so language
+			// survives app restart even if localStorage was cleared
+			localStorage.setItem(LANGUAGE_STORAGE_KEY, lang);
+			if (i18n.language !== lang) {
+				i18n.changeLanguage(lang);
+			}
+		}
 
 		// Document Graph settings (with validation)
 		if (allSettings['documentGraphShowExternalLinks'] !== undefined)

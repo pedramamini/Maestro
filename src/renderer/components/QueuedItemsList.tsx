@@ -1,6 +1,7 @@
 import React, { useState, useCallback, useRef, memo } from 'react';
 import { X, ChevronDown, ChevronUp, GripVertical } from 'lucide-react';
 import type { Theme, QueuedItem } from '../types';
+import { useI18n } from '../hooks/useI18n';
 
 // ============================================================================
 // QueuedItemsList - Displays queued execution items with expand/collapse
@@ -31,6 +32,8 @@ export const QueuedItemsList = memo(
 		onReorderItems,
 		activeTabId,
 	}: QueuedItemsListProps) => {
+		const { t } = useI18n();
+		const { t: tA } = useI18n('accessibility');
 		// Filter to only show items for the active tab if activeTabId is provided
 		const filteredQueue = activeTabId
 			? executionQueue.filter((item) => item.tabId === activeTabId)
@@ -126,7 +129,7 @@ export const QueuedItemsList = memo(
 						className="text-xs font-bold tracking-wider"
 						style={{ color: theme.colors.warning }}
 					>
-						QUEUED ({filteredQueue.length})
+						{t('queued_items.separator', { count: filteredQueue.length })}
 					</span>
 					<div className="flex-1 h-px" style={{ backgroundColor: theme.colors.border }} />
 				</div>
@@ -147,7 +150,7 @@ export const QueuedItemsList = memo(
 							onDragOver={(e) => handleDragOver(e, index)}
 							onDragEnd={handleDragEnd}
 							onDragLeave={handleDragLeave}
-							className="mx-6 mb-2 p-3 rounded-lg relative group transition-all"
+							className="mx-6 mb-2 p-3 rounded-lg relative group transition-all overflow-hidden"
 							style={{
 								backgroundColor:
 									item.type === 'command'
@@ -176,14 +179,15 @@ export const QueuedItemsList = memo(
 								className="absolute top-2 right-2 p-1 rounded hover:bg-black/20 transition-colors"
 								style={{ color: theme.colors.textDim }}
 								title="Remove from queue"
+								aria-label={tA('action.remove_from_queue')}
 							>
 								<X className="w-4 h-4" />
 							</button>
 
 							{/* Item content */}
 							<div
-								className={`text-sm pr-8 whitespace-pre-wrap break-words ${canDrag ? 'pl-4' : ''}`}
-								style={{ color: theme.colors.textMain }}
+								className={`text-sm pr-8 whitespace-pre-wrap break-words overflow-hidden ${canDrag ? 'pl-4' : ''}`}
+								style={{ color: theme.colors.textMain, overflowWrap: 'anywhere' }}
 							>
 								{item.type === 'command' && (
 									<span style={{ color: theme.colors.success, fontWeight: 600 }}>
@@ -205,16 +209,17 @@ export const QueuedItemsList = memo(
 										color: theme.colors.accent,
 										backgroundColor: theme.colors.bgActivity,
 									}}
+									aria-expanded={isQueuedExpanded}
 								>
 									{isQueuedExpanded ? (
 										<>
 											<ChevronUp className="w-3 h-3" />
-											Show less
+											{t('queued_items.show_less')}
 										</>
 									) : (
 										<>
 											<ChevronDown className="w-3 h-3" />
-											Show all ({displayText.split('\n').length} lines)
+											{t('queued_items.show_all', { lines: displayText.split('\n').length })}
 										</>
 									)}
 								</button>
@@ -223,7 +228,7 @@ export const QueuedItemsList = memo(
 							{/* Images indicator */}
 							{item.images && item.images.length > 0 && (
 								<div className="mt-1 text-xs" style={{ color: theme.colors.textDim }}>
-									{item.images.length} image{item.images.length > 1 ? 's' : ''} attached
+									{t('queued_items.images_attached', { count: item.images.length })}
 								</div>
 							)}
 						</div>
@@ -237,6 +242,9 @@ export const QueuedItemsList = memo(
 						style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}
 						onClick={() => setQueueRemoveConfirmId(null)}
 						onKeyDown={handleModalKeyDown}
+						role="dialog"
+						aria-modal="true"
+						aria-labelledby="queue-remove-confirm-title"
 					>
 						<div
 							className="p-4 rounded-lg shadow-xl max-w-md mx-4"
@@ -245,11 +253,15 @@ export const QueuedItemsList = memo(
 							tabIndex={-1}
 							ref={(el) => el?.focus()}
 						>
-							<h3 className="text-lg font-semibold mb-2" style={{ color: theme.colors.textMain }}>
-								Remove Queued Message?
+							<h3
+								id="queue-remove-confirm-title"
+								className="text-lg font-semibold mb-2"
+								style={{ color: theme.colors.textMain }}
+							>
+								{t('queued_items.remove_title')}
 							</h3>
 							<p className="text-sm mb-4" style={{ color: theme.colors.textDim }}>
-								This message will be removed from the queue and will not be sent.
+								{t('queued_items.remove_message')}
 							</p>
 							<div className="flex gap-2 justify-end">
 								<button
@@ -257,7 +269,7 @@ export const QueuedItemsList = memo(
 									className="px-3 py-1.5 rounded text-sm"
 									style={{ backgroundColor: theme.colors.bgActivity, color: theme.colors.textMain }}
 								>
-									Cancel
+									{t('cancel')}
 								</button>
 								<button
 									onClick={handleConfirmRemove}
@@ -265,7 +277,7 @@ export const QueuedItemsList = memo(
 									style={{ backgroundColor: theme.colors.error, color: 'white' }}
 									autoFocus
 								>
-									Remove
+									{t('queued_items.remove_button')}
 								</button>
 							</div>
 						</div>

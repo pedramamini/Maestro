@@ -1,4 +1,5 @@
 import React, { useRef } from 'react';
+import { useTranslation } from 'react-i18next';
 import type { Theme, Session } from '../types';
 import { MODAL_PRIORITIES } from '../constants/modalPriorities';
 import { Modal, ModalFooter } from './ui/Modal';
@@ -30,6 +31,7 @@ export function RenameSessionModal(props: RenameSessionModalProps) {
 		targetSessionId,
 		onAfterRename,
 	} = props;
+	const { t } = useTranslation('modals');
 	// Use targetSessionId if provided, otherwise fall back to activeSessionId
 	const sessionIdToRename = targetSessionId || activeSessionId;
 	const inputRef = useRef<HTMLInputElement>(null);
@@ -78,7 +80,7 @@ export function RenameSessionModal(props: RenameSessionModalProps) {
 	return (
 		<Modal
 			theme={theme}
-			title="Rename Agent"
+			title={t('rename_session.title')}
 			priority={MODAL_PRIORITIES.RENAME_INSTANCE}
 			onClose={onClose}
 			initialFocusRef={inputRef}
@@ -87,7 +89,7 @@ export function RenameSessionModal(props: RenameSessionModalProps) {
 					theme={theme}
 					onCancel={onClose}
 					onConfirm={handleRename}
-					confirmLabel="Rename"
+					confirmLabel={t('rename_session.rename_button')}
 					confirmDisabled={!value.trim()}
 				/>
 			}
@@ -98,7 +100,7 @@ export function RenameSessionModal(props: RenameSessionModalProps) {
 				value={value}
 				onChange={setValue}
 				onSubmit={handleRename}
-				placeholder="Enter agent name..."
+				placeholder={t('rename_session.placeholder')}
 			/>
 		</Modal>
 	);

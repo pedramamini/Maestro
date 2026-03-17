@@ -60,6 +60,10 @@ vi.mock('../../../web/mobile/constants', () => ({
 	},
 }));
 
+vi.mock('../../../shared/i18n/config', () => ({
+	default: { language: 'en' },
+}));
+
 // Mock the logger
 vi.mock('../../../web/utils/logger', () => ({
 	webLogger: {
@@ -569,7 +573,7 @@ describe('SessionStatusBanner', () => {
 	});
 
 	describe('formatRelativeTime (via LastResponsePreviewSection)', () => {
-		it('shows "just now" for timestamps under 1 minute ago', () => {
+		it('shows "now" for timestamps under 1 minute ago', () => {
 			const lastResponse = createLastResponse({
 				timestamp: Date.now() - 30000, // 30 seconds ago
 			});
@@ -577,10 +581,10 @@ describe('SessionStatusBanner', () => {
 
 			render(<SessionStatusBanner session={session} />);
 
-			expect(screen.getByText(/just now/)).toBeInTheDocument();
+			expect(screen.getByText(/now/)).toBeInTheDocument();
 		});
 
-		it('shows "Xm ago" for timestamps under 1 hour ago', () => {
+		it('shows "X minutes ago" for timestamps under 1 hour ago', () => {
 			const lastResponse = createLastResponse({
 				timestamp: Date.now() - 1800000, // 30 minutes ago
 			});
@@ -588,10 +592,10 @@ describe('SessionStatusBanner', () => {
 
 			render(<SessionStatusBanner session={session} />);
 
-			expect(screen.getByText(/30m ago/)).toBeInTheDocument();
+			expect(screen.getByText(/30 minutes ago/)).toBeInTheDocument();
 		});
 
-		it('shows "Xh ago" for timestamps under 24 hours ago', () => {
+		it('shows "X hours ago" for timestamps under 24 hours ago', () => {
 			const lastResponse = createLastResponse({
 				timestamp: Date.now() - 7200000, // 2 hours ago
 			});
@@ -599,10 +603,10 @@ describe('SessionStatusBanner', () => {
 
 			render(<SessionStatusBanner session={session} />);
 
-			expect(screen.getByText(/2h ago/)).toBeInTheDocument();
+			expect(screen.getByText(/2 hours ago/)).toBeInTheDocument();
 		});
 
-		it('shows "Xd ago" for timestamps over 24 hours ago', () => {
+		it('shows "X days ago" for timestamps over 24 hours ago', () => {
 			const lastResponse = createLastResponse({
 				timestamp: Date.now() - 172800000, // 2 days ago
 			});
@@ -610,10 +614,10 @@ describe('SessionStatusBanner', () => {
 
 			render(<SessionStatusBanner session={session} />);
 
-			expect(screen.getByText(/2d ago/)).toBeInTheDocument();
+			expect(screen.getByText(/2 days ago/)).toBeInTheDocument();
 		});
 
-		it('shows "1m ago" at exactly 60 seconds', () => {
+		it('shows "1 minute ago" at exactly 60 seconds', () => {
 			const lastResponse = createLastResponse({
 				timestamp: Date.now() - 60000, // exactly 1 minute ago
 			});
@@ -621,7 +625,7 @@ describe('SessionStatusBanner', () => {
 
 			render(<SessionStatusBanner session={session} />);
 
-			expect(screen.getByText(/1m ago/)).toBeInTheDocument();
+			expect(screen.getByText(/1 minute ago/)).toBeInTheDocument();
 		});
 	});
 
@@ -1287,7 +1291,7 @@ describe('SessionStatusBanner', () => {
 				// Context usage
 				expect(screen.getByText('3%')).toBeInTheDocument();
 				// Last response section
-				expect(screen.getByText(/5m ago/)).toBeInTheDocument();
+				expect(screen.getByText(/5 minutes ago/)).toBeInTheDocument();
 			});
 
 			it('shows elapsed time and thinking indicator when busy with thinkingStartTime', () => {

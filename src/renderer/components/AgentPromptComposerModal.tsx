@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { X, FileText, Variable, ChevronDown, ChevronRight } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import type { Theme } from '../types';
 import { useLayerStack } from '../contexts/LayerStackContext';
 import { MODAL_PRIORITIES } from '../constants/modalPriorities';
@@ -23,6 +24,7 @@ export function AgentPromptComposerModal({
 	initialValue,
 	onSubmit,
 }: AgentPromptComposerModalProps) {
+	const { t } = useTranslation('modals');
 	const [value, setValue] = useState(initialValue);
 	const [variablesExpanded, setVariablesExpanded] = useState(false);
 	const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -147,14 +149,14 @@ export function AgentPromptComposerModal({
 					<div className="flex items-center gap-2">
 						<FileText className="w-5 h-5" style={{ color: theme.colors.accent }} />
 						<span className="font-medium" style={{ color: theme.colors.textMain }}>
-							Agent Prompt Editor
+							{t('agent_prompt_composer.title')}
 						</span>
 					</div>
 					<div className="flex items-center gap-3">
 						<button
 							onClick={handleDone}
 							className="p-1.5 rounded hover:bg-white/10 transition-colors"
-							title="Close (Escape)"
+							title={t('agent_prompt_composer.close_tooltip')}
 						>
 							<X className="w-5 h-5" style={{ color: theme.colors.textDim }} />
 						</button>
@@ -173,7 +175,7 @@ export function AgentPromptComposerModal({
 						<div className="flex items-center gap-2">
 							<Variable className="w-4 h-4" style={{ color: theme.colors.accent }} />
 							<span className="text-xs font-bold uppercase" style={{ color: theme.colors.textDim }}>
-								Template Variables
+								{t('agent_prompt_composer.template_variables_label')}
 							</span>
 						</div>
 						{variablesExpanded ? (
@@ -185,8 +187,7 @@ export function AgentPromptComposerModal({
 					{variablesExpanded && (
 						<div className="px-4 pb-3 pt-1">
 							<p className="text-xs mb-2" style={{ color: theme.colors.textDim }}>
-								Use these variables in your prompt. They will be replaced with actual values at
-								runtime.
+								{t('agent_prompt_composer.template_variables_description')}
 							</p>
 							<div className="grid grid-cols-2 gap-x-6 gap-y-1 max-h-40 overflow-y-auto scrollbar-thin">
 								{TEMPLATE_VARIABLES.map(({ variable, description }) => (
@@ -215,7 +216,7 @@ export function AgentPromptComposerModal({
 													});
 												}
 											}}
-											title="Click to insert"
+											title={t('agent_prompt_composer.click_to_insert')}
 										>
 											{variable}
 										</code>
@@ -238,7 +239,7 @@ export function AgentPromptComposerModal({
 						onKeyDown={handleTextareaKeyDown}
 						className="w-full h-full bg-transparent resize-none outline-none text-sm leading-relaxed scrollbar-thin font-mono"
 						style={{ color: theme.colors.textMain }}
-						placeholder="Enter your agent prompt... (type {{ for variables)"
+						placeholder={t('agent_prompt_composer.prompt_placeholder')}
 					/>
 					{/* Template Variable Autocomplete Dropdown */}
 					<TemplateAutocompleteDropdown
@@ -255,8 +256,8 @@ export function AgentPromptComposerModal({
 					style={{ borderColor: theme.colors.border, backgroundColor: theme.colors.bgSidebar }}
 				>
 					<div className="text-xs flex items-center gap-3" style={{ color: theme.colors.textDim }}>
-						<span>{value.length.toLocaleString('en-US')} characters</span>
-						<span>~{tokenCount.toLocaleString('en-US')} tokens</span>
+						<span>{t('agent_prompt_composer.characters_label', { count: value.length })}</span>
+						<span>{t('agent_prompt_composer.tokens_label', { count: tokenCount })}</span>
 					</div>
 					<button
 						onClick={handleDone}
@@ -266,7 +267,7 @@ export function AgentPromptComposerModal({
 							color: theme.colors.accentForeground,
 						}}
 					>
-						Done
+						{t('agent_prompt_composer.done_button')}
 					</button>
 				</div>
 			</div>

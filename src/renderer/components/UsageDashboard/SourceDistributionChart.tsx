@@ -14,6 +14,7 @@
  */
 
 import { memo, useState, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 import type { Theme } from '../../types';
 import type { StatsAggregation } from '../../hooks/stats/useStats';
 import { COLORBLIND_BINARY_PALETTE } from '../../constants/colorblindPalettes';
@@ -165,6 +166,7 @@ export const SourceDistributionChart = memo(function SourceDistributionChart({
 	theme,
 	colorBlindMode = false,
 }: SourceDistributionChartProps) {
+	const { t: tA } = useTranslation('accessibility');
 	const [metricMode, setMetricMode] = useState<MetricMode>('count');
 	const [hoveredSource, setHoveredSource] = useState<'interactive' | 'auto' | null>(null);
 
@@ -250,7 +252,12 @@ export const SourceDistributionChart = memo(function SourceDistributionChart({
 			className="p-4 rounded-lg"
 			style={{ backgroundColor: theme.colors.bgMain }}
 			role="figure"
-			aria-label={`Session type chart showing ${metricMode === 'count' ? 'query counts' : 'duration'} breakdown between Interactive and Auto Run sessions.`}
+			aria-label={tA('dashboard.source_distribution', {
+				metric:
+					metricMode === 'count'
+						? tA('dashboard.query_count_label')
+						: tA('dashboard.total_duration_label'),
+			})}
 		>
 			{/* Header with title and metric toggle */}
 			<div className="flex items-center justify-between mb-4">
@@ -274,7 +281,7 @@ export const SourceDistributionChart = memo(function SourceDistributionChart({
 								color: metricMode === 'count' ? theme.colors.accent : theme.colors.textDim,
 							}}
 							aria-pressed={metricMode === 'count'}
-							aria-label="Show query count"
+							aria-label={tA('dashboard.show_query_count')}
 						>
 							Count
 						</button>
@@ -288,7 +295,7 @@ export const SourceDistributionChart = memo(function SourceDistributionChart({
 								borderLeft: `1px solid ${theme.colors.border}`,
 							}}
 							aria-pressed={metricMode === 'duration'}
-							aria-label="Show total duration"
+							aria-label={tA('dashboard.show_total_duration')}
 						>
 							Duration
 						</button>
@@ -354,7 +361,11 @@ export const SourceDistributionChart = memo(function SourceDistributionChart({
 						</div>
 
 						{/* Legend */}
-						<div className="flex flex-col gap-3" role="list" aria-label="Chart legend">
+						<div
+							className="flex flex-col gap-3"
+							role="list"
+							aria-label={tA('dashboard.chart_legend')}
+						>
 							{sourceData.map((source) => (
 								<div
 									key={source.source}
@@ -362,7 +373,10 @@ export const SourceDistributionChart = memo(function SourceDistributionChart({
 									onMouseEnter={() => setHoveredSource(source.source)}
 									onMouseLeave={() => setHoveredSource(null)}
 									role="listitem"
-									aria-label={`${source.label}: ${source.percentage.toFixed(1)}%`}
+									aria-label={tA('dashboard.source_item_label', {
+										label: source.label,
+										percentage: source.percentage.toFixed(1),
+									})}
 								>
 									<div
 										className="w-3 h-3 rounded-sm flex-shrink-0"

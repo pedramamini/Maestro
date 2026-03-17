@@ -1,6 +1,7 @@
 import { useRef, useState, useEffect, useCallback } from 'react';
 import { ListOrdered, Command, MessageSquare } from 'lucide-react';
 import type { Session, Theme } from '../types';
+import { useI18n } from '../hooks/useI18n';
 
 interface ExecutionQueueIndicatorProps {
 	session: Session;
@@ -14,6 +15,7 @@ interface ExecutionQueueIndicatorProps {
  * Clicking opens the ExecutionQueueBrowser modal for full queue management.
  */
 export function ExecutionQueueIndicator({ session, theme, onClick }: ExecutionQueueIndicatorProps) {
+	const { t: tA } = useI18n('accessibility');
 	const queue = session.executionQueue || [];
 	const containerRef = useRef<HTMLButtonElement>(null);
 	const [maxVisiblePills, setMaxVisiblePills] = useState(3);
@@ -124,6 +126,7 @@ export function ExecutionQueueIndicator({ session, theme, onClick }: ExecutionQu
 				borderColor: theme.colors.border,
 				color: theme.colors.textMain,
 			}}
+			aria-label={tA('status.items_queued', { count: queue.length })}
 		>
 			<ListOrdered className="w-4 h-4 flex-shrink-0" style={{ color: theme.colors.warning }} />
 

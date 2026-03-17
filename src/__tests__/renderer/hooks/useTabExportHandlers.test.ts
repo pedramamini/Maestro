@@ -39,6 +39,12 @@ vi.mock('../../../renderer/stores/notificationStore', () => ({
 	notifyToast: (...args: unknown[]) => mockNotifyToast(...args),
 }));
 
+// Mock tNotify
+const mockTNotify = vi.fn();
+vi.mock('../../../renderer/utils/tNotify', () => ({
+	tNotify: (...args: unknown[]) => mockTNotify(...args),
+}));
+
 // Mock tabExport for dynamic import
 const mockDownloadTabExport = vi.fn();
 vi.mock('../../../renderer/utils/tabExport', () => ({
@@ -240,10 +246,10 @@ describe('useTabExportHandlers', () => {
 				await Promise.resolve();
 			});
 
-			expect(mockNotifyToast).toHaveBeenCalledWith({
+			expect(mockTNotify).toHaveBeenCalledWith({
 				type: 'success',
-				title: 'Context Copied',
-				message: 'Conversation copied to clipboard.',
+				titleKey: 'notifications:export.context_copied_title',
+				messageKey: 'notifications:export.context_copied_message',
 			});
 		});
 
@@ -264,10 +270,10 @@ describe('useTabExportHandlers', () => {
 				await Promise.resolve();
 			});
 
-			expect(mockNotifyToast).toHaveBeenCalledWith({
+			expect(mockTNotify).toHaveBeenCalledWith({
 				type: 'error',
-				title: 'Copy Failed',
-				message: 'Failed to copy context to clipboard.',
+				titleKey: 'notifications:export.copy_failed_title',
+				messageKey: 'notifications:export.copy_failed_message',
 			});
 
 			consoleError.mockRestore();
@@ -309,7 +315,7 @@ describe('useTabExportHandlers', () => {
 			});
 
 			expect(mockClipboardWriteText).not.toHaveBeenCalled();
-			expect(mockNotifyToast).not.toHaveBeenCalled();
+			expect(mockTNotify).not.toHaveBeenCalled();
 		});
 
 		it('does nothing when the activeSessionId does not match any session', async () => {
@@ -356,7 +362,7 @@ describe('useTabExportHandlers', () => {
 			});
 
 			expect(mockClipboardWriteText).not.toHaveBeenCalled();
-			expect(mockNotifyToast).not.toHaveBeenCalled();
+			expect(mockTNotify).not.toHaveBeenCalled();
 		});
 
 		it('does nothing when tab.logs is undefined', async () => {
@@ -423,10 +429,10 @@ describe('useTabExportHandlers', () => {
 				await result.current.handleExportHtml('tab-1');
 			});
 
-			expect(mockNotifyToast).toHaveBeenCalledWith({
+			expect(mockTNotify).toHaveBeenCalledWith({
 				type: 'success',
-				title: 'Export Complete',
-				message: 'Conversation exported as HTML.',
+				titleKey: 'notifications:export.export_complete_title',
+				messageKey: 'notifications:export.export_complete_message',
 			});
 		});
 
@@ -444,10 +450,10 @@ describe('useTabExportHandlers', () => {
 				await result.current.handleExportHtml('tab-1');
 			});
 
-			expect(mockNotifyToast).toHaveBeenCalledWith({
+			expect(mockTNotify).toHaveBeenCalledWith({
 				type: 'error',
-				title: 'Export Failed',
-				message: 'Failed to export conversation as HTML.',
+				titleKey: 'notifications:export.export_failed_title',
+				messageKey: 'notifications:export.export_failed_message',
 			});
 
 			consoleError.mockRestore();
@@ -485,7 +491,7 @@ describe('useTabExportHandlers', () => {
 			});
 
 			expect(mockDownloadTabExport).not.toHaveBeenCalled();
-			expect(mockNotifyToast).not.toHaveBeenCalled();
+			expect(mockTNotify).not.toHaveBeenCalled();
 		});
 
 		it('does nothing when the tab is not found', async () => {
@@ -513,7 +519,7 @@ describe('useTabExportHandlers', () => {
 			});
 
 			expect(mockDownloadTabExport).not.toHaveBeenCalled();
-			expect(mockNotifyToast).not.toHaveBeenCalled();
+			expect(mockTNotify).not.toHaveBeenCalled();
 		});
 
 		it('does nothing when tab.logs is undefined', async () => {

@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { ExternalLink, Trophy, Clock, Star, Share2, Copy, Download, Check } from 'lucide-react';
 import confetti from 'canvas-confetti';
+import { useTranslation } from 'react-i18next';
 import type { Theme, ThemeMode } from '../types';
 import type { ConductorBadge } from '../constants/conductorBadges';
 import { useLayerStack } from '../contexts/LayerStackContext';
@@ -43,11 +44,23 @@ export function StandingOvationOverlay({
 	isLeaderboardRegistered,
 	disableConfetti = false,
 }: StandingOvationOverlayProps) {
+	const { t } = useTranslation('common');
 	const { registerLayer, unregisterLayer, updateLayerHandler } = useLayerStack();
 	const layerIdRef = useRef<string>();
 	const containerRef = useRef<HTMLDivElement>(null);
 	const onCloseRef = useRef(onClose);
 	onCloseRef.current = onClose;
+
+	// Resolve badge text via i18n with English fallback
+	const badgeKey = badge.id.replace(/-/g, '_');
+	const badgeName = t(`badges.${badgeKey}.name`, badge.name);
+	const badgeDescription = t(`badges.${badgeKey}.description`, badge.description);
+	const badgeFlavorText = t(`badges.${badgeKey}.flavor_text`, badge.flavorText);
+	const exampleEra = t(`badges.${badgeKey}.example_era`, badge.exampleConductor.era);
+	const exampleAchievement = t(
+		`badges.${badgeKey}.example_achievement`,
+		badge.exampleConductor.achievement
+	);
 
 	// Ref for the close handler that includes confetti animation
 	const handleCloseRef = useRef<() => void>(() => {});
@@ -150,7 +163,7 @@ export function StandingOvationOverlay({
 			blocksLowerLayers: true,
 			capturesFocus: true,
 			focusTrap: 'strict',
-			ariaLabel: 'Standing Ovation Achievement',
+			ariaLabel: t('standing_ovation.aria_label'),
 			onEscape: () => handleCloseRef.current(),
 		});
 		layerIdRef.current = id;
@@ -246,27 +259,31 @@ export function StandingOvationOverlay({
 		ctx.font = 'bold 24px system-ui';
 		ctx.fillStyle = goldColor;
 		ctx.textAlign = 'center';
-		ctx.fillText('STANDING OVATION', width / 2, 120);
+		ctx.fillText(t('standing_ovation.title'), width / 2, 120);
 
 		// Achievement type
 		ctx.font = '16px system-ui';
 		ctx.fillStyle = textMain;
-		ctx.fillText(isNewRecord ? 'New Personal Record!' : 'Achievement Unlocked!', width / 2, 145);
+		ctx.fillText(
+			isNewRecord ? t('standing_ovation.new_record') : t('standing_ovation.achievement_unlocked'),
+			width / 2,
+			145
+		);
 
 		// Level badge
 		ctx.font = 'bold 18px system-ui';
 		ctx.fillStyle = goldColor;
-		ctx.fillText(`⭐ Level ${badge.level} ⭐`, width / 2, 180);
+		ctx.fillText(`⭐ ${t('badges.level_label', { level: badge.level })} ⭐`, width / 2, 180);
 
 		// Badge name
 		ctx.font = 'bold 28px system-ui';
 		ctx.fillStyle = purpleAccent;
-		ctx.fillText(badge.name, width / 2, 215);
+		ctx.fillText(badgeName, width / 2, 215);
 
 		// Flavor text
 		ctx.font = 'italic 14px system-ui';
 		ctx.fillStyle = textDim;
-		const flavorLines = wrapText(ctx, `"${badge.flavorText}"`, width - 80);
+		const flavorLines = wrapText(ctx, `"${badgeFlavorText}"`, width - 80);
 		let yOffset = 250;
 		flavorLines.forEach((line) => {
 			ctx.fillText(line, width / 2, yOffset);
@@ -286,7 +303,7 @@ export function StandingOvationOverlay({
 		ctx.font = '14px system-ui';
 		ctx.fillStyle = textDim;
 		ctx.textAlign = 'left';
-		ctx.fillText('Total AutoRun:', 70, statsY + 15);
+		ctx.fillText(`${t('standing_ovation.total_autorun')}:`, 70, statsY + 15);
 		ctx.fillStyle = textMain;
 		ctx.font = 'bold 14px system-ui';
 		ctx.fillText(formatCumulativeTime(cumulativeTimeMs), 180, statsY + 15);
@@ -295,7 +312,7 @@ export function StandingOvationOverlay({
 			ctx.fillStyle = textDim;
 			ctx.font = '14px system-ui';
 			ctx.textAlign = 'left';
-			ctx.fillText('Longest Run:', 350, statsY + 15);
+			ctx.fillText(`${t('standing_ovation.longest_run')}:`, 350, statsY + 15);
 			ctx.fillStyle = isNewRecord ? goldColor : textMain;
 			ctx.font = 'bold 14px system-ui';
 			ctx.fillText(formatCumulativeTime(recordTimeMs), 450, statsY + 15);
@@ -305,7 +322,7 @@ export function StandingOvationOverlay({
 		ctx.font = 'bold 12px system-ui';
 		ctx.fillStyle = textDim;
 		ctx.textAlign = 'center';
-		ctx.fillText('MAESTRO • Agent Orchestration Command Center', width / 2, height - 20);
+		ctx.fillText(t('standing_ovation.canvas_footer'), width / 2, height - 20);
 
 		return canvas;
 	}, [badge, cumulativeTimeMs, recordTimeMs, isNewRecord, purpleAccent, theme.colors]);
@@ -382,7 +399,7 @@ export function StandingOvationOverlay({
 				className="fixed inset-0 flex items-center justify-center z-[99999] pointer-events-none p-4"
 				role="dialog"
 				aria-modal="true"
-				aria-label="Standing Ovation Achievement"
+				aria-label={t('standing_ovation.aria_label')}
 				tabIndex={-1}
 			>
 				{/* Main content card */}
@@ -426,11 +443,13 @@ export function StandingOvationOverlay({
 								textShadow: `0 0 20px ${goldColor}60`,
 							}}
 						>
-							STANDING OVATION
+							{t('standing_ovation.title')}
 						</h1>
 
 						<p className="text-lg" style={{ color: theme.colors.textMain }}>
-							{isNewRecord ? 'New Personal Record!' : 'Achievement Unlocked!'}
+							{isNewRecord
+								? t('standing_ovation.new_record')
+								: t('standing_ovation.achievement_unlocked')}
 						</p>
 					</div>
 
@@ -452,17 +471,17 @@ export function StandingOvationOverlay({
 						<div className="flex items-center justify-center gap-2 mb-2">
 							<Star className="w-5 h-5" style={{ color: goldColor }} />
 							<span className="text-xl font-bold" style={{ color: theme.colors.textMain }}>
-								Level {badge.level}
+								{t('badges.level_label', { level: badge.level })}
 							</span>
 							<Star className="w-5 h-5" style={{ color: goldColor }} />
 						</div>
 
 						<h2 className="text-2xl font-bold mb-3" style={{ color: purpleAccent }}>
-							{badge.name}
+							{badgeName}
 						</h2>
 
 						<p className="text-sm mb-4 leading-relaxed" style={{ color: theme.colors.textDim }}>
-							{badge.description}
+							{badgeDescription}
 						</p>
 
 						{/* Flavor text */}
@@ -470,7 +489,7 @@ export function StandingOvationOverlay({
 							className="text-sm italic mb-4"
 							style={{ color: theme.colors.textMain, opacity: 0.8 }}
 						>
-							"{badge.flavorText}"
+							"{badgeFlavorText}"
 						</p>
 
 						{/* Example conductor */}
@@ -482,16 +501,16 @@ export function StandingOvationOverlay({
 							}}
 						>
 							<p className="text-xs mb-1" style={{ color: theme.colors.textDim }}>
-								Example Maestro
+								{t('standing_ovation.example_maestro')}
 							</p>
 							<p className="font-medium" style={{ color: theme.colors.textMain }}>
 								{badge.exampleConductor.name}
 							</p>
 							<p className="text-xs" style={{ color: theme.colors.textDim }}>
-								{badge.exampleConductor.era}
+								{exampleEra}
 							</p>
 							<p className="text-xs mt-1" style={{ color: theme.colors.textDim }}>
-								{badge.exampleConductor.achievement}
+								{exampleAchievement}
 							</p>
 							<button
 								onClick={() =>
@@ -501,7 +520,7 @@ export function StandingOvationOverlay({
 								style={{ color: purpleAccent }}
 							>
 								<ExternalLink className="w-3 h-3" />
-								Learn more on Wikipedia
+								{t('standing_ovation.learn_more_wikipedia')}
 							</button>
 						</div>
 
@@ -517,7 +536,7 @@ export function StandingOvationOverlay({
 								<div className="flex items-center justify-center gap-1 mb-1">
 									<Clock className="w-3 h-3" style={{ color: theme.colors.textDim }} />
 									<span className="text-xs" style={{ color: theme.colors.textDim }}>
-										Total AutoRun
+										{t('standing_ovation.total_autorun')}
 									</span>
 								</div>
 								<span className="font-mono font-bold" style={{ color: theme.colors.textMain }}>
@@ -529,7 +548,9 @@ export function StandingOvationOverlay({
 									<div className="flex items-center justify-center gap-1 mb-1">
 										<Trophy className="w-3 h-3" style={{ color: goldColor }} />
 										<span className="text-xs" style={{ color: theme.colors.textDim }}>
-											{isNewRecord ? 'New Record' : 'Longest Run'}
+											{isNewRecord
+												? t('standing_ovation.new_record_label')
+												: t('standing_ovation.longest_run')}
 										</span>
 									</div>
 									<span
@@ -545,15 +566,17 @@ export function StandingOvationOverlay({
 						{/* Next level info */}
 						{nextBadge && (
 							<div className="text-xs" style={{ color: theme.colors.textDim }}>
-								<span>Next: </span>
-								<span style={{ color: purpleAccent }}>{nextBadge.name}</span>
+								<span>{t('standing_ovation.next_label')} </span>
+								<span style={{ color: purpleAccent }}>
+									{t(`badges.${nextBadge.id.replace(/-/g, '_')}.name`, nextBadge.name)}
+								</span>
 								<span> • {formatTimeRemaining(cumulativeTimeMs, nextBadge)}</span>
 							</div>
 						)}
 
 						{!nextBadge && (
 							<div className="text-xs" style={{ color: goldColor }}>
-								You have achieved the highest rank! A true Titan of the Baton.
+								{t('standing_ovation.highest_rank')}
 							</div>
 						)}
 					</div>
@@ -570,7 +593,9 @@ export function StandingOvationOverlay({
 								boxShadow: `0 4px 20px ${purpleAccent}40`,
 							}}
 						>
-							{isClosing ? '🎉 Bravo! 🎉' : 'Take a Bow'}
+							{isClosing
+								? `🎉 ${t('standing_ovation.bravo')} 🎉`
+								: t('standing_ovation.take_a_bow')}
 						</button>
 
 						{/* Share options */}
@@ -585,7 +610,7 @@ export function StandingOvationOverlay({
 								}}
 							>
 								<Share2 className="w-4 h-4" />
-								Share Achievement
+								{t('standing_ovation.share_achievement')}
 							</button>
 
 							{shareMenuOpen && (
@@ -609,7 +634,9 @@ export function StandingOvationOverlay({
 											<Copy className="w-4 h-4" style={{ color: theme.colors.textDim }} />
 										)}
 										<span style={{ color: theme.colors.textMain }}>
-											{copySuccess ? 'Copied!' : 'Copy to Clipboard'}
+											{copySuccess
+												? t('standing_ovation.copied')
+												: t('standing_ovation.copy_to_clipboard')}
 										</span>
 									</button>
 									<button
@@ -620,7 +647,9 @@ export function StandingOvationOverlay({
 										className="w-full flex items-center gap-3 px-3 py-2 rounded hover:bg-white/10 transition-colors"
 									>
 										<Download className="w-4 h-4" style={{ color: theme.colors.textDim }} />
-										<span style={{ color: theme.colors.textMain }}>Save as Image</span>
+										<span style={{ color: theme.colors.textMain }}>
+											{t('standing_ovation.save_as_image')}
+										</span>
 									</button>
 								</div>
 							)}
@@ -641,7 +670,7 @@ export function StandingOvationOverlay({
 								}}
 							>
 								<Trophy className="w-4 h-4" />
-								Join Global Leaderboard
+								{t('standing_ovation.join_global_leaderboard')}
 							</button>
 						)}
 					</div>

@@ -6,6 +6,7 @@
  */
 
 import { useRef, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 import { AlertTriangle, Trash2 } from 'lucide-react';
 import type { Theme } from '../types';
 import { MODAL_PRIORITIES } from '../constants/modalPriorities';
@@ -26,6 +27,7 @@ export function DeleteGroupChatModal({
 	onClose,
 	onConfirm,
 }: DeleteGroupChatModalProps): JSX.Element | null {
+	const { t } = useTranslation('modals');
 	const confirmButtonRef = useRef<HTMLButtonElement>(null);
 
 	const handleConfirm = useCallback(() => {
@@ -38,7 +40,7 @@ export function DeleteGroupChatModal({
 	return (
 		<Modal
 			theme={theme}
-			title="Delete Group Chat"
+			title={t('delete_group_chat.title')}
 			priority={MODAL_PRIORITIES.DELETE_GROUP_CHAT}
 			onClose={onClose}
 			headerIcon={<Trash2 className="w-4 h-4" style={{ color: theme.colors.error }} />}
@@ -49,7 +51,7 @@ export function DeleteGroupChatModal({
 					theme={theme}
 					onCancel={onClose}
 					onConfirm={handleConfirm}
-					confirmLabel="Delete"
+					confirmLabel={t('delete_group_chat.delete_button')}
 					destructive
 					confirmButtonRef={confirmButtonRef}
 				/>
@@ -64,11 +66,10 @@ export function DeleteGroupChatModal({
 				</div>
 				<div>
 					<p className="leading-relaxed" style={{ color: theme.colors.textMain }}>
-						Are you sure you want to delete <strong>"{groupChatName}"</strong>?
+						{t('delete_group_chat.confirm_message', { name: groupChatName })}
 					</p>
 					<p className="text-sm leading-relaxed mt-2" style={{ color: theme.colors.textDim }}>
-						This will permanently delete the group chat and all its messages. Participant sessions
-						will not be affected.
+						{t('delete_group_chat.warning_message')}
 					</p>
 				</div>
 			</div>

@@ -1,4 +1,5 @@
 import { useRef } from 'react';
+import { useTranslation } from 'react-i18next';
 import { AlertTriangle, Trash2 } from 'lucide-react';
 import type { Theme } from '../types';
 import { MODAL_PRIORITIES } from '../constants/modalPriorities';
@@ -17,6 +18,7 @@ export function PlaybookDeleteConfirmModal({
 	onConfirm,
 	onCancel,
 }: PlaybookDeleteConfirmModalProps) {
+	const { t } = useTranslation('modals');
 	const confirmButtonRef = useRef<HTMLButtonElement>(null);
 
 	const handleConfirmClick = () => {
@@ -27,7 +29,7 @@ export function PlaybookDeleteConfirmModal({
 	return (
 		<Modal
 			theme={theme}
-			title="Delete Playbook"
+			title={t('playbook_delete.title')}
 			priority={MODAL_PRIORITIES.PLAYBOOK_DELETE_CONFIRM}
 			onClose={onCancel}
 			headerIcon={<Trash2 className="w-4 h-4" style={{ color: theme.colors.error }} />}
@@ -38,7 +40,7 @@ export function PlaybookDeleteConfirmModal({
 					theme={theme}
 					onCancel={onCancel}
 					onConfirm={handleConfirmClick}
-					confirmLabel="Delete"
+					confirmLabel={t('playbook_delete.delete_button')}
 					destructive
 					confirmButtonRef={confirmButtonRef}
 				/>
@@ -58,10 +60,10 @@ export function PlaybookDeleteConfirmModal({
 				</div>
 				<div>
 					<p className="leading-relaxed" style={{ color: theme.colors.textMain }}>
-						Are you sure you want to delete "<strong>{playbookName}</strong>"?
+						{t('playbook_delete.confirm_message', { name: playbookName })}
 					</p>
 					<p className="text-sm mt-2" style={{ color: theme.colors.textDim }}>
-						This cannot be undone.
+						{t('playbook_delete.warning_message')}
 					</p>
 				</div>
 			</div>

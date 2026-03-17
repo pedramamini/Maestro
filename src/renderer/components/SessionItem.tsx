@@ -1,5 +1,6 @@
 import React, { memo } from 'react';
 import { Activity, GitBranch, Bot, Bookmark, AlertCircle, Server } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import type { Session, Group, Theme } from '../types';
 import { getStatusColor } from '../utils/theme';
 
@@ -84,6 +85,8 @@ export const SessionItem = memo(function SessionItem({
 	onStartRename,
 	onToggleBookmark,
 }: SessionItemProps) {
+	const { t } = useTranslation(['menus', 'common']);
+
 	// Determine if we show the GIT/LOCAL badge (not shown in bookmark variant, terminal sessions, or worktree variant)
 	const showGitLocalBadge =
 		variant !== 'bookmark' && variant !== 'worktree' && session.toolType !== 'terminal';
@@ -175,7 +178,7 @@ export const SessionItem = memo(function SessionItem({
 							</div>
 						)}
 						<Activity className="w-3 h-3" /> {session.toolType}
-						{session.sessionSshRemoteConfig?.enabled ? ' (SSH)' : ''}
+						{session.sessionSshRemoteConfig?.enabled ? ` ${t('menus:session.ssh_suffix')}` : ''}
 						{/* Group badge (only in bookmark variant when session belongs to a group) */}
 						{variant === 'bookmark' && group && (
 							<span
@@ -214,7 +217,7 @@ export const SessionItem = memo(function SessionItem({
 										backgroundColor: theme.colors.warning + '30',
 										color: theme.colors.warning,
 									}}
-									title="Running on remote host via SSH"
+									title={t('common:status.ssh_remote')}
 								>
 									<Server className="w-3 h-3" />
 								</div>
@@ -225,9 +228,9 @@ export const SessionItem = memo(function SessionItem({
 									backgroundColor: theme.colors.accent + '30',
 									color: theme.colors.accent,
 								}}
-								title="Git repository"
+								title={t('menus:session.git_repo_title')}
 							>
-								GIT
+								{t('menus:session.git_badge')}
 							</div>
 						</>
 					) : (
@@ -244,11 +247,13 @@ export const SessionItem = memo(function SessionItem({
 							}}
 							title={
 								session.sessionSshRemoteConfig?.enabled
-									? 'Running on remote host via SSH'
-									: 'Local directory (not a git repo)'
+									? t('common:status.ssh_remote')
+									: t('menus:session.local_dir_title')
 							}
 						>
-							{session.sessionSshRemoteConfig?.enabled ? 'REMOTE' : 'LOCAL'}
+							{session.sessionSshRemoteConfig?.enabled
+								? t('menus:session.remote_badge')
+								: t('menus:session.local_badge')}
 						</div>
 					))}
 
@@ -260,10 +265,10 @@ export const SessionItem = memo(function SessionItem({
 							backgroundColor: theme.colors.warning + '30',
 							color: theme.colors.warning,
 						}}
-						title="Auto Run active"
+						title={t('common:status.auto_run_active')}
 					>
 						<Bot className="w-2.5 h-2.5" />
-						AUTO
+						{t('menus:session.auto_badge')}
 					</div>
 				)}
 
@@ -272,10 +277,10 @@ export const SessionItem = memo(function SessionItem({
 					<div
 						className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold uppercase"
 						style={{ backgroundColor: theme.colors.error + '30', color: theme.colors.error }}
-						title={`Error: ${session.agentError.message}`}
+						title={t('common:status.error_prefix', { message: session.agentError.message })}
 					>
 						<AlertCircle className="w-2.5 h-2.5" />
-						ERR
+						{t('menus:session.err_badge')}
 					</div>
 				)}
 
@@ -288,7 +293,11 @@ export const SessionItem = memo(function SessionItem({
 								onToggleBookmark();
 							}}
 							className={`p-0.5 rounded hover:bg-white/10 transition-all ${session.bookmarked ? '' : 'opacity-0 group-hover:opacity-100'}`}
-							title={session.bookmarked ? 'Remove bookmark' : 'Add bookmark'}
+							title={
+								session.bookmarked
+									? t('menus:session.remove_bookmark')
+									: t('menus:session.add_bookmark')
+							}
 						>
 							<Bookmark
 								className="w-3 h-3"
@@ -303,7 +312,7 @@ export const SessionItem = memo(function SessionItem({
 								onToggleBookmark();
 							}}
 							className="p-0.5 rounded hover:bg-white/10 transition-colors"
-							title="Remove bookmark"
+							title={t('menus:session.remove_bookmark')}
 						>
 							<Bookmark
 								className="w-3 h-3"
@@ -328,18 +337,20 @@ export const SessionItem = memo(function SessionItem({
 						}
 						title={
 							session.toolType === 'claude-code' && !session.agentSessionId
-								? 'No active Claude session'
+								? t('common:status.no_active_session')
 								: session.state === 'idle'
-									? 'Ready and waiting'
+									? t('common:status.ready')
 									: session.state === 'busy'
 										? session.cliActivity
-											? `CLI: Running playbook "${session.cliActivity.playbookName}"`
-											: 'Agent is thinking'
+											? t('common:status.running_playbook', {
+													playbookName: session.cliActivity.playbookName,
+												})
+											: t('common:status.thinking')
 										: session.state === 'connecting'
-											? 'Attempting to establish connection'
+											? t('common:status.connecting')
 											: session.state === 'error'
-												? 'No connection with agent'
-												: 'Waiting for input'
+												? t('common:status.no_connection')
+												: t('common:status.waiting_input')
 						}
 					/>
 					{/* Unread Notification Badge */}
@@ -347,7 +358,7 @@ export const SessionItem = memo(function SessionItem({
 						<div
 							className="absolute -top-0.5 -right-0.5 w-1.5 h-1.5 rounded-full"
 							style={{ backgroundColor: theme.colors.error }}
-							title="Unread messages"
+							title={t('common:status.unread_messages')}
 						/>
 					)}
 				</div>

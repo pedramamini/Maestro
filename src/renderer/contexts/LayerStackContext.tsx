@@ -1,8 +1,13 @@
 import React, { createContext, useContext, useEffect, ReactNode } from 'react';
 import { useLayerStack as useLayerStackHook, type LayerStackAPI } from '../hooks';
 
-// Create context with null as default (will throw if used outside provider)
-const LayerStackContext = createContext<LayerStackAPI | null>(null);
+// Cache the context on globalThis so it survives Vite HMR module reloads.
+// Without this, HMR creates a new context object, breaking the provider/consumer link.
+const _global = globalThis as { __MAESTRO_LAYER_STACK_CTX__?: React.Context<LayerStackAPI | null> };
+if (!_global.__MAESTRO_LAYER_STACK_CTX__) {
+	_global.__MAESTRO_LAYER_STACK_CTX__ = createContext<LayerStackAPI | null>(null);
+}
+const LayerStackContext = _global.__MAESTRO_LAYER_STACK_CTX__;
 
 interface LayerStackProviderProps {
 	children: ReactNode;

@@ -20,7 +20,7 @@ import { useSessionStore } from '../../stores/sessionStore';
 import { useSettingsStore } from '../../stores/settingsStore';
 import { useUIStore } from '../../stores/uiStore';
 import { getModalActions } from '../../stores/modalStore';
-import { notifyToast } from '../../stores/notificationStore';
+import { tNotify } from '../../utils/tNotify';
 import { generateId } from '../../utils/ids';
 import { validateNewSession } from '../../utils/sessionValidation';
 import { gitService } from '../../services/git';
@@ -158,10 +158,13 @@ export function useSessionCrud(deps: UseSessionCrudDeps): UseSessionCrudReturn {
 				);
 				if (!validation.valid) {
 					console.error(`Session validation failed: ${validation.error}`);
-					notifyToast({
+					tNotify({
 						type: 'error',
-						title: 'Agent Creation Failed',
-						message: validation.error || 'Cannot create duplicate agent',
+						titleKey: 'notifications:agent.creation_failed_title',
+						messageKey: validation.error
+							? 'notifications:agent.creation_failed_message'
+							: 'notifications:agent.creation_failed_default_message',
+						values: validation.error ? { message: validation.error } : undefined,
 					});
 					return;
 				}
@@ -349,12 +352,11 @@ export function useSessionCrud(deps: UseSessionCrudDeps): UseSessionCrudReturn {
 						setActiveSessionId('');
 					}
 
-					notifyToast({
+					tNotify({
 						type: 'success',
-						title: 'Group Removed',
-						message: `Removed "${group.name}" and ${sessionCount} agent${
-							sessionCount !== 1 ? 's' : ''
-						}`,
+						titleKey: 'notifications:session.group_removed_title',
+						messageKey: 'notifications:session.group_removed_message',
+						values: { name: group.name, count: sessionCount },
 					});
 				}
 			);

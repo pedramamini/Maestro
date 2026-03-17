@@ -334,7 +334,10 @@ export function MermaidRenderer({ chart, theme }: MermaidRendererProps) {
 			setError(null);
 			setSvgContent(null);
 
-			// Initialize mermaid with the app's theme colors (only when theme changes)
+			// Initialize mermaid with the app's theme colors (only when theme changes).
+			// IMPORTANT: theme.name is a proper noun (e.g. "Dracula", "Nord") and must
+			// remain untranslated — it serves as a stable cache key here. If theme.name
+			// were ever routed through i18n, the cache would thrash on every language switch.
 			if (lastThemeId !== theme.name) {
 				initMermaid(theme);
 				lastThemeId = theme.name;

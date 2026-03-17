@@ -1,13 +1,15 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { useTranslation } from 'react-i18next';
 import { X, GitPullRequest, Loader2, AlertTriangle, ExternalLink } from 'lucide-react';
 import type { Theme, GhCliStatus } from '../types';
 import { useLayerStack } from '../contexts/LayerStackContext';
 import { MODAL_PRIORITIES } from '../constants/modalPriorities';
+import { useI18n } from '../hooks/useI18n';
 
 /**
  * Renders error text with URLs converted to clickable links
  */
-function renderErrorWithLinks(error: string, theme: Theme): React.ReactNode {
+function renderErrorWithLinks(error: string, theme: Theme, viewPrLabel: string): React.ReactNode {
 	// Match URLs in the error text
 	const urlRegex = /(https?:\/\/[^\s]+)/g;
 	const parts = error.split(urlRegex);
@@ -23,7 +25,7 @@ function renderErrorWithLinks(error: string, theme: Theme): React.ReactNode {
 			urlRegex.lastIndex = 0;
 			// Extract PR number or use shortened URL
 			const prMatch = part.match(/\/pull\/(\d+)/);
-			const displayText = prMatch ? `PR #${prMatch[1]}` : 'View PR';
+			const displayText = prMatch ? `PR #${prMatch[1]}` : viewPrLabel;
 			return (
 				<button
 					key={index}
@@ -84,6 +86,8 @@ export function CreatePRModal({
 	availableBranches,
 	onPRCreated,
 }: CreatePRModalProps) {
+	const { t } = useTranslation('modals');
+	const { t: tA } = useI18n('accessibility');
 	const { registerLayer, unregisterLayer } = useLayerStack();
 	const onCloseRef = useRef(onClose);
 	onCloseRef.current = onClose;
@@ -190,10 +194,10 @@ export function CreatePRModal({
 				});
 				onClose();
 			} else {
-				setError(result.error || 'Failed to create PR');
+				setError(result.error || t('create_pr.failed_to_create'));
 			}
 		} catch (err) {
-			setError(err instanceof Error ? err.message : 'Failed to create PR');
+			setError(err instanceof Error ? err.message : t('create_pr.failed_to_create'));
 		} finally {
 			setIsCreating(false);
 		}
@@ -224,10 +228,14 @@ export function CreatePRModal({
 					<div className="flex items-center gap-2">
 						<GitPullRequest className="w-5 h-5" style={{ color: theme.colors.accent }} />
 						<h2 className="font-bold" style={{ color: theme.colors.textMain }}>
-							Create Pull Request
+							{t('create_pr.title')}
 						</h2>
 					</div>
-					<button onClick={onClose} className="p-1 rounded hover:bg-white/10 transition-colors">
+					<button
+						onClick={onClose}
+						className="p-1 rounded hover:bg-white/10 transition-colors"
+						aria-label={tA('modal.close')}
+					>
 						<X className="w-4 h-4" style={{ color: theme.colors.textDim }} />
 					</button>
 				</div>
@@ -248,18 +256,18 @@ export function CreatePRModal({
 								style={{ color: theme.colors.warning }}
 							/>
 							<div className="text-sm">
-								<p style={{ color: theme.colors.warning }}>GitHub CLI not installed</p>
+								<p style={{ color: theme.colors.warning }}>{t('create_pr.gh_not_installed')}</p>
 								<p className="mt-1" style={{ color: theme.colors.textDim }}>
-									Install{' '}
+									{t('create_pr.gh_install_prefix')}{' '}
 									<button
 										type="button"
 										className="underline hover:opacity-80"
 										style={{ color: theme.colors.accent }}
 										onClick={() => window.maestro.shell.openExternal('https://cli.github.com')}
 									>
-										GitHub CLI
+										{t('create_pr.gh_cli_link')}
 									</button>{' '}
-									to create pull requests.
+									{t('create_pr.gh_not_installed_description')}
 								</p>
 							</div>
 						</div>
@@ -279,16 +287,16 @@ export function CreatePRModal({
 								style={{ color: theme.colors.warning }}
 							/>
 							<div className="text-sm">
-								<p style={{ color: theme.colors.warning }}>GitHub CLI not authenticated</p>
+								<p style={{ color: theme.colors.warning }}>{t('create_pr.gh_not_authenticated')}</p>
 								<p className="mt-1" style={{ color: theme.colors.textDim }}>
-									Run{' '}
+									{t('create_pr.gh_run_prefix')}{' '}
 									<code
 										className="px-1 py-0.5 rounded"
 										style={{ backgroundColor: theme.colors.bgActivity }}
 									>
 										gh auth login
 									</code>{' '}
-									in your terminal to authenticate.
+									{t('create_pr.gh_not_authenticated_description')}
 								</p>
 							</div>
 						</div>
@@ -301,7 +309,7 @@ export function CreatePRModal({
 							style={{ color: theme.colors.textDim }}
 						>
 							<Loader2 className="w-4 h-4 animate-spin" />
-							Checking GitHub CLI...
+							{t('create_pr.checking_gh')}
 						</div>
 					)}
 
@@ -323,11 +331,12 @@ export function CreatePRModal({
 									/>
 									<div className="text-sm">
 										<p style={{ color: theme.colors.warning }}>
-											{uncommittedCount} uncommitted change{uncommittedCount !== 1 ? 's' : ''}
+											{uncommittedCount !== 1
+												? t('create_pr.uncommitted_changes_plural', { count: uncommittedCount })
+												: t('create_pr.uncommitted_changes', { count: uncommittedCount })}
 										</p>
 										<p className="mt-1" style={{ color: theme.colors.textDim }}>
-											Only committed changes will be included in the PR. Uncommitted changes will
-											not be pushed.
+											{t('create_pr.uncommitted_description')}
 										</p>
 									</div>
 								</div>
@@ -339,7 +348,7 @@ export function CreatePRModal({
 									className="text-xs font-medium mb-1.5 block"
 									style={{ color: theme.colors.textDim }}
 								>
-									From Branch
+									{t('create_pr.from_branch_label')}
 								</label>
 								<div
 									className="px-3 py-2 rounded border text-sm"
@@ -359,7 +368,7 @@ export function CreatePRModal({
 									className="text-xs font-medium mb-1.5 block"
 									style={{ color: theme.colors.textDim }}
 								>
-									Target Branch
+									{t('create_pr.target_branch_label')}
 								</label>
 								<select
 									value={targetBranch}
@@ -388,13 +397,13 @@ export function CreatePRModal({
 									className="text-xs font-medium mb-1.5 block"
 									style={{ color: theme.colors.textDim }}
 								>
-									Title
+									{t('create_pr.title_label')}
 								</label>
 								<input
 									type="text"
 									value={title}
 									onChange={(e) => setTitle(e.target.value)}
-									placeholder="PR title..."
+									placeholder={t('create_pr.title_placeholder')}
 									className="w-full px-3 py-2 rounded border bg-transparent outline-none text-sm"
 									style={{
 										borderColor: theme.colors.border,
@@ -409,12 +418,13 @@ export function CreatePRModal({
 									className="text-xs font-medium mb-1.5 block"
 									style={{ color: theme.colors.textDim }}
 								>
-									Description <span className="opacity-50">(optional)</span>
+									{t('create_pr.description_label')}{' '}
+									<span className="opacity-50">{t('create_pr.description_optional')}</span>
 								</label>
 								<textarea
 									value={description}
 									onChange={(e) => setDescription(e.target.value)}
-									placeholder="Add a description..."
+									placeholder={t('create_pr.description_placeholder')}
 									rows={3}
 									className="w-full px-3 py-2 rounded border bg-transparent outline-none text-sm resize-none"
 									style={{
@@ -438,7 +448,7 @@ export function CreatePRModal({
 										style={{ color: theme.colors.error }}
 									/>
 									<p className="text-sm break-words min-w-0" style={{ color: theme.colors.error }}>
-										{renderErrorWithLinks(error, theme)}
+										{renderErrorWithLinks(error, theme, t('create_pr.view_pr'))}
 									</p>
 								</div>
 							)}
@@ -456,7 +466,7 @@ export function CreatePRModal({
 						className="px-4 py-2 rounded text-sm hover:bg-white/10 transition-colors"
 						style={{ color: theme.colors.textMain }}
 					>
-						Cancel
+						{t('create_pr.cancel_button')}
 					</button>
 					<button
 						onClick={handleCreatePR}
@@ -472,12 +482,12 @@ export function CreatePRModal({
 						{isCreating ? (
 							<>
 								<Loader2 className="w-4 h-4 animate-spin" />
-								Creating...
+								{t('create_pr.creating_button')}
 							</>
 						) : (
 							<>
 								<GitPullRequest className="w-4 h-4" />
-								Create PR
+								{t('create_pr.create_button')}
 							</>
 						)}
 					</button>

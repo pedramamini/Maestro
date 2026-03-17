@@ -28,17 +28,18 @@ export type LookbackPeriod = {
 	label: string;
 	hours: number | null; // null = all time
 	bucketCount: number;
+	tKey: string; // i18n translation key (under common:history.lookback.*)
 };
 
 export const LOOKBACK_OPTIONS: LookbackPeriod[] = [
-	{ label: '24 hours', hours: 24, bucketCount: 24 },
-	{ label: '72 hours', hours: 72, bucketCount: 24 },
-	{ label: '1 week', hours: 168, bucketCount: 28 },
-	{ label: '2 weeks', hours: 336, bucketCount: 28 },
-	{ label: '1 month', hours: 720, bucketCount: 30 },
-	{ label: '6 months', hours: 4320, bucketCount: 24 },
-	{ label: '1 year', hours: 8760, bucketCount: 24 },
-	{ label: 'All time', hours: null, bucketCount: 24 },
+	{ label: '24 hours', hours: 24, bucketCount: 24, tKey: 'history.lookback.24_hours' },
+	{ label: '72 hours', hours: 72, bucketCount: 24, tKey: 'history.lookback.72_hours' },
+	{ label: '1 week', hours: 168, bucketCount: 28, tKey: 'history.lookback.1_week' },
+	{ label: '2 weeks', hours: 336, bucketCount: 28, tKey: 'history.lookback.2_weeks' },
+	{ label: '1 month', hours: 720, bucketCount: 30, tKey: 'history.lookback.1_month' },
+	{ label: '6 months', hours: 4320, bucketCount: 24, tKey: 'history.lookback.6_months' },
+	{ label: '1 year', hours: 8760, bucketCount: 24, tKey: 'history.lookback.1_year' },
+	{ label: 'All time', hours: null, bucketCount: 24, tKey: 'history.lookback.all_time' },
 ];
 
 // Constants for history pagination

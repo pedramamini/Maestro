@@ -24,7 +24,7 @@ import {
 	type ConductorBadge,
 } from '../constants/conductorBadges';
 import { MaestroSilhouette } from './MaestroSilhouette';
-import { formatTokensCompact } from '../utils/formatters';
+import { formatTokensCompact, getActiveLocale } from '../utils/formatters';
 import maestroWandIcon from '../assets/icon-wand.png';
 import { safeClipboardWriteBlob } from '../utils/clipboard';
 
@@ -184,9 +184,9 @@ function BadgeTooltip({
 	const getPositionStyles = () => {
 		switch (position) {
 			case 'left':
-				return { left: 0, transform: 'translateX(0)' };
+				return { insetInlineStart: 0, transform: 'translateX(0)' };
 			case 'right':
-				return { right: 0, transform: 'translateX(0)' };
+				return { insetInlineEnd: 0, transform: 'translateX(0)' };
 			default:
 				return { left: '50%', transform: 'translateX(-50%)' };
 		}
@@ -195,9 +195,9 @@ function BadgeTooltip({
 	const getArrowStyles = () => {
 		switch (position) {
 			case 'left':
-				return { left: '16px', transform: 'translateX(0)' };
+				return { insetInlineStart: '16px', transform: 'translateX(0)' };
 			case 'right':
-				return { right: '16px', left: 'auto', transform: 'translateX(0)' };
+				return { insetInlineEnd: '16px', insetInlineStart: 'auto', transform: 'translateX(0)' };
 			default:
 				return { left: '50%', transform: 'translateX(-50%)' };
 		}
@@ -1038,7 +1038,7 @@ export function AchievementCard({
 						className="absolute rounded-full flex items-center justify-center overflow-hidden"
 						style={{
 							top: 8,
-							left: 8,
+							insetInlineStart: 8,
 							width: 56,
 							height: 56,
 							background: currentLevel > 0 ? '#2d2d44' : theme.colors.bgMain,
@@ -1058,7 +1058,7 @@ export function AchievementCard({
 							className="absolute flex items-center justify-center text-xs font-bold"
 							style={{
 								top: -2,
-								right: -2,
+								insetInlineEnd: -2,
 								width: 20,
 								height: 20,
 								borderRadius: '50%',
@@ -1260,7 +1260,7 @@ export function AchievementCard({
 												<span style={{ color: theme.colors.textMain }}>{badge.shortName}</span>
 											</div>
 											<span style={{ color: theme.colors.textDim }}>
-												{new Date(record.unlockedAt).toLocaleDateString(undefined, {
+												{new Date(record.unlockedAt).toLocaleDateString(getActiveLocale(), {
 													month: 'short',
 													day: 'numeric',
 													year: 'numeric',

@@ -16,6 +16,7 @@ import type { Theme, Shortcut } from '../types';
 import { formatShortcutKeys } from '../utils/shortcutFormatter';
 import { useClickOutside } from '../hooks';
 import { WelcomeContent } from './WelcomeContent';
+import { useI18n } from '../hooks/useI18n';
 
 interface EmptyStateViewProps {
 	theme: Theme;
@@ -40,6 +41,7 @@ export function EmptyStateView({
 	onCheckForUpdates,
 	onStartTour,
 }: EmptyStateViewProps) {
+	const { t: tMenus } = useI18n('menus');
 	const [menuOpen, setMenuOpen] = useState(false);
 	const menuRef = useRef<HTMLDivElement>(null);
 
@@ -85,7 +87,7 @@ export function EmptyStateView({
 						onClick={() => setMenuOpen(!menuOpen)}
 						className="p-2 rounded hover:bg-white/10 transition-colors"
 						style={{ color: theme.colors.textDim }}
-						title="Menu"
+						title={tMenus('hamburger.menu')}
 					>
 						<Menu className="w-5 h-5" />
 					</button>
@@ -110,10 +112,10 @@ export function EmptyStateView({
 									<Wand2 className="w-5 h-5" style={{ color: theme.colors.accent }} />
 									<div className="flex-1">
 										<div className="text-sm font-medium" style={{ color: theme.colors.textMain }}>
-											New Agent Wizard
+											{tMenus('hamburger.wizard')}
 										</div>
 										<div className="text-xs" style={{ color: theme.colors.textDim }}>
-											Get started with AI
+											{tMenus('hamburger.wizard_desc')}
 										</div>
 									</div>
 									<span
@@ -138,10 +140,10 @@ export function EmptyStateView({
 										<Compass className="w-5 h-5" style={{ color: theme.colors.accent }} />
 										<div className="flex-1">
 											<div className="text-sm font-medium" style={{ color: theme.colors.textMain }}>
-												Take a Tour
+												{tMenus('hamburger.tour')}
 											</div>
 											<div className="text-xs" style={{ color: theme.colors.textDim }}>
-												Learn the interface
+												{tMenus('hamburger.tour_desc')}
 											</div>
 										</div>
 									</button>
@@ -159,7 +161,7 @@ export function EmptyStateView({
 									<Settings className="w-5 h-5" style={{ color: theme.colors.textDim }} />
 									<div className="flex-1">
 										<div className="text-sm font-medium" style={{ color: theme.colors.textMain }}>
-											Settings
+											{tMenus('hamburger.settings')}
 										</div>
 									</div>
 									<span
@@ -183,7 +185,7 @@ export function EmptyStateView({
 									<HelpCircle className="w-5 h-5" style={{ color: theme.colors.textDim }} />
 									<div className="flex-1">
 										<div className="text-sm font-medium" style={{ color: theme.colors.textMain }}>
-											Keyboard Shortcuts
+											{tMenus('hamburger.keyboard_shortcuts')}
 										</div>
 									</div>
 									<span
@@ -209,10 +211,10 @@ export function EmptyStateView({
 									<RefreshCw className="w-5 h-5" style={{ color: theme.colors.textDim }} />
 									<div className="flex-1">
 										<div className="text-sm font-medium" style={{ color: theme.colors.textMain }}>
-											Check for Updates
+											{tMenus('hamburger.check_updates')}
 										</div>
 										<div className="text-xs" style={{ color: theme.colors.textDim }}>
-											Get the latest version
+											{tMenus('hamburger.check_updates_desc')}
 										</div>
 									</div>
 								</button>
@@ -227,10 +229,10 @@ export function EmptyStateView({
 									<Globe className="w-5 h-5" style={{ color: theme.colors.textDim }} />
 									<div className="flex-1">
 										<div className="text-sm font-medium" style={{ color: theme.colors.textMain }}>
-											Maestro Website
+											{tMenus('hamburger.website')}
 										</div>
 										<div className="text-xs" style={{ color: theme.colors.textDim }}>
-											Visit runmaestro.ai
+											{tMenus('hamburger.website_desc')}
 										</div>
 									</div>
 									<ExternalLink className="w-4 h-4" style={{ color: theme.colors.textDim }} />
@@ -246,10 +248,10 @@ export function EmptyStateView({
 									<BookOpen className="w-5 h-5" style={{ color: theme.colors.textDim }} />
 									<div className="flex-1">
 										<div className="text-sm font-medium" style={{ color: theme.colors.textMain }}>
-											Documentation
+											{tMenus('hamburger.documentation')}
 										</div>
 										<div className="text-xs" style={{ color: theme.colors.textDim }}>
-											See usage docs on docs.runmaestro.ai
+											{tMenus('hamburger.documentation_desc')}
 										</div>
 									</div>
 									<ExternalLink className="w-4 h-4" style={{ color: theme.colors.textDim }} />
@@ -265,10 +267,10 @@ export function EmptyStateView({
 									<Info className="w-5 h-5" style={{ color: theme.colors.textDim }} />
 									<div className="flex-1">
 										<div className="text-sm font-medium" style={{ color: theme.colors.textMain }}>
-											About Maestro
+											{tMenus('hamburger.about')}
 										</div>
 										<div className="text-xs" style={{ color: theme.colors.textDim }}>
-											Version, Credits, Stats
+											{tMenus('hamburger.about_desc')}
 										</div>
 									</div>
 								</button>
@@ -290,7 +292,7 @@ export function EmptyStateView({
 						style={{ backgroundColor: theme.colors.accent, color: theme.colors.accentForeground }}
 					>
 						<Bot className="w-5 h-5" />
-						New Agent
+						{tMenus('empty_state.new_agent')}
 					</button>
 					<button
 						onClick={onOpenWizard}
@@ -298,7 +300,7 @@ export function EmptyStateView({
 						style={{ backgroundColor: theme.colors.accent, color: theme.colors.accentForeground }}
 					>
 						<Wand2 className="w-5 h-5" />
-						Wizard
+						{tMenus('empty_state.wizard')}
 					</button>
 				</div>
 			</div>

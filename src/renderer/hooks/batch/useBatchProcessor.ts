@@ -22,7 +22,7 @@ import { useSessionDebounce } from './useSessionDebounce';
 import { DEFAULT_BATCH_STATE, type BatchAction } from './batchReducer';
 import { useBatchStore, selectHasAnyActiveBatch } from '../../stores/batchStore';
 import { useSessionStore } from '../../stores/sessionStore';
-import { notifyToast } from '../../stores/notificationStore';
+import { tNotify } from '../../utils/tNotify';
 import { useTimeTracking } from './useTimeTracking';
 import { useWorktreeManager } from './useWorktreeManager';
 import { useDocumentProcessor } from './useDocumentProcessor';
@@ -798,10 +798,11 @@ export function useBatchProcessor({
 			});
 
 			// Notify user that Auto Run has started
-			notifyToast({
+			tNotify({
 				type: 'info',
-				title: 'Auto Run Started',
-				message: `${initialTotalTasks} ${initialTotalTasks === 1 ? 'task' : 'tasks'} across ${documents.length} ${documents.length === 1 ? 'document' : 'documents'}`,
+				titleKey: 'notifications:autorun.started_title',
+				messageKey: 'notifications:autorun.started_message',
+				values: { count: initialTotalTasks, docCount: documents.length },
 				project: session.name,
 				sessionId,
 			});

@@ -2,6 +2,9 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Check } from 'lucide-react';
 import type { Theme, HistoryEntry } from '../../types';
 import { LOOKBACK_OPTIONS } from './historyConstants';
+import { useI18n } from '../../hooks/useI18n';
+import { getActiveLocale } from '../../utils/formatters';
+import { useContextMenuPosition } from '../../hooks/ui/useContextMenuPosition';
 
 // Activity bar graph component with configurable lookback window
 export interface ActivityGraphProps {
@@ -21,9 +24,16 @@ export const ActivityGraph: React.FC<ActivityGraphProps> = ({
 	lookbackHours,
 	onLookbackChange,
 }) => {
+	const { t } = useI18n();
 	const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
 	const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
 	const graphRef = useRef<HTMLDivElement>(null);
+	const contextMenuRef = useRef<HTMLDivElement>(null);
+	const contextMenuPos = useContextMenuPosition(
+		contextMenuRef,
+		contextMenu?.x ?? 0,
+		contextMenu?.y ?? 0
+	);
 
 	// Get the current lookback config
 	const lookbackConfig = useMemo(
@@ -101,18 +111,13 @@ export const ActivityGraph: React.FC<ActivityGraphProps> = ({
 
 		// Format based on lookback period
 		if (lookbackHours !== null && lookbackHours <= 72) {
-			// For short periods, show time of day
-			const formatHour = (date: Date) => {
-				const hour = date.getHours();
-				const ampm = hour >= 12 ? 'PM' : 'AM';
-				const hour12 = hour % 12 || 12;
-				return `${hour12}${ampm}`;
-			};
-			return `${formatHour(bucketStart)} - ${formatHour(bucketEnd)}`;
+			// For short periods, show time of day using locale-aware formatting
+			const hourFmt = new Intl.DateTimeFormat(getActiveLocale(), { hour: 'numeric' });
+			return `${hourFmt.format(bucketStart)} - ${hourFmt.format(bucketEnd)}`;
 		} else {
 			// For longer periods, show dates
 			const formatDate = (date: Date) => {
-				return date.toLocaleDateString([], { month: 'short', day: 'numeric' });
+				return date.toLocaleDateString(getActiveLocale(), { month: 'short', day: 'numeric' });
 			};
 			if (formatDate(bucketStart) === formatDate(bucketEnd)) {
 				return formatDate(bucketStart);
@@ -160,10 +165,13 @@ export const ActivityGraph: React.FC<ActivityGraphProps> = ({
 		const diffMins = Math.floor(diffMs / 60000);
 		const diffHours = Math.floor(diffMins / 60);
 
-		if (diffMins < 1) return 'Now';
-		if (diffMins < 60) return `${diffMins}m ago`;
-		if (diffHours < 24) return `${diffHours}h ago`;
-		return new Date(endTime).toLocaleDateString([], { month: 'short', day: 'numeric' });
+		if (diffMins < 1) return t('history.graph.now_label');
+		if (diffMins < 60) return t('history.graph.minutes_ago', { count: diffMins });
+		if (diffHours < 24) return t('history.graph.hours_ago', { count: diffHours });
+		return new Date(endTime).toLocaleDateString(getActiveLocale(), {
+			month: 'short',
+			day: 'numeric',
+		});
 	};
 
 	// Check if we're viewing historical data (not "now")
@@ -175,35 +183,47 @@ export const ActivityGraph: React.FC<ActivityGraphProps> = ({
 			// All time - show start and end dates
 			return [
 				{
-					label: new Date(startTime).toLocaleDateString([], { month: 'short', day: 'numeric' }),
+					label: new Date(startTime).toLocaleDateString(getActiveLocale(), {
+						month: 'short',
+						day: 'numeric',
+					}),
 					index: 0,
 				},
-				{ label: 'Now', index: bucketCount - 1 },
+				{ label: t('history.graph.now_label'), index: bucketCount - 1 },
 			];
 		} else if (lookbackHours <= 24) {
 			return [
-				{ label: `${lookbackHours}h`, index: 0 },
-				{ label: `${Math.floor((lookbackHours * 2) / 3)}h`, index: Math.floor(bucketCount / 3) },
-				{ label: `${Math.floor(lookbackHours / 3)}h`, index: Math.floor((bucketCount * 2) / 3) },
-				{ label: '0h', index: bucketCount - 1 },
+				{ label: t('time.hours_short', { count: lookbackHours }), index: 0 },
+				{
+					label: t('time.hours_short', { count: Math.floor((lookbackHours * 2) / 3) }),
+					index: Math.floor(bucketCount / 3),
+				},
+				{
+					label: t('time.hours_short', { count: Math.floor(lookbackHours / 3) }),
+					index: Math.floor((bucketCount * 2) / 3),
+				},
+				{ label: t('time.hours_short', { count: 0 }), index: bucketCount - 1 },
 			];
 		} else if (lookbackHours <= 168) {
 			// Up to 1 week - show days
 			const days = Math.floor(lookbackHours / 24);
 			return [
-				{ label: `${days}d`, index: 0 },
-				{ label: `${Math.floor(days / 2)}d`, index: Math.floor(bucketCount / 2) },
-				{ label: 'Now', index: bucketCount - 1 },
+				{ label: t('time.days_short', { count: days }), index: 0 },
+				{
+					label: t('time.days_short', { count: Math.floor(days / 2) }),
+					index: Math.floor(bucketCount / 2),
+				},
+				{ label: t('history.graph.now_label'), index: bucketCount - 1 },
 			];
 		} else {
 			// Longer periods - show start/end
-			const startLabel = new Date(startTime).toLocaleDateString([], {
+			const startLabel = new Date(startTime).toLocaleDateString(getActiveLocale(), {
 				month: 'short',
 				day: 'numeric',
 			});
 			return [
 				{ label: startLabel, index: 0 },
-				{ label: 'Now', index: bucketCount - 1 },
+				{ label: t('history.graph.now_label'), index: bucketCount - 1 },
 			];
 		}
 	};
@@ -216,7 +236,18 @@ export const ActivityGraph: React.FC<ActivityGraphProps> = ({
 			className="flex-1 min-w-0 flex flex-col relative mt-0.5"
 			title={
 				hoveredIndex === null
-					? `${isHistorical ? `Viewing: ${formatReferenceTime()} • ` : ''}${lookbackConfig.label}: ${totalAuto} auto, ${totalUser} user (right-click to change)`
+					? isHistorical
+						? t('history.graph.tooltip_viewing', {
+								time: formatReferenceTime(),
+								period: t(lookbackConfig.tKey, { defaultValue: lookbackConfig.label }),
+								autoCount: totalAuto,
+								userCount: totalUser,
+							})
+						: t('history.graph.tooltip', {
+								period: t(lookbackConfig.tKey, { defaultValue: lookbackConfig.label }),
+								autoCount: totalAuto,
+								userCount: totalUser,
+							})
 					: undefined
 			}
 			onContextMenu={handleContextMenu}
@@ -224,10 +255,12 @@ export const ActivityGraph: React.FC<ActivityGraphProps> = ({
 			{/* Context menu for lookback options */}
 			{contextMenu && (
 				<div
+					ref={contextMenuRef}
 					className="fixed z-50 py-1 rounded border shadow-lg"
 					style={{
-						left: contextMenu.x,
-						top: contextMenu.y,
+						left: contextMenuPos.left,
+						top: contextMenuPos.top,
+						opacity: contextMenuPos.ready ? 1 : 0,
 						backgroundColor: theme.colors.bgSidebar,
 						borderColor: theme.colors.border,
 						minWidth: '120px',
@@ -237,11 +270,11 @@ export const ActivityGraph: React.FC<ActivityGraphProps> = ({
 						className="px-3 py-1 text-[10px] font-bold uppercase"
 						style={{ color: theme.colors.textDim }}
 					>
-						Lookback Period
+						{t('history.graph.lookback_period')}
 					</div>
 					{LOOKBACK_OPTIONS.map((option) => (
 						<button
-							key={option.label}
+							key={option.hours ?? 'all'}
 							className="w-full px-3 py-1.5 text-left text-xs hover:bg-white/10 transition-colors flex items-center justify-between"
 							style={{
 								color: option.hours === lookbackHours ? theme.colors.accent : theme.colors.textMain,
@@ -251,7 +284,7 @@ export const ActivityGraph: React.FC<ActivityGraphProps> = ({
 								setContextMenu(null);
 							}}
 						>
-							{option.label}
+							{t(option.tKey, { defaultValue: option.label })}
 							{option.hours === lookbackHours && (
 								<Check className="w-3 h-3" style={{ color: theme.colors.accent }} />
 							)}
@@ -287,13 +320,13 @@ export const ActivityGraph: React.FC<ActivityGraphProps> = ({
 					</div>
 					<div className="flex flex-col gap-0.5">
 						<div className="flex items-center justify-between gap-3">
-							<span style={{ color: theme.colors.warning }}>Auto</span>
+							<span style={{ color: theme.colors.warning }}>{t('history.graph.auto_label')}</span>
 							<span className="font-bold" style={{ color: theme.colors.warning }}>
 								{bucketData[hoveredIndex].auto}
 							</span>
 						</div>
 						<div className="flex items-center justify-between gap-3">
-							<span style={{ color: theme.colors.accent }}>User</span>
+							<span style={{ color: theme.colors.accent }}>{t('history.graph.user_label')}</span>
 							<span className="font-bold" style={{ color: theme.colors.accent }}>
 								{bucketData[hoveredIndex].user}
 							</span>

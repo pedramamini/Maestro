@@ -17,6 +17,7 @@ import { generateId } from '../utils/ids';
 import { useLayerStack } from '../contexts/LayerStackContext';
 import { MODAL_PRIORITIES } from '../constants/modalPriorities';
 import { formatMetaKey } from '../utils/shortcutFormatter';
+import { useTranslation } from 'react-i18next';
 
 // Tree node type for folder structure
 export interface DocTreeNode {
@@ -65,6 +66,7 @@ function DocumentSelectorModal({
 	onAdd,
 	onRefresh,
 }: DocumentSelectorModalProps) {
+	const { t: tA } = useTranslation('accessibility');
 	// Layer stack for escape handling
 	const { registerLayer, unregisterLayer } = useLayerStack();
 	const onCloseRef = useRef(onClose);
@@ -423,7 +425,7 @@ function DocumentSelectorModal({
 					e.stopPropagation();
 					onClose();
 				}}
-				aria-label="Close document selector"
+				aria-label={tA('modal.close_document_selector')}
 			/>
 			<div
 				className="relative z-10 w-[550px] max-h-[70vh] border rounded-lg shadow-2xl overflow-hidden flex flex-col"

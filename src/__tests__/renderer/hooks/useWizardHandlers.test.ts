@@ -36,6 +36,11 @@ vi.mock('../../../renderer/stores/notificationStore', async () => {
 	return { ...actual, notifyToast: vi.fn() };
 });
 
+const mockTNotify = vi.fn();
+vi.mock('../../../renderer/utils/tNotify', () => ({
+	tNotify: (...args: unknown[]) => mockTNotify(...args),
+}));
+
 let idCounter = 0;
 vi.mock('../../../renderer/utils/ids', () => ({
 	generateId: vi.fn(() => `mock-id-${++idCounter}`),
@@ -1016,10 +1021,10 @@ describe('useWizardHandlers', () => {
 				await result.current.handleHistoryCommand();
 			});
 
-			expect(notifyToast).toHaveBeenCalledWith(
+			expect(mockTNotify).toHaveBeenCalledWith(
 				expect.objectContaining({
 					type: 'success',
-					title: 'History Entry Added',
+					titleKey: 'notifications:history.entry_added_title',
 				})
 			);
 		});
@@ -2019,10 +2024,10 @@ describe('useWizardHandlers', () => {
 				})
 			).rejects.toThrow('Duplicate session');
 
-			expect(notifyToast).toHaveBeenCalledWith(
+			expect(mockTNotify).toHaveBeenCalledWith(
 				expect.objectContaining({
 					type: 'error',
-					title: 'Agent Creation Failed',
+					titleKey: 'notifications:agent.creation_failed_title',
 				})
 			);
 			consoleSpy.mockRestore();

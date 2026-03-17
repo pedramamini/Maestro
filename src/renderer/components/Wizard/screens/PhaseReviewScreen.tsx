@@ -15,6 +15,7 @@
  */
 
 import { useEffect, useCallback, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Loader2, Rocket, Compass, X } from 'lucide-react';
 import type { Theme } from '../../../types';
 import { useWizard } from '../WizardContext';
@@ -67,6 +68,8 @@ function DocumentReview({
 	) => void;
 	wizardStartTime?: number;
 }): JSX.Element {
+	const { t } = useTranslation('modals');
+
 	const { state, setEditedPhase1Content, getPhase1Content, setWantsTour, setCurrentDocumentIndex } =
 		useWizard();
 
@@ -387,7 +390,7 @@ function DocumentReview({
 	if (!currentDoc) {
 		return (
 			<div className="flex-1 flex items-center justify-center">
-				<p style={{ color: theme.colors.textDim }}>No documents generated</p>
+				<p style={{ color: theme.colors.textDim }}>{t('wizard.review.no_documents')}</p>
 			</div>
 		);
 	}
@@ -395,8 +398,12 @@ function DocumentReview({
 	// Build stats text
 	const statsText =
 		generatedDocuments.length > 1
-			? `${totalTasks} total tasks • ${generatedDocuments.length} documents • ${taskCount} tasks in this document`
-			: `${taskCount} tasks ready to run`;
+			? t('wizard.review.total_tasks_stats', {
+					totalTasks,
+					docCount: generatedDocuments.length,
+					currentTasks: taskCount,
+				})
+			: t('wizard.review.single_doc_stats', { taskCount });
 
 	return (
 		<div
@@ -501,7 +508,9 @@ function DocumentReview({
 						) : (
 							<Rocket className="w-5 h-5" />
 						)}
-						{launchingButton === 'ready' ? 'Launching...' : "I'm Ready to Go"}
+						{launchingButton === 'ready'
+							? t('wizard.review.launching')
+							: t('wizard.review.ready_button')}
 					</button>
 
 					{/* Secondary button - Walk Me Through */}
@@ -525,7 +534,9 @@ function DocumentReview({
 						) : (
 							<Compass className="w-5 h-5" />
 						)}
-						{launchingButton === 'tour' ? 'Launching...' : 'Walk Me Through the Interface'}
+						{launchingButton === 'tour'
+							? t('wizard.review.launching')
+							: t('wizard.review.tour_button')}
 					</button>
 				</div>
 
@@ -538,7 +549,7 @@ function DocumentReview({
 						>
 							{formatShortcutKeys(['Meta', 'e'])}
 						</kbd>
-						Toggle Edit/Preview
+						{t('wizard.review.kbd_toggle_edit')}
 					</span>
 					{generatedDocuments.length > 1 && (
 						<span
@@ -551,7 +562,7 @@ function DocumentReview({
 							>
 								{formatShortcutKeys(['Meta', 'Shift'])}[]
 							</kbd>
-							Cycle documents
+							{t('wizard.review.kbd_cycle_docs')}
 						</span>
 					)}
 					<span className="text-xs flex items-center gap-1" style={{ color: theme.colors.textDim }}>
@@ -561,7 +572,7 @@ function DocumentReview({
 						>
 							Tab
 						</kbd>
-						Switch buttons
+						{t('wizard.review.kbd_switch_buttons')}
 					</span>
 					<span className="text-xs flex items-center gap-1" style={{ color: theme.colors.textDim }}>
 						<kbd
@@ -570,7 +581,7 @@ function DocumentReview({
 						>
 							Enter
 						</kbd>
-						Select
+						{t('wizard.review.kbd_select')}
 					</span>
 					<span className="text-xs flex items-center gap-1" style={{ color: theme.colors.textDim }}>
 						<kbd
@@ -579,7 +590,7 @@ function DocumentReview({
 						>
 							Esc
 						</kbd>
-						Go back
+						{t('wizard.review.kbd_go_back')}
 					</span>
 				</div>
 			</div>
@@ -603,6 +614,8 @@ export function PhaseReviewScreen({
 	onWizardComplete,
 	wizardStartTime,
 }: PhaseReviewScreenProps): JSX.Element {
+	const { t } = useTranslation('modals');
+
 	const { state, previousStep } = useWizard();
 
 	// Screen reader announcement state
@@ -633,7 +646,7 @@ export function PhaseReviewScreen({
 		previousStep();
 		return (
 			<div className="flex-1 flex items-center justify-center">
-				<p style={{ color: theme.colors.textDim }}>Redirecting...</p>
+				<p style={{ color: theme.colors.textDim }}>{t('wizard.review.redirecting')}</p>
 			</div>
 		);
 	}

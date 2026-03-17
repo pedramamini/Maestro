@@ -10,6 +10,7 @@ import React, {
 import { HelpCircle } from 'lucide-react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import type { Session, Theme, HistoryEntry, HistoryEntryType } from '../types';
+import { useI18n } from '../hooks/useI18n';
 import { HistoryDetailModal } from './HistoryDetailModal';
 import { HistoryHelpModal } from './HistoryHelpModal';
 import { useThrottledCallback, useListNavigation } from '../hooks';
@@ -57,6 +58,7 @@ export const HistoryPanel = React.memo(
 		},
 		ref
 	) {
+		const { t } = useI18n();
 		const [historyEntries, setHistoryEntries] = useState<HistoryEntry[]>([]);
 		const [activeFilters, setActiveFilters] = useState<Set<HistoryEntryType>>(
 			new Set(['AUTO', 'USER'])
@@ -469,7 +471,7 @@ export const HistoryPanel = React.memo(
 							color: theme.colors.textDim,
 							border: `1px solid ${theme.colors.border}`,
 						}}
-						title="History panel help"
+						title={t('history.help_tooltip')}
 					>
 						<HelpCircle className="w-3.5 h-3.5" />
 					</button>
@@ -482,7 +484,7 @@ export const HistoryPanel = React.memo(
 							ref={searchInputRef}
 							autoFocus
 							type="text"
-							placeholder="Filter history..."
+							placeholder={t('history.search_placeholder')}
 							value={searchFilter}
 							onChange={(e) => setSearchFilter(e.target.value)}
 							onKeyDown={(e) => {
@@ -505,7 +507,7 @@ export const HistoryPanel = React.memo(
 						/>
 						{searchFilter && (
 							<div className="text-[10px] mt-1 text-right" style={{ color: theme.colors.textDim }}>
-								{allFilteredEntries.length} result{allFilteredEntries.length !== 1 ? 's' : ''}
+								{t('history.result_count', { count: allFilteredEntries.length })}
 							</div>
 						)}
 					</div>
@@ -520,33 +522,40 @@ export const HistoryPanel = React.memo(
 					onScroll={handleScroll}
 				>
 					{isLoading ? (
-						<div className="text-center py-8 text-xs opacity-50">Loading history...</div>
+						<div className="text-center py-8 text-xs opacity-50">
+							{t('history.loading_message')}
+						</div>
 					) : allFilteredEntries.length === 0 ? (
 						<div className="text-center py-8 text-xs opacity-50">
 							{historyEntries.length === 0 ? (
-								'No history yet. Run batch tasks or use /history to add entries.'
+								t('history.empty_message')
 							) : searchFilter ? (
-								`No entries match "${searchFilter}"`
+								t('history.no_search_match', { filter: searchFilter })
 							) : graphLookbackHours !== null ? (
 								<>
-									No entries in the last{' '}
-									{graphLookbackHours <= 24
-										? `${graphLookbackHours}h`
-										: graphLookbackHours <= 168
-											? `${Math.round(graphLookbackHours / 24)}d`
-											: `${Math.round(graphLookbackHours / 720)}mo`}
-									.
+									{t('history.no_entries_in_range', {
+										period:
+											graphLookbackHours <= 24
+												? t('common:time.hours_short', { count: graphLookbackHours })
+												: graphLookbackHours <= 168
+													? t('common:time.days_short', {
+															count: Math.round(graphLookbackHours / 24),
+														})
+													: t('common:time.months_short', {
+															count: Math.round(graphLookbackHours / 720),
+														}),
+									})}
 									<br />
 									<button
 										onClick={() => handleLookbackChange(null)}
 										className="mt-2 underline hover:no-underline"
 										style={{ color: theme.colors.accent }}
 									>
-										Show all time ({historyEntries.length} entries)
+										{t('history.show_all_time', { count: historyEntries.length })}
 									</button>
 								</>
 							) : (
-								'No entries match the selected filters.'
+								t('history.no_filter_match')
 							)}
 						</div>
 					) : (

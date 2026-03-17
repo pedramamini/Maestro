@@ -18,6 +18,7 @@ import { useThemeColors } from '../components/ThemeProvider';
 import { triggerHaptic, HAPTIC_PATTERNS } from './constants';
 import type { CommandHistoryEntry } from '../hooks/useCommandHistory';
 import { truncateCommand } from '../../shared/formatters';
+import { useI18n } from '../../renderer/hooks/useI18n';
 
 /** Maximum characters to show in a chip before truncating */
 const MAX_CHIP_LENGTH = 30;
@@ -49,6 +50,7 @@ export function RecentCommandChips({
 	disabled = false,
 }: RecentCommandChipsProps) {
 	const colors = useThemeColors();
+	const { t: ta } = useI18n('accessibility');
 	const scrollContainerRef = useRef<HTMLDivElement>(null);
 
 	// Get limited number of commands
@@ -158,7 +160,7 @@ export function RecentCommandChips({
 							e.currentTarget.style.transform = 'scale(1)';
 							e.currentTarget.style.backgroundColor = colors.bgSidebar;
 						}}
-						aria-label={`Reuse command: ${entry.command}`}
+						aria-label={ta('mobile.reuse_command', { command: entry.command })}
 					>
 						{/* Mode indicator icon */}
 						{entry.mode === 'ai' ? (

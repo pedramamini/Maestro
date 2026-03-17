@@ -27,11 +27,9 @@ vi.mock('../../../../renderer/services/git', () => ({
 	},
 }));
 
-// Mock notifyToast
-vi.mock('../../../../renderer/stores/notificationStore', async () => {
-	const actual = await vi.importActual('../../../../renderer/stores/notificationStore');
-	return { ...actual, notifyToast: vi.fn() };
-});
+// Mock tNotify
+const { tNotify } = vi.hoisted(() => ({ tNotify: vi.fn() }));
+vi.mock('../../../../renderer/utils/tNotify', () => ({ tNotify }));
 
 // Mock worktreeDedup
 vi.mock('../../../../renderer/utils/worktreeDedup', () => ({
@@ -41,7 +39,6 @@ vi.mock('../../../../renderer/utils/worktreeDedup', () => ({
 }));
 
 import { gitService } from '../../../../renderer/services/git';
-import { notifyToast } from '../../../../renderer/stores/notificationStore';
 import {
 	markWorktreePathAsRecentlyCreated,
 	clearRecentlyCreatedWorktreePath,
@@ -333,10 +330,11 @@ describe('handleStartBatchRun — worktree dispatch integration', () => {
 			);
 
 			// Should show warning toast
-			expect(notifyToast).toHaveBeenCalledWith(
+			expect(tNotify).toHaveBeenCalledWith(
 				expect.objectContaining({
 					type: 'warning',
-					title: 'Worktree Agent Not Found',
+					titleKey: 'notifications:worktree.agent_not_found_title',
+					messageKey: 'notifications:worktree.agent_not_found_message',
 				})
 			);
 		});
@@ -378,11 +376,11 @@ describe('handleStartBatchRun — worktree dispatch integration', () => {
 			expect(deps.startBatchRun).not.toHaveBeenCalled();
 
 			// Should show warning toast
-			expect(notifyToast).toHaveBeenCalledWith(
+			expect(tNotify).toHaveBeenCalledWith(
 				expect.objectContaining({
 					type: 'warning',
-					title: 'Target Agent Busy',
-					message: 'Target agent is busy. Please try again.',
+					titleKey: 'notifications:worktree.target_busy_title',
+					messageKey: 'notifications:worktree.target_busy_message',
 				})
 			);
 		});
@@ -855,11 +853,12 @@ describe('handleStartBatchRun — worktree dispatch integration', () => {
 				await result.current.handleStartBatchRun(config);
 			});
 
-			expect(notifyToast).toHaveBeenCalledWith(
+			expect(tNotify).toHaveBeenCalledWith(
 				expect.objectContaining({
 					type: 'error',
-					title: 'Failed to Create Worktree',
-					message: 'disk full',
+					titleKey: 'notifications:worktree.create_failed_title',
+					messageKey: 'notifications:worktree.create_failed_message',
+					values: { message: 'disk full' },
 				})
 			);
 		});
@@ -920,11 +919,12 @@ describe('handleStartBatchRun — worktree dispatch integration', () => {
 			});
 
 			expect(deps.startBatchRun).not.toHaveBeenCalled();
-			expect(notifyToast).toHaveBeenCalledWith(
+			expect(tNotify).toHaveBeenCalledWith(
 				expect.objectContaining({
 					type: 'error',
-					title: 'Worktree Error',
-					message: 'IPC channel closed',
+					titleKey: 'notifications:worktree.error_title',
+					messageKey: 'notifications:worktree.error_message',
+					values: { message: 'IPC channel closed' },
 				})
 			);
 		});

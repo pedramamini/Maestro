@@ -9,6 +9,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { FileText, Trash2, ArrowRight } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import type { Theme } from '../../types';
 import { useLayerStack } from '../../contexts/LayerStackContext';
 import { MODAL_PRIORITIES } from '../../constants/modalPriorities';
@@ -38,6 +39,7 @@ export function ExistingDocsModal({
 	onContinue,
 	onCancel,
 }: ExistingDocsModalProps): JSX.Element {
+	const { t } = useTranslation('modals');
 	const { registerLayer, unregisterLayer, updateLayerHandler } = useLayerStack();
 	const layerIdRef = useRef<string>();
 	const continueButtonRef = useRef<HTMLButtonElement>(null);
@@ -142,7 +144,7 @@ export function ExistingDocsModal({
 						className="text-base font-semibold"
 						style={{ color: theme.colors.textMain }}
 					>
-						Existing Auto Run Documents Found
+						{t('existing_docs.title')}
 					</h2>
 				</div>
 
@@ -160,7 +162,7 @@ export function ExistingDocsModal({
 						from a previous planning session.
 					</p>
 					<p className="text-sm mt-3 leading-relaxed" style={{ color: theme.colors.textDim }}>
-						How would you like to proceed?
+						{t('existing_docs.message')}
 					</p>
 
 					{/* Error message */}
@@ -200,11 +202,10 @@ export function ExistingDocsModal({
 								</div>
 								<div className="flex-1">
 									<div className="font-medium text-sm" style={{ color: theme.colors.textMain }}>
-										Continue Building on Existing Plan
+										{t('existing_docs.continue_button')}
 									</div>
 									<div className="text-xs mt-1" style={{ color: theme.colors.textDim }}>
-										I'll analyze the existing documents, provide a synopsis of what's been planned,
-										and help you continue from where you left off.
+										{t('existing_docs.continue_description')}
 									</div>
 								</div>
 								<div
@@ -214,7 +215,7 @@ export function ExistingDocsModal({
 										color: theme.colors.success,
 									}}
 								>
-									Recommended
+									{t('existing_docs.recommended')}
 								</div>
 							</div>
 						</button>
@@ -246,11 +247,12 @@ export function ExistingDocsModal({
 								</div>
 								<div className="flex-1">
 									<div className="font-medium text-sm" style={{ color: theme.colors.textMain }}>
-										{isDeleting ? 'Deleting Documents...' : 'Delete & Start Fresh'}
+										{isDeleting
+											? t('existing_docs.deleting')
+											: t('existing_docs.delete_fresh_button')}
 									</div>
 									<div className="text-xs mt-1" style={{ color: theme.colors.textDim }}>
-										Remove all existing Auto Run documents and start the planning process from
-										scratch.
+										{t('existing_docs.delete_fresh_description')}
 									</div>
 								</div>
 							</div>
@@ -265,7 +267,7 @@ export function ExistingDocsModal({
 							className="text-xs underline transition-colors hover:opacity-80"
 							style={{ color: theme.colors.textDim }}
 						>
-							Cancel and choose a different directory
+							{t('existing_docs.cancel_link')}
 						</button>
 					</div>
 

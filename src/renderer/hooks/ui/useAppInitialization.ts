@@ -25,7 +25,8 @@ import { useSessionStore } from '../../stores/sessionStore';
 import { useSettingsStore } from '../../stores/settingsStore';
 import { getModalActions } from '../../stores/modalStore';
 import { useTabStore } from '../../stores/tabStore';
-import { useNotificationStore, notifyToast } from '../../stores/notificationStore';
+import { useNotificationStore } from '../../stores/notificationStore';
+import { tNotify } from '../../utils/tNotify';
 import { getSpeckitCommands } from '../../services/speckit';
 import { getOpenSpecCommands } from '../../services/openspec';
 import { exposeWindowsWarningModalDebug } from '../../components/WindowsWarningModal';
@@ -252,10 +253,11 @@ export function useAppInitialization(): AppInitializationReturn {
 			?.getInitializationResult()
 			.then((result) => {
 				if (result?.userMessage) {
-					notifyToast({
+					tNotify({
 						type: 'warning',
-						title: 'Statistics Database',
-						message: result.userMessage,
+						titleKey: 'notifications:stats.database_title',
+						messageKey: 'notifications:stats.database_message',
+						values: { message: result.userMessage },
 						duration: 10000,
 					});
 					window.maestro?.stats?.clearInitializationResult();

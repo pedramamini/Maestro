@@ -12,8 +12,10 @@
  */
 
 import { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Plus, Trash2 } from 'lucide-react';
 import type { Theme } from '../../types';
+import { useI18n } from '../../hooks/useI18n';
 
 export interface EnvVarEntry {
 	id: number;
@@ -28,6 +30,8 @@ export interface EnvVarsEditorProps {
 }
 
 export function EnvVarsEditor({ envVars, setEnvVars, theme }: EnvVarsEditorProps) {
+	const { t } = useTranslation('settings');
+	const { t: tA } = useI18n('accessibility');
 	// Convert object to array with stable IDs for editing
 	const [entries, setEntries] = useState<EnvVarEntry[]>(() => {
 		return Object.entries(envVars).map(([key, value], index) => ({
@@ -46,7 +50,7 @@ export function EnvVarsEditor({ envVars, setEnvVars, theme }: EnvVarsEditorProps
 		}
 		// Check for valid variable name format (alphanumeric and underscore)
 		if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(entry.key)) {
-			return `Invalid variable name: only letters, numbers, and underscores allowed and must not start with a number.`;
+			return t('env_editor.invalid_name');
 		}
 		// Check if value contains special characters that might need quoting
 		if (
@@ -55,7 +59,7 @@ export function EnvVarsEditor({ envVars, setEnvVars, theme }: EnvVarsEditorProps
 			!entry.value.startsWith('"') &&
 			!entry.value.startsWith("'")
 		) {
-			return `Invalid value: contains disallowed special characters; quote or escape them if you intend to include them.`;
+			return t('env_editor.invalid_value');
 		}
 		return null;
 	};
@@ -144,7 +148,7 @@ export function EnvVarsEditor({ envVars, setEnvVars, theme }: EnvVarsEditorProps
 
 	return (
 		<div>
-			<div className="block text-xs opacity-60 mb-1">Environment Variables (optional)</div>
+			<div className="block text-xs opacity-60 mb-1">{t('env_editor.label')}</div>
 			<div className="space-y-2">
 				{entries.map((entry) => {
 					const error = validationErrors[entry.id];
@@ -155,7 +159,8 @@ export function EnvVarsEditor({ envVars, setEnvVars, theme }: EnvVarsEditorProps
 									type="text"
 									value={entry.key}
 									onChange={(e) => updateEntry(entry.id, 'key', e.target.value)}
-									placeholder="VARIABLE"
+									placeholder={t('env_editor.variable_placeholder')}
+									aria-label={tA('form.env_var_name')}
 									className={`flex-1 p-2 rounded border bg-transparent outline-none text-xs font-mono ${
 										entry.key.trim() &&
 										!validateEntry({ id: entry.id, key: entry.key, value: entry.value })
@@ -174,14 +179,15 @@ export function EnvVarsEditor({ envVars, setEnvVars, theme }: EnvVarsEditorProps
 									type="text"
 									value={entry.value}
 									onChange={(e) => updateEntry(entry.id, 'value', e.target.value)}
-									placeholder="value"
+									placeholder={t('env_editor.value_placeholder')}
+									aria-label={tA('form.env_var_value')}
 									className="flex-[2] p-2 rounded border bg-transparent outline-none text-xs font-mono"
 									style={{ borderColor: theme.colors.border, color: theme.colors.textMain }}
 								/>
 								<button
 									onClick={() => removeEntry(entry.id)}
 									className="p-2 rounded hover:bg-white/10 transition-colors"
-									title="Remove variable"
+									title={t('env_editor.remove_variable')}
 									style={{ color: theme.colors.textDim }}
 								>
 									<Trash2 className="w-3 h-3" />
@@ -201,16 +207,14 @@ export function EnvVarsEditor({ envVars, setEnvVars, theme }: EnvVarsEditorProps
 					style={{ color: theme.colors.textDim }}
 				>
 					<Plus className="w-3 h-3" />
-					Add Variable
+					{t('env_editor.add_variable')}
 				</button>
 			</div>
 			<div className="mt-2 space-y-1">
-				<p className="text-xs opacity-50">
-					Environment variables passed to all terminal sessions and AI agent processes.
-				</p>
+				<p className="text-xs opacity-50">{t('env_editor.description')}</p>
 				{Object.keys(envVars).length > 0 && (
 					<p className="text-xs opacity-60">
-						✓ Valid ({Object.keys(envVars).length} variables loaded)
+						{t('env_editor.valid_count', { count: Object.keys(envVars).length })}
 					</p>
 				)}
 			</div>

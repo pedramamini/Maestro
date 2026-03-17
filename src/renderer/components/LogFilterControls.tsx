@@ -1,6 +1,7 @@
 import React from 'react';
 import { X, Filter, PlusCircle, MinusCircle } from 'lucide-react';
 import type { Theme } from '../types';
+import { useI18n } from '../hooks/useI18n';
 
 // ============================================================================
 // LogFilterControls - Local filter controls for log entries
@@ -63,6 +64,7 @@ export const LogFilterControls: React.FC<LogFilterControlsProps> = ({
 	onSetFilterMode,
 	onClearFilter,
 }) => {
+	const { t } = useI18n('accessibility');
 	// Show expanded filter bar when active or when there's a query
 	const showExpanded = isActive || filterQuery;
 
@@ -144,6 +146,7 @@ export const LogFilterControls: React.FC<LogFilterControlsProps> = ({
 						backgroundColor: theme.colors.bgMain,
 					}}
 					autoFocus={isActive}
+					aria-label={t('form.filter_log_output')}
 				/>
 
 				{/* Clear/Close button */}
@@ -151,6 +154,7 @@ export const LogFilterControls: React.FC<LogFilterControlsProps> = ({
 					onClick={() => onClearFilter(logId)}
 					className="p-1 rounded hover:opacity-70 transition-opacity"
 					style={{ color: theme.colors.textDim }}
+					aria-label={t('action.clear_filter')}
 				>
 					<X className="w-3 h-3" />
 				</button>

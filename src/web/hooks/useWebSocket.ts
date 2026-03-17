@@ -120,6 +120,7 @@ export type ServerMessageType =
 	| 'session_exit'
 	| 'user_input'
 	| 'theme'
+	| 'language'
 	| 'custom_commands'
 	| 'autorun_state'
 	| 'tabs_changed'
@@ -259,6 +260,14 @@ export interface ThemeMessage extends ServerMessage {
 }
 
 /**
+ * Language message from server
+ */
+export interface LanguageMessage extends ServerMessage {
+	type: 'language';
+	language: string;
+}
+
+/**
  * Custom AI command definition
  */
 export interface CustomCommand {
@@ -322,6 +331,7 @@ export type TypedServerMessage =
 	| SessionExitMessage
 	| UserInputMessage
 	| ThemeMessage
+	| LanguageMessage
 	| CustomCommandsMessage
 	| AutoRunStateMessage
 	| TabsChangedMessage
@@ -359,6 +369,8 @@ export interface WebSocketEventHandlers {
 	onUserInput?: (sessionId: string, command: string, inputMode: 'ai' | 'terminal') => void;
 	/** Called when theme is received or updated */
 	onThemeUpdate?: (theme: Theme) => void;
+	/** Called when language is received or updated (for RTL/LTR direction sync) */
+	onLanguageUpdate?: (language: string) => void;
 	/** Called when custom commands are received */
 	onCustomCommands?: (commands: CustomCommand[]) => void;
 	/** Called when AutoRun state changes (batch processing on desktop) */
@@ -678,6 +690,12 @@ export function useWebSocket(options: UseWebSocketOptions = {}): UseWebSocketRet
 					case 'theme': {
 						const themeMsg = message as ThemeMessage;
 						handlersRef.current?.onThemeUpdate?.(themeMsg.theme);
+						break;
+					}
+
+					case 'language': {
+						const langMsg = message as LanguageMessage;
+						handlersRef.current?.onLanguageUpdate?.(langMsg.language);
 						break;
 					}
 

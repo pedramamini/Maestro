@@ -7,6 +7,7 @@
  */
 
 import { useEffect, useRef, useCallback, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
 	useWizard,
 	WIZARD_TOTAL_STEPS,
@@ -69,20 +70,20 @@ interface MaestroWizardProps {
 /**
  * Get human-readable title for each wizard step
  */
-function getStepTitle(step: WizardStep): string {
+function getStepTitle(step: WizardStep, t: any): string {
 	switch (step) {
 		case 'agent-selection':
-			return 'New Agent Wizard';
+			return t('wizard.step_titles.agent_selection');
 		case 'directory-selection':
-			return 'Choose Project Directory';
+			return t('wizard.step_titles.directory_selection');
 		case 'conversation':
-			return 'Project Discovery';
+			return t('wizard.step_titles.conversation');
 		case 'preparing-plan':
-			return 'Preparing Playbooks';
+			return t('wizard.step_titles.preparing_plan');
 		case 'phase-review':
-			return 'Review Your Playbooks';
+			return t('wizard.step_titles.phase_review');
 		default:
-			return 'Setup Wizard';
+			return t('wizard.step_titles.default');
 	}
 }
 
@@ -101,6 +102,8 @@ export function MaestroWizard({
 	onWizardAbandon,
 	onWizardComplete,
 }: MaestroWizardProps): JSX.Element | null {
+	const { t } = useTranslation('modals');
+
 	const {
 		state,
 		closeWizard,
@@ -267,12 +270,16 @@ export function MaestroWizard({
 		// Only announce when wizard is open and not transitioning
 		if (state.isOpen && !isTransitioning) {
 			const stepNumber = STEP_INDEX[displayedStep];
-			const title = getStepTitle(displayedStep);
-			const newAnnouncement = `Step ${stepNumber} of ${WIZARD_TOTAL_STEPS}: ${title}`;
+			const title = getStepTitle(displayedStep, t);
+			const newAnnouncement = t('wizard.step_announcement', {
+				current: stepNumber,
+				total: WIZARD_TOTAL_STEPS,
+				title,
+			});
 			setAnnouncement(newAnnouncement);
 			setAnnouncementKey((prev) => prev + 1);
 		}
-	}, [state.isOpen, displayedStep, isTransitioning]);
+	}, [state.isOpen, displayedStep, isTransitioning, t]);
 
 	// Register with layer stack for Escape handling
 	useEffect(() => {
@@ -283,7 +290,7 @@ export function MaestroWizard({
 				blocksLowerLayers: true,
 				capturesFocus: true,
 				focusTrap: 'strict',
-				ariaLabel: 'Setup Wizard',
+				ariaLabel: t('wizard.aria_label'),
 				onEscape: handleCloseRequest,
 			});
 			return () => unregisterLayer(id);
@@ -434,7 +441,7 @@ export function MaestroWizard({
 	}
 
 	const currentStepNumber = getCurrentStepNumber();
-	const stepTitle = getStepTitle(state.currentStep);
+	const stepTitle = getStepTitle(state.currentStep, t);
 
 	return (
 		<div
@@ -493,7 +500,10 @@ export function MaestroWizard({
 								{stepTitle}
 							</h2>
 							<p className="text-xs" style={{ color: theme.colors.textDim }}>
-								Step {currentStepNumber} of {WIZARD_TOTAL_STEPS}
+								{t('wizard.step_progress', {
+									current: currentStepNumber,
+									total: WIZARD_TOTAL_STEPS,
+								})}
 							</p>
 						</div>
 					</div>
@@ -529,8 +539,14 @@ export function MaestroWizard({
 												: theme.colors.border,
 										transform: isActive ? 'scale(1.2)' : 'scale(1)',
 									}}
-									aria-label={`Step ${stepNum}${isActive ? ' (current)' : isCompleted ? ' (completed - click to go back)' : ''}`}
-									title={canNavigate ? `Go back to step ${stepNum}` : undefined}
+									aria-label={
+										isActive
+											? t('wizard.step_aria_current', { step: stepNum })
+											: isCompleted
+												? t('wizard.step_aria_completed', { step: stepNum })
+												: t('wizard.step_aria', { step: stepNum })
+									}
+									title={canNavigate ? t('wizard.go_back_to_step', { step: stepNum }) : undefined}
 								/>
 							);
 						})}
@@ -554,8 +570,8 @@ export function MaestroWizard({
 									['--tw-ring-color' as any]: theme.colors.accent,
 									['--tw-ring-offset-color' as any]: theme.colors.bgSidebar,
 								}}
-								title="Go back"
-								aria-label="Go back to previous step"
+								title={t('wizard.go_back_title')}
+								aria-label={t('wizard.go_back_aria')}
 							>
 								<svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
 									<path
@@ -565,7 +581,7 @@ export function MaestroWizard({
 										d="M15 19l-7-7 7-7"
 									/>
 								</svg>
-								Back
+								{t('wizard.back_button')}
 							</button>
 						)}
 
@@ -578,8 +594,8 @@ export function MaestroWizard({
 								['--tw-ring-color' as any]: theme.colors.accent,
 								['--tw-ring-offset-color' as any]: theme.colors.bgSidebar,
 							}}
-							title="Close wizard (Escape)"
-							aria-label="Close wizard"
+							title={t('wizard.close_tooltip')}
+							aria-label={t('wizard.close_aria')}
 						>
 							<svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
 								<path

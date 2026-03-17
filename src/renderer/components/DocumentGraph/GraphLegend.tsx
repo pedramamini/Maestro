@@ -15,6 +15,7 @@ import { memo } from 'react';
 import { X, AlertTriangle, ExternalLink } from 'lucide-react';
 import type { Theme } from '../../types';
 import { formatShortcutKeys } from '../../utils/shortcutFormatter';
+import { useI18n } from '../../hooks/useI18n';
 
 /**
  * Props for the GraphLegend component
@@ -117,13 +118,14 @@ const DocumentNodePreview = memo(function DocumentNodePreview({
 	theme: Theme;
 	selected?: boolean;
 }) {
+	const { t: tA } = useI18n('accessibility');
 	return (
 		<svg
 			width={36}
 			height={24}
 			viewBox="0 0 36 24"
 			role="img"
-			aria-label={`Document node card${selected ? ' (selected)' : ''}`}
+			aria-label={tA(selected ? 'status.document_node_card_selected' : 'status.document_node_card')}
 		>
 			{/* Card background */}
 			<rect
@@ -160,13 +162,14 @@ const ExternalNodePreview = memo(function ExternalNodePreview({
 	theme: Theme;
 	selected?: boolean;
 }) {
+	const { t: tA } = useI18n('accessibility');
 	return (
 		<svg
 			width={36}
 			height={18}
 			viewBox="0 0 36 18"
 			role="img"
-			aria-label={`External link node pill${selected ? ' (selected)' : ''}`}
+			aria-label={tA(selected ? 'status.external_link_pill_selected' : 'status.external_link_pill')}
 		>
 			{/* Pill background */}
 			<rect
@@ -197,6 +200,7 @@ const EdgePreview = memo(function EdgePreview({
 	type: 'internal' | 'external';
 	highlighted?: boolean;
 }) {
+	const { t: tA } = useI18n('accessibility');
 	const strokeColor = highlighted ? theme.colors.accent : theme.colors.textDim;
 	const strokeWidth = highlighted ? 2 : 1.5;
 	const isDashed = type === 'external';
@@ -208,7 +212,9 @@ const EdgePreview = memo(function EdgePreview({
 			height={16}
 			viewBox="0 0 40 16"
 			role="img"
-			aria-label={`${type === 'internal' ? 'Internal' : 'External'} link edge${highlighted ? ' (highlighted)' : ''}`}
+			aria-label={tA(
+				`status.${type === 'internal' ? 'internal' : 'external'}_link_edge${highlighted ? '_highlighted' : ''}`
+			)}
 		>
 			{/* Curved bezier path to match mind map style */}
 			<path
@@ -251,6 +257,8 @@ export const GraphLegend = memo(function GraphLegend({
 	showExternalLinks,
 	onClose,
 }: GraphLegendProps) {
+	const { t: ta } = useI18n('accessibility');
+
 	return (
 		<div
 			className="graph-legend absolute top-0 left-0 h-full overflow-y-auto shadow-xl animate-in slide-in-from-left duration-200"
@@ -261,7 +269,7 @@ export const GraphLegend = memo(function GraphLegend({
 				zIndex: 20,
 			}}
 			role="region"
-			aria-label="Help panel"
+			aria-label={ta('modal.help_panel')}
 		>
 			{/* Header */}
 			<div
@@ -280,7 +288,7 @@ export const GraphLegend = memo(function GraphLegend({
 					style={{ color: theme.colors.textDim }}
 					onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = `${theme.colors.accent}20`)}
 					onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
-					title="Close (Esc)"
+					title={ta('action.close_esc')}
 				>
 					<X className="w-4 h-4" />
 				</button>
@@ -446,7 +454,7 @@ export const GraphLegend = memo(function GraphLegend({
 									backgroundColor: '#f59e0b20',
 								}}
 								role="img"
-								aria-label="Broken links warning indicator"
+								aria-label={ta('status.broken_links_warning')}
 							>
 								<AlertTriangle size={14} style={{ color: '#f59e0b' }} />
 							</div>

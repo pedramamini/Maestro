@@ -3,6 +3,7 @@ import { Search, ChevronUp, ChevronDown, X } from 'lucide-react';
 import type { Theme } from '../types';
 import { useLayerStack } from '../contexts/LayerStackContext';
 import { MODAL_PRIORITIES } from '../constants/modalPriorities';
+import { useI18n } from '../hooks/useI18n';
 
 export interface AutoRunSearchBarProps {
 	theme: Theme;
@@ -36,6 +37,7 @@ export function AutoRunSearchBar({
 	onPrevMatch,
 	onClose,
 }: AutoRunSearchBarProps) {
+	const { t: tA } = useI18n('accessibility');
 	const searchInputRef = useRef<HTMLInputElement>(null);
 	const { registerLayer, unregisterLayer } = useLayerStack();
 	const onCloseRef = useRef(onClose);
@@ -90,6 +92,7 @@ export function AutoRunSearchBar({
 				onChange={(e) => onSearchQueryChange(e.target.value)}
 				onKeyDown={handleKeyDown}
 				placeholder="Search..."
+				aria-label={tA('form.search_autorun_docs')}
 				className="flex-1 bg-transparent outline-none text-sm"
 				style={{ color: theme.colors.textMain }}
 				autoFocus

@@ -20,6 +20,7 @@
 
 import { WebSocket } from 'ws';
 import { logger } from '../../utils/logger';
+import { mainT } from '../../i18n';
 
 // Logger context for all message handler logs
 const LOG_CONTEXT = 'WebServer';
@@ -235,26 +236,22 @@ export class WebSocketMessageHandler {
 				`[Web Command] Missing sessionId or command: sessionId=${sessionId}, commandLen=${command?.length}`,
 				LOG_CONTEXT
 			);
-			this.sendError(client, 'Missing sessionId or command');
+			this.sendError(client, mainT('notifications:error.web.missing_session_or_command'));
 			return;
 		}
 
 		// Get session details to check state and determine how to handle
 		const sessionDetail = this.callbacks.getSessionDetail?.(sessionId);
 		if (!sessionDetail) {
-			this.sendError(client, 'Session not found');
+			this.sendError(client, mainT('notifications:error.web.session_not_found'));
 			return;
 		}
 
 		// Check if session is busy - prevent race conditions between desktop and web
 		if (sessionDetail.state === 'busy') {
-			this.sendError(
-				client,
-				'Session is busy - please wait for the current operation to complete',
-				{
-					sessionId,
-				}
-			);
+			this.sendError(client, mainT('notifications:error.web.session_busy'), {
+				sessionId,
+			});
 			logger.debug(`Command rejected - session ${sessionId} is busy`, LOG_CONTEXT);
 			return;
 		}
@@ -291,10 +288,13 @@ export class WebSocketMessageHandler {
 						`[Web Command] ${mode} command failed for session ${sessionId}: ${error.message}`,
 						LOG_CONTEXT
 					);
-					this.sendError(client, `Failed to execute command: ${error.message}`);
+					this.sendError(
+						client,
+						mainT('notifications:error.web.command_failed', { message: error.message })
+					);
 				});
 		} else {
-			this.sendError(client, 'Command execution not configured');
+			this.sendError(client, mainT('notifications:error.web.command_not_configured'));
 		}
 	}
 
@@ -310,13 +310,13 @@ export class WebSocketMessageHandler {
 		);
 
 		if (!sessionId || !mode) {
-			this.sendError(client, 'Missing sessionId or mode');
+			this.sendError(client, mainT('notifications:error.web.missing_session_or_mode'));
 			return;
 		}
 
 		if (!this.callbacks.switchMode) {
 			logger.warn(`[Web] switchModeCallback is not set!`, LOG_CONTEXT);
-			this.sendError(client, 'Mode switching not configured');
+			this.sendError(client, mainT('notifications:error.web.mode_switch_not_configured'));
 			return;
 		}
 
@@ -333,7 +333,10 @@ export class WebSocketMessageHandler {
 				);
 			})
 			.catch((error) => {
-				this.sendError(client, `Failed to switch mode: ${error.message}`);
+				this.sendError(
+					client,
+					mainT('notifications:error.web.mode_switch_failed', { message: error.message })
+				);
 			});
 	}
 
@@ -349,13 +352,13 @@ export class WebSocketMessageHandler {
 		);
 
 		if (!sessionId) {
-			this.sendError(client, 'Missing sessionId');
+			this.sendError(client, mainT('notifications:error.web.missing_session'));
 			return;
 		}
 
 		if (!this.callbacks.selectSession) {
 			logger.warn(`[Web] selectSessionCallback is not set!`, LOG_CONTEXT);
-			this.sendError(client, 'Session selection not configured');
+			this.sendError(client, mainT('notifications:error.web.session_select_not_configured'));
 			return;
 		}
 
@@ -377,7 +380,10 @@ export class WebSocketMessageHandler {
 				this.send(client, { type: 'select_session_result', success, sessionId });
 			})
 			.catch((error) => {
-				this.sendError(client, `Failed to select session: ${error.message}`);
+				this.sendError(
+					client,
+					mainT('notifications:error.web.session_select_failed', { message: error.message })
+				);
 			});
 	}
 
@@ -417,12 +423,12 @@ export class WebSocketMessageHandler {
 		);
 
 		if (!sessionId || !tabId) {
-			this.sendError(client, 'Missing sessionId or tabId');
+			this.sendError(client, mainT('notifications:error.web.missing_session_or_tab'));
 			return;
 		}
 
 		if (!this.callbacks.selectTab) {
-			this.sendError(client, 'Tab selection not configured');
+			this.sendError(client, mainT('notifications:error.web.tab_select_not_configured'));
 			return;
 		}
 
@@ -432,7 +438,10 @@ export class WebSocketMessageHandler {
 				this.send(client, { type: 'select_tab_result', success, sessionId, tabId });
 			})
 			.catch((error) => {
-				this.sendError(client, `Failed to select tab: ${error.message}`);
+				this.sendError(
+					client,
+					mainT('notifications:error.web.tab_select_failed', { message: error.message })
+				);
 			});
 	}
 
@@ -444,12 +453,12 @@ export class WebSocketMessageHandler {
 		logger.info(`[Web] Received new_tab message: session=${sessionId}`, LOG_CONTEXT);
 
 		if (!sessionId) {
-			this.sendError(client, 'Missing sessionId');
+			this.sendError(client, mainT('notifications:error.web.missing_session'));
 			return;
 		}
 
 		if (!this.callbacks.newTab) {
-			this.sendError(client, 'Tab creation not configured');
+			this.sendError(client, mainT('notifications:error.web.tab_create_not_configured'));
 			return;
 		}
 
@@ -464,7 +473,10 @@ export class WebSocketMessageHandler {
 				});
 			})
 			.catch((error) => {
-				this.sendError(client, `Failed to create tab: ${error.message}`);
+				this.sendError(
+					client,
+					mainT('notifications:error.web.tab_create_failed', { message: error.message })
+				);
 			});
 	}
 
@@ -480,12 +492,12 @@ export class WebSocketMessageHandler {
 		);
 
 		if (!sessionId || !tabId) {
-			this.sendError(client, 'Missing sessionId or tabId');
+			this.sendError(client, mainT('notifications:error.web.missing_session_or_tab'));
 			return;
 		}
 
 		if (!this.callbacks.closeTab) {
-			this.sendError(client, 'Tab closing not configured');
+			this.sendError(client, mainT('notifications:error.web.tab_close_not_configured'));
 			return;
 		}
 
@@ -495,7 +507,10 @@ export class WebSocketMessageHandler {
 				this.send(client, { type: 'close_tab_result', success, sessionId, tabId });
 			})
 			.catch((error) => {
-				this.sendError(client, `Failed to close tab: ${error.message}`);
+				this.sendError(
+					client,
+					mainT('notifications:error.web.tab_close_failed', { message: error.message })
+				);
 			});
 	}
 
@@ -512,12 +527,12 @@ export class WebSocketMessageHandler {
 		);
 
 		if (!sessionId || !tabId) {
-			this.sendError(client, 'Missing sessionId or tabId');
+			this.sendError(client, mainT('notifications:error.web.missing_session_or_tab'));
 			return;
 		}
 
 		if (!this.callbacks.renameTab) {
-			this.sendError(client, 'Tab renaming not configured');
+			this.sendError(client, mainT('notifications:error.web.tab_rename_not_configured'));
 			return;
 		}
 
@@ -534,7 +549,10 @@ export class WebSocketMessageHandler {
 				});
 			})
 			.catch((error) => {
-				this.sendError(client, `Failed to rename tab: ${error.message}`);
+				this.sendError(
+					client,
+					mainT('notifications:error.web.tab_rename_failed', { message: error.message })
+				);
 			});
 	}
 
@@ -551,12 +569,12 @@ export class WebSocketMessageHandler {
 		);
 
 		if (!sessionId || !tabId) {
-			this.sendError(client, 'Missing sessionId or tabId');
+			this.sendError(client, mainT('notifications:error.web.missing_session_or_tab'));
 			return;
 		}
 
 		if (!this.callbacks.starTab) {
-			this.sendError(client, 'Tab starring not configured');
+			this.sendError(client, mainT('notifications:error.web.tab_star_not_configured'));
 			return;
 		}
 
@@ -566,7 +584,10 @@ export class WebSocketMessageHandler {
 				this.send(client, { type: 'star_tab_result', success, sessionId, tabId, starred });
 			})
 			.catch((error) => {
-				this.sendError(client, `Failed to star tab: ${error.message}`);
+				this.sendError(
+					client,
+					mainT('notifications:error.web.tab_star_failed', { message: error.message })
+				);
 			});
 	}
 
@@ -583,12 +604,12 @@ export class WebSocketMessageHandler {
 		);
 
 		if (!sessionId || fromIndex == null || toIndex == null) {
-			this.sendError(client, 'Missing sessionId, fromIndex, or toIndex');
+			this.sendError(client, mainT('notifications:error.web.missing_reorder_params'));
 			return;
 		}
 
 		if (!this.callbacks.reorderTab) {
-			this.sendError(client, 'Tab reordering not configured');
+			this.sendError(client, mainT('notifications:error.web.tab_reorder_not_configured'));
 			return;
 		}
 
@@ -604,7 +625,10 @@ export class WebSocketMessageHandler {
 				});
 			})
 			.catch((error) => {
-				this.sendError(client, `Failed to reorder tab: ${error.message}`);
+				this.sendError(
+					client,
+					mainT('notifications:error.web.tab_reorder_failed', { message: error.message })
+				);
 			});
 	}
 
@@ -616,12 +640,12 @@ export class WebSocketMessageHandler {
 		logger.info(`[Web] Received toggle_bookmark message: session=${sessionId}`, LOG_CONTEXT);
 
 		if (!sessionId) {
-			this.sendError(client, 'Missing sessionId');
+			this.sendError(client, mainT('notifications:error.web.missing_session'));
 			return;
 		}
 
 		if (!this.callbacks.toggleBookmark) {
-			this.sendError(client, 'Bookmark toggling not configured');
+			this.sendError(client, mainT('notifications:error.web.bookmark_not_configured'));
 			return;
 		}
 
@@ -631,7 +655,10 @@ export class WebSocketMessageHandler {
 				this.send(client, { type: 'toggle_bookmark_result', success, sessionId });
 			})
 			.catch((error) => {
-				this.sendError(client, `Failed to toggle bookmark: ${error.message}`);
+				this.sendError(
+					client,
+					mainT('notifications:error.web.bookmark_failed', { message: error.message })
+				);
 			});
 	}
 

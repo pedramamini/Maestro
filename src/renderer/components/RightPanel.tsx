@@ -29,6 +29,7 @@ import { useSettingsStore } from '../stores/settingsStore';
 import { useFileExplorerStore } from '../stores/fileExplorerStore';
 import { useBatchStore } from '../stores/batchStore';
 import { useSessionStore } from '../stores/sessionStore';
+import { useI18n } from '../hooks/useI18n';
 
 export interface RightPanelHandle {
 	refreshHistoryPanel: () => void;
@@ -112,6 +113,8 @@ interface RightPanelProps {
 
 export const RightPanel = memo(
 	forwardRef<RightPanelHandle, RightPanelProps>(function RightPanel(props, ref) {
+		const { t } = useI18n();
+		const { t: tModals } = useI18n('modals');
 		// === State from stores (direct subscriptions — no prop drilling) ===
 		const session = useSessionStore(
 			(s) => s.sessions.find((x) => x.id === s.activeSessionId) ?? null
@@ -381,7 +384,7 @@ export const RightPanel = memo(
 			<div
 				ref={panelRef}
 				tabIndex={0}
-				className={`border-l flex flex-col ${rightPanelTransitionClass} outline-none relative ${rightPanelOpen ? '' : 'w-0 overflow-hidden opacity-0'} ${activeFocus === 'right' ? 'ring-1 ring-inset z-10' : ''}`}
+				className={`border-s flex flex-col ${rightPanelTransitionClass} outline-none relative ${rightPanelOpen ? '' : 'w-0 overflow-hidden opacity-0'} ${activeFocus === 'right' ? 'ring-1 ring-inset z-10' : ''}`}
 				style={
 					{
 						width: rightPanelOpen ? `${rightPanelWidth}px` : '0',
@@ -396,7 +399,7 @@ export const RightPanel = memo(
 				{/* Resize Handle */}
 				{rightPanelOpen && (
 					<div
-						className="absolute top-0 left-0 w-3 h-full cursor-col-resize border-l-4 border-transparent hover:border-blue-500 transition-colors z-20"
+						className="absolute top-0 start-0 w-3 h-full cursor-col-resize border-s-4 border-transparent hover:border-blue-500 transition-colors z-20"
 						onMouseDown={onRightPanelResizeStart}
 					/>
 				)}
@@ -414,14 +417,23 @@ export const RightPanel = memo(
 							}}
 							data-tour={`${tab}-tab`}
 						>
-							{tab === 'autorun' ? 'Auto Run' : tab.charAt(0).toUpperCase() + tab.slice(1)}
+							{
+								{
+									files: t('right_panel.tab_files'),
+									history: t('right_panel.tab_history'),
+									autorun: t('right_panel.tab_autorun'),
+								}[tab]
+							}
 						</button>
 					))}
 
 					<button
 						onClick={() => setRightPanelOpen(!rightPanelOpen)}
 						className="flex items-center justify-center p-2 rounded hover:bg-white/5 transition-colors w-12 shrink-0"
-						title={`${rightPanelOpen ? 'Collapse' : 'Expand'} Right Panel (${formatShortcutKeys(shortcuts.toggleRightPanel.keys)})`}
+						title={t(
+							rightPanelOpen ? 'right_panel.collapse_tooltip' : 'right_panel.expand_tooltip',
+							{ shortcut: formatShortcutKeys(shortcuts.toggleRightPanel.keys) }
+						)}
 					>
 						{rightPanelOpen ? (
 							<PanelRightClose className="w-4 h-4 opacity-50" />
@@ -550,20 +562,26 @@ export const RightPanel = memo(
 										onClick={() => setActiveRightTab('autorun')}
 										className="text-xs font-bold uppercase cursor-pointer hover:underline"
 										style={{ color: theme.colors.error }}
-										title="View error details in Auto Run tab"
+										title={t('right_panel.batch.view_error_tooltip')}
 									>
-										Auto Run Paused
+										{t('right_panel.batch.paused_label')}
 									</button>
 								) : (
 									<span
 										className="text-xs font-bold uppercase"
 										style={{ color: theme.colors.textMain }}
 									>
-										{currentSessionBatchState.isStopping ? 'Stopping...' : 'Auto Run Active'}
+										{currentSessionBatchState.isStopping
+											? t('right_panel.batch.stopping_label')
+											: t('right_panel.batch.active_label')}
 									</span>
 								)}
 								{currentSessionBatchState.worktreeActive && (
-									<span title={`Worktree: ${currentSessionBatchState.worktreeBranch || 'active'}`}>
+									<span
+										title={t('right_panel.batch.worktree_tooltip', {
+											branch: currentSessionBatchState.worktreeBranch || 'active',
+										})}
+									>
 										<GitBranch className="w-4 h-4" style={{ color: theme.colors.warning }} />
 									</span>
 								)}
@@ -575,10 +593,10 @@ export const RightPanel = memo(
 											backgroundColor: theme.colors.error,
 											color: 'white',
 										}}
-										title="Force kill the running process"
+										title={t('right_panel.batch.kill_tooltip')}
 									>
 										<Skull className="w-3 h-3" />
-										Kill
+										{t('right_panel.batch.kill_button')}
 									</button>
 								)}
 							</div>
@@ -587,7 +605,7 @@ export const RightPanel = memo(
 								<span
 									className="text-xs font-mono"
 									style={{ color: theme.colors.textDim }}
-									title="Total elapsed time"
+									title={t('right_panel.batch.elapsed_tooltip')}
 								>
 									{elapsedTime}
 								</span>
@@ -625,16 +643,24 @@ export const RightPanel = memo(
 												direction: 'rtl',
 												textAlign: 'left',
 											}}
-											title={`Document ${currentSessionBatchState.currentDocumentIndex + 1}/${currentSessionBatchState.documents.length}: ${currentSessionBatchState.documents[currentSessionBatchState.currentDocumentIndex]}.md`}
+											title={
+												t('right_panel.batch.document_title', {
+													current: currentSessionBatchState.currentDocumentIndex + 1,
+													total: currentSessionBatchState.documents.length,
+													name: currentSessionBatchState.documents[
+														currentSessionBatchState.currentDocumentIndex
+													],
+												}) + '.md'
+											}
 										>
 											<bdi>
-												Document {currentSessionBatchState.currentDocumentIndex + 1}/
-												{currentSessionBatchState.documents.length}:{' '}
-												{
-													currentSessionBatchState.documents[
+												{t('right_panel.batch.document_title', {
+													current: currentSessionBatchState.currentDocumentIndex + 1,
+													total: currentSessionBatchState.documents.length,
+													name: currentSessionBatchState.documents[
 														currentSessionBatchState.currentDocumentIndex
-													]
-												}
+													],
+												})}
 											</bdi>
 										</span>
 										<div
@@ -697,12 +723,18 @@ export const RightPanel = memo(
 								}}
 							>
 								{currentSessionBatchState.errorPaused
-									? currentSessionBatchState.error?.message || 'Paused due to error'
+									? currentSessionBatchState.error?.message || t('right_panel.batch.paused_error')
 									: currentSessionBatchState.isStopping
-										? 'Waiting for current task to complete before stopping...'
+										? t('right_panel.batch.waiting_to_stop')
 										: currentSessionBatchState.totalTasksAcrossAllDocs > 0
-											? `${currentSessionBatchState.completedTasksAcrossAllDocs} of ${currentSessionBatchState.totalTasksAcrossAllDocs} tasks completed`
-											: `${currentSessionBatchState.completedTasks} of ${currentSessionBatchState.totalTasks} tasks completed`}
+											? t('right_panel.batch.tasks_completed', {
+													completed: currentSessionBatchState.completedTasksAcrossAllDocs,
+													total: currentSessionBatchState.totalTasksAcrossAllDocs,
+												})
+											: t('right_panel.batch.tasks_completed', {
+													completed: currentSessionBatchState.completedTasks,
+													total: currentSessionBatchState.totalTasks,
+												})}
 							</span>
 							<div className="flex items-center gap-2 shrink-0">
 								{/* Loop iteration indicator */}
@@ -714,8 +746,10 @@ export const RightPanel = memo(
 											color: theme.colors.accent,
 										}}
 									>
-										Loop {currentSessionBatchState.loopIteration + 1} of{' '}
-										{currentSessionBatchState.maxLoops ?? '∞'}
+										{t('right_panel.batch.loop_badge', {
+											current: currentSessionBatchState.loopIteration + 1,
+											max: currentSessionBatchState.maxLoops ?? '∞',
+										})}
 									</span>
 								)}
 								{/* View history link - only shown on auto-run tab */}
@@ -728,7 +762,7 @@ export const RightPanel = memo(
 										}}
 										onClick={() => setActiveRightTab('history')}
 									>
-										View history
+										{t('right_panel.batch.view_history')}
 									</button>
 								)}
 							</div>
@@ -740,11 +774,11 @@ export const RightPanel = memo(
 				{showKillConfirm && (
 					<ConfirmModal
 						theme={theme}
-						title="Force Kill Process"
-						message="This will immediately terminate the running agent process. The current task will be interrupted mid-execution and may leave incomplete changes. Are you sure?"
+						title={tModals('kill_process.title')}
+						message={tModals('kill_process.message')}
 						headerIcon={<Skull className="w-4 h-4" style={{ color: theme.colors.error }} />}
 						icon={<Skull className="w-5 h-5" style={{ color: theme.colors.error }} />}
-						confirmLabel="Kill Process"
+						confirmLabel={tModals('kill_process.confirm_button')}
 						destructive
 						onConfirm={() => {
 							if (session?.id) {

@@ -45,6 +45,7 @@ export type WsSessionData = SessionData;
 export interface WsRouteCallbacks {
 	getSessions: () => SessionData[];
 	getTheme: () => Theme | null;
+	getLanguage: () => string;
 	getCustomCommands: () => CustomAICommand[];
 	getAutoRunStates: () => Map<string, AutoRunState>;
 	getLiveSessionInfo: (sessionId: string) => LiveSessionInfo | undefined;
@@ -148,6 +149,18 @@ export class WsRoute {
 						})
 					);
 				}
+			}
+
+			// Send current language for direction (RTL/LTR) support
+			if (this.callbacks.getLanguage) {
+				const language = this.callbacks.getLanguage();
+				connection.socket.send(
+					JSON.stringify({
+						type: 'language',
+						language,
+						timestamp: Date.now(),
+					})
+				);
 			}
 
 			// Send custom AI commands

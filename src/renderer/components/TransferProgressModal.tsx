@@ -20,11 +20,13 @@
 
 import { useState, useEffect, useRef, useMemo, useCallback, memo } from 'react';
 import { X, Check, Loader2, AlertTriangle, ArrowRight, Wand2 } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import type { Theme, ToolType } from '../types';
 import type { GroomingProgress } from '../types/contextMerge';
 import { useLayerStack } from '../contexts/LayerStackContext';
 import { MODAL_PRIORITIES } from '../constants/modalPriorities';
 import { getAgentDisplayName } from '../services/contextGroomer';
+import { CodeText } from './shared/CodeText';
 
 /**
  * Progress stage definition for transfer display
@@ -144,6 +146,7 @@ function CancelConfirmDialog({
 	onConfirm: () => void;
 	onCancel: () => void;
 }) {
+	const { t } = useTranslation('modals');
 	return (
 		<div
 			className="absolute inset-0 flex items-center justify-center z-10"
@@ -159,12 +162,11 @@ function CancelConfirmDialog({
 				<div className="flex items-center gap-3 mb-4">
 					<AlertTriangle className="w-5 h-5" style={{ color: theme.colors.warning }} />
 					<h3 className="text-sm font-bold" style={{ color: theme.colors.textMain }}>
-						Cancel Transfer?
+						{t('transfer_progress.cancel_transfer_title')}
 					</h3>
 				</div>
 				<p className="text-xs mb-4" style={{ color: theme.colors.textDim }}>
-					This will abort the transfer operation and clean up any temporary resources. The original
-					session will remain unchanged.
+					{t('transfer_progress.cancel_transfer_message')}
 				</p>
 				<div className="flex justify-end gap-2">
 					<button
@@ -176,7 +178,7 @@ function CancelConfirmDialog({
 							color: theme.colors.textMain,
 						}}
 					>
-						Continue Transfer
+						{t('transfer_progress.continue_transfer_button')}
 					</button>
 					<button
 						type="button"
@@ -187,7 +189,7 @@ function CancelConfirmDialog({
 							color: '#fff',
 						}}
 					>
-						Cancel Transfer
+						{t('transfer_progress.cancel_transfer_button')}
 					</button>
 				</div>
 			</div>
@@ -212,7 +214,7 @@ function AgentTransferIndicator({
 
 	return (
 		<div className="flex items-center justify-center gap-2 mb-4">
-			<span
+			<CodeText
 				className="text-xs font-medium px-2 py-1 rounded"
 				style={{
 					backgroundColor: theme.colors.bgMain,
@@ -220,9 +222,9 @@ function AgentTransferIndicator({
 				}}
 			>
 				{sourceName}
-			</span>
+			</CodeText>
 			<ArrowRight className="w-4 h-4" style={{ color: theme.colors.accent }} />
-			<span
+			<CodeText
 				className="text-xs font-medium px-2 py-1 rounded"
 				style={{
 					backgroundColor: `${theme.colors.accent}20`,
@@ -230,7 +232,7 @@ function AgentTransferIndicator({
 				}}
 			>
 				{targetName}
-			</span>
+			</CodeText>
 		</div>
 	);
 }
@@ -253,6 +255,8 @@ export function TransferProgressModal({
 	onCancel,
 	onComplete,
 }: TransferProgressModalProps) {
+	const { t } = useTranslation('modals');
+	const { t: tA } = useTranslation('accessibility');
 	// Track start time for elapsed time display
 	const [startTime] = useState(() => Date.now());
 
@@ -352,7 +356,7 @@ export function TransferProgressModal({
 			className="fixed inset-0 modal-overlay flex items-center justify-center z-[9999]"
 			role="dialog"
 			aria-modal="true"
-			aria-label="Transfer Progress"
+			aria-label={tA('modal.transfer_progress')}
 			tabIndex={-1}
 		>
 			<div
@@ -378,7 +382,9 @@ export function TransferProgressModal({
 					style={{ borderColor: theme.colors.border }}
 				>
 					<h2 className="text-sm font-bold" style={{ color: theme.colors.textMain }}>
-						{isComplete ? 'Transfer Complete' : 'Transferring Context...'}
+						{isComplete
+							? t('transfer_progress.complete_title')
+							: t('transfer_progress.transferring_title')}
 					</h2>
 					{isComplete && (
 						<button
@@ -386,7 +392,7 @@ export function TransferProgressModal({
 							onClick={() => onComplete?.() || onCancel()}
 							className="p-1 rounded hover:bg-white/10 transition-colors"
 							style={{ color: theme.colors.textDim }}
-							aria-label="Close modal"
+							aria-label={tA('modal.close')}
 						>
 							<X className="w-4 h-4" />
 						</button>
@@ -428,7 +434,7 @@ export function TransferProgressModal({
 								className="flex items-center justify-center gap-2 text-xs"
 								style={{ color: theme.colors.textDim }}
 							>
-								<span>Elapsed:</span>
+								<span>{t('transfer_progress.elapsed_label')}:</span>
 								<ElapsedTimeDisplay startTime={startTime} textColor={theme.colors.textMain} />
 							</div>
 						)}
@@ -437,7 +443,9 @@ export function TransferProgressModal({
 					{/* Progress Bar */}
 					<div className="mb-6">
 						<div className="flex justify-between text-xs mb-1">
-							<span style={{ color: theme.colors.textDim }}>Progress</span>
+							<span style={{ color: theme.colors.textDim }}>
+								{t('transfer_progress.progress_label')}
+							</span>
 							<span style={{ color: theme.colors.textMain }}>{progress.progress}%</span>
 						</div>
 						<div
@@ -520,7 +528,7 @@ export function TransferProgressModal({
 							}),
 						}}
 					>
-						{isComplete ? 'Done' : 'Cancel'}
+						{isComplete ? t('transfer_progress.done_button') : t('transfer_progress.cancel_button')}
 					</button>
 				</div>
 			</div>

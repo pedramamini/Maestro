@@ -55,6 +55,27 @@ vi.mock('../../../../main/utils/logger', () => ({
 	},
 }));
 
+// Mock main process i18n
+const mainTTranslations: Record<string, string> = {
+	'notifications:error.notification.queue_full':
+		'Notification queue is full (max {{max}} items). Please wait for current items to complete.',
+	'notifications:error.notification.not_supported': 'Notifications not supported',
+	'notifications:error.notification.no_active_process':
+		'No active notification process with that ID',
+};
+
+vi.mock('../../../../main/i18n', () => ({
+	mainT: vi.fn((key: string, options?: Record<string, unknown>) => {
+		let result = mainTTranslations[key] || key;
+		if (options) {
+			for (const [k, v] of Object.entries(options)) {
+				result = result.replace(`{{${k}}}`, String(v));
+			}
+		}
+		return result;
+	}),
+}));
+
 // Mock child_process - must include default export
 vi.mock('child_process', async (importOriginal) => {
 	const actual = await importOriginal<typeof import('child_process')>();

@@ -175,7 +175,7 @@ export function substituteTemplateVariables(template: string, context: TemplateC
 		YEAR: String(now.getFullYear()),
 		MONTH: String(now.getMonth() + 1).padStart(2, '0'),
 		DAY: String(now.getDate()).padStart(2, '0'),
-		WEEKDAY: now.toLocaleDateString('en-US', { weekday: 'long' }),
+		WEEKDAY: now.toLocaleDateString(undefined, { weekday: 'long' }),
 
 		// Git variables
 		GIT_BRANCH: gitBranch || '',

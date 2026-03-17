@@ -8,6 +8,7 @@
 
 import { useEffect, useRef } from 'react';
 import { AlertCircle } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import type { Theme } from '../../types';
 import { useLayerStack } from '../../contexts/LayerStackContext';
 import { MODAL_PRIORITIES } from '../../constants/modalPriorities';
@@ -40,6 +41,7 @@ export function WizardExitConfirmModal({
 	onCancel,
 	onQuitWithoutSaving,
 }: WizardExitConfirmModalProps): JSX.Element {
+	const { t } = useTranslation('modals');
 	const { registerLayer, unregisterLayer, updateLayerHandler } = useLayerStack();
 	const layerIdRef = useRef<string>();
 	const stayButtonRef = useRef<HTMLButtonElement>(null);
@@ -118,7 +120,7 @@ export function WizardExitConfirmModal({
 						className="text-base font-semibold"
 						style={{ color: theme.colors.textMain }}
 					>
-						Exit Setup Wizard?
+						{t('wizard_exit_confirm.title')}
 					</h2>
 				</div>
 
@@ -129,11 +131,10 @@ export function WizardExitConfirmModal({
 						className="text-sm leading-relaxed"
 						style={{ color: theme.colors.textMain }}
 					>
-						Are you sure you want to exit the setup wizard?
+						{t('wizard_exit_confirm.confirm_message')}
 					</p>
 					<p className="text-sm mt-3 leading-relaxed" style={{ color: theme.colors.textDim }}>
-						Your progress can be saved, and you can resume where you left off the next time you open
-						Maestro.
+						{t('wizard_exit_confirm.save_progress_message')}
 					</p>
 
 					{/* Progress indicator */}
@@ -146,10 +147,11 @@ export function WizardExitConfirmModal({
 					>
 						<div className="flex justify-between items-center mb-2">
 							<span className="text-xs font-medium" style={{ color: theme.colors.textDim }}>
-								Current Progress
+								{t('wizard_exit_confirm.current_progress')}
 							</span>
 							<span className="text-xs font-medium" style={{ color: theme.colors.accent }}>
-								Step {currentStep} of {totalSteps}
+								{t('wizard_exit_confirm.step_label')} {currentStep}{' '}
+								{t('wizard_exit_confirm.of_label')} {totalSteps}
 							</span>
 						</div>
 						<div
@@ -178,7 +180,7 @@ export function WizardExitConfirmModal({
 								['--tw-ring-offset-color' as any]: theme.colors.bgSidebar,
 							}}
 						>
-							Exit & Save Progress
+							{t('wizard_exit_confirm.exit_save_button')}
 						</button>
 						<button
 							onClick={onQuitWithoutSaving}
@@ -190,7 +192,7 @@ export function WizardExitConfirmModal({
 								['--tw-ring-offset-color' as any]: theme.colors.bgSidebar,
 							}}
 						>
-							Just Quit
+							{t('wizard_exit_confirm.just_quit_button')}
 						</button>
 						<button
 							ref={stayButtonRef}
@@ -203,7 +205,7 @@ export function WizardExitConfirmModal({
 								['--tw-ring-offset-color' as any]: theme.colors.bgSidebar,
 							}}
 						>
-							Cancel
+							{t('wizard_exit_confirm.cancel_button')}
 						</button>
 					</div>
 

@@ -3,7 +3,7 @@ import type { Session, BatchRunConfig } from '../../types';
 import { useSessionStore } from '../../stores/sessionStore';
 import { useSettingsStore } from '../../stores/settingsStore';
 import { gitService } from '../../services/git';
-import { notifyToast } from '../../stores/notificationStore';
+import { tNotify } from '../../utils/tNotify';
 import { buildWorktreeSession } from '../../utils/worktreeSession';
 import {
 	markWorktreePathAsRecentlyCreated,
@@ -130,10 +130,11 @@ async function spawnWorktreeAgentAndDispatch(
 		}
 		if (!result.success) {
 			clearRecentlyCreatedWorktreePath(worktreePath);
-			notifyToast({
+			tNotify({
 				type: 'error',
-				title: 'Failed to Create Worktree',
-				message: result.error || 'Unknown error',
+				titleKey: 'notifications:worktree.create_failed_title',
+				messageKey: 'notifications:worktree.create_failed_message',
+				values: { message: result.error || 'Unknown error' },
 			});
 			return null;
 		}
@@ -333,11 +334,10 @@ export function useAutoRunHandlers(
 						`Target worktree session no longer exists: ${config.worktreeTarget.sessionId}. Falling back to active session.`,
 						'AutoRunHandlers'
 					);
-					notifyToast({
+					tNotify({
 						type: 'warning',
-						title: 'Worktree Agent Not Found',
-						message:
-							'The selected worktree agent was removed. Running on the active agent instead.',
+						titleKey: 'notifications:worktree.agent_not_found_title',
+						messageKey: 'notifications:worktree.agent_not_found_message',
 					});
 					// Fall back to active session
 					targetSessionId = activeSession.id;
@@ -348,10 +348,10 @@ export function useAutoRunHandlers(
 						`Target worktree session is busy: ${config.worktreeTarget.sessionId}`,
 						'AutoRunHandlers'
 					);
-					notifyToast({
+					tNotify({
 						type: 'warning',
-						title: 'Target Agent Busy',
-						message: 'Target agent is busy. Please try again.',
+						titleKey: 'notifications:worktree.target_busy_title',
+						messageKey: 'notifications:worktree.target_busy_message',
 					});
 					return;
 				} else {
@@ -386,10 +386,11 @@ export function useAutoRunHandlers(
 						`Failed to spawn worktree agent: ${err instanceof Error ? err.message : String(err)}`,
 						'AutoRunHandlers'
 					);
-					notifyToast({
+					tNotify({
 						type: 'error',
-						title: 'Worktree Error',
-						message: err instanceof Error ? err.message : String(err),
+						titleKey: 'notifications:worktree.error_title',
+						messageKey: 'notifications:worktree.error_message',
+						values: { message: err instanceof Error ? err.message : String(err) },
 					});
 					return;
 				}

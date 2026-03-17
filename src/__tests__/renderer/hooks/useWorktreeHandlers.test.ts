@@ -17,11 +17,10 @@ vi.mock('../../../renderer/services/git', () => ({
 	},
 }));
 
-// Mock notifyToast
-vi.mock('../../../renderer/stores/notificationStore', async () => {
-	const actual = await vi.importActual('../../../renderer/stores/notificationStore');
-	return { ...actual, notifyToast: vi.fn() };
-});
+// Mock tNotify
+vi.mock('../../../renderer/utils/tNotify', () => ({
+	tNotify: vi.fn(),
+}));
 
 // Mock generateId to produce deterministic IDs for testing
 let idCounter = 0;
@@ -34,7 +33,7 @@ import { useModalStore, getModalActions } from '../../../renderer/stores/modalSt
 import { useSessionStore } from '../../../renderer/stores/sessionStore';
 import { useSettingsStore } from '../../../renderer/stores/settingsStore';
 import { gitService } from '../../../renderer/services/git';
-import { notifyToast } from '../../../renderer/stores/notificationStore';
+import { tNotify } from '../../../renderer/utils/tNotify';
 import type { Session } from '../../../renderer/types';
 
 // ============================================================================
@@ -439,11 +438,11 @@ describe('handleSaveWorktreeConfig', () => {
 			});
 		});
 
-		expect(notifyToast).toHaveBeenCalledWith(
+		expect(tNotify).toHaveBeenCalledWith(
 			expect.objectContaining({
 				type: 'success',
-				title: 'Worktrees Discovered',
-				message: expect.stringContaining('2'),
+				titleKey: 'notifications:worktree.discovered_title',
+				messageKey: 'notifications:worktree.discovered_message',
 			})
 		);
 	});
@@ -532,11 +531,11 @@ describe('handleDisableWorktreeConfig', () => {
 			result.current.handleDisableWorktreeConfig();
 		});
 
-		expect(notifyToast).toHaveBeenCalledWith(
+		expect(tNotify).toHaveBeenCalledWith(
 			expect.objectContaining({
 				type: 'success',
-				title: 'Worktrees Disabled',
-				message: expect.stringContaining('Removed 2 worktree sub-agents'),
+				titleKey: 'notifications:worktree.disabled_title',
+				messageKey: 'notifications:worktree.disabled_with_removed_message',
 			})
 		);
 	});
@@ -594,11 +593,11 @@ describe('handleCreateWorktreeFromConfig', () => {
 			})
 		).rejects.toThrow('branch exists');
 
-		expect(notifyToast).toHaveBeenCalledWith(
+		expect(tNotify).toHaveBeenCalledWith(
 			expect.objectContaining({
 				type: 'error',
-				title: 'Failed to Create Worktree',
-				message: 'branch exists',
+				titleKey: 'notifications:worktree.create_failed_title',
+				messageKey: 'notifications:worktree.create_failed_message',
 			})
 		);
 	});
@@ -638,11 +637,11 @@ describe('handleCreateWorktreeFromConfig', () => {
 			await result.current.handleCreateWorktreeFromConfig('feature-new', '/projects/worktrees');
 		});
 
-		expect(notifyToast).toHaveBeenCalledWith(
+		expect(tNotify).toHaveBeenCalledWith(
 			expect.objectContaining({
 				type: 'error',
-				title: 'Error',
-				message: 'No worktree directory configured',
+				titleKey: 'notifications:worktree.no_directory_title',
+				messageKey: 'notifications:worktree.no_directory_message',
 			})
 		);
 	});

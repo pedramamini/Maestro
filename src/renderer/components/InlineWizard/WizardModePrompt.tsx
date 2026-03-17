@@ -13,6 +13,7 @@
  */
 
 import React, { useState, useRef, useEffect, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Wand2, FileText, RefreshCw } from 'lucide-react';
 import type { Theme } from '../../types';
 import type { InlineWizardMode } from '../../hooks/batch/useInlineWizard';
@@ -50,6 +51,7 @@ export function WizardModePrompt({
 	onClose,
 	existingDocCount = 0,
 }: WizardModePromptProps): JSX.Element | null {
+	const { t } = useTranslation('modals');
 	const [selectedOption, setSelectedOption] = useState<'new' | 'iterate' | null>(null);
 	const [iterateGoal, setIterateGoal] = useState('');
 	const goalInputRef = useRef<HTMLInputElement>(null);
@@ -100,7 +102,7 @@ export function WizardModePrompt({
 	return (
 		<Modal
 			theme={theme}
-			title="Wizard Mode"
+			title={t('wizard.inline_mode_prompt.title')}
 			priority={MODAL_PRIORITIES.WIZARD_MODE_PROMPT}
 			onClose={onClose}
 			width={480}
@@ -112,8 +114,8 @@ export function WizardModePrompt({
 				{/* Intro text */}
 				<p className="text-sm" style={{ color: theme.colors.textDim }}>
 					{existingDocCount > 0
-						? `You have ${existingDocCount} existing Auto Run document${existingDocCount === 1 ? '' : 's'}. What would you like to do?`
-						: 'Choose how you want to proceed with the wizard.'}
+						? t('wizard.inline_mode_prompt.intro_with_docs', { count: existingDocCount })
+						: t('wizard.inline_mode_prompt.intro_no_docs')}
 				</p>
 
 				{/* Option buttons */}
@@ -143,11 +145,10 @@ export function WizardModePrompt({
 							</div>
 							<div className="flex-1">
 								<h3 className="font-semibold text-sm mb-1" style={{ color: theme.colors.textMain }}>
-									Create New Plan
+									{t('wizard.inline_mode_prompt.new_plan_title')}
 								</h3>
 								<p className="text-xs" style={{ color: theme.colors.textDim }}>
-									Start fresh with a new project plan. The wizard will ask you about your project to
-									generate new Auto Run documents.
+									{t('wizard.inline_mode_prompt.new_plan_description')}
 								</p>
 							</div>
 						</div>
@@ -180,11 +181,10 @@ export function WizardModePrompt({
 										className="font-semibold text-sm mb-1"
 										style={{ color: theme.colors.textMain }}
 									>
-										Iterate on Existing
+										{t('wizard.inline_mode_prompt.iterate_title')}
 									</h3>
 									<p className="text-xs" style={{ color: theme.colors.textDim }}>
-										Build upon your existing documents. Tell the wizard what you want to add,
-										change, or extend.
+										{t('wizard.inline_mode_prompt.iterate_description')}
 									</p>
 								</div>
 							</div>
@@ -201,7 +201,7 @@ export function WizardModePrompt({
 									className="block text-xs font-medium mb-2"
 									style={{ color: theme.colors.textMain }}
 								>
-									What do you want to add or change?
+									{t('wizard.inline_mode_prompt.iterate_goal_label')}
 								</label>
 								<input
 									ref={goalInputRef}
@@ -210,7 +210,7 @@ export function WizardModePrompt({
 									value={iterateGoal}
 									onChange={(e) => setIterateGoal(e.target.value)}
 									onKeyDown={handleKeyDown}
-									placeholder="e.g., Add user authentication, fix performance issues..."
+									placeholder={t('wizard.inline_mode_prompt.iterate_goal_placeholder')}
 									className="w-full px-3 py-2 text-sm rounded-md border outline-none focus:ring-2"
 									style={{
 										borderColor: theme.colors.border,
@@ -229,7 +229,7 @@ export function WizardModePrompt({
 											color: theme.colors.textDim,
 										}}
 									>
-										Back
+										{t('wizard.inline_mode_prompt.back_button')}
 									</button>
 									<button
 										type="button"
@@ -242,7 +242,7 @@ export function WizardModePrompt({
 										disabled={!iterateGoal.trim()}
 										data-testid="wizard-mode-confirm-button"
 									>
-										Continue
+										{t('wizard.inline_mode_prompt.continue_button')}
 									</button>
 								</div>
 							</div>
@@ -262,7 +262,7 @@ export function WizardModePrompt({
 						}}
 						data-testid="wizard-mode-cancel-button"
 					>
-						Cancel
+						{t('wizard.inline_mode_prompt.cancel_button')}
 					</button>
 				</div>
 			</div>

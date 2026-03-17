@@ -18,10 +18,12 @@
 
 import { useState, useEffect, useRef, useMemo, useCallback, memo } from 'react';
 import { X, Check, Loader2, AlertTriangle, TrendingDown, Wand2 } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import type { Theme } from '../types';
 import type { SummarizeProgress, SummarizeResult } from '../types/contextMerge';
 import { useLayerStack } from '../contexts/LayerStackContext';
 import { MODAL_PRIORITIES } from '../constants/modalPriorities';
+import { useI18n } from '../hooks/useI18n';
 
 /**
  * Progress stage definition for display
@@ -122,6 +124,7 @@ function CancelConfirmDialog({
 	onConfirm: () => void;
 	onCancel: () => void;
 }) {
+	const { t } = useTranslation('modals');
 	return (
 		<div
 			className="absolute inset-0 flex items-center justify-center z-10"
@@ -137,7 +140,7 @@ function CancelConfirmDialog({
 				<div className="flex items-center gap-3 mb-4">
 					<AlertTriangle className="w-5 h-5" style={{ color: theme.colors.warning }} />
 					<h3 className="text-sm font-bold" style={{ color: theme.colors.textMain }}>
-						Cancel Compaction?
+						{t('summarize_progress.cancel_compaction_title')}
 					</h3>
 				</div>
 				<div className="flex justify-end gap-2">
@@ -150,7 +153,7 @@ function CancelConfirmDialog({
 							color: theme.colors.textMain,
 						}}
 					>
-						No
+						{t('summarize_progress.no_button')}
 					</button>
 					<button
 						type="button"
@@ -161,7 +164,7 @@ function CancelConfirmDialog({
 							color: '#fff',
 						}}
 					>
-						Yes
+						{t('summarize_progress.yes_button')}
 					</button>
 				</div>
 			</div>
@@ -173,6 +176,7 @@ function CancelConfirmDialog({
  * Token reduction stats display
  */
 function TokenReductionStats({ result, theme }: { result: SummarizeResult; theme: Theme }) {
+	const { t } = useTranslation('modals');
 	return (
 		<div
 			className="mt-4 p-3 rounded-lg border"
@@ -184,20 +188,20 @@ function TokenReductionStats({ result, theme }: { result: SummarizeResult; theme
 			<div className="flex items-center gap-2 mb-2">
 				<TrendingDown className="w-4 h-4" style={{ color: theme.colors.success }} />
 				<span className="text-xs font-medium" style={{ color: theme.colors.success }}>
-					Context Reduced by {result.reductionPercent}%
+					{t('summarize_progress.context_reduced', { percent: result.reductionPercent })}
 				</span>
 			</div>
 			<div className="grid grid-cols-2 gap-2 text-xs" style={{ color: theme.colors.textDim }}>
 				<div>
-					<span className="text-[10px] uppercase">Before</span>
+					<span className="text-[10px] uppercase">{t('summarize_progress.before_label')}</span>
 					<div className="font-mono" style={{ color: theme.colors.textMain }}>
-						~{(result.originalTokens ?? 0).toLocaleString()} tokens
+						~{(result.originalTokens ?? 0).toLocaleString()} {t('summarize_progress.tokens_unit')}
 					</div>
 				</div>
 				<div>
-					<span className="text-[10px] uppercase">After</span>
+					<span className="text-[10px] uppercase">{t('summarize_progress.after_label')}</span>
 					<div className="font-mono" style={{ color: theme.colors.textMain }}>
-						~{(result.compactedTokens ?? 0).toLocaleString()} tokens
+						~{(result.compactedTokens ?? 0).toLocaleString()} {t('summarize_progress.tokens_unit')}
 					</div>
 				</div>
 			</div>
@@ -216,6 +220,8 @@ export function SummarizeProgressModal({
 	onCancel,
 	onComplete,
 }: SummarizeProgressModalProps) {
+	const { t } = useTranslation('modals');
+	const { t: ta } = useI18n('accessibility');
 	// Track start time for elapsed time display
 	const [startTime] = useState(() => Date.now());
 
@@ -306,7 +312,7 @@ export function SummarizeProgressModal({
 			className="fixed inset-0 modal-overlay flex items-center justify-center z-[9999]"
 			role="dialog"
 			aria-modal="true"
-			aria-label="Summarization Progress"
+			aria-label={ta('modal.summarization_progress')}
 			tabIndex={-1}
 		>
 			<div
@@ -332,7 +338,9 @@ export function SummarizeProgressModal({
 					style={{ borderColor: theme.colors.border }}
 				>
 					<h2 className="text-sm font-bold" style={{ color: theme.colors.textMain }}>
-						{isComplete ? 'Summarization Complete' : 'Summarizing Context...'}
+						{isComplete
+							? t('summarize_progress.complete_title')
+							: t('summarize_progress.summarizing_title')}
 					</h2>
 					{isComplete && (
 						<button
@@ -340,7 +348,7 @@ export function SummarizeProgressModal({
 							onClick={onComplete}
 							className="p-1 rounded hover:bg-white/10 transition-colors"
 							style={{ color: theme.colors.textDim }}
-							aria-label="Close modal"
+							aria-label={ta('modal.close')}
 						>
 							<X className="w-4 h-4" />
 						</button>
@@ -373,7 +381,7 @@ export function SummarizeProgressModal({
 								className="flex items-center justify-center gap-2 text-xs"
 								style={{ color: theme.colors.textDim }}
 							>
-								<span>Elapsed:</span>
+								<span>{t('summarize_progress.elapsed_label')}:</span>
 								<ElapsedTimeDisplay startTime={startTime} textColor={theme.colors.textMain} />
 							</div>
 						)}
@@ -382,12 +390,19 @@ export function SummarizeProgressModal({
 					{/* Progress Bar */}
 					<div className="mb-6">
 						<div className="flex justify-between text-xs mb-1">
-							<span style={{ color: theme.colors.textDim }}>Progress</span>
+							<span style={{ color: theme.colors.textDim }}>
+								{t('summarize_progress.progress_label')}
+							</span>
 							<span style={{ color: theme.colors.textMain }}>{progressValue}%</span>
 						</div>
 						<div
 							className="h-2 rounded-full overflow-hidden"
 							style={{ backgroundColor: theme.colors.bgMain }}
+							role="progressbar"
+							aria-valuenow={progressValue}
+							aria-valuemin={0}
+							aria-valuemax={100}
+							aria-label={ta('status.summarization_progress', { percent: progressValue })}
 						>
 							<div
 								className="h-full rounded-full transition-all duration-300 ease-out"
@@ -488,7 +503,9 @@ export function SummarizeProgressModal({
 							}),
 						}}
 					>
-						{isComplete ? 'Done' : 'Cancel'}
+						{isComplete
+							? t('summarize_progress.done_button')
+							: t('summarize_progress.cancel_button')}
 					</button>
 				</div>
 			</div>

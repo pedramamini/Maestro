@@ -5,12 +5,13 @@
  * session ID, context usage, stats, and cost.
  */
 
-import { MessageSquare, Copy, Check, DollarSign, RotateCcw, Server } from 'lucide-react';
+import { MessageSquare, Copy, Check, RotateCcw, Server } from 'lucide-react';
 import { useState, useCallback } from 'react';
 import type { Theme, GroupChatParticipant, SessionState } from '../types';
-import { getStatusColor } from '../utils/theme';
-import { formatCost } from '../utils/formatters';
+import { getStatusColor, getStatusLabel } from '../utils/theme';
+import { formatCost, getActiveLocale } from '../utils/formatters';
 import { safeClipboardWrite } from '../utils/clipboard';
+import { useI18n } from '../hooks/useI18n';
 
 interface ParticipantCardProps {
 	theme: Theme;
@@ -29,7 +30,10 @@ function formatTime(timestamp: number): string {
 	const diff = now - timestamp;
 	if (diff < 60000) return 'just now';
 	if (diff < 3600000) return `${Math.floor(diff / 60000)}m ago`;
-	return new Date(timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+	return new Date(timestamp).toLocaleTimeString(getActiveLocale(), {
+		hour: '2-digit',
+		minute: '2-digit',
+	});
 }
 
 export function ParticipantCard({
@@ -40,6 +44,7 @@ export function ParticipantCard({
 	groupChatId,
 	onContextReset,
 }: ParticipantCardProps): JSX.Element {
+	const { t } = useI18n();
 	const [copied, setCopied] = useState(false);
 	const [isResetting, setIsResetting] = useState(false);
 
@@ -57,19 +62,6 @@ export function ParticipantCard({
 
 	// Determine if state should animate (busy or connecting)
 	const shouldPulse = state === 'busy' || state === 'connecting';
-
-	const getStatusLabel = (): string => {
-		switch (state) {
-			case 'busy':
-				return 'Working';
-			case 'error':
-				return 'Error';
-			case 'connecting':
-				return 'Connecting';
-			default:
-				return 'Idle';
-		}
-	};
 
 	// Context usage percentage (default to 0 if not set)
 	const contextUsage = participant.contextUsage ?? 0;
@@ -102,7 +94,7 @@ export function ParticipantCard({
 				<div
 					className={`w-2 h-2 rounded-full shrink-0 ${shouldPulse ? 'animate-pulse' : ''}`}
 					style={{ backgroundColor: getStatusColor(state, theme) }}
-					title={getStatusLabel()}
+					title={getStatusLabel(state, t)}
 				/>
 				<span className="font-medium" style={{ color: color || theme.colors.textMain }}>
 					{participant.name}
@@ -203,8 +195,7 @@ export function ParticipantCard({
 						}}
 						title="Total cost"
 					>
-						<DollarSign className="w-3 h-3" />
-						{formatCost(participant.totalCost).slice(1)}
+						{formatCost(participant.totalCost)}
 					</span>
 				)}
 				{/* Reset button */}

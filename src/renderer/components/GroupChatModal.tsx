@@ -12,6 +12,7 @@
  */
 
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 import { X, Settings, ChevronDown, Check } from 'lucide-react';
 import { isBetaAgent } from '../../shared/agentMetadata';
 import type { Theme, AgentConfig, ModeratorConfig, GroupChat } from '../types';
@@ -51,6 +52,8 @@ type GroupChatModalProps = GroupChatModalCreateProps | GroupChatModalEditProps;
 
 export function GroupChatModal(props: GroupChatModalProps): JSX.Element | null {
 	const { mode, theme, isOpen, onClose } = props;
+	const { t } = useTranslation('modals');
+	const { t: tA } = useTranslation('accessibility');
 	const groupChat = mode === 'edit' ? props.groupChat : undefined;
 
 	const [name, setName] = useState('');
@@ -208,7 +211,7 @@ export function GroupChatModal(props: GroupChatModalProps): JSX.Element | null {
 	const selectedTile = AGENT_TILES.find((t) => t.id === ac.selectedAgent);
 
 	const isCreate = mode === 'create';
-	const modalTitle = isCreate ? 'New Group Chat' : 'Edit Group Chat';
+	const modalTitle = isCreate ? t('group_chat.new_title') : t('group_chat.edit_title');
 	const modalPriority = isCreate
 		? MODAL_PRIORITIES.NEW_GROUP_CHAT
 		: MODAL_PRIORITIES.EDIT_GROUP_CHAT;
@@ -229,7 +232,7 @@ export function GroupChatModal(props: GroupChatModalProps): JSX.Element | null {
 					>
 						<div className="flex items-center gap-3">
 							<h2 className="text-sm font-bold" style={{ color: theme.colors.textMain }}>
-								New Group Chat
+								{t('group_chat.new_title')}
 							</h2>
 							<span
 								className="text-[10px] font-semibold tracking-wide uppercase px-2 py-0.5 rounded"
@@ -239,7 +242,7 @@ export function GroupChatModal(props: GroupChatModalProps): JSX.Element | null {
 									border: `1px solid ${theme.colors.accent}40`,
 								}}
 							>
-								Beta
+								{t('group_chat.beta_badge')}
 							</span>
 						</div>
 						<button
@@ -247,7 +250,7 @@ export function GroupChatModal(props: GroupChatModalProps): JSX.Element | null {
 							onClick={onClose}
 							className="p-1 rounded hover:bg-white/10 transition-colors"
 							style={{ color: theme.colors.textDim }}
-							aria-label="Close modal"
+							aria-label={tA('modal.close')}
 						>
 							<X className="w-4 h-4" />
 						</button>
@@ -259,7 +262,7 @@ export function GroupChatModal(props: GroupChatModalProps): JSX.Element | null {
 					theme={theme}
 					onCancel={onClose}
 					onConfirm={handleSubmit}
-					confirmLabel={isCreate ? 'Create' : 'Save'}
+					confirmLabel={isCreate ? t('group_chat.create_button') : t('group_chat.save_button')}
 					confirmDisabled={!canSubmit}
 				/>
 			}
@@ -268,12 +271,13 @@ export function GroupChatModal(props: GroupChatModalProps): JSX.Element | null {
 				{/* Description (create mode only) */}
 				{isCreate && (
 					<div className="mb-6 text-sm leading-relaxed" style={{ color: theme.colors.textDim }}>
-						A Group Chat lets you collaborate with multiple AI agents in a single conversation. The{' '}
-						<span style={{ color: theme.colors.textMain }}>moderator</span> manages the conversation
-						flow, deciding when to involve other agents. You can{' '}
-						<span style={{ color: theme.colors.accent }}>@mention</span> any agent defined in
-						Maestro to bring them into the discussion. We're still working on this feature, but
-						right now Claude appears to be the best performing moderator.
+						{t('group_chat.description_part1')}{' '}
+						<span style={{ color: theme.colors.textMain }}>
+							{t('group_chat.description_moderator')}
+						</span>{' '}
+						{t('group_chat.description_part2')}{' '}
+						<span style={{ color: theme.colors.accent }}>@mention</span>{' '}
+						{t('group_chat.description_part3')}
 					</div>
 				)}
 
@@ -283,11 +287,11 @@ export function GroupChatModal(props: GroupChatModalProps): JSX.Element | null {
 						<FormInput
 							ref={nameInputRef}
 							theme={theme}
-							label="Chat Name"
+							label={t('group_chat.chat_name_label')}
 							value={name}
 							onChange={setName}
 							onSubmit={canSubmit ? handleSubmit : undefined}
-							placeholder="e.g., Auth Feature Implementation"
+							placeholder={t('group_chat.chat_name_placeholder')}
 						/>
 					</div>
 				)}
@@ -298,7 +302,9 @@ export function GroupChatModal(props: GroupChatModalProps): JSX.Element | null {
 						className="block text-xs font-bold opacity-70 uppercase mb-2"
 						style={{ color: theme.colors.textMain }}
 					>
-						{isCreate ? 'Select Moderator' : 'Moderator Agent'}
+						{isCreate
+							? t('group_chat.select_moderator_label')
+							: t('group_chat.moderator_agent_label')}
 					</label>
 
 					{ac.isDetecting ? (
@@ -308,12 +314,12 @@ export function GroupChatModal(props: GroupChatModalProps): JSX.Element | null {
 								style={{ borderColor: theme.colors.accent, borderTopColor: 'transparent' }}
 							/>
 							<span className="text-sm" style={{ color: theme.colors.textDim }}>
-								Detecting agents...
+								{t('group_chat.detecting_agents')}
 							</span>
 						</div>
 					) : availableTiles.length === 0 ? (
 						<div className="text-sm py-2" style={{ color: theme.colors.textDim }}>
-							No agents available. Please install Claude Code, OpenCode, Codex, or Factory Droid.
+							{t('group_chat.no_agents_message')}
 						</div>
 					) : (
 						<div className="flex items-center gap-2">
@@ -329,14 +335,14 @@ export function GroupChatModal(props: GroupChatModalProps): JSX.Element | null {
 										color: theme.colors.textMain,
 										zIndex: 10000,
 									}}
-									aria-label="Select moderator agent"
+									aria-label={tA('modal.select_moderator')}
 								>
 									{availableTiles.map((tile) => {
 										const isBeta = isBetaAgent(tile.id);
 										return (
 											<option key={tile.id} value={tile.id}>
 												{tile.name}
-												{isBeta ? ' (Beta)' : ''}
+												{isBeta ? ` (${t('group_chat.beta_badge')})` : ''}
 											</option>
 										);
 									})}
@@ -356,10 +362,10 @@ export function GroupChatModal(props: GroupChatModalProps): JSX.Element | null {
 									color: ac.isConfigExpanded ? theme.colors.accent : theme.colors.textDim,
 									backgroundColor: ac.isConfigExpanded ? `${theme.colors.accent}10` : 'transparent',
 								}}
-								title="Customize moderator settings"
+								title={t('group_chat.customize_tooltip')}
 							>
 								<Settings className="w-4 h-4" />
-								<span className="text-sm">Customize</span>
+								<span className="text-sm">{t('group_chat.customize_button')}</span>
 								{ac.hasCustomization && (
 									<span
 										className="w-2 h-2 rounded-full"
@@ -381,13 +387,13 @@ export function GroupChatModal(props: GroupChatModalProps): JSX.Element | null {
 						>
 							<div className="flex items-center justify-between mb-3">
 								<span className="text-xs font-medium" style={{ color: theme.colors.textDim }}>
-									{selectedTile.name} Configuration
+									{t('group_chat.agent_configuration_label', { agent: selectedTile.name })}
 								</span>
 								{ac.hasCustomization && (
 									<div className="flex items-center gap-1">
 										<Check className="w-3 h-3" style={{ color: theme.colors.success }} />
 										<span className="text-xs" style={{ color: theme.colors.success }}>
-											Customized
+											{t('group_chat.customized_label')}
 										</span>
 									</div>
 								)}
@@ -485,8 +491,8 @@ export function GroupChatModal(props: GroupChatModalProps): JSX.Element | null {
 							border: `1px solid ${theme.colors.warning}40`,
 						}}
 					>
-						<strong>Note:</strong> Changing the moderator agent will restart the moderator process.
-						Existing conversation history will be preserved.
+						<strong>{t('group_chat.moderator_warning_note')}</strong>{' '}
+						{t('group_chat.moderator_warning_message')}
 					</div>
 				)}
 
@@ -495,11 +501,11 @@ export function GroupChatModal(props: GroupChatModalProps): JSX.Element | null {
 					<FormInput
 						ref={nameInputRef}
 						theme={theme}
-						label="Chat Name"
+						label={t('group_chat.chat_name_label')}
 						value={name}
 						onChange={setName}
 						onSubmit={canSubmit ? handleSubmit : undefined}
-						placeholder="e.g., Auth Feature Implementation"
+						placeholder={t('group_chat.chat_name_placeholder')}
 					/>
 				)}
 			</div>

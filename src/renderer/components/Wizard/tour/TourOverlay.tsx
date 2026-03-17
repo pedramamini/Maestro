@@ -13,6 +13,7 @@ import { useEffect, useCallback, useRef, useState } from 'react';
 import type { Theme, Shortcut } from '../../../types';
 import { useLayerStack } from '../../../contexts/LayerStackContext';
 import { MODAL_PRIORITIES } from '../../../constants/modalPriorities';
+import { useTranslation } from 'react-i18next';
 import { TourStep } from './TourStep';
 import { TourWelcome } from './TourWelcome';
 import { useTour, type TourStepConfig } from './useTour';
@@ -96,6 +97,7 @@ export function TourOverlay({
 	onTourComplete,
 	onTourSkip,
 }: TourOverlayProps): JSX.Element | null {
+	const { t: tA } = useTranslation('accessibility');
 	const { registerLayer, unregisterLayer } = useLayerStack();
 
 	// Track whether we're showing the welcome screen (before tour steps)
@@ -268,7 +270,7 @@ export function TourOverlay({
 			className="fixed inset-0 z-[9999] tour-overlay"
 			role="dialog"
 			aria-modal="true"
-			aria-label="Interface tour"
+			aria-label={tA('modal.interface_tour')}
 		>
 			{/* Dark overlay with spotlight cutout */}
 			<div

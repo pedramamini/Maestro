@@ -2,6 +2,7 @@ import { memo, useState } from 'react';
 import type { Session, Theme } from '../../types';
 import { getStatusColor } from '../../utils/theme';
 import { SessionTooltipContent } from './SessionTooltipContent';
+import { useI18n } from '../../hooks/useI18n';
 
 interface CollapsedSessionPillProps {
 	session: Session;
@@ -28,6 +29,7 @@ export const CollapsedSessionPill = memo(function CollapsedSessionPill({
 	getWorktreeChildren,
 	setActiveSessionId,
 }: CollapsedSessionPillProps) {
+	const { t: ta } = useI18n('accessibility');
 	const [tooltipPosition, setTooltipPosition] = useState<{ x: number; y: number } | null>(null);
 
 	const worktreeChildren = getWorktreeChildren(session.id);
@@ -51,7 +53,7 @@ export const CollapsedSessionPill = memo(function CollapsedSessionPill({
 						key={`${keyPrefix}-part-${s.id}`}
 						role="button"
 						tabIndex={0}
-						aria-label={`Switch to ${s.name}`}
+						aria-label={ta('navigation.switch_to_session', { name: s.name })}
 						className={`group/segment relative flex-1 h-full ${isInBatch ? 'animate-pulse' : ''}`}
 						style={{
 							...(s.toolType === 'claude-code' && !s.agentSessionId && !isInBatch

@@ -1,4 +1,5 @@
 import { useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { AlertTriangle, Loader2, Trash2 } from 'lucide-react';
 import type { Theme, Session } from '../types';
 import { MODAL_PRIORITIES } from '../constants/modalPriorities';
@@ -27,6 +28,7 @@ export function DeleteWorktreeModal({
 	onConfirm,
 	onConfirmAndDelete,
 }: DeleteWorktreeModalProps) {
+	const { t } = useTranslation('modals');
 	const confirmButtonRef = useRef<HTMLButtonElement>(null);
 	const [isDeleting, setIsDeleting] = useState(false);
 	const [error, setError] = useState<string | null>(null);
@@ -43,7 +45,7 @@ export function DeleteWorktreeModal({
 			await onConfirmAndDelete();
 			onClose();
 		} catch (err) {
-			setError(err instanceof Error ? err.message : 'Failed to delete worktree');
+			setError(err instanceof Error ? err.message : t('delete_worktree.failed_to_delete'));
 			setIsDeleting(false);
 		}
 	};
@@ -51,7 +53,7 @@ export function DeleteWorktreeModal({
 	return (
 		<Modal
 			theme={theme}
-			title="Delete Worktree"
+			title={t('delete_worktree.title')}
 			priority={MODAL_PRIORITIES.CONFIRM}
 			onClose={onClose}
 			headerIcon={<Trash2 className="w-4 h-4" style={{ color: theme.colors.error }} />}
@@ -72,7 +74,7 @@ export function DeleteWorktreeModal({
 							}}
 						>
 							<Loader2 className="w-3 h-3 animate-spin" />
-							Deleting...
+							{t('delete_worktree.deleting_button')}
 						</button>
 					) : (
 						<>
@@ -91,7 +93,7 @@ export function DeleteWorktreeModal({
 									color: theme.colors.textMain,
 								}}
 							>
-								Cancel
+								{t('delete_worktree.cancel_button')}
 							</button>
 							<button
 								ref={confirmButtonRef}
@@ -109,7 +111,7 @@ export function DeleteWorktreeModal({
 									color: '#ffffff',
 								}}
 							>
-								Remove
+								{t('delete_worktree.remove_button')}
 							</button>
 							<button
 								type="button"
@@ -126,7 +128,7 @@ export function DeleteWorktreeModal({
 									color: '#ffffff',
 								}}
 							>
-								Remove and Delete
+								{t('delete_worktree.remove_delete_button')}
 							</button>
 						</>
 					)}
@@ -142,16 +144,20 @@ export function DeleteWorktreeModal({
 				</div>
 				<div className="space-y-3">
 					<p className="leading-relaxed" style={{ color: theme.colors.textMain }}>
-						Delete worktree session "<span className="font-semibold">{session.name}</span>"?
+						{t('delete_worktree.confirm_message', { name: session.name })}
 					</p>
 					<div className="text-sm space-y-2" style={{ color: theme.colors.textDim }}>
 						<p>
-							<strong style={{ color: theme.colors.textMain }}>Remove:</strong> Removes the
-							sub-agent from Maestro but keeps the git worktree directory on disk.
+							<strong style={{ color: theme.colors.textMain }}>
+								{t('delete_worktree.remove_label')}
+							</strong>{' '}
+							{t('delete_worktree.remove_keep_description')}
 						</p>
 						<p>
-							<strong style={{ color: theme.colors.textMain }}>Remove and Delete:</strong> Removes
-							the sub-agent AND permanently deletes the worktree directory from disk.
+							<strong style={{ color: theme.colors.textMain }}>
+								{t('delete_worktree.remove_delete_label')}
+							</strong>{' '}
+							{t('delete_worktree.remove_delete_description')}
 						</p>
 					</div>
 					{session.cwd && (

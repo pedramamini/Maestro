@@ -17,6 +17,7 @@ import { render, screen, act, waitFor } from '@testing-library/react';
 import { WizardConversationView } from '../../../../renderer/components/InlineWizard/WizardConversationView';
 import type { WizardMessageBubbleMessage } from '../../../../renderer/components/InlineWizard/WizardMessageBubble';
 import type { Theme } from '../../../../renderer/types';
+import commonEn from '../../../../shared/i18n/locales/en/common.json';
 
 // Mock theme for testing
 const mockTheme: Theme = {
@@ -61,6 +62,38 @@ function createMessage(
 // Mock scrollTo on the container (used instead of scrollIntoView)
 const mockScrollTo = vi.fn();
 Element.prototype.scrollTo = mockScrollTo;
+
+// Mock i18n config so i18n.t() resolves English translations
+vi.mock('../../../../shared/i18n/config', () => {
+	function resolveKey(key: string): string {
+		// Strip namespace prefix (e.g., 'common:wizard_errors.timeout_title' -> 'wizard_errors.timeout_title')
+		const bareKey = key.includes(':') ? key.split(':').slice(1).join(':') : key;
+		const parts = bareKey.split('.');
+		let value: unknown = commonEn;
+		for (const part of parts) {
+			if (value && typeof value === 'object' && part in (value as Record<string, unknown>)) {
+				value = (value as Record<string, unknown>)[part];
+			} else {
+				return key;
+			}
+		}
+		return typeof value === 'string' ? value : key;
+	}
+	return {
+		default: {
+			t: (key: string, opts?: Record<string, unknown>) => {
+				let result = resolveKey(key);
+				if (opts) {
+					for (const [k, v] of Object.entries(opts)) {
+						result = result.replace(new RegExp(`\\{\\{${k}\\}\\}`, 'g'), String(v));
+					}
+				}
+				return result;
+			},
+			language: 'en',
+		},
+	};
+});
 
 // Mock filler phrases
 vi.mock('../../../../renderer/components/Wizard/services/fillerPhrases', () => ({
@@ -1000,6 +1033,190 @@ describe('WizardConversationView', () => {
 			);
 
 			expect(screen.getByText('Read')).toBeInTheDocument();
+		});
+	});
+
+	describe('error display', () => {
+		it('shows error display when error is provided and not loading', () => {
+			render(
+				<WizardConversationView
+					theme={mockTheme}
+					conversationHistory={[]}
+					isLoading={false}
+					error="Something went wrong"
+				/>
+			);
+
+			expect(screen.getByTestId('wizard-error-display')).toBeInTheDocument();
+		});
+
+		it('does not show error display when loading', () => {
+			render(
+				<WizardConversationView
+					theme={mockTheme}
+					conversationHistory={[]}
+					isLoading={true}
+					error="Something went wrong"
+				/>
+			);
+
+			expect(screen.queryByTestId('wizard-error-display')).not.toBeInTheDocument();
+		});
+
+		it('maps timeout errors to translated title and description', () => {
+			render(
+				<WizardConversationView
+					theme={mockTheme}
+					conversationHistory={[]}
+					isLoading={false}
+					error="The agent timed out"
+				/>
+			);
+
+			expect(screen.getByTestId('error-title')).toHaveTextContent('Response Timeout');
+			expect(screen.getByTestId('error-description')).toHaveTextContent(/stopped producing output/);
+		});
+
+		it('maps "not available" errors to translated title', () => {
+			render(
+				<WizardConversationView
+					theme={mockTheme}
+					conversationHistory={[]}
+					isLoading={false}
+					error="Agent not available"
+				/>
+			);
+
+			expect(screen.getByTestId('error-title')).toHaveTextContent('Agent Not Available');
+		});
+
+		it('maps session errors to translated title', () => {
+			render(
+				<WizardConversationView
+					theme={mockTheme}
+					conversationHistory={[]}
+					isLoading={false}
+					error="session not active"
+				/>
+			);
+
+			expect(screen.getByTestId('error-title')).toHaveTextContent('Session Error');
+		});
+
+		it('maps spawn errors to translated title', () => {
+			render(
+				<WizardConversationView
+					theme={mockTheme}
+					conversationHistory={[]}
+					isLoading={false}
+					error="Failed to spawn agent"
+				/>
+			);
+
+			expect(screen.getByTestId('error-title')).toHaveTextContent('Failed to Start Agent');
+		});
+
+		it('maps exit code errors to translated title', () => {
+			render(
+				<WizardConversationView
+					theme={mockTheme}
+					conversationHistory={[]}
+					isLoading={false}
+					error="Process exited with code 1"
+				/>
+			);
+
+			expect(screen.getByTestId('error-title')).toHaveTextContent('Agent Error');
+		});
+
+		it('maps parse errors to translated title', () => {
+			render(
+				<WizardConversationView
+					theme={mockTheme}
+					conversationHistory={[]}
+					isLoading={false}
+					error="Failed to parse response"
+				/>
+			);
+
+			expect(screen.getByTestId('error-title')).toHaveTextContent('Response Error');
+		});
+
+		it('shows generic error for unknown error strings', () => {
+			render(
+				<WizardConversationView
+					theme={mockTheme}
+					conversationHistory={[]}
+					isLoading={false}
+					error="Some unknown error"
+				/>
+			);
+
+			expect(screen.getByTestId('error-title')).toHaveTextContent('Something Went Wrong');
+		});
+
+		it('shows translated Try Again button', () => {
+			const onRetry = vi.fn();
+			render(
+				<WizardConversationView
+					theme={mockTheme}
+					conversationHistory={[]}
+					isLoading={false}
+					error="test error"
+					onRetry={onRetry}
+				/>
+			);
+
+			const button = screen.getByTestId('error-retry-button');
+			expect(button).toHaveTextContent('Try Again');
+			button.click();
+			expect(onRetry).toHaveBeenCalledTimes(1);
+		});
+
+		it('shows translated Dismiss button', () => {
+			const onClearError = vi.fn();
+			render(
+				<WizardConversationView
+					theme={mockTheme}
+					conversationHistory={[]}
+					isLoading={false}
+					error="test error"
+					onClearError={onClearError}
+				/>
+			);
+
+			const button = screen.getByTestId('error-dismiss-button');
+			expect(button).toHaveTextContent('Dismiss');
+			button.click();
+			expect(onClearError).toHaveBeenCalledTimes(1);
+		});
+
+		it('shows translated Technical details summary', () => {
+			render(
+				<WizardConversationView
+					theme={mockTheme}
+					conversationHistory={[]}
+					isLoading={false}
+					error="test error"
+				/>
+			);
+
+			expect(screen.getByText('Technical details')).toBeInTheDocument();
+		});
+
+		it('shows raw error in technical details', () => {
+			render(
+				<WizardConversationView
+					theme={mockTheme}
+					conversationHistory={[]}
+					isLoading={false}
+					error="Raw error: connection refused"
+				/>
+			);
+
+			expect(screen.getByTestId('error-technical-details')).toHaveTextContent(
+				'Raw error: connection refused'
+			);
 		});
 	});
 });

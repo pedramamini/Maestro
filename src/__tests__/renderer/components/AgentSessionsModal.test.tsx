@@ -23,6 +23,11 @@ vi.mock('../../../renderer/constants/modalPriorities', () => ({
 	},
 }));
 
+// Mock i18n config
+vi.mock('../../../shared/i18n/config', () => ({
+	default: { language: 'en' },
+}));
+
 // Create a mock theme
 const mockTheme: Theme = {
 	id: 'dracula',
@@ -566,7 +571,7 @@ describe('AgentSessionsModal', () => {
 	});
 
 	describe('Relative Time Formatting', () => {
-		it('should display "just now" for recent timestamps', async () => {
+		it('should display "now" for recent timestamps', async () => {
 			const mockSessions = [createMockClaudeSession({ modifiedAt: new Date().toISOString() })];
 			vi.mocked(window.maestro.agentSessions.listPaginated).mockResolvedValue({
 				sessions: mockSessions,
@@ -585,7 +590,7 @@ describe('AgentSessionsModal', () => {
 			);
 
 			await waitFor(() => {
-				expect(screen.getByText('just now')).toBeInTheDocument();
+				expect(screen.getByText('now')).toBeInTheDocument();
 			});
 		});
 
@@ -610,7 +615,7 @@ describe('AgentSessionsModal', () => {
 			);
 
 			await waitFor(() => {
-				expect(screen.getByText('15m ago')).toBeInTheDocument();
+				expect(screen.getByText('15 minutes ago')).toBeInTheDocument();
 			});
 		});
 
@@ -635,7 +640,7 @@ describe('AgentSessionsModal', () => {
 			);
 
 			await waitFor(() => {
-				expect(screen.getByText('5h ago')).toBeInTheDocument();
+				expect(screen.getByText('5 hours ago')).toBeInTheDocument();
 			});
 		});
 
@@ -660,7 +665,7 @@ describe('AgentSessionsModal', () => {
 			);
 
 			await waitFor(() => {
-				expect(screen.getByText('3d ago')).toBeInTheDocument();
+				expect(screen.getByText('3 days ago')).toBeInTheDocument();
 			});
 		});
 
@@ -1210,7 +1215,7 @@ describe('AgentSessionsModal', () => {
 
 			await waitFor(() => {
 				expect(screen.getByText(/5 messages/)).toBeInTheDocument();
-				expect(screen.getByText(/just now/)).toBeInTheDocument();
+				expect(screen.getByText(/\bnow\b/)).toBeInTheDocument();
 			});
 		});
 

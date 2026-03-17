@@ -197,6 +197,18 @@ export class BroadcastService {
 	}
 
 	/**
+	 * Broadcast language change to all connected web clients
+	 * Called when the user changes the language in the desktop app
+	 */
+	broadcastLanguageChange(language: string): void {
+		this.broadcastToAll({
+			type: 'language',
+			language,
+			timestamp: Date.now(),
+		});
+	}
+
+	/**
 	 * Broadcast custom commands update to all connected web clients
 	 * Called when the user modifies custom AI commands in the desktop app
 	 */

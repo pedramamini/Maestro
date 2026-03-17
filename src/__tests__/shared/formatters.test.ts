@@ -13,10 +13,39 @@ import {
 	formatElapsedTime,
 	formatElapsedTimeColon,
 	formatCost,
+	formatPercent,
 	estimateTokenCount,
 	truncatePath,
 	truncateCommand,
+	getActiveLocale,
 } from '../../shared/formatters';
+
+// Mock i18n to avoid initializing the full i18n stack in tests.
+// Includes a basic t() that resolves English time unit translations.
+const timeTranslations: Record<string, string> = {
+	'common:time.milliseconds_short': '{{count}}ms',
+	'common:time.seconds_short': '{{count}}s',
+	'common:time.minutes_short': '{{count}}m',
+	'common:time.hours_short': '{{count}}h',
+	'common:time.days_short': '{{count}}d',
+	'common:time.minutes_compact': '{{count}}M',
+	'common:time.hours_compact': '{{count}}H',
+	'common:time.days_compact': '{{count}}D',
+	'common:time.less_than_minute': '<1M',
+};
+vi.mock('../../shared/i18n/config', () => ({
+	default: {
+		language: 'en',
+		t: (key: string, opts?: Record<string, unknown>) => {
+			const template = timeTranslations[key];
+			if (!template) return key;
+			if (opts?.count !== undefined) {
+				return template.replace('{{count}}', String(opts.count));
+			}
+			return template;
+		},
+	},
+}));
 
 describe('shared/formatters', () => {
 	// ==========================================================================
@@ -50,6 +79,20 @@ describe('shared/formatters', () => {
 		it('should format terabytes', () => {
 			expect(formatSize(1024 * 1024 * 1024 * 1024)).toBe('1.0 TB');
 			expect(formatSize(1024 * 1024 * 1024 * 1024 * 5)).toBe('5.0 TB');
+		});
+
+		it('should accept optional locale parameter without breaking output', () => {
+			expect(formatSize(0, 'en')).toBe('0 B');
+			expect(formatSize(1536, 'en')).toBe('1.5 KB');
+			expect(formatSize(1024 * 1024 * 1.5, 'en')).toBe('1.5 MB');
+		});
+
+		it('should use locale-aware decimal separators', () => {
+			// French uses comma as decimal separator
+			expect(formatSize(1536, 'fr')).toBe('1,5 KB');
+			expect(formatSize(1024 * 1024 * 1.5, 'fr')).toBe('1,5 MB');
+			// German also uses comma
+			expect(formatSize(1024 * 1024 * 1024 * 2.5, 'de')).toBe('2,5 GB');
 		});
 	});
 
@@ -106,6 +149,25 @@ describe('shared/formatters', () => {
 			expect(formatTokens(1000000000)).toBe('~1B');
 			expect(formatTokens(2500000000)).toBe('~3B'); // Rounds to nearest B
 		});
+
+		it('should accept optional locale parameter without breaking output', () => {
+			expect(formatTokens(0, 'en')).toBe('0');
+			expect(formatTokens(1000, 'en')).toBe('~1K');
+			expect(formatTokens(1500, 'en')).toBe('~2K');
+			expect(formatTokens(1000000, 'en')).toBe('~1M');
+		});
+
+		it('should produce locale-aware compact notation', () => {
+			// German uses '.' as thousands separator in some contexts
+			const deResult = formatTokens(1000000, 'de');
+			expect(deResult).toContain('~');
+			expect(deResult.length).toBeGreaterThan(1);
+
+			// Spanish compact notation
+			const esResult = formatTokens(1000, 'es');
+			expect(esResult).toContain('~');
+			expect(esResult.length).toBeGreaterThan(1);
+		});
 	});
 
 	// ==========================================================================
@@ -128,35 +190,66 @@ describe('shared/formatters', () => {
 			expect(formatTokensCompact(1000000)).toBe('1.0M');
 			expect(formatTokensCompact(2500000)).toBe('2.5M');
 		});
+
+		it('should accept optional locale parameter without breaking output', () => {
+			expect(formatTokensCompact(0, 'en')).toBe('0');
+			expect(formatTokensCompact(1000, 'en')).toBe('1.0K');
+			expect(formatTokensCompact(1500, 'en')).toBe('1.5K');
+			expect(formatTokensCompact(1000000, 'en')).toBe('1.0M');
+		});
+
+		it('should use locale-aware number formatting', () => {
+			// French uses comma as decimal separator
+			const frResult = formatTokensCompact(1500, 'fr');
+			expect(frResult).toMatch(/1[,.]5/); // locale may use comma or period
+
+			// German uses comma as decimal separator
+			const deResult = formatTokensCompact(2500000, 'de');
+			expect(deResult).toContain('2,5');
+		});
 	});
 
 	// ==========================================================================
-	// formatRelativeTime tests
+	// getActiveLocale tests
+	// ==========================================================================
+	describe('getActiveLocale', () => {
+		it('should return override locale when provided', () => {
+			expect(getActiveLocale('fr')).toBe('fr');
+			expect(getActiveLocale('es')).toBe('es');
+		});
+
+		it('should return i18n language when no override', () => {
+			expect(getActiveLocale()).toBe('en');
+		});
+	});
+
+	// ==========================================================================
+	// formatRelativeTime tests (locale-aware via Intl.RelativeTimeFormat)
 	// ==========================================================================
 	describe('formatRelativeTime', () => {
 		const now = Date.now();
 
-		it('should format just now for < 1 minute', () => {
-			expect(formatRelativeTime(now)).toBe('just now');
-			expect(formatRelativeTime(now - 30000)).toBe('just now'); // 30 seconds
+		it('should format "now" for < 1 minute', () => {
+			expect(formatRelativeTime(now)).toBe('now');
+			expect(formatRelativeTime(now - 30000)).toBe('now'); // 30 seconds
 		});
 
 		it('should format minutes ago', () => {
-			expect(formatRelativeTime(now - 60000)).toBe('1m ago');
-			expect(formatRelativeTime(now - 5 * 60000)).toBe('5m ago');
-			expect(formatRelativeTime(now - 59 * 60000)).toBe('59m ago');
+			expect(formatRelativeTime(now - 60000)).toBe('1 minute ago');
+			expect(formatRelativeTime(now - 5 * 60000)).toBe('5 minutes ago');
+			expect(formatRelativeTime(now - 59 * 60000)).toBe('59 minutes ago');
 		});
 
 		it('should format hours ago', () => {
-			expect(formatRelativeTime(now - 60 * 60000)).toBe('1h ago');
-			expect(formatRelativeTime(now - 5 * 60 * 60000)).toBe('5h ago');
-			expect(formatRelativeTime(now - 23 * 60 * 60000)).toBe('23h ago');
+			expect(formatRelativeTime(now - 60 * 60000)).toBe('1 hour ago');
+			expect(formatRelativeTime(now - 5 * 60 * 60000)).toBe('5 hours ago');
+			expect(formatRelativeTime(now - 23 * 60 * 60000)).toBe('23 hours ago');
 		});
 
 		it('should format days ago', () => {
-			expect(formatRelativeTime(now - 24 * 60 * 60000)).toBe('1d ago');
-			expect(formatRelativeTime(now - 5 * 24 * 60 * 60000)).toBe('5d ago');
-			expect(formatRelativeTime(now - 6 * 24 * 60 * 60000)).toBe('6d ago');
+			expect(formatRelativeTime(now - 24 * 60 * 60000)).toBe('yesterday');
+			expect(formatRelativeTime(now - 5 * 24 * 60 * 60000)).toBe('5 days ago');
+			expect(formatRelativeTime(now - 6 * 24 * 60 * 60000)).toBe('6 days ago');
 		});
 
 		it('should format older dates as localized date', () => {
@@ -167,13 +260,24 @@ describe('shared/formatters', () => {
 		});
 
 		it('should accept Date objects', () => {
-			expect(formatRelativeTime(new Date(now))).toBe('just now');
-			expect(formatRelativeTime(new Date(now - 60000))).toBe('1m ago');
+			expect(formatRelativeTime(new Date(now))).toBe('now');
+			expect(formatRelativeTime(new Date(now - 60000))).toBe('1 minute ago');
 		});
 
 		it('should accept ISO date strings', () => {
-			expect(formatRelativeTime(new Date(now).toISOString())).toBe('just now');
-			expect(formatRelativeTime(new Date(now - 60000).toISOString())).toBe('1m ago');
+			expect(formatRelativeTime(new Date(now).toISOString())).toBe('now');
+			expect(formatRelativeTime(new Date(now - 60000).toISOString())).toBe('1 minute ago');
+		});
+
+		it('should respect locale parameter for Spanish', () => {
+			expect(formatRelativeTime(now - 5 * 60000, 'es')).toBe('hace 5 minutos');
+		});
+
+		it('should respect locale parameter for French', () => {
+			const result = formatRelativeTime(now - 60 * 60000, 'fr');
+			expect(result).toContain('1');
+			// French: "il y a 1 heure"
+			expect(result.length).toBeGreaterThan(0);
 		});
 	});
 
@@ -207,6 +311,14 @@ describe('shared/formatters', () => {
 			expect(formatActiveTime(24 * 60 * 60000)).toBe('1D');
 			expect(formatActiveTime(3 * 24 * 60 * 60000)).toBe('3D');
 		});
+
+		it('should accept optional locale parameter without breaking output', () => {
+			// Locale parameter is accepted but English output stays the same
+			expect(formatActiveTime(0, 'en')).toBe('<1M');
+			expect(formatActiveTime(5 * 60000, 'en')).toBe('5M');
+			expect(formatActiveTime(90 * 60000, 'en')).toBe('1H 30M');
+			expect(formatActiveTime(24 * 60 * 60000, 'en')).toBe('1D');
+		});
 	});
 
 	// ==========================================================================
@@ -238,6 +350,13 @@ describe('shared/formatters', () => {
 			expect(formatElapsedTime(70 * 60000)).toBe('1h 10m');
 			expect(formatElapsedTime(2 * 60 * 60000 + 30 * 60000)).toBe('2h 30m');
 		});
+
+		it('should accept optional locale parameter without breaking output', () => {
+			expect(formatElapsedTime(500, 'en')).toBe('500ms');
+			expect(formatElapsedTime(5000, 'en')).toBe('5s');
+			expect(formatElapsedTime(90000, 'en')).toBe('1m 30s');
+			expect(formatElapsedTime(70 * 60000, 'en')).toBe('1h 10m');
+		});
 	});
 
 	// ==========================================================================
@@ -246,11 +365,13 @@ describe('shared/formatters', () => {
 	describe('formatCost', () => {
 		it('should format zero cost', () => {
 			expect(formatCost(0)).toBe('$0.00');
+			expect(formatCost(0, 'en')).toBe('$0.00');
 		});
 
 		it('should format very small costs as <$0.01', () => {
 			expect(formatCost(0.001)).toBe('<$0.01');
 			expect(formatCost(0.009)).toBe('<$0.01');
+			expect(formatCost(0.001, 'en')).toBe('<$0.01');
 		});
 
 		it('should format normal costs with 2 decimal places', () => {
@@ -261,9 +382,63 @@ describe('shared/formatters', () => {
 		});
 
 		it('should round to 2 decimal places', () => {
-			expect(formatCost(1.234)).toBe('$1.23');
-			expect(formatCost(1.235)).toBe('$1.24'); // rounds up
-			expect(formatCost(1.999)).toBe('$2.00');
+			expect(formatCost(1.234, 'en')).toBe('$1.23');
+			expect(formatCost(1.235, 'en')).toBe('$1.24'); // rounds up
+			expect(formatCost(1.999, 'en')).toBe('$2.00');
+		});
+
+		it('should use locale-aware currency formatting with explicit locale', () => {
+			// German uses comma for decimal, currency symbol after number
+			const deCost = formatCost(1.23, 'de');
+			expect(deCost).toContain('1,23');
+
+			// French uses comma for decimal, currency symbol after number
+			const frCost = formatCost(1.23, 'fr');
+			expect(frCost).toContain('1,23');
+		});
+
+		it('should handle locale-aware less-than formatting', () => {
+			const deCost = formatCost(0.005, 'de');
+			expect(deCost).toContain('<');
+			expect(deCost).toContain('0,01');
+		});
+	});
+
+	// ==========================================================================
+	// formatPercent tests
+	// ==========================================================================
+	describe('formatPercent', () => {
+		it('should format 0%', () => {
+			expect(formatPercent(0)).toBe('0%');
+		});
+
+		it('should format 100%', () => {
+			expect(formatPercent(100)).toBe('100%');
+		});
+
+		it('should format intermediate values', () => {
+			expect(formatPercent(50)).toBe('50%');
+			expect(formatPercent(75)).toBe('75%');
+			expect(formatPercent(1)).toBe('1%');
+		});
+
+		it('should use locale-aware formatting with explicit locale', () => {
+			// French uses non-breaking space before %
+			const frResult = formatPercent(50, 'fr');
+			// French formatting includes the number and % symbol
+			expect(frResult).toContain('50');
+			expect(frResult).toContain('%');
+		});
+
+		it('should round to zero decimal places', () => {
+			// formatPercent takes integer 0-100 values; verify no decimals
+			expect(formatPercent(33)).toBe('33%');
+			expect(formatPercent(67)).toBe('67%');
+		});
+
+		it('should handle locale override parameter', () => {
+			const enResult = formatPercent(42, 'en');
+			expect(enResult).toBe('42%');
 		});
 	});
 

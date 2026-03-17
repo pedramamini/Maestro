@@ -7,6 +7,7 @@
  */
 
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Sparkles, AlertTriangle, AppWindow } from 'lucide-react';
 import { useSettings } from '../../../hooks';
 import type { Theme } from '../../../types';
@@ -48,6 +49,7 @@ export function DisplayTab({ theme }: DisplayTabProps) {
 		localHonorGitignore,
 		setLocalHonorGitignore,
 	} = useSettings();
+	const { t } = useTranslation('settings');
 
 	const [systemFonts, setSystemFonts] = useState<string[]>([]);
 	const [customFonts, setCustomFonts] = useState<string[]>([]);
@@ -114,13 +116,15 @@ export function DisplayTab({ theme }: DisplayTabProps) {
 
 			{/* Font Size */}
 			<div>
-				<div className="block text-xs font-bold opacity-70 uppercase mb-2">Font Size</div>
+				<div className="block text-xs font-bold opacity-70 uppercase mb-2">
+					{t('display.font_size_header')}
+				</div>
 				<ToggleButtonGroup
 					options={[
-						{ value: 12, label: 'Small' },
-						{ value: 14, label: 'Medium' },
-						{ value: 16, label: 'Large' },
-						{ value: 18, label: 'X-Large' },
+						{ value: 12, label: t('display.font_size_small') },
+						{ value: 14, label: t('display.font_size_medium') },
+						{ value: 16, label: t('display.font_size_large') },
+						{ value: 18, label: t('display.font_size_xlarge') },
 					]}
 					value={fontSize}
 					onChange={setFontSize}
@@ -131,7 +135,7 @@ export function DisplayTab({ theme }: DisplayTabProps) {
 			{/* Terminal Width */}
 			<div>
 				<div className="block text-xs font-bold opacity-70 uppercase mb-2">
-					Terminal Width (Columns)
+					{t('display.terminal_width_header')}
 				</div>
 				<ToggleButtonGroup
 					options={[80, 100, 120, 160]}
@@ -143,22 +147,22 @@ export function DisplayTab({ theme }: DisplayTabProps) {
 
 			{/* Max Log Buffer */}
 			<div>
-				<div className="block text-xs font-bold opacity-70 uppercase mb-2">Maximum Log Buffer</div>
+				<div className="block text-xs font-bold opacity-70 uppercase mb-2">
+					{t('display.log_buffer_header')}
+				</div>
 				<ToggleButtonGroup
 					options={[1000, 5000, 10000, 25000]}
 					value={maxLogBuffer}
 					onChange={setMaxLogBuffer}
 					theme={theme}
 				/>
-				<p className="text-xs opacity-50 mt-2">
-					Maximum number of log messages to keep in memory. Older logs are automatically removed.
-				</p>
+				<p className="text-xs opacity-50 mt-2">{t('display.log_buffer_help')}</p>
 			</div>
 
 			{/* Max Output Lines */}
 			<div>
 				<div className="block text-xs font-bold opacity-70 uppercase mb-2">
-					Max Output Lines per Response
+					{t('display.output_lines_header')}
 				</div>
 				<ToggleButtonGroup
 					options={[
@@ -166,36 +170,30 @@ export function DisplayTab({ theme }: DisplayTabProps) {
 						{ value: 25 },
 						{ value: 50 },
 						{ value: 100 },
-						{ value: Infinity, label: 'All' },
+						{ value: Infinity, label: t('display.output_lines_all') },
 					]}
 					value={maxOutputLines}
 					onChange={setMaxOutputLines}
 					theme={theme}
 				/>
-				<p className="text-xs opacity-50 mt-2">
-					Long outputs will be collapsed into a scrollable window. Set to "All" to always show full
-					output.
-				</p>
+				<p className="text-xs opacity-50 mt-2">{t('display.output_lines_help')}</p>
 			</div>
 
 			{/* Message Alignment */}
 			<div>
 				<div className="block text-xs font-bold opacity-70 uppercase mb-2">
-					User Message Alignment
+					{t('display.alignment_header')}
 				</div>
 				<ToggleButtonGroup
 					options={[
-						{ value: 'left', label: 'Left' },
-						{ value: 'right', label: 'Right' },
+						{ value: 'left', label: t('display.alignment_left') },
+						{ value: 'right', label: t('display.alignment_right') },
 					]}
 					value={userMessageAlignment ?? 'right'}
 					onChange={setUserMessageAlignment}
 					theme={theme}
 				/>
-				<p className="text-xs opacity-50 mt-2">
-					Position your messages on the left or right side of the chat. AI responses appear on the
-					opposite side.
-				</p>
+				<p className="text-xs opacity-50 mt-2">{t('display.alignment_help')}</p>
 			</div>
 
 			{/* Window Chrome Settings */}
@@ -205,7 +203,7 @@ export function DisplayTab({ theme }: DisplayTabProps) {
 					style={{ color: theme.colors.textDim }}
 				>
 					<AppWindow className="w-3 h-3" />
-					Window Chrome
+					{t('display.window_chrome_header')}
 				</label>
 				<div
 					className="p-3 rounded border space-y-3"
@@ -218,11 +216,10 @@ export function DisplayTab({ theme }: DisplayTabProps) {
 					<div className="flex items-center justify-between">
 						<div>
 							<p className="text-sm" style={{ color: theme.colors.textMain }}>
-								Use native title bar
+								{t('display.native_title_bar_title')}
 							</p>
 							<p className="text-xs opacity-50 mt-0.5">
-								Use the OS native title bar instead of Maestro&apos;s custom title bar. Requires
-								restart.
+								{t('display.native_title_bar_description')}
 							</p>
 						</div>
 						<button
@@ -250,11 +247,10 @@ export function DisplayTab({ theme }: DisplayTabProps) {
 					>
 						<div>
 							<p className="text-sm" style={{ color: theme.colors.textMain }}>
-								Auto-hide menu bar
+								{t('display.auto_hide_menu_bar_title')}
 							</p>
 							<p className="text-xs opacity-50 mt-0.5">
-								Hide the application menu bar. Press Alt to toggle visibility. Applies to Windows
-								and Linux. Requires restart.
+								{t('display.auto_hide_menu_bar_description')}
 							</p>
 						</div>
 						<button
@@ -281,7 +277,7 @@ export function DisplayTab({ theme }: DisplayTabProps) {
 			<div>
 				<div className="block text-xs font-bold opacity-70 uppercase mb-2 flex items-center gap-2">
 					<Sparkles className="w-3 h-3" />
-					Document Graph
+					{t('display.document_graph_header')}
 					<span
 						className="px-1.5 py-0.5 rounded text-[9px] font-bold uppercase"
 						style={{
@@ -289,7 +285,7 @@ export function DisplayTab({ theme }: DisplayTabProps) {
 							color: theme.colors.warning,
 						}}
 					>
-						Beta
+						{t('display.document_graph_badge_beta')}
 					</span>
 				</div>
 				<div
@@ -300,10 +296,10 @@ export function DisplayTab({ theme }: DisplayTabProps) {
 					<div className="flex items-center justify-between">
 						<div>
 							<p className="text-sm" style={{ color: theme.colors.textMain }}>
-								Show external links by default
+								{t('display.document_graph_show_external_title')}
 							</p>
 							<p className="text-xs opacity-50 mt-0.5">
-								Display external website links as nodes. Can be toggled in the graph view.
+								{t('display.document_graph_show_external_description')}
 							</p>
 						</div>
 						<button
@@ -327,7 +323,9 @@ export function DisplayTab({ theme }: DisplayTabProps) {
 
 					{/* Max Nodes */}
 					<div>
-						<div className="block text-xs opacity-60 mb-2">Maximum nodes to display</div>
+						<div className="block text-xs opacity-60 mb-2">
+							{t('display.document_graph_max_nodes_label')}
+						</div>
 						<div className="flex items-center gap-3">
 							<input
 								type="range"
@@ -348,10 +346,7 @@ export function DisplayTab({ theme }: DisplayTabProps) {
 								{documentGraphMaxNodes}
 							</span>
 						</div>
-						<p className="text-xs opacity-50 mt-1">
-							Limits initial graph size for performance. Use &quot;Load more&quot; to show
-							additional nodes.
-						</p>
+						<p className="text-xs opacity-50 mt-1">{t('display.document_graph_max_nodes_help')}</p>
 					</div>
 				</div>
 			</div>
@@ -360,7 +355,7 @@ export function DisplayTab({ theme }: DisplayTabProps) {
 			<div>
 				<div className="block text-xs font-bold opacity-70 uppercase mb-2 flex items-center gap-2">
 					<AlertTriangle className="w-3 h-3" />
-					Context Window Warnings
+					{t('display.context_warnings_header')}
 				</div>
 				<div
 					className="p-3 rounded border space-y-3"
@@ -387,10 +382,10 @@ export function DisplayTab({ theme }: DisplayTabProps) {
 					>
 						<div className="flex-1 pr-3">
 							<div className="font-medium" style={{ color: theme.colors.textMain }}>
-								Show context consumption warnings
+								{t('display.context_warnings_title')}
 							</div>
 							<div className="text-xs opacity-50 mt-0.5" style={{ color: theme.colors.textDim }}>
-								Display warning banners when context window usage reaches configurable thresholds
+								{t('display.context_warnings_description')}
 							</div>
 						</div>
 						<button
@@ -439,7 +434,7 @@ export function DisplayTab({ theme }: DisplayTabProps) {
 										className="w-2.5 h-2.5 rounded-full"
 										style={{ backgroundColor: '#eab308' }}
 									/>
-									Yellow warning threshold
+									{t('display.context_warnings_yellow')}
 								</div>
 								<span
 									className="text-xs font-mono px-2 py-0.5 rounded"
@@ -487,7 +482,7 @@ export function DisplayTab({ theme }: DisplayTabProps) {
 										className="w-2.5 h-2.5 rounded-full"
 										style={{ backgroundColor: '#ef4444' }}
 									/>
-									Red warning threshold
+									{t('display.context_warnings_red')}
 								</div>
 								<span
 									className="text-xs font-mono px-2 py-0.5 rounded"
@@ -528,8 +523,8 @@ export function DisplayTab({ theme }: DisplayTabProps) {
 			{/* Local File Indexing Ignore Patterns */}
 			<IgnorePatternsSection
 				theme={theme}
-				title="Local Ignore Patterns"
-				description="Configure glob patterns for folders to exclude when indexing local files in the file explorer. Excluding large directories (like .git) reduces memory usage and speeds up file tree loading."
+				title={t('display.ignore_patterns_title')}
+				description={t('display.ignore_patterns_description')}
 				ignorePatterns={localIgnorePatterns}
 				onIgnorePatternsChange={setLocalIgnorePatterns}
 				defaultPatterns={DEFAULT_LOCAL_IGNORE_PATTERNS}

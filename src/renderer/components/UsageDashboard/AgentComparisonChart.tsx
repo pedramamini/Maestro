@@ -13,6 +13,7 @@
  */
 
 import React, { memo, useMemo, useCallback, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import type { Theme } from '../../types';
 import type { StatsAggregation } from '../../hooks/stats/useStats';
 import { COLORBLIND_AGENT_PALETTE } from '../../constants/colorblindPalettes';
@@ -105,6 +106,7 @@ export const AgentComparisonChart = memo(function AgentComparisonChart({
 	theme,
 	colorBlindMode = false,
 }: AgentComparisonChartProps) {
+	const { t: tA } = useTranslation('accessibility');
 	const [hoveredAgent, setHoveredAgent] = useState<string | null>(null);
 	const [tooltipPos, setTooltipPos] = useState<{ x: number; y: number } | null>(null);
 
@@ -163,7 +165,7 @@ export const AgentComparisonChart = memo(function AgentComparisonChart({
 			className="p-4 rounded-lg"
 			style={{ backgroundColor: theme.colors.bgMain }}
 			role="figure"
-			aria-label={`Provider comparison chart showing query counts and duration by provider type. ${agentData.length} providers displayed.`}
+			aria-label={tA('dashboard.provider_comparison', { count: agentData.length })}
 		>
 			{/* Header */}
 			<div className="flex items-center justify-between mb-4">
@@ -182,7 +184,7 @@ export const AgentComparisonChart = memo(function AgentComparisonChart({
 						<span className="text-sm">No agent data available</span>
 					</div>
 				) : (
-					<div className="space-y-2" role="list" aria-label="Agent usage data">
+					<div className="space-y-2" role="list" aria-label={tA('dashboard.agent_usage_data')}>
 						{agentData.map((agent) => {
 							const barWidth = maxDuration > 0 ? (agent.duration / maxDuration) * 100 : 0;
 							const isHovered = hoveredAgent === agent.agent;
@@ -195,7 +197,11 @@ export const AgentComparisonChart = memo(function AgentComparisonChart({
 									onMouseEnter={(e) => handleMouseEnter(agent.agent, e)}
 									onMouseLeave={handleMouseLeave}
 									role="listitem"
-									aria-label={`${agent.agent}: ${agent.count} queries, ${formatDuration(agent.duration)}`}
+									aria-label={tA('dashboard.provider_item', {
+										agent: agent.agent,
+										count: agent.count,
+										duration: formatDuration(agent.duration),
+									})}
 								>
 									{/* Agent name label */}
 									<div
@@ -218,7 +224,7 @@ export const AgentComparisonChart = memo(function AgentComparisonChart({
 										aria-valuenow={agent.durationPercentage}
 										aria-valuemin={0}
 										aria-valuemax={100}
-										aria-label={`${agent.agent} usage percentage`}
+										aria-label={tA('dashboard.provider_usage_pct', { agent: agent.agent })}
 									>
 										{/* Bar fill */}
 										<div
@@ -318,7 +324,7 @@ export const AgentComparisonChart = memo(function AgentComparisonChart({
 					className="flex flex-wrap gap-3 mt-4 pt-3 border-t"
 					style={{ borderColor: theme.colors.border }}
 					role="list"
-					aria-label="Chart legend"
+					aria-label={tA('dashboard.chart_legend')}
 				>
 					{agentData.slice(0, 6).map((agent) => (
 						<div key={agent.agent} className="flex items-center gap-1.5" role="listitem">

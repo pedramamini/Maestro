@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { ChevronDown, ChevronRight, RefreshCw, FolderOpen, Plus, Folder } from 'lucide-react';
 import type { Theme } from '../types';
 import { useClickOutside } from '../hooks';
+import { useTranslation } from 'react-i18next';
 
 // Tree node type for folder structure
 export interface DocTreeNode {
@@ -42,6 +43,7 @@ export function AutoRunDocumentSelector({
 	isLoading = false,
 	documentTaskCounts,
 }: AutoRunDocumentSelectorProps) {
+	const { t: tA } = useTranslation('accessibility');
 	const [isOpen, setIsOpen] = useState(false);
 	const [showCreateModal, setShowCreateModal] = useState(false);
 	const [newDocName, setNewDocName] = useState('');
@@ -404,7 +406,7 @@ export function AutoRunDocumentSelector({
 					className="fixed inset-0 modal-overlay flex items-center justify-center z-[10000] animate-in fade-in duration-200"
 					role="dialog"
 					aria-modal="true"
-					aria-label="Create New Document"
+					aria-label={tA('form.create_new_document')}
 					onClick={(e) => {
 						if (e.target === e.currentTarget) {
 							handleCloseCreateModal();

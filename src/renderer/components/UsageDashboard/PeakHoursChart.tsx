@@ -13,6 +13,7 @@
  */
 
 import { memo, useState, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 import type { Theme } from '../../types';
 import type { StatsAggregation } from '../../hooks/stats/useStats';
 
@@ -59,6 +60,7 @@ export const PeakHoursChart = memo(function PeakHoursChart({
 	theme,
 	colorBlindMode: _colorBlindMode = false,
 }: PeakHoursChartProps) {
+	const { t: tA } = useTranslation('accessibility');
 	const [metricMode, setMetricMode] = useState<MetricMode>('count');
 	const [hoveredHour, setHoveredHour] = useState<number | null>(null);
 
@@ -114,7 +116,7 @@ export const PeakHoursChart = memo(function PeakHoursChart({
 			className="p-4 rounded-lg"
 			style={{ backgroundColor: theme.colors.bgMain }}
 			role="figure"
-			aria-label="Peak hours chart showing activity distribution across hours of the day"
+			aria-label={tA('dashboard.peak_hours')}
 		>
 			{/* Header */}
 			<div className="flex items-center justify-between mb-3">

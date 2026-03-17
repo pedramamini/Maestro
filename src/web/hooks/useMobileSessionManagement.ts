@@ -83,6 +83,8 @@ export interface UseMobileSessionManagementDeps {
 	onResponseComplete?: (session: Session, response?: unknown) => void;
 	/** Callback when theme updates from server */
 	onThemeUpdate?: (theme: Theme) => void;
+	/** Callback when language updates from server (for RTL/LTR direction sync) */
+	onLanguageUpdate?: (language: string) => void;
 	/** Callback when custom commands are received */
 	onCustomCommands?: (commands: CustomCommand[]) => void;
 	/** Callback when AutoRun state changes */
@@ -114,6 +116,7 @@ export interface MobileSessionHandlers {
 	onSessionExit: (sessionId: string, exitCode: number) => void;
 	onUserInput: (sessionId: string, command: string, inputMode: 'ai' | 'terminal') => void;
 	onThemeUpdate: (theme: Theme) => void;
+	onLanguageUpdate: (language: string) => void;
 	onCustomCommands: (commands: CustomCommand[]) => void;
 	onAutoRunStateChange: (sessionId: string, state: AutoRunState | null) => void;
 	onTabsChanged: (sessionId: string, aiTabs: AITabData[], newActiveTabId: string) => void;
@@ -190,6 +193,7 @@ export function useMobileSessionManagement(
 		hapticTapPattern,
 		onResponseComplete,
 		onThemeUpdate,
+		onLanguageUpdate,
 		onCustomCommands,
 		onAutoRunStateChange,
 	} = deps;
@@ -642,6 +646,11 @@ export function useMobileSessionManagement(
 				webLogger.debug(`Theme update received: ${theme.name} (${theme.mode})`, 'Mobile');
 				onThemeUpdate?.(theme);
 			},
+			onLanguageUpdate: (language: string) => {
+				// Sync language from desktop app for RTL/LTR direction support
+				webLogger.debug(`Language update received: ${language}`, 'Mobile');
+				onLanguageUpdate?.(language);
+			},
 			onCustomCommands: (commands: CustomCommand[]) => {
 				// Custom slash commands from desktop app
 				webLogger.debug(`Custom commands received: ${commands.length}`, 'Mobile');
@@ -672,7 +681,7 @@ export function useMobileSessionManagement(
 				}
 			},
 		}),
-		[onResponseComplete, onThemeUpdate, onCustomCommands, onAutoRunStateChange]
+		[onResponseComplete, onThemeUpdate, onLanguageUpdate, onCustomCommands, onAutoRunStateChange]
 	);
 
 	return {

@@ -45,6 +45,7 @@ vi.mock('../../../renderer/utils/markdownConfig', () => ({
 
 vi.mock('../../../renderer/utils/shortcutFormatter', () => ({
 	formatShortcutKeys: (keys: string[]) => keys.join('+'),
+	getShortcutLabel: (_id: string, fallback: string) => fallback,
 }));
 
 vi.mock('react-markdown', () => ({

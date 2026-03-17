@@ -192,6 +192,15 @@ const JsonNode = memo(
 					className="group flex items-center py-0.5 cursor-pointer hover:bg-white/5 rounded"
 					style={{ paddingLeft: indent }}
 					onClick={toggleExpand}
+					role="button"
+					aria-expanded={isExpanded}
+					tabIndex={0}
+					onKeyDown={(e) => {
+						if (e.key === 'Enter' || e.key === ' ') {
+							e.preventDefault();
+							toggleExpand();
+						}
+					}}
 				>
 					{/* Expand/collapse icon */}
 					<span

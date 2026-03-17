@@ -30,7 +30,7 @@ import { useSessionStore, selectActiveSession } from '../../stores/sessionStore'
 import { useSettingsStore } from '../../stores/settingsStore';
 import { useUIStore } from '../../stores/uiStore';
 import { getModalActions, useModalStore } from '../../stores/modalStore';
-import { notifyToast } from '../../stores/notificationStore';
+import { tNotify } from '../../utils/tNotify';
 import { getActiveTab, createTab } from '../../utils/tabHelpers';
 import { generateId } from '../../utils/ids';
 import { getSlashCommandDescription } from '../../constants/app';
@@ -613,10 +613,11 @@ export function useWizardHandlers(deps: UseWizardHandlersDeps): UseWizardHandler
 					})
 				);
 
-				notifyToast({
+				tNotify({
 					type: 'success',
-					title: 'History Entry Added',
-					message: parsed.shortSummary,
+					titleKey: 'notifications:history.entry_added_title',
+					messageKey: 'notifications:history.entry_added_message',
+					values: { message: parsed.shortSummary },
 					group: groupName,
 					project: currentSession.name,
 					sessionId: currentSession.id,
@@ -1077,10 +1078,13 @@ export function useWizardHandlers(deps: UseWizardHandlersDeps): UseWizardHandler
 			);
 			if (!validation.valid) {
 				console.error(`Wizard session validation failed: ${validation.error}`);
-				notifyToast({
+				tNotify({
 					type: 'error',
-					title: 'Agent Creation Failed',
-					message: validation.error || 'Cannot create duplicate agent',
+					titleKey: 'notifications:agent.creation_failed_title',
+					messageKey: validation.error
+						? 'notifications:agent.creation_failed_message'
+						: 'notifications:agent.creation_failed_default_message',
+					values: validation.error ? { message: validation.error } : undefined,
 				});
 				throw new Error(validation.error || 'Session validation failed');
 			}

@@ -2,6 +2,7 @@ import React, { memo, useMemo, useCallback } from 'react';
 import { Calendar } from 'lucide-react';
 import type { Theme } from '../../types';
 import { LOOKBACK_OPTIONS } from './historyConstants';
+import { useI18n } from '../../hooks/useI18n';
 
 export interface LookbackSelectorProps {
 	/** Current lookback in hours, or null for "all time" */
@@ -23,13 +24,15 @@ export const LookbackSelector = memo(function LookbackSelector({
 	theme,
 	disabled = false,
 }: LookbackSelectorProps) {
+	const { t } = useI18n();
 	// Find the current index in LOOKBACK_OPTIONS
 	const currentIndex = useMemo(() => {
 		const idx = LOOKBACK_OPTIONS.findIndex((o) => o.hours === lookbackHours);
 		return idx >= 0 ? idx : 0;
 	}, [lookbackHours]);
 
-	const currentLabel = LOOKBACK_OPTIONS[currentIndex].label;
+	const option = LOOKBACK_OPTIONS[currentIndex];
+	const currentLabel = t(option.tKey, { defaultValue: option.label });
 
 	const handleChange = useCallback(
 		(e: React.ChangeEvent<HTMLInputElement>) => {

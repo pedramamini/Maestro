@@ -6,6 +6,7 @@
  * the actual tour steps.
  */
 
+import { useTranslation } from 'react-i18next';
 import type { Theme } from '../../../types';
 import { WelcomeContent } from '../../WelcomeContent';
 
@@ -24,6 +25,7 @@ interface TourWelcomeProps {
  * navigation options to start or skip the tour.
  */
 export function TourWelcome({ theme, onStartTour, onSkip }: TourWelcomeProps): JSX.Element {
+	const { t } = useTranslation('modals');
 	return (
 		<div
 			className="tour-step-tooltip rounded-xl shadow-2xl overflow-hidden tour-welcome-enter"
@@ -53,7 +55,7 @@ export function TourWelcome({ theme, onStartTour, onSkip }: TourWelcomeProps): J
 					className="text-xs hover:underline transition-colors"
 					style={{ color: theme.colors.textDim }}
 				>
-					Skip Tour
+					{t('tour.skip_button')}
 				</button>
 			</div>
 
@@ -70,7 +72,7 @@ export function TourWelcome({ theme, onStartTour, onSkip }: TourWelcomeProps): J
 						color: theme.colors.accentForeground,
 					}}
 				>
-					Let's Take a Tour
+					{t('tour.start_button')}
 				</button>
 			</div>
 
@@ -90,7 +92,7 @@ export function TourWelcome({ theme, onStartTour, onSkip }: TourWelcomeProps): J
 					>
 						Enter
 					</kbd>{' '}
-					to continue
+					{t('tour.kbd_enter_continue')}
 					{' • '}
 					<kbd
 						className="px-1.5 py-0.5 rounded text-xs"
@@ -98,7 +100,7 @@ export function TourWelcome({ theme, onStartTour, onSkip }: TourWelcomeProps): J
 					>
 						Esc
 					</kbd>{' '}
-					to skip
+					{t('tour.kbd_esc_skip')}
 				</span>
 			</div>
 		</div>

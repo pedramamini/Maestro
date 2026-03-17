@@ -1,6 +1,7 @@
 import { memo, useMemo, useState, useCallback } from 'react';
 import { AlertTriangle, X } from 'lucide-react';
 import type { Theme } from '../types';
+import { useTranslation } from 'react-i18next';
 
 export interface ContextWarningSashProps {
 	theme: Theme;
@@ -32,6 +33,7 @@ export const ContextWarningSash = memo(function ContextWarningSash({
 	onSummarizeClick,
 	tabId,
 }: ContextWarningSashProps) {
+	const { t: tA } = useTranslation('accessibility');
 	const isLight = theme.mode === 'light';
 	const tabKey = tabId ?? '__default__';
 	const [dismissedByTab, setDismissedByTab] = useState<
@@ -104,7 +106,7 @@ export const ContextWarningSash = memo(function ContextWarningSash({
 		<div
 			role="alert"
 			aria-live="polite"
-			aria-label={`Context window at ${contextUsage}% capacity`}
+			aria-label={tA('status.context_usage', { usage: contextUsage })}
 			className="context-warning-sash w-full flex items-center justify-between px-2 py-1 text-xs rounded-lg"
 			style={{
 				backgroundColor,
@@ -158,7 +160,7 @@ export const ContextWarningSash = memo(function ContextWarningSash({
 					className="p-0.5 rounded hover:bg-white/10 transition-colors"
 					style={{ color: textColor }}
 					title="Dismiss"
-					aria-label="Dismiss warning"
+					aria-label={tA('status.dismiss_warning')}
 				>
 					<X className="w-3 h-3" />
 				</button>

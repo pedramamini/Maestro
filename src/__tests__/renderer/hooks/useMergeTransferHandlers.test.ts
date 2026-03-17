@@ -102,6 +102,12 @@ vi.mock('../../../renderer/stores/notificationStore', () => ({
 	notifyToast: (...args: unknown[]) => mockNotifyToast(...args),
 }));
 
+// Mock tNotify
+const mockTNotify = vi.fn();
+vi.mock('../../../renderer/utils/tNotify', () => ({
+	tNotify: (...args: unknown[]) => mockTNotify(...args),
+}));
+
 // Mock other dependencies
 vi.mock('../../../renderer/utils/templateVariables', () => ({
 	substituteTemplateVariables: vi.fn((prompt: string) => prompt),
@@ -336,10 +342,10 @@ describe('useMergeTransferHandlers', () => {
 				} as any);
 			});
 
-			expect(mockNotifyToast).toHaveBeenCalledWith(
+			expect(mockTNotify).toHaveBeenCalledWith(
 				expect.objectContaining({
 					type: 'error',
-					title: 'Merge Failed',
+					titleKey: 'notifications:merge.failed_title',
 				})
 			);
 		});
@@ -356,7 +362,7 @@ describe('useMergeTransferHandlers', () => {
 				} as any);
 			});
 
-			expect(mockNotifyToast).not.toHaveBeenCalledWith(expect.objectContaining({ type: 'error' }));
+			expect(mockTNotify).not.toHaveBeenCalledWith(expect.objectContaining({ type: 'error' }));
 		});
 	});
 
@@ -483,10 +489,10 @@ describe('useMergeTransferHandlers', () => {
 			if (sendResult.success) {
 				expect(mockSetSendToAgentModalOpen).toHaveBeenCalledWith(false);
 				expect(mockSetActiveSessionId).toHaveBeenCalledWith('target-session');
-				expect(mockNotifyToast).toHaveBeenCalledWith(
+				expect(mockTNotify).toHaveBeenCalledWith(
 					expect.objectContaining({
 						type: 'success',
-						title: 'Context Sent',
+						titleKey: 'notifications:merge.context_sent_title',
 					})
 				);
 				expect(sendResult.newSessionId).toBe('target-session');
@@ -727,10 +733,10 @@ describe('useMergeTransferHandlers', () => {
 
 			expect(mockSetActiveSessionId).toHaveBeenCalledWith('new-session');
 			expect(mockSetMergeSessionModalOpen).toHaveBeenCalledWith(false);
-			expect(mockNotifyToast).toHaveBeenCalledWith(
+			expect(mockTNotify).toHaveBeenCalledWith(
 				expect.objectContaining({
 					type: 'success',
-					title: 'Session Merged',
+					titleKey: 'notifications:merge.session_merged_title',
 				})
 			);
 			expect((window as any).maestro.notification.show).toHaveBeenCalledWith(
@@ -759,10 +765,10 @@ describe('useMergeTransferHandlers', () => {
 			});
 
 			expect(mockSetActiveSessionId).toHaveBeenCalledWith('target-session');
-			expect(mockNotifyToast).toHaveBeenCalledWith(
+			expect(mockTNotify).toHaveBeenCalledWith(
 				expect.objectContaining({
 					type: 'success',
-					title: 'Context Merged',
+					titleKey: 'notifications:merge.context_merged_title',
 				})
 			);
 		});
@@ -781,10 +787,10 @@ describe('useMergeTransferHandlers', () => {
 
 			expect(mockSetActiveSessionId).toHaveBeenCalledWith('new-session');
 			expect(mockSetSendToAgentModalOpen).toHaveBeenCalledWith(false);
-			expect(mockNotifyToast).toHaveBeenCalledWith(
+			expect(mockTNotify).toHaveBeenCalledWith(
 				expect.objectContaining({
 					type: 'success',
-					title: 'Context Transferred',
+					titleKey: 'notifications:merge.context_transferred_title',
 				})
 			);
 
@@ -1008,11 +1014,10 @@ describe('useMergeTransferHandlers', () => {
 					groomContext: false,
 				} as any);
 				if (sendResult.success) {
-					expect(mockNotifyToast).toHaveBeenCalledWith(
+					expect(mockTNotify).toHaveBeenCalledWith(
 						expect.objectContaining({
 							type: 'success',
-							title: 'Context Sent',
-							message: expect.stringContaining('tokens'),
+							titleKey: 'notifications:merge.context_sent_title',
 						})
 					);
 				}
@@ -1089,9 +1094,7 @@ describe('useMergeTransferHandlers', () => {
 
 			// Should NOT navigate or show success toast
 			expect(mockSetActiveSessionId).not.toHaveBeenCalled();
-			expect(mockNotifyToast).not.toHaveBeenCalledWith(
-				expect.objectContaining({ type: 'success' })
-			);
+			expect(mockTNotify).not.toHaveBeenCalledWith(expect.objectContaining({ type: 'success' }));
 		});
 
 		it('switches to target tab when targetTabId is provided', () => {
@@ -1133,10 +1136,11 @@ describe('useMergeTransferHandlers', () => {
 			// Should navigate to target session
 			expect(mockSetActiveSessionId).toHaveBeenCalledWith('target-session');
 
-			// Should include token info in the toast
-			expect(mockNotifyToast).toHaveBeenCalledWith(
+			// Should include token info in the toast values
+			expect(mockTNotify).toHaveBeenCalledWith(
 				expect.objectContaining({
-					message: expect.stringContaining('1,000 tokens'),
+					type: 'success',
+					titleKey: 'notifications:merge.context_merged_title',
 				})
 			);
 
@@ -1149,10 +1153,10 @@ describe('useMergeTransferHandlers', () => {
 				expect(updatedTarget.activeTabId).toBe('target-tab');
 			} else {
 				// The callback's setSessions updated the store — verify the toast as proof it ran
-				expect(mockNotifyToast).toHaveBeenCalledWith(
+				expect(mockTNotify).toHaveBeenCalledWith(
 					expect.objectContaining({
 						type: 'success',
-						title: 'Context Merged',
+						titleKey: 'notifications:merge.context_merged_title',
 					})
 				);
 			}
@@ -1204,9 +1208,10 @@ describe('useMergeTransferHandlers', () => {
 				});
 			});
 
-			expect(mockNotifyToast).toHaveBeenCalledWith(
+			expect(mockTNotify).toHaveBeenCalledWith(
 				expect.objectContaining({
-					message: expect.stringContaining('Saved ~2,000 tokens'),
+					type: 'success',
+					titleKey: 'notifications:merge.session_merged_title',
 				})
 			);
 		});

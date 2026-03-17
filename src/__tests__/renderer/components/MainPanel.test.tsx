@@ -168,6 +168,7 @@ vi.mock('../../../renderer/utils/tabHelpers', () => ({
 vi.mock('../../../renderer/utils/shortcutFormatter', () => ({
 	formatShortcutKeys: vi.fn((keys: string[]) => keys?.join('+') || ''),
 	isMacOS: vi.fn(() => false),
+	getShortcutLabel: vi.fn((_id: string, fallback: string) => fallback),
 }));
 
 // Configurable git status data for tests - can be modified in individual tests

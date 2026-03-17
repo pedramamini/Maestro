@@ -9,6 +9,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { Trash2, BookOpen, FolderOpen, AlertTriangle, FileText } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import type { Theme } from '../../types';
 import { useLayerStack } from '../../contexts/LayerStackContext';
 import { MODAL_PRIORITIES } from '../../constants/modalPriorities';
@@ -30,6 +31,8 @@ export function ExistingAutoRunDocsModal({
 	onContinuePlanning,
 	onCancel,
 }: ExistingAutoRunDocsModalProps) {
+	const { t } = useTranslation('modals');
+	const { t: tA } = useTranslation('accessibility');
 	const { registerLayer, unregisterLayer, updateLayerHandler } = useLayerStack();
 	const layerIdRef = useRef<string>();
 	const continueButtonRef = useRef<HTMLButtonElement>(null);
@@ -107,7 +110,7 @@ export function ExistingAutoRunDocsModal({
 			className="fixed inset-0 modal-overlay flex items-center justify-center z-[10000] animate-in fade-in duration-200"
 			role="dialog"
 			aria-modal="true"
-			aria-label="Existing Auto Run Documents Detected"
+			aria-label={tA('modal.existing_autorun_docs')}
 			tabIndex={-1}
 			onKeyDown={handleKeyDown}
 		>
@@ -126,10 +129,10 @@ export function ExistingAutoRunDocsModal({
 						</div>
 						<div>
 							<h2 className="text-lg font-semibold" style={{ color: theme.colors.textMain }}>
-								Existing Planning Documents Found
+								{t('existing_autorun_docs.title')}
 							</h2>
 							<p className="text-sm mt-0.5" style={{ color: theme.colors.textDim }}>
-								This project already has Auto Run documents
+								{t('existing_autorun_docs.subtitle')}
 							</p>
 						</div>
 					</div>
@@ -151,7 +154,7 @@ export function ExistingAutoRunDocsModal({
 							</div>
 							<div className="flex-1 min-w-0">
 								<p className="text-xs" style={{ color: theme.colors.textDim }}>
-									Project Location
+									{t('existing_autorun_docs.project_location')}
 								</p>
 								<p
 									className="text-sm font-mono truncate"
@@ -182,9 +185,7 @@ export function ExistingAutoRunDocsModal({
 
 					{/* Explanation */}
 					<p className="text-sm leading-relaxed" style={{ color: theme.colors.textDim }}>
-						It looks like you've already started planning this project. Would you like the agent to
-						read the existing documents and continue from where you left off, or start fresh with a
-						new plan?
+						{t('existing_autorun_docs.message')}
 					</p>
 				</div>
 
@@ -205,7 +206,7 @@ export function ExistingAutoRunDocsModal({
 						}}
 					>
 						<BookOpen className="w-4 h-4" />
-						Continue Planning
+						{t('existing_autorun_docs.continue_button')}
 					</button>
 
 					<button
@@ -229,12 +230,12 @@ export function ExistingAutoRunDocsModal({
 									className="w-4 h-4 border-2 border-t-transparent rounded-full animate-spin"
 									style={{ borderColor: theme.colors.error, borderTopColor: 'transparent' }}
 								/>
-								Deleting...
+								{t('existing_autorun_docs.deleting')}
 							</>
 						) : (
 							<>
 								<Trash2 className="w-4 h-4" />
-								Start Fresh (Delete Existing Docs)
+								{t('existing_autorun_docs.start_fresh_button')}
 							</>
 						)}
 					</button>

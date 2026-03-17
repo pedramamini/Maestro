@@ -26,6 +26,10 @@ vi.mock('lucide-react', () => ({
 	FileText: () => <svg data-testid="file-text-icon" />,
 }));
 
+vi.mock('../../../shared/i18n/config', () => ({
+	default: { language: 'en' },
+}));
+
 // Create a test theme
 const createTestTheme = (overrides: Partial<Theme['colors']> = {}): Theme => ({
 	id: 'test-theme',
@@ -265,7 +269,7 @@ describe('TabSwitcherModal', () => {
 		});
 
 		describe('formatRelativeTime', () => {
-			it('formats "just now" for < 1 minute ago', () => {
+			it('formats "now" for < 1 minute ago', () => {
 				const tab = createTestTab({
 					logs: [{ id: '1', timestamp: Date.now() - 30000, source: 'stdout', text: 'test' }],
 				});
@@ -282,7 +286,7 @@ describe('TabSwitcherModal', () => {
 					/>
 				);
 
-				expect(screen.getByText('just now')).toBeInTheDocument();
+				expect(screen.getByText('now')).toBeInTheDocument();
 			});
 
 			it('formats minutes ago', () => {
@@ -304,7 +308,7 @@ describe('TabSwitcherModal', () => {
 					/>
 				);
 
-				expect(screen.getByText('5m ago')).toBeInTheDocument();
+				expect(screen.getByText('5 minutes ago')).toBeInTheDocument();
 			});
 
 			it('formats hours ago', () => {
@@ -326,7 +330,7 @@ describe('TabSwitcherModal', () => {
 					/>
 				);
 
-				expect(screen.getByText('3h ago')).toBeInTheDocument();
+				expect(screen.getByText('3 hours ago')).toBeInTheDocument();
 			});
 
 			it('formats days ago', () => {
@@ -353,7 +357,7 @@ describe('TabSwitcherModal', () => {
 					/>
 				);
 
-				expect(screen.getByText('2d ago')).toBeInTheDocument();
+				expect(screen.getByText('2 days ago')).toBeInTheDocument();
 			});
 
 			it('formats as date for > 7 days ago', () => {

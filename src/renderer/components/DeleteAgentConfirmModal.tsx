@@ -1,4 +1,5 @@
 import React, { useRef, useCallback, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { AlertTriangle, Trash2 } from 'lucide-react';
 import type { Theme } from '../types';
 import { MODAL_PRIORITIES } from '../constants/modalPriorities';
@@ -21,6 +22,7 @@ export function DeleteAgentConfirmModal({
 	onConfirmAndErase,
 	onClose,
 }: DeleteAgentConfirmModalProps) {
+	const { t } = useTranslation('modals');
 	const confirmButtonRef = useRef<HTMLButtonElement>(null);
 	const [confirmationText, setConfirmationText] = useState('');
 	const isEraseEnabled = confirmationText === agentName;
@@ -46,7 +48,7 @@ export function DeleteAgentConfirmModal({
 	return (
 		<Modal
 			theme={theme}
-			title="Confirm Delete"
+			title={t('delete_agent.title')}
 			priority={MODAL_PRIORITIES.CONFIRM}
 			onClose={onClose}
 			headerIcon={<Trash2 className="w-4 h-4" style={{ color: theme.colors.error }} />}
@@ -65,7 +67,7 @@ export function DeleteAgentConfirmModal({
 							color: theme.colors.textMain,
 						}}
 					>
-						Cancel
+						{t('delete_agent.cancel_button')}
 					</button>
 					<button
 						ref={confirmButtonRef}
@@ -78,7 +80,7 @@ export function DeleteAgentConfirmModal({
 							color: '#ffffff',
 						}}
 					>
-						Agent Only
+						{t('delete_agent.agent_only_button')}
 					</button>
 					<button
 						type="button"
@@ -93,7 +95,7 @@ export function DeleteAgentConfirmModal({
 							color: '#ffffff',
 						}}
 					>
-						Agent + Working Directory
+						{t('delete_agent.agent_plus_dir_button')}
 					</button>
 				</div>
 			}
@@ -107,12 +109,14 @@ export function DeleteAgentConfirmModal({
 				</div>
 				<div className="space-y-3">
 					<p className="leading-relaxed" style={{ color: theme.colors.textMain }}>
-						<strong style={{ color: theme.colors.warning }}>Danger:</strong> You are about to delete
-						the agent "{agentName}". This action cannot be undone.
+						<strong style={{ color: theme.colors.warning }}>
+							{t('delete_agent.danger_label')}
+						</strong>{' '}
+						{t('delete_agent.danger_message', { name: agentName })}
 					</p>
 					<p className="text-sm leading-relaxed" style={{ color: theme.colors.textDim }}>
-						<strong>Agent + Working Directory</strong> will also move the working directory to the
-						trash:
+						<strong>{t('delete_agent.agent_plus_dir_label')}</strong>{' '}
+						{t('delete_agent.agent_plus_dir_description')}
 					</p>
 					<code
 						className="block text-xs px-2 py-1 rounded break-all"
@@ -125,7 +129,7 @@ export function DeleteAgentConfirmModal({
 						{workingDirectory}
 					</code>
 					<p className="text-xs leading-relaxed" style={{ color: theme.colors.textDim }}>
-						Enter agent name below to enable working directory deletion:
+						{t('delete_agent.confirm_name_prompt')}
 					</p>
 					<input
 						type="text"
@@ -138,7 +142,7 @@ export function DeleteAgentConfirmModal({
 							color: theme.colors.textMain,
 							border: `1px solid ${theme.colors.border}`,
 						}}
-						aria-label="Confirm agent name"
+						aria-label={t('delete_agent.confirm_name_aria')}
 					/>
 				</div>
 			</div>

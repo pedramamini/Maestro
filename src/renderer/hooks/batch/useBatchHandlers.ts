@@ -24,7 +24,7 @@ import type {
 import { useSessionStore, selectActiveSession } from '../../stores/sessionStore';
 import { useSettingsStore, selectIsLeaderboardRegistered } from '../../stores/settingsStore';
 import { useModalStore, getModalActions } from '../../stores/modalStore';
-import { notifyToast } from '../../stores/notificationStore';
+import { tNotify } from '../../utils/tNotify';
 import { CONDUCTOR_BADGES, getBadgeForTime } from '../../constants/conductorBadges';
 import { getActiveTab } from '../../utils/tabHelpers';
 import { generateId } from '../../utils/ids';
@@ -208,22 +208,25 @@ export function useBatchHandlers(deps: UseBatchHandlersDeps): UseBatchHandlersRe
 					? 'success'
 					: 'info';
 
-			// Build message
-			let message: string;
+			// Determine messageKey based on completion status
+			let messageKey: string;
+			let messageValues: Record<string, string | number>;
 			if (info.wasStopped) {
-				message = `Stopped after completing ${info.completedTasks} of ${info.totalTasks} tasks`;
+				messageKey = 'notifications:autorun.complete_stopped_message';
+				messageValues = { completed: info.completedTasks, total: info.totalTasks };
 			} else if (info.completedTasks === info.totalTasks) {
-				message = `All ${info.totalTasks} ${
-					info.totalTasks === 1 ? 'task' : 'tasks'
-				} completed successfully`;
+				messageKey = 'notifications:autorun.complete_all_message';
+				messageValues = { total: info.totalTasks, count: info.totalTasks };
 			} else {
-				message = `Completed ${info.completedTasks} of ${info.totalTasks} tasks`;
+				messageKey = 'notifications:autorun.complete_partial_message';
+				messageValues = { completed: info.completedTasks, total: info.totalTasks };
 			}
 
-			notifyToast({
+			tNotify({
 				type: toastType,
-				title: 'Auto-Run Complete',
-				message,
+				titleKey: 'notifications:autorun.complete_title',
+				messageKey,
+				values: messageValues,
 				group: groupName,
 				project: info.sessionName,
 				taskDuration: info.elapsedTimeMs,
@@ -345,10 +348,11 @@ export function useBatchHandlers(deps: UseBatchHandlersDeps): UseBatchHandlersRe
 											rankMessage += ` | New personal best! #${longestRun.rank} on longest runs!`;
 										}
 
-										notifyToast({
+										tNotify({
 											type: 'success',
-											title: 'Leaderboard Updated',
-											message: rankMessage,
+											titleKey: 'notifications:leaderboard.updated_title',
+											messageKey: 'notifications:leaderboard.updated_message',
+											values: { message: rankMessage },
 										});
 									}
 
@@ -397,10 +401,11 @@ export function useBatchHandlers(deps: UseBatchHandlersDeps): UseBatchHandlersRe
 							},
 						});
 						if (result.prUrl) {
-							notifyToast({
+							tNotify({
 								type: 'success',
-								title: 'Symphony: PR Ready for Review',
-								message: `PR opened: ${result.prUrl}`,
+								titleKey: 'notifications:symphony.pr_ready_title',
+								messageKey: 'notifications:symphony.pr_ready_message',
+								values: { prUrl: result.prUrl },
 								sessionId: info.sessionId,
 							});
 
@@ -433,10 +438,13 @@ export function useBatchHandlers(deps: UseBatchHandlersDeps): UseBatchHandlersRe
 								contributionId,
 								status: 'completed',
 							});
-							notifyToast({
+							tNotify({
 								type: 'warning',
-								title: 'Symphony: Manual Finalization Needed',
-								message: result.error || 'Could not auto-finalize PR. Open Symphony to finalize.',
+								titleKey: 'notifications:symphony.manual_needed_title',
+								messageKey: result.error
+									? 'notifications:symphony.manual_needed_message'
+									: 'notifications:symphony.manual_needed_default_message',
+								values: result.error ? { message: result.error } : undefined,
 								sessionId: info.sessionId,
 							});
 						}
@@ -453,10 +461,10 @@ export function useBatchHandlers(deps: UseBatchHandlersDeps): UseBatchHandlersRe
 						Sentry.captureException(err, {
 							extra: { operation: 'symphony-auto-finalize', contributionId },
 						});
-						notifyToast({
+						tNotify({
 							type: 'warning',
-							title: 'Symphony: Auto-Finalize Failed',
-							message: 'PR remains as draft. Open Symphony to finalize manually.',
+							titleKey: 'notifications:symphony.auto_finalize_failed_title',
+							messageKey: 'notifications:symphony.auto_finalize_failed_message',
 							sessionId: info.sessionId,
 						});
 					}
@@ -475,19 +483,25 @@ export function useBatchHandlers(deps: UseBatchHandlersDeps): UseBatchHandlersRe
 			const groupName = sessionGroup?.name || 'Ungrouped';
 
 			if (info.success) {
-				notifyToast({
+				tNotify({
 					type: 'success',
-					title: 'PR Created',
-					message: info.prUrl || 'Pull request created successfully',
+					titleKey: 'notifications:pr.created_title',
+					messageKey: info.prUrl
+						? 'notifications:pr.created_message'
+						: 'notifications:pr.created_default_message',
+					values: info.prUrl ? { message: info.prUrl } : undefined,
 					group: groupName,
 					project: info.sessionName,
 					sessionId: info.sessionId,
 				});
 			} else {
-				notifyToast({
+				tNotify({
 					type: 'warning',
-					title: 'PR Creation Failed',
-					message: info.error || 'Failed to create pull request',
+					titleKey: 'notifications:pr.failed_title',
+					messageKey: info.error
+						? 'notifications:pr.failed_message'
+						: 'notifications:pr.failed_default_message',
+					values: info.error ? { message: info.error } : undefined,
 					group: groupName,
 					project: info.sessionName,
 					sessionId: info.sessionId,

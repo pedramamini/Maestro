@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Search, Star, FileText } from 'lucide-react';
 import type { AITab, FilePreviewTab, Theme, Shortcut, ToolType } from '../types';
 import { fuzzyMatchWithScore } from '../utils/search';
@@ -191,6 +192,7 @@ export function TabSwitcherModal({
 	onClose,
 	colorBlindMode,
 }: TabSwitcherModalProps) {
+	const { t } = useTranslation('modals');
 	const [search, setSearch] = useState('');
 	const [firstVisibleIndex, setFirstVisibleIndex] = useState(0);
 	const [viewMode, setViewMode] = useState<ViewMode>('open');
@@ -229,7 +231,7 @@ export function TabSwitcherModal({
 			blocksLowerLayers: true,
 			capturesFocus: true,
 			focusTrap: 'strict',
-			ariaLabel: 'Tab Switcher',
+			ariaLabel: t('tab_switcher.aria_label'),
 			onEscape: () => onCloseRef.current(),
 		});
 
@@ -539,7 +541,7 @@ export function TabSwitcherModal({
 			<div
 				role="dialog"
 				aria-modal="true"
-				aria-label="Tab Switcher"
+				aria-label={t('tab_switcher.aria_label')}
 				tabIndex={-1}
 				className="w-[600px] rounded-xl shadow-2xl border overflow-hidden flex flex-col max-h-[700px] outline-none"
 				style={{ backgroundColor: theme.colors.bgActivity, borderColor: theme.colors.border }}
@@ -555,10 +557,10 @@ export function TabSwitcherModal({
 						className="flex-1 bg-transparent outline-none text-lg placeholder-opacity-50"
 						placeholder={
 							viewMode === 'open'
-								? 'Search open tabs...'
+								? t('tab_switcher.placeholder_open')
 								: viewMode === 'starred'
-									? 'Search starred sessions...'
-									: 'Search named sessions...'
+									? t('tab_switcher.placeholder_starred')
+									: t('tab_switcher.placeholder_named')
 						}
 						style={{ color: theme.colors.textMain }}
 						value={search}
@@ -596,7 +598,7 @@ export function TabSwitcherModal({
 							color: viewMode === 'open' ? theme.colors.accentForeground : theme.colors.textDim,
 						}}
 					>
-						Open Tabs ({tabs.length + fileTabs.length})
+						{t('tab_switcher.open_tabs_tab', { count: tabs.length + fileTabs.length })}
 					</button>
 					<button
 						onClick={() => handleViewModeChange('all-named')}
@@ -607,17 +609,18 @@ export function TabSwitcherModal({
 								viewMode === 'all-named' ? theme.colors.accentForeground : theme.colors.textDim,
 						}}
 					>
-						All Named (
-						{tabs.filter((t) => t.agentSessionId && t.name).length +
-							namedSessions.filter((s) => {
-								if (s.projectPath !== projectRoot || openTabSessionIds.has(s.agentSessionId))
-									return false;
-								const firstOctet = s.agentSessionId.split('-')[0].toUpperCase();
-								return (
-									s.sessionName !== s.agentSessionId && s.sessionName.toUpperCase() !== firstOctet
-								);
-							}).length}
-						)
+						{t('tab_switcher.all_named_tab', {
+							count:
+								tabs.filter((tab) => tab.agentSessionId && tab.name).length +
+								namedSessions.filter((s) => {
+									if (s.projectPath !== projectRoot || openTabSessionIds.has(s.agentSessionId))
+										return false;
+									const firstOctet = s.agentSessionId.split('-')[0].toUpperCase();
+									return (
+										s.sessionName !== s.agentSessionId && s.sessionName.toUpperCase() !== firstOctet
+									);
+								}).length,
+						})}
 					</button>
 					<button
 						onClick={() => handleViewModeChange('starred')}
@@ -631,18 +634,19 @@ export function TabSwitcherModal({
 							className="w-3 h-3"
 							style={{ fill: viewMode === 'starred' ? 'currentColor' : 'none' }}
 						/>
-						Starred (
-						{tabs.filter((t) => t.starred).length +
-							namedSessions.filter(
-								(s) =>
-									s.starred &&
-									s.projectPath === projectRoot &&
-									!openTabSessionIds.has(s.agentSessionId)
-							).length}
-						)
+						{t('tab_switcher.starred_tab', {
+							count:
+								tabs.filter((tab) => tab.starred).length +
+								namedSessions.filter(
+									(s) =>
+										s.starred &&
+										s.projectPath === projectRoot &&
+										!openTabSessionIds.has(s.agentSessionId)
+								).length,
+						})}
 					</button>
 					<span className="text-[10px] opacity-50 ml-auto" style={{ color: theme.colors.textDim }}>
-						Tab / ⇧Tab to switch
+						{t('tab_switcher.tab_to_switch')}
 					</span>
 				</div>
 
@@ -838,7 +842,7 @@ export function TabSwitcherModal({
 											color: isSelected ? theme.colors.accentForeground : theme.colors.textDim,
 										}}
 									>
-										File
+										{t('tab_switcher.file_label')}
 									</div>
 								</button>
 							);
@@ -909,7 +913,7 @@ export function TabSwitcherModal({
 											color: isSelected ? theme.colors.accentForeground : theme.colors.textDim,
 										}}
 									>
-										Closed
+										{t('tab_switcher.closed_label')}
 									</div>
 								</button>
 							);
@@ -922,10 +926,10 @@ export function TabSwitcherModal({
 							style={{ color: theme.colors.textDim }}
 						>
 							{viewMode === 'open'
-								? 'No open tabs'
+								? t('tab_switcher.no_open_tabs')
 								: viewMode === 'starred'
-									? 'No starred sessions'
-									: 'No named sessions found'}
+									? t('tab_switcher.no_starred')
+									: t('tab_switcher.no_named')}
 						</div>
 					)}
 				</div>
@@ -936,10 +940,13 @@ export function TabSwitcherModal({
 					style={{ borderColor: theme.colors.border, color: theme.colors.textDim }}
 				>
 					<span>
-						{filteredItems.length}{' '}
-						{viewMode === 'open' ? 'tabs' : viewMode === 'starred' ? 'starred' : 'sessions'}
+						{viewMode === 'open'
+							? t('tab_switcher.tabs_count', { count: filteredItems.length })
+							: viewMode === 'starred'
+								? t('tab_switcher.starred_count', { count: filteredItems.length })
+								: t('tab_switcher.sessions_count', { count: filteredItems.length })}
 					</span>
-					<span>{`↑↓ navigate • Enter select • ${formatShortcutKeys(['Meta'])}1-9 quick select`}</span>
+					<span>{t('tab_switcher.footer_hint', { shortcut: formatShortcutKeys(['Meta']) })}</span>
 				</div>
 			</div>
 		</div>

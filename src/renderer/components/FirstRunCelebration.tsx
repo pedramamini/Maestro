@@ -24,6 +24,7 @@ import type { Theme } from '../types';
 import { useLayerStack } from '../contexts/LayerStackContext';
 import { MODAL_PRIORITIES } from '../constants/modalPriorities';
 import { formatShortcutKeys } from '../utils/shortcutFormatter';
+import { useTranslation } from 'react-i18next';
 
 // 15 minutes in milliseconds - threshold for "Standing Ovation" variation
 const STANDING_OVATION_THRESHOLD_MS = 15 * 60 * 1000;
@@ -98,6 +99,7 @@ export function FirstRunCelebration({
 	isLeaderboardRegistered,
 	disableConfetti = false,
 }: FirstRunCelebrationProps): JSX.Element {
+	const { t: tA } = useTranslation('accessibility');
 	const containerRef = useRef<HTMLDivElement>(null);
 	const { registerLayer, unregisterLayer, updateLayerHandler } = useLayerStack();
 	const layerIdRef = useRef<string>();
@@ -258,7 +260,7 @@ export function FirstRunCelebration({
 				className="fixed inset-0 flex items-center justify-center z-[99999] pointer-events-none p-4"
 				role="dialog"
 				aria-modal="true"
-				aria-label="First Auto Run Celebration"
+				aria-label={tA('modal.first_autorun_celebration')}
 				tabIndex={-1}
 			>
 				{/* Main content card */}

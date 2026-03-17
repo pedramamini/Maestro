@@ -32,6 +32,11 @@ vi.mock('../../../renderer/stores/notificationStore', async () => {
 	return { ...actual, notifyToast: vi.fn() };
 });
 
+const mockTNotify = vi.fn();
+vi.mock('../../../renderer/utils/tNotify', () => ({
+	tNotify: (...args: unknown[]) => mockTNotify(...args),
+}));
+
 let idCounter = 0;
 vi.mock('../../../renderer/utils/ids', () => ({
 	generateId: vi.fn(() => `mock-id-${++idCounter}`),
@@ -350,10 +355,10 @@ describe('useSessionCrud', () => {
 			});
 
 			expect(useSessionStore.getState().sessions).toHaveLength(0);
-			expect(notifyToast).toHaveBeenCalledWith(
+			expect(mockTNotify).toHaveBeenCalledWith(
 				expect.objectContaining({
 					type: 'error',
-					title: 'Agent Creation Failed',
+					titleKey: 'notifications:agent.creation_failed_title',
 				})
 			);
 		});
@@ -795,11 +800,12 @@ describe('useSessionCrud', () => {
 				await onConfirm();
 			});
 
-			expect(notifyToast).toHaveBeenCalledWith(
+			expect(mockTNotify).toHaveBeenCalledWith(
 				expect.objectContaining({
 					type: 'success',
-					title: 'Group Removed',
-					message: expect.stringContaining('Toast Group'),
+					titleKey: 'notifications:session.group_removed_title',
+					messageKey: 'notifications:session.group_removed_message',
+					values: expect.objectContaining({ name: 'Toast Group' }),
 				})
 			);
 		});

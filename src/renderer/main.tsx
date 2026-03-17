@@ -1,6 +1,6 @@
 // IMPORTANT: wdyr must be imported BEFORE React
 import './wdyr';
-import React from 'react';
+import React, { Suspense } from 'react';
 import ReactDOM from 'react-dom/client';
 import * as Sentry from '@sentry/electron/renderer';
 import MaestroConsole from './App';
@@ -10,6 +10,7 @@ import { LayerStackProvider } from './contexts/LayerStackContext';
 // ModalProvider removed - modal state now managed by modalStore (Zustand)
 import { WizardProvider } from './components/Wizard';
 import { logger } from './utils/logger';
+import { initI18n, LANGUAGE_STORAGE_KEY } from '../shared/i18n/config';
 import './index.css';
 
 // Initialize Sentry for renderer process
@@ -88,14 +89,57 @@ window.addEventListener('unhandledrejection', (event: PromiseRejectionEvent) => 
 	event.preventDefault();
 });
 
-ReactDOM.createRoot(document.getElementById('root')!).render(
-	<React.StrictMode>
-		<ErrorBoundary>
-			<LayerStackProvider>
-				<WizardProvider>
-					<MaestroConsole />
-				</WizardProvider>
-			</LayerStackProvider>
-		</ErrorBoundary>
-	</React.StrictMode>
-);
+// Initialize i18n before rendering.
+// If the user has no stored preference, detect the system locale via IPC
+// and set it as the initial language.
+const bootstrap = async () => {
+	const i18n = await initI18n();
+
+	// Check for a stored user preference; if absent, detect from OS
+	const stored = localStorage.getItem(LANGUAGE_STORAGE_KEY);
+	if (!stored) {
+		try {
+			const systemLocale = await window.maestro?.locale?.getSystem();
+			if (systemLocale && systemLocale !== i18n.language) {
+				await i18n.changeLanguage(systemLocale);
+			}
+		} catch {
+			// IPC not available (e.g. tests) — keep fallback 'en'
+		}
+	}
+
+	// Minimal loading fallback while i18n resources initialize (<100ms typically).
+	// Uses inline styles to avoid FOUC — no external CSS needed.
+	const i18nFallback = (
+		<div
+			style={{
+				display: 'flex',
+				alignItems: 'center',
+				justifyContent: 'center',
+				height: '100vh',
+				background: '#1a1a2e',
+				color: '#888',
+				fontFamily: 'system-ui, sans-serif',
+				fontSize: '14px',
+			}}
+		>
+			Loading…
+		</div>
+	);
+
+	ReactDOM.createRoot(document.getElementById('root')!).render(
+		<React.StrictMode>
+			<ErrorBoundary>
+				<Suspense fallback={i18nFallback}>
+					<LayerStackProvider>
+						<WizardProvider>
+							<MaestroConsole />
+						</WizardProvider>
+					</LayerStackProvider>
+				</Suspense>
+			</ErrorBoundary>
+		</React.StrictMode>
+	);
+};
+
+bootstrap();

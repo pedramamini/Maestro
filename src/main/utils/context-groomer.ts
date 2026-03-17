@@ -15,6 +15,7 @@
 import { v4 as uuidv4 } from 'uuid';
 import { logger } from './logger';
 import { buildAgentArgs, applyAgentConfigOverrides } from './agent-args';
+import { mainT } from '../i18n';
 import type { AgentDetector } from '../agents';
 
 const LOG_CONTEXT = '[ContextGroomer]';
@@ -189,7 +190,7 @@ export async function groomContext(
 	// Get agent configuration
 	const agent = await agentDetector.getAgent(agentType);
 	if (!agent || !agent.available) {
-		throw new Error(`Agent ${agentType} is not available`);
+		throw new Error(mainT('notifications:error.grooming.agent_not_available', { agentType }));
 	}
 
 	// Build args using the unified buildAgentArgs utility
@@ -249,7 +250,7 @@ export async function groomContext(
 			}
 
 			cleanup();
-			reject(new Error('Grooming cancelled by user'));
+			reject(new Error(mainT('notifications:error.grooming.cancelled')));
 		};
 
 		// Track this grooming session with cancel function
@@ -320,7 +321,7 @@ export async function groomContext(
 				resolved = true;
 				const errorMsg = error instanceof Error ? error.message : String(error);
 				logger.error('Grooming error', LOG_CONTEXT, { groomerSessionId, error: errorMsg });
-				reject(new Error(`Grooming error: ${errorMsg}`));
+				reject(new Error(mainT('notifications:error.grooming.error', { message: errorMsg })));
 			}
 		};
 
@@ -347,7 +348,7 @@ export async function groomContext(
 
 		if (!spawnResult || spawnResult.pid <= 0) {
 			cleanup();
-			reject(new Error(`Failed to spawn grooming process for ${agentType}`));
+			reject(new Error(mainT('notifications:error.grooming.spawn_failed', { agentType })));
 			return;
 		}
 
@@ -377,7 +378,7 @@ export async function groomContext(
 				} else {
 					cleanup();
 					resolved = true;
-					reject(new Error('Grooming timed out with no response'));
+					reject(new Error(mainT('notifications:error.grooming.timeout')));
 				}
 			}
 		}, timeoutMs);

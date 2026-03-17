@@ -8,6 +8,7 @@
  */
 
 import React, { useState, useRef, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { createPortal } from 'react-dom';
 import { FolderOpen } from 'lucide-react';
 import type { Theme } from '../types';
@@ -45,6 +46,7 @@ export function SaveMarkdownModal({
 	onFileSaved,
 	onOpenInTab,
 }: SaveMarkdownModalProps) {
+	const { t } = useTranslation('modals');
 	const [folder, setFolder] = useState(defaultFolder);
 	const [filename, setFilename] = useState('');
 	const [saving, setSaving] = useState(false);
@@ -67,17 +69,17 @@ export function SaveMarkdownModal({
 				setError(null);
 			}
 		} catch {
-			setError('Failed to open folder browser');
+			setError(t('save_markdown.browse_error'));
 		}
 	};
 
 	const handleSave = async () => {
 		if (!folder.trim()) {
-			setError('Please select a folder');
+			setError(t('save_markdown.select_folder_error'));
 			return;
 		}
 		if (!filename.trim()) {
-			setError('Please enter a filename');
+			setError(t('save_markdown.enter_filename_error'));
 			return;
 		}
 
@@ -104,7 +106,7 @@ export function SaveMarkdownModal({
 				}
 				onClose();
 			} else {
-				setError('Failed to save file');
+				setError(t('save_markdown.save_error'));
 			}
 		} catch (err) {
 			setError(err instanceof Error ? err.message : 'Failed to save file');
@@ -125,7 +127,7 @@ export function SaveMarkdownModal({
 	return createPortal(
 		<Modal
 			theme={theme}
-			title="Save Markdown"
+			title={t('save_markdown.title')}
 			priority={MODAL_PRIORITIES.SAVE_MARKDOWN}
 			onClose={onClose}
 			width={480}
@@ -145,7 +147,7 @@ export function SaveMarkdownModal({
 								className="rounded"
 								style={{ accentColor: theme.colors.accent }}
 							/>
-							<span className="text-xs">Open in Tab</span>
+							<span className="text-xs">{t('save_markdown.open_in_tab_label')}</span>
 						</label>
 					) : (
 						<div />
@@ -156,7 +158,9 @@ export function SaveMarkdownModal({
 							theme={theme}
 							onCancel={onClose}
 							onConfirm={handleSave}
-							confirmLabel={saving ? 'Saving...' : 'Save'}
+							confirmLabel={
+								saving ? t('save_markdown.saving_button') : t('save_markdown.save_button')
+							}
 							confirmDisabled={!isValid || saving}
 						/>
 					</div>
@@ -170,7 +174,7 @@ export function SaveMarkdownModal({
 						className="block text-xs font-medium mb-1.5"
 						style={{ color: theme.colors.textDim }}
 					>
-						Folder
+						{t('save_markdown.folder_label')}
 					</label>
 					<div className="flex gap-2">
 						<input
@@ -181,7 +185,7 @@ export function SaveMarkdownModal({
 								setError(null);
 							}}
 							onKeyDown={handleKeyDown}
-							placeholder="/path/to/folder"
+							placeholder={t('save_markdown.folder_placeholder')}
 							className="flex-1 px-3 py-2 rounded border text-sm outline-none focus:ring-1"
 							style={{
 								backgroundColor: theme.colors.bgMain,
@@ -199,7 +203,7 @@ export function SaveMarkdownModal({
 									borderColor: theme.colors.border,
 									color: theme.colors.textMain,
 								}}
-								title="Browse for folder"
+								title={t('save_markdown.browse_tooltip')}
 							>
 								<FolderOpen className="w-4 h-4" />
 							</button>
@@ -213,7 +217,7 @@ export function SaveMarkdownModal({
 						className="block text-xs font-medium mb-1.5"
 						style={{ color: theme.colors.textDim }}
 					>
-						Filename
+						{t('save_markdown.filename_label')}
 					</label>
 					<input
 						ref={filenameInputRef}
@@ -224,7 +228,7 @@ export function SaveMarkdownModal({
 							setError(null);
 						}}
 						onKeyDown={handleKeyDown}
-						placeholder="document.md"
+						placeholder={t('save_markdown.filename_placeholder')}
 						className="w-full px-3 py-2 rounded border text-sm outline-none focus:ring-1"
 						style={{
 							backgroundColor: theme.colors.bgMain,
@@ -233,7 +237,7 @@ export function SaveMarkdownModal({
 						}}
 					/>
 					<p className="text-xs mt-1" style={{ color: theme.colors.textDim }}>
-						.md extension will be added automatically if not provided
+						{t('save_markdown.md_hint')}
 					</p>
 				</div>
 

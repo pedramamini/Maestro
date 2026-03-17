@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, startTransition } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
 	Terminal,
 	Cpu,
@@ -249,6 +250,8 @@ export const InputArea = React.memo(function InputArea(props: InputAreaProps) {
 		onToggleWizardShowThinking,
 	} = props;
 
+	const { t } = useTranslation('common');
+
 	const setCommandHistoryFilterRef = React.useCallback((el: HTMLInputElement | null) => {
 		if (el) {
 			el.focus();
@@ -470,7 +473,7 @@ export const InputArea = React.memo(function InputArea(props: InputAreaProps) {
 							>
 								<img
 									src={img}
-									alt={`Staged image ${idx + 1}`}
+									alt={t('input.staged_image_alt', { index: idx + 1 })}
 									className="h-16 rounded border cursor-pointer hover:opacity-80 transition-opacity block"
 									style={{
 										borderColor: theme.colors.border,
@@ -528,7 +531,11 @@ export const InputArea = React.memo(function InputArea(props: InputAreaProps) {
 								onMouseEnter={() => setSelectedSlashCommandIndex(idx)}
 							>
 								<div className="font-mono text-sm">{cmd.command}</div>
-								<div className="text-xs opacity-70 mt-0.5">{cmd.description}</div>
+								<div className="text-xs opacity-70 mt-0.5">
+									{t(`input.slash_commands.${cmd.command.slice(1)}`, {
+										defaultValue: cmd.description,
+									})}
+								</div>
 							</button>
 						))}
 					</div>
@@ -548,7 +555,7 @@ export const InputArea = React.memo(function InputArea(props: InputAreaProps) {
 							type="text"
 							className="w-full bg-transparent outline-none text-sm p-2 border-b"
 							style={{ borderColor: theme.colors.border, color: theme.colors.textMain }}
-							placeholder={isTerminalMode ? 'Filter commands...' : 'Filter messages...'}
+							placeholder={isTerminalMode ? t('input.filter_commands') : t('input.filter_messages')}
 							value={commandHistoryFilter}
 							onChange={(e) => {
 								setCommandHistoryFilter(e.target.value);
@@ -618,7 +625,7 @@ export const InputArea = React.memo(function InputArea(props: InputAreaProps) {
 						})}
 						{filteredCommandHistory.length === 0 && (
 							<div className="px-3 py-4 text-center text-sm opacity-50">
-								{isTerminalMode ? 'No matching commands' : 'No matching messages'}
+								{isTerminalMode ? t('input.no_matching_commands') : t('input.no_matching_messages')}
 							</div>
 						)}
 					</div>
@@ -636,7 +643,7 @@ export const InputArea = React.memo(function InputArea(props: InputAreaProps) {
 						style={{ borderColor: theme.colors.border }}
 					>
 						<span className="text-xs opacity-60" style={{ color: theme.colors.textDim }}>
-							Tab Completion
+							{t('input.tab_completion')}
 						</span>
 						{/* Filter buttons - only show in git repos */}
 						{session.isGitRepo && setTabCompletionFilter && (
@@ -655,14 +662,14 @@ export const InputArea = React.memo(function InputArea(props: InputAreaProps) {
 														: null;
 									const label =
 										filterType === 'all'
-											? 'All'
+											? t('input.filter_all')
 											: filterType === 'history'
-												? 'History'
+												? t('input.filter_history')
 												: filterType === 'branch'
-													? 'Branches'
+													? t('input.filter_branches')
 													: filterType === 'tag'
-														? 'Tags'
-														: 'Files';
+														? t('input.filter_tags')
+														: t('input.filter_files');
 									return (
 										<button
 											key={filterType}
@@ -751,16 +758,15 @@ export const InputArea = React.memo(function InputArea(props: InputAreaProps) {
 								className="px-3 py-4 text-center text-sm opacity-50"
 								style={{ color: theme.colors.textDim }}
 							>
-								No matching{' '}
 								{tabCompletionFilter === 'all'
-									? 'suggestions'
+									? t('input.no_matching_suggestions')
 									: tabCompletionFilter === 'history'
-										? 'history'
+										? t('input.no_matching_history')
 										: tabCompletionFilter === 'branch'
-											? 'branches'
+											? t('input.no_matching_branches')
 											: tabCompletionFilter === 'tag'
-												? 'tags'
-												: 'files'}
+												? t('input.no_matching_tags')
+												: t('input.no_matching_files')}
 							</div>
 						)}
 					</div>
@@ -777,8 +783,12 @@ export const InputArea = React.memo(function InputArea(props: InputAreaProps) {
 						className="px-3 py-2 border-b text-xs font-medium"
 						style={{ borderColor: theme.colors.border, color: theme.colors.textDim }}
 					>
-						Files{' '}
-						{atMentionFilter && <span className="opacity-50">matching "{atMentionFilter}"</span>}
+						{t('input.files_header')}{' '}
+						{atMentionFilter && (
+							<span className="opacity-50">
+								{t('input.files_matching', { filter: atMentionFilter })}
+							</span>
+						)}
 					</div>
 					<div className="overflow-y-auto max-h-56 scrollbar-thin">
 						{atMentionSuggestions.map((suggestion, idx) => {
@@ -828,7 +838,7 @@ export const InputArea = React.memo(function InputArea(props: InputAreaProps) {
 												color: theme.colors.accent,
 											}}
 										>
-											Auto Run
+											{t('input.auto_run_badge')}
 										</span>
 									)}
 									<span className="text-[10px] opacity-40 flex-shrink-0">{suggestion.type}</span>
@@ -866,8 +876,11 @@ export const InputArea = React.memo(function InputArea(props: InputAreaProps) {
 								style={{ color: theme.colors.textMain, maxHeight: '11rem' }}
 								placeholder={
 									isTerminalMode
-										? 'Run shell command...'
-										: `Talking to ${session.name} powered by ${getProviderDisplayName(session.toolType)}`
+										? t('input.run_shell_command')
+										: t('input.talking_to', {
+												name: session.name,
+												provider: getProviderDisplayName(session.toolType),
+											})
 								}
 								value={inputValue}
 								onFocus={onInputFocus}
@@ -974,7 +987,13 @@ export const InputArea = React.memo(function InputArea(props: InputAreaProps) {
 									<button
 										onClick={onOpenPromptComposer}
 										className="p-1 hover:bg-white/10 rounded opacity-50 hover:opacity-100"
-										title={`Open Prompt Composer${shortcuts?.openPromptComposer ? ` (${formatShortcutKeys(shortcuts.openPromptComposer.keys)})` : ''}`}
+										title={
+											shortcuts?.openPromptComposer
+												? t('input.open_prompt_composer_with_shortcut', {
+														shortcut: formatShortcutKeys(shortcuts.openPromptComposer.keys),
+													})
+												: t('input.open_prompt_composer')
+										}
 									>
 										<PenLine className="w-4 h-4" />
 									</button>
@@ -983,7 +1002,7 @@ export const InputArea = React.memo(function InputArea(props: InputAreaProps) {
 									<button
 										onClick={() => document.getElementById('image-file-input')?.click()}
 										className="p-1 hover:bg-white/10 rounded opacity-50 hover:opacity-100"
-										title="Attach Image"
+										title={t('input.attach_image')}
 									>
 										<ImageIcon className="w-4 h-4" />
 									</button>
@@ -1003,7 +1022,7 @@ export const InputArea = React.memo(function InputArea(props: InputAreaProps) {
 													const imageData = event.target!.result as string;
 													setStagedImages((prev) => {
 														if (prev.includes(imageData)) {
-															showFlashNotification?.('Duplicate image ignored');
+															showFlashNotification?.(t('input.duplicate_image_ignored'));
 															return prev;
 														}
 														return [...prev, imageData];
@@ -1034,10 +1053,12 @@ export const InputArea = React.memo(function InputArea(props: InputAreaProps) {
 												? `1px solid ${theme.colors.accent}50`
 												: '1px solid transparent',
 										}}
-										title={`Save to History (${formatShortcutKeys(['Meta', 's'])}) - Synopsis added after each completion`}
+										title={t('input.save_to_history_tooltip', {
+											shortcut: formatShortcutKeys(['Meta', 's']),
+										})}
 									>
 										<History className="w-3 h-3" />
-										<span>History</span>
+										<span>{t('input.history_label')}</span>
 									</button>
 								)}
 								{/* Read-only mode toggle - AI mode only, if agent supports it */}
@@ -1059,10 +1080,10 @@ export const InputArea = React.memo(function InputArea(props: InputAreaProps) {
 													? `1px solid ${theme.colors.warning}50`
 													: '1px solid transparent',
 											}}
-											title="Toggle read-only mode (agent won't modify files)"
+											title={t('input.read_only_tooltip')}
 										>
 											<Eye className="w-3 h-3" />
-											<span>Read-only</span>
+											<span>{t('input.read_only_label')}</span>
 										</button>
 									)}
 								{/* Show Thinking toggle - AI mode only, for agents that support it
@@ -1095,14 +1116,14 @@ export const InputArea = React.memo(function InputArea(props: InputAreaProps) {
 										}}
 										title={
 											tabShowThinking === 'off'
-												? 'Show Thinking - Click to stream AI reasoning'
+												? t('input.thinking_off_tooltip')
 												: tabShowThinking === 'on'
-													? 'Thinking (temporary) - Click for sticky mode'
-													: 'Thinking (sticky) - Click to turn off'
+													? t('input.thinking_on_tooltip')
+													: t('input.thinking_sticky_tooltip')
 										}
 									>
 										<Brain className="w-3 h-3" />
-										<span>Thinking</span>
+										<span>{t('input.thinking_label')}</span>
 										{tabShowThinking === 'sticky' && <Pin className="w-2.5 h-2.5" />}
 									</button>
 								)}
@@ -1142,7 +1163,7 @@ export const InputArea = React.memo(function InputArea(props: InputAreaProps) {
 							borderColor: theme.colors.border,
 							color: theme.colors.textDim,
 						}}
-						title={`Toggle Mode (${formatShortcutKeys(['Meta', 'j'])})`}
+						title={t('input.toggle_mode', { shortcut: formatShortcutKeys(['Meta', 'j']) })}
 					>
 						{session.inputMode === 'terminal' ? (
 							<Terminal className="w-4 h-4" />
@@ -1161,7 +1182,9 @@ export const InputArea = React.memo(function InputArea(props: InputAreaProps) {
 							backgroundColor: theme.colors.accent,
 							color: theme.colors.accentForeground,
 						}}
-						title={session.inputMode === 'terminal' ? 'Run command (Enter)' : 'Send message'}
+						title={
+							session.inputMode === 'terminal' ? t('input.run_command') : t('input.send_message')
+						}
 					>
 						<ArrowUp className="w-4 h-4" />
 					</button>

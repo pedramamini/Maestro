@@ -341,7 +341,7 @@ function ThinkingStatusPillInner({
 
 	return (
 		// Thinking Pill - centered container with negative top margin to offset parent padding
-		<div className="relative flex justify-center pb-2 -mt-2">
+		<div className="relative flex justify-center pb-2 -mt-2" role="status" aria-live="polite">
 			{/* Thinking Pill - shrinks to fit content */}
 			<div
 				className="flex items-center gap-2 px-4 py-1.5 rounded-full"
@@ -349,6 +349,7 @@ function ThinkingStatusPillInner({
 					backgroundColor: theme.colors.warning + '20',
 					border: `1px solid ${theme.colors.border}`,
 				}}
+				aria-label={`AI is thinking: ${maestroSessionName}`}
 			>
 				{/* Thinking Pill - Pulsing yellow circle indicator */}
 				<div

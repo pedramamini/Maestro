@@ -1,4 +1,5 @@
 import React, { useRef } from 'react';
+import { useTranslation } from 'react-i18next';
 import type { Theme, Group } from '../types';
 import { MODAL_PRIORITIES } from '../constants/modalPriorities';
 import { Modal, ModalFooter, EmojiPickerField, FormInput } from './ui';
@@ -27,6 +28,7 @@ export function RenameGroupModal(props: RenameGroupModalProps) {
 		groups: _groups,
 		setGroups,
 	} = props;
+	const { t } = useTranslation('modals');
 
 	const inputRef = useRef<HTMLInputElement>(null);
 
@@ -44,7 +46,7 @@ export function RenameGroupModal(props: RenameGroupModalProps) {
 	return (
 		<Modal
 			theme={theme}
-			title="Rename Group"
+			title={t('rename_group.title')}
 			priority={MODAL_PRIORITIES.RENAME_GROUP}
 			onClose={onClose}
 			initialFocusRef={inputRef}
@@ -53,7 +55,7 @@ export function RenameGroupModal(props: RenameGroupModalProps) {
 					theme={theme}
 					onCancel={onClose}
 					onConfirm={handleRename}
-					confirmLabel="Rename"
+					confirmLabel={t('rename_group.rename_button')}
 					confirmDisabled={!groupName.trim()}
 				/>
 			}
@@ -72,11 +74,11 @@ export function RenameGroupModal(props: RenameGroupModalProps) {
 					<FormInput
 						ref={inputRef}
 						theme={theme}
-						label="Group Name"
+						label={t('rename_group.group_name_label')}
 						value={groupName}
 						onChange={setGroupName}
 						onSubmit={handleRename}
-						placeholder="Enter group name..."
+						placeholder={t('rename_group.group_name_placeholder')}
 						heightClass="h-[52px]"
 						autoFocus
 					/>

@@ -16,6 +16,7 @@
  */
 
 import { useState, useEffect, useRef, useMemo, useCallback, memo } from 'react';
+import { useTranslation } from 'react-i18next';
 import { X, Check, Loader2, AlertTriangle, Wand2 } from 'lucide-react';
 import type { Theme } from '../types';
 import type { GroomingProgress } from '../types/contextMerge';
@@ -118,10 +119,12 @@ function CancelConfirmDialog({
 	theme,
 	onConfirm,
 	onCancel,
+	t,
 }: {
 	theme: Theme;
 	onConfirm: () => void;
 	onCancel: () => void;
+	t: (key: any, opts?: any) => string;
 }) {
 	return (
 		<div
@@ -138,12 +141,11 @@ function CancelConfirmDialog({
 				<div className="flex items-center gap-3 mb-4">
 					<AlertTriangle className="w-5 h-5" style={{ color: theme.colors.warning }} />
 					<h3 className="text-sm font-bold" style={{ color: theme.colors.textMain }}>
-						Cancel Merge?
+						{t('merge_progress.cancel_merge_title')}
 					</h3>
 				</div>
 				<p className="text-xs mb-4" style={{ color: theme.colors.textDim }}>
-					This will abort the merge operation and clean up any temporary resources. The original
-					sessions will remain unchanged.
+					{t('merge_progress.cancel_merge_message')}
 				</p>
 				<div className="flex justify-end gap-2">
 					<button
@@ -155,7 +157,7 @@ function CancelConfirmDialog({
 							color: theme.colors.textMain,
 						}}
 					>
-						Continue Merge
+						{t('merge_progress.continue_merge_button')}
 					</button>
 					<button
 						type="button"
@@ -166,7 +168,7 @@ function CancelConfirmDialog({
 							color: '#fff',
 						}}
 					>
-						Cancel Merge
+						{t('merge_progress.cancel_merge_button')}
 					</button>
 				</div>
 			</div>
@@ -185,6 +187,9 @@ export function MergeProgressModal({
 	targetName,
 	onCancel,
 }: MergeProgressModalProps) {
+	const { t } = useTranslation('modals');
+	const { t: tA } = useTranslation('accessibility');
+
 	// Track start time for elapsed time display
 	const [startTime] = useState(() => Date.now());
 
@@ -271,7 +276,7 @@ export function MergeProgressModal({
 			className="fixed inset-0 modal-overlay flex items-center justify-center z-[9999]"
 			role="dialog"
 			aria-modal="true"
-			aria-label="Merge Progress"
+			aria-label={tA('modal.merge_progress')}
 			tabIndex={-1}
 		>
 			<div
@@ -288,6 +293,7 @@ export function MergeProgressModal({
 						theme={theme}
 						onConfirm={handleConfirmCancel}
 						onCancel={handleDismissCancel}
+						t={t}
 					/>
 				)}
 
@@ -298,10 +304,13 @@ export function MergeProgressModal({
 				>
 					<h2 className="text-sm font-bold" style={{ color: theme.colors.textMain }}>
 						{isComplete
-							? 'Merge Complete'
+							? t('merge_progress.title_complete')
 							: sourceName
-								? `Merging "${sourceName}" into "${targetName || 'session'}"...`
-								: 'Merging Contexts...'}
+								? t('merge_progress.title_merging_named', {
+										source: sourceName,
+										target: targetName || 'session',
+									})
+								: t('merge_progress.title_merging_default')}
 					</h2>
 					{isComplete && (
 						<button
@@ -309,7 +318,7 @@ export function MergeProgressModal({
 							onClick={onCancel}
 							className="p-1 rounded hover:bg-white/10 transition-colors"
 							style={{ color: theme.colors.textDim }}
-							aria-label="Close modal"
+							aria-label={t('merge_progress.close_aria')}
 						>
 							<X className="w-4 h-4" />
 						</button>
@@ -335,14 +344,17 @@ export function MergeProgressModal({
 					{/* Current Status Message */}
 					<div className="text-center mb-6">
 						<p className="text-sm font-medium mb-1" style={{ color: theme.colors.textMain }}>
-							{progress.message || STAGES[currentStageIndex]?.activeLabel || 'Processing...'}
+							{progress.message ||
+								(currentStageIndex >= 0
+									? t(`merge_progress.stage_${STAGES[currentStageIndex].id}_active`)
+									: t('merge_progress.processing'))}
 						</p>
 						{!isComplete && (
 							<div
 								className="flex items-center justify-center gap-2 text-xs"
 								style={{ color: theme.colors.textDim }}
 							>
-								<span>Elapsed:</span>
+								<span>{t('merge_progress.elapsed_label')}</span>
 								<ElapsedTimeDisplay startTime={startTime} textColor={theme.colors.textMain} />
 							</div>
 						)}
@@ -351,7 +363,9 @@ export function MergeProgressModal({
 					{/* Progress Bar */}
 					<div className="mb-6">
 						<div className="flex justify-between text-xs mb-1">
-							<span style={{ color: theme.colors.textDim }}>Progress</span>
+							<span style={{ color: theme.colors.textDim }}>
+								{t('merge_progress.progress_label')}
+							</span>
 							<span style={{ color: theme.colors.textMain }}>{progress.progress}%</span>
 						</div>
 						<div
@@ -410,7 +424,9 @@ export function MergeProgressModal({
 											fontWeight: isActive ? 500 : 400,
 										}}
 									>
-										{isActive ? stage.activeLabel : stage.label}
+										{isActive
+											? t(`merge_progress.stage_${stage.id}_active`)
+											: t(`merge_progress.stage_${stage.id}`)}
 									</span>
 								</div>
 							);
@@ -434,7 +450,7 @@ export function MergeProgressModal({
 							}),
 						}}
 					>
-						{isComplete ? 'Done' : 'Cancel'}
+						{isComplete ? t('merge_progress.done_button') : t('merge_progress.cancel_button')}
 					</button>
 				</div>
 			</div>

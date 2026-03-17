@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Save } from 'lucide-react';
 import type { Theme } from '../types';
 import { MODAL_PRIORITIES } from '../constants/modalPriorities';
@@ -22,9 +23,12 @@ export function PlaybookNameModal({
 	onSave,
 	onCancel,
 	initialName = '',
-	title = 'Save Playbook',
-	saveButtonText = 'Save',
+	title: titleProp,
+	saveButtonText: saveButtonTextProp,
 }: PlaybookNameModalProps) {
+	const { t } = useTranslation('modals');
+	const title = titleProp ?? t('playbook_name.title');
+	const saveButtonText = saveButtonTextProp ?? t('playbook_name.save_button');
 	const [name, setName] = useState(initialName);
 	const inputRef = useRef<HTMLInputElement>(null);
 
@@ -68,13 +72,13 @@ export function PlaybookNameModal({
 			<FormInput
 				ref={inputRef}
 				theme={theme}
-				label="Playbook Name"
+				label={t('playbook_name.name_label')}
 				value={name}
 				onChange={setName}
 				onSubmit={handleSave}
 				submitEnabled={isValid}
-				placeholder="Enter playbook name..."
-				helperText="Give your playbook a descriptive name to easily identify it later."
+				placeholder={t('playbook_name.placeholder')}
+				helperText={t('playbook_name.helper_text')}
 			/>
 		</Modal>
 	);

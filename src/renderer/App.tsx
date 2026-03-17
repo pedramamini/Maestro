@@ -21,6 +21,10 @@ import { TourOverlay } from './components/Wizard/tour';
 // CONDUCTOR_BADGES moved to useAutoRunAchievements hook
 import { EmptyStateView } from './components/EmptyStateView';
 import { DeleteAgentConfirmModal } from './components/DeleteAgentConfirmModal';
+import { DirectionProvider } from './components/shared/DirectionProvider';
+import { LiveRegion } from './components/shared/LiveRegion';
+import { useSessionAnnouncements } from './hooks/useSessionAnnouncements';
+import { useBatchAnnouncements } from './hooks/useBatchAnnouncements';
 
 // Lazy-loaded components for performance (rarely-used heavy modals)
 // These are loaded on-demand when the user first opens them
@@ -139,6 +143,7 @@ import { useSymphonyContribution } from './hooks/symphony/useSymphonyContributio
 // Import contexts
 import { useLayerStack } from './contexts/LayerStackContext';
 import { notifyToast } from './stores/notificationStore';
+import { tNotify } from './utils/tNotify';
 import { useModalActions, useModalStore } from './stores/modalStore';
 import { GitStatusProvider } from './contexts/GitStatusContext';
 import { InputProvider, useInputContext } from './contexts/InputContext';
@@ -185,6 +190,10 @@ import { useFileExplorerStore } from './stores/fileExplorerStore';
 function MaestroConsoleInner() {
 	// --- LAYER STACK (for blocking shortcuts when modals are open) ---
 	const { hasOpenLayers, hasOpenModal } = useLayerStack();
+
+	// --- SCREEN READER ANNOUNCEMENTS (WCAG 2.1 SC 4.1.3) ---
+	useSessionAnnouncements();
+	useBatchAnnouncements();
 
 	// --- MODAL STATE (from modalStore, replaces ModalContext) ---
 	const {
@@ -722,10 +731,10 @@ function MaestroConsoleInner() {
 				notifyToast({ type, title, message });
 			},
 			testToast: () => {
-				notifyToast({
+				tNotify({
 					type: 'success',
-					title: 'Test Notification',
-					message: 'This is a test toast notification from the console!',
+					titleKey: 'notifications:debug.test_title',
+					messageKey: 'notifications:debug.test_message',
 					group: 'Debug',
 					project: 'Test Project',
 				});
@@ -1455,10 +1464,11 @@ function MaestroConsoleInner() {
 			if (activeSession?.autoRunFolderPath) {
 				handleAutoRunRefresh();
 			}
-			notifyToast({
+			tNotify({
 				type: 'success',
-				title: 'Playbook Imported',
-				message: `Successfully imported playbook to ${folderName}`,
+				titleKey: 'notifications:playbook.imported_title',
+				messageKey: 'notifications:playbook.imported_message',
+				values: { folder: folderName },
 			});
 		},
 		[activeSession?.autoRunFolderPath, handleAutoRunRefresh]
@@ -1715,10 +1725,11 @@ function MaestroConsoleInner() {
 	const handlePRCreated = useCallback(
 		async (prDetails: PRDetails) => {
 			const session = createPRSession || activeSession;
-			notifyToast({
+			tNotify({
 				type: 'success',
-				title: 'Pull Request Created',
-				message: prDetails.title,
+				titleKey: 'notifications:pr.app_created_title',
+				messageKey: 'notifications:pr.app_created_message',
+				values: { title: prDetails.title },
 				actionUrl: prDetails.url,
 				actionLabel: prDetails.url,
 			});
@@ -2847,13 +2858,15 @@ function MaestroConsoleInner() {
 							// Copy the gist URL to clipboard
 							safeClipboardWrite(gistUrl);
 							// Show a toast notification
-							notifyToast({
+							tNotify({
 								type: 'success',
-								title: 'Gist Published',
-								message: `${isPublic ? 'Public' : 'Secret'} gist created! URL copied to clipboard.`,
+								titleKey: 'notifications:gist.published_title',
+								messageKey: isPublic
+									? 'notifications:gist.published_public_message'
+									: 'notifications:gist.published_secret_message',
 								duration: 5000,
 								actionUrl: gistUrl,
-								actionLabel: 'Open Gist',
+								actionLabel: gistUrl,
 							});
 							// Clear tab gist content after success
 							useTabStore.getState().setTabGistContent(null);
@@ -3231,15 +3244,19 @@ function MaestroConsoleInner() {
  * MaestroConsole - Main application component with context providers
  *
  * Wraps MaestroConsoleInner with context providers for centralized state management.
+ * DirectionProvider - RTL/LTR direction based on active language
  * InputProvider - centralized input state management
  * InlineWizardProvider - inline /wizard command state management
  */
 export default function MaestroConsole() {
 	return (
-		<InlineWizardProvider>
-			<InputProvider>
-				<MaestroConsoleInner />
-			</InputProvider>
-		</InlineWizardProvider>
+		<DirectionProvider>
+			<InlineWizardProvider>
+				<InputProvider>
+					<MaestroConsoleInner />
+					<LiveRegion />
+				</InputProvider>
+			</InlineWizardProvider>
+		</DirectionProvider>
 	);
 }

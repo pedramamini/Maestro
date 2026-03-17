@@ -25,12 +25,14 @@ import {
 	getCachedAnsiHtml,
 } from '../utils/textProcessing';
 import { formatShortcutKeys } from '../utils/shortcutFormatter';
+import { getActiveLocale } from '../utils/formatters';
 import { MarkdownRenderer } from './MarkdownRenderer';
 import { QueuedItemsList } from './QueuedItemsList';
 import { LogFilterControls } from './LogFilterControls';
 import { SaveMarkdownModal } from './SaveMarkdownModal';
 import { generateTerminalProseStyles } from '../utils/markdownConfig';
 import { safeClipboardWrite } from '../utils/clipboard';
+import { useTranslation } from 'react-i18next';
 
 // ============================================================================
 // Tool display helpers (pure functions, hoisted out of render path)
@@ -382,7 +384,10 @@ const LogItemComponent = memo(
 						const logDate = new Date(log.timestamp);
 						const today = new Date();
 						const isToday = logDate.toDateString() === today.toDateString();
-						const time = logDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+						const time = logDate.toLocaleTimeString(getActiveLocale(), {
+							hour: '2-digit',
+							minute: '2-digit',
+						});
 						if (isToday) {
 							return time;
 						}
@@ -1079,6 +1084,7 @@ export const TerminalOutput = memo(
 			onOpenInTab,
 		} = props;
 
+		const { t: tA } = useTranslation('accessibility');
 		// Use the forwarded ref if provided, otherwise create a local one
 		const localRef = useRef<HTMLDivElement>(null);
 		const terminalOutputRef = (ref as React.RefObject<HTMLDivElement>) || localRef;
@@ -1611,7 +1617,7 @@ export const TerminalOutput = memo(
 				ref={terminalOutputRef}
 				tabIndex={0}
 				role="region"
-				aria-label="Terminal output"
+				aria-label={tA('modal.terminal_output')}
 				className="terminal-output flex-1 flex flex-col overflow-hidden transition-colors outline-none relative"
 				style={{
 					backgroundColor:

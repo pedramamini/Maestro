@@ -1,7 +1,9 @@
 import { useState, useEffect, useRef } from 'react';
+import { useTranslation } from 'react-i18next';
 import { X, GitBranch, FolderOpen, Plus, Loader2, AlertTriangle, Server } from 'lucide-react';
 import type { Theme, Session, GhCliStatus } from '../types';
 import { useLayerStack } from '../contexts/LayerStackContext';
+import { useI18n } from '../hooks/useI18n';
 import { MODAL_PRIORITIES } from '../constants/modalPriorities';
 
 interface WorktreeConfigModalProps {
@@ -45,6 +47,8 @@ export function WorktreeConfigModal({
 	onCreateWorktree,
 	onDisableConfig,
 }: WorktreeConfigModalProps) {
+	const { t } = useTranslation('modals');
+	const { t: tA } = useI18n('accessibility');
 	const { registerLayer, unregisterLayer } = useLayerStack();
 	const onCloseRef = useRef(onClose);
 	onCloseRef.current = onClose;
@@ -113,7 +117,7 @@ export function WorktreeConfigModal({
 
 	const handleSave = async () => {
 		if (!basePath.trim()) {
-			setError('Please select a worktree directory');
+			setError(t('worktree_config.select_dir_error'));
 			return;
 		}
 
@@ -125,15 +129,15 @@ export function WorktreeConfigModal({
 			if (!exists) {
 				setError(
 					isRemoteSession
-						? 'Directory not found on remote server. Please enter a valid path.'
-						: 'Directory not found. Please select a valid directory.'
+						? t('worktree_config.remote_dir_not_found')
+						: t('worktree_config.local_dir_not_found')
 				);
 				return;
 			}
 			onSaveConfig({ basePath: basePath.trim(), watchEnabled });
 			onClose();
 		} catch (err) {
-			setError(err instanceof Error ? err.message : 'Failed to validate directory');
+			setError(err instanceof Error ? err.message : t('worktree_config.failed_to_validate'));
 		} finally {
 			setIsValidating(false);
 		}
@@ -141,11 +145,11 @@ export function WorktreeConfigModal({
 
 	const handleCreateWorktree = async () => {
 		if (!basePath.trim()) {
-			setError('Please select a worktree directory first');
+			setError(t('worktree_config.select_dir_first_error'));
 			return;
 		}
 		if (!newBranchName.trim()) {
-			setError('Please enter a branch name');
+			setError(t('worktree_config.enter_branch_error'));
 			return;
 		}
 
@@ -159,7 +163,7 @@ export function WorktreeConfigModal({
 			await onCreateWorktree(newBranchName.trim(), basePath.trim());
 			setNewBranchName('');
 		} catch (err) {
-			setError(err instanceof Error ? err.message : 'Failed to create worktree');
+			setError(err instanceof Error ? err.message : t('worktree_config.failed_to_create'));
 		} finally {
 			setIsCreating(false);
 		}
@@ -197,10 +201,14 @@ export function WorktreeConfigModal({
 					<div className="flex items-center gap-2">
 						<GitBranch className="w-5 h-5" style={{ color: theme.colors.accent }} />
 						<h2 className="font-bold" style={{ color: theme.colors.textMain }}>
-							Worktree Configuration
+							{t('worktree_config.title')}
 						</h2>
 					</div>
-					<button onClick={onClose} className="p-1 rounded hover:bg-white/10 transition-colors">
+					<button
+						onClick={onClose}
+						className="p-1 rounded hover:bg-white/10 transition-colors"
+						aria-label={tA('modal.close')}
+					>
 						<X className="w-4 h-4" style={{ color: theme.colors.textDim }} />
 					</button>
 				</div>
@@ -221,18 +229,18 @@ export function WorktreeConfigModal({
 								style={{ color: theme.colors.warning }}
 							/>
 							<div className="text-sm">
-								<p style={{ color: theme.colors.warning }}>GitHub CLI recommended</p>
+								<p style={{ color: theme.colors.warning }}>{t('worktree_config.gh_recommended')}</p>
 								<p className="mt-1" style={{ color: theme.colors.textDim }}>
-									Install{' '}
+									{t('worktree_config.install_prefix')}{' '}
 									<button
 										type="button"
 										className="underline hover:opacity-80"
 										style={{ color: theme.colors.accent }}
 										onClick={() => window.maestro.shell.openExternal('https://cli.github.com')}
 									>
-										GitHub CLI
+										{t('worktree_config.gh_cli_link')}
 									</button>{' '}
-									for best worktree support.
+									{t('worktree_config.gh_recommended_description')}
 								</p>
 							</div>
 						</div>
@@ -249,7 +257,7 @@ export function WorktreeConfigModal({
 						>
 							<Server className="w-4 h-4" style={{ color: theme.colors.accent }} />
 							<span className="text-sm" style={{ color: theme.colors.textMain }}>
-								Remote session — enter the path on the remote server
+								{t('worktree_config.remote_session_notice')}
 							</span>
 						</div>
 					)}
@@ -260,14 +268,18 @@ export function WorktreeConfigModal({
 							className="text-xs font-bold uppercase mb-1.5 block"
 							style={{ color: theme.colors.textDim }}
 						>
-							Worktree Directory
+							{t('worktree_config.worktree_dir_label')}
 						</label>
 						<div className="flex gap-2">
 							<input
 								type="text"
 								value={basePath}
 								onChange={(e) => setBasePath(e.target.value)}
-								placeholder={isRemoteSession ? '/home/user/worktrees' : '/path/to/worktrees'}
+								placeholder={
+									isRemoteSession
+										? t('worktree_config.remote_placeholder')
+										: t('worktree_config.local_placeholder')
+								}
 								className="flex-1 px-3 py-2 rounded border bg-transparent outline-none text-sm"
 								style={{
 									borderColor: theme.colors.border,
@@ -283,18 +295,18 @@ export function WorktreeConfigModal({
 								style={{ borderColor: theme.colors.border, color: theme.colors.textMain }}
 								title={
 									isRemoteSession
-										? 'Browse is not available for remote sessions'
-										: 'Browse for directory'
+										? t('worktree_config.browse_disabled_tooltip')
+										: t('worktree_config.browse_tooltip')
 								}
 							>
 								<FolderOpen className="w-4 h-4" />
-								Browse
+								{t('worktree_config.browse_button')}
 							</button>
 						</div>
 						<p className="text-[10px] mt-1" style={{ color: theme.colors.textDim }}>
 							{isRemoteSession
-								? 'Path on the remote server where worktrees will be created'
-								: 'Base directory where worktrees will be created'}
+								? t('worktree_config.remote_path_description')
+								: t('worktree_config.local_path_description')}
 						</p>
 					</div>
 
@@ -302,10 +314,10 @@ export function WorktreeConfigModal({
 					<div className="flex items-center justify-between">
 						<div>
 							<div className="text-sm font-medium" style={{ color: theme.colors.textMain }}>
-								Watch for new worktrees
+								{t('worktree_config.watch_label')}
 							</div>
 							<p className="text-[10px]" style={{ color: theme.colors.textDim }}>
-								Auto-detect worktrees created outside Maestro
+								{t('worktree_config.watch_description')}
 							</p>
 						</div>
 						<button
@@ -331,7 +343,7 @@ export function WorktreeConfigModal({
 							className="text-xs font-bold uppercase mb-1.5 block"
 							style={{ color: theme.colors.textDim }}
 						>
-							Create New Worktree
+							{t('worktree_config.create_section_title')}
 						</label>
 						<div className="flex gap-2">
 							<input
@@ -343,7 +355,7 @@ export function WorktreeConfigModal({
 										handleCreateWorktree();
 									}
 								}}
-								placeholder="feature-xyz"
+								placeholder={t('worktree_config.branch_placeholder')}
 								className="flex-1 px-3 py-2 rounded border bg-transparent outline-none text-sm"
 								style={{
 									borderColor: theme.colors.border,
@@ -369,7 +381,7 @@ export function WorktreeConfigModal({
 								) : (
 									<Plus className="w-4 h-4" />
 								)}
-								Create
+								{t('worktree_config.create_button')}
 							</button>
 						</div>
 					</div>
@@ -412,14 +424,14 @@ export function WorktreeConfigModal({
 							color: theme.colors.error,
 						}}
 					>
-						Disable
+						{t('worktree_config.disable_button')}
 					</button>
 					<button
 						onClick={onClose}
 						className="px-4 py-2 rounded text-sm hover:bg-white/10 transition-colors"
 						style={{ color: theme.colors.textMain }}
 					>
-						Cancel
+						{t('worktree_config.cancel_button')}
 					</button>
 					<button
 						onClick={handleSave}
@@ -433,7 +445,9 @@ export function WorktreeConfigModal({
 						}}
 					>
 						{isValidating && <Loader2 className="w-4 h-4 animate-spin" />}
-						{isValidating ? 'Validating...' : 'Save Configuration'}
+						{isValidating
+							? t('worktree_config.validating_button')
+							: t('worktree_config.save_button')}
 					</button>
 				</div>
 			</div>

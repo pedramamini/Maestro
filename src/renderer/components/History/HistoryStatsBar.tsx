@@ -1,6 +1,7 @@
 import React, { memo } from 'react';
 import { Layers, Hash, Bot, User, BarChart3 } from 'lucide-react';
 import type { Theme } from '../../types';
+import { useI18n } from '../../hooks/useI18n';
 
 export interface HistoryStats {
 	agentCount: number;
@@ -49,18 +50,19 @@ export const HistoryStatsBar = memo(function HistoryStatsBar({
 	stats,
 	theme,
 }: HistoryStatsBarProps) {
+	const { t } = useI18n();
 	return (
 		<div className="flex items-center justify-center gap-4 py-2 mb-3 flex-wrap">
 			<StatItem
 				icon={<Layers className="w-3 h-3" />}
-				label="Agents"
+				label={t('history.stats.agents_label')}
 				value={stats.agentCount}
 				color={theme.colors.accent}
 				theme={theme}
 			/>
 			<StatItem
 				icon={<Hash className="w-3 h-3" />}
-				label="Sessions"
+				label={t('history.stats.sessions_label')}
 				value={stats.sessionCount}
 				color={theme.colors.accent}
 				theme={theme}
@@ -68,14 +70,14 @@ export const HistoryStatsBar = memo(function HistoryStatsBar({
 			<div className="w-px h-4 flex-shrink-0" style={{ backgroundColor: theme.colors.border }} />
 			<StatItem
 				icon={<User className="w-3 h-3" />}
-				label="User"
+				label={t('history.stats.user_label')}
 				value={stats.userCount}
 				color={theme.colors.accent}
 				theme={theme}
 			/>
 			<StatItem
 				icon={<Bot className="w-3 h-3" />}
-				label="Auto"
+				label={t('history.stats.auto_label')}
 				value={stats.autoCount}
 				color={theme.colors.warning}
 				theme={theme}
@@ -83,7 +85,7 @@ export const HistoryStatsBar = memo(function HistoryStatsBar({
 			<div className="w-px h-4 flex-shrink-0" style={{ backgroundColor: theme.colors.border }} />
 			<StatItem
 				icon={<BarChart3 className="w-3 h-3" />}
-				label="Total"
+				label={t('history.stats.total_label')}
 				value={stats.totalCount}
 				color={theme.colors.textMain}
 				theme={theme}

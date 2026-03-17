@@ -20,6 +20,7 @@ import {
 	type ParticipantColorInfo,
 } from '../utils/participantColors';
 import { useResizablePanel } from '../hooks';
+import { useI18n } from '../hooks/useI18n';
 
 export type GroupChatRightTab = 'participants' | 'history';
 
@@ -80,6 +81,7 @@ export function GroupChatRightPanel({
 	onJumpToMessage,
 	onColorsComputed,
 }: GroupChatRightPanelProps): JSX.Element | null {
+	const { t } = useI18n();
 	// Color preferences state
 	const [colorPreferences, setColorPreferences] = useState<Record<string, number>>({});
 	const { panelRef, onResizeStart, transitionClass } = useResizablePanel({
@@ -259,7 +261,11 @@ export function GroupChatRightPanel({
 			/>
 
 			{/* Tab Header - matches RightPanel styling */}
-			<div className="flex border-b h-16" style={{ borderColor: theme.colors.border }}>
+			<div
+				className="flex border-b h-16"
+				style={{ borderColor: theme.colors.border }}
+				role="tablist"
+			>
 				{(['participants', 'history'] as const).map((tab) => (
 					<button
 						key={tab}
@@ -269,16 +275,30 @@ export function GroupChatRightPanel({
 							borderColor: activeTab === tab ? theme.colors.accent : 'transparent',
 							color: activeTab === tab ? theme.colors.textMain : theme.colors.textDim,
 						}}
-						title={tab === 'participants' ? 'View participants' : 'View task history'}
+						role="tab"
+						aria-selected={activeTab === tab}
+						title={
+							{
+								participants: t('group_chat_right_panel.participants_tooltip'),
+								history: t('group_chat_right_panel.history_tooltip'),
+							}[tab]
+						}
 					>
-						{tab.charAt(0).toUpperCase() + tab.slice(1)}
+						{
+							{
+								participants: t('group_chat_right_panel.tab_participants'),
+								history: t('group_chat_right_panel.tab_history'),
+							}[tab]
+						}
 					</button>
 				))}
 
 				<button
 					onClick={onToggle}
 					className="flex items-center justify-center p-2 rounded hover:bg-white/5 transition-colors w-12 shrink-0"
-					title={`Collapse Panel (${formatShortcutKeys(shortcuts.toggleRightPanel.keys)})`}
+					title={t('group_chat_right_panel.collapse_tooltip', {
+						shortcut: formatShortcutKeys(shortcuts.toggleRightPanel.keys),
+					})}
 				>
 					<PanelRightClose className="w-4 h-4 opacity-50" />
 				</button>
@@ -286,7 +306,7 @@ export function GroupChatRightPanel({
 
 			{/* Tab Content */}
 			{activeTab === 'participants' ? (
-				<div className="flex-1 overflow-y-auto p-3 space-y-3">
+				<div className="flex-1 overflow-y-auto p-3 space-y-3" role="tabpanel">
 					{/* Moderator card always at top */}
 					<ParticipantCard
 						key="moderator"
@@ -304,9 +324,9 @@ export function GroupChatRightPanel({
 					{/* Participants sorted alphabetically */}
 					{sortedParticipants.length === 0 ? (
 						<div className="text-sm text-center py-4" style={{ color: theme.colors.textDim }}>
-							No participants yet.
+							{t('group_chat_right_panel.no_participants')}
 							<br />
-							Ask the moderator to add agents.
+							{t('group_chat_right_panel.no_participants_hint')}
 						</div>
 					) : (
 						sortedParticipants.map((participant) => {

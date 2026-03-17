@@ -21,7 +21,7 @@ import { useUIStore } from '../../stores/uiStore';
 import { generateId } from '../../utils/ids';
 import { validateNewSession } from '../../utils/sessionValidation';
 import { gitService } from '../../services/git';
-import { notifyToast } from '../../stores/notificationStore';
+import { tNotify } from '../../utils/tNotify';
 import { DEFAULT_BATCH_PROMPT } from '../../components/BatchRunnerModal';
 
 // ============================================================================
@@ -72,10 +72,11 @@ export function useSymphonyContribution(
 			const agent = await window.maestro.agents.get(data.agentType);
 			if (!agent) {
 				console.error(`Agent not found: ${data.agentType}`);
-				notifyToast({
+				tNotify({
 					type: 'error',
-					title: 'Symphony Error',
-					message: `Agent not found: ${data.agentType}`,
+					titleKey: 'notifications:symphony.error_title',
+					messageKey: 'notifications:symphony.agent_not_found_message',
+					values: { agentType: data.agentType },
 				});
 				return;
 			}
@@ -89,10 +90,13 @@ export function useSymphonyContribution(
 			);
 			if (!validation.valid) {
 				console.error(`Session validation failed: ${validation.error}`);
-				notifyToast({
+				tNotify({
 					type: 'error',
-					title: 'Agent Creation Failed',
-					message: validation.error || 'Cannot create duplicate agent',
+					titleKey: 'notifications:agent.creation_failed_title',
+					messageKey: validation.error
+						? 'notifications:agent.creation_failed_message'
+						: 'notifications:agent.creation_failed_default_message',
+					values: validation.error ? { message: validation.error } : undefined,
 				});
 				return;
 			}

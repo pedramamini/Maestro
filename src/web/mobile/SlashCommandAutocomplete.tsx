@@ -13,6 +13,7 @@
  */
 
 import React, { useEffect, useRef, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useThemeColors } from '../components/ThemeProvider';
 import type { InputMode } from './CommandInputBar';
 import { MIN_TOUCH_TARGET } from './constants';
@@ -90,6 +91,8 @@ export function SlashCommandAutocomplete({
 	isInputExpanded = false,
 }: SlashCommandAutocompleteProps) {
 	const colors = useThemeColors();
+	const { t } = useTranslation('common');
+	const { t: tA } = useTranslation('accessibility');
 	const containerRef = useRef<HTMLDivElement>(null);
 
 	// Filter commands based on input and mode
@@ -170,8 +173,8 @@ export function SlashCommandAutocomplete({
 			style={{
 				position: 'absolute',
 				bottom: '100%',
-				left: '16px',
-				right: '16px',
+				insetInlineStart: '16px',
+				insetInlineEnd: '16px',
 				marginBottom: '8px',
 				backgroundColor: colors.bgSidebar,
 				border: `1px solid ${colors.border}`,
@@ -210,7 +213,7 @@ export function SlashCommandAutocomplete({
 						letterSpacing: '0.5px',
 					}}
 				>
-					Commands
+					{t('mobile.commands_header')}
 				</span>
 				<button
 					onClick={(e) => {
@@ -237,7 +240,7 @@ export function SlashCommandAutocomplete({
 						e.currentTarget.style.backgroundColor = 'transparent';
 						e.currentTarget.style.color = colors.textDim;
 					}}
-					aria-label="Close commands"
+					aria-label={tA('mobile.close_commands')}
 				>
 					<svg
 						width="18"

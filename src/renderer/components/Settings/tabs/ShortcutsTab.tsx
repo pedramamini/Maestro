@@ -7,8 +7,9 @@
  */
 
 import React, { useState, useRef, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useSettings } from '../../../hooks';
-import { formatShortcutKeys } from '../../../utils/shortcutFormatter';
+import { formatShortcutKeys, getShortcutLabel } from '../../../utils/shortcutFormatter';
 import type { Theme, Shortcut } from '../../../types';
 
 export interface ShortcutsTabProps {
@@ -19,6 +20,7 @@ export interface ShortcutsTabProps {
 
 export function ShortcutsTab({ theme, hasNoAgents, onRecordingChange }: ShortcutsTabProps) {
 	const { shortcuts, setShortcuts, tabShortcuts, setTabShortcuts } = useSettings();
+	const { t } = useTranslation('settings');
 
 	const [recordingId, setRecordingId] = useState<string | null>(null);
 	const [shortcutsFilter, setShortcutsFilter] = useState('');
@@ -92,7 +94,7 @@ export function ShortcutsTab({ theme, hasNoAgents, onRecordingChange }: Shortcut
 	];
 	const totalShortcuts = allShortcuts.length;
 	const filteredShortcuts = allShortcuts.filter((sc) =>
-		sc.label.toLowerCase().includes(shortcutsFilter.toLowerCase())
+		getShortcutLabel(sc.id, sc.label).toLowerCase().includes(shortcutsFilter.toLowerCase())
 	);
 	const filteredCount = filteredShortcuts.length;
 
@@ -107,7 +109,7 @@ export function ShortcutsTab({ theme, hasNoAgents, onRecordingChange }: Shortcut
 			style={{ borderColor: theme.colors.border, backgroundColor: theme.colors.bgMain }}
 		>
 			<span className="text-sm font-medium" style={{ color: theme.colors.textMain }}>
-				{sc.label}
+				{getShortcutLabel(sc.id, sc.label)}
 			</span>
 			<button
 				onClick={(e) => {
@@ -132,7 +134,7 @@ export function ShortcutsTab({ theme, hasNoAgents, onRecordingChange }: Shortcut
 					} as React.CSSProperties
 				}
 			>
-				{recordingId === sc.id ? 'Press keys...' : formatShortcutKeys(sc.keys)}
+				{recordingId === sc.id ? t('shortcuts.press_keys') : formatShortcutKeys(sc.keys)}
 			</button>
 		</div>
 	);
@@ -147,7 +149,7 @@ export function ShortcutsTab({ theme, hasNoAgents, onRecordingChange }: Shortcut
 						color: theme.colors.accent,
 					}}
 				>
-					Note: Most functionality is unavailable until you've created your first agent.
+					{t('shortcuts.no_agents_note')}
 				</p>
 			)}
 			<div className="flex items-center gap-2 mb-3">
@@ -156,7 +158,7 @@ export function ShortcutsTab({ theme, hasNoAgents, onRecordingChange }: Shortcut
 					type="text"
 					value={shortcutsFilter}
 					onChange={(e) => setShortcutsFilter(e.target.value)}
-					placeholder="Filter shortcuts..."
+					placeholder={t('shortcuts.filter_placeholder')}
 					className="flex-1 px-3 py-2 rounded border bg-transparent outline-none text-sm"
 					style={{ borderColor: theme.colors.border, color: theme.colors.textMain }}
 				/>
@@ -171,14 +173,14 @@ export function ShortcutsTab({ theme, hasNoAgents, onRecordingChange }: Shortcut
 				</span>
 			</div>
 			<p className="text-xs opacity-50 mb-3" style={{ color: theme.colors.textDim }}>
-				Not all shortcuts can be modified. Press{' '}
+				{t('shortcuts.help_text_prefix')}{' '}
 				<kbd
 					className="px-1.5 py-0.5 rounded font-mono"
 					style={{ backgroundColor: theme.colors.bgActivity }}
 				>
 					{formatShortcutKeys(['Meta', '/'])}
 				</kbd>{' '}
-				from the main interface to view the full list of keyboard shortcuts.
+				{t('shortcuts.help_text_suffix')}
 			</p>
 			<div className="space-y-4 flex-1 overflow-y-auto pr-2 scrollbar-thin">
 				{/* General Shortcuts Section */}
@@ -188,7 +190,7 @@ export function ShortcutsTab({ theme, hasNoAgents, onRecordingChange }: Shortcut
 							className="text-xs font-bold uppercase mb-2 px-1"
 							style={{ color: theme.colors.textDim }}
 						>
-							General
+							{t('shortcuts.general_section')}
 						</h3>
 						<div className="space-y-2">{generalShortcuts.map(renderShortcutItem)}</div>
 					</div>
@@ -201,7 +203,7 @@ export function ShortcutsTab({ theme, hasNoAgents, onRecordingChange }: Shortcut
 							className="text-xs font-bold uppercase mb-2 px-1"
 							style={{ color: theme.colors.textDim }}
 						>
-							AI Tab
+							{t('shortcuts.ai_tab_section')}
 						</h3>
 						<div className="space-y-2">{tabShortcutsFiltered.map(renderShortcutItem)}</div>
 					</div>

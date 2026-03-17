@@ -22,6 +22,7 @@ import type {
 	ReorderTabCallback,
 	ToggleBookmarkCallback,
 	GetThemeCallback,
+	GetLanguageCallback,
 	GetCustomCommandsCallback,
 	GetHistoryCallback,
 } from '../types';
@@ -35,6 +36,7 @@ export interface WebServerCallbacks {
 	getSessions: GetSessionsCallback | null;
 	getSessionDetail: GetSessionDetailCallback | null;
 	getTheme: GetThemeCallback | null;
+	getLanguage: GetLanguageCallback | null;
 	getCustomCommands: GetCustomCommandsCallback | null;
 	writeToSession: WriteToSessionCallback | null;
 	executeCommand: ExecuteCommandCallback | null;
@@ -56,6 +58,7 @@ export class CallbackRegistry {
 		getSessions: null,
 		getSessionDetail: null,
 		getTheme: null,
+		getLanguage: null,
 		getCustomCommands: null,
 		writeToSession: null,
 		executeCommand: null,
@@ -84,6 +87,10 @@ export class CallbackRegistry {
 
 	getTheme(): ReturnType<GetThemeCallback> | null {
 		return this.callbacks.getTheme?.() ?? null;
+	}
+
+	getLanguage(): string {
+		return this.callbacks.getLanguage?.() ?? 'en';
 	}
 
 	getCustomCommands(): ReturnType<GetCustomCommandsCallback> | [] {
@@ -168,6 +175,10 @@ export class CallbackRegistry {
 
 	setGetThemeCallback(callback: GetThemeCallback): void {
 		this.callbacks.getTheme = callback;
+	}
+
+	setGetLanguageCallback(callback: GetLanguageCallback): void {
+		this.callbacks.getLanguage = callback;
 	}
 
 	setGetCustomCommandsCallback(callback: GetCustomCommandsCallback): void {

@@ -15,6 +15,7 @@ import { MODAL_PRIORITIES } from '../constants/modalPriorities';
 import { KEYBOARD_MASTERY_LEVELS } from '../constants/keyboardMastery';
 import { DEFAULT_SHORTCUTS } from '../constants/shortcuts';
 import { isMacOSPlatform } from '../utils/platformUtils';
+import { useTranslation } from 'react-i18next';
 
 interface KeyboardMasteryCelebrationProps {
 	theme: Theme;
@@ -66,6 +67,7 @@ export function KeyboardMasteryCelebration({
 	shortcuts,
 	disableConfetti = false,
 }: KeyboardMasteryCelebrationProps): JSX.Element {
+	const { t: tA } = useTranslation('accessibility');
 	const containerRef = useRef<HTMLDivElement>(null);
 	const { registerLayer, unregisterLayer, updateLayerHandler } = useLayerStack();
 	const layerIdRef = useRef<string>();
@@ -227,7 +229,7 @@ export function KeyboardMasteryCelebration({
 				className="fixed inset-0 flex items-center justify-center z-[99999] pointer-events-none p-4"
 				role="dialog"
 				aria-modal="true"
-				aria-label="Keyboard Mastery Level Up"
+				aria-label={tA('modal.keyboard_mastery')}
 				tabIndex={-1}
 			>
 				<div

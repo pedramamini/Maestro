@@ -6,6 +6,8 @@
  * uses readable text (Ctrl, Alt, Shift).
  */
 
+import i18n from '../../shared/i18n/config';
+import { SHORTCUT_LABELS } from '../../shared/i18n/constantKeys';
 import { isMacOSPlatform } from './platformUtils';
 
 // Detect if running on macOS — uses window.maestro.platform (Electron preload bridge)
@@ -112,8 +114,10 @@ export function formatMetaKey(): string {
  * @returns Display string like 'Enter' or '⌘ + Enter' / 'Ctrl + Enter'
  */
 export function formatEnterToSend(enterToSend: boolean): string {
-	if (enterToSend) return 'Enter';
-	return isMac() ? '⌘ + Enter' : 'Ctrl + Enter';
+	if (enterToSend) return i18n.t('common:input.enter_to_send', { defaultValue: 'Enter' });
+	return isMac()
+		? i18n.t('common:input.meta_enter_to_send_mac', { defaultValue: '⌘ + Enter' })
+		: i18n.t('common:input.meta_enter_to_send_other', { defaultValue: 'Ctrl + Enter' });
 }
 
 /**
@@ -124,9 +128,33 @@ export function formatEnterToSend(enterToSend: boolean): string {
  */
 export function formatEnterToSendTooltip(enterToSend: boolean): string {
 	if (enterToSend) {
-		return `Switch to ${isMac() ? 'Cmd' : 'Ctrl'}+Enter to send`;
+		const key = isMac() ? 'Cmd' : 'Ctrl';
+		return i18n.t('common:input.switch_to_meta_enter', {
+			key,
+			defaultValue: `Switch to ${key}+Enter to send`,
+		});
 	}
-	return 'Switch to Enter to send';
+	return i18n.t('common:input.switch_to_enter', { defaultValue: 'Switch to Enter to send' });
+}
+
+/**
+ * Get the translated label for a shortcut.
+ *
+ * Resolves the shortcut's ID through the SHORTCUT_LABELS mapping to find the
+ * i18n translation key, then calls i18n.t() to get the translated string.
+ * Falls back to the shortcut's hardcoded label if no mapping exists.
+ *
+ * Uses the i18n singleton directly (not a React hook) so it can be called
+ * from any context. The result is reactive when used inside components
+ * that re-render on language change via react-i18next.
+ *
+ * @param shortcutId - The shortcut's ID (e.g., 'toggleSidebar')
+ * @param fallbackLabel - The hardcoded label to use as fallback
+ * @returns The translated label string
+ */
+export function getShortcutLabel(shortcutId: string, fallbackLabel: string): string {
+	const key = SHORTCUT_LABELS[shortcutId as keyof typeof SHORTCUT_LABELS];
+	return key ? i18n.t(key, { defaultValue: fallbackLabel }) : fallbackLabel;
 }
 
 /**

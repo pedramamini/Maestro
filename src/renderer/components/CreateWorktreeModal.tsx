@@ -1,7 +1,9 @@
 import { useState, useEffect, useRef } from 'react';
+import { useTranslation } from 'react-i18next';
 import { X, GitBranch, Loader2, AlertTriangle } from 'lucide-react';
 import type { Theme, Session, GhCliStatus } from '../types';
 import { useLayerStack } from '../contexts/LayerStackContext';
+import { useI18n } from '../hooks/useI18n';
 import { MODAL_PRIORITIES } from '../constants/modalPriorities';
 
 interface CreateWorktreeModalProps {
@@ -25,6 +27,8 @@ export function CreateWorktreeModal({
 	session,
 	onCreateWorktree,
 }: CreateWorktreeModalProps) {
+	const { t } = useTranslation('modals');
+	const { t: tA } = useI18n('accessibility');
 	const { registerLayer, unregisterLayer } = useLayerStack();
 	const onCloseRef = useRef(onClose);
 	onCloseRef.current = onClose;
@@ -78,15 +82,13 @@ export function CreateWorktreeModal({
 	const handleCreate = async () => {
 		const trimmedName = branchName.trim();
 		if (!trimmedName) {
-			setError('Please enter a branch name');
+			setError(t('create_worktree.enter_branch_error'));
 			return;
 		}
 
 		// Basic branch name validation
 		if (!/^[\w\-./]+$/.test(trimmedName)) {
-			setError(
-				'Invalid branch name. Use only letters, numbers, hyphens, underscores, dots, and slashes.'
-			);
+			setError(t('create_worktree.invalid_branch_error'));
 			return;
 		}
 
@@ -97,7 +99,7 @@ export function CreateWorktreeModal({
 			await onCreateWorktree(trimmedName);
 			onClose();
 		} catch (err) {
-			setError(err instanceof Error ? err.message : 'Failed to create worktree');
+			setError(err instanceof Error ? err.message : t('create_worktree.failed_to_create'));
 		} finally {
 			setIsCreating(false);
 		}
@@ -134,10 +136,14 @@ export function CreateWorktreeModal({
 					<div className="flex items-center gap-2">
 						<GitBranch className="w-5 h-5" style={{ color: theme.colors.accent }} />
 						<h2 className="font-bold" style={{ color: theme.colors.textMain }}>
-							Create New Worktree
+							{t('create_worktree.title')}
 						</h2>
 					</div>
-					<button onClick={onClose} className="p-1 rounded hover:bg-white/10 transition-colors">
+					<button
+						onClick={onClose}
+						className="p-1 rounded hover:bg-white/10 transition-colors"
+						aria-label={tA('modal.close')}
+					>
 						<X className="w-4 h-4" style={{ color: theme.colors.textDim }} />
 					</button>
 				</div>
@@ -158,18 +164,18 @@ export function CreateWorktreeModal({
 								style={{ color: theme.colors.warning }}
 							/>
 							<div className="text-sm">
-								<p style={{ color: theme.colors.warning }}>GitHub CLI recommended</p>
+								<p style={{ color: theme.colors.warning }}>{t('create_worktree.gh_recommended')}</p>
 								<p className="mt-1" style={{ color: theme.colors.textDim }}>
-									Install{' '}
+									{t('create_worktree.gh_install_prefix')}{' '}
 									<button
 										type="button"
 										className="underline hover:opacity-80"
 										style={{ color: theme.colors.accent }}
 										onClick={() => window.maestro.shell.openExternal('https://cli.github.com')}
 									>
-										GitHub CLI
+										{t('create_worktree.gh_cli_link')}
 									</button>{' '}
-									for best worktree support.
+									{t('create_worktree.gh_recommended_description')}
 								</p>
 							</div>
 						</div>
@@ -189,10 +195,11 @@ export function CreateWorktreeModal({
 								style={{ color: theme.colors.warning }}
 							/>
 							<div className="text-sm">
-								<p style={{ color: theme.colors.warning }}>No worktree directory configured</p>
+								<p style={{ color: theme.colors.warning }}>
+									{t('create_worktree.no_config_title')}
+								</p>
 								<p className="mt-1" style={{ color: theme.colors.textDim }}>
-									A default directory will be used. Configure a custom directory in the Worktree
-									settings.
+									{t('create_worktree.no_config_description')}
 								</p>
 							</div>
 						</div>
@@ -204,7 +211,7 @@ export function CreateWorktreeModal({
 							className="text-xs font-bold uppercase mb-1.5 block"
 							style={{ color: theme.colors.textDim }}
 						>
-							Branch Name
+							{t('create_worktree.branch_name_label')}
 						</label>
 						<input
 							ref={inputRef}
@@ -212,7 +219,7 @@ export function CreateWorktreeModal({
 							value={branchName}
 							onChange={(e) => setBranchName(e.target.value)}
 							onKeyDown={handleKeyDown}
-							placeholder="feature-xyz"
+							placeholder={t('create_worktree.branch_placeholder')}
 							className="w-full px-3 py-2 rounded border bg-transparent outline-none text-sm"
 							style={{
 								borderColor: theme.colors.border,
@@ -223,7 +230,10 @@ export function CreateWorktreeModal({
 						/>
 						{hasWorktreeConfig && (
 							<p className="text-[10px] mt-1" style={{ color: theme.colors.textDim }}>
-								Will be created at: {session.worktreeConfig?.basePath}/{branchName || '...'}
+								{t('create_worktree.will_be_created_at', {
+									path: session.worktreeConfig?.basePath,
+									branch: branchName || '...',
+								})}
 							</p>
 						)}
 					</div>
@@ -259,7 +269,7 @@ export function CreateWorktreeModal({
 						style={{ color: theme.colors.textMain }}
 						disabled={isCreating}
 					>
-						Cancel
+						{t('create_worktree.cancel_button')}
 					</button>
 					<button
 						onClick={handleCreate}
@@ -277,10 +287,10 @@ export function CreateWorktreeModal({
 						{isCreating ? (
 							<>
 								<Loader2 className="w-4 h-4 animate-spin" />
-								Creating...
+								{t('create_worktree.creating_button')}
 							</>
 						) : (
-							'Create'
+							t('create_worktree.create_button')
 						)}
 					</button>
 				</div>

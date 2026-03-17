@@ -19,8 +19,10 @@ import { buildApiUrl } from '../utils/config';
 import { webLogger } from '../utils/logger';
 import { HistoryEntry } from '../../shared/types';
 import { stripAnsiCodes } from '../../shared/stringUtils';
-import { formatElapsedTime } from '../../shared/formatters';
+import { formatElapsedTime, getActiveLocale } from '../../shared/formatters';
 import { useSwipeGestures } from '../hooks/useSwipeGestures';
+import { useI18n } from '../../renderer/hooks/useI18n';
+import { useDirection, getDirectionalTranslateX } from '../utils/rtlCoordinates';
 
 /**
  * Format timestamp for display
@@ -51,6 +53,7 @@ interface HistoryCardProps {
 
 function HistoryCard({ entry, onSelect }: HistoryCardProps) {
 	const colors = useThemeColors();
+	const { t: ta } = useI18n('accessibility');
 
 	// Get pill color based on type
 	const getPillColor = () => {
@@ -89,7 +92,10 @@ function HistoryCard({ entry, onSelect }: HistoryCardProps) {
 				userSelect: 'none',
 				WebkitUserSelect: 'none',
 			}}
-			aria-label={`${entry.type} entry from ${formatTime(entry.timestamp)}`}
+			aria-label={ta('mobile.history_entry', {
+				type: entry.type,
+				time: formatTime(entry.timestamp),
+			})}
 		>
 			{/* Top row: Type pill, success indicator (for AUTO), and timestamp */}
 			<div
@@ -302,31 +308,42 @@ function HistoryDetailView({
 	onNavigate,
 }: HistoryDetailViewProps) {
 	const colors = useThemeColors();
+	const { t: ta } = useI18n('accessibility');
+	const dir = useDirection();
+	const isRTL = dir === 'rtl';
 
 	const canGoNext = currentIndex < totalCount - 1;
 	const canGoPrev = currentIndex > 0;
 
+	// RTL-aware navigation callbacks
+	const goNext = canGoNext
+		? () => {
+				triggerHaptic(HAPTIC_PATTERNS.tap);
+				onNavigate(currentIndex + 1);
+			}
+		: undefined;
+	const goPrev = canGoPrev
+		? () => {
+				triggerHaptic(HAPTIC_PATTERNS.tap);
+				onNavigate(currentIndex - 1);
+			}
+		: undefined;
+
 	// Swipe gestures for mobile navigation
+	// In RTL, swipe directions are mirrored: swipe-left → prev, swipe-right → next
 	const {
 		handlers: swipeHandlers,
 		offsetX,
 		isSwiping,
 	} = useSwipeGestures({
-		onSwipeLeft: canGoNext
-			? () => {
-					triggerHaptic(HAPTIC_PATTERNS.tap);
-					onNavigate(currentIndex + 1);
-				}
-			: undefined,
-		onSwipeRight: canGoPrev
-			? () => {
-					triggerHaptic(HAPTIC_PATTERNS.tap);
-					onNavigate(currentIndex - 1);
-				}
-			: undefined,
+		onSwipeLeft: isRTL ? goPrev : goNext,
+		onSwipeRight: isRTL ? goNext : goPrev,
 		trackOffset: true,
 		threshold: 50,
 	});
+
+	// Logical offset: positive = swiping toward "start" (prev direction)
+	const logicalOffsetX = isRTL ? -offsetX : offsetX;
 
 	// Get pill color based on type
 	const getPillColor = () => {
@@ -383,8 +400,8 @@ function HistoryDetailView({
 			style={{
 				position: 'fixed',
 				top: 0,
-				left: 0,
-				right: 0,
+				insetInlineStart: 0,
+				insetInlineEnd: 0,
 				bottom: 0,
 				backgroundColor: colors.bgMain,
 				zIndex: 210, // Higher than MobileHistoryPanel (200) to overlay it
@@ -515,7 +532,7 @@ function HistoryDetailView({
 						WebkitTapHighlightColor: 'transparent',
 						flexShrink: 0,
 					}}
-					aria-label="Close detail view"
+					aria-label={ta('mobile.close_detail_view')}
 				>
 					Done
 				</button>
@@ -621,10 +638,10 @@ function HistoryDetailView({
 							}}
 						>
 							<span style={{ color: colors.accent }}>
-								In: {(entry.usageStats.inputTokens ?? 0).toLocaleString('en-US')}
+								In: {(entry.usageStats.inputTokens ?? 0).toLocaleString(getActiveLocale())}
 							</span>
 							<span style={{ color: colors.success }}>
-								Out: {(entry.usageStats.outputTokens ?? 0).toLocaleString('en-US')}
+								Out: {(entry.usageStats.outputTokens ?? 0).toLocaleString(getActiveLocale())}
 							</span>
 						</div>
 					)}
@@ -639,7 +656,7 @@ function HistoryDetailView({
 					overflowY: 'auto',
 					overflowX: 'hidden',
 					padding: '16px',
-					transform: `translateX(${offsetX}px)`,
+					transform: getDirectionalTranslateX(logicalOffsetX, dir),
 					transition: isSwiping ? 'none' : 'transform 0.2s ease-out',
 					touchAction: 'pan-y', // Allow vertical scrolling, capture horizontal swipes
 				}}
@@ -659,17 +676,17 @@ function HistoryDetailView({
 				</pre>
 			</div>
 
-			{/* Swipe hint overlays */}
-			{isSwiping && offsetX > 20 && canGoPrev && (
+			{/* Swipe hint overlays — use logical offset and positioning for RTL */}
+			{isSwiping && logicalOffsetX > 20 && canGoPrev && (
 				<div
 					style={{
 						position: 'absolute',
-						left: 0,
+						insetInlineStart: 0,
 						top: '50%',
 						transform: 'translateY(-50%)',
 						padding: '16px',
 						color: colors.accent,
-						opacity: Math.min(1, offsetX / 50),
+						opacity: Math.min(1, logicalOffsetX / 50),
 					}}
 				>
 					<svg
@@ -680,20 +697,20 @@ function HistoryDetailView({
 						stroke="currentColor"
 						strokeWidth="2"
 					>
-						<polyline points="15 18 9 12 15 6" />
+						<polyline points={isRTL ? '9 18 15 12 9 6' : '15 18 9 12 15 6'} />
 					</svg>
 				</div>
 			)}
-			{isSwiping && offsetX < -20 && canGoNext && (
+			{isSwiping && logicalOffsetX < -20 && canGoNext && (
 				<div
 					style={{
 						position: 'absolute',
-						right: 0,
+						insetInlineEnd: 0,
 						top: '50%',
 						transform: 'translateY(-50%)',
 						padding: '16px',
 						color: colors.accent,
-						opacity: Math.min(1, Math.abs(offsetX) / 50),
+						opacity: Math.min(1, Math.abs(logicalOffsetX) / 50),
 					}}
 				>
 					<svg
@@ -704,7 +721,7 @@ function HistoryDetailView({
 						stroke="currentColor"
 						strokeWidth="2"
 					>
-						<polyline points="9 18 15 12 9 6" />
+						<polyline points={isRTL ? '15 18 9 12 15 6' : '9 18 15 12 9 6'} />
 					</svg>
 				</div>
 			)}
@@ -742,7 +759,7 @@ function HistoryDetailView({
 						fontSize: '14px',
 						fontWeight: 500,
 					}}
-					aria-label="Previous entry"
+					aria-label={ta('mobile.previous_entry')}
 				>
 					<svg
 						width="16"
@@ -789,7 +806,7 @@ function HistoryDetailView({
 						fontSize: '14px',
 						fontWeight: 500,
 					}}
-					aria-label="Next entry"
+					aria-label={ta('mobile.next_entry')}
 				>
 					Next
 					<svg
@@ -865,6 +882,7 @@ export function MobileHistoryPanel({
 	onSearchChange,
 }: MobileHistoryPanelProps) {
 	const colors = useThemeColors();
+	const { t: ta } = useI18n('accessibility');
 	const [entries, setEntries] = useState<HistoryEntry[]>([]);
 	const [isLoading, setIsLoading] = useState(true);
 	const [error, setError] = useState<string | null>(null);
@@ -1031,8 +1049,8 @@ export function MobileHistoryPanel({
 				style={{
 					position: 'fixed',
 					top: 0,
-					left: 0,
-					right: 0,
+					insetInlineStart: 0,
+					insetInlineEnd: 0,
 					bottom: 0,
 					backgroundColor: colors.bgMain,
 					zIndex: 200, // Higher than CommandInputBar (100) to fully cover the screen including input box
@@ -1079,7 +1097,7 @@ export function MobileHistoryPanel({
 							touchAction: 'manipulation',
 							WebkitTapHighlightColor: 'transparent',
 						}}
-						aria-label="Close history"
+						aria-label={ta('mobile.close_history')}
 					>
 						Done
 					</button>
@@ -1125,7 +1143,7 @@ export function MobileHistoryPanel({
 								transition:
 									'background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease',
 							}}
-							aria-label="Search history"
+							aria-label={ta('mobile.search_history')}
 							aria-pressed={isSearchOpen}
 						>
 							<svg
@@ -1270,7 +1288,7 @@ export function MobileHistoryPanel({
 											touchAction: 'manipulation',
 											WebkitTapHighlightColor: 'transparent',
 										}}
-										aria-label="Clear search"
+										aria-label={ta('mobile.clear_search')}
 									>
 										<svg
 											width="12"

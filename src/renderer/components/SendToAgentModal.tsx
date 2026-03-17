@@ -14,6 +14,7 @@
  */
 
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Search, ArrowRight, X, Loader2, Circle } from 'lucide-react';
 import type { Theme, Session, AITab, ToolType } from '../types';
 import type { MergeResult } from '../types/contextMerge';
@@ -68,16 +69,16 @@ export interface SendToAgentModalProps {
 }
 
 /**
- * Get status label for a session
+ * Get status label for a session using i18n
  */
-function getStatusLabel(status: SessionStatus): string {
+function getStatusLabelForSend(status: SessionStatus, t: (key: any) => string): string {
 	switch (status) {
 		case 'idle':
-			return 'Idle';
+			return t('send_to_agent.idle_status');
 		case 'busy':
-			return 'Busy';
+			return t('send_to_agent.busy_status');
 		case 'current':
-			return 'Source';
+			return t('send_to_agent.source_status');
 		default:
 			return '';
 	}
@@ -138,6 +139,8 @@ export function SendToAgentModal({
 	onClose,
 	onSend,
 }: SendToAgentModalProps) {
+	const { t } = useTranslation('modals');
+
 	// Search state
 	const [searchQuery, setSearchQuery] = useState('');
 
@@ -184,7 +187,7 @@ export function SendToAgentModal({
 			blocksLowerLayers: true,
 			capturesFocus: true,
 			focusTrap: 'strict',
-			ariaLabel: 'Send Context to Agent',
+			ariaLabel: t('send_to_agent.title'),
 			onEscape: () => onCloseRef.current(),
 		});
 
@@ -467,7 +470,7 @@ export function SendToAgentModal({
 							className="text-sm font-bold"
 							style={{ color: theme.colors.textMain }}
 						>
-							Send Context to Agent
+							{t('send_to_agent.title')}
 						</h2>
 					</div>
 					<button
@@ -475,7 +478,7 @@ export function SendToAgentModal({
 						onClick={onClose}
 						className="p-1 rounded hover:bg-white/10 transition-colors"
 						style={{ color: theme.colors.textDim }}
-						aria-label="Close dialog"
+						aria-label={t('send_to_agent.close_aria')}
 					>
 						<X className="w-4 h-4" aria-hidden="true" />
 					</button>
@@ -483,8 +486,7 @@ export function SendToAgentModal({
 
 				{/* Description for screen readers */}
 				<p id="send-to-agent-description" className="sr-only">
-					Select a session to transfer your current context to. Use arrow keys to navigate and Enter
-					or Space to select.
+					{t('send_to_agent.sr_description')}
 				</p>
 
 				{/* Content Area */}
@@ -498,13 +500,13 @@ export function SendToAgentModal({
 								aria-hidden="true"
 							/>
 							<label htmlFor="search-sessions-input" className="sr-only">
-								Search sessions
+								{t('send_to_agent.search_sr_label')}
 							</label>
 							<input
 								id="search-sessions-input"
 								ref={inputRef}
 								type="text"
-								placeholder="Search sessions..."
+								placeholder={t('send_to_agent.search_placeholder')}
 								value={searchQuery}
 								onChange={(e) => handleSearchQueryChange(e.target.value)}
 								aria-controls="session-list"
@@ -523,7 +525,7 @@ export function SendToAgentModal({
 						id="session-list"
 						className="flex-1 overflow-y-auto px-4 pb-4"
 						role="listbox"
-						aria-label="Available sessions"
+						aria-label={t('send_to_agent.sessions_list_aria')}
 					>
 						{filteredSessions.length === 0 ? (
 							<div
@@ -531,7 +533,7 @@ export function SendToAgentModal({
 								style={{ color: theme.colors.textDim }}
 								role="status"
 							>
-								{searchQuery ? 'No matching sessions found' : 'No other sessions available'}
+								{searchQuery ? t('send_to_agent.no_match') : t('send_to_agent.no_sessions')}
 							</div>
 						) : (
 							<div className="space-y-1" role="presentation">
@@ -549,7 +551,7 @@ export function SendToAgentModal({
 											role="option"
 											aria-selected={isSelected}
 											aria-disabled={isDisabled}
-											aria-label={`${session.name}, ${getStatusLabel(session.status)}${index < 9 ? `, press ${index + 1} to select` : ''}`}
+											aria-label={`${session.name}, ${getStatusLabelForSend(session.status, t)}${index < 9 ? `, press ${index + 1} to select` : ''}`}
 											className={`w-full p-3 rounded-lg border text-left transition-all duration-150 disabled:cursor-not-allowed flex items-center gap-3 ${isSelected ? 'animate-highlight-pulse' : ''}`}
 											style={
 												{
@@ -613,7 +615,7 @@ export function SendToAgentModal({
 											>
 												{session.status === 'idle' && <Circle className="w-2 h-2 fill-current" />}
 												{session.status === 'busy' && <Loader2 className="w-3 h-3 animate-spin" />}
-												{getStatusLabel(session.status)}
+												{getStatusLabelForSend(session.status, t)}
 											</div>
 
 											{/* Quick Select Number */}
@@ -643,7 +645,7 @@ export function SendToAgentModal({
 					className="p-4 border-t space-y-3"
 					style={{ borderColor: theme.colors.border }}
 					role="region"
-					aria-label="Transfer preview and options"
+					aria-label={t('send_to_agent.transfer_options_aria')}
 				>
 					{/* Token Preview */}
 					<div
@@ -651,20 +653,24 @@ export function SendToAgentModal({
 						style={{ backgroundColor: theme.colors.bgMain }}
 						role="status"
 						aria-live="polite"
-						aria-label="Token estimate"
+						aria-label={t('send_to_agent.token_estimate_aria')}
 					>
 						<div className="flex justify-between">
 							<span style={{ color: theme.colors.textDim }}>
-								Source: {sourceTab ? getTabDisplayName(sourceTab) : 'Unknown'}
+								{t('send_to_agent.source_label', {
+									name: sourceTab ? getTabDisplayName(sourceTab) : 'Unknown',
+								})}
 							</span>
 							<span style={{ color: theme.colors.textMain }}>
-								~{formatTokensCompact(sourceTokens)} tokens
+								{t('send_to_agent.tokens_label', { tokens: formatTokensCompact(sourceTokens) })}
 							</span>
 						</div>
 
 						{selectedSession && (
 							<div className="flex justify-between">
-								<span style={{ color: theme.colors.textDim }}>Target: {selectedSession.name}</span>
+								<span style={{ color: theme.colors.textDim }}>
+									{t('send_to_agent.target_label', { name: selectedSession.name })}
+								</span>
 								<span className="flex items-center gap-1" style={{ color: theme.colors.textMain }}>
 									<ArrowRight className="w-3 h-3" aria-hidden="true" />
 									{getAgentIcon(selectedSession.toolType)}
@@ -674,9 +680,13 @@ export function SendToAgentModal({
 
 						{groomContext && (
 							<div className="flex justify-between">
-								<span style={{ color: theme.colors.success }}>After cleaning:</span>
 								<span style={{ color: theme.colors.success }}>
-									~{formatTokensCompact(estimatedGroomedTokens)} tokens (estimated)
+									{t('send_to_agent.after_cleaning_label')}
+								</span>
+								<span style={{ color: theme.colors.success }}>
+									{t('send_to_agent.after_cleaning_tokens', {
+										tokens: formatTokensCompact(estimatedGroomedTokens),
+									})}
 								</span>
 							</div>
 						)}
@@ -684,7 +694,7 @@ export function SendToAgentModal({
 
 					{/* Options */}
 					<fieldset className="space-y-2">
-						<legend className="sr-only">Transfer options</legend>
+						<legend className="sr-only">{t('send_to_agent.transfer_options_legend')}</legend>
 						<label
 							className="flex items-center gap-2 cursor-pointer"
 							style={{ color: theme.colors.textMain }}
@@ -697,7 +707,7 @@ export function SendToAgentModal({
 								aria-describedby="groom-context-send-desc"
 							/>
 							<span className="text-xs" id="groom-context-send-desc">
-								Clean context (remove duplicates, reduce size)
+								{t('send_to_agent.clean_context_label')}
 							</span>
 						</label>
 					</fieldset>
@@ -717,7 +727,7 @@ export function SendToAgentModal({
 							color: theme.colors.textMain,
 						}}
 					>
-						Cancel
+						{t('send_to_agent.cancel_button')}
 					</button>
 					<button
 						type="button"
@@ -733,12 +743,12 @@ export function SendToAgentModal({
 						{isSending ? (
 							<>
 								<Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" />
-								Sending...
+								{t('send_to_agent.sending_button')}
 							</>
 						) : (
 							<>
 								<ArrowRight className="w-4 h-4" aria-hidden="true" />
-								Send to Session
+								{t('send_to_agent.send_button')}
 							</>
 						)}
 					</button>

@@ -8,6 +8,43 @@
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import commonEn from '../../../shared/i18n/locales/en/common.json';
+
+// Mock i18n config with actual English translations
+vi.mock('../../../shared/i18n/config', () => {
+	const resolve = (key: string): string => {
+		const bareKey = key.includes(':') ? key.split(':').slice(1).join(':') : key;
+		const parts = bareKey.split('.');
+		let value: unknown = commonEn;
+		for (const part of parts) {
+			if (value && typeof value === 'object' && part in (value as Record<string, unknown>)) {
+				value = (value as Record<string, unknown>)[part];
+			} else {
+				return key;
+			}
+		}
+		return typeof value === 'string' ? value : key;
+	};
+
+	return {
+		default: {
+			t: (key: string, opts?: Record<string, unknown>) => {
+				let result = resolve(key);
+				if (opts) {
+					if (opts.defaultValue && result === key) {
+						result = String(opts.defaultValue);
+					}
+					for (const [k, v] of Object.entries(opts)) {
+						if (k !== 'defaultValue') {
+							result = result.replace(new RegExp(`\\{\\{${k}\\}\\}`, 'g'), String(v));
+						}
+					}
+				}
+				return result;
+			},
+		},
+	};
+});
 
 // Undo the global mock from setup.ts — this file tests the real module
 vi.unmock('../../../renderer/utils/shortcutFormatter');

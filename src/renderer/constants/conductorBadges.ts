@@ -5,6 +5,8 @@
  * Inspired by the hierarchy of orchestral conductors, from apprentice to legendary.
  */
 
+import i18n from '../../shared/i18n/config';
+
 export interface ConductorBadge {
 	id: string;
 	level: number;
@@ -289,11 +291,11 @@ export function formatTimeRemaining(
 	nextBadge: ConductorBadge | null
 ): string {
 	if (!nextBadge) {
-		return 'Maximum level achieved!';
+		return i18n.t('common:badges.max_level');
 	}
 
 	const remaining = nextBadge.requiredTimeMs - cumulativeTimeMs;
-	if (remaining <= 0) return 'Ready to unlock!';
+	if (remaining <= 0) return i18n.t('common:badges.ready_to_unlock');
 
 	const days = Math.floor(remaining / DAY);
 	const hours = Math.floor((remaining % DAY) / HOUR);
@@ -302,20 +304,20 @@ export function formatTimeRemaining(
 	if (days >= 365) {
 		const years = Math.floor(days / 365);
 		const remainingDays = days % 365;
-		return `${years}y ${remainingDays}d remaining`;
+		return i18n.t('common:badges.years_days_remaining', { years, days: remainingDays });
 	}
 	if (days > 30) {
 		const months = Math.floor(days / 30);
 		const remainingDays = days % 30;
-		return `${months}mo ${remainingDays}d remaining`;
+		return i18n.t('common:badges.months_days_remaining', { months, days: remainingDays });
 	}
 	if (days > 0) {
-		return `${days}d ${hours}h remaining`;
+		return i18n.t('common:badges.days_hours_remaining', { days, hours });
 	}
 	if (hours > 0) {
-		return `${hours}h ${minutes}m remaining`;
+		return i18n.t('common:badges.hours_minutes_remaining', { hours, minutes });
 	}
-	return `${minutes}m remaining`;
+	return i18n.t('common:badges.minutes_remaining', { minutes });
 }
 
 /**
@@ -330,16 +332,16 @@ export function formatCumulativeTime(timeMs: number): string {
 	if (days >= 365) {
 		const years = Math.floor(days / 365);
 		const remainingDays = days % 365;
-		return `${years}y ${remainingDays}d`;
+		return i18n.t('common:badges.years_days_format', { years, days: remainingDays });
 	}
 	if (days > 0) {
-		return `${days}d ${hours}h ${minutes}m`;
+		return i18n.t('common:badges.days_hours_minutes_format', { days, hours, minutes });
 	}
 	if (hours > 0) {
-		return `${hours}h ${minutes}m`;
+		return i18n.t('common:badges.hours_minutes_format', { hours, minutes });
 	}
 	if (minutes > 0) {
-		return `${minutes}m ${seconds}s`;
+		return i18n.t('common:badges.minutes_seconds_format', { minutes, seconds });
 	}
-	return `${seconds}s`;
+	return i18n.t('common:badges.seconds_format', { seconds });
 }

@@ -16,12 +16,15 @@ import {
 	useContext,
 	useCallback,
 } from 'react';
+import { useTranslation } from 'react-i18next';
+import i18n from 'i18next';
 import { ThemeProvider } from './components/ThemeProvider';
 import { registerServiceWorker, isOffline } from './utils/serviceWorker';
 import { getMaestroConfig } from './utils/config';
 import type { MaestroConfig } from './utils/config';
 import { webLogger } from './utils/logger';
 import type { Theme } from '../shared/theme-types';
+import { RTL_LANGUAGES } from '../shared/i18n/config';
 
 /**
  * Context for offline status
@@ -105,6 +108,46 @@ export function useDesktopTheme(): ThemeUpdateContextValue {
 }
 
 /**
+ * Context for language updates from WebSocket
+ * Allows the mobile app to update direction (RTL/LTR) when language changes on desktop
+ */
+interface LanguageUpdateContextValue {
+	/** Current language from desktop app */
+	desktopLanguage: string | null;
+	/** Update the language when received from desktop app */
+	setDesktopLanguage: (language: string) => void;
+}
+
+const LanguageUpdateContext = createContext<LanguageUpdateContextValue>({
+	desktopLanguage: null,
+	setDesktopLanguage: () => {},
+});
+
+/**
+ * Hook to access and update the desktop language
+ * Used by mobile app to set language when received via WebSocket
+ */
+export function useDesktopLanguage(): LanguageUpdateContextValue {
+	return useContext(LanguageUpdateContext);
+}
+
+/**
+ * Apply direction attributes to document based on language.
+ * Sets dir, lang, data-dir attributes and CSS custom properties
+ * to match the desktop app's DirectionProvider behavior.
+ */
+function applyLanguageDirection(language: string): void {
+	const isRtl = (RTL_LANGUAGES as readonly string[]).includes(language);
+	const dir = isRtl ? 'rtl' : 'ltr';
+
+	document.documentElement.dir = dir;
+	document.documentElement.lang = language;
+	document.documentElement.setAttribute('data-dir', dir);
+	document.documentElement.style.setProperty('--dir-start', isRtl ? 'right' : 'left');
+	document.documentElement.style.setProperty('--dir-end', isRtl ? 'left' : 'right');
+}
+
+/**
  * Build the Maestro mode context based on injected config.
  */
 export function createMaestroModeContextValue(config: MaestroConfig): MaestroModeContextValue {
@@ -154,6 +197,7 @@ const WebApp = lazy(() =>
  * or if there's an error loading the app module
  */
 function PlaceholderApp() {
+	const { t } = useTranslation('common');
 	return (
 		<div
 			style={{
@@ -168,12 +212,12 @@ function PlaceholderApp() {
 				backgroundColor: 'var(--color-background)',
 			}}
 		>
-			<h1 style={{ marginBottom: '16px', fontSize: '24px' }}>Maestro Web</h1>
+			<h1 style={{ marginBottom: '16px', fontSize: '24px' }}>{t('mobile.web_title')}</h1>
 			<p style={{ marginBottom: '8px', color: 'var(--color-text-muted)' }}>
-				Remote control interface
+				{t('mobile.web_subtitle')}
 			</p>
 			<p style={{ fontSize: '14px', color: 'var(--color-text-muted)' }}>
-				Connect to your Maestro desktop app to get started
+				{t('mobile.web_connect_hint')}
 			</p>
 		</div>
 	);
@@ -213,6 +257,7 @@ function LoadingFallback() {
 export function App() {
 	const [offline, setOffline] = useState(isOffline());
 	const [desktopTheme, setDesktopTheme] = useState<Theme | null>(null);
+	const [desktopLanguage, setDesktopLanguageState] = useState<string | null>(null);
 	const config = useMemo(() => getMaestroConfig(), []);
 
 	const modeContextValue = useMemo(
@@ -225,12 +270,29 @@ export function App() {
 		setDesktopTheme(theme);
 	}, []);
 
+	const handleDesktopLanguage = useCallback((language: string) => {
+		webLogger.debug(`Desktop language received: ${language}`, 'App');
+		setDesktopLanguageState(language);
+		// Apply direction attributes immediately (independent of theme)
+		applyLanguageDirection(language);
+		// Sync i18n language for translation support
+		i18n.changeLanguage(language);
+	}, []);
+
 	const themeUpdateContextValue = useMemo(
 		() => ({
 			desktopTheme,
 			setDesktopTheme: handleDesktopTheme,
 		}),
 		[desktopTheme, handleDesktopTheme]
+	);
+
+	const languageUpdateContextValue = useMemo(
+		() => ({
+			desktopLanguage,
+			setDesktopLanguage: handleDesktopLanguage,
+		}),
+		[desktopLanguage, handleDesktopLanguage]
 	);
 
 	// Register service worker for offline capability
@@ -262,17 +324,19 @@ export function App() {
 		<MaestroModeContext.Provider value={modeContextValue}>
 			<OfflineContext.Provider value={{ isOffline: offline }}>
 				<ThemeUpdateContext.Provider value={themeUpdateContextValue}>
-					{/*
-            Enable useDevicePreference to respect the device's dark/light mode preference.
-            When no theme is provided from the desktop app via WebSocket, the web interface
-            will automatically use a dark or light theme based on the user's device settings.
-            Once the desktop app sends a theme (via desktopTheme), it will override the device preference.
-          */}
-					<ThemeProvider theme={desktopTheme || undefined} useDevicePreference>
-						<Suspense fallback={<LoadingFallback />}>
-							<WebApp />
-						</Suspense>
-					</ThemeProvider>
+					<LanguageUpdateContext.Provider value={languageUpdateContextValue}>
+						{/*
+              Enable useDevicePreference to respect the device's dark/light mode preference.
+              When no theme is provided from the desktop app via WebSocket, the web interface
+              will automatically use a dark or light theme based on the user's device settings.
+              Once the desktop app sends a theme (via desktopTheme), it will override the device preference.
+            */}
+						<ThemeProvider theme={desktopTheme || undefined} useDevicePreference>
+							<Suspense fallback={<LoadingFallback />}>
+								<WebApp />
+							</Suspense>
+						</ThemeProvider>
+					</LanguageUpdateContext.Provider>
 				</ThemeUpdateContext.Provider>
 			</OfflineContext.Provider>
 		</MaestroModeContext.Provider>

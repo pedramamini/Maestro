@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Folder, FileText, Play, CheckSquare } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import type { Theme } from '../types';
 import { Modal, ModalFooter, FormInput } from './ui';
 import { MODAL_PRIORITIES } from '../constants/modalPriorities';
@@ -24,6 +25,7 @@ export function AutoRunSetupModal({
 	sshRemoteId,
 	sshRemoteHost,
 }: AutoRunSetupModalProps) {
+	const { t } = useTranslation('modals');
 	const [selectedFolder, setSelectedFolder] = useState(currentFolder || '');
 	const [homeDir, setHomeDir] = useState<string>('');
 	const [folderValidation, setFolderValidation] = useState<{
@@ -88,7 +90,7 @@ export function AutoRunSetupModal({
 						checking: false,
 						valid: false,
 						docCount: 0,
-						error: 'Folder not found or not accessible',
+						error: t('autorun_setup.folder_not_found'),
 					});
 				}
 			} catch {
@@ -96,7 +98,7 @@ export function AutoRunSetupModal({
 					checking: false,
 					valid: false,
 					docCount: 0,
-					error: 'Failed to access folder',
+					error: t('autorun_setup.folder_access_failed'),
 				});
 			}
 		}, 300);
@@ -148,7 +150,7 @@ export function AutoRunSetupModal({
 		<div onKeyDown={handleKeyDown}>
 			<Modal
 				theme={theme}
-				title="Change Auto Run Folder"
+				title={t('autorun_setup.title')}
 				priority={MODAL_PRIORITIES.AUTORUN_SETUP}
 				onClose={onClose}
 				width={520}
@@ -157,7 +159,7 @@ export function AutoRunSetupModal({
 						theme={theme}
 						onCancel={onClose}
 						onConfirm={handleContinue}
-						confirmLabel="Continue"
+						confirmLabel={t('autorun_setup.continue_button')}
 						confirmDisabled={!selectedFolder}
 						confirmButtonRef={continueButtonRef}
 					/>
@@ -166,9 +168,7 @@ export function AutoRunSetupModal({
 				{/* Explanation */}
 				<div className="space-y-4">
 					<p className="text-sm leading-relaxed" style={{ color: theme.colors.textMain }}>
-						Auto Run lets you manage and execute Markdown documents containing open tasks. Select a
-						folder that contains your task documents. Each Maestro agent is assigned its own working
-						folder.
+						{t('autorun_setup.description')}
 					</p>
 
 					{/* Feature list */}
@@ -180,10 +180,10 @@ export function AutoRunSetupModal({
 							/>
 							<div>
 								<div className="text-sm font-medium" style={{ color: theme.colors.textMain }}>
-									Markdown Documents
+									{t('autorun_setup.markdown_docs_title')}
 								</div>
 								<div className="text-xs" style={{ color: theme.colors.textDim }}>
-									Each .md file in your folder becomes a runnable document
+									{t('autorun_setup.markdown_docs_description')}
 								</div>
 							</div>
 						</div>
@@ -195,10 +195,10 @@ export function AutoRunSetupModal({
 							/>
 							<div>
 								<div className="text-sm font-medium" style={{ color: theme.colors.textMain }}>
-									Checkbox Tasks
+									{t('autorun_setup.checkbox_tasks_title')}
 								</div>
 								<div className="text-xs" style={{ color: theme.colors.textDim }}>
-									Use markdown checkboxes (- [ ]) to define tasks that can be automated
+									{t('autorun_setup.checkbox_tasks_description')}
 								</div>
 							</div>
 						</div>
@@ -210,10 +210,10 @@ export function AutoRunSetupModal({
 							/>
 							<div>
 								<div className="text-sm font-medium" style={{ color: theme.colors.textMain }}>
-									Batch Execution
+									{t('autorun_setup.batch_execution_title')}
 								</div>
 								<div className="text-xs" style={{ color: theme.colors.textDim }}>
-									Run multiple documents in sequence with loop and reset options
+									{t('autorun_setup.batch_execution_description')}
 								</div>
 							</div>
 						</div>
@@ -227,15 +227,17 @@ export function AutoRunSetupModal({
 				>
 					<FormInput
 						theme={theme}
-						label="Auto Run Folder"
+						label={t('autorun_setup.folder_label')}
 						value={selectedFolder}
 						onChange={setSelectedFolder}
 						placeholder={
 							sshRemoteId
-								? `Enter remote path${sshRemoteHost ? ` on ${sshRemoteHost}` : ''} (e.g., /home/user/docs)`
+								? sshRemoteHost
+									? t('autorun_setup.folder_placeholder_ssh_with_host', { host: sshRemoteHost })
+									: t('autorun_setup.folder_placeholder_ssh')
 								: sessionName
-									? `Select Auto Run folder for ${sessionName}`
-									: 'Select Auto Run folder'
+									? t('autorun_setup.folder_placeholder_session', { name: sessionName })
+									: t('autorun_setup.folder_placeholder_default')
 						}
 						monospace
 						heightClass="p-2"
@@ -247,8 +249,14 @@ export function AutoRunSetupModal({
 								style={{ borderColor: theme.colors.border, color: theme.colors.textMain }}
 								title={
 									sshRemoteId
-										? `Folder picker unavailable for SSH remote${sshRemoteHost ? ` (${sshRemoteHost})` : ''}. Enter the remote path manually.`
-										: `Browse folders (${formatShortcutKeys(['Meta', 'o'])})`
+										? sshRemoteHost
+											? t('autorun_setup.folder_picker_ssh_tooltip_with_host', {
+													host: sshRemoteHost,
+												})
+											: t('autorun_setup.folder_picker_ssh_tooltip')
+										: t('autorun_setup.folder_picker_tooltip', {
+												shortcut: formatShortcutKeys(['Meta', 'o']),
+											})
 								}
 							>
 								<Folder className="w-5 h-5" />
@@ -258,12 +266,18 @@ export function AutoRunSetupModal({
 					{selectedFolder && (
 						<div className="mt-2 text-xs">
 							{folderValidation.checking ? (
-								<span style={{ color: theme.colors.textDim }}>Checking folder...</span>
+								<span style={{ color: theme.colors.textDim }}>
+									{t('autorun_setup.checking_folder')}
+								</span>
 							) : folderValidation.valid ? (
 								<span style={{ color: theme.colors.success }}>
 									{folderValidation.docCount === 0
-										? 'Folder found (no markdown documents yet)'
-										: `Found ${folderValidation.docCount} markdown document${folderValidation.docCount === 1 ? '' : 's'}`}
+										? t('autorun_setup.folder_found_no_docs')
+										: folderValidation.docCount === 1
+											? t('autorun_setup.folder_found_docs', { count: folderValidation.docCount })
+											: t('autorun_setup.folder_found_docs_plural', {
+													count: folderValidation.docCount,
+												})}
 								</span>
 							) : folderValidation.error ? (
 								<span style={{ color: theme.colors.error }}>{folderValidation.error}</span>

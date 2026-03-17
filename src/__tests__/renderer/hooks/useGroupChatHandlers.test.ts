@@ -9,12 +9,11 @@ import { useModalStore } from '../../../renderer/stores/modalStore';
 import { useSessionStore } from '../../../renderer/stores/sessionStore';
 import { useUIStore } from '../../../renderer/stores/uiStore';
 
-// Mock notifyToast (module-level export can't be spied — must vi.mock)
-vi.mock('../../../renderer/stores/notificationStore', async () => {
-	const actual = await vi.importActual('../../../renderer/stores/notificationStore');
-	return { ...actual, notifyToast: vi.fn() };
-});
-import { notifyToast } from '../../../renderer/stores/notificationStore';
+// Mock tNotify (module-level export can't be spied — must vi.mock)
+vi.mock('../../../renderer/utils/tNotify', () => ({
+	tNotify: vi.fn(),
+}));
+import { tNotify } from '../../../renderer/utils/tNotify';
 
 // ---------------------------------------------------------------------------
 // Mock window.maestro.groupChat (not in global setup)
@@ -266,8 +265,12 @@ describe('useGroupChatHandlers', () => {
 				await result.current.handleCreateGroupChat('Chat', 'bad-agent');
 			});
 
-			expect(notifyToast).toHaveBeenCalledWith(
-				expect.objectContaining({ type: 'error', title: 'Group Chat' })
+			expect(tNotify).toHaveBeenCalledWith(
+				expect.objectContaining({
+					type: 'error',
+					titleKey: 'notifications:group_chat.error_title',
+					messageKey: 'notifications:group_chat.create_failed_dynamic_message',
+				})
 			);
 			// Modal closed even on error
 			const modal = useModalStore.getState().modals.get('newGroupChat');
@@ -286,8 +289,12 @@ describe('useGroupChatHandlers', () => {
 				})
 			).rejects.toThrow('Network timeout');
 
-			expect(notifyToast).toHaveBeenCalledWith(
-				expect.objectContaining({ type: 'error', message: 'Failed to create group chat' })
+			expect(tNotify).toHaveBeenCalledWith(
+				expect.objectContaining({
+					type: 'error',
+					titleKey: 'notifications:group_chat.error_title',
+					messageKey: 'notifications:group_chat.create_failed_message',
+				})
 			);
 		});
 

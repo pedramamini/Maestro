@@ -6,6 +6,7 @@
  */
 
 import { useEffect, useRef } from 'react';
+import { useTranslation } from 'react-i18next';
 import { AlertCircle } from 'lucide-react';
 import type { Theme } from '../../types';
 import { useLayerStack } from '../../contexts/LayerStackContext';
@@ -31,6 +32,7 @@ export function WizardExitConfirmDialog({
 	onConfirm,
 	onCancel,
 }: WizardExitConfirmDialogProps): JSX.Element {
+	const { t } = useTranslation('modals');
 	const { registerLayer, unregisterLayer, updateLayerHandler } = useLayerStack();
 	const layerIdRef = useRef<string>();
 	const cancelButtonRef = useRef<HTMLButtonElement>(null);
@@ -111,7 +113,7 @@ export function WizardExitConfirmDialog({
 						className="text-base font-semibold"
 						style={{ color: theme.colors.textMain }}
 					>
-						Exit Wizard?
+						{t('wizard.inline_exit.title')}
 					</h2>
 				</div>
 
@@ -122,7 +124,7 @@ export function WizardExitConfirmDialog({
 						className="text-sm leading-relaxed"
 						style={{ color: theme.colors.textDim }}
 					>
-						Progress will be lost. Are you sure you want to exit the wizard?
+						{t('wizard.inline_exit.message')}
 					</p>
 
 					{/* Actions */}
@@ -135,7 +137,7 @@ export function WizardExitConfirmDialog({
 								color: theme.colors.textMain,
 							}}
 						>
-							Exit
+							{t('wizard.inline_exit.exit_button')}
 						</button>
 						<button
 							ref={cancelButtonRef}
@@ -146,7 +148,7 @@ export function WizardExitConfirmDialog({
 								color: theme.colors.accentForeground,
 							}}
 						>
-							Cancel
+							{t('wizard.inline_exit.cancel_button')}
 						</button>
 					</div>
 
@@ -158,21 +160,21 @@ export function WizardExitConfirmDialog({
 						>
 							Tab
 						</kbd>{' '}
-						to switch •{' '}
+						{t('wizard.inline_exit.kbd_switch')} •{' '}
 						<kbd
 							className="px-1.5 py-0.5 rounded border"
 							style={{ borderColor: theme.colors.border }}
 						>
 							Enter
 						</kbd>{' '}
-						to confirm •{' '}
+						{t('wizard.inline_exit.kbd_confirm')} •{' '}
 						<kbd
 							className="px-1.5 py-0.5 rounded border"
 							style={{ borderColor: theme.colors.border }}
 						>
 							Esc
 						</kbd>{' '}
-						to cancel
+						{t('wizard.inline_exit.kbd_cancel')}
 					</div>
 				</div>
 			</div>

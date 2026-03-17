@@ -9,6 +9,7 @@ import {
 	Loader2,
 	Star,
 } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import type { Theme, Session } from '../types';
 import { useLayerStack } from '../contexts/LayerStackContext';
 import { useListNavigation } from '../hooks';
@@ -50,6 +51,7 @@ export function AgentSessionsModal({
 	onClose,
 	onResumeSession,
 }: AgentSessionsModalProps) {
+	const { t } = useTranslation('modals');
 	// Get agentId from the active session's toolType
 	const agentId = activeSession?.toolType || 'claude-code';
 	const [sessions, setSessions] = useState<AgentSession[]>([]);
@@ -87,7 +89,7 @@ export function AgentSessionsModal({
 			blocksLowerLayers: true,
 			capturesFocus: true,
 			focusTrap: 'strict',
-			ariaLabel: 'Agent Sessions',
+			ariaLabel: t('agent_sessions.aria_label'),
 			onEscape: () => {
 				if (viewingSession) {
 					setViewingSession(null);
@@ -431,7 +433,7 @@ export function AgentSessionsModal({
 			<div
 				role="dialog"
 				aria-modal="true"
-				aria-label="Agent Sessions"
+				aria-label={t('agent_sessions.aria_label')}
 				tabIndex={-1}
 				className="w-[700px] rounded-xl shadow-2xl border overflow-hidden flex flex-col max-h-[600px] outline-none"
 				style={{ backgroundColor: theme.colors.bgActivity, borderColor: theme.colors.border }}
@@ -458,10 +460,13 @@ export function AgentSessionsModal({
 									className="text-sm font-medium truncate"
 									style={{ color: theme.colors.textMain }}
 								>
-									{viewingSession.sessionName || viewingSession.firstMessage || 'Session Preview'}
+									{viewingSession.sessionName ||
+										viewingSession.firstMessage ||
+										t('agent_sessions.session_preview_fallback')}
 								</div>
 								<div className="text-xs" style={{ color: theme.colors.textDim }}>
-									{totalMessages} messages • {formatRelativeTime(viewingSession.modifiedAt)}
+									{t('agent_sessions.messages_label', { count: totalMessages })} •{' '}
+									{formatRelativeTime(viewingSession.modifiedAt)}
 								</div>
 							</div>
 							<button
@@ -473,7 +478,7 @@ export function AgentSessionsModal({
 								}}
 							>
 								<Play className="w-4 h-4" />
-								Resume
+								{t('agent_sessions.resume_button')}
 							</button>
 						</>
 					) : (
@@ -482,7 +487,9 @@ export function AgentSessionsModal({
 							<input
 								ref={inputRef}
 								className="flex-1 bg-transparent outline-none text-lg placeholder-opacity-50"
-								placeholder={`Search ${activeSession?.name || 'agent'} sessions...`}
+								placeholder={t('agent_sessions.search_placeholder', {
+									name: activeSession?.name || 'agent',
+								})}
 								style={{ color: theme.colors.textMain }}
 								value={search}
 								onChange={(e) => setSearch(e.target.value)}
@@ -519,7 +526,7 @@ export function AgentSessionsModal({
 										className="text-sm hover:underline"
 										style={{ color: theme.colors.accent }}
 									>
-										Load earlier messages...
+										{t('agent_sessions.load_earlier')}
 									</button>
 								)}
 							</div>
@@ -557,7 +564,7 @@ export function AgentSessionsModal({
 										}}
 									>
 										<div className="whitespace-pre-wrap break-words">
-											{msg.content || '[No content]'}
+											{msg.content || t('agent_sessions.no_content')}
 										</div>
 										<div
 											className="text-[10px] mt-1 opacity-60"
@@ -596,8 +603,8 @@ export function AgentSessionsModal({
 						) : filteredSessions.length === 0 ? (
 							<div className="px-4 py-8 text-center" style={{ color: theme.colors.textDim }}>
 								{sessions.length === 0
-									? 'No Claude sessions found for this project'
-									: 'No sessions match your search'}
+									? t('agent_sessions.no_sessions_for_project')
+									: t('agent_sessions.no_sessions_match')}
 							</div>
 						) : (
 							<>
@@ -618,7 +625,11 @@ export function AgentSessionsModal({
 											<button
 												onClick={(e) => toggleStar(session.sessionId, e)}
 												className="p-1 -ml-1 rounded hover:bg-white/10 transition-colors shrink-0"
-												title={isStarred ? 'Remove from favorites' : 'Add to favorites'}
+												title={
+													isStarred
+														? t('agent_sessions.remove_favorites_tooltip')
+														: t('agent_sessions.add_favorites_tooltip')
+												}
 											>
 												<Star
 													className="w-4 h-4"
@@ -632,7 +643,9 @@ export function AgentSessionsModal({
 												<div className="font-medium truncate text-sm">
 													{session.sessionName ||
 														session.firstMessage ||
-														`Session ${session.sessionId.slice(0, 8)}...`}
+														t('agent_sessions.session_id_label', {
+															id: session.sessionId.slice(0, 8),
+														})}
 												</div>
 												<div
 													className="flex items-center gap-3 mt-1 text-xs"
@@ -644,7 +657,7 @@ export function AgentSessionsModal({
 													</span>
 													<span className="flex items-center gap-1">
 														<MessageSquare className="w-3 h-3" />
-														{session.messageCount} msgs
+														{t('agent_sessions.msgs_label', { count: session.messageCount })}
 													</span>
 													<span className="flex items-center gap-1">
 														<HardDrive className="w-3 h-3" />
@@ -665,12 +678,15 @@ export function AgentSessionsModal({
 													style={{ color: theme.colors.accent }}
 												/>
 												<span className="text-xs" style={{ color: theme.colors.textDim }}>
-													Loading more sessions...
+													{t('agent_sessions.loading_more')}
 												</span>
 											</div>
 										) : (
 											<span className="text-[10px]" style={{ color: theme.colors.textDim }}>
-												{sessions.length} of {totalSessionCount} sessions loaded
+												{t('agent_sessions.sessions_loaded_count', {
+													loaded: sessions.length,
+													total: totalSessionCount,
+												})}
 											</span>
 										)}
 									</div>

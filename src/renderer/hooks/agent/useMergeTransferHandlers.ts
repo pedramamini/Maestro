@@ -20,7 +20,7 @@ import type { MergeState } from '../../stores/operationStore';
 import type { TransferState } from '../../stores/operationStore';
 import { useSessionStore, selectActiveSession } from '../../stores/sessionStore';
 import { getModalActions } from '../../stores/modalStore';
-import { notifyToast } from '../../stores/notificationStore';
+import { tNotify } from '../../utils/tNotify';
 import { substituteTemplateVariables } from '../../utils/templateVariables';
 import { gitService } from '../../services/git';
 import { maestroSystemPrompt } from '../../../prompts';
@@ -136,10 +136,16 @@ export function useMergeTransferHandlers(
 					: info.sessionName;
 
 			// Show toast notification in the UI
-			notifyToast({
+			tNotify({
 				type: 'success',
-				title: 'Session Merged',
-				message: `Created "${info.sessionName}" from ${sourceInfo}${tokenInfo}.${savedInfo}`,
+				titleKey: 'notifications:merge.session_merged_title',
+				messageKey: 'notifications:merge.session_merged_message',
+				values: {
+					sessionName: info.sessionName,
+					sourceInfo,
+					tokenInfo,
+					savedInfo,
+				},
 				sessionId: info.sessionId,
 			});
 
@@ -180,12 +186,16 @@ export function useMergeTransferHandlers(
 					);
 				}
 
-				notifyToast({
+				tNotify({
 					type: 'success',
-					title: 'Context Merged',
-					message: `"${result.sourceSessionName || 'Current Session'}" → "${
-						result.targetSessionName || 'Selected Session'
-					}"${tokenInfo}.${savedInfo}`,
+					titleKey: 'notifications:merge.context_merged_title',
+					messageKey: 'notifications:merge.context_merged_message',
+					values: {
+						source: result.sourceSessionName || 'Current Session',
+						target: result.targetSessionName || 'Selected Session',
+						tokenInfo,
+						savedInfo,
+					},
 				});
 
 				// Clear the merge state for the source tab
@@ -216,10 +226,11 @@ export function useMergeTransferHandlers(
 			getModalActions().setSendToAgentModalOpen(false);
 
 			// Show toast notification in the UI
-			notifyToast({
+			tNotify({
 				type: 'success',
-				title: 'Context Transferred',
-				message: `Created "${sessionName}" with transferred context`,
+				titleKey: 'notifications:merge.context_transferred_title',
+				messageKey: 'notifications:merge.context_transferred_message',
+				values: { sessionName },
 			});
 
 			// Show desktop notification for visibility when app is not focused
@@ -266,10 +277,13 @@ export function useMergeTransferHandlers(
 			);
 
 			if (!result.success) {
-				notifyToast({
+				tNotify({
 					type: 'error',
-					title: 'Merge Failed',
-					message: result.error || 'Failed to merge contexts',
+					titleKey: 'notifications:merge.failed_title',
+					messageKey: result.error
+						? 'notifications:merge.failed_message'
+						: 'notifications:merge.failed_default_message',
+					values: result.error ? { message: result.error } : undefined,
 				});
 			}
 			// Note: Success toasts are handled by onSessionCreated (for new sessions)
@@ -422,10 +436,15 @@ You are taking over this conversation. Based on the context above, provide a bri
 			const tokenInfo = estimatedTokens > 0 ? ` (~${estimatedTokens.toLocaleString()} tokens)` : '';
 
 			// Show success toast
-			notifyToast({
+			tNotify({
 				type: 'success',
-				title: 'Context Sent',
-				message: `"${sourceName}" → "${targetSession.name}"${tokenInfo}`,
+				titleKey: 'notifications:merge.context_sent_title',
+				messageKey: 'notifications:merge.context_sent_message',
+				values: {
+					source: sourceName,
+					target: targetSession.name,
+					tokenInfo,
+				},
 				sessionId: targetSessionId,
 				tabId: newTabId,
 			});

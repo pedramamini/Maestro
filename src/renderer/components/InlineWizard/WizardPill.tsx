@@ -6,6 +6,7 @@
  * while the wizard is active. Shows a spinner when thinking.
  */
 
+import { useTranslation } from 'react-i18next';
 import { Wand2, Loader2 } from 'lucide-react';
 import type { Theme } from '../../types';
 
@@ -28,6 +29,8 @@ interface WizardPillProps {
  * - Subtle pulse animation while active (paused when thinking)
  */
 export function WizardPill({ theme, onClick, isThinking = false }: WizardPillProps): JSX.Element {
+	const { t } = useTranslation('modals');
+
 	return (
 		<button
 			type="button"
@@ -38,10 +41,14 @@ export function WizardPill({ theme, onClick, isThinking = false }: WizardPillPro
 				color: theme.colors.accentForeground,
 				cursor: onClick ? 'pointer' : 'default',
 			}}
-			title={isThinking ? 'Wizard is thinking...' : 'Wizard mode active - click to exit'}
+			title={
+				isThinking ? t('wizard.inline_pill.thinking_title') : t('wizard.inline_pill.active_title')
+			}
 		>
 			{isThinking ? <Loader2 className="w-4 h-4 animate-spin" /> : <Wand2 className="w-4 h-4" />}
-			<span>{isThinking ? 'Thinking...' : 'Wizard'}</span>
+			<span>
+				{isThinking ? t('wizard.inline_pill.thinking_label') : t('wizard.inline_pill.wizard_label')}
+			</span>
 
 			{/* Pulse animation styles */}
 			<style>{`

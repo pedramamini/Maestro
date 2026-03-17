@@ -66,6 +66,7 @@ vi.mock('../../../renderer/services/git', () => ({
 vi.mock('../../../renderer/utils/shortcutFormatter', () => ({
 	formatShortcutKeys: vi.fn((keys: string[]) => keys.join('+')),
 	isMacOS: vi.fn(() => false),
+	getShortcutLabel: vi.fn((_id: string, fallback: string) => fallback),
 }));
 
 // Mock lucide-react

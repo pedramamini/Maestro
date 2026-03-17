@@ -459,8 +459,8 @@ describe('QuickActionsMenu', () => {
 			expect(backdrop).toHaveStyle({
 				position: 'fixed',
 				top: '0px',
-				left: '0px',
-				right: '0px',
+				'inset-inline-start': '0',
+				'inset-inline-end': '0',
 				bottom: '0px',
 			});
 		});

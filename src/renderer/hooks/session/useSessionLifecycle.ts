@@ -23,7 +23,7 @@ import { generateId } from '../../utils/ids';
 import { useGroupChatStore } from '../../stores/groupChatStore';
 import { useModalStore } from '../../stores/modalStore';
 import { useUIStore } from '../../stores/uiStore';
-import { notifyToast } from '../../stores/notificationStore';
+import { tNotify } from '../../utils/tNotify';
 import { getActiveTab } from '../../utils/tabHelpers';
 import type { NavHistoryEntry } from './useNavigationHistory';
 import { captureException } from '../../utils/sentry';
@@ -322,9 +322,10 @@ export function useSessionLifecycle(deps: SessionLifecycleDeps): SessionLifecycl
 					captureException(error, {
 						extra: { sessionId: id, cwd: session.cwd, operation: 'trash-working-directory' },
 					});
-					notifyToast({
-						title: 'Failed to Erase Directory',
-						message: error instanceof Error ? error.message : 'Unknown error',
+					tNotify({
+						titleKey: 'notifications:session.erase_failed_title',
+						messageKey: 'notifications:session.erase_failed_message',
+						values: { message: error instanceof Error ? error.message : 'Unknown error' },
 						type: 'error',
 					});
 				}

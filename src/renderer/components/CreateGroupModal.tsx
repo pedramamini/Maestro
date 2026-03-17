@@ -1,4 +1,5 @@
 import React, { useState, useRef } from 'react';
+import { useTranslation } from 'react-i18next';
 import type { Theme, Group } from '../types';
 import { MODAL_PRIORITIES } from '../constants/modalPriorities';
 import { Modal, ModalFooter, EmojiPickerField, FormInput } from './ui';
@@ -14,6 +15,7 @@ interface CreateGroupModalProps {
 
 export function CreateGroupModal(props: CreateGroupModalProps) {
 	const { theme, onClose, groups, setGroups, onGroupCreated } = props;
+	const { t } = useTranslation('modals');
 
 	const [groupName, setGroupName] = useState('');
 	const [groupEmoji, setGroupEmoji] = useState('📂');
@@ -45,7 +47,7 @@ export function CreateGroupModal(props: CreateGroupModalProps) {
 	return (
 		<Modal
 			theme={theme}
-			title="Create New Group"
+			title={t('create_group.title')}
 			priority={MODAL_PRIORITIES.CREATE_GROUP}
 			onClose={onClose}
 			initialFocusRef={inputRef}
@@ -54,7 +56,7 @@ export function CreateGroupModal(props: CreateGroupModalProps) {
 					theme={theme}
 					onCancel={onClose}
 					onConfirm={handleCreate}
-					confirmLabel="Create"
+					confirmLabel={t('create_group.create_button')}
 					confirmDisabled={!groupName.trim()}
 				/>
 			}
@@ -73,11 +75,11 @@ export function CreateGroupModal(props: CreateGroupModalProps) {
 					<FormInput
 						ref={inputRef}
 						theme={theme}
-						label="Group Name"
+						label={t('create_group.group_name_label')}
 						value={groupName}
 						onChange={setGroupName}
 						onSubmit={groupName.trim() ? handleCreate : undefined}
-						placeholder="Enter group name..."
+						placeholder={t('create_group.group_name_placeholder')}
 						heightClass="h-[52px]"
 						autoFocus
 					/>

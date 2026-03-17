@@ -1,4 +1,5 @@
 import { useRef, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 import { RotateCcw } from 'lucide-react';
 import type { Theme } from '../types';
 import { MODAL_PRIORITIES } from '../constants/modalPriorities';
@@ -19,6 +20,7 @@ export function ResetTasksConfirmModal({
 	onConfirm,
 	onClose,
 }: ResetTasksConfirmModalProps) {
+	const { t } = useTranslation('modals');
 	const confirmButtonRef = useRef<HTMLButtonElement>(null);
 
 	const handleConfirm = useCallback(() => {
@@ -29,7 +31,7 @@ export function ResetTasksConfirmModal({
 	return (
 		<Modal
 			theme={theme}
-			title="Reset Completed Tasks"
+			title={t('reset_tasks.title')}
 			priority={MODAL_PRIORITIES.AUTORUN_RESET_TASKS}
 			onClose={onClose}
 			width={450}
@@ -39,7 +41,7 @@ export function ResetTasksConfirmModal({
 					theme={theme}
 					onCancel={onClose}
 					onConfirm={handleConfirm}
-					confirmLabel="Reset Tasks"
+					confirmLabel={t('reset_tasks.reset_button')}
 					confirmButtonRef={confirmButtonRef}
 				/>
 			}
@@ -53,11 +55,10 @@ export function ResetTasksConfirmModal({
 				</div>
 				<div>
 					<p className="text-sm leading-relaxed mb-2" style={{ color: theme.colors.textMain }}>
-						Are you sure you want to reset all {completedTaskCount} completed task
-						{completedTaskCount !== 1 ? 's' : ''} in <strong>{documentName}</strong>?
+						{t('reset_tasks.confirm_message', { count: completedTaskCount, documentName })}
 					</p>
 					<p className="text-xs" style={{ color: theme.colors.textDim }}>
-						This will uncheck all completed checkboxes, marking them as pending again.
+						{t('reset_tasks.warning_message')}
 					</p>
 				</div>
 			</div>

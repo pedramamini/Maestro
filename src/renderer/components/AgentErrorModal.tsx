@@ -17,6 +17,8 @@
  */
 
 import React, { useRef, useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
+import { getActiveLocale } from '../utils/formatters';
 import {
 	AlertCircle,
 	RefreshCw,
@@ -83,22 +85,22 @@ function getErrorIcon(type: AgentErrorType): React.ReactNode {
 /**
  * Get a human-readable title for an error type
  */
-function getErrorTitle(type: AgentErrorType): string {
+function getErrorTitle(type: AgentErrorType, t: (key: any) => string): string {
 	switch (type) {
 		case 'auth_expired':
-			return 'Authentication Required';
+			return t('agent_error.auth_expired_title');
 		case 'token_exhaustion':
-			return 'Context Limit Reached';
+			return t('agent_error.token_exhaustion_title');
 		case 'rate_limited':
-			return 'Rate Limit Exceeded';
+			return t('agent_error.rate_limited_title');
 		case 'network_error':
-			return 'Connection Error';
+			return t('agent_error.network_error_title');
 		case 'agent_crashed':
-			return 'Agent Error';
+			return t('agent_error.agent_crashed_title');
 		case 'permission_denied':
-			return 'Permission Denied';
+			return t('agent_error.permission_denied_title');
 		default:
-			return 'Error';
+			return t('agent_error.default_title');
 	}
 }
 
@@ -122,6 +124,7 @@ export function AgentErrorModal({
 	onDismiss,
 	dismissible = true,
 }: AgentErrorModalProps) {
+	const { t } = useTranslation('modals');
 	const primaryButtonRef = useRef<HTMLButtonElement>(null);
 	const [showJsonDetails, setShowJsonDetails] = useState(false);
 
@@ -136,7 +139,7 @@ export function AgentErrorModal({
 
 	const errorColor = getErrorColor(error, theme);
 	const errorIcon = getErrorIcon(error.type);
-	const errorTitle = getErrorTitle(error.type);
+	const errorTitle = getErrorTitle(error.type, t);
 
 	return (
 		<Modal
@@ -168,7 +171,7 @@ export function AgentErrorModal({
 
 				{/* Timestamp */}
 				<div className="text-xs" style={{ color: theme.colors.textDim }}>
-					{new Date(error.timestamp).toLocaleTimeString()}
+					{new Date(error.timestamp).toLocaleTimeString(getActiveLocale())}
 				</div>
 
 				{/* Collapsible JSON Details */}
@@ -186,7 +189,7 @@ export function AgentErrorModal({
 								<ChevronRight className="w-3 h-3" />
 							)}
 							<Code2 className="w-3 h-3" />
-							<span>Error Details (JSON)</span>
+							<span>{t('agent_error.error_details_json')}</span>
 						</button>
 						{showJsonDetails && (
 							<div className="px-2 pb-2">
@@ -253,7 +256,7 @@ export function AgentErrorModal({
 						className="w-full text-center text-sm py-2 rounded hover:bg-white/5 transition-colors"
 						style={{ color: theme.colors.textDim }}
 					>
-						Dismiss
+						{t('agent_error.dismiss_button')}
 					</button>
 				</div>
 			)}

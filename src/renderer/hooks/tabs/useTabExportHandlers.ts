@@ -13,7 +13,7 @@ import { useCallback } from 'react';
 import type { Session, Theme, AITab } from '../../types';
 import { useTabStore } from '../../stores/tabStore';
 import { formatLogsForClipboard } from '../../utils/contextExtractor';
-import { notifyToast } from '../../stores/notificationStore';
+import { tNotify } from '../../utils/tNotify';
 
 // ============================================================================
 // Dependencies interface
@@ -68,10 +68,10 @@ export function useTabExportHandlers(deps: UseTabExportHandlersDeps): UseTabExpo
 
 		const text = formatLogsForClipboard(resolved.tab.logs);
 		if (!text.trim()) {
-			notifyToast({
+			tNotify({
 				type: 'warning',
-				title: 'Nothing to Copy',
-				message: 'No user or assistant messages to copy.',
+				titleKey: 'notifications:export.nothing_to_copy_title',
+				messageKey: 'notifications:export.nothing_to_copy_message',
 			});
 			return;
 		}
@@ -79,18 +79,18 @@ export function useTabExportHandlers(deps: UseTabExportHandlersDeps): UseTabExpo
 		navigator.clipboard
 			.writeText(text)
 			.then(() => {
-				notifyToast({
+				tNotify({
 					type: 'success',
-					title: 'Context Copied',
-					message: 'Conversation copied to clipboard.',
+					titleKey: 'notifications:export.context_copied_title',
+					messageKey: 'notifications:export.context_copied_message',
 				});
 			})
 			.catch((err) => {
 				console.error('Failed to copy context:', err);
-				notifyToast({
+				tNotify({
 					type: 'error',
-					title: 'Copy Failed',
-					message: 'Failed to copy context to clipboard.',
+					titleKey: 'notifications:export.copy_failed_title',
+					messageKey: 'notifications:export.copy_failed_message',
 				});
 			});
 	}, []);
@@ -112,17 +112,17 @@ export function useTabExportHandlers(deps: UseTabExportHandlersDeps): UseTabExpo
 				},
 				themeRef.current
 			);
-			notifyToast({
+			tNotify({
 				type: 'success',
-				title: 'Export Complete',
-				message: 'Conversation exported as HTML.',
+				titleKey: 'notifications:export.export_complete_title',
+				messageKey: 'notifications:export.export_complete_message',
 			});
 		} catch (err) {
 			console.error('Failed to export tab:', err);
-			notifyToast({
+			tNotify({
 				type: 'error',
-				title: 'Export Failed',
-				message: 'Failed to export conversation as HTML.',
+				titleKey: 'notifications:export.export_failed_title',
+				messageKey: 'notifications:export.export_failed_message',
 			});
 		}
 	}, []);
@@ -134,10 +134,10 @@ export function useTabExportHandlers(deps: UseTabExportHandlersDeps): UseTabExpo
 		// Convert logs to markdown-like text format
 		const content = formatLogsForClipboard(resolved.tab.logs);
 		if (!content.trim()) {
-			notifyToast({
+			tNotify({
 				type: 'warning',
-				title: 'Nothing to Publish',
-				message: 'No user or assistant messages to publish.',
+				titleKey: 'notifications:export.nothing_to_publish_title',
+				messageKey: 'notifications:export.nothing_to_publish_message',
 			});
 			return;
 		}

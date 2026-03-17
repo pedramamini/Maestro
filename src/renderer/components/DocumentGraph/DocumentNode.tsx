@@ -14,6 +14,7 @@ import { Handle, Position, NodeProps } from 'reactflow';
 import { FileText, Hash, AlignLeft, HardDrive, AlertTriangle, FileWarning } from 'lucide-react';
 import type { Theme } from '../../types';
 import type { DocumentNodeData } from './graphDataBuilder';
+import { useI18n } from '../../hooks/useI18n';
 
 /**
  * Extended node data including theme and search state for styling
@@ -55,6 +56,7 @@ function truncateText(text: string, maxLength: number): string {
  * Custom React Flow node for rendering markdown documents in the graph
  */
 export const DocumentNode = memo(function DocumentNode({ data, selected }: DocumentNodeProps) {
+	const { t: tA } = useI18n('accessibility');
 	const {
 		title,
 		lineCount,
@@ -233,7 +235,7 @@ export const DocumentNode = memo(function DocumentNode({ data, selected }: Docum
 				{hasBrokenLinks && (
 					<span
 						data-testid="broken-links-warning"
-						aria-label={`${brokenLinks.length} broken link${brokenLinks.length > 1 ? 's' : ''}`}
+						aria-label={tA('status.broken_links_count', { count: brokenLinks.length })}
 						style={warningIconStyle}
 					>
 						<AlertTriangle size={14} />

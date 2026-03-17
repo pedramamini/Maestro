@@ -21,6 +21,7 @@ import type { Session, GroupInfo } from '../hooks/useSessions';
 import { triggerHaptic, HAPTIC_PATTERNS } from './constants';
 import { truncatePath } from '../../shared/formatters';
 import { getAgentDisplayName } from '../../shared/agentMetadata';
+import { useI18n } from '../../renderer/hooks/useI18n';
 
 /** Duration in ms to trigger long-press */
 const LONG_PRESS_DURATION = 500;
@@ -48,6 +49,7 @@ interface SessionPillProps {
  */
 function SessionPill({ session, isActive, onSelect, onLongPress }: SessionPillProps) {
 	const colors = useThemeColors();
+	const { t: ta } = useI18n('accessibility');
 	const buttonRef = useRef<HTMLButtonElement>(null);
 	const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 	const isLongPressTriggeredRef = useRef(false);
@@ -212,7 +214,11 @@ function SessionPill({ session, isActive, onSelect, onLongPress }: SessionPillPr
 				WebkitUserSelect: 'none',
 			}}
 			aria-pressed={isActive}
-			aria-label={`${session.name} session, ${getStatus()}, ${session.inputMode} mode${isActive ? ', active' : ''}. Long press for details.`}
+			aria-label={ta(isActive ? 'mobile.session_card_active' : 'mobile.session_card', {
+				name: session.name,
+				status: getStatus(),
+				mode: session.inputMode,
+			})}
 		>
 			{/* Status dot */}
 			<StatusDot status={getStatus()} size="sm" />
@@ -254,16 +260,12 @@ function SessionInfoPopover({
 	onToggleBookmark,
 }: SessionInfoPopoverProps) {
 	const colors = useThemeColors();
+	const { t: ta } = useI18n('accessibility');
+	const { t } = useI18n();
 	const popoverRef = useRef<HTMLDivElement>(null);
 
 	// Get status label based on session state
-	const getStatusLabel = (): string => {
-		const state = session.state as string;
-		if (state === 'idle') return 'Ready';
-		if (state === 'busy') return 'Thinking...';
-		if (state === 'connecting') return 'Connecting...';
-		return 'Error';
-	};
+	const statusLabel = t(`common:status.label.${session.state}` as any) as string;
 
 	// Get status color based on session state
 	const getStatusColor = (): string => {
@@ -358,7 +360,7 @@ function SessionInfoPopover({
 			<div
 				ref={popoverRef}
 				role="dialog"
-				aria-label={`Session info for ${session.name}`}
+				aria-label={ta('mobile.session_info', { name: session.name })}
 				style={{
 					...calculatePosition(),
 					backgroundColor: colors.bgSidebar,
@@ -395,7 +397,7 @@ function SessionInfoPopover({
 					</div>
 					<button
 						onClick={onClose}
-						aria-label="Close popover"
+						aria-label={ta('mobile.close_popover')}
 						style={{
 							padding: '4px 8px',
 							fontSize: '18px',
@@ -434,7 +436,7 @@ function SessionInfoPopover({
 								color: getStatusColor(),
 							}}
 						>
-							{getStatusLabel()}
+							{statusLabel}
 						</div>
 					</div>
 
@@ -604,6 +606,7 @@ function GroupHeader({
 	onToggleCollapse,
 }: GroupHeaderProps) {
 	const colors = useThemeColors();
+	const { t: ta } = useI18n('accessibility');
 	const touchStartRef = useRef<{ x: number; y: number } | null>(null);
 	const isScrollingRef = useRef(false);
 
@@ -683,7 +686,10 @@ function GroupHeader({
 				transition: 'all 0.15s ease',
 			}}
 			aria-expanded={!isCollapsed}
-			aria-label={`${name} group with ${sessionCount} sessions. ${isCollapsed ? 'Tap to expand' : 'Tap to collapse'}`}
+			aria-label={ta(isCollapsed ? 'mobile.group_expand' : 'mobile.group_collapse', {
+				name,
+				count: sessionCount,
+			})}
 		>
 			{/* Collapse/expand indicator */}
 			<span
@@ -778,6 +784,7 @@ export function SessionPillBar({
 	style,
 }: SessionPillBarProps) {
 	const colors = useThemeColors();
+	const { t: ta } = useI18n('accessibility');
 	const scrollContainerRef = useRef<HTMLDivElement>(null);
 	const [popoverState, setPopoverState] = useState<PopoverState | null>(null);
 	const [collapsedGroups, setCollapsedGroups] = useState<Set<string> | null>(null);
@@ -902,9 +909,17 @@ export function SessionPillBar({
 						`[data-group-id="${groupId}"]`
 					) as HTMLElement | null;
 					if (groupHeader) {
-						// Scroll to put the group header at the left edge (with a small margin)
+						// Use getBoundingClientRect for RTL-safe scroll targeting.
+						// In LTR, align header to left edge; in RTL, align to right edge.
+						const containerRect = container.getBoundingClientRect();
+						const headerRect = groupHeader.getBoundingClientRect();
+						const dir = document.documentElement.dir === 'rtl' ? 'rtl' : 'ltr';
+						const scrollTarget =
+							dir === 'rtl'
+								? container.scrollLeft + (headerRect.right - containerRect.right) + 8
+								: container.scrollLeft + (headerRect.left - containerRect.left) - 8;
 						container.scrollTo({
-							left: groupHeader.offsetLeft - 8,
+							left: scrollTarget,
 							behavior: 'smooth',
 						});
 					}
@@ -922,14 +937,16 @@ export function SessionPillBar({
 		const activeButton = container.querySelector(`[aria-pressed="true"]`) as HTMLElement | null;
 
 		if (activeButton) {
-			// Calculate the scroll position to center the active pill
-			const containerWidth = container.offsetWidth;
-			const buttonLeft = activeButton.offsetLeft;
-			const buttonWidth = activeButton.offsetWidth;
-			const scrollTarget = buttonLeft - containerWidth / 2 + buttonWidth / 2;
+			// Use getBoundingClientRect for RTL-safe scroll centering.
+			// Physical pixel deltas applied to scrollLeft work correctly
+			// regardless of layout direction.
+			const containerRect = container.getBoundingClientRect();
+			const buttonRect = activeButton.getBoundingClientRect();
+			const buttonCenter = buttonRect.left + buttonRect.width / 2;
+			const containerCenter = containerRect.left + containerRect.width / 2;
 
 			container.scrollTo({
-				left: Math.max(0, scrollTarget),
+				left: container.scrollLeft + (buttonCenter - containerCenter),
 				behavior: 'smooth',
 			});
 		}
@@ -978,8 +995,8 @@ export function SessionPillBar({
 					<div
 						style={{
 							flexShrink: 0,
-							paddingLeft: '12px',
-							paddingRight: '4px',
+							paddingInlineStart: '12px',
+							paddingInlineEnd: '4px',
 							paddingTop: '10px',
 							paddingBottom: '10px',
 							display: 'flex',
@@ -1008,7 +1025,7 @@ export function SessionPillBar({
 								WebkitTapHighlightColor: 'transparent',
 								outline: 'none',
 							}}
-							aria-label={`Search ${sessions.length} sessions`}
+							aria-label={ta('mobile.search_sessions', { count: sessions.length })}
 							title="Search Sessions"
 						>
 							{/* Search icon */}
@@ -1050,7 +1067,7 @@ export function SessionPillBar({
 									WebkitTapHighlightColor: 'transparent',
 									outline: 'none',
 								}}
-								aria-label="View history"
+								aria-label={ta('mobile.view_history')}
 								title="History"
 							>
 								{/* Clock/history icon */}
@@ -1080,7 +1097,7 @@ export function SessionPillBar({
 						flex: 1,
 						gap: '8px',
 						padding: '10px 16px',
-						paddingLeft: onOpenAllSessions ? '8px' : '16px',
+						paddingInlineStart: onOpenAllSessions ? '8px' : '16px',
 						overflowX: 'auto',
 						overflowY: 'hidden',
 						WebkitOverflowScrolling: 'touch',
@@ -1091,7 +1108,7 @@ export function SessionPillBar({
 					// Hide scrollbar using inline style (for webkit browsers)
 					className="hide-scrollbar"
 					role="tablist"
-					aria-label="Session selector organized by groups. Long press a session for details."
+					aria-label={ta('mobile.session_selector_hint')}
 				>
 					{sortedGroupKeys.map((groupKey) => {
 						const group = sessionsByGroup[groupKey];

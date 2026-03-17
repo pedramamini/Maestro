@@ -51,6 +51,10 @@ vi.mock('lucide-react', () => ({
 	AlertCircle: () => <span data-testid="icon-alert-circle" />,
 }));
 
+vi.mock('../../../shared/i18n/config', () => ({
+	default: { language: 'en' },
+}));
+
 // Default theme
 const defaultTheme: Theme = {
 	id: 'dracula',
@@ -381,7 +385,7 @@ describe('AgentSessionsBrowser', () => {
 	});
 
 	describe('formatRelativeTime helper', () => {
-		it('formats just now correctly', async () => {
+		it('formats "now" correctly', async () => {
 			const now = new Date();
 			const session = createMockClaudeSession({
 				modifiedAt: now.toISOString(),
@@ -398,7 +402,7 @@ describe('AgentSessionsBrowser', () => {
 				await vi.runAllTimersAsync();
 			});
 
-			expect(screen.getByText('just now')).toBeInTheDocument();
+			expect(screen.getByText('now')).toBeInTheDocument();
 		});
 
 		it('formats minutes ago correctly', async () => {
@@ -418,7 +422,7 @@ describe('AgentSessionsBrowser', () => {
 				await vi.runAllTimersAsync();
 			});
 
-			expect(screen.getByText('30m ago')).toBeInTheDocument();
+			expect(screen.getByText('30 minutes ago')).toBeInTheDocument();
 		});
 
 		it('formats hours ago correctly', async () => {
@@ -438,7 +442,7 @@ describe('AgentSessionsBrowser', () => {
 				await vi.runAllTimersAsync();
 			});
 
-			expect(screen.getByText('5h ago')).toBeInTheDocument();
+			expect(screen.getByText('5 hours ago')).toBeInTheDocument();
 		});
 
 		it('formats days ago correctly', async () => {
@@ -458,7 +462,7 @@ describe('AgentSessionsBrowser', () => {
 				await vi.runAllTimersAsync();
 			});
 
-			expect(screen.getByText('3d ago')).toBeInTheDocument();
+			expect(screen.getByText('3 days ago')).toBeInTheDocument();
 		});
 	});
 

@@ -1,8 +1,10 @@
 import React, { useState, useEffect, useRef, useCallback, lazy, Suspense } from 'react';
 import { createPortal } from 'react-dom';
 import { X, History, Sparkles, Loader2, Clapperboard, HelpCircle } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import type { Theme } from '../../types';
 import { useLayerStack } from '../../contexts/LayerStackContext';
+import { useI18n } from '../../hooks/useI18n';
 import { MODAL_PRIORITIES } from '../../constants/modalPriorities';
 import { OverviewTab, type TabFocusHandle } from './OverviewTab';
 import { hasCachedSynopsis } from './AIOverviewTab';
@@ -41,6 +43,8 @@ export function DirectorNotesModal({
 	fileTree,
 	onFileClick,
 }: DirectorNotesModalProps) {
+	const { t } = useTranslation('modals');
+	const { t: tA } = useI18n('accessibility');
 	const { directorNotesSettings: _directorNotesSettings, shortcuts } = useSettings();
 	const cached = hasCachedSynopsis();
 	const [activeTab, setActiveTab] = useState<TabId>('history');
@@ -198,12 +202,16 @@ export function DirectorNotesModal({
 							className="text-lg font-semibold"
 							style={{ color: theme.colors.textMain }}
 						>
-							Director's Notes
+							{t('director_notes.title')}
 						</h2>
 					</div>
 
 					{/* Close button */}
-					<button onClick={onClose} className="p-1 rounded hover:bg-white/10 transition-colors">
+					<button
+						onClick={onClose}
+						className="p-1 rounded hover:bg-white/10 transition-colors"
+						aria-label={tA('modal.close')}
+					>
 						<X className="w-4 h-4" style={{ color: theme.colors.textDim }} />
 					</button>
 				</div>
@@ -238,7 +246,11 @@ export function DirectorNotesModal({
 									<Icon className="w-4 h-4" />
 								)}
 								{tab.label}
-								{showGenerating && <span className="text-[10px] font-normal">(generating...)</span>}
+								{showGenerating && (
+									<span className="text-[10px] font-normal">
+										{t('director_notes.generating_status')}
+									</span>
+								)}
 							</button>
 						);
 					})}

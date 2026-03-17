@@ -7,6 +7,7 @@
  */
 
 import { useEffect, useRef } from 'react';
+import { useTranslation } from 'react-i18next';
 import { AlertTriangle } from 'lucide-react';
 import type { Theme } from '../types';
 import { useLayerStack } from '../contexts/LayerStackContext';
@@ -37,6 +38,7 @@ export function QuitConfirmModal({
 	onConfirmQuit,
 	onCancel,
 }: QuitConfirmModalProps): JSX.Element {
+	const { t } = useTranslation('modals');
 	const { registerLayer, unregisterLayer, updateLayerHandler } = useLayerStack();
 	const layerIdRef = useRef<string>();
 	const cancelButtonRef = useRef<HTMLButtonElement>(null);
@@ -56,7 +58,7 @@ export function QuitConfirmModal({
 			blocksLowerLayers: true,
 			capturesFocus: true,
 			focusTrap: 'strict',
-			ariaLabel: 'Confirm Quit Application',
+			ariaLabel: t('quit_confirm.aria_label'),
 			onEscape: () => onCancelRef.current(),
 		});
 		layerIdRef.current = id;
@@ -118,7 +120,7 @@ export function QuitConfirmModal({
 						className="text-base font-semibold"
 						style={{ color: theme.colors.textMain }}
 					>
-						Quit Maestro?
+						{t('quit_confirm.title')}
 					</h2>
 				</div>
 
@@ -129,8 +131,13 @@ export function QuitConfirmModal({
 						className="text-sm leading-relaxed"
 						style={{ color: theme.colors.textMain }}
 					>
-						{busyAgentCount} {agentText} currently {hasAutoRun ? 'active' : 'thinking'}. Quitting
-						now will interrupt their work.
+						{t('quit_confirm.description', {
+							count: busyAgentCount,
+							agentText,
+							status: hasAutoRun
+								? t('quit_confirm.status_active')
+								: t('quit_confirm.status_thinking'),
+						})}
 					</p>
 
 					{/* List of busy agents */}
@@ -142,7 +149,7 @@ export function QuitConfirmModal({
 						}}
 					>
 						<div className="text-xs font-medium mb-2" style={{ color: theme.colors.textDim }}>
-							Active Agents
+							{t('quit_confirm.active_agents')}
 						</div>
 						<div className="flex flex-wrap gap-2">
 							{displayNames.map((name, index) => (
@@ -166,7 +173,7 @@ export function QuitConfirmModal({
 									className="inline-flex items-center px-2 py-1 rounded text-xs"
 									style={{ color: theme.colors.textDim }}
 								>
-									+{remainingCount} more
+									{t('quit_confirm.more_agents', { count: remainingCount })}
 								</span>
 							)}
 						</div>
@@ -182,7 +189,7 @@ export function QuitConfirmModal({
 								color: '#ffffff',
 							}}
 						>
-							Quit Anyway
+							{t('quit_confirm.quit_button')}
 						</button>
 						<button
 							ref={cancelButtonRef}
@@ -193,7 +200,7 @@ export function QuitConfirmModal({
 								color: theme.colors.accentForeground,
 							}}
 						>
-							Cancel
+							{t('quit_confirm.cancel_button')}
 						</button>
 					</div>
 
@@ -205,21 +212,21 @@ export function QuitConfirmModal({
 						>
 							Tab
 						</kbd>{' '}
-						to switch •{' '}
+						{t('quit_confirm.hint_switch')} •{' '}
 						<kbd
 							className="px-1.5 py-0.5 rounded border"
 							style={{ borderColor: theme.colors.border }}
 						>
 							Enter
 						</kbd>{' '}
-						to confirm •{' '}
+						{t('quit_confirm.hint_confirm')} •{' '}
 						<kbd
 							className="px-1.5 py-0.5 rounded border"
 							style={{ borderColor: theme.colors.border }}
 						>
 							Esc
 						</kbd>{' '}
-						to cancel
+						{t('quit_confirm.hint_cancel')}
 					</div>
 				</div>
 			</div>

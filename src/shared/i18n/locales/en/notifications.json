@@ -1,0 +1,193 @@
+{
+	"task": {
+		"completed_title": "Task Complete",
+		"completed_message": "{{agent}} finished in {{duration}}",
+		"failed_title": "Task Failed",
+		"failed_message": "{{agent}} encountered an error"
+	},
+	"connection": {
+		"lost_title": "Connection Lost",
+		"restored_title": "Connection Restored"
+	},
+	"group_chat": {
+		"error_title": "Group Chat",
+		"create_failed_message": "Failed to create group chat",
+		"create_failed_dynamic_message": "{{message}}"
+	},
+	"worktree": {
+		"discovered_title": "Worktrees Discovered",
+		"discovered_message_one": "Found {{count}} worktree sub-agent",
+		"discovered_message_other": "Found {{count}} worktree sub-agents",
+		"disabled_title": "Worktrees Disabled",
+		"disabled_message": "Worktree configuration cleared for this agent.",
+		"disabled_with_removed_message_one": "Worktree configuration cleared for this agent. Removed {{count}} worktree sub-agent.",
+		"disabled_with_removed_message_other": "Worktree configuration cleared for this agent. Removed {{count}} worktree sub-agents.",
+		"no_directory_title": "Error",
+		"no_directory_message": "No worktree directory configured",
+		"created_title": "Worktree Created",
+		"created_message": "{{branch}}",
+		"create_failed_title": "Failed to Create Worktree",
+		"create_failed_message": "{{message}}",
+		"new_discovered_title": "New Worktree Discovered",
+		"new_discovered_message": "{{name}}",
+		"agent_not_found_title": "Worktree Agent Not Found",
+		"agent_not_found_message": "The selected worktree agent was removed. Running on the active agent instead.",
+		"target_busy_title": "Target Agent Busy",
+		"target_busy_message": "Target agent is busy. Please try again.",
+		"error_title": "Worktree Error",
+		"error_message": "{{message}}"
+	},
+	"autorun": {
+		"started_title": "Auto Run Started",
+		"started_message_one": "{{count}} task across {{docCount}} document",
+		"started_message_other": "{{count}} tasks across {{docCount}} documents",
+		"complete_title": "Auto-Run Complete",
+		"complete_stopped_message": "Stopped after completing {{completed}} of {{total}} tasks",
+		"complete_all_message_one": "All {{total}} task completed successfully",
+		"complete_all_message_other": "All {{total}} tasks completed successfully",
+		"complete_partial_message": "Completed {{completed}} of {{total}} tasks",
+		"error_title": "Auto Run: {{errorTitle}}",
+		"error_message": "{{message}}"
+	},
+	"leaderboard": {
+		"updated_title": "Leaderboard Updated",
+		"updated_message": "{{message}}"
+	},
+	"symphony": {
+		"pr_ready_title": "Symphony: PR Ready for Review",
+		"pr_ready_message": "PR opened: {{prUrl}}",
+		"manual_needed_title": "Symphony: Manual Finalization Needed",
+		"manual_needed_message": "{{message}}",
+		"manual_needed_default_message": "Could not auto-finalize PR. Open Symphony to finalize.",
+		"auto_finalize_failed_title": "Symphony: Auto-Finalize Failed",
+		"auto_finalize_failed_message": "PR remains as draft. Open Symphony to finalize manually.",
+		"error_title": "Symphony Error",
+		"agent_not_found_message": "Agent not found: {{agentType}}"
+	},
+	"pr": {
+		"created_title": "PR Created",
+		"created_message": "{{message}}",
+		"created_default_message": "Pull request created successfully",
+		"failed_title": "PR Creation Failed",
+		"failed_message": "{{message}}",
+		"failed_default_message": "Failed to create pull request",
+		"app_created_title": "Pull Request Created",
+		"app_created_message": "{{title}}"
+	},
+	"merge": {
+		"session_merged_title": "Session Merged",
+		"session_merged_message": "Created \"{{sessionName}}\" from {{sourceInfo}}{{tokenInfo}}.{{savedInfo}}",
+		"context_merged_title": "Context Merged",
+		"context_merged_message": "\"{{source}}\" → \"{{target}}\"{{tokenInfo}}.{{savedInfo}}",
+		"context_transferred_title": "Context Transferred",
+		"context_transferred_message": "Created \"{{sessionName}}\" with transferred context",
+		"failed_title": "Merge Failed",
+		"failed_message": "{{message}}",
+		"failed_default_message": "Failed to merge contexts",
+		"context_sent_title": "Context Sent",
+		"context_sent_message": "\"{{source}}\" → \"{{target}}\"{{tokenInfo}}"
+	},
+	"compact": {
+		"cannot_title": "Cannot Compact",
+		"cannot_message": "Context too small. Need at least {{percent}}% usage, ~2k tokens, or 8+ messages to compact.",
+		"success_title": "Context Compacted",
+		"success_message": "Reduced context by {{percent}}%. Click to view the new tab.",
+		"failed_title": "Compaction Failed",
+		"failed_message": "Failed to compact context. Check the tab for details.",
+		"failed_unexpected_message": "An unexpected error occurred during compaction."
+	},
+	"agent": {
+		"creation_failed_title": "Agent Creation Failed",
+		"creation_failed_message": "{{message}}",
+		"creation_failed_default_message": "Cannot create duplicate agent"
+	},
+	"session": {
+		"group_removed_title": "Group Removed",
+		"group_removed_message_one": "Removed \"{{name}}\" and {{count}} agent",
+		"group_removed_message_other": "Removed \"{{name}}\" and {{count}} agents",
+		"erase_failed_title": "Failed to Erase Directory",
+		"erase_failed_message": "{{message}}"
+	},
+	"export": {
+		"nothing_to_copy_title": "Nothing to Copy",
+		"nothing_to_copy_message": "No user or assistant messages to copy.",
+		"context_copied_title": "Context Copied",
+		"context_copied_message": "Conversation copied to clipboard.",
+		"copy_failed_title": "Copy Failed",
+		"copy_failed_message": "Failed to copy context to clipboard.",
+		"export_complete_title": "Export Complete",
+		"export_complete_message": "Conversation exported as HTML.",
+		"export_failed_title": "Export Failed",
+		"export_failed_message": "Failed to export conversation as HTML.",
+		"nothing_to_publish_title": "Nothing to Publish",
+		"nothing_to_publish_message": "No user or assistant messages to publish."
+	},
+	"stats": {
+		"database_title": "Statistics Database",
+		"database_message": "{{message}}"
+	},
+	"history": {
+		"entry_added_title": "History Entry Added",
+		"entry_added_message": "{{message}}"
+	},
+	"synopsis": {
+		"title": "Synopsis",
+		"message": "{{message}}"
+	},
+	"playbook": {
+		"imported_title": "Playbook Imported",
+		"imported_message": "Successfully imported playbook to {{folder}}"
+	},
+	"gist": {
+		"published_title": "Gist Published",
+		"published_public_message": "Public gist created! URL copied to clipboard.",
+		"published_secret_message": "Secret gist created! URL copied to clipboard."
+	},
+	"debug": {
+		"test_title": "Test Notification",
+		"test_message": "This is a test toast notification from the console!"
+	},
+	"error": {
+		"web": {
+			"missing_session_or_command": "Missing sessionId or command",
+			"missing_session_or_mode": "Missing sessionId or mode",
+			"missing_session": "Missing sessionId",
+			"missing_session_or_tab": "Missing sessionId or tabId",
+			"missing_reorder_params": "Missing sessionId, fromIndex, or toIndex",
+			"session_not_found": "Session not found",
+			"session_busy": "Session is busy - please wait for the current operation to complete",
+			"command_not_configured": "Command execution not configured",
+			"mode_switch_not_configured": "Mode switching not configured",
+			"session_select_not_configured": "Session selection not configured",
+			"tab_select_not_configured": "Tab selection not configured",
+			"tab_create_not_configured": "Tab creation not configured",
+			"tab_close_not_configured": "Tab closing not configured",
+			"tab_rename_not_configured": "Tab renaming not configured",
+			"tab_star_not_configured": "Tab starring not configured",
+			"tab_reorder_not_configured": "Tab reordering not configured",
+			"bookmark_not_configured": "Bookmark toggling not configured",
+			"command_failed": "Failed to execute command: {{message}}",
+			"mode_switch_failed": "Failed to switch mode: {{message}}",
+			"session_select_failed": "Failed to select session: {{message}}",
+			"tab_select_failed": "Failed to select tab: {{message}}",
+			"tab_create_failed": "Failed to create tab: {{message}}",
+			"tab_close_failed": "Failed to close tab: {{message}}",
+			"tab_rename_failed": "Failed to rename tab: {{message}}",
+			"tab_star_failed": "Failed to star tab: {{message}}",
+			"tab_reorder_failed": "Failed to reorder tab: {{message}}",
+			"bookmark_failed": "Failed to toggle bookmark: {{message}}"
+		},
+		"grooming": {
+			"agent_not_available": "Agent {{agentType}} is not available",
+			"cancelled": "Grooming cancelled by user",
+			"error": "Grooming error: {{message}}",
+			"spawn_failed": "Failed to spawn grooming process for {{agentType}}",
+			"timeout": "Grooming timed out with no response"
+		},
+		"notification": {
+			"queue_full": "Notification queue is full (max {{max}} items). Please wait for current items to complete.",
+			"not_supported": "Notifications not supported",
+			"no_active_process": "No active notification process with that ID"
+		}
+	}
+}

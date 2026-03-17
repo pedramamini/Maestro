@@ -23,12 +23,12 @@ import type {
 import { countUnfinishedTasks, uncheckAllTasks, useBatchProcessor } from '../../../renderer/hooks';
 import { useBatchStore } from '../../../renderer/stores/batchStore';
 
-// Mock notifyToast so we can verify toast notifications
-const { mockNotifyToast } = vi.hoisted(() => ({
-	mockNotifyToast: vi.fn(),
+// Mock tNotify so we can verify toast notifications
+const { mockTNotify } = vi.hoisted(() => ({
+	mockTNotify: vi.fn(),
 }));
-vi.mock('../../../renderer/stores/notificationStore', () => ({
-	notifyToast: (...args: unknown[]) => mockNotifyToast(...args),
+vi.mock('../../../renderer/utils/tNotify', () => ({
+	tNotify: (...args: unknown[]) => mockTNotify(...args),
 }));
 
 // ============================================================================
@@ -5796,22 +5796,27 @@ describe('useBatchProcessor hook', () => {
 			});
 
 			// Verify "Auto Run Started" toast was fired
-			expect(mockNotifyToast).toHaveBeenCalledWith(
+			expect(mockTNotify).toHaveBeenCalledWith(
 				expect.objectContaining({
 					type: 'info',
-					title: 'Auto Run Started',
+					titleKey: 'notifications:autorun.started_title',
+					messageKey: 'notifications:autorun.started_message',
 					sessionId: 'wt-session-id',
 				})
 			);
 
-			// Verify the message includes task and document counts
-			const toastCall = mockNotifyToast.mock.calls.find(
-				(call: unknown[]) => (call[0] as { title?: string })?.title === 'Auto Run Started'
+			// Verify the values include task and document counts
+			const toastCall = mockTNotify.mock.calls.find(
+				(call: unknown[]) =>
+					(call[0] as { titleKey?: string })?.titleKey === 'notifications:autorun.started_title'
 			);
 			expect(toastCall).toBeDefined();
-			expect((toastCall![0] as { message: string }).message).toMatch(
-				/\d+ tasks? across \d+ documents?/
-			);
+			expect(
+				(toastCall![0] as { values: { count: number; docCount: number } }).values.count
+			).toBeGreaterThanOrEqual(0);
+			expect(
+				(toastCall![0] as { values: { count: number; docCount: number } }).values.docCount
+			).toBeGreaterThan(0);
 		});
 
 		it('should add history entry with PR URL on successful PR creation', async () => {

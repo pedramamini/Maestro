@@ -16,7 +16,7 @@ import { useModalStore } from '../../stores/modalStore';
 import { useSessionStore } from '../../stores/sessionStore';
 import { useUIStore } from '../../stores/uiStore';
 import { useAgentErrorRecovery } from '../agent/useAgentErrorRecovery';
-import { notifyToast } from '../../stores/notificationStore';
+import { tNotify } from '../../utils/tNotify';
 import { generateId } from '../../utils/ids';
 
 // ---------------------------------------------------------------------------
@@ -425,12 +425,15 @@ export function useGroupChatHandlers(): GroupChatHandlersReturn {
 				closeModal('newGroupChat');
 				const message = err instanceof Error ? err.message : '';
 				const isValidationError = message.includes('Invalid moderator agent ID');
-				notifyToast({
+				tNotify({
 					type: 'error',
-					title: 'Group Chat',
-					message: isValidationError
-						? message.replace(/^Error invoking remote method '[^']+': /, '')
-						: 'Failed to create group chat',
+					titleKey: 'notifications:group_chat.error_title',
+					messageKey: isValidationError
+						? 'notifications:group_chat.create_failed_dynamic_message'
+						: 'notifications:group_chat.create_failed_message',
+					values: isValidationError
+						? { message: message.replace(/^Error invoking remote method '[^']+': /, '') }
+						: undefined,
 				});
 				if (!isValidationError) {
 					throw err; // Unexpected — let Sentry capture via unhandledrejection

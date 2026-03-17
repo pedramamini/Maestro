@@ -30,14 +30,11 @@ vi.mock('../../../renderer/services/git', () => ({
 	},
 }));
 
-// Mock notifyToast
-vi.mock('../../../renderer/stores/notificationStore', async () => {
-	const actual = await vi.importActual('../../../renderer/stores/notificationStore');
-	return { ...actual, notifyToast: vi.fn() };
-});
+// Mock tNotify
+const { tNotify } = vi.hoisted(() => ({ tNotify: vi.fn() }));
+vi.mock('../../../renderer/utils/tNotify', () => ({ tNotify }));
 
 import { gitService } from '../../../renderer/services/git';
-import { notifyToast } from '../../../renderer/stores/notificationStore';
 
 // ============================================================================
 // Test Helpers
@@ -1311,11 +1308,12 @@ describe('useAutoRunHandlers', () => {
 			});
 
 			// Should show error toast
-			expect(notifyToast).toHaveBeenCalledWith(
+			expect(tNotify).toHaveBeenCalledWith(
 				expect.objectContaining({
 					type: 'error',
-					title: 'Failed to Create Worktree',
-					message: 'branch already exists',
+					titleKey: 'notifications:worktree.create_failed_title',
+					messageKey: 'notifications:worktree.create_failed_message',
+					values: { message: 'branch already exists' },
 				})
 			);
 

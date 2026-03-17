@@ -13,6 +13,7 @@ import {
 	LayoutGrid,
 	AlertTriangle,
 } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import type { Theme, BatchRunState, SessionState, Shortcut } from '../types';
 import { useLayerStack } from '../contexts/LayerStackContext';
 import { MODAL_PRIORITIES } from '../constants/modalPriorities';
@@ -92,6 +93,7 @@ export function AutoRunExpandedModal({
 	onOpenMarketplace,
 	...autoRunProps
 }: AutoRunExpandedModalProps) {
+	const { t } = useTranslation('modals');
 	const { registerLayer, unregisterLayer, updateLayerHandler } = useLayerStack();
 	const layerIdRef = useRef<string>();
 	const onCloseRef = useRef(onClose);
@@ -252,7 +254,7 @@ export function AutoRunExpandedModal({
 				>
 					{/* Left side - Title */}
 					<h2 className="text-sm font-semibold" style={{ color: theme.colors.textMain }}>
-						Auto Run
+						{t('autorun_expanded.title')}
 					</h2>
 
 					{/* Center - Mode controls */}
@@ -273,10 +275,14 @@ export function AutoRunExpandedModal({
 										: theme.colors.textDim,
 								border: `1px solid ${localMode === 'edit' && !isLocked ? theme.colors.accent : theme.colors.border}`,
 							}}
-							title={isLocked ? 'Editing disabled while Auto Run active' : 'Edit document'}
+							title={
+								isLocked
+									? t('autorun_expanded.editing_disabled_tooltip')
+									: t('autorun_expanded.edit_tooltip')
+							}
 						>
 							<Edit className="w-3.5 h-3.5" />
-							Edit
+							{t('autorun_expanded.edit_button')}
 						</button>
 						<button
 							onClick={() => setMode('preview')}
@@ -292,10 +298,10 @@ export function AutoRunExpandedModal({
 										: theme.colors.textDim,
 								border: `1px solid ${localMode === 'preview' || isLocked ? theme.colors.accent : theme.colors.border}`,
 							}}
-							title="Preview document"
+							title={t('autorun_expanded.preview_tooltip')}
 						>
 							<Eye className="w-3.5 h-3.5" />
-							Preview
+							{t('autorun_expanded.preview_button')}
 						</button>
 						{/* Image upload button - hidden for now, can be re-enabled when needed
             <button
@@ -327,10 +333,10 @@ export function AutoRunExpandedModal({
 										color: theme.colors.textDim,
 										border: `1px solid ${theme.colors.border}`,
 									}}
-									title="Discard changes"
+									title={t('autorun_expanded.discard_tooltip')}
 								>
 									<RotateCcw className="w-3 h-3" />
-									Revert
+									{t('autorun_expanded.revert_button')}
 								</button>
 								<button
 									onClick={handleSave}
@@ -340,10 +346,10 @@ export function AutoRunExpandedModal({
 										color: theme.colors.accentForeground,
 										border: `1px solid ${theme.colors.accent}`,
 									}}
-									title="Save changes"
+									title={t('autorun_expanded.save_tooltip')}
 								>
 									<Save className="w-3 h-3" />
-									Save
+									{t('autorun_expanded.save_button')}
 									{/* Keyboard shortcut overlay on hover */}
 									<span
 										className="absolute -bottom-6 left-1/2 -translate-x-1/2 px-1.5 py-0.5 rounded text-[10px] whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none"
@@ -370,14 +376,20 @@ export function AutoRunExpandedModal({
 									border: `1px solid ${isStopping ? theme.colors.warning : theme.colors.error}`,
 									pointerEvents: isStopping ? 'none' : 'auto',
 								}}
-								title={isStopping ? 'Stopping after current task...' : 'Stop auto-run'}
+								title={
+									isStopping
+										? t('autorun_expanded.stopping_tooltip')
+										: t('autorun_expanded.stop_tooltip')
+								}
 							>
 								{isStopping ? (
 									<Loader2 className="w-3.5 h-3.5 animate-spin" />
 								) : (
 									<Square className="w-3.5 h-3.5" />
 								)}
-								{isStopping ? 'Stopping...' : 'Stop'}
+								{isStopping
+									? t('autorun_expanded.stopping_button')
+									: t('autorun_expanded.stop_button')}
 							</button>
 						) : (
 							<button
@@ -395,10 +407,14 @@ export function AutoRunExpandedModal({
 									color: theme.colors.accentForeground,
 									border: `1px solid ${theme.colors.accent}`,
 								}}
-								title={isAgentBusy ? 'Cannot run while agent is thinking' : 'Run auto-run on tasks'}
+								title={
+									isAgentBusy
+										? t('autorun_expanded.run_disabled_tooltip')
+										: t('autorun_expanded.run_tooltip')
+								}
 							>
 								<Play className="w-3.5 h-3.5" />
-								Run
+								{t('autorun_expanded.run_button')}
 							</button>
 						)}
 						{/* Exchange button */}
@@ -411,10 +427,10 @@ export function AutoRunExpandedModal({
 									border: `1px solid ${theme.colors.accent}`,
 									backgroundColor: `${theme.colors.accent}15`,
 								}}
-								title="Browse Playbook Exchange - discover and share community playbooks"
+								title={t('autorun_expanded.exchange_tooltip')}
 							>
 								<LayoutGrid className="w-3.5 h-3.5" />
-								Exchange
+								{t('autorun_expanded.exchange_button')}
 							</button>
 						)}
 					</div>
@@ -425,15 +441,15 @@ export function AutoRunExpandedModal({
 							onClick={handleClose}
 							className="flex items-center gap-1.5 px-2 py-1 rounded text-xs transition-colors hover:bg-white/10"
 							style={{ color: theme.colors.textDim }}
-							title={`Collapse${shortcuts?.toggleAutoRunExpanded ? ` (${formatShortcutKeys(shortcuts.toggleAutoRunExpanded.keys)})` : ' (Esc)'}`}
+							title={`${t('autorun_expanded.collapse_button')}${shortcuts?.toggleAutoRunExpanded ? ` (${formatShortcutKeys(shortcuts.toggleAutoRunExpanded.keys)})` : ' (Esc)'}`}
 						>
 							<Minimize2 className="w-4 h-4" />
-							Collapse
+							{t('autorun_expanded.collapse_button')}
 						</button>
 						<button
 							onClick={handleClose}
 							className="p-1 rounded hover:bg-white/10 transition-colors"
-							title="Close (Esc)"
+							title={t('autorun_expanded.close_tooltip')}
 						>
 							<X className="w-5 h-5" style={{ color: theme.colors.textDim }} />
 						</button>
@@ -466,13 +482,13 @@ export function AutoRunExpandedModal({
 			{showUnsavedConfirm && (
 				<ConfirmModal
 					theme={theme}
-					title="Unsaved Changes"
+					title={t('autorun_expanded.unsaved_title')}
 					headerIcon={<AlertTriangle className="w-4 h-4" style={{ color: theme.colors.warning }} />}
-					message="You have unsaved changes to this Auto Run document. Discard changes and close?"
+					message={t('autorun_expanded.unsaved_message')}
 					onConfirm={handleDiscardAndClose}
 					onClose={() => setShowUnsavedConfirm(false)}
 					destructive={false}
-					confirmLabel="Discard"
+					confirmLabel={t('autorun_expanded.discard_button')}
 				/>
 			)}
 		</div>,

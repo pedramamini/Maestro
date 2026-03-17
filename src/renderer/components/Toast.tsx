@@ -1,6 +1,7 @@
 import React, { memo, useEffect, useState } from 'react';
 import type { Theme } from '../types';
 import { useNotificationStore, type Toast as ToastType } from '../stores/notificationStore';
+import { useI18n } from '../hooks/useI18n';
 
 interface ToastContainerProps {
 	theme: Theme;
@@ -37,6 +38,7 @@ const ToastItem = memo(function ToastItem({
 	onRemove: (toastId: string) => void;
 	onSessionClick?: (sessionId: string, tabId?: string) => void;
 }) {
+	const { t } = useI18n();
 	const [isExiting, setIsExiting] = useState(false);
 	const [isEntering, setIsEntering] = useState(true);
 
@@ -254,7 +256,9 @@ const ToastItem = memo(function ToastItem({
 									d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
 								/>
 							</svg>
-							<span>Completed in {formatDuration(toast.taskDuration)}</span>
+							<span>
+								{t('toast.completed_in', { duration: formatDuration(toast.taskDuration) })}
+							</span>
 						</div>
 					)}
 				</div>
@@ -311,6 +315,9 @@ export const ToastContainer = memo(function ToastContainer({
 		<div
 			className="fixed bottom-4 right-4 z-50 flex flex-col-reverse"
 			style={{ pointerEvents: 'none' }}
+			role="status"
+			aria-live="polite"
+			aria-label="Toast notifications"
 		>
 			<div style={{ pointerEvents: 'auto' }}>
 				{toasts.map((toast) => (

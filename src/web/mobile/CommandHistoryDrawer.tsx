@@ -21,6 +21,8 @@ import { triggerHaptic, HAPTIC_PATTERNS, GESTURE_THRESHOLDS } from './constants'
 import { formatRelativeTime, truncateCommand } from '../../shared/formatters';
 import { useSwipeGestures } from '../hooks/useSwipeGestures';
 import type { CommandHistoryEntry } from '../hooks/useCommandHistory';
+import { useI18n } from '../../renderer/hooks/useI18n';
+import { useDirection, getDirectionalTranslateX, getLogicalSide } from '../utils/rtlCoordinates';
 
 /** Height of the drawer handle area */
 const HANDLE_HEIGHT = 28;
@@ -85,7 +87,23 @@ function SwipeableHistoryItem({
 	onLongPressEnd,
 }: SwipeableHistoryItemProps) {
 	const colors = useThemeColors();
+	const { t: ta } = useI18n('accessibility');
+	const dir = useDirection();
+	const isRTL = dir === 'rtl';
 	const [showDeleteAction, setShowDeleteAction] = useState(false);
+
+	// Build directional swipe handlers
+	// "Backward" swipe (left in LTR, right in RTL) reveals delete
+	// "Forward" swipe (right in LTR, left in RTL) hides delete
+	const showDeleteHandler = onDelete
+		? () => {
+				triggerHaptic(HAPTIC_PATTERNS.tap);
+				setShowDeleteAction(true);
+			}
+		: undefined;
+	const hideDeleteHandler = () => {
+		setShowDeleteAction(false);
+	};
 
 	// Swipe gesture hook for swipe-to-delete
 	const {
@@ -94,17 +112,8 @@ function SwipeableHistoryItem({
 		isSwiping,
 		resetOffset,
 	} = useSwipeGestures({
-		onSwipeLeft: onDelete
-			? () => {
-					// Show delete action on swipe left
-					triggerHaptic(HAPTIC_PATTERNS.tap);
-					setShowDeleteAction(true);
-				}
-			: undefined,
-		onSwipeRight: () => {
-			// Hide delete action on swipe right
-			setShowDeleteAction(false);
-		},
+		onSwipeLeft: isRTL ? hideDeleteHandler : showDeleteHandler,
+		onSwipeRight: isRTL ? showDeleteHandler : hideDeleteHandler,
 		trackOffset: true,
 		threshold: DELETE_SWIPE_THRESHOLD,
 		maxOffset: DELETE_ACTION_WIDTH + 20,
@@ -134,8 +143,10 @@ function SwipeableHistoryItem({
 		[entry.id, onDelete, resetOffset]
 	);
 
-	// Calculate transform based on swipe offset or delete action state
-	const translateX = showDeleteAction ? -DELETE_ACTION_WIDTH : Math.min(0, offsetX); // Only allow left swipe
+	// Calculate transform using RTL-aware directional utility
+	// Convert physical offsetX to logical (negative = backward direction)
+	const logicalOffset = isRTL ? -offsetX : offsetX;
+	const constrainedOffset = showDeleteAction ? -DELETE_ACTION_WIDTH : Math.min(0, logicalOffset); // Only allow backward movement
 
 	return (
 		<div
@@ -144,14 +155,14 @@ function SwipeableHistoryItem({
 				overflow: 'hidden',
 			}}
 		>
-			{/* Delete action button (revealed on swipe left) */}
+			{/* Delete action button (revealed on backward swipe) */}
 			{onDelete && (
 				<button
 					type="button"
 					style={{
 						position: 'absolute',
 						top: 0,
-						right: 0,
+						[getLogicalSide('end', dir)]: 0,
 						bottom: 1, // Account for border
 						width: `${DELETE_ACTION_WIDTH}px`,
 						display: 'flex',
@@ -159,12 +170,12 @@ function SwipeableHistoryItem({
 						justifyContent: 'center',
 						backgroundColor: '#ef4444',
 						cursor: 'pointer',
-						opacity: showDeleteAction || offsetX < -20 ? 1 : 0,
+						opacity: showDeleteAction || logicalOffset < -20 ? 1 : 0,
 						transition: 'opacity 0.15s ease',
 						border: 'none',
 					}}
 					onClick={handleDeleteTap}
-					aria-label="Delete command"
+					aria-label={ta('mobile.delete_command')}
 				>
 					<svg
 						width="20"
@@ -207,7 +218,7 @@ function SwipeableHistoryItem({
 					cursor: 'pointer',
 					backgroundColor: isLongPressed ? `${colors.accent}15` : colors.bgSidebar,
 					transition: isSwiping ? 'none' : 'transform 0.3s ease, background-color 0.15s ease',
-					transform: `translateX(${translateX}px)`,
+					transform: getDirectionalTranslateX(constrainedOffset, dir),
 					WebkitTapHighlightColor: 'transparent',
 					border: 'none',
 					borderBottom: `1px solid ${colors.border}`,
@@ -285,7 +296,7 @@ function SwipeableHistoryItem({
 					</p>
 				</div>
 
-				{/* Swipe hint indicator (chevron) */}
+				{/* Swipe hint indicator (chevron) — points backward */}
 				{onDelete && !showDeleteAction && (
 					<div
 						style={{
@@ -295,7 +306,7 @@ function SwipeableHistoryItem({
 						}}
 						aria-hidden="true"
 					>
-						‹
+						{isRTL ? '›' : '‹'}
 					</div>
 				)}
 			</button>
@@ -315,6 +326,8 @@ export function CommandHistoryDrawer({
 	onClearHistory,
 }: CommandHistoryDrawerProps) {
 	const colors = useThemeColors();
+	const { t: ta } = useI18n('accessibility');
+	const dir = useDirection();
 	const drawerRef = useRef<HTMLDivElement>(null);
 	const contentRef = useRef<HTMLDivElement>(null);
 
@@ -497,7 +510,7 @@ export function CommandHistoryDrawer({
 					border: 'none',
 					padding: 0,
 				}}
-				aria-label="Close command history drawer"
+				aria-label={ta('mobile.close_command_history')}
 			/>
 
 			{/* Drawer container */}
@@ -505,8 +518,8 @@ export function CommandHistoryDrawer({
 				ref={drawerRef}
 				style={{
 					position: 'fixed',
-					left: 0,
-					right: 0,
+					insetInlineStart: 0,
+					insetInlineEnd: 0,
 					bottom: 0,
 					height: currentHeight,
 					backgroundColor: colors.bgSidebar,
@@ -661,7 +674,9 @@ export function CommandHistoryDrawer({
 										opacity: 0.7,
 									}}
 								>
-									Swipe left on an item to delete
+									{dir === 'rtl'
+										? 'Swipe right on an item to delete'
+										: 'Swipe left on an item to delete'}
 								</p>
 							)}
 							{history.map((entry) => (

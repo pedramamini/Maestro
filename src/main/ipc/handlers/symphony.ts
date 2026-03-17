@@ -925,7 +925,7 @@ async function postPRComment(
 				: `${seconds}s`;
 
 	// Format token counts with commas
-	const formatNumber = (n: number) => n.toLocaleString('en-US');
+	const formatNumber = (n: number) => n.toLocaleString(undefined);
 
 	// Build the comment body
 	const commentBody = `## Symphony Contribution Summary

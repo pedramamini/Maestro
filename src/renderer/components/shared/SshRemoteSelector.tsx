@@ -10,6 +10,7 @@
  * - Hint when no remotes are configured
  */
 
+import { useTranslation } from 'react-i18next';
 import { ChevronDown, Monitor, Cloud } from 'lucide-react';
 import type { Theme } from '../../types';
 import type { SshRemoteConfig, AgentSshRemoteConfig } from '../../../shared/types';
@@ -30,6 +31,7 @@ export function SshRemoteSelector({
 	onSshRemoteConfigChange,
 	compact = false,
 }: SshRemoteSelectorProps): JSX.Element {
+	const { t } = useTranslation('settings');
 	// Compact mode uses bordered container style (for nested use in config panels)
 	// Non-compact mode uses simple label + input style (for top-level modal use)
 	if (compact) {
@@ -39,7 +41,7 @@ export function SshRemoteSelector({
 				style={{ borderColor: theme.colors.border, backgroundColor: theme.colors.bgMain }}
 			>
 				<label className="block text-xs font-medium mb-2" style={{ color: theme.colors.textDim }}>
-					SSH Remote Execution
+					{t('ssh_selector.label')}
 				</label>
 				<SshRemoteDropdown
 					theme={theme}
@@ -47,9 +49,7 @@ export function SshRemoteSelector({
 					sshRemoteConfig={sshRemoteConfig}
 					onSshRemoteConfigChange={onSshRemoteConfigChange}
 				/>
-				<p className="text-xs opacity-50 mt-2">
-					Execute this agent on a remote host via SSH instead of locally
-				</p>
+				<p className="text-xs opacity-50 mt-2">{t('ssh_selector.help')}</p>
 			</div>
 		);
 	}
@@ -61,7 +61,7 @@ export function SshRemoteSelector({
 				className="block text-xs font-bold opacity-70 uppercase mb-2"
 				style={{ color: theme.colors.textMain }}
 			>
-				SSH Remote Execution
+				{t('ssh_selector.label')}
 			</label>
 			<SshRemoteDropdown
 				theme={theme}
@@ -70,7 +70,7 @@ export function SshRemoteSelector({
 				onSshRemoteConfigChange={onSshRemoteConfigChange}
 			/>
 			<p className="mt-1 text-xs" style={{ color: theme.colors.textDim }}>
-				Execute this agent on a remote host via SSH instead of locally.
+				{t('ssh_selector.help')}
 			</p>
 		</div>
 	);
@@ -88,6 +88,7 @@ function SshRemoteDropdown({
 	sshRemoteConfig?: AgentSshRemoteConfig;
 	onSshRemoteConfigChange: (config: AgentSshRemoteConfig) => void;
 }): JSX.Element {
+	const { t } = useTranslation('settings');
 	// Get the currently selected remote (if any)
 	const selectedRemoteId =
 		sshRemoteConfig?.enabled && sshRemoteConfig?.remoteId ? sshRemoteConfig.remoteId : null;
@@ -124,7 +125,7 @@ function SshRemoteDropdown({
 						color: theme.colors.textMain,
 					}}
 				>
-					<option value="local">Local Execution</option>
+					<option value="local">{t('ssh_selector.local_execution')}</option>
 					{sshRemotes
 						.filter((r) => r.enabled)
 						.map((remote) => (
@@ -148,14 +149,17 @@ function SshRemoteDropdown({
 					<>
 						<Cloud className="w-3 h-3" style={{ color: theme.colors.success }} />
 						<span style={{ color: theme.colors.textMain }}>
-							Agent will run on <span className="font-medium">{selectedRemote.name}</span>
+							{t('ssh_selector.will_run_on')}{' '}
+							<span className="font-medium">{selectedRemote.name}</span>
 							<span style={{ color: theme.colors.textDim }}> ({selectedRemote.host})</span>
 						</span>
 					</>
 				) : (
 					<>
 						<Monitor className="w-3 h-3" style={{ color: theme.colors.textDim }} />
-						<span style={{ color: theme.colors.textDim }}>Agent will run locally</span>
+						<span style={{ color: theme.colors.textDim }}>
+							{t('ssh_selector.will_run_locally')}
+						</span>
 					</>
 				)}
 			</div>
@@ -163,10 +167,8 @@ function SshRemoteDropdown({
 			{/* No remotes configured hint */}
 			{sshRemotes.filter((r) => r.enabled).length === 0 && (
 				<p className="text-xs" style={{ color: theme.colors.textDim }}>
-					No SSH remotes configured.{' '}
-					<span style={{ color: theme.colors.accent }}>
-						Configure remotes in Settings → SSH Remotes.
-					</span>
+					{t('ssh_selector.no_remotes')}{' '}
+					<span style={{ color: theme.colors.accent }}>{t('ssh_selector.configure_hint')}</span>
 				</p>
 			)}
 		</div>

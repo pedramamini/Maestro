@@ -27,10 +27,12 @@ import {
 	HardDrive,
 	ArrowRight,
 } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import type { Theme, ToolType } from '../types';
 import { MODAL_PRIORITIES } from '../constants/modalPriorities';
 import { Modal } from './ui/Modal';
 import { getAgentDisplayName } from '../services/contextGroomer';
+import { getActiveLocale } from '../utils/formatters';
 
 /**
  * Types of transfer errors that can occur
@@ -249,7 +251,7 @@ function formatDetails(error: TransferError): string | null {
 
 	if (details.estimatedTokens && details.targetLimit) {
 		parts.push(
-			`Context size: ~${details.estimatedTokens.toLocaleString('en-US')} tokens (limit: ${details.targetLimit.toLocaleString('en-US')})`
+			`Context size: ~${details.estimatedTokens.toLocaleString(getActiveLocale())} tokens (limit: ${details.targetLimit.toLocaleString(getActiveLocale())})`
 		);
 	}
 
@@ -279,6 +281,7 @@ export function TransferErrorModal({
 	onCancel,
 	isRetrying = false,
 }: TransferErrorModalProps) {
+	const { t } = useTranslation('modals');
 	const primaryButtonRef = useRef<HTMLButtonElement>(null);
 
 	// Determine available actions
@@ -384,7 +387,7 @@ export function TransferErrorModal({
 
 				{/* Timestamp */}
 				<div className="text-xs" style={{ color: theme.colors.textDim }}>
-					{new Date(error.timestamp).toLocaleTimeString()}
+					{new Date(error.timestamp).toLocaleTimeString(getActiveLocale())}
 				</div>
 			</div>
 
@@ -437,7 +440,7 @@ export function TransferErrorModal({
 						)}
 						<div className="flex-1 min-w-0 text-left">
 							<div className="text-sm font-medium">
-								{isRetrying ? 'Retrying...' : actions.retryLabel}
+								{isRetrying ? t('transfer_error.retrying') : actions.retryLabel}
 							</div>
 							{actions.retryDescription && !isRetrying && (
 								<div
@@ -492,7 +495,7 @@ export function TransferErrorModal({
 					className="w-full text-center text-sm py-2 rounded hover:bg-white/5 transition-colors disabled:opacity-50"
 					style={{ color: theme.colors.textDim }}
 				>
-					Cancel
+					{t('transfer_error.close_button')}
 				</button>
 			</div>
 		</Modal>

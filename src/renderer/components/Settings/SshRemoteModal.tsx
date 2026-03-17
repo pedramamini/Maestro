@@ -23,6 +23,7 @@
  */
 
 import React, { useState, useRef, useEffect, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
 	Server,
 	Plus,
@@ -38,6 +39,7 @@ import type { SshRemoteConfig, SshRemoteTestResult } from '../../../shared/types
 import { MODAL_PRIORITIES } from '../../constants/modalPriorities';
 import { Modal, ModalFooter } from '../ui/Modal';
 import { FormInput } from '../ui/FormInput';
+import { ToggleSwitch } from '../ui/ToggleSwitch';
 
 /**
  * SSH config host entry from ~/.ssh/config
@@ -129,7 +131,7 @@ function getSshConfigHostSummary(host: SshConfigHost): string {
 		const keyName = host.identityFile.split('/').pop() || host.identityFile;
 		parts.push(`key: ${keyName}`);
 	}
-	return parts.join(', ') || 'No details available';
+	return parts.join(', ');
 }
 
 export function SshRemoteModal({
@@ -292,13 +294,15 @@ export function SshRemoteModal({
 		}
 	}, [isOpen, initialConfig]);
 
+	const { t } = useTranslation('settings');
+
 	// Validation
 	const validateForm = useCallback((): string | null => {
-		if (!name.trim()) return 'Name is required';
-		if (!host.trim()) return 'Host is required';
+		if (!name.trim()) return t('ssh_modal.validation_name_required');
+		if (!host.trim()) return t('ssh_modal.validation_host_required');
 		const portNum = parseInt(port, 10);
 		if (isNaN(portNum) || portNum < 1 || portNum > 65535) {
-			return 'Port must be between 1 and 65535';
+			return t('ssh_modal.validation_port_range');
 		}
 		// Username and key are always optional - SSH will use defaults from config or ssh-agent
 		return null;
@@ -369,10 +373,10 @@ export function SshRemoteModal({
 			if (result.success) {
 				onClose();
 			} else {
-				setError(result.error || 'Failed to save configuration');
+				setError(result.error || t('ssh_modal.failed_save'));
 			}
 		} catch (err) {
-			setError(err instanceof Error ? err.message : 'Failed to save configuration');
+			setError(err instanceof Error ? err.message : t('ssh_modal.failed_save'));
 		} finally {
 			setSaving(false);
 		}
@@ -398,19 +402,19 @@ export function SshRemoteModal({
 			if (result.success && result.result) {
 				setTestResult({
 					success: true,
-					message: 'Connection successful!',
+					message: t('ssh_modal.connection_success'),
 					hostname: result.result.remoteInfo?.hostname,
 				});
 			} else {
 				setTestResult({
 					success: false,
-					message: result.error || 'Connection failed',
+					message: result.error || t('ssh_modal.connection_failed'),
 				});
 			}
 		} catch (err) {
 			setTestResult({
 				success: false,
-				message: err instanceof Error ? err.message : 'Connection test failed',
+				message: err instanceof Error ? err.message : t('ssh_modal.connection_test_failed'),
 			});
 		} finally {
 			setTesting(false);
@@ -436,7 +440,8 @@ export function SshRemoteModal({
 
 	if (!isOpen) return null;
 
-	const modalTitle = title || (initialConfig ? 'Edit SSH Remote' : 'Add SSH Remote');
+	const modalTitle =
+		title || (initialConfig ? t('ssh_modal.title_edit') : t('ssh_modal.title_add'));
 	const hasSshConfigHosts = sshConfigHosts.length > 0;
 
 	return (
@@ -466,10 +471,10 @@ export function SshRemoteModal({
 							{testing ? (
 								<>
 									<Loader2 className="w-4 h-4 animate-spin" />
-									Testing...
+									{t('ssh_modal.testing')}
 								</>
 							) : (
-								'Test Connection'
+								t('ssh_modal.test_connection')
 							)}
 						</button>
 					)}
@@ -478,7 +483,7 @@ export function SshRemoteModal({
 						theme={theme}
 						onCancel={onClose}
 						onConfirm={handleSave}
-						confirmLabel={saving ? 'Saving...' : 'Save'}
+						confirmLabel={saving ? t('ssh_modal.saving') : t('ssh_modal.save')}
 						confirmDisabled={!isValid || saving}
 					/>
 				</div>
@@ -519,7 +524,7 @@ export function SshRemoteModal({
 							<div>{testResult.message}</div>
 							{testResult.hostname && (
 								<div className="text-xs mt-1 opacity-80">
-									Remote hostname: {testResult.hostname}
+									{t('ssh_modal.remote_hostname', { hostname: testResult.hostname })}
 								</div>
 							)}
 						</div>
@@ -538,12 +543,16 @@ export function SshRemoteModal({
 						<div className="flex items-center gap-2 mb-2">
 							<FileCode className="w-4 h-4" style={{ color: theme.colors.accent }} />
 							<span className="text-sm font-medium" style={{ color: theme.colors.textMain }}>
-								Import from SSH Config
+								{t('ssh_modal.import_header')}
 							</span>
 						</div>
 						<p className="text-xs mb-2" style={{ color: theme.colors.textDim }}>
-							{sshConfigHosts.length} host{sshConfigHosts.length !== 1 ? 's' : ''} found in
-							~/.ssh/config
+							{t(
+								sshConfigHosts.length !== 1
+									? 'ssh_modal.hosts_found_plural'
+									: 'ssh_modal.hosts_found',
+								{ count: sshConfigHosts.length }
+							)}
 						</p>
 						<div className="relative" ref={dropdownRef}>
 							<button
@@ -560,10 +569,10 @@ export function SshRemoteModal({
 								{sshConfigLoading ? (
 									<span className="flex items-center gap-2">
 										<Loader2 className="w-3 h-3 animate-spin" />
-										Loading...
+										{t('ssh_modal.loading')}
 									</span>
 								) : (
-									<span>Select a host to import...</span>
+									<span>{t('ssh_modal.select_host')}</span>
 								)}
 								<ChevronDown className="w-4 h-4" style={{ color: theme.colors.textDim }} />
 							</button>
@@ -576,7 +585,7 @@ export function SshRemoteModal({
 									}}
 									onKeyDown={handleDropdownKeyDown}
 									role="listbox"
-									aria-label="SSH config hosts"
+									aria-label={t('ssh_modal.ssh_config_hosts_aria')}
 									tabIndex={0}
 								>
 									{/* Filter input */}
@@ -587,7 +596,7 @@ export function SshRemoteModal({
 											value={sshConfigFilter}
 											onChange={(e) => handleSshConfigFilterChange(e.target.value)}
 											onKeyDown={handleDropdownKeyDown}
-											placeholder="Type to filter..."
+											placeholder={t('ssh_modal.type_to_filter')}
 											className="w-full px-2 py-1 rounded text-sm bg-transparent outline-none"
 											style={{
 												color: theme.colors.textMain,
@@ -602,7 +611,7 @@ export function SshRemoteModal({
 												className="px-3 py-2 text-sm text-center"
 												style={{ color: theme.colors.textDim }}
 											>
-												No hosts match filter
+												{t('ssh_modal.no_hosts_match')}
 											</div>
 										) : (
 											filteredSshConfigHosts.map((configHost, index) => (
@@ -622,7 +631,7 @@ export function SshRemoteModal({
 												>
 													<div className="font-mono text-sm">{configHost.host}</div>
 													<div className="text-xs" style={{ color: theme.colors.textDim }}>
-														{getSshConfigHostSummary(configHost)}
+														{getSshConfigHostSummary(configHost) || t('ssh_modal.no_details')}
 													</div>
 												</button>
 											))
@@ -645,7 +654,7 @@ export function SshRemoteModal({
 					>
 						<FileCode className="w-4 h-4" />
 						<span>
-							Imported from: <code className="font-mono">{sshConfigHost}</code>
+							{t('ssh_modal.imported_from')} <code className="font-mono">{sshConfigHost}</code>
 						</span>
 						<button
 							type="button"
@@ -654,7 +663,7 @@ export function SshRemoteModal({
 								setSshConfigHost(undefined);
 							}}
 							className="ml-auto text-xs opacity-70 hover:opacity-100"
-							title="Stop tracking SSH config origin"
+							title={t('ssh_modal.stop_tracking')}
 						>
 							×
 						</button>
@@ -665,11 +674,11 @@ export function SshRemoteModal({
 				<FormInput
 					ref={nameInputRef}
 					theme={theme}
-					label="Display Name"
+					label={t('ssh_modal.display_name')}
 					value={name}
 					onChange={setName}
-					placeholder="My Remote Server"
-					helperText="A friendly name to identify this remote configuration"
+					placeholder={t('ssh_modal.display_name_placeholder')}
+					helperText={t('ssh_modal.display_name_help')}
 				/>
 
 				{/* Host and Port */}
@@ -677,18 +686,18 @@ export function SshRemoteModal({
 					<div className="flex-1">
 						<FormInput
 							theme={theme}
-							label="Host"
+							label={t('ssh_modal.host')}
 							value={host}
 							onChange={setHost}
-							placeholder="hostname, IP, or SSH config alias"
+							placeholder={t('ssh_modal.host_placeholder')}
 							monospace
-							helperText="Hostname, IP address, or Host pattern from ~/.ssh/config"
+							helperText={t('ssh_modal.host_help')}
 						/>
 					</div>
 					<div className="w-24">
 						<FormInput
 							theme={theme}
-							label="Port"
+							label={t('ssh_modal.port')}
 							value={port}
 							onChange={setPort}
 							placeholder="22"
@@ -700,23 +709,23 @@ export function SshRemoteModal({
 				{/* Username */}
 				<FormInput
 					theme={theme}
-					label="Username (optional)"
+					label={t('ssh_modal.username_label')}
 					value={username}
 					onChange={setUsername}
-					placeholder="username"
+					placeholder={t('ssh_modal.username_placeholder')}
 					monospace
-					helperText="Leave empty to use SSH config or system defaults"
+					helperText={t('ssh_modal.username_help')}
 				/>
 
 				{/* Private Key Path */}
 				<FormInput
 					theme={theme}
-					label="Private Key Path (optional)"
+					label={t('ssh_modal.private_key_label')}
 					value={privateKeyPath}
 					onChange={setPrivateKeyPath}
-					placeholder="~/.ssh/id_ed25519"
+					placeholder={t('ssh_modal.private_key_placeholder')}
 					monospace
-					helperText="Leave empty to use SSH config or ssh-agent"
+					helperText={t('ssh_modal.private_key_help')}
 				/>
 
 				{/* Environment Variables */}
@@ -726,7 +735,7 @@ export function SshRemoteModal({
 							className="text-xs font-bold opacity-70 uppercase"
 							style={{ color: theme.colors.textMain }}
 						>
-							Environment Variables (optional)
+							{t('ssh_modal.env_vars_label')}
 						</div>
 						<button
 							type="button"
@@ -735,7 +744,7 @@ export function SshRemoteModal({
 							style={{ color: theme.colors.accent }}
 						>
 							<Plus className="w-3 h-3" />
-							Add Variable
+							{t('ssh_modal.add_variable')}
 						</button>
 					</div>
 
@@ -747,7 +756,7 @@ export function SshRemoteModal({
 										type="text"
 										value={entry.key}
 										onChange={(e) => updateEnvVar(entry.id, 'key', e.target.value)}
-										placeholder="VARIABLE"
+										placeholder={t('ssh_modal.variable_placeholder')}
 										className="flex-1 p-2 rounded border bg-transparent outline-none text-xs font-mono"
 										style={{
 											borderColor: theme.colors.border,
@@ -761,7 +770,7 @@ export function SshRemoteModal({
 										type="text"
 										value={entry.value}
 										onChange={(e) => updateEnvVar(entry.id, 'value', e.target.value)}
-										placeholder="value"
+										placeholder={t('ssh_modal.value_placeholder')}
 										className="flex-[2] p-2 rounded border bg-transparent outline-none text-xs font-mono"
 										style={{
 											borderColor: theme.colors.border,
@@ -772,7 +781,7 @@ export function SshRemoteModal({
 										type="button"
 										onClick={() => removeEnvVar(entry.id)}
 										className="p-2 rounded hover:bg-white/10 transition-colors"
-										title="Remove variable"
+										title={t('ssh_modal.remove_variable')}
 										style={{ color: theme.colors.textDim }}
 									>
 										<Trash2 className="w-3 h-3" />
@@ -783,7 +792,7 @@ export function SshRemoteModal({
 					)}
 
 					<p className="text-xs" style={{ color: theme.colors.textDim }}>
-						Environment variables passed to agents running on this remote host
+						{t('ssh_modal.env_vars_help')}
 					</p>
 				</div>
 
@@ -797,27 +806,19 @@ export function SshRemoteModal({
 				>
 					<div>
 						<div className="font-medium text-sm" style={{ color: theme.colors.textMain }}>
-							Enable this remote
+							{t('ssh_modal.enable_remote')}
 						</div>
 						<div className="text-xs" style={{ color: theme.colors.textDim }}>
-							Disabled remotes won&apos;t be available for selection
+							{t('ssh_modal.disabled_description')}
 						</div>
 					</div>
-					<button
-						type="button"
-						onClick={() => setEnabled(!enabled)}
-						className="w-12 h-6 rounded-full transition-colors relative"
-						style={{
-							backgroundColor: enabled ? theme.colors.accent : theme.colors.bgActivity,
-						}}
-					>
-						<div
-							className="absolute top-1 w-4 h-4 rounded-full bg-white transition-transform"
-							style={{
-								transform: enabled ? 'translateX(26px)' : 'translateX(4px)',
-							}}
-						/>
-					</button>
+					<ToggleSwitch
+						checked={enabled}
+						onChange={() => setEnabled(!enabled)}
+						theme={theme}
+						size="lg"
+						inactiveColor={theme.colors.bgActivity}
+					/>
 				</div>
 			</div>
 		</Modal>

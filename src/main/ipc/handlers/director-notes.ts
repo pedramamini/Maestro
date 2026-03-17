@@ -282,12 +282,12 @@ export function registerDirectorNotesHandlers(deps: DirectorNotesHandlerDependen
 					)
 					.join('\n');
 
-				const cutoffDate = new Date(cutoffTime).toLocaleDateString('en-US', {
+				const cutoffDate = new Date(cutoffTime).toLocaleDateString(undefined, {
 					month: 'short',
 					day: 'numeric',
 					year: 'numeric',
 				});
-				const nowDate = new Date().toLocaleDateString('en-US', {
+				const nowDate = new Date().toLocaleDateString(undefined, {
 					month: 'short',
 					day: 'numeric',
 					year: 'numeric',

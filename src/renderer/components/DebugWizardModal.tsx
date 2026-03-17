@@ -7,6 +7,7 @@
  */
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 import { FolderOpen } from 'lucide-react';
 import type { Theme } from '../types';
 import { MODAL_PRIORITIES } from '../constants/modalPriorities';
@@ -25,6 +26,7 @@ export function DebugWizardModal({
 	isOpen,
 	onClose,
 }: DebugWizardModalProps): JSX.Element | null {
+	const { t } = useTranslation('modals');
 	const [directoryPath, setDirectoryPath] = useState('');
 	const [agentName, setAgentName] = useState('');
 	const [error, setError] = useState<string | null>(null);
@@ -70,12 +72,12 @@ export function DebugWizardModal({
 
 	const handleSubmit = useCallback(async () => {
 		if (!directoryPath) {
-			setError('Please select a directory');
+			setError(t('debug_wizard.select_dir_error'));
 			return;
 		}
 
 		if (!agentName.trim()) {
-			setError('Please enter an agent name');
+			setError(t('debug_wizard.enter_name_error'));
 			return;
 		}
 
@@ -95,13 +97,13 @@ export function DebugWizardModal({
 					)
 					.map((f: { name: string }) => f.name);
 			} catch {
-				setError(`No Auto Run Docs folder found at ${autoRunPath}`);
+				setError(t('debug_wizard.no_folder_error', { path: autoRunPath }));
 				setLoading(false);
 				return;
 			}
 
 			if (files.length === 0) {
-				setError(`No markdown files found in ${autoRunPath}`);
+				setError(t('debug_wizard.no_files_error', { path: autoRunPath }));
 				setLoading(false);
 				return;
 			}
@@ -126,7 +128,7 @@ export function DebugWizardModal({
 			}
 
 			if (documents.length === 0) {
-				setError('Failed to load any documents');
+				setError(t('debug_wizard.load_failed_error'));
 				setLoading(false);
 				return;
 			}
@@ -178,7 +180,7 @@ export function DebugWizardModal({
 	return (
 		<Modal
 			theme={theme}
-			title="Debug: Jump to Phase Review"
+			title={t('debug_wizard.title')}
 			priority={MODAL_PRIORITIES.CONFIRM || 100}
 			onClose={onClose}
 			width={500}
@@ -188,7 +190,7 @@ export function DebugWizardModal({
 					theme={theme}
 					onCancel={onClose}
 					onConfirm={handleSubmit}
-					confirmLabel={loading ? 'Loading...' : 'Jump to Phase Review'}
+					confirmLabel={loading ? t('debug_wizard.loading_button') : t('debug_wizard.jump_button')}
 					confirmDisabled={loading}
 				/>
 			}
@@ -200,7 +202,7 @@ export function DebugWizardModal({
 						className="block text-sm font-medium mb-2"
 						style={{ color: theme.colors.textMain }}
 					>
-						Project Directory
+						{t('debug_wizard.project_dir_label')}
 					</label>
 					<div className="flex gap-2">
 						<input
@@ -208,7 +210,7 @@ export function DebugWizardModal({
 							type="text"
 							value={directoryPath}
 							onChange={(e) => setDirectoryPath(e.target.value)}
-							placeholder="/path/to/project"
+							placeholder={t('debug_wizard.project_dir_placeholder')}
 							className="flex-1 px-3 py-2 rounded-lg text-sm outline-none"
 							style={{
 								backgroundColor: theme.colors.bgMain,
@@ -226,11 +228,11 @@ export function DebugWizardModal({
 							}}
 						>
 							<FolderOpen className="w-4 h-4" />
-							Browse
+							{t('debug_wizard.browse_button')}
 						</button>
 					</div>
 					<p className="text-xs mt-1" style={{ color: theme.colors.textDim }}>
-						Must contain an "{AUTO_RUN_FOLDER_NAME}" folder with .md files
+						{t('debug_wizard.auto_run_hint', { folderName: AUTO_RUN_FOLDER_NAME })}
 					</p>
 				</div>
 
@@ -240,13 +242,13 @@ export function DebugWizardModal({
 						className="block text-sm font-medium mb-2"
 						style={{ color: theme.colors.textMain }}
 					>
-						Agent Name
+						{t('debug_wizard.agent_name_label')}
 					</label>
 					<input
 						type="text"
 						value={agentName}
 						onChange={(e) => setAgentName(e.target.value)}
-						placeholder="My Project"
+						placeholder={t('debug_wizard.agent_name_placeholder')}
 						className="w-full px-3 py-2 rounded-lg text-sm outline-none"
 						style={{
 							backgroundColor: theme.colors.bgMain,

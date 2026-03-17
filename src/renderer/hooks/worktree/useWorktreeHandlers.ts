@@ -22,7 +22,7 @@ import { getModalActions, useModalStore } from '../../stores/modalStore';
 import { useSessionStore } from '../../stores/sessionStore';
 import { useSettingsStore } from '../../stores/settingsStore';
 import { gitService } from '../../services/git';
-import { notifyToast } from '../../stores/notificationStore';
+import { tNotify } from '../../utils/tNotify';
 import { buildWorktreeSession } from '../../utils/worktreeSession';
 import { isRecentlyCreatedWorktreePath } from '../../utils/worktreeDedup';
 
@@ -235,12 +235,11 @@ export function useWorktreeHandlers(): WorktreeHandlersReturn {
 							.setSessions((prev) =>
 								prev.map((s) => (s.id === activeSession.id ? { ...s, worktreesExpanded: true } : s))
 							);
-						notifyToast({
+						tNotify({
 							type: 'success',
-							title: 'Worktrees Discovered',
-							message: `Found ${newWorktreeSessions.length} worktree sub-agent${
-								newWorktreeSessions.length > 1 ? 's' : ''
-							}`,
+							titleKey: 'notifications:worktree.discovered_title',
+							messageKey: 'notifications:worktree.discovered_message',
+							values: { count: newWorktreeSessions.length },
 						});
 					}
 				}
@@ -273,15 +272,14 @@ export function useWorktreeHandlers(): WorktreeHandlersReturn {
 				)
 		);
 
-		const childMessage =
-			worktreeChildCount > 0
-				? ` Removed ${worktreeChildCount} worktree sub-agent${worktreeChildCount > 1 ? 's' : ''}.`
-				: '';
-
-		notifyToast({
+		tNotify({
 			type: 'success',
-			title: 'Worktrees Disabled',
-			message: `Worktree configuration cleared for this agent.${childMessage}`,
+			titleKey: 'notifications:worktree.disabled_title',
+			messageKey:
+				worktreeChildCount > 0
+					? 'notifications:worktree.disabled_with_removed_message'
+					: 'notifications:worktree.disabled_message',
+			values: worktreeChildCount > 0 ? { count: worktreeChildCount } : undefined,
 		});
 	}, []);
 
@@ -290,10 +288,10 @@ export function useWorktreeHandlers(): WorktreeHandlersReturn {
 			const { sessions: currentSessions, activeSessionId } = useSessionStore.getState();
 			const activeSession = currentSessions.find((s) => s.id === activeSessionId);
 			if (!activeSession || !basePath) {
-				notifyToast({
+				tNotify({
 					type: 'error',
-					title: 'Error',
-					message: 'No worktree directory configured',
+					titleKey: 'notifications:worktree.no_directory_title',
+					messageKey: 'notifications:worktree.no_directory_message',
 				});
 				return;
 			}
@@ -353,18 +351,20 @@ export function useWorktreeHandlers(): WorktreeHandlersReturn {
 						worktreeSession,
 					]);
 
-				notifyToast({
+				tNotify({
 					type: 'success',
-					title: 'Worktree Created',
-					message: branchName,
+					titleKey: 'notifications:worktree.created_title',
+					messageKey: 'notifications:worktree.created_message',
+					values: { branch: branchName },
 				});
 			} catch (err) {
 				recentlyCreatedWorktreePathsRef.current.delete(normalizedCreatedPath);
 				console.error('[WorktreeConfig] Failed to create worktree:', err);
-				notifyToast({
+				tNotify({
 					type: 'error',
-					title: 'Failed to Create Worktree',
-					message: err instanceof Error ? err.message : String(err),
+					titleKey: 'notifications:worktree.create_failed_title',
+					messageKey: 'notifications:worktree.create_failed_message',
+					values: { message: err instanceof Error ? err.message : String(err) },
 				});
 				throw err; // Re-throw so the modal can show the error
 			}
@@ -442,10 +442,11 @@ export function useWorktreeHandlers(): WorktreeHandlersReturn {
 				worktreeSession,
 			]);
 
-			notifyToast({
+			tNotify({
 				type: 'success',
-				title: 'Worktree Created',
-				message: branchName,
+				titleKey: 'notifications:worktree.created_title',
+				messageKey: 'notifications:worktree.created_message',
+				values: { branch: branchName },
 			});
 		} catch (err) {
 			recentlyCreatedWorktreePathsRef.current.delete(normalizedCreatedPath);
@@ -666,10 +667,11 @@ export function useWorktreeHandlers(): WorktreeHandlersReturn {
 					prev.map((s) => (s.id === sessionId ? { ...s, worktreesExpanded: true } : s))
 				);
 
-			notifyToast({
+			tNotify({
 				type: 'success',
-				title: 'New Worktree Discovered',
-				message: worktree.branch || worktree.name,
+				titleKey: 'notifications:worktree.new_discovered_title',
+				messageKey: 'notifications:worktree.new_discovered_message',
+				values: { name: worktree.branch || worktree.name },
 			});
 		});
 
@@ -786,10 +788,11 @@ export function useWorktreeHandlers(): WorktreeHandlersReturn {
 					});
 
 					for (const session of newSessionsToAdd) {
-						notifyToast({
+						tNotify({
 							type: 'success',
-							title: 'New Worktree Discovered',
-							message: session.name,
+							titleKey: 'notifications:worktree.new_discovered_title',
+							messageKey: 'notifications:worktree.new_discovered_message',
+							values: { name: session.name },
 						});
 					}
 				}

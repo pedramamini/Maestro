@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Search, File, FileImage, FileText } from 'lucide-react';
 import type { Theme, Shortcut } from '../types';
 import type { FileNode } from '../types/fileTree';
@@ -208,6 +209,7 @@ export function FileSearchModal({
 	onFileSelect,
 	onClose,
 }: FileSearchModalProps) {
+	const { t } = useTranslation('modals');
 	const [search, setSearch] = useState('');
 	const [selectedIndex, setSelectedIndex] = useState(0);
 	const [firstVisibleIndex, setFirstVisibleIndex] = useState(0);
@@ -245,7 +247,7 @@ export function FileSearchModal({
 			blocksLowerLayers: true,
 			capturesFocus: true,
 			focusTrap: 'strict',
-			ariaLabel: 'Fuzzy File Search',
+			ariaLabel: t('file_search.aria_label'),
 			onEscape: () => onCloseRef.current(),
 		});
 
@@ -382,7 +384,7 @@ export function FileSearchModal({
 			<div
 				role="dialog"
 				aria-modal="true"
-				aria-label="Fuzzy File Search"
+				aria-label={t('file_search.aria_label')}
 				tabIndex={-1}
 				className="w-[600px] rounded-xl shadow-2xl border overflow-hidden flex flex-col max-h-[550px] outline-none"
 				style={{ backgroundColor: theme.colors.bgActivity, borderColor: theme.colors.border }}
@@ -396,7 +398,7 @@ export function FileSearchModal({
 					<input
 						ref={inputRef}
 						className="flex-1 bg-transparent outline-none text-lg placeholder-opacity-50"
-						placeholder="Search files..."
+						placeholder={t('file_search.placeholder')}
 						style={{ color: theme.colors.textMain }}
 						value={search}
 						onChange={(e) => handleSearchChange(e.target.value)}
@@ -433,7 +435,7 @@ export function FileSearchModal({
 							color: viewMode === 'visible' ? theme.colors.accentForeground : theme.colors.textDim,
 						}}
 					>
-						Visible Files ({fileCounts.visible})
+						{t('file_search.visible_files_tab', { count: fileCounts.visible })}
 					</button>
 					<button
 						onClick={() => handleViewModeChange('all')}
@@ -443,10 +445,10 @@ export function FileSearchModal({
 							color: viewMode === 'all' ? theme.colors.accentForeground : theme.colors.textDim,
 						}}
 					>
-						All Files ({fileCounts.all})
+						{t('file_search.all_files_tab', { count: fileCounts.all })}
 					</button>
 					<span className="text-[10px] opacity-50 ml-auto" style={{ color: theme.colors.textDim }}>
-						Tab to switch
+						{t('file_search.tab_to_switch')}
 					</span>
 				</div>
 
@@ -534,7 +536,7 @@ export function FileSearchModal({
 							className="px-4 py-4 text-center opacity-50 text-sm"
 							style={{ color: theme.colors.textDim }}
 						>
-							{search ? 'No files match your search' : 'No files to search'}
+							{search ? t('file_search.no_match') : t('file_search.no_files')}
 						</div>
 					)}
 				</div>
@@ -544,8 +546,8 @@ export function FileSearchModal({
 					className="px-4 py-2 border-t text-xs flex items-center justify-between"
 					style={{ borderColor: theme.colors.border, color: theme.colors.textDim }}
 				>
-					<span>{filteredFiles.length} files</span>
-					<span>{`↑↓ navigate • Enter select • ${formatShortcutKeys(['Meta'])}1-9 quick select`}</span>
+					<span>{t('file_search.file_count', { count: filteredFiles.length })}</span>
+					<span>{t('file_search.footer_hint', { shortcut: formatShortcutKeys(['Meta']) })}</span>
 				</div>
 			</div>
 		</div>

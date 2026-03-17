@@ -17,6 +17,7 @@
  */
 
 import { useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 import type { Theme } from '../../types';
 import { IgnorePatternsSection } from './IgnorePatternsSection';
 
@@ -43,6 +44,7 @@ export function SshRemoteIgnoreSection({
 	honorGitignore,
 	onHonorGitignoreChange,
 }: SshRemoteIgnoreSectionProps) {
+	const { t } = useTranslation('settings');
 	const handleReset = useCallback(() => {
 		onHonorGitignoreChange(true);
 	}, [onHonorGitignoreChange]);
@@ -50,8 +52,8 @@ export function SshRemoteIgnoreSection({
 	return (
 		<IgnorePatternsSection
 			theme={theme}
-			title="Remote Ignore Patterns"
-			description="Configure glob patterns for folders to exclude when indexing remote files via SSH. These patterns apply to all SSH connections."
+			title={t('ssh_remote_ignore.title')}
+			description={t('ssh_remote_ignore.description')}
 			ignorePatterns={ignorePatterns}
 			onIgnorePatternsChange={onIgnorePatternsChange}
 			defaultPatterns={SSH_DEFAULT_PATTERNS}

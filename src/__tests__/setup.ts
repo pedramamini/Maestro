@@ -2,6 +2,106 @@ import '@testing-library/jest-dom';
 import { vi } from 'vitest';
 import React from 'react';
 
+// Global mock for react-i18next that resolves keys from all namespaces.
+// Individual test files can override this with their own vi.mock('react-i18next', ...).
+import commonEn from '../shared/i18n/locales/en/common.json';
+import settingsEn from '../shared/i18n/locales/en/settings.json';
+import modalsEn from '../shared/i18n/locales/en/modals.json';
+import menusEn from '../shared/i18n/locales/en/menus.json';
+import notificationsEn from '../shared/i18n/locales/en/notifications.json';
+import accessibilityEn from '../shared/i18n/locales/en/accessibility.json';
+import shortcutsEn from '../shared/i18n/locales/en/shortcuts.json';
+
+const i18nNamespaces: Record<string, Record<string, unknown>> = {
+	common: commonEn,
+	settings: settingsEn,
+	modals: modalsEn,
+	menus: menusEn,
+	notifications: notificationsEn,
+	accessibility: accessibilityEn,
+	shortcuts: shortcutsEn,
+};
+
+function resolveFromNamespace(bareKey: string, namespace: string): string | null {
+	const translations = i18nNamespaces[namespace];
+	if (!translations) return null;
+
+	const parts = bareKey.split('.');
+	let value: unknown = translations;
+	for (const part of parts) {
+		if (value && typeof value === 'object' && part in (value as Record<string, unknown>)) {
+			value = (value as Record<string, unknown>)[part];
+		} else {
+			return null;
+		}
+	}
+	return typeof value === 'string' ? value : null;
+}
+
+function resolveI18nKey(key: string, ns?: string | string[]): string {
+	// Handle namespace:key syntax
+	let bareKey = key;
+	let explicitNs: string | undefined;
+	if (key.includes(':')) {
+		const [nsPrefix, ...rest] = key.split(':');
+		explicitNs = nsPrefix;
+		bareKey = rest.join(':');
+	}
+
+	// Build ordered list of namespaces to try
+	const namespacesToTry: string[] = [];
+	if (explicitNs) {
+		namespacesToTry.push(explicitNs);
+	} else if (Array.isArray(ns)) {
+		namespacesToTry.push(...ns);
+	} else if (ns) {
+		namespacesToTry.push(ns);
+	} else {
+		namespacesToTry.push('common');
+	}
+
+	// Try each namespace in order
+	for (const namespace of namespacesToTry) {
+		const result = resolveFromNamespace(bareKey, namespace);
+		if (result !== null) return result;
+	}
+
+	return key;
+}
+
+function interpolateI18n(result: string, opts?: Record<string, unknown>): string {
+	if (!opts) return result;
+	let out = result;
+	if (opts.defaultValue && out === result) {
+		// only use defaultValue if result was the raw key
+	}
+	for (const [k, v] of Object.entries(opts)) {
+		if (k !== 'defaultValue') {
+			out = out.replace(new RegExp(`\\{\\{${k}\\}\\}`, 'g'), String(v));
+		}
+	}
+	return out;
+}
+
+vi.mock('react-i18next', () => ({
+	useTranslation: (ns?: string | string[]) => ({
+		t: (key: string, opts?: Record<string, unknown>) => {
+			let result = resolveI18nKey(key, ns);
+			if (opts) {
+				if (opts.defaultValue && result === key) {
+					result = String(opts.defaultValue);
+				}
+				result = interpolateI18n(result, opts);
+			}
+			return result;
+		},
+		i18n: { language: 'en', dir: () => 'ltr' },
+		ready: true,
+	}),
+	Trans: ({ children }: { children: React.ReactNode }) => children,
+	initReactI18next: { type: '3rdParty', init: () => {} },
+}));
+
 // Create a mock icon component factory
 const createMockIcon = (name: string) => {
 	const MockIcon = function ({
@@ -121,6 +221,7 @@ vi.mock('../renderer/utils/shortcutFormatter', () => ({
 		enterToSend ? 'Switch to Ctrl+Enter to send' : 'Switch to Enter to send'
 	),
 	isMacOS: vi.fn(() => false),
+	getShortcutLabel: vi.fn((_shortcutId: string, fallbackLabel: string) => fallbackLabel),
 }));
 
 // Mock window.matchMedia for components that use media queries

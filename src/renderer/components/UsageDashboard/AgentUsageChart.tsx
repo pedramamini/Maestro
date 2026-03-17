@@ -16,6 +16,7 @@
 
 import React, { memo, useState, useMemo, useCallback } from 'react';
 import { format, parseISO } from 'date-fns';
+import { useTranslation } from 'react-i18next';
 import type { Theme, Session } from '../../types';
 import type { StatsTimeRange, StatsAggregation } from '../../hooks/stats/useStats';
 import { COLORBLIND_AGENT_PALETTE } from '../../constants/colorblindPalettes';
@@ -169,6 +170,7 @@ export const AgentUsageChart = memo(function AgentUsageChart({
 	colorBlindMode = false,
 	sessions,
 }: AgentUsageChartProps) {
+	const { t: tA } = useTranslation('accessibility');
 	const [hoveredDay, setHoveredDay] = useState<{ dayIndex: number; agent?: string } | null>(null);
 	const [tooltipPos, setTooltipPos] = useState<{ x: number; y: number } | null>(null);
 	const [metricMode, setMetricMode] = useState<'count' | 'duration'>('count');
@@ -331,7 +333,13 @@ export const AgentUsageChart = memo(function AgentUsageChart({
 			className="p-4 rounded-lg"
 			style={{ backgroundColor: theme.colors.bgMain }}
 			role="figure"
-			aria-label={`Agent usage chart showing ${metricMode === 'count' ? 'query counts' : 'duration'} over time. ${agents.length} agents displayed.`}
+			aria-label={tA('dashboard.agent_usage_chart', {
+				metric:
+					metricMode === 'count'
+						? tA('dashboard.query_count_label')
+						: tA('dashboard.total_duration_label'),
+				count: agents.length,
+			})}
 		>
 			{/* Header with title and metric toggle */}
 			<div className="flex items-center justify-between mb-4">
@@ -385,7 +393,12 @@ export const AgentUsageChart = memo(function AgentUsageChart({
 						viewBox={`0 0 ${chartWidth} ${chartHeight}`}
 						preserveAspectRatio="xMidYMid meet"
 						role="img"
-						aria-label={`Line chart showing ${metricMode === 'count' ? 'query counts' : 'duration'} per agent over time`}
+						aria-label={tA('dashboard.agent_usage_line', {
+							metric:
+								metricMode === 'count'
+									? tA('dashboard.query_count_label')
+									: tA('dashboard.total_duration_label'),
+						})}
 					>
 						{/* Grid lines */}
 						{yTicks.map((tick, idx) => (

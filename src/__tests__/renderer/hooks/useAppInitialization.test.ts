@@ -107,6 +107,11 @@ vi.mock('../../../renderer/stores/notificationStore', () => ({
 	notifyToast: vi.fn(),
 }));
 
+const mockTNotify = vi.fn();
+vi.mock('../../../renderer/utils/tNotify', () => ({
+	tNotify: (...args: unknown[]) => mockTNotify(...args),
+}));
+
 // ============================================================================
 // Mock services
 // ============================================================================
@@ -675,8 +680,6 @@ describe('useAppInitialization', () => {
 	// --- Stats DB corruption check ---
 	describe('stats DB corruption check', () => {
 		it('should show toast when stats DB has corruption message', async () => {
-			const { notifyToast: mockNotifyToast } =
-				await import('../../../renderer/stores/notificationStore');
 			mockGetInitializationResult.mockResolvedValue({
 				userMessage: 'Database was reset due to corruption',
 			});
@@ -684,24 +687,23 @@ describe('useAppInitialization', () => {
 			renderHook(() => useAppInitialization());
 			await act(flushPromises);
 
-			expect(mockNotifyToast).toHaveBeenCalledWith({
+			expect(mockTNotify).toHaveBeenCalledWith({
 				type: 'warning',
-				title: 'Statistics Database',
-				message: 'Database was reset due to corruption',
+				titleKey: 'notifications:stats.database_title',
+				messageKey: 'notifications:stats.database_message',
+				values: { message: 'Database was reset due to corruption' },
 				duration: 10000,
 			});
 			expect(mockClearInitializationResult).toHaveBeenCalled();
 		});
 
 		it('should not show toast when no corruption', async () => {
-			const { notifyToast: mockNotifyToast } =
-				await import('../../../renderer/stores/notificationStore');
 			mockGetInitializationResult.mockResolvedValue(null);
 
 			renderHook(() => useAppInitialization());
 			await act(flushPromises);
 
-			expect(mockNotifyToast).not.toHaveBeenCalled();
+			expect(mockTNotify).not.toHaveBeenCalled();
 		});
 	});
 

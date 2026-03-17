@@ -2,6 +2,7 @@ import { memo } from 'react';
 import type { Session, Group, Theme } from '../../types';
 import { getStatusColor } from '../../utils/theme';
 import { SessionTooltipContent } from './SessionTooltipContent';
+import { useI18n } from '../../hooks/useI18n';
 
 interface SkinnySidebarProps {
 	theme: Theme;
@@ -28,6 +29,7 @@ export const SkinnySidebar = memo(function SkinnySidebar({
 	setActiveSessionId,
 	handleContextMenu,
 }: SkinnySidebarProps) {
+	const { t: ta } = useI18n('accessibility');
 	return (
 		<div className="flex-1 flex flex-col items-center py-4 gap-2 overflow-y-auto overflow-x-visible no-scrollbar">
 			{sortedSessions.map((session) => {
@@ -45,7 +47,7 @@ export const SkinnySidebar = memo(function SkinnySidebar({
 						key={session.id}
 						role="button"
 						tabIndex={0}
-						aria-label={`Switch to ${session.name}`}
+						aria-label={ta('navigation.switch_to_session', { name: session.name })}
 						onClick={() => setActiveSessionId(session.id)}
 						onContextMenu={(e) => handleContextMenu(e, session.id)}
 						onKeyDown={(e) => {

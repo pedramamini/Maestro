@@ -14,6 +14,7 @@
  */
 
 import { useEffect, useRef, useState, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { Brain } from 'lucide-react';
@@ -37,6 +38,7 @@ import { ScreenReaderAnnouncement } from '../ScreenReaderAnnouncement';
 import { formatShortcutKeys } from '../../../utils/shortcutFormatter';
 import { TypingIndicator } from '../shared/TypingIndicator';
 import { formatAgentName, getToolDetail } from '../shared/wizardHelpers';
+import { getActiveLocale } from '../../../utils/formatters';
 
 interface ConversationScreenProps {
 	theme: Theme;
@@ -51,7 +53,7 @@ interface ConversationScreenProps {
  */
 function formatTimestamp(timestamp: number): string {
 	const date = new Date(timestamp);
-	return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+	return date.toLocaleTimeString(getActiveLocale(), { hour: '2-digit', minute: '2-digit' });
 }
 
 /**
@@ -80,6 +82,7 @@ function containsDeferredResponsePhrase(message: string): boolean {
  * ConfidenceMeter - Horizontal progress bar with gradient fill
  */
 function ConfidenceMeter({ confidence, theme }: { confidence: number; theme: Theme }): JSX.Element {
+	const { t } = useTranslation('modals');
 	const clampedConfidence = Math.max(0, Math.min(100, confidence));
 	const confidenceColor = getConfidenceColor(clampedConfidence);
 
@@ -87,7 +90,7 @@ function ConfidenceMeter({ confidence, theme }: { confidence: number; theme: The
 		<div className="w-full">
 			<div className="flex items-center justify-between mb-2">
 				<span className="text-sm font-medium" style={{ color: theme.colors.textMain }}>
-					Project Understanding Confidence
+					{t('wizard.conversation.confidence_label')}
 				</span>
 				<span className="text-sm font-bold" style={{ color: confidenceColor }}>
 					{clampedConfidence}%
@@ -108,7 +111,7 @@ function ConfidenceMeter({ confidence, theme }: { confidence: number; theme: The
 			</div>
 			{clampedConfidence >= READY_CONFIDENCE_THRESHOLD && (
 				<p className="text-xs mt-1 text-center" style={{ color: theme.colors.success }}>
-					Ready to create your Playbook!
+					{t('wizard.conversation.ready_message')}
 				</p>
 			)}
 		</div>
@@ -129,6 +132,7 @@ function MessageBubble({
 	agentName: string;
 	providerName?: string;
 }): JSX.Element {
+	const { t } = useTranslation('modals');
 	const isUser = message.role === 'user';
 	const isSystem = message.role === 'system';
 
@@ -163,7 +167,7 @@ function MessageBubble({
 										color: getConfidenceColor(message.confidence),
 									}}
 								>
-									{message.confidence}% confident
+									{t('wizard.conversation.confident_badge', { confidence: message.confidence })}
 								</span>
 							)}
 						</div>
@@ -323,6 +327,8 @@ function ThinkingDisplay({
 	thinkingContent: string;
 	toolExecutions: Array<{ toolName: string; state?: unknown; timestamp: number }>;
 }): JSX.Element {
+	const { t } = useTranslation('modals');
+
 	return (
 		<div className="flex justify-start mb-4" data-testid="wizard-thinking-display">
 			<div
@@ -366,7 +372,8 @@ function ThinkingDisplay({
 					style={{ color: theme.colors.textDim, opacity: 0.85 }}
 					data-testid="thinking-display-content"
 				>
-					{thinkingContent || (toolExecutions.length === 0 ? 'Reasoning...' : '')}
+					{thinkingContent ||
+						(toolExecutions.length === 0 ? t('wizard.conversation.reasoning_label') : '')}
 					<span className="animate-pulse ml-1" data-testid="thinking-cursor">
 						▊
 					</span>
@@ -384,6 +391,8 @@ export function ConversationScreen({
 	showThinking,
 	setShowThinking,
 }: ConversationScreenProps): JSX.Element {
+	const { t } = useTranslation('modals');
+
 	const {
 		state,
 		addMessage,
@@ -558,7 +567,7 @@ export function ConversationScreen({
 			} catch (error) {
 				console.error('Failed to initialize conversation:', error);
 				if (mounted) {
-					setConversationError('Failed to initialize conversation. Please try again.');
+					setConversationError(t('wizard.conversation.error_init_failed'));
 				}
 			}
 		}
@@ -660,7 +669,7 @@ export function ConversationScreen({
 		setConversationLoading(true);
 
 		// Announce that AI is thinking
-		setAnnouncement('Message sent. AI assistant is thinking...');
+		setAnnouncement(t('wizard.conversation.announce_sent'));
 		setAnnouncementKey((prev) => prev + 1);
 
 		try {
@@ -669,7 +678,7 @@ export function ConversationScreen({
 				// Safety check: selectedAgent should always be set at this point
 				// but we guard against null to prevent crashes
 				if (!state.selectedAgent) {
-					setConversationError('No agent selected. Please go back and select an agent.');
+					setConversationError(t('wizard.conversation.error_no_agent'));
 					setConversationLoading(false);
 					return;
 				}
@@ -789,7 +798,7 @@ export function ConversationScreen({
 							} else {
 								// No structured data - just announce response received
 								console.log('[ConversationScreen] No structured data in response');
-								setAnnouncement('Response received from AI assistant.');
+								setAnnouncement(t('wizard.conversation.announce_received'));
 								setAnnouncementKey((prev) => prev + 1);
 							}
 
@@ -897,14 +906,14 @@ export function ConversationScreen({
 		setConversationLoading(true);
 
 		// Announce that AI is analyzing
-		setAnnouncement('Analyzing existing documents...');
+		setAnnouncement(t('wizard.conversation.announce_analyzing'));
 		setAnnouncementKey((prev) => prev + 1);
 
 		try {
 			// Re-initialize conversation if needed
 			if (!conversationManager.isConversationActive()) {
 				if (!state.selectedAgent) {
-					setConversationError('No agent selected. Please go back and select an agent.');
+					setConversationError(t('wizard.conversation.error_no_agent'));
 					setConversationLoading(false);
 					return;
 				}
@@ -1005,7 +1014,7 @@ export function ConversationScreen({
 									setAnnouncementKey((prev) => prev + 1);
 								}
 							} else {
-								setAnnouncement('Analysis complete.');
+								setAnnouncement(t('wizard.conversation.announce_analysis_complete'));
 								setAnnouncementKey((prev) => prev + 1);
 							}
 
@@ -1274,10 +1283,10 @@ export function ConversationScreen({
 								}}
 							>
 								{detectedError && !detectedError.canRetry
-									? 'Dismiss'
+									? t('wizard.conversation.error_dismiss')
 									: errorRetryCount > 2
-										? 'Try Again'
-										: 'Dismiss'}
+										? t('wizard.conversation.error_try_again')
+										: t('wizard.conversation.error_dismiss')}
 							</button>
 							{/* Go Back button for non-recoverable errors */}
 							{detectedError && !detectedError.canRetry && (
@@ -1292,7 +1301,7 @@ export function ConversationScreen({
 										['--tw-ring-offset-color' as any]: theme.colors.bgMain,
 									}}
 								>
-									Go Back
+									{t('wizard.conversation.error_go_back')}
 								</button>
 							)}
 						</div>
@@ -1302,7 +1311,7 @@ export function ConversationScreen({
 							className="mt-3 text-xs underline hover:opacity-80 transition-opacity cursor-pointer"
 							style={{ color: theme.colors.textDim }}
 						>
-							(Debug Logs)
+							{t('wizard.conversation.debug_logs')}
 						</button>
 					</div>
 				)}
@@ -1317,7 +1326,7 @@ export function ConversationScreen({
 						}}
 					>
 						<p className="text-sm font-medium mb-3" style={{ color: theme.colors.success }}>
-							I think I have a good understanding of your project. Ready to create your Playbook?
+							{t('wizard.conversation.ready_prompt')}
 						</p>
 						<button
 							onClick={handleLetsGo}
@@ -1330,10 +1339,10 @@ export function ConversationScreen({
 								['--tw-ring-offset-color' as any]: theme.colors.bgMain,
 							}}
 						>
-							Let's Get Started!
+							{t('wizard.conversation.lets_get_started')}
 						</button>
 						<p className="text-xs mt-3" style={{ color: theme.colors.textDim }}>
-							Or continue chatting below to add more details
+							{t('wizard.conversation.continue_chatting')}
 						</p>
 					</div>
 				)}
@@ -1363,7 +1372,7 @@ export function ConversationScreen({
 								className="w-2 h-2 rounded-full animate-pulse"
 								style={{ backgroundColor: theme.colors.accent }}
 							/>
-							<span>Your turn — continue the conversation</span>
+							<span>{t('wizard.conversation.your_turn')}</span>
 						</div>
 					)}
 				<div className="flex gap-3">
@@ -1380,7 +1389,7 @@ export function ConversationScreen({
 								}
 								// Plain Enter adds newline (default textarea behavior)
 							}}
-							placeholder="Describe your project..."
+							placeholder={t('wizard.conversation.placeholder')}
 							disabled={state.isConversationLoading}
 							rows={1}
 							className="w-full px-4 py-3 rounded-lg border resize-none outline-none transition-all"
@@ -1434,7 +1443,7 @@ export function ConversationScreen({
 								/>
 							</svg>
 						)}
-						Send
+						{t('wizard.conversation.send_button')}
 					</button>
 				</div>
 
@@ -1453,7 +1462,11 @@ export function ConversationScreen({
 							className={`flex items-center gap-1 px-2 py-1 rounded hover:bg-white/5 transition-opacity focus:outline-none focus:ring-2 focus:ring-offset-1 ${
 								showThinking ? 'opacity-100' : 'opacity-50 hover:opacity-100'
 							}`}
-							title={showThinking ? 'Hide AI thinking (show filler messages)' : 'Show AI thinking'}
+							title={
+								showThinking
+									? t('wizard.conversation.hide_thinking_tooltip')
+									: t('wizard.conversation.show_thinking_tooltip')
+							}
 							style={
 								showThinking
 									? {
@@ -1469,7 +1482,7 @@ export function ConversationScreen({
 							}
 						>
 							<Brain className="w-3 h-3" />
-							<span>Thinking</span>
+							<span>{t('wizard.conversation.thinking_label')}</span>
 						</button>
 					</span>
 					<span className="text-xs flex items-center gap-1" style={{ color: theme.colors.textDim }}>
@@ -1479,7 +1492,7 @@ export function ConversationScreen({
 						>
 							{formatShortcutKeys(['Meta', 'Enter'])}
 						</kbd>
-						Send
+						{t('wizard.conversation.kbd_send')}
 					</span>
 					<span className="text-xs flex items-center gap-1" style={{ color: theme.colors.textDim }}>
 						<kbd
@@ -1488,7 +1501,7 @@ export function ConversationScreen({
 						>
 							Enter
 						</kbd>
-						New line
+						{t('wizard.conversation.kbd_new_line')}
 					</span>
 					<span className="text-xs flex items-center gap-1" style={{ color: theme.colors.textDim }}>
 						<kbd
@@ -1497,7 +1510,7 @@ export function ConversationScreen({
 						>
 							Esc
 						</kbd>
-						Exit Wizard
+						{t('wizard.conversation.kbd_exit')}
 					</span>
 				</div>
 			</div>

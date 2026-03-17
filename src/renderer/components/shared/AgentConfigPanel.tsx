@@ -14,6 +14,7 @@
  */
 
 import { useState, useRef, useMemo, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { RefreshCw, Plus, Trash2, HelpCircle, ChevronDown } from 'lucide-react';
 import type { Theme, AgentConfig, AgentConfigOption } from '../../types';
 
@@ -53,6 +54,7 @@ function ModelTextInput({
 	loadingModels,
 	onRefreshModels,
 }: ModelTextInputProps): JSX.Element {
+	const { t } = useTranslation('settings');
 	const [showDropdown, setShowDropdown] = useState(false);
 	const [filterText, setFilterText] = useState('');
 	// Track whether we're in filter mode (typing to filter dropdown vs direct input)
@@ -217,7 +219,7 @@ function ModelTextInput({
 							onRefreshModels();
 						}}
 						className="p-2 rounded border hover:bg-white/10 transition-colors"
-						title="Refresh available models"
+						title={t('agent_config.refresh_models')}
 						style={{ borderColor: theme.colors.border, color: theme.colors.textDim }}
 					>
 						<RefreshCw className={`w-3 h-3 ${loadingModels ? 'animate-spin' : ''}`} />
@@ -226,12 +228,17 @@ function ModelTextInput({
 			</div>
 			{isModelField && loadingModels && (
 				<p className="text-xs mt-1" style={{ color: theme.colors.textDim }}>
-					Loading available models...
+					{t('agent_config.loading_models')}
 				</p>
 			)}
 			{isModelField && !loadingModels && hasModels && (
 				<p className="text-xs mt-1" style={{ color: theme.colors.textDim }}>
-					{availableModels.length} model{availableModels.length !== 1 ? 's' : ''} available
+					{t(
+						availableModels.length !== 1
+							? 'agent_config.models_available_plural'
+							: 'agent_config.models_available',
+						{ count: availableModels.length }
+					)}
 				</p>
 			)}
 		</>
@@ -307,6 +314,7 @@ export function AgentConfigPanel({
 	showBuiltInEnvVars = false,
 	isSshEnabled = false,
 }: AgentConfigPanelProps): JSX.Element {
+	const { t } = useTranslation('settings');
 	const callOnConfigBlurSafely = (key: string, committedValue: any) => {
 		const maybePromise = onConfigBlur(key, committedValue);
 		if (maybePromise && typeof (maybePromise as Promise<void>).catch === 'function') {
@@ -386,16 +394,18 @@ export function AgentConfigPanel({
 					className="block text-xs font-medium mb-2 flex items-center justify-between"
 					style={{ color: theme.colors.textDim }}
 				>
-					<span>{isSshEnabled ? 'Remote Command' : 'Path'}</span>
+					<span>
+						{isSshEnabled ? t('agent_config.remote_command') : t('agent_config.path_label')}
+					</span>
 					{onRefreshAgent && !isSshEnabled && (
 						<button
 							onClick={onRefreshAgent}
 							className="p-1 rounded hover:bg-white/10 transition-colors flex items-center gap-1"
-							title="Re-detect agent path"
+							title={t('agent_config.detect_path')}
 							style={{ color: theme.colors.textDim }}
 						>
 							<RefreshCw className={`w-3 h-3 ${refreshingAgent ? 'animate-spin' : ''}`} />
-							<span className="text-xs">Detect</span>
+							<span className="text-xs">{t('agent_config.detect')}</span>
 						</button>
 					)}
 				</label>
@@ -425,16 +435,18 @@ export function AgentConfigPanel({
 							}}
 							className="px-2 py-1.5 rounded text-xs"
 							style={{ backgroundColor: theme.colors.bgActivity, color: theme.colors.textDim }}
-							title={isSshEnabled ? 'Reset to remote binary name' : 'Reset to detected path'}
+							title={
+								isSshEnabled ? t('agent_config.reset_remote') : t('agent_config.reset_detected')
+							}
 						>
-							Reset
+							{t('agent_config.reset')}
 						</button>
 					)}
 				</div>
 				<p className="text-xs opacity-50 mt-2">
 					{isSshEnabled
-						? `Remote command/binary for ${agent.binaryName}. Leave empty to use default.`
-						: `Path to the ${agent.binaryName} binary. Edit to override the auto-detected path.`}
+						? t('agent_config.remote_path_help', { binaryName: agent.binaryName })
+						: t('agent_config.local_path_help', { binaryName: agent.binaryName })}
 				</p>
 			</div>
 
@@ -444,7 +456,7 @@ export function AgentConfigPanel({
 				style={{ borderColor: theme.colors.border, backgroundColor: theme.colors.bgMain }}
 			>
 				<label className="block text-xs font-medium mb-2" style={{ color: theme.colors.textDim }}>
-					Custom Arguments (optional)
+					{t('agent_config.custom_args_label')}
 				</label>
 				<div className="flex gap-2">
 					<input
@@ -466,13 +478,11 @@ export function AgentConfigPanel({
 							className="px-2 py-1.5 rounded text-xs"
 							style={{ backgroundColor: theme.colors.bgActivity, color: theme.colors.textDim }}
 						>
-							Clear
+							{t('agent_config.clear')}
 						</button>
 					)}
 				</div>
-				<p className="text-xs opacity-50 mt-2">
-					Additional CLI arguments appended to all calls to this agent
-				</p>
+				<p className="text-xs opacity-50 mt-2">{t('agent_config.custom_args_help')}</p>
 			</div>
 
 			{/* Custom environment variables input */}
@@ -481,7 +491,7 @@ export function AgentConfigPanel({
 				style={{ borderColor: theme.colors.border, backgroundColor: theme.colors.bgMain }}
 			>
 				<label className="block text-xs font-medium mb-2" style={{ color: theme.colors.textDim }}>
-					Environment Variables (optional)
+					{t('agent_config.env_vars_label')}
 				</label>
 				<div className="space-y-2">
 					{/* Built-in env vars (read-only, shown when showBuiltInEnvVars is true) */}
@@ -505,7 +515,7 @@ export function AgentConfigPanel({
 											}}
 											onBlur={() => setTimeout(() => setShowingTooltip(null), 150)}
 											className="p-0.5 rounded hover:bg-white/10 transition-colors"
-											title="What is this?"
+											title={t('agent_config.what_is_this')}
 											style={{ color: theme.colors.accent }}
 										>
 											<HelpCircle className="w-3 h-3" />
@@ -570,7 +580,7 @@ export function AgentConfigPanel({
 									onEnvVarRemove(key);
 								}}
 								className="p-2 rounded hover:bg-white/10 transition-colors"
-								title="Remove variable"
+								title={t('agent_config.remove_variable')}
 								style={{ color: theme.colors.textDim }}
 							>
 								<Trash2 className="w-3 h-3" />
@@ -587,13 +597,10 @@ export function AgentConfigPanel({
 						style={{ color: theme.colors.textDim }}
 					>
 						<Plus className="w-3 h-3" />
-						Add Variable
+						{t('agent_config.add_variable')}
 					</button>
 				</div>
-				<p className="text-xs opacity-50 mt-2">
-					Agent-specific environment variables (overrides global environment variables from
-					Settings). These are passed to all calls to this agent.
-				</p>
+				<p className="text-xs opacity-50 mt-2">{t('agent_config.env_vars_help')}</p>
 			</div>
 
 			{/* Agent-specific configuration options (contextWindow, model, etc.) */}
@@ -663,7 +670,7 @@ export function AgentConfigPanel({
 									style={{ accentColor: theme.colors.accent }}
 								/>
 								<span className="text-xs" style={{ color: theme.colors.textMain }}>
-									Enabled
+									{t('agent_config.enabled')}
 								</span>
 							</label>
 						)}

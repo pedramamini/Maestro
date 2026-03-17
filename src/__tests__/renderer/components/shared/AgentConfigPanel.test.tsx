@@ -9,6 +9,40 @@ import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { AgentConfigPanel } from '../../../../renderer/components/shared/AgentConfigPanel';
 import type { Theme, AgentConfig } from '../../../../renderer/types';
+import settingsEn from '../../../../shared/i18n/locales/en/settings.json';
+
+// Mock react-i18next to resolve keys from actual English translations
+vi.mock('react-i18next', () => {
+	const resolve = (key: string): string => {
+		const bareKey = key.includes(':') ? key.split(':').slice(1).join(':') : key;
+		const parts = bareKey.split('.');
+		let value: unknown = settingsEn;
+		for (const part of parts) {
+			if (value && typeof value === 'object' && part in (value as Record<string, unknown>)) {
+				value = (value as Record<string, unknown>)[part];
+			} else {
+				return key;
+			}
+		}
+		return typeof value === 'string' ? value : key;
+	};
+
+	return {
+		useTranslation: () => ({
+			t: (key: string, opts?: Record<string, unknown>) => {
+				let result = resolve(key);
+				if (opts) {
+					for (const [k, v] of Object.entries(opts)) {
+						result = result.replace(new RegExp(`\\{\\{${k}\\}\\}`, 'g'), String(v));
+					}
+				}
+				return result;
+			},
+			i18n: { language: 'en' },
+			ready: true,
+		}),
+	};
+});
 
 // Mock lucide-react icons
 vi.mock('lucide-react', () => ({

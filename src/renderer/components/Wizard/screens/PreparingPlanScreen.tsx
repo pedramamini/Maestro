@@ -14,6 +14,7 @@
  */
 
 import { useEffect, useCallback, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { ChevronRight, ChevronDown, FileText } from 'lucide-react';
 import type { Theme } from '../../../types';
 import { useWizard } from '../WizardContext';
@@ -143,6 +144,7 @@ function FactContent({
  * Supports markdown-style links: [text](url)
  */
 function AustinFactTypewriter({ theme }: { theme: Theme }): JSX.Element {
+	const { t } = useTranslation('modals');
 	const [currentFact, setCurrentFact] = useState(() => getNextAustinFact());
 	const [displayLength, setDisplayLength] = useState(0);
 	const [isTypingComplete, setIsTypingComplete] = useState(false);
@@ -198,7 +200,7 @@ function AustinFactTypewriter({ theme }: { theme: Theme }): JSX.Element {
 						className="text-xs font-medium uppercase tracking-wide mb-1"
 						style={{ color: theme.colors.accent }}
 					>
-						Austin Facts
+						{t('wizard.preparing.austin_facts_label')}
 					</p>
 					<p
 						className="text-sm leading-relaxed"
@@ -237,6 +239,8 @@ function CreatedFileEntry({
 	theme: Theme;
 	onToggle: () => void;
 }): JSX.Element {
+	const { t } = useTranslation('modals');
+
 	return (
 		<div
 			className="overflow-hidden transition-all duration-300"
@@ -283,7 +287,7 @@ function CreatedFileEntry({
 								color: theme.colors.accent,
 							}}
 						>
-							{file.taskCount} {file.taskCount === 1 ? 'task' : 'tasks'}
+							{t('wizard.preparing.task_count', { count: file.taskCount })}
 						</span>
 					)}
 					{/* File size */}
@@ -327,6 +331,8 @@ function CreatedFilesList({
 	files: CreatedFileInfo[];
 	theme: Theme;
 }): JSX.Element | null {
+	const { t } = useTranslation('modals');
+
 	// Track which files are expanded (by filename)
 	const [expandedFiles, setExpandedFiles] = useState<Set<string>>(new Set());
 	// Track files the user has manually toggled - we never auto-change these
@@ -403,7 +409,7 @@ function CreatedFilesList({
 					className="text-xs font-medium uppercase tracking-wide"
 					style={{ color: theme.colors.success }}
 				>
-					Work Plans Drafted ({files.length})
+					{t('wizard.preparing.work_plans_header', { count: files.length })}
 				</span>
 			</div>
 			{/* Responsive list - grows to fit content but scrolls if too many */}
@@ -449,6 +455,8 @@ function LoadingIndicator({
 	createdFiles?: CreatedFileInfo[];
 	startTime?: number;
 }): JSX.Element {
+	const { t } = useTranslation('modals');
+
 	// Calculate total tasks across all files
 	const totalTasks = createdFiles.reduce((sum, file) => sum + (file.taskCount || 0), 0);
 
@@ -501,12 +509,11 @@ function LoadingIndicator({
 
 				{/* Subtitle with elapsed time */}
 				<p className="text-sm text-center max-w-md" style={{ color: theme.colors.textDim }}>
-					This may take a while. We're creating detailed task documents based on your project
-					requirements.
+					{t('wizard.preparing.subtitle')}
 				</p>
 				{startTime && elapsedMs > 0 && (
 					<p className="text-xs mt-1 font-mono" style={{ color: theme.colors.textDim }}>
-						Elapsed: {formatElapsedTime(elapsedMs)}
+						{t('wizard.preparing.elapsed', { time: formatElapsedTime(elapsedMs) })}
 					</p>
 				)}
 
@@ -517,7 +524,7 @@ function LoadingIndicator({
 							{totalTasks}
 						</span>
 						<span className="text-lg font-medium" style={{ color: theme.colors.textMain }}>
-							{totalTasks === 1 ? 'Task' : 'Tasks'} Planned
+							{t('wizard.preparing.tasks_planned', { count: totalTasks })}
 						</span>
 					</div>
 				) : (
@@ -581,6 +588,8 @@ function ErrorDisplay({
 	onSkip: () => void;
 	theme: Theme;
 }): JSX.Element {
+	const { t } = useTranslation('modals');
+
 	const handleDownloadDebugLogs = () => {
 		wizardDebugLogger.downloadLogs();
 	};
@@ -607,7 +616,7 @@ function ErrorDisplay({
 				className="text-xl font-semibold mb-2 text-center"
 				style={{ color: theme.colors.textMain }}
 			>
-				Generation Failed
+				{t('wizard.preparing.error_title')}
 			</h3>
 			<p className="text-sm text-center max-w-md mb-6" style={{ color: theme.colors.error }}>
 				{error}
@@ -623,7 +632,7 @@ function ErrorDisplay({
 						color: theme.colors.accentForeground,
 					}}
 				>
-					Try Again
+					{t('wizard.preparing.retry_button')}
 				</button>
 				<button
 					onClick={onSkip}
@@ -633,7 +642,7 @@ function ErrorDisplay({
 						color: theme.colors.textDim,
 					}}
 				>
-					Go Back
+					{t('wizard.preparing.go_back_button')}
 				</button>
 			</div>
 
@@ -643,7 +652,7 @@ function ErrorDisplay({
 				className="mt-6 text-xs underline hover:opacity-80 transition-opacity cursor-pointer"
 				style={{ color: theme.colors.textDim }}
 			>
-				(Debug Logs)
+				{t('wizard.preparing.debug_logs')}
 			</button>
 		</div>
 	);
@@ -659,6 +668,8 @@ function ErrorDisplay({
  * 4. Auto-advancing to phase-review when generation completes
  */
 export function PreparingPlanScreen({ theme }: PreparingPlanScreenProps): JSX.Element {
+	const { t } = useTranslation('modals');
+
 	const {
 		state,
 		setGeneratingDocuments,
@@ -668,7 +679,7 @@ export function PreparingPlanScreen({ theme }: PreparingPlanScreenProps): JSX.El
 		nextStep,
 	} = useWizard();
 
-	const [progressMessage, setProgressMessage] = useState('Generating Auto Run Documents...');
+	const [progressMessage, setProgressMessage] = useState(t('wizard.preparing.title'));
 	const generationStartedRef = useRef(false);
 
 	// Track files as they are created (from FS watcher or saveDocuments callback)
@@ -694,7 +705,7 @@ export function PreparingPlanScreen({ theme }: PreparingPlanScreenProps): JSX.El
 
 		setGeneratingDocuments(true);
 		setGenerationError(null);
-		setProgressMessage('Generating Auto Run Documents...');
+		setProgressMessage(t('wizard.preparing.title'));
 		setCreatedFiles([]); // Reset files list
 		seenFilesRef.current.clear(); // Reset seen files tracking
 		setGenerationStartTime(Date.now()); // Start elapsed time tracking
@@ -730,7 +741,7 @@ export function PreparingPlanScreen({ theme }: PreparingPlanScreenProps): JSX.El
 				},
 				{
 					onStart: () => {
-						setProgressMessage('Starting document generation...');
+						setProgressMessage(t('wizard.preparing.starting'));
 					},
 					onProgress: (message) => {
 						setProgressMessage(message);
@@ -767,7 +778,7 @@ export function PreparingPlanScreen({ theme }: PreparingPlanScreenProps): JSX.El
 							}
 
 							// Save documents to disk in "Initiation" subfolder
-							setProgressMessage('Saving documents...');
+							setProgressMessage(t('wizard.preparing.saving'));
 							const saveResult = await phaseGenerator.saveDocuments(
 								state.directoryPath,
 								genResult.documents,

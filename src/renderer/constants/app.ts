@@ -3,6 +3,8 @@
  * These are Claude Code tool-related constants used for output parsing and command handling
  */
 
+import i18n from '../../shared/i18n/config';
+
 /**
  * Known Claude Code tool names - used to detect concatenated tool name patterns
  * that shouldn't appear in thinking content
@@ -73,7 +75,25 @@ export function isLikelyConcatenatedToolNames(text: string): boolean {
 }
 
 /**
- * Built-in Claude Code slash commands with their descriptions
+ * Maps built-in command names to their i18n keys in the 'common' namespace.
+ */
+const BUILTIN_COMMAND_I18N_KEYS: Record<string, string> = {
+	compact: 'slash_commands.compact',
+	context: 'slash_commands.context',
+	cost: 'slash_commands.cost',
+	init: 'slash_commands.init',
+	'pr-comments': 'slash_commands.pr_comments',
+	'release-notes': 'slash_commands.release_notes',
+	todos: 'slash_commands.todos',
+	review: 'slash_commands.review',
+	'security-review': 'slash_commands.security_review',
+	plan: 'slash_commands.plan',
+};
+
+/**
+ * Built-in Claude Code slash commands with their descriptions.
+ * Kept as a static object for backward compatibility; callers that need
+ * translated descriptions should use getSlashCommandDescription() instead.
  */
 export const CLAUDE_BUILTIN_COMMANDS: Record<string, string> = {
 	compact: 'Summarize conversation to reduce context usage',
@@ -89,24 +109,25 @@ export const CLAUDE_BUILTIN_COMMANDS: Record<string, string> = {
 };
 
 /**
- * Get description for Claude Code slash commands
- * Built-in commands have known descriptions, custom ones use a generic description
+ * Get description for Claude Code slash commands.
+ * Returns i18n-translated description when available.
  */
 export function getSlashCommandDescription(cmd: string): string {
 	// Remove leading slash if present
 	const cmdName = cmd.startsWith('/') ? cmd.slice(1) : cmd;
 
-	// Check for built-in command
-	if (CLAUDE_BUILTIN_COMMANDS[cmdName]) {
-		return CLAUDE_BUILTIN_COMMANDS[cmdName];
+	// Check for built-in command with i18n key
+	const i18nKey = BUILTIN_COMMAND_I18N_KEYS[cmdName];
+	if (i18nKey) {
+		return i18n.t(`common:${i18nKey}` as any);
 	}
 
 	// For plugin commands (e.g., "plugin-name:command"), use the full name as description hint
 	if (cmdName.includes(':')) {
 		const [plugin, command] = cmdName.split(':');
-		return `${command} (${plugin})`;
+		return i18n.t('common:slash_commands.plugin_format', { command, plugin });
 	}
 
 	// Generic description for unknown commands
-	return 'Claude Code command';
+	return i18n.t('common:slash_commands.generic_command');
 }

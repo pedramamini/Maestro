@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, memo } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
 	X,
 	Key,
@@ -94,6 +95,8 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 		setSshRemoteHonorGitignore,
 	} = useSettings();
 
+	const { t } = useTranslation('settings');
+
 	const [activeTab, setActiveTab] = useState<
 		| 'general'
 		| 'display'
@@ -136,7 +139,7 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 			blocksLowerLayers: true,
 			capturesFocus: true,
 			focusTrap: 'strict',
-			ariaLabel: 'Settings',
+			ariaLabel: t('modal.aria_label'),
 			onEscape: () => {
 				// If recording a shortcut, ShortcutsTab handles its own escape via onKeyDownCapture
 				if (isRecordingShortcutRef.current) return;
@@ -217,7 +220,7 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 
 			if (llmProvider === 'openrouter') {
 				if (!apiKey) {
-					throw new Error('API key is required for OpenRouter');
+					throw new Error(t('llm.api_key_required_error', { provider: 'OpenRouter' }));
 				}
 
 				response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
@@ -236,21 +239,24 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 
 				if (!response.ok) {
 					const error = await response.json();
-					throw new Error(error.error?.message || `OpenRouter API error: ${response.status}`);
+					throw new Error(
+						error.error?.message ||
+							t('llm.api_error', { provider: 'OpenRouter', status: response.status })
+					);
 				}
 
 				const data = await response.json();
 				if (!data.choices?.[0]?.message?.content) {
-					throw new Error('Invalid response from OpenRouter');
+					throw new Error(t('llm.invalid_response_error', { provider: 'OpenRouter' }));
 				}
 
 				setTestResult({
 					status: 'success',
-					message: 'Successfully connected to OpenRouter!',
+					message: t('llm.connection_success', { provider: 'OpenRouter' }),
 				});
 			} else if (llmProvider === 'anthropic') {
 				if (!apiKey) {
-					throw new Error('API key is required for Anthropic');
+					throw new Error(t('llm.api_key_required_error', { provider: 'Anthropic' }));
 				}
 
 				response = await fetch('https://api.anthropic.com/v1/messages', {
@@ -269,17 +275,20 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 
 				if (!response.ok) {
 					const error = await response.json();
-					throw new Error(error.error?.message || `Anthropic API error: ${response.status}`);
+					throw new Error(
+						error.error?.message ||
+							t('llm.api_error', { provider: 'Anthropic', status: response.status })
+					);
 				}
 
 				const data = await response.json();
 				if (!data.content?.[0]?.text) {
-					throw new Error('Invalid response from Anthropic');
+					throw new Error(t('llm.invalid_response_error', { provider: 'Anthropic' }));
 				}
 
 				setTestResult({
 					status: 'success',
-					message: 'Successfully connected to Anthropic!',
+					message: t('llm.connection_success', { provider: 'Anthropic' }),
 				});
 			} else if (llmProvider === 'ollama') {
 				response = await fetch('http://localhost:11434/api/generate', {
@@ -295,25 +304,23 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 				});
 
 				if (!response.ok) {
-					throw new Error(
-						`Ollama API error: ${response.status}. Make sure Ollama is running locally.`
-					);
+					throw new Error(t('llm.ollama_api_error', { status: response.status }));
 				}
 
 				const data = await response.json();
 				if (!data.response) {
-					throw new Error('Invalid response from Ollama');
+					throw new Error(t('llm.invalid_response_error', { provider: 'Ollama' }));
 				}
 
 				setTestResult({
 					status: 'success',
-					message: 'Successfully connected to Ollama!',
+					message: t('llm.connection_success', { provider: 'Ollama' }),
 				});
 			}
 		} catch (error: any) {
 			setTestResult({
 				status: 'error',
-				message: error.message || 'Connection failed',
+				message: error.message || t('llm.connection_failed_error'),
 			});
 		} finally {
 			setTestingLLM(false);
@@ -327,7 +334,7 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 			className="fixed inset-0 modal-overlay flex items-center justify-center z-[9999]"
 			role="dialog"
 			aria-modal="true"
-			aria-label="Settings"
+			aria-label={t('modal.aria_label')}
 		>
 			<div
 				className="w-[780px] h-[720px] rounded-xl border shadow-2xl overflow-hidden flex flex-col"
@@ -337,67 +344,67 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 					<button
 						onClick={() => setActiveTab('general')}
 						className={`px-4 py-4 text-sm font-bold border-b-2 cursor-pointer ${activeTab === 'general' ? 'border-indigo-500' : 'border-transparent'} flex items-center gap-2`}
-						title="General"
+						title={t('tabs.general')}
 					>
 						<Settings className="w-4 h-4" />
-						{activeTab === 'general' && <span>General</span>}
+						{activeTab === 'general' && <span>{t('tabs.general')}</span>}
 					</button>
 					<button
 						onClick={() => setActiveTab('display')}
 						className={`px-4 py-4 text-sm font-bold border-b-2 cursor-pointer ${activeTab === 'display' ? 'border-indigo-500' : 'border-transparent'} flex items-center gap-2`}
-						title="Display"
+						title={t('tabs.display')}
 					>
 						<Monitor className="w-4 h-4" />
-						{activeTab === 'display' && <span>Display</span>}
+						{activeTab === 'display' && <span>{t('tabs.display')}</span>}
 					</button>
 					{FEATURE_FLAGS.LLM_SETTINGS && (
 						<button
 							onClick={() => setActiveTab('llm')}
 							className={`px-4 py-4 text-sm font-bold border-b-2 cursor-pointer ${activeTab === 'llm' ? 'border-indigo-500' : 'border-transparent'}`}
-							title="LLM"
+							title={t('tabs.llm')}
 						>
-							LLM
+							{t('tabs.llm')}
 						</button>
 					)}
 					<button
 						onClick={() => setActiveTab('shortcuts')}
 						className={`px-4 py-4 text-sm font-bold border-b-2 cursor-pointer ${activeTab === 'shortcuts' ? 'border-indigo-500' : 'border-transparent'} flex items-center gap-2`}
-						title="Shortcuts"
+						title={t('tabs.shortcuts')}
 					>
 						<Keyboard className="w-4 h-4" />
-						{activeTab === 'shortcuts' && <span>Shortcuts</span>}
+						{activeTab === 'shortcuts' && <span>{t('tabs.shortcuts')}</span>}
 					</button>
 					<button
 						onClick={() => setActiveTab('theme')}
 						className={`px-4 py-4 text-sm font-bold border-b-2 cursor-pointer ${activeTab === 'theme' ? 'border-indigo-500' : 'border-transparent'} flex items-center gap-2`}
-						title="Themes"
+						title={t('tabs.themes')}
 					>
 						<Palette className="w-4 h-4" />
-						{activeTab === 'theme' && <span>Themes</span>}
+						{activeTab === 'theme' && <span>{t('tabs.themes')}</span>}
 					</button>
 					<button
 						onClick={() => setActiveTab('notifications')}
 						className={`px-4 py-4 text-sm font-bold border-b-2 cursor-pointer ${activeTab === 'notifications' ? 'border-indigo-500' : 'border-transparent'} flex items-center gap-2`}
-						title="Notifications"
+						title={t('tabs.notifications')}
 					>
 						<Bell className="w-4 h-4" />
-						{activeTab === 'notifications' && <span>Notify</span>}
+						{activeTab === 'notifications' && <span>{t('tabs.notifications_short')}</span>}
 					</button>
 					<button
 						onClick={() => setActiveTab('aicommands')}
 						className={`px-4 py-4 text-sm font-bold border-b-2 cursor-pointer ${activeTab === 'aicommands' ? 'border-indigo-500' : 'border-transparent'} flex items-center gap-2`}
-						title="AI Commands"
+						title={t('tabs.ai_commands')}
 					>
 						<Cpu className="w-4 h-4" />
-						{activeTab === 'aicommands' && <span>AI Commands</span>}
+						{activeTab === 'aicommands' && <span>{t('tabs.ai_commands')}</span>}
 					</button>
 					<button
 						onClick={() => setActiveTab('ssh')}
 						className={`px-4 py-4 text-sm font-bold border-b-2 cursor-pointer ${activeTab === 'ssh' ? 'border-indigo-500' : 'border-transparent'} flex items-center gap-2`}
-						title="SSH Hosts"
+						title={t('tabs.ssh_hosts')}
 					>
 						<Server className="w-4 h-4" />
-						{activeTab === 'ssh' && <span>SSH Hosts</span>}
+						{activeTab === 'ssh' && <span>{t('tabs.ssh_hosts')}</span>}
 					</button>
 					<button
 						onClick={() => setActiveTab('encore')}
@@ -405,10 +412,10 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 						style={{
 							color: activeTab === 'encore' ? theme.colors.textMain : theme.colors.textDim,
 						}}
-						title="Encore Features"
+						title={t('tabs.encore_features')}
 					>
 						<FlaskConical className="w-4 h-4" />
-						{activeTab === 'encore' && <span>Encore Features</span>}
+						{activeTab === 'encore' && <span>{t('tabs.encore_features')}</span>}
 					</button>
 					<div className="flex-1 flex justify-end items-center pr-4">
 						<button onClick={onClose} className="cursor-pointer">
@@ -426,7 +433,7 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 						<div className="space-y-5">
 							<div>
 								<div className="block text-xs font-bold opacity-70 uppercase mb-2">
-									LLM Provider
+									{t('llm.provider_label')}
 								</div>
 								<select
 									value={llmProvider}
@@ -434,14 +441,16 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 									className="w-full p-2 rounded border bg-transparent outline-none"
 									style={{ borderColor: theme.colors.border }}
 								>
-									<option value="openrouter">OpenRouter</option>
-									<option value="anthropic">Anthropic</option>
-									<option value="ollama">Ollama (Local)</option>
+									<option value="openrouter">{t('llm.provider_openrouter')}</option>
+									<option value="anthropic">{t('llm.provider_anthropic')}</option>
+									<option value="ollama">{t('llm.provider_ollama')}</option>
 								</select>
 							</div>
 
 							<div>
-								<div className="block text-xs font-bold opacity-70 uppercase mb-2">Model Slug</div>
+								<div className="block text-xs font-bold opacity-70 uppercase mb-2">
+									{t('llm.model_slug_label')}
+								</div>
 								<input
 									value={modelSlug}
 									onChange={(e) => setModelSlug(e.target.value)}
@@ -455,7 +464,9 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 
 							{llmProvider !== 'ollama' && (
 								<div>
-									<div className="block text-xs font-bold opacity-70 uppercase mb-2">API Key</div>
+									<div className="block text-xs font-bold opacity-70 uppercase mb-2">
+										{t('llm.api_key_label')}
+									</div>
 									<div
 										className="flex items-center border rounded px-3 py-2"
 										style={{
@@ -472,9 +483,7 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 											placeholder="sk-..."
 										/>
 									</div>
-									<p className="text-[10px] mt-2 opacity-50">
-										Keys are stored locally in ~/.maestro/settings.json
-									</p>
+									<p className="text-[10px] mt-2 opacity-50">{t('llm.api_key_help')}</p>
 								</div>
 							)}
 
@@ -489,7 +498,9 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 										color: theme.colors.accentForeground,
 									}}
 								>
-									{testingLLM ? 'Testing Connection...' : 'Test Connection'}
+									{testingLLM
+										? t('llm.testing_connection_button')
+										: t('llm.test_connection_button')}
 								</button>
 
 								{testResult.status && (
@@ -509,9 +520,7 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 									</div>
 								)}
 
-								<p className="text-[10px] mt-3 opacity-50 text-center">
-									Test sends a simple prompt to verify connectivity and configuration
-								</p>
+								<p className="text-[10px] mt-3 opacity-50 text-center">{t('llm.test_help')}</p>
 							</div>
 						</div>
 					)}
@@ -568,6 +577,11 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 
 							{/* OpenSpec Commands Section */}
 							<OpenSpecCommandsPanel theme={theme} />
+
+							{/* System prompts note */}
+							<p className="text-xs opacity-50 italic" style={{ color: theme.colors.textDim }}>
+								{t('ai_commands.system_prompts_note')}
+							</p>
 						</div>
 					)}
 

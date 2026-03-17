@@ -13,6 +13,10 @@ import React from 'react';
 import { render, screen, fireEvent, act, waitFor } from '@testing-library/react';
 import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest';
 
+vi.mock('../../../shared/i18n/config', () => ({
+	default: { language: 'en' },
+}));
+
 // Mock dependencies before importing component
 vi.mock('../../../web/components/ThemeProvider', () => ({
 	useThemeColors: () => ({
@@ -124,13 +128,13 @@ describe('formatRelativeTime (via component)', () => {
 		vi.useRealTimers();
 	});
 
-	it('formats "just now" for timestamps within 60 seconds', () => {
+	it('formats "now" for timestamps within 60 seconds', () => {
 		const entry = createMockEntry({
 			timestamp: Date.now() - 30000, // 30 seconds ago
 		});
 		render(<CommandHistoryDrawer {...createDefaultProps({ history: [entry] })} />);
 
-		expect(screen.getByText('just now')).toBeInTheDocument();
+		expect(screen.getByText('now')).toBeInTheDocument();
 	});
 
 	it('formats minutes correctly', () => {
@@ -139,7 +143,7 @@ describe('formatRelativeTime (via component)', () => {
 		});
 		render(<CommandHistoryDrawer {...createDefaultProps({ history: [entry] })} />);
 
-		expect(screen.getByText('5m ago')).toBeInTheDocument();
+		expect(screen.getByText('5 minutes ago')).toBeInTheDocument();
 	});
 
 	it('formats hours correctly', () => {
@@ -148,7 +152,7 @@ describe('formatRelativeTime (via component)', () => {
 		});
 		render(<CommandHistoryDrawer {...createDefaultProps({ history: [entry] })} />);
 
-		expect(screen.getByText('3h ago')).toBeInTheDocument();
+		expect(screen.getByText('3 hours ago')).toBeInTheDocument();
 	});
 
 	it('formats days correctly', () => {
@@ -157,7 +161,7 @@ describe('formatRelativeTime (via component)', () => {
 		});
 		render(<CommandHistoryDrawer {...createDefaultProps({ history: [entry] })} />);
 
-		expect(screen.getByText('2d ago')).toBeInTheDocument();
+		expect(screen.getByText('2 days ago')).toBeInTheDocument();
 	});
 
 	it('handles boundary: exactly 1 minute', () => {
@@ -166,7 +170,7 @@ describe('formatRelativeTime (via component)', () => {
 		});
 		render(<CommandHistoryDrawer {...createDefaultProps({ history: [entry] })} />);
 
-		expect(screen.getByText('1m ago')).toBeInTheDocument();
+		expect(screen.getByText('1 minute ago')).toBeInTheDocument();
 	});
 
 	it('handles boundary: exactly 1 hour', () => {
@@ -175,7 +179,7 @@ describe('formatRelativeTime (via component)', () => {
 		});
 		render(<CommandHistoryDrawer {...createDefaultProps({ history: [entry] })} />);
 
-		expect(screen.getByText('1h ago')).toBeInTheDocument();
+		expect(screen.getByText('1 hour ago')).toBeInTheDocument();
 	});
 
 	it('handles boundary: exactly 1 day', () => {
@@ -184,7 +188,7 @@ describe('formatRelativeTime (via component)', () => {
 		});
 		render(<CommandHistoryDrawer {...createDefaultProps({ history: [entry] })} />);
 
-		expect(screen.getByText('1d ago')).toBeInTheDocument();
+		expect(screen.getByText('yesterday')).toBeInTheDocument();
 	});
 });
 
@@ -951,8 +955,8 @@ describe('Edge cases', () => {
 		});
 		render(<CommandHistoryDrawer {...createDefaultProps({ history: [entry] })} />);
 
-		// formatRelativeTime with negative diff should show "just now"
-		expect(screen.getByText('just now')).toBeInTheDocument();
+		// formatRelativeTime with negative diff should show "now"
+		expect(screen.getByText('now')).toBeInTheDocument();
 
 		vi.useRealTimers();
 	});

@@ -40,6 +40,11 @@ vi.mock('../../../renderer/stores/notificationStore', async () => {
 	return { ...actual, notifyToast: vi.fn() };
 });
 
+const mockTNotify = vi.fn();
+vi.mock('../../../renderer/utils/tNotify', () => ({
+	tNotify: (...args: unknown[]) => mockTNotify(...args),
+}));
+
 let idCounter = 0;
 vi.mock('../../../renderer/utils/ids', () => ({
 	generateId: vi.fn(() => `mock-id-${++idCounter}`),
@@ -259,11 +264,12 @@ describe('useSymphonyContribution', () => {
 				await result.current.handleStartContribution(data);
 			});
 
-			expect(notifyToast).toHaveBeenCalledWith(
+			expect(mockTNotify).toHaveBeenCalledWith(
 				expect.objectContaining({
 					type: 'error',
-					title: 'Symphony Error',
-					message: expect.stringContaining('unknown-agent'),
+					titleKey: 'notifications:symphony.error_title',
+					messageKey: 'notifications:symphony.agent_not_found_message',
+					values: expect.objectContaining({ agentType: 'unknown-agent' }),
 				})
 			);
 			expect(useSessionStore.getState().sessions).toHaveLength(0);
@@ -324,11 +330,12 @@ describe('useSymphonyContribution', () => {
 				await result.current.handleStartContribution(createContributionData());
 			});
 
-			expect(notifyToast).toHaveBeenCalledWith(
+			expect(mockTNotify).toHaveBeenCalledWith(
 				expect.objectContaining({
 					type: 'error',
-					title: 'Agent Creation Failed',
-					message: 'Duplicate session for this path',
+					titleKey: 'notifications:agent.creation_failed_title',
+					messageKey: 'notifications:agent.creation_failed_message',
+					values: expect.objectContaining({ message: 'Duplicate session for this path' }),
 				})
 			);
 			expect(useSessionStore.getState().sessions).toHaveLength(0);
@@ -348,11 +355,11 @@ describe('useSymphonyContribution', () => {
 				await result.current.handleStartContribution(createContributionData());
 			});
 
-			expect(notifyToast).toHaveBeenCalledWith(
+			expect(mockTNotify).toHaveBeenCalledWith(
 				expect.objectContaining({
 					type: 'error',
-					title: 'Agent Creation Failed',
-					message: 'Cannot create duplicate agent',
+					titleKey: 'notifications:agent.creation_failed_title',
+					messageKey: 'notifications:agent.creation_failed_default_message',
 				})
 			);
 		});

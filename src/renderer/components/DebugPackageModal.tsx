@@ -9,6 +9,7 @@
  */
 
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Package, Check, Loader2, FolderOpen, AlertCircle, Copy } from 'lucide-react';
 import type { Theme } from '../types';
 import { MODAL_PRIORITIES } from '../constants/modalPriorities';
@@ -31,6 +32,7 @@ interface PreviewCategory {
 type GenerationState = 'idle' | 'generating' | 'success' | 'error';
 
 export function DebugPackageModal({ theme, isOpen, onClose }: DebugPackageModalProps) {
+	const { t } = useTranslation('modals');
 	const generateButtonRef = useRef<HTMLButtonElement>(null);
 
 	// Category selection state
@@ -113,16 +115,16 @@ export function DebugPackageModal({ theme, isOpen, onClose }: DebugPackageModalP
 				setResultPath(result.path);
 				notifyToast({
 					type: 'success',
-					title: 'Debug Package Created',
-					message: `Package saved to ${result.path}`,
+					title: t('debug_package.toast_created_title'),
+					message: t('debug_package.toast_created_message', { path: result.path }),
 				});
 			} else {
 				setGenerationState('error');
 				setErrorMessage(result.error || 'Unknown error occurred');
 				notifyToast({
 					type: 'error',
-					title: 'Debug Package Failed',
-					message: result.error || 'Failed to create debug package',
+					title: t('debug_package.toast_failed_title'),
+					message: result.error || t('debug_package.toast_failed_message'),
 				});
 			}
 		} catch (err) {
@@ -131,11 +133,11 @@ export function DebugPackageModal({ theme, isOpen, onClose }: DebugPackageModalP
 			setErrorMessage(err instanceof Error ? err.message : 'Unknown error');
 			notifyToast({
 				type: 'error',
-				title: 'Debug Package Failed',
-				message: err instanceof Error ? err.message : 'Failed to create debug package',
+				title: t('debug_package.toast_failed_title'),
+				message: err instanceof Error ? err.message : t('debug_package.toast_failed_message'),
 			});
 		}
-	}, [categories]);
+	}, [categories, t]);
 
 	// Reveal the generated file in Finder
 	const handleRevealInFinder = useCallback(() => {
@@ -160,8 +162,8 @@ export function DebugPackageModal({ theme, isOpen, onClose }: DebugPackageModalP
 				.then(() => {
 					notifyToast({
 						type: 'success',
-						title: 'Copied',
-						message: 'File path copied to clipboard',
+						title: t('debug_package.toast_copied_title'),
+						message: t('debug_package.toast_copied_message'),
 					});
 				})
 				.catch(console.error);
@@ -177,7 +179,7 @@ export function DebugPackageModal({ theme, isOpen, onClose }: DebugPackageModalP
 	return (
 		<Modal
 			theme={theme}
-			title="Create Debug Package"
+			title={t('debug_package.title')}
 			headerIcon={<Package className="w-4 h-4" style={{ color: theme.colors.accent }} />}
 			priority={MODAL_PRIORITIES.DEBUG_PACKAGE}
 			onClose={onClose}
@@ -196,7 +198,7 @@ export function DebugPackageModal({ theme, isOpen, onClose }: DebugPackageModalP
 							}}
 						>
 							<FolderOpen className="w-4 h-4" />
-							Show in Finder
+							{t('debug_package.show_in_finder')}
 						</button>
 						<button
 							type="button"
@@ -207,7 +209,7 @@ export function DebugPackageModal({ theme, isOpen, onClose }: DebugPackageModalP
 								color: theme.colors.accentForeground,
 							}}
 						>
-							Done
+							{t('debug_package.done_button')}
 						</button>
 					</>
 				) : (
@@ -215,8 +217,12 @@ export function DebugPackageModal({ theme, isOpen, onClose }: DebugPackageModalP
 						theme={theme}
 						onCancel={onClose}
 						onConfirm={handleGenerate}
-						cancelLabel="Cancel"
-						confirmLabel={generationState === 'generating' ? 'Generating...' : 'Generate Package'}
+						cancelLabel={t('debug_package.cancel_button')}
+						confirmLabel={
+							generationState === 'generating'
+								? t('debug_package.generating_button')
+								: t('debug_package.generate_button')
+						}
 						confirmDisabled={generationState === 'generating' || includedCount === 0}
 						confirmButtonRef={generateButtonRef}
 					/>
@@ -232,8 +238,7 @@ export function DebugPackageModal({ theme, isOpen, onClose }: DebugPackageModalP
 				}}
 			>
 				<p style={{ color: theme.colors.textMain }}>
-					<strong>Privacy:</strong> This package does NOT include your conversations, API keys, or
-					file contents. All paths are sanitized to remove usernames.
+					<strong>{t('debug_package.privacy_label')}</strong> {t('debug_package.privacy_notice')}
 				</p>
 			</div>
 
@@ -245,7 +250,7 @@ export function DebugPackageModal({ theme, isOpen, onClose }: DebugPackageModalP
 				<div className="flex flex-col items-center justify-center py-8 gap-4">
 					<Loader2 className="w-8 h-8 animate-spin" style={{ color: theme.colors.accent }} />
 					<p className="text-sm" style={{ color: theme.colors.textDim }}>
-						Collecting diagnostic information...
+						{t('debug_package.generating_message')}
 					</p>
 				</div>
 			) : generationState === 'success' ? (
@@ -258,7 +263,7 @@ export function DebugPackageModal({ theme, isOpen, onClose }: DebugPackageModalP
 					</div>
 					<div className="text-center">
 						<p className="text-sm font-medium mb-2" style={{ color: theme.colors.textMain }}>
-							Package created successfully!
+							{t('debug_package.success_message')}
 						</p>
 						<div className="flex items-center justify-center gap-2 px-4">
 							<p className="text-xs break-all" style={{ color: theme.colors.textDim }}>
@@ -269,7 +274,7 @@ export function DebugPackageModal({ theme, isOpen, onClose }: DebugPackageModalP
 								onClick={handleCopyPath}
 								className="p-1 rounded hover:bg-white/10 transition-colors flex-shrink-0"
 								style={{ color: theme.colors.textDim }}
-								title="Copy file path to clipboard"
+								title={t('debug_package.copy_path_tooltip')}
 							>
 								<Copy className="w-3.5 h-3.5" />
 							</button>
@@ -286,7 +291,7 @@ export function DebugPackageModal({ theme, isOpen, onClose }: DebugPackageModalP
 					</div>
 					<div className="text-center">
 						<p className="text-sm font-medium mb-2" style={{ color: theme.colors.textMain }}>
-							Failed to create package
+							{t('debug_package.failed_message')}
 						</p>
 						<p className="text-xs px-4" style={{ color: theme.colors.error }}>
 							{errorMessage}
@@ -299,10 +304,10 @@ export function DebugPackageModal({ theme, isOpen, onClose }: DebugPackageModalP
 					<div className="mb-4">
 						<div className="flex items-center justify-between mb-2">
 							<p className="text-sm font-medium" style={{ color: theme.colors.textMain }}>
-								Select what to include:
+								{t('debug_package.select_what_to_include')}
 							</p>
 							<p className="text-xs" style={{ color: theme.colors.textDim }}>
-								{includedCount} of {totalCount} selected
+								{t('debug_package.count_selected', { included: includedCount, total: totalCount })}
 							</p>
 						</div>
 
@@ -358,12 +363,14 @@ export function DebugPackageModal({ theme, isOpen, onClose }: DebugPackageModalP
 					{/* Submission instructions */}
 					<div className="text-xs" style={{ color: theme.colors.textDim }}>
 						<p className="mb-1">
-							<strong style={{ color: theme.colors.textMain }}>To submit:</strong>
+							<strong style={{ color: theme.colors.textMain }}>
+								{t('debug_package.submit_label')}
+							</strong>
 						</p>
 						<ol className="list-decimal list-inside space-y-1">
-							<li>Open a GitHub issue at github.com/RunMaestro/Maestro/issues</li>
-							<li>Describe the problem you encountered</li>
-							<li>Attach the generated zip file</li>
+							<li>{t('debug_package.submit_step1')}</li>
+							<li>{t('debug_package.submit_step2')}</li>
+							<li>{t('debug_package.submit_step3')}</li>
 						</ol>
 					</div>
 				</>

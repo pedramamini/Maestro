@@ -1,12 +1,13 @@
 /**
  * GeneralTab - General settings tab for SettingsModal
  *
- * Contains: About Me, Shell, Log Level, GitHub CLI, Input Behavior,
+ * Contains: About Me, Language, Shell, Log Level, GitHub CLI, Input Behavior,
  * History, Thinking Mode, Tab Naming, Auto-scroll, Power, Rendering,
  * Updates, Pre-release, Privacy, Stats & WakaTime, Storage Location.
  */
 
 import { useState, useEffect, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
 	X,
 	Key,
@@ -34,9 +35,11 @@ import {
 	ExternalLink,
 	Keyboard,
 	Trash2,
+	Globe,
 } from 'lucide-react';
 import { useSettings } from '../../../hooks';
 import type { Theme, ShellInfo } from '../../../types';
+import { SUPPORTED_LANGUAGES, LANGUAGE_NATIVE_NAMES } from '../../../../shared/i18n/config';
 import { formatMetaKey, formatEnterToSend } from '../../../utils/shortcutFormatter';
 import { getOpenInLabel, isLinuxPlatform } from '../../../utils/platformUtils';
 import { ToggleButtonGroup } from '../../ToggleButtonGroup';
@@ -50,6 +53,9 @@ export interface GeneralTabProps {
 
 export function GeneralTab({ theme, isOpen }: GeneralTabProps) {
 	const {
+		// Language
+		language,
+		setLanguage,
 		// Conductor Profile
 		conductorProfile,
 		setConductorProfile,
@@ -109,6 +115,7 @@ export function GeneralTab({ theme, isOpen }: GeneralTabProps) {
 		wakatimeDetailedTracking,
 		setWakatimeDetailedTracking,
 	} = useSettings();
+	const { t } = useTranslation('settings');
 
 	// Shell state
 	const [shells, setShells] = useState<ShellInfo[]>([]);
@@ -221,7 +228,7 @@ export function GeneralTab({ theme, isOpen }: GeneralTabProps) {
 			})
 			.catch((err) => {
 				console.error('Failed to load sync settings:', err);
-				setSyncError('Failed to load storage settings');
+				setSyncError(t('general.storage_failed_load'));
 			});
 
 		// Load stats database size and earliest timestamp
@@ -281,18 +288,14 @@ export function GeneralTab({ theme, isOpen }: GeneralTabProps) {
 			<div>
 				<div className="block text-xs font-bold opacity-70 uppercase mb-1 flex items-center gap-2">
 					<User className="w-3 h-3" />
-					Conductor Profile (aka, About Me)
+					{t('general.conductor_profile_header')}
 				</div>
-				<p className="text-xs opacity-50 mb-2">
-					Tell us a little about yourself so that agents created under Maestro know how to work and
-					communicate with you. As the conductor, you orchestrate the symphony of AI agents.
-					(Optional, max 1000 characters)
-				</p>
+				<p className="text-xs opacity-50 mb-2">{t('general.conductor_profile_description')}</p>
 				<div className="relative">
 					<textarea
 						value={conductorProfile}
 						onChange={(e) => setConductorProfile(e.target.value)}
-						placeholder="e.g., I'm a senior developer working on a React/TypeScript project. I prefer concise explanations and clean code patterns..."
+						placeholder={t('general.conductor_profile_placeholder')}
 						className="w-full p-3 rounded border bg-transparent outline-none text-sm resize-none"
 						style={{
 							borderColor: theme.colors.border,
@@ -312,18 +315,42 @@ export function GeneralTab({ theme, isOpen }: GeneralTabProps) {
 				</div>
 			</div>
 
+			{/* Language */}
+			<div>
+				<div className="block text-xs font-bold opacity-70 uppercase mb-1 flex items-center gap-2">
+					<Globe className="w-3 h-3" />
+					{t('general.language_label')}
+				</div>
+				<p className="text-xs opacity-50 mb-2">{t('general.language_description')}</p>
+				<select
+					value={language}
+					onChange={(e) => setLanguage(e.target.value)}
+					aria-label={t('general.language_label')}
+					className="w-full p-2 rounded border bg-transparent outline-none text-sm"
+					style={{
+						borderColor: theme.colors.border,
+						color: theme.colors.textMain,
+						backgroundColor: theme.colors.bgMain,
+					}}
+				>
+					{SUPPORTED_LANGUAGES.map((code) => (
+						<option key={code} value={code}>
+							{LANGUAGE_NATIVE_NAMES[code]}
+						</option>
+					))}
+				</select>
+				<p className="text-xs opacity-40 mt-1">{t('general.language_help')}</p>
+			</div>
+
 			{/* Default Shell */}
 			<div>
 				<div className="block text-xs font-bold opacity-70 uppercase mb-1 flex items-center gap-2">
 					<Terminal className="w-3 h-3" />
-					Default Terminal Shell
+					{t('general.shell_header')}
 				</div>
-				<p className="text-xs opacity-50 mb-2">
-					Choose which shell to use for terminal sessions. Select any shell and configure a custom
-					path if needed.
-				</p>
+				<p className="text-xs opacity-50 mb-2">{t('general.shell_description')}</p>
 				{shellsLoading ? (
-					<div className="text-sm opacity-50 p-2">Loading shells...</div>
+					<div className="text-sm opacity-50 p-2">{t('general.shell_loading')}</div>
 				) : (
 					<div className="space-y-2">
 						{shellsLoaded && shells.length > 0 ? (
@@ -369,7 +396,7 @@ export function GeneralTab({ theme, isOpen }: GeneralTabProps) {
 														color: theme.colors.success,
 													}}
 												>
-													Available
+													{t('general.shell_available')}
 												</span>
 											)
 										) : defaultShell === shell.id ? (
@@ -381,7 +408,7 @@ export function GeneralTab({ theme, isOpen }: GeneralTabProps) {
 														color: theme.colors.warning,
 													}}
 												>
-													Custom Path Required
+													{t('general.shell_custom_path_required')}
 												</span>
 												<Check className="w-4 h-4" style={{ color: theme.colors.accent }} />
 											</div>
@@ -393,7 +420,7 @@ export function GeneralTab({ theme, isOpen }: GeneralTabProps) {
 													color: theme.colors.warning,
 												}}
 											>
-												Not Found
+												{t('general.shell_not_found')}
 											</span>
 										)}
 									</div>
@@ -418,7 +445,9 @@ export function GeneralTab({ theme, isOpen }: GeneralTabProps) {
 											<div className="font-medium">
 												{defaultShell.charAt(0).toUpperCase() + defaultShell.slice(1)}
 											</div>
-											<div className="text-xs opacity-50 font-mono mt-1">Current default</div>
+											<div className="text-xs opacity-50 font-mono mt-1">
+												{t('general.shell_current_default')}
+											</div>
 										</div>
 										<Check className="w-4 h-4" style={{ color: theme.colors.accent }} />
 									</div>
@@ -434,7 +463,7 @@ export function GeneralTab({ theme, isOpen }: GeneralTabProps) {
 								>
 									<div className="flex items-center gap-2">
 										<Terminal className="w-4 h-4" />
-										<span>Detect other available shells...</span>
+										<span>{t('general.shell_detect_others')}</span>
 									</div>
 								</button>
 							</div>
@@ -449,7 +478,7 @@ export function GeneralTab({ theme, isOpen }: GeneralTabProps) {
 					style={{ borderColor: theme.colors.border, backgroundColor: theme.colors.bgMain }}
 				>
 					<span className="text-sm font-medium" style={{ color: theme.colors.textMain }}>
-						Shell Configuration
+						{t('general.shell_configuration')}
 					</span>
 					<ChevronDown
 						className={`w-4 h-4 transition-transform ${shellConfigExpanded ? 'rotate-180' : ''}`}
@@ -467,13 +496,15 @@ export function GeneralTab({ theme, isOpen }: GeneralTabProps) {
 					>
 						{/* Custom Shell Path */}
 						<div>
-							<div className="block text-xs opacity-60 mb-1">Custom Path (optional)</div>
+							<div className="block text-xs opacity-60 mb-1">
+								{t('general.shell_custom_path_label')}
+							</div>
 							<div className="flex gap-2">
 								<input
 									type="text"
 									value={customShellPath}
 									onChange={(e) => setCustomShellPath(e.target.value)}
-									placeholder="/path/to/shell"
+									placeholder={t('general.shell_custom_path_placeholder')}
 									className="flex-1 p-2 rounded border bg-transparent outline-none text-sm font-mono"
 									style={{ borderColor: theme.colors.border, color: theme.colors.textMain }}
 								/>
@@ -486,24 +517,22 @@ export function GeneralTab({ theme, isOpen }: GeneralTabProps) {
 											color: theme.colors.textDim,
 										}}
 									>
-										Clear
+										{t('general.clear_button')}
 									</button>
 								)}
 							</div>
-							<p className="text-xs opacity-50 mt-1">
-								Override the auto-detected shell path. Leave empty to use the detected path.
-							</p>
+							<p className="text-xs opacity-50 mt-1">{t('general.shell_custom_path_help')}</p>
 						</div>
 
 						{/* Shell Arguments */}
 						<div>
-							<div className="block text-xs opacity-60 mb-1">Additional Arguments (optional)</div>
+							<div className="block text-xs opacity-60 mb-1">{t('general.shell_args_label')}</div>
 							<div className="flex gap-2">
 								<input
 									type="text"
 									value={shellArgs}
 									onChange={(e) => setShellArgs(e.target.value)}
-									placeholder="--flag value"
+									placeholder={t('general.shell_args_placeholder')}
 									className="flex-1 p-2 rounded border bg-transparent outline-none text-sm font-mono"
 									style={{ borderColor: theme.colors.border, color: theme.colors.textMain }}
 								/>
@@ -516,30 +545,26 @@ export function GeneralTab({ theme, isOpen }: GeneralTabProps) {
 											color: theme.colors.textDim,
 										}}
 									>
-										Clear
+										{t('general.clear_button')}
 									</button>
 								)}
 							</div>
-							<p className="text-xs opacity-50 mt-1">
-								Additional CLI arguments passed to every shell session (e.g., --login, -c).
-							</p>
+							<p className="text-xs opacity-50 mt-1">{t('general.shell_args_help')}</p>
 						</div>
 
 						{/* Global Environment Variables */}
 						<div className="flex items-start gap-2 mb-2">
 							<div className="flex-1">
 								<p className="text-xs opacity-50">
-									<strong>Global Environment Variables</strong> apply to all terminal sessions and
-									AI agent processes. Format: KEY=VALUE (one per line). Variables with special
-									characters should be quoted. Agent-specific settings can override these values.
-									Typical use cases: API keys, proxy settings, custom tool paths.
+									<strong>{t('general.env_vars_header')}</strong>{' '}
+									{t('general.env_vars_description')}
 								</p>
 							</div>
 							<div
 								className="group relative flex-shrink-0 mt-0.5 outline-none"
 								tabIndex={0}
 								aria-describedby="env-vars-help-tooltip"
-								title="Environment variables configured here are available to all terminal sessions, all AI agent processes (Claude, OpenCode, etc.), and any spawned child processes. Agent-specific settings can override these values."
+								title={t('general.env_vars_tooltip_full')}
 							>
 								<HelpCircle
 									className="w-4 h-4 cursor-help"
@@ -550,13 +575,13 @@ export function GeneralTab({ theme, isOpen }: GeneralTabProps) {
 									role="tooltip"
 									className="absolute hidden group-hover:block group-focus-visible:block bg-black/80 text-white text-xs rounded p-2 z-50 w-60 -right-2 top-5 whitespace-normal"
 								>
-									<p className="mb-1 font-semibold">Environment variables apply to:</p>
+									<p className="mb-1 font-semibold">{t('general.env_vars_tooltip_header')}</p>
 									<ul className="list-disc list-inside space-y-0.5">
-										<li>All terminal sessions</li>
-										<li>All AI agent processes (Claude, OpenCode, etc.)</li>
-										<li>Any spawned child processes</li>
+										<li>{t('general.env_vars_tooltip_terminals')}</li>
+										<li>{t('general.env_vars_tooltip_agents')}</li>
+										<li>{t('general.env_vars_tooltip_children')}</li>
 									</ul>
-									<p className="mt-1">Agent-specific settings can override these values.</p>
+									<p className="mt-1">{t('general.env_vars_tooltip_override')}</p>
 								</div>
 							</div>
 						</div>
@@ -567,40 +592,40 @@ export function GeneralTab({ theme, isOpen }: GeneralTabProps) {
 
 			{/* System Log Level */}
 			<div>
-				<div className="block text-xs font-bold opacity-70 uppercase mb-2">System Log Level</div>
+				<div className="block text-xs font-bold opacity-70 uppercase mb-2">
+					{t('general.log_level_header')}
+				</div>
 				<ToggleButtonGroup
 					options={[
-						{ value: 'debug', label: 'Debug', activeColor: '#6366f1' },
-						{ value: 'info', label: 'Info', activeColor: '#3b82f6' },
-						{ value: 'warn', label: 'Warn', activeColor: '#f59e0b' },
-						{ value: 'error', label: 'Error', activeColor: '#ef4444' },
+						{ value: 'debug', label: t('general.log_level_debug'), activeColor: '#6366f1' },
+						{ value: 'info', label: t('general.log_level_info'), activeColor: '#3b82f6' },
+						{ value: 'warn', label: t('general.log_level_warn'), activeColor: '#f59e0b' },
+						{ value: 'error', label: t('general.log_level_error'), activeColor: '#ef4444' },
 					]}
 					value={logLevel}
 					onChange={setLogLevel}
 					theme={theme}
 				/>
-				<p className="text-xs opacity-50 mt-2">
-					Higher levels show fewer logs. Debug shows all logs, Error shows only errors.
-				</p>
+				<p className="text-xs opacity-50 mt-2">{t('general.log_level_help')}</p>
 			</div>
 
 			{/* GitHub CLI Path */}
 			<div>
 				<div className="block text-xs font-bold opacity-70 uppercase mb-2 flex items-center gap-2">
 					<Terminal className="w-3 h-3" />
-					GitHub CLI (gh) Path
+					{t('general.gh_path_header')}
 				</div>
 				<div
 					className="p-3 rounded border"
 					style={{ borderColor: theme.colors.border, backgroundColor: theme.colors.bgMain }}
 				>
-					<div className="block text-xs opacity-60 mb-1">Custom Path (optional)</div>
+					<div className="block text-xs opacity-60 mb-1">{t('general.gh_path_label')}</div>
 					<div className="flex gap-2">
 						<input
 							type="text"
 							value={ghPath}
 							onChange={(e) => setGhPath(e.target.value)}
-							placeholder="/opt/homebrew/bin/gh"
+							placeholder={t('general.gh_path_placeholder')}
 							className="flex-1 p-1.5 rounded border bg-transparent outline-none text-xs font-mono"
 							style={{ borderColor: theme.colors.border, color: theme.colors.textMain }}
 						/>
@@ -613,7 +638,7 @@ export function GeneralTab({ theme, isOpen }: GeneralTabProps) {
 									color: theme.colors.textDim,
 								}}
 							>
-								Clear
+								{t('general.clear_button')}
 							</button>
 						)}
 					</div>
@@ -634,11 +659,10 @@ export function GeneralTab({ theme, isOpen }: GeneralTabProps) {
 			<div>
 				<div className="block text-xs font-bold opacity-70 uppercase mb-2 flex items-center gap-2">
 					<Keyboard className="w-3 h-3" />
-					Input Send Behavior
+					{t('general.input_behavior_header')}
 				</div>
 				<p className="text-xs opacity-50 mb-3">
-					Configure how to send messages in each mode. Choose between Enter or {formatMetaKey()}
-					+Enter for each input type.
+					{t('general.input_behavior_description', { metaKey: formatMetaKey() })}
 				</p>
 
 				{/* AI Mode Setting */}
@@ -647,7 +671,7 @@ export function GeneralTab({ theme, isOpen }: GeneralTabProps) {
 					style={{ borderColor: theme.colors.border, backgroundColor: theme.colors.bgMain }}
 				>
 					<div className="flex items-center justify-between mb-2">
-						<div className="text-sm font-medium">AI Interaction Mode</div>
+						<div className="text-sm font-medium">{t('general.input_ai_mode')}</div>
 						<button
 							onClick={() => setEnterToSendAI(!enterToSendAI)}
 							className="px-3 py-1.5 rounded text-xs font-mono transition-all"
@@ -662,8 +686,8 @@ export function GeneralTab({ theme, isOpen }: GeneralTabProps) {
 					</div>
 					<p className="text-xs opacity-50">
 						{enterToSendAI
-							? 'Press Enter to send. Use Shift+Enter for new line.'
-							: `Press ${formatMetaKey()}+Enter to send. Enter creates new line.`}
+							? t('general.input_enter_to_send')
+							: t('general.input_meta_to_send', { metaKey: formatMetaKey() })}
 					</p>
 				</div>
 
@@ -673,7 +697,7 @@ export function GeneralTab({ theme, isOpen }: GeneralTabProps) {
 					style={{ borderColor: theme.colors.border, backgroundColor: theme.colors.bgMain }}
 				>
 					<div className="flex items-center justify-between mb-2">
-						<div className="text-sm font-medium">Terminal Mode</div>
+						<div className="text-sm font-medium">{t('general.input_terminal_mode')}</div>
 						<button
 							onClick={() => setEnterToSendTerminal(!enterToSendTerminal)}
 							className="px-3 py-1.5 rounded text-xs font-mono transition-all"
@@ -690,8 +714,8 @@ export function GeneralTab({ theme, isOpen }: GeneralTabProps) {
 					</div>
 					<p className="text-xs opacity-50">
 						{enterToSendTerminal
-							? 'Press Enter to send. Use Shift+Enter for new line.'
-							: `Press ${formatMetaKey()}+Enter to send. Enter creates new line.`}
+							? t('general.input_enter_to_send')
+							: t('general.input_meta_to_send', { metaKey: formatMetaKey() })}
 					</p>
 				</div>
 			</div>
@@ -699,9 +723,9 @@ export function GeneralTab({ theme, isOpen }: GeneralTabProps) {
 			{/* Default History Toggle */}
 			<SettingCheckbox
 				icon={History}
-				sectionLabel="Default History Toggle"
-				title='Enable "History" by default for new tabs'
-				description='When enabled, new AI tabs will have the "History" toggle on by default, saving a synopsis after each completion'
+				sectionLabel={t('general.history_toggle_header')}
+				title={t('general.history_toggle_title')}
+				description={t('general.history_toggle_description')}
 				checked={defaultSaveToHistory}
 				onChange={setDefaultSaveToHistory}
 				theme={theme}
@@ -711,25 +735,25 @@ export function GeneralTab({ theme, isOpen }: GeneralTabProps) {
 			<div>
 				<div className="block text-xs font-bold opacity-70 uppercase mb-2 flex items-center gap-2">
 					<Brain className="w-3 h-3" />
-					Default Thinking Mode
+					{t('general.thinking_mode_header')}
 				</div>
 				<div
 					className="p-3 rounded border"
 					style={{ borderColor: theme.colors.border, backgroundColor: theme.colors.bgMain }}
 				>
 					<div className="font-medium mb-1" style={{ color: theme.colors.textMain }}>
-						Show AI thinking/reasoning content for new tabs
+						{t('general.thinking_mode_title')}
 					</div>
 					<div className="text-sm opacity-60 mb-3" style={{ color: theme.colors.textDim }}>
-						{defaultShowThinking === 'off' && 'Thinking hidden, only final responses shown'}
-						{defaultShowThinking === 'on' && 'Thinking streams live, clears on completion'}
-						{defaultShowThinking === 'sticky' && 'Thinking streams live and stays visible'}
+						{defaultShowThinking === 'off' && t('general.thinking_mode_off')}
+						{defaultShowThinking === 'on' && t('general.thinking_mode_on')}
+						{defaultShowThinking === 'sticky' && t('general.thinking_mode_sticky')}
 					</div>
 					<ToggleButtonGroup
 						options={[
-							{ value: 'off' as const, label: 'Off' },
-							{ value: 'on' as const, label: 'On' },
-							{ value: 'sticky' as const, label: 'Sticky' },
+							{ value: 'off' as const, label: t('general.thinking_mode_label_off') },
+							{ value: 'on' as const, label: t('general.thinking_mode_label_on') },
+							{ value: 'sticky' as const, label: t('general.thinking_mode_label_sticky') },
 						]}
 						value={defaultShowThinking}
 						onChange={setDefaultShowThinking}
@@ -741,9 +765,9 @@ export function GeneralTab({ theme, isOpen }: GeneralTabProps) {
 			{/* Automatic Tab Naming */}
 			<SettingCheckbox
 				icon={Tag}
-				sectionLabel="Automatic Tab Naming"
-				title="Automatically name tabs based on first message"
-				description="When you send your first message to a new tab, an AI will analyze it and generate a descriptive tab name. The naming request runs in parallel and leaves no history."
+				sectionLabel={t('general.tab_naming_header')}
+				title={t('general.tab_naming_title')}
+				description={t('general.tab_naming_description')}
 				checked={automaticTabNamingEnabled}
 				onChange={setAutomaticTabNamingEnabled}
 				theme={theme}
@@ -752,9 +776,9 @@ export function GeneralTab({ theme, isOpen }: GeneralTabProps) {
 			{/* Auto-scroll AI Output */}
 			<SettingCheckbox
 				icon={ArrowDownToLine}
-				sectionLabel="Auto-scroll AI Output"
-				title="Auto-scroll AI output"
-				description="Automatically scroll to the bottom when new AI output arrives. When disabled, a floating button appears for new messages."
+				sectionLabel={t('general.auto_scroll_header')}
+				title={t('general.auto_scroll_title')}
+				description={t('general.auto_scroll_description')}
 				checked={autoScrollAiMode}
 				onChange={setAutoScrollAiMode}
 				theme={theme}
@@ -764,7 +788,7 @@ export function GeneralTab({ theme, isOpen }: GeneralTabProps) {
 			<div>
 				<div className="block text-xs font-bold opacity-70 uppercase mb-2 flex items-center gap-2">
 					<Battery className="w-3 h-3" />
-					Power
+					{t('general.power_header')}
 				</div>
 				<div
 					className="p-3 rounded border space-y-3"
@@ -784,10 +808,10 @@ export function GeneralTab({ theme, isOpen }: GeneralTabProps) {
 					>
 						<div className="flex-1 pr-3">
 							<div className="font-medium" style={{ color: theme.colors.textMain }}>
-								Prevent sleep while working
+								{t('general.power_prevent_sleep_title')}
 							</div>
 							<div className="text-xs opacity-50 mt-0.5" style={{ color: theme.colors.textDim }}>
-								Keeps your computer awake when AI agents are busy or Auto Run is active
+								{t('general.power_prevent_sleep_description')}
 							</div>
 						</div>
 						<button
@@ -803,7 +827,7 @@ export function GeneralTab({ theme, isOpen }: GeneralTabProps) {
 							}}
 							role="switch"
 							aria-checked={preventSleepEnabled}
-							aria-label="Prevent sleep while working"
+							aria-label={t('general.power_prevent_sleep_title')}
 						>
 							<span
 								className={`absolute left-0 top-0.5 w-4 h-4 rounded-full bg-white transition-transform ${
@@ -822,7 +846,7 @@ export function GeneralTab({ theme, isOpen }: GeneralTabProps) {
 								color: theme.colors.warning,
 							}}
 						>
-							Note: May have limited support on some Linux desktop environments.
+							{t('general.power_linux_note')}
 						</div>
 					)}
 				</div>
@@ -832,7 +856,7 @@ export function GeneralTab({ theme, isOpen }: GeneralTabProps) {
 			<div>
 				<div className="block text-xs font-bold opacity-70 uppercase mb-2 flex items-center gap-2">
 					<Monitor className="w-3 h-3" />
-					Rendering Options
+					{t('general.rendering_header')}
 				</div>
 				<div
 					className="p-3 rounded border space-y-3"
@@ -853,10 +877,10 @@ export function GeneralTab({ theme, isOpen }: GeneralTabProps) {
 					>
 						<div className="flex-1 pr-3">
 							<div className="font-medium" style={{ color: theme.colors.textMain }}>
-								Disable GPU acceleration
+								{t('general.rendering_gpu_title')}
 							</div>
 							<div className="text-xs opacity-50 mt-0.5" style={{ color: theme.colors.textDim }}>
-								Use software rendering instead of GPU. Requires restart to take effect.
+								{t('general.rendering_gpu_description')}
 							</div>
 						</div>
 						<button
@@ -872,7 +896,7 @@ export function GeneralTab({ theme, isOpen }: GeneralTabProps) {
 							}}
 							role="switch"
 							aria-checked={disableGpuAcceleration}
-							aria-label="Disable GPU acceleration"
+							aria-label={t('general.rendering_gpu_title')}
 						>
 							<span
 								className={`absolute left-0 top-0.5 w-4 h-4 rounded-full bg-white transition-transform ${
@@ -902,10 +926,10 @@ export function GeneralTab({ theme, isOpen }: GeneralTabProps) {
 								style={{ color: theme.colors.textMain }}
 							>
 								<PartyPopper className="w-4 h-4" />
-								Disable confetti animations
+								{t('general.rendering_confetti_title')}
 							</div>
 							<div className="text-xs opacity-50 mt-0.5" style={{ color: theme.colors.textDim }}>
-								Skip celebratory confetti effects on achievements and milestones
+								{t('general.rendering_confetti_description')}
 							</div>
 						</div>
 						<button
@@ -919,7 +943,7 @@ export function GeneralTab({ theme, isOpen }: GeneralTabProps) {
 							}}
 							role="switch"
 							aria-checked={disableConfetti}
-							aria-label="Disable confetti animations"
+							aria-label={t('general.rendering_confetti_title')}
 						>
 							<span
 								className={`absolute left-0 top-0.5 w-4 h-4 rounded-full bg-white transition-transform ${
@@ -934,9 +958,9 @@ export function GeneralTab({ theme, isOpen }: GeneralTabProps) {
 			{/* Check for Updates on Startup */}
 			<SettingCheckbox
 				icon={Download}
-				sectionLabel="Updates"
-				title="Check for updates on startup"
-				description="Automatically check for new Maestro versions when the app starts"
+				sectionLabel={t('general.updates_header')}
+				title={t('general.updates_title')}
+				description={t('general.updates_description')}
 				checked={checkForUpdatesOnStartup}
 				onChange={setCheckForUpdatesOnStartup}
 				theme={theme}
@@ -945,9 +969,9 @@ export function GeneralTab({ theme, isOpen }: GeneralTabProps) {
 			{/* Beta Updates */}
 			<SettingCheckbox
 				icon={FlaskConical}
-				sectionLabel="Pre-release Channel"
-				title="Include beta and release candidate updates"
-				description="Opt-in to receive pre-release versions (e.g., v0.11.1-rc, v0.12.0-beta). These may contain experimental features and bugs."
+				sectionLabel={t('general.beta_header')}
+				title={t('general.beta_title')}
+				description={t('general.beta_description')}
 				checked={enableBetaUpdates}
 				onChange={setEnableBetaUpdates}
 				theme={theme}
@@ -956,9 +980,9 @@ export function GeneralTab({ theme, isOpen }: GeneralTabProps) {
 			{/* Crash Reporting */}
 			<SettingCheckbox
 				icon={Bug}
-				sectionLabel="Privacy"
-				title="Send anonymous crash reports"
-				description="Help improve Maestro by automatically sending crash reports. No personal data is collected. Changes take effect after restart."
+				sectionLabel={t('general.privacy_header')}
+				title={t('general.privacy_title')}
+				description={t('general.privacy_description')}
 				checked={crashReportingEnabled}
 				onChange={setCrashReportingEnabled}
 				theme={theme}
@@ -968,7 +992,7 @@ export function GeneralTab({ theme, isOpen }: GeneralTabProps) {
 			<div>
 				<div className="block text-xs font-bold opacity-70 uppercase mb-2 flex items-center gap-2">
 					<Database className="w-3 h-3" />
-					Usage & Stats
+					{t('general.stats_header')}
 					<span
 						className="px-1.5 py-0.5 rounded text-[9px] font-bold uppercase"
 						style={{
@@ -976,7 +1000,7 @@ export function GeneralTab({ theme, isOpen }: GeneralTabProps) {
 							color: theme.colors.warning,
 						}}
 					>
-						Beta
+						{t('general.stats_badge_beta')}
 					</span>
 				</div>
 				<div
@@ -987,11 +1011,9 @@ export function GeneralTab({ theme, isOpen }: GeneralTabProps) {
 					<div className="flex items-center justify-between">
 						<div>
 							<p className="text-sm" style={{ color: theme.colors.textMain }}>
-								Enable stats collection
+								{t('general.stats_enable_title')}
 							</p>
-							<p className="text-xs opacity-50 mt-0.5">
-								Track queries and Auto Run sessions for the dashboard.
-							</p>
+							<p className="text-xs opacity-50 mt-0.5">{t('general.stats_enable_description')}</p>
 						</div>
 						<button
 							onClick={() => setStatsCollectionEnabled(!statsCollectionEnabled)}
@@ -1005,7 +1027,7 @@ export function GeneralTab({ theme, isOpen }: GeneralTabProps) {
 							}}
 							role="switch"
 							aria-checked={statsCollectionEnabled}
-							aria-label="Enable stats collection"
+							aria-label={t('general.stats_enable_title')}
 						>
 							<span
 								className={`absolute left-0 top-0.5 w-4 h-4 rounded-full bg-white transition-transform ${
@@ -1017,7 +1039,9 @@ export function GeneralTab({ theme, isOpen }: GeneralTabProps) {
 
 					{/* Default Time Range */}
 					<div>
-						<div className="block text-xs opacity-60 mb-2">Default dashboard time range</div>
+						<div className="block text-xs opacity-60 mb-2">
+							{t('general.stats_time_range_label')}
+						</div>
 						<select
 							value={defaultStatsTimeRange}
 							onChange={(e) =>
@@ -1028,15 +1052,13 @@ export function GeneralTab({ theme, isOpen }: GeneralTabProps) {
 							className="w-full p-2 rounded border bg-transparent outline-none text-sm"
 							style={{ borderColor: theme.colors.border, color: theme.colors.textMain }}
 						>
-							<option value="day">Last 24 hours</option>
-							<option value="week">Last 7 days</option>
-							<option value="month">Last 30 days</option>
-							<option value="year">Last 365 days</option>
-							<option value="all">All time</option>
+							<option value="day">{t('general.stats_time_range_day')}</option>
+							<option value="week">{t('general.stats_time_range_week')}</option>
+							<option value="month">{t('general.stats_time_range_month')}</option>
+							<option value="year">{t('general.stats_time_range_year')}</option>
+							<option value="all">{t('general.stats_time_range_all')}</option>
 						</select>
-						<p className="text-xs opacity-50 mt-1">
-							Time range shown when opening the Usage Dashboard.
-						</p>
+						<p className="text-xs opacity-50 mt-1">{t('general.stats_time_range_help')}</p>
 					</div>
 
 					{/* Divider */}
@@ -1045,19 +1067,24 @@ export function GeneralTab({ theme, isOpen }: GeneralTabProps) {
 					{/* Database Size Display */}
 					<div className="flex items-center justify-between">
 						<span className="text-sm" style={{ color: theme.colors.textDim }}>
-							Database size
+							{t('general.stats_db_size')}
 						</span>
 						<span className="text-sm font-mono" style={{ color: theme.colors.textMain }}>
-							{statsDbSize !== null ? (statsDbSize / 1024 / 1024).toFixed(2) + ' MB' : 'Loading...'}
+							{statsDbSize !== null
+								? t('general.stats_mb', { size: (statsDbSize / 1024 / 1024).toFixed(2) })
+								: t('general.stats_db_loading')}
 							{statsEarliestDate && (
-								<span style={{ color: theme.colors.textDim }}> (since {statsEarliestDate})</span>
+								<span style={{ color: theme.colors.textDim }}>
+									{' '}
+									{t('general.stats_db_since', { date: statsEarliestDate })}
+								</span>
 							)}
 						</span>
 					</div>
 
 					{/* Clear Old Data Dropdown */}
 					<div>
-						<div className="block text-xs opacity-60 mb-2">Clear stats older than...</div>
+						<div className="block text-xs opacity-60 mb-2">{t('general.stats_clear_label')}</div>
 						<div className="flex items-center gap-2">
 							<select
 								id="clear-stats-period"
@@ -1067,13 +1094,13 @@ export function GeneralTab({ theme, isOpen }: GeneralTabProps) {
 								disabled={statsClearing}
 							>
 								<option value="" disabled>
-									Select a time period
+									{t('general.stats_clear_select_period')}
 								</option>
-								<option value="7">7 days</option>
-								<option value="30">30 days</option>
-								<option value="90">90 days</option>
-								<option value="180">6 months</option>
-								<option value="365">1 year</option>
+								<option value="7">{t('general.stats_clear_7_days')}</option>
+								<option value="30">{t('general.stats_clear_30_days')}</option>
+								<option value="90">{t('general.stats_clear_90_days')}</option>
+								<option value="180">{t('general.stats_clear_6_months')}</option>
+								<option value="365">{t('general.stats_clear_1_year')}</option>
 							</select>
 							<button
 								onClick={async () => {
@@ -1114,12 +1141,10 @@ export function GeneralTab({ theme, isOpen }: GeneralTabProps) {
 								}}
 							>
 								<Trash2 className="w-3 h-3" />
-								{statsClearing ? 'Clearing...' : 'Clear'}
+								{statsClearing ? t('general.stats_clearing') : t('general.stats_clear_button')}
 							</button>
 						</div>
-						<p className="text-xs opacity-50 mt-2">
-							Remove old query events, Auto Run sessions, and tasks from the stats database.
-						</p>
+						<p className="text-xs opacity-50 mt-2">{t('general.stats_clear_help')}</p>
 					</div>
 
 					{/* Clear Result Feedback */}
@@ -1137,19 +1162,21 @@ export function GeneralTab({ theme, isOpen }: GeneralTabProps) {
 								<>
 									<Check className="w-3 h-3 flex-shrink-0 mt-0.5" />
 									<span>
-										Cleared{' '}
-										{statsClearResult.deletedQueryEvents +
-											statsClearResult.deletedAutoRunSessions +
-											statsClearResult.deletedAutoRunTasks}{' '}
-										records ({statsClearResult.deletedQueryEvents} queries,{' '}
-										{statsClearResult.deletedAutoRunSessions} sessions,{' '}
-										{statsClearResult.deletedAutoRunTasks} tasks)
+										{t('general.stats_clear_success', {
+											total:
+												statsClearResult.deletedQueryEvents +
+												statsClearResult.deletedAutoRunSessions +
+												statsClearResult.deletedAutoRunTasks,
+											queries: statsClearResult.deletedQueryEvents,
+											sessions: statsClearResult.deletedAutoRunSessions,
+											tasks: statsClearResult.deletedAutoRunTasks,
+										})}
 									</span>
 								</>
 							) : (
 								<>
 									<X className="w-3 h-3 flex-shrink-0 mt-0.5" />
-									<span>{statsClearResult.error || 'Failed to clear stats data'}</span>
+									<span>{statsClearResult.error || t('general.stats_clear_failed')}</span>
 								</>
 							)}
 						</div>
@@ -1166,11 +1193,9 @@ export function GeneralTab({ theme, isOpen }: GeneralTabProps) {
 								style={{ color: theme.colors.textMain }}
 							>
 								<Timer className="w-3.5 h-3.5 opacity-60" />
-								Enable WakaTime tracking
+								{t('general.wakatime_title')}
 							</p>
-							<p className="text-xs opacity-50 mt-0.5">
-								Track coding activity in Maestro sessions via WakaTime.
-							</p>
+							<p className="text-xs opacity-50 mt-0.5">{t('general.wakatime_description')}</p>
 						</div>
 						<button
 							onClick={() => setWakatimeEnabled(!wakatimeEnabled)}
@@ -1180,7 +1205,7 @@ export function GeneralTab({ theme, isOpen }: GeneralTabProps) {
 							}}
 							role="switch"
 							aria-checked={wakatimeEnabled}
-							aria-label="Enable WakaTime tracking"
+							aria-label={t('general.wakatime_title')}
 						>
 							<span
 								className={`absolute left-0 top-0.5 w-4 h-4 rounded-full bg-white transition-transform ${
@@ -1193,7 +1218,7 @@ export function GeneralTab({ theme, isOpen }: GeneralTabProps) {
 					{/* CLI not found warning */}
 					{wakatimeEnabled && wakatimeCliStatus && !wakatimeCliStatus.available && (
 						<p className="text-xs mt-1" style={{ color: theme.colors.warning }}>
-							WakaTime CLI is being installed automatically...
+							{t('general.wakatime_cli_installing')}
 						</p>
 					)}
 
@@ -1202,10 +1227,10 @@ export function GeneralTab({ theme, isOpen }: GeneralTabProps) {
 						<div className="flex items-center justify-between">
 							<div>
 								<p className="text-sm" style={{ color: theme.colors.textMain }}>
-									Detailed file tracking
+									{t('general.wakatime_detailed_title')}
 								</p>
 								<p className="text-xs opacity-50 mt-0.5">
-									Track per-file write activity. Sends file paths (not content) to WakaTime.
+									{t('general.wakatime_detailed_description')}
 								</p>
 							</div>
 							<button
@@ -1219,7 +1244,7 @@ export function GeneralTab({ theme, isOpen }: GeneralTabProps) {
 								}}
 								role="switch"
 								aria-checked={wakatimeDetailedTracking}
-								aria-label="Detailed file tracking"
+								aria-label={t('general.wakatime_detailed_title')}
 							>
 								<span
 									className={`absolute left-0 top-0.5 w-4 h-4 rounded-full bg-white transition-transform ${
@@ -1233,7 +1258,9 @@ export function GeneralTab({ theme, isOpen }: GeneralTabProps) {
 					{/* API Key Input (only shown when enabled) */}
 					{wakatimeEnabled && (
 						<div>
-							<div className="block text-xs opacity-60 mb-1">API Key</div>
+							<div className="block text-xs opacity-60 mb-1">
+								{t('general.wakatime_api_key_label')}
+							</div>
 							<div
 								className="flex items-center border rounded px-3 py-2"
 								style={{
@@ -1259,7 +1286,7 @@ export function GeneralTab({ theme, isOpen }: GeneralTabProps) {
 									}}
 									className="bg-transparent flex-1 text-sm outline-none"
 									style={{ color: theme.colors.textMain }}
-									placeholder="waka_..."
+									placeholder={t('general.wakatime_api_key_placeholder')}
 								/>
 								{wakatimeKeyValidating && <span className="ml-2 text-xs opacity-50">...</span>}
 								{!wakatimeKeyValidating && wakatimeKeyValid === true && (
@@ -1272,16 +1299,13 @@ export function GeneralTab({ theme, isOpen }: GeneralTabProps) {
 									<button
 										onClick={() => handleWakatimeApiKeyChange('')}
 										className="ml-2 opacity-50 hover:opacity-100"
-										title="Clear API key"
+										title={t('general.wakatime_clear_api_key')}
 									>
 										<X className="w-3 h-3" />
 									</button>
 								)}
 							</div>
-							<p className="text-[10px] mt-1.5 opacity-50">
-								Get your API key from wakatime.com/settings/api-key. Keys are stored locally in
-								~/.maestro/settings.json.
-							</p>
+							<p className="text-[10px] mt-1.5 opacity-50">{t('general.wakatime_api_key_help')}</p>
 						</div>
 					)}
 				</div>
@@ -1291,7 +1315,7 @@ export function GeneralTab({ theme, isOpen }: GeneralTabProps) {
 			<div>
 				<div className="block text-xs font-bold opacity-70 uppercase mb-2 flex items-center gap-2">
 					<FolderSync className="w-3 h-3" />
-					Storage Location
+					{t('general.storage_header')}
 					<span
 						className="px-1.5 py-0.5 rounded text-[9px] font-bold uppercase"
 						style={{
@@ -1299,7 +1323,7 @@ export function GeneralTab({ theme, isOpen }: GeneralTabProps) {
 							color: theme.colors.warning,
 						}}
 					>
-						Beta
+						{t('general.storage_badge_beta')}
 					</span>
 				</div>
 				<div
@@ -1309,34 +1333,32 @@ export function GeneralTab({ theme, isOpen }: GeneralTabProps) {
 					{/* Settings folder header */}
 					<div>
 						<p className="text-sm font-semibold" style={{ color: theme.colors.textMain }}>
-							Settings folder
+							{t('general.storage_settings_folder')}
 						</p>
-						<p className="text-xs opacity-60 mt-0.5">
-							Choose where Maestro stores settings, sessions, and groups (including global
-							environment variables, agents, and configurations). Use a synced folder (iCloud Drive,
-							Dropbox, OneDrive) to share across devices.
-						</p>
-						<p className="text-xs opacity-50 mt-1 italic">
-							Note: Only run Maestro on one device at a time to avoid sync conflicts.
-						</p>
+						<p className="text-xs opacity-60 mt-0.5">{t('general.storage_description')}</p>
+						<p className="text-xs opacity-50 mt-1 italic">{t('general.storage_sync_note')}</p>
 					</div>
 
 					{/* Default Location */}
 					<div>
-						<div className="block text-xs opacity-60 mb-1">Default Location</div>
+						<div className="block text-xs opacity-60 mb-1">
+							{t('general.storage_default_location')}
+						</div>
 						<div
 							className="text-xs p-2 rounded font-mono truncate"
 							style={{ backgroundColor: theme.colors.bgActivity }}
 							title={defaultStoragePath}
 						>
-							{defaultStoragePath || 'Loading...'}
+							{defaultStoragePath || t('general.stats_db_loading')}
 						</div>
 					</div>
 
 					{/* Current Location (if different) */}
 					{customSyncPath && (
 						<div>
-							<div className="block text-xs opacity-60 mb-1">Current Location (Custom)</div>
+							<div className="block text-xs opacity-60 mb-1">
+								{t('general.storage_current_location')}
+							</div>
 							<div
 								className="text-xs p-2 rounded font-mono truncate flex items-center gap-2"
 								style={{
@@ -1374,7 +1396,7 @@ export function GeneralTab({ theme, isOpen }: GeneralTabProps) {
 												setSyncError(
 													result.errors?.join(', ') ||
 														result.error ||
-														'Failed to change storage location'
+														t('general.storage_failed_change')
 												);
 											}
 											if (result.errors && result.errors.length > 0) {
@@ -1399,10 +1421,10 @@ export function GeneralTab({ theme, isOpen }: GeneralTabProps) {
 						>
 							<Folder className="w-3 h-3" />
 							{syncMigrating
-								? 'Migrating...'
+								? t('general.storage_migrating')
 								: customSyncPath
-									? 'Change Folder...'
-									: 'Choose Folder...'}
+									? t('general.storage_change_folder')
+									: t('general.storage_choose_folder')}
 						</button>
 
 						{customSyncPath && (
@@ -1424,7 +1446,7 @@ export function GeneralTab({ theme, isOpen }: GeneralTabProps) {
 											setSyncError(
 												result.errors?.join(', ') ||
 													result.error ||
-													'Failed to reset storage location'
+													t('general.storage_failed_reset')
 											);
 										}
 									} catch (error) {
@@ -1439,10 +1461,10 @@ export function GeneralTab({ theme, isOpen }: GeneralTabProps) {
 									backgroundColor: theme.colors.border,
 									color: theme.colors.textMain,
 								}}
-								title="Reset to default location"
+								title={t('general.storage_reset_to_default')}
 							>
 								<RotateCcw className="w-3 h-3" />
-								Use Default
+								{t('general.storage_use_default')}
 							</button>
 						)}
 					</div>
@@ -1457,7 +1479,9 @@ export function GeneralTab({ theme, isOpen }: GeneralTabProps) {
 							}}
 						>
 							<Check className="w-3 h-3" />
-							Migrated {syncMigratedCount} settings file{syncMigratedCount !== 1 ? 's' : ''}
+							{syncMigratedCount !== 1
+								? t('general.storage_migrated_plural', { count: syncMigratedCount })
+								: t('general.storage_migrated', { count: syncMigratedCount })}
 						</div>
 					)}
 
@@ -1485,7 +1509,7 @@ export function GeneralTab({ theme, isOpen }: GeneralTabProps) {
 							}}
 						>
 							<RotateCcw className="w-3 h-3" />
-							Restart Maestro for changes to take effect
+							{t('general.storage_restart_required')}
 						</div>
 					)}
 

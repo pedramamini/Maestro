@@ -1,4 +1,5 @@
 import React, { useState, useCallback, useRef } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Palette, Download, Upload, RotateCcw, Check, ChevronDown } from 'lucide-react';
 import type { Theme, ThemeColors, ThemeId } from '../types';
 import { THEMES, DEFAULT_CUSTOM_THEME_COLORS } from '../constants/themes';
@@ -29,21 +30,21 @@ interface CustomThemeBuilderProps {
 	onImportSuccess?: (message: string) => void;
 }
 
-// Color picker labels with descriptions
-const COLOR_CONFIG: { key: keyof ThemeColors; label: string; description: string }[] = [
-	{ key: 'bgMain', label: 'Main Background', description: 'Primary content area' },
-	{ key: 'bgSidebar', label: 'Sidebar Background', description: 'Left & right panels' },
-	{ key: 'bgActivity', label: 'Activity Background', description: 'Hover, active states' },
-	{ key: 'border', label: 'Border', description: 'Dividers & outlines' },
-	{ key: 'textMain', label: 'Main Text', description: 'Primary text color' },
-	{ key: 'textDim', label: 'Dimmed Text', description: 'Secondary text' },
-	{ key: 'accent', label: 'Accent', description: 'Highlights, links' },
-	{ key: 'accentDim', label: 'Accent Dim', description: 'Accent with transparency' },
-	{ key: 'accentText', label: 'Accent Text', description: 'Text in accent contexts' },
-	{ key: 'accentForeground', label: 'Accent Foreground', description: 'Text ON accent' },
-	{ key: 'success', label: 'Success', description: 'Green states' },
-	{ key: 'warning', label: 'Warning', description: 'Yellow/orange states' },
-	{ key: 'error', label: 'Error', description: 'Red states' },
+// Color keys for theme customization (display labels are in i18n settings:custom_theme.color_*_label/desc)
+const COLOR_KEYS: (keyof ThemeColors)[] = [
+	'bgMain',
+	'bgSidebar',
+	'bgActivity',
+	'border',
+	'textMain',
+	'textDim',
+	'accent',
+	'accentDim',
+	'accentText',
+	'accentForeground',
+	'success',
+	'warning',
+	'error',
 ];
 
 // Mini UI Preview component
@@ -290,6 +291,7 @@ export function CustomThemeBuilder({
 	onImportError,
 	onImportSuccess,
 }: CustomThemeBuilderProps) {
+	const { t } = useTranslation('settings');
 	const [showBaseSelector, setShowBaseSelector] = useState(false);
 	const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -351,21 +353,20 @@ export function CustomThemeBuilder({
 					const data = JSON.parse(e.target?.result as string);
 					if (data.colors && typeof data.colors === 'object') {
 						// Validate all required color keys exist
-						const requiredKeys = COLOR_CONFIG.map((c) => c.key);
-						const hasAllKeys = requiredKeys.every((key) => key in data.colors);
+						const hasAllKeys = COLOR_KEYS.every((key) => key in data.colors);
 
 						if (!hasAllKeys) {
-							const missing = requiredKeys.filter((key) => !(key in data.colors));
-							const errorMsg = `Invalid theme file: missing color keys (${missing.slice(0, 3).join(', ')}${missing.length > 3 ? '...' : ''})`;
-							onImportError?.(errorMsg);
+							const missing = COLOR_KEYS.filter((key) => !(key in data.colors));
+							const keysStr = `${missing.slice(0, 3).join(', ')}${missing.length > 3 ? '...' : ''}`;
+							onImportError?.(t('custom_theme.error_missing_keys', { keys: keysStr }));
 							return;
 						}
 
 						// Validate all color values are valid CSS colors
-						const invalidColors = requiredKeys.filter((key) => !isValidColor(data.colors[key]));
+						const invalidColors = COLOR_KEYS.filter((key) => !isValidColor(data.colors[key]));
 						if (invalidColors.length > 0) {
-							const errorMsg = `Invalid theme file: invalid color values for ${invalidColors.slice(0, 3).join(', ')}${invalidColors.length > 3 ? '...' : ''}`;
-							onImportError?.(errorMsg);
+							const keysStr = `${invalidColors.slice(0, 3).join(', ')}${invalidColors.length > 3 ? '...' : ''}`;
+							onImportError?.(t('custom_theme.error_invalid_colors', { keys: keysStr }));
 							return;
 						}
 
@@ -374,12 +375,12 @@ export function CustomThemeBuilder({
 						if (data.baseTheme && THEMES[data.baseTheme as ThemeId]) {
 							setCustomThemeBaseId(data.baseTheme);
 						}
-						onImportSuccess?.('Theme imported successfully');
+						onImportSuccess?.(t('custom_theme.import_success'));
 					} else {
-						onImportError?.('Invalid theme file: missing colors object');
+						onImportError?.(t('custom_theme.error_missing_colors'));
 					}
 				} catch {
-					onImportError?.('Failed to parse theme file: invalid JSON format');
+					onImportError?.(t('custom_theme.error_invalid_json'));
 				}
 			};
 			reader.readAsText(file);
@@ -389,7 +390,7 @@ export function CustomThemeBuilder({
 				fileInputRef.current.value = '';
 			}
 		},
-		[setCustomThemeColors, setCustomThemeBaseId, onImportError, onImportSuccess]
+		[setCustomThemeColors, setCustomThemeBaseId, onImportError, onImportSuccess, t]
 	);
 
 	return (
@@ -400,7 +401,7 @@ export function CustomThemeBuilder({
 				style={{ color: theme.colors.textDim }}
 			>
 				<Palette className="w-3 h-3" />
-				Custom Theme
+				{t('themes.custom_theme')}
 			</div>
 
 			{/* Theme Selection Button + Controls */}
@@ -418,7 +419,7 @@ export function CustomThemeBuilder({
 				<button onClick={onSelect} className="w-full p-3 text-left" tabIndex={-1}>
 					<div className="flex justify-between items-center mb-2">
 						<span className="text-sm font-bold" style={{ color: customThemeColors.textMain }}>
-							Custom
+							{t('custom_theme.custom_label')}
 						</span>
 						{isSelected && (
 							<Check className="w-4 h-4" style={{ color: customThemeColors.accent }} />
@@ -445,7 +446,7 @@ export function CustomThemeBuilder({
 							className="text-[10px] uppercase font-bold mb-2"
 							style={{ color: theme.colors.textDim }}
 						>
-							Preview
+							{t('custom_theme.preview')}
 						</div>
 						<MiniUIPreview colors={customThemeColors} />
 					</div>
@@ -464,7 +465,7 @@ export function CustomThemeBuilder({
 								}}
 							>
 								<RotateCcw className="w-3 h-3" />
-								Initialize
+								{t('custom_theme.initialize')}
 								<ChevronDown className="w-3 h-3" />
 							</button>
 
@@ -476,28 +477,36 @@ export function CustomThemeBuilder({
 										borderColor: theme.colors.border,
 									}}
 								>
-									{baseThemes.map((t) => (
+									{baseThemes.map((baseTheme) => (
 										<button
-											key={t.id}
-											onClick={() => handleInitializeFromBase(t.id)}
+											key={baseTheme.id}
+											onClick={() => handleInitializeFromBase(baseTheme.id)}
 											className="w-full px-2 py-1.5 text-left text-xs hover:opacity-80 flex items-center gap-2"
 											style={{
 												backgroundColor:
-													customThemeBaseId === t.id ? theme.colors.accentDim : 'transparent',
+													customThemeBaseId === baseTheme.id
+														? theme.colors.accentDim
+														: 'transparent',
 												color: theme.colors.textMain,
 											}}
 										>
 											<div className="flex h-3 w-8 rounded overflow-hidden">
-												<div className="flex-1" style={{ backgroundColor: t.colors.bgMain }} />
-												<div className="flex-1" style={{ backgroundColor: t.colors.accent }} />
+												<div
+													className="flex-1"
+													style={{ backgroundColor: baseTheme.colors.bgMain }}
+												/>
+												<div
+													className="flex-1"
+													style={{ backgroundColor: baseTheme.colors.accent }}
+												/>
 											</div>
-											{t.name}
-											{customThemeBaseId === t.id && (
+											{baseTheme.name}
+											{customThemeBaseId === baseTheme.id && (
 												<span
 													className="ml-auto text-[9px]"
 													style={{ color: theme.colors.textDim }}
 												>
-													current base
+													{t('custom_theme.current_base')}
 												</span>
 											)}
 										</button>
@@ -515,7 +524,7 @@ export function CustomThemeBuilder({
 								borderColor: theme.colors.border,
 								color: theme.colors.textMain,
 							}}
-							title="Export theme"
+							title={t('custom_theme.export_theme')}
 						>
 							<Download className="w-3 h-3" />
 						</button>
@@ -529,7 +538,7 @@ export function CustomThemeBuilder({
 								borderColor: theme.colors.border,
 								color: theme.colors.textMain,
 							}}
-							title="Import theme"
+							title={t('custom_theme.import_theme')}
 						>
 							<Upload className="w-3 h-3" />
 						</button>
@@ -550,7 +559,7 @@ export function CustomThemeBuilder({
 								borderColor: theme.colors.error + '40',
 								color: theme.colors.error,
 							}}
-							title="Reset to default"
+							title={t('custom_theme.reset_to_default')}
 						>
 							<RotateCcw className="w-3 h-3" />
 						</button>
@@ -561,7 +570,7 @@ export function CustomThemeBuilder({
 						className="text-[10px] uppercase font-bold mb-2"
 						style={{ color: theme.colors.textDim }}
 					>
-						Colors
+						{t('custom_theme.colors_header')}
 					</div>
 					<div
 						className="rounded-lg border p-2 max-h-64 overflow-y-auto"
@@ -570,12 +579,12 @@ export function CustomThemeBuilder({
 							borderColor: theme.colors.border,
 						}}
 					>
-						{COLOR_CONFIG.map(({ key, label, description }) => (
+						{COLOR_KEYS.map((key) => (
 							<ColorInput
 								key={key}
 								colorKey={key}
-								label={label}
-								description={description}
+								label={t(`custom_theme.color_${key}_label`)}
+								description={t(`custom_theme.color_${key}_desc`)}
 								value={customThemeColors[key]}
 								onChange={handleColorChange}
 								theme={theme}

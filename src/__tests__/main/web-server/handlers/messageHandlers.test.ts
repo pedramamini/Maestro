@@ -35,6 +35,49 @@ vi.mock('../../../../main/utils/logger', () => ({
 	},
 }));
 
+// Mock mainT to return English translations (same strings as before i18n)
+vi.mock('../../../../main/i18n', () => ({
+	mainT: vi.fn((key: string, options?: Record<string, unknown>) => {
+		const translations: Record<string, string> = {
+			'notifications:error.web.missing_session_or_command': 'Missing sessionId or command',
+			'notifications:error.web.missing_session_or_mode': 'Missing sessionId or mode',
+			'notifications:error.web.missing_session': 'Missing sessionId',
+			'notifications:error.web.missing_session_or_tab': 'Missing sessionId or tabId',
+			'notifications:error.web.missing_reorder_params': 'Missing sessionId, fromIndex, or toIndex',
+			'notifications:error.web.session_not_found': 'Session not found',
+			'notifications:error.web.session_busy':
+				'Session is busy - please wait for the current operation to complete',
+			'notifications:error.web.command_not_configured': 'Command execution not configured',
+			'notifications:error.web.mode_switch_not_configured': 'Mode switching not configured',
+			'notifications:error.web.session_select_not_configured': 'Session selection not configured',
+			'notifications:error.web.tab_select_not_configured': 'Tab selection not configured',
+			'notifications:error.web.tab_create_not_configured': 'Tab creation not configured',
+			'notifications:error.web.tab_close_not_configured': 'Tab closing not configured',
+			'notifications:error.web.tab_rename_not_configured': 'Tab renaming not configured',
+			'notifications:error.web.tab_star_not_configured': 'Tab starring not configured',
+			'notifications:error.web.tab_reorder_not_configured': 'Tab reordering not configured',
+			'notifications:error.web.bookmark_not_configured': 'Bookmark toggling not configured',
+			'notifications:error.web.command_failed': 'Failed to execute command: {{message}}',
+			'notifications:error.web.mode_switch_failed': 'Failed to switch mode: {{message}}',
+			'notifications:error.web.session_select_failed': 'Failed to select session: {{message}}',
+			'notifications:error.web.tab_select_failed': 'Failed to select tab: {{message}}',
+			'notifications:error.web.tab_create_failed': 'Failed to create tab: {{message}}',
+			'notifications:error.web.tab_close_failed': 'Failed to close tab: {{message}}',
+			'notifications:error.web.tab_rename_failed': 'Failed to rename tab: {{message}}',
+			'notifications:error.web.tab_star_failed': 'Failed to star tab: {{message}}',
+			'notifications:error.web.tab_reorder_failed': 'Failed to reorder tab: {{message}}',
+			'notifications:error.web.bookmark_failed': 'Failed to toggle bookmark: {{message}}',
+		};
+		let result = translations[key] ?? key;
+		if (options) {
+			for (const [k, v] of Object.entries(options)) {
+				result = result.replace(`{{${k}}}`, String(v));
+			}
+		}
+		return result;
+	}),
+}));
+
 /**
  * Create a mock WebSocket client
  */

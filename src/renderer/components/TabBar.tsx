@@ -1,5 +1,6 @@
 import React, { useState, useRef, useCallback, useEffect, memo, useMemo } from 'react';
 import { createPortal } from 'react-dom';
+import { useTranslation } from 'react-i18next';
 import {
 	X,
 	Plus,
@@ -27,6 +28,7 @@ import { formatShortcutKeys } from '../utils/shortcutFormatter';
 import { getExtensionColor } from '../utils/extensionColors';
 import { getRevealLabel } from '../utils/platformUtils';
 import { safeClipboardWrite } from '../utils/clipboard';
+import i18n from '../../shared/i18n/config';
 
 interface TabBarProps {
 	tabs: AITab[];
@@ -182,7 +184,7 @@ function getTabDisplayName(tab: AITab): string {
 		// Generic fallback: first 8 chars uppercase
 		return id.slice(0, 8).toUpperCase();
 	}
-	return 'New Session';
+	return i18n.t('common:tabs.new_session');
 }
 
 /**
@@ -229,6 +231,7 @@ const Tab = memo(function Tab({
 	totalTabs,
 	tabIndex,
 }: TabProps) {
+	const { t } = useTranslation('common');
 	const [isHovered, setIsHovered] = useState(false);
 	const [overlayOpen, setOverlayOpen] = useState(false);
 	const [showCopied, setShowCopied] = useState(false);
@@ -553,7 +556,7 @@ const Tab = memo(function Tab({
 			{/* Generating name indicator - spinning loader while tab name is being generated */}
 			{/* Show regardless of busy state since tab naming runs in parallel with the main request */}
 			{tab.isGeneratingName && (
-				<span title="Generating tab name...">
+				<span title={t('tabs.generating_name')}>
 					<Loader2
 						className="w-3 h-3 shrink-0 animate-spin"
 						style={{ color: theme.colors.textDim }}
@@ -566,7 +569,7 @@ const Tab = memo(function Tab({
 				<div
 					className="w-2 h-2 rounded-full shrink-0"
 					style={{ backgroundColor: theme.colors.accent }}
-					title="New messages"
+					title={t('tabs.new_messages')}
 				/>
 			)}
 
@@ -577,7 +580,7 @@ const Tab = memo(function Tab({
 
 			{/* Draft indicator - pencil icon for tabs with unsent input or staged images */}
 			{hasDraft && (
-				<span title="Has draft message">
+				<span title={t('tabs.has_draft')}>
 					<Pencil className="w-3 h-3 shrink-0" style={{ color: theme.colors.warning }} />
 				</span>
 			)}
@@ -608,7 +611,7 @@ const Tab = memo(function Tab({
 				<button
 					onClick={handleCloseClick}
 					className="p-0.5 rounded hover:bg-white/10 transition-colors shrink-0"
-					title="Close tab"
+					title={t('tabs.close_tab')}
 				>
 					<X className="w-3 h-3" style={{ color: theme.colors.textDim }} />
 				</button>
@@ -692,7 +695,7 @@ const Tab = memo(function Tab({
 										title={`Full ID: ${tab.agentSessionId}`}
 									>
 										<Copy className="w-3.5 h-3.5" style={{ color: theme.colors.textDim }} />
-										{showCopied ? 'Copied!' : 'Copy Session ID'}
+										{showCopied ? t('tabs.copied') : t('tabs.copy_session_id')}
 									</button>
 								)}
 
@@ -707,7 +710,7 @@ const Tab = memo(function Tab({
 											className={`w-3.5 h-3.5 ${tab.starred ? 'fill-current' : ''}`}
 											style={{ color: tab.starred ? theme.colors.warning : theme.colors.textDim }}
 										/>
-										{tab.starred ? 'Unstar Session' : 'Star Session'}
+										{tab.starred ? t('tabs.unstar_session') : t('tabs.star_session')}
 									</button>
 								)}
 
@@ -719,7 +722,7 @@ const Tab = memo(function Tab({
 										style={{ color: theme.colors.textMain }}
 									>
 										<Edit2 className="w-3.5 h-3.5" style={{ color: theme.colors.textDim }} />
-										Rename Tab
+										{t('tabs.rename_tab')}
 									</button>
 								)}
 
@@ -731,7 +734,7 @@ const Tab = memo(function Tab({
 										style={{ color: theme.colors.textMain }}
 									>
 										<Mail className="w-3.5 h-3.5" style={{ color: theme.colors.textDim }} />
-										Mark as Unread
+										{t('tabs.mark_as_unread')}
 									</button>
 								)}
 
@@ -743,7 +746,7 @@ const Tab = memo(function Tab({
 										style={{ color: theme.colors.textMain }}
 									>
 										<Download className="w-3.5 h-3.5" style={{ color: theme.colors.textDim }} />
-										Export as HTML
+										{t('tabs.export_as_html')}
 									</button>
 								)}
 
@@ -761,7 +764,7 @@ const Tab = memo(function Tab({
 										style={{ color: theme.colors.textMain }}
 									>
 										<Clipboard className="w-3.5 h-3.5" style={{ color: theme.colors.textDim }} />
-										Context: Copy to Clipboard
+										{t('tabs.context_copy_clipboard')}
 									</button>
 								)}
 
@@ -773,7 +776,7 @@ const Tab = memo(function Tab({
 										style={{ color: theme.colors.textMain }}
 									>
 										<Minimize2 className="w-3.5 h-3.5" style={{ color: theme.colors.textDim }} />
-										Context: Compact
+										{t('tabs.context_compact')}
 									</button>
 								)}
 
@@ -785,7 +788,7 @@ const Tab = memo(function Tab({
 										style={{ color: theme.colors.textMain }}
 									>
 										<GitMerge className="w-3.5 h-3.5" style={{ color: theme.colors.textDim }} />
-										Context: Merge Into
+										{t('tabs.context_merge_into')}
 									</button>
 								)}
 
@@ -800,7 +803,7 @@ const Tab = memo(function Tab({
 											className="w-3.5 h-3.5"
 											style={{ color: theme.colors.textDim }}
 										/>
-										Context: Send to Agent
+										{t('tabs.context_send_to_agent')}
 									</button>
 								)}
 
@@ -812,7 +815,7 @@ const Tab = memo(function Tab({
 										style={{ color: theme.colors.textMain }}
 									>
 										<Share2 className="w-3.5 h-3.5" style={{ color: theme.colors.textDim }} />
-										Context: Publish as GitHub Gist
+										{t('tabs.context_publish_gist')}
 									</button>
 								)}
 
@@ -829,7 +832,7 @@ const Tab = memo(function Tab({
 										style={{ color: theme.colors.textMain }}
 									>
 										<ChevronsLeft className="w-3.5 h-3.5" style={{ color: theme.colors.textDim }} />
-										Move to First Position
+										{t('tabs.move_to_first')}
 									</button>
 								)}
 
@@ -844,7 +847,7 @@ const Tab = memo(function Tab({
 											className="w-3.5 h-3.5"
 											style={{ color: theme.colors.textDim }}
 										/>
-										Move to Last Position
+										{t('tabs.move_to_last')}
 									</button>
 								)}
 
@@ -861,7 +864,7 @@ const Tab = memo(function Tab({
 									disabled={totalTabs === 1}
 								>
 									<X className="w-3.5 h-3.5" style={{ color: theme.colors.textDim }} />
-									Close Tab
+									{t('tabs.close_tab')}
 								</button>
 
 								{/* Close Other Tabs */}
@@ -875,7 +878,7 @@ const Tab = memo(function Tab({
 										disabled={totalTabs === 1}
 									>
 										<X className="w-3.5 h-3.5" style={{ color: theme.colors.textDim }} />
-										Close Other Tabs
+										{t('tabs.close_other_tabs')}
 									</button>
 								)}
 
@@ -890,7 +893,7 @@ const Tab = memo(function Tab({
 										disabled={tabIndex === 0}
 									>
 										<ChevronsLeft className="w-3.5 h-3.5" style={{ color: theme.colors.textDim }} />
-										Close Tabs to Left
+										{t('tabs.close_tabs_left')}
 									</button>
 								)}
 
@@ -910,7 +913,7 @@ const Tab = memo(function Tab({
 											className="w-3.5 h-3.5"
 											style={{ color: theme.colors.textDim }}
 										/>
-										Close Tabs to Right
+										{t('tabs.close_tabs_right')}
 									</button>
 								)}
 							</div>
@@ -1003,6 +1006,7 @@ const FileTab = memo(function FileTab({
 	colorBlindMode,
 	shortcutHint,
 }: FileTabProps) {
+	const { t } = useTranslation('common');
 	const [isHovered, setIsHovered] = useState(false);
 	const [overlayOpen, setOverlayOpen] = useState(false);
 	const [showCopied, setShowCopied] = useState<'path' | 'name' | null>(null);
@@ -1264,7 +1268,7 @@ const FileTab = memo(function FileTab({
 		>
 			{/* Unsaved edits indicator - pencil icon */}
 			{hasUnsavedEdits && (
-				<span title="Has unsaved changes">
+				<span title={t('tabs.has_unsaved_changes')}>
 					<Pencil className="w-3 h-3 shrink-0" style={{ color: theme.colors.warning }} />
 				</span>
 			)}
@@ -1308,7 +1312,7 @@ const FileTab = memo(function FileTab({
 				<button
 					onClick={handleCloseClick}
 					className="p-0.5 rounded hover:bg-white/10 transition-colors shrink-0"
-					title="Close tab"
+					title={t('tabs.close_tab')}
 				>
 					<X className="w-3 h-3" style={{ color: theme.colors.textDim }} />
 				</button>
@@ -1363,7 +1367,7 @@ const FileTab = memo(function FileTab({
 									title={tab.path}
 								>
 									<Copy className="w-3.5 h-3.5" style={{ color: theme.colors.textDim }} />
-									{showCopied === 'path' ? 'Copied!' : 'Copy File Path'}
+									{showCopied === 'path' ? t('tabs.copied') : t('tabs.copy_file_path')}
 								</button>
 
 								{/* Copy File Name */}
@@ -1373,7 +1377,7 @@ const FileTab = memo(function FileTab({
 									style={{ color: theme.colors.textMain }}
 								>
 									<Clipboard className="w-3.5 h-3.5" style={{ color: theme.colors.textDim }} />
-									{showCopied === 'name' ? 'Copied!' : 'Copy File Name'}
+									{showCopied === 'name' ? t('tabs.copied') : t('tabs.copy_file_name')}
 								</button>
 
 								{/* Open in Default App */}
@@ -1383,7 +1387,7 @@ const FileTab = memo(function FileTab({
 									style={{ color: theme.colors.textMain }}
 								>
 									<ExternalLink className="w-3.5 h-3.5" style={{ color: theme.colors.textDim }} />
-									Open in Default App
+									{t('tabs.open_in_default_app')}
 								</button>
 
 								{/* Reveal in Finder / Explorer */}
@@ -1409,7 +1413,7 @@ const FileTab = memo(function FileTab({
 										style={{ color: theme.colors.textMain }}
 									>
 										<ChevronsLeft className="w-3.5 h-3.5" style={{ color: theme.colors.textDim }} />
-										Move to First Position
+										{t('tabs.move_to_first')}
 									</button>
 								)}
 
@@ -1424,7 +1428,7 @@ const FileTab = memo(function FileTab({
 											className="w-3.5 h-3.5"
 											style={{ color: theme.colors.textDim }}
 										/>
-										Move to Last Position
+										{t('tabs.move_to_last')}
 									</button>
 								)}
 
@@ -1438,7 +1442,7 @@ const FileTab = memo(function FileTab({
 									style={{ color: theme.colors.textMain }}
 								>
 									<X className="w-3.5 h-3.5" style={{ color: theme.colors.textDim }} />
-									Close Tab
+									{t('tabs.close_tab')}
 								</button>
 
 								{/* Close Other Tabs */}
@@ -1452,7 +1456,7 @@ const FileTab = memo(function FileTab({
 										disabled={totalTabs === 1}
 									>
 										<X className="w-3.5 h-3.5" style={{ color: theme.colors.textDim }} />
-										Close Other Tabs
+										{t('tabs.close_other_tabs')}
 									</button>
 								)}
 
@@ -1467,7 +1471,7 @@ const FileTab = memo(function FileTab({
 										disabled={tabIndex === 0}
 									>
 										<ChevronsLeft className="w-3.5 h-3.5" style={{ color: theme.colors.textDim }} />
-										Close Tabs to Left
+										{t('tabs.close_tabs_left')}
 									</button>
 								)}
 
@@ -1487,7 +1491,7 @@ const FileTab = memo(function FileTab({
 											className="w-3.5 h-3.5"
 											style={{ color: theme.colors.textDim }}
 										/>
-										Close Tabs to Right
+										{t('tabs.close_tabs_right')}
 									</button>
 								)}
 							</div>
@@ -1538,6 +1542,7 @@ function TabBarInner({
 	// Accessibility
 	colorBlindMode,
 }: TabBarProps) {
+	const { t } = useTranslation('common');
 	const [draggingTabId, setDraggingTabId] = useState<string | null>(null);
 	const [dragOverTabId, setDragOverTabId] = useState<string | null>(null);
 	// Use prop if provided (controlled), otherwise use local state (uncontrolled)
@@ -1859,7 +1864,7 @@ function TabBarInner({
 						onClick={onOpenTabSearch}
 						className="flex items-center justify-center w-6 h-6 rounded hover:bg-white/10 transition-colors"
 						style={{ color: theme.colors.textDim }}
-						title={`Search tabs (${formatShortcutKeys(['Meta', 'Shift', 'o'])})`}
+						title={t('tabs.search_tabs', { shortcut: formatShortcutKeys(['Meta', 'Shift', 'o']) })}
 					>
 						<Search className="w-4 h-4" />
 					</button>
@@ -1874,8 +1879,8 @@ function TabBarInner({
 					}}
 					title={
 						showUnreadOnly
-							? `Showing unread only (${formatShortcutKeys(['Meta', 'u'])})`
-							: `Filter unread tabs (${formatShortcutKeys(['Meta', 'u'])})`
+							? t('tabs.showing_unread_only', { shortcut: formatShortcutKeys(['Meta', 'u']) })
+							: t('tabs.filter_unread_tabs', { shortcut: formatShortcutKeys(['Meta', 'u']) })
 					}
 				>
 					<Mail className="w-4 h-4" />
@@ -1894,7 +1899,7 @@ function TabBarInner({
 						className="flex items-center px-3 py-1.5 text-xs italic shrink-0 self-center mb-1"
 						style={{ color: theme.colors.textDim }}
 					>
-						No unread tabs
+						{t('tabs.no_unread_tabs')}
 					</div>
 				)}
 
@@ -2139,7 +2144,7 @@ function TabBarInner({
 					onClick={onNewTab}
 					className="flex items-center justify-center w-6 h-6 rounded hover:bg-white/10 transition-colors"
 					style={{ color: theme.colors.textDim }}
-					title={`New tab (${formatShortcutKeys(['Meta', 't'])})`}
+					title={t('tabs.new_tab', { shortcut: formatShortcutKeys(['Meta', 't']) })}
 				>
 					<Plus className="w-4 h-4" />
 				</button>

@@ -1,0 +1,193 @@
+{
+	"task": {
+		"completed_title": "Tâche terminée",
+		"completed_message": "{{agent}} a terminé en {{duration}}",
+		"failed_title": "Tâche échouée",
+		"failed_message": "{{agent}} a rencontré une erreur"
+	},
+	"connection": {
+		"lost_title": "Connexion perdue",
+		"restored_title": "Connexion rétablie"
+	},
+	"group_chat": {
+		"error_title": "Discussion de groupe",
+		"create_failed_message": "Impossible de créer la discussion de groupe",
+		"create_failed_dynamic_message": "{{message}}"
+	},
+	"worktree": {
+		"discovered_title": "Worktrees découverts",
+		"discovered_message_one": "{{count}} sous-agent worktree trouvé",
+		"discovered_message_other": "{{count}} sous-agents worktree trouvés",
+		"disabled_title": "Worktrees désactivés",
+		"disabled_message": "Configuration des worktrees effacée pour cet agent.",
+		"disabled_with_removed_message_one": "Configuration des worktrees effacée pour cet agent. {{count}} sous-agent worktree supprimé.",
+		"disabled_with_removed_message_other": "Configuration des worktrees effacée pour cet agent. {{count}} sous-agents worktree supprimés.",
+		"no_directory_title": "Erreur",
+		"no_directory_message": "Aucun répertoire de worktree configuré",
+		"created_title": "Worktree créé",
+		"created_message": "{{branch}}",
+		"create_failed_title": "Échec de la création du worktree",
+		"create_failed_message": "{{message}}",
+		"new_discovered_title": "Nouveau worktree découvert",
+		"new_discovered_message": "{{name}}",
+		"agent_not_found_title": "Agent worktree introuvable",
+		"agent_not_found_message": "L'agent worktree sélectionné a été supprimé. Exécution sur l'agent actif à la place.",
+		"target_busy_title": "Agent cible occupé",
+		"target_busy_message": "L'agent cible est occupé. Veuillez réessayer.",
+		"error_title": "Erreur worktree",
+		"error_message": "{{message}}"
+	},
+	"autorun": {
+		"started_title": "Auto Run démarré",
+		"started_message_one": "{{count}} tâche sur {{docCount}} document",
+		"started_message_other": "{{count}} tâches sur {{docCount}} documents",
+		"complete_title": "Auto Run terminé",
+		"complete_stopped_message": "Arrêté après avoir terminé {{completed}} sur {{total}} tâches",
+		"complete_all_message_one": "La totalité des {{total}} tâche terminée avec succès",
+		"complete_all_message_other": "La totalité des {{total}} tâches terminées avec succès",
+		"complete_partial_message": "{{completed}} sur {{total}} tâches terminées",
+		"error_title": "Auto Run\u00A0: {{errorTitle}}",
+		"error_message": "{{message}}"
+	},
+	"leaderboard": {
+		"updated_title": "Classement mis à jour",
+		"updated_message": "{{message}}"
+	},
+	"symphony": {
+		"pr_ready_title": "Symphony\u00A0: PR prête pour révision",
+		"pr_ready_message": "PR ouverte\u00A0: {{prUrl}}",
+		"manual_needed_title": "Symphony\u00A0: Finalisation manuelle requise",
+		"manual_needed_message": "{{message}}",
+		"manual_needed_default_message": "Impossible de finaliser la PR automatiquement. Ouvrez Symphony pour finaliser.",
+		"auto_finalize_failed_title": "Symphony\u00A0: Échec de la finalisation automatique",
+		"auto_finalize_failed_message": "La PR reste en brouillon. Ouvrez Symphony pour finaliser manuellement.",
+		"error_title": "Erreur Symphony",
+		"agent_not_found_message": "Agent introuvable\u00A0: {{agentType}}"
+	},
+	"pr": {
+		"created_title": "PR créée",
+		"created_message": "{{message}}",
+		"created_default_message": "Pull request créée avec succès",
+		"failed_title": "Échec de la création de la PR",
+		"failed_message": "{{message}}",
+		"failed_default_message": "Impossible de créer la pull request",
+		"app_created_title": "Pull request créée",
+		"app_created_message": "{{title}}"
+	},
+	"merge": {
+		"session_merged_title": "Session fusionnée",
+		"session_merged_message": "\"{{sessionName}}\" créée à partir de {{sourceInfo}}{{tokenInfo}}.{{savedInfo}}",
+		"context_merged_title": "Contexte fusionné",
+		"context_merged_message": "\"{{source}}\" → \"{{target}}\"{{tokenInfo}}.{{savedInfo}}",
+		"context_transferred_title": "Contexte transféré",
+		"context_transferred_message": "\"{{sessionName}}\" créée avec le contexte transféré",
+		"failed_title": "Échec de la fusion",
+		"failed_message": "{{message}}",
+		"failed_default_message": "Impossible de fusionner les contextes",
+		"context_sent_title": "Contexte envoyé",
+		"context_sent_message": "\"{{source}}\" → \"{{target}}\"{{tokenInfo}}"
+	},
+	"compact": {
+		"cannot_title": "Compaction impossible",
+		"cannot_message": "Contexte trop petit. Il faut au moins {{percent}}\u00A0% d'utilisation, environ 2\u00A0000 tokens ou plus de 8 messages pour compacter.",
+		"success_title": "Contexte compacté",
+		"success_message": "Contexte réduit de {{percent}}\u00A0%. Cliquez pour voir le nouvel onglet.",
+		"failed_title": "Échec de la compaction",
+		"failed_message": "Impossible de compacter le contexte. Consultez l'onglet pour plus de détails.",
+		"failed_unexpected_message": "Une erreur inattendue s'est produite lors de la compaction."
+	},
+	"agent": {
+		"creation_failed_title": "Échec de la création de l'agent",
+		"creation_failed_message": "{{message}}",
+		"creation_failed_default_message": "Impossible de créer un agent en double"
+	},
+	"session": {
+		"group_removed_title": "Groupe supprimé",
+		"group_removed_message_one": "\"{{name}}\" et {{count}} agent supprimés",
+		"group_removed_message_other": "\"{{name}}\" et {{count}} agents supprimés",
+		"erase_failed_title": "Échec de la suppression du répertoire",
+		"erase_failed_message": "{{message}}"
+	},
+	"export": {
+		"nothing_to_copy_title": "Rien à copier",
+		"nothing_to_copy_message": "Aucun message utilisateur ou assistant à copier.",
+		"context_copied_title": "Contexte copié",
+		"context_copied_message": "Conversation copiée dans le presse-papiers.",
+		"copy_failed_title": "Échec de la copie",
+		"copy_failed_message": "Impossible de copier le contexte dans le presse-papiers.",
+		"export_complete_title": "Export terminé",
+		"export_complete_message": "Conversation exportée en HTML.",
+		"export_failed_title": "Échec de l'export",
+		"export_failed_message": "Impossible d'exporter la conversation en HTML.",
+		"nothing_to_publish_title": "Rien à publier",
+		"nothing_to_publish_message": "Aucun message utilisateur ou assistant à publier."
+	},
+	"stats": {
+		"database_title": "Base de données statistiques",
+		"database_message": "{{message}}"
+	},
+	"history": {
+		"entry_added_title": "Entrée d'historique ajoutée",
+		"entry_added_message": "{{message}}"
+	},
+	"synopsis": {
+		"title": "Synopsis",
+		"message": "{{message}}"
+	},
+	"playbook": {
+		"imported_title": "Playbook importé",
+		"imported_message": "Playbook importé avec succès dans {{folder}}"
+	},
+	"gist": {
+		"published_title": "Gist publié",
+		"published_public_message": "Gist public créé\u00A0! URL copiée dans le presse-papiers.",
+		"published_secret_message": "Gist secret créé\u00A0! URL copiée dans le presse-papiers."
+	},
+	"debug": {
+		"test_title": "Notification de test",
+		"test_message": "Ceci est une notification de test depuis la console\u00A0!"
+	},
+	"error": {
+		"web": {
+			"missing_session_or_command": "sessionId ou commande manquant",
+			"missing_session_or_mode": "sessionId ou mode manquant",
+			"missing_session": "sessionId manquant",
+			"missing_session_or_tab": "sessionId ou tabId manquant",
+			"missing_reorder_params": "sessionId, fromIndex ou toIndex manquant",
+			"session_not_found": "Session introuvable",
+			"session_busy": "La session est occupée - veuillez attendre la fin de l'opération en cours",
+			"command_not_configured": "L'exécution de commandes n'est pas configurée",
+			"mode_switch_not_configured": "Le changement de mode n'est pas configuré",
+			"session_select_not_configured": "La sélection de session n'est pas configurée",
+			"tab_select_not_configured": "La sélection d'onglet n'est pas configurée",
+			"tab_create_not_configured": "La création d'onglet n'est pas configurée",
+			"tab_close_not_configured": "La fermeture d'onglet n'est pas configurée",
+			"tab_rename_not_configured": "Le renommage d'onglet n'est pas configuré",
+			"tab_star_not_configured": "Le marquage d'onglet n'est pas configuré",
+			"tab_reorder_not_configured": "La réorganisation d'onglets n'est pas configurée",
+			"bookmark_not_configured": "Le basculement de signet n'est pas configuré",
+			"command_failed": "Échec de l'exécution de la commande\u00A0: {{message}}",
+			"mode_switch_failed": "Échec du changement de mode\u00A0: {{message}}",
+			"session_select_failed": "Échec de la sélection de session\u00A0: {{message}}",
+			"tab_select_failed": "Échec de la sélection d'onglet\u00A0: {{message}}",
+			"tab_create_failed": "Échec de la création d'onglet\u00A0: {{message}}",
+			"tab_close_failed": "Échec de la fermeture d'onglet\u00A0: {{message}}",
+			"tab_rename_failed": "Échec du renommage d'onglet\u00A0: {{message}}",
+			"tab_star_failed": "Échec du marquage d'onglet\u00A0: {{message}}",
+			"tab_reorder_failed": "Échec de la réorganisation d'onglet\u00A0: {{message}}",
+			"bookmark_failed": "Échec du basculement de signet\u00A0: {{message}}"
+		},
+		"grooming": {
+			"agent_not_available": "L'agent {{agentType}} n'est pas disponible",
+			"cancelled": "Préparation annulée par l'utilisateur",
+			"error": "Erreur de préparation\u00A0: {{message}}",
+			"spawn_failed": "Échec du lancement du processus de préparation pour {{agentType}}",
+			"timeout": "Délai de préparation dépassé sans réponse"
+		},
+		"notification": {
+			"queue_full": "La file de notifications est pleine (maximum {{max}} éléments). Veuillez attendre que les éléments en cours se terminent.",
+			"not_supported": "Les notifications ne sont pas prises en charge",
+			"no_active_process": "Aucun processus de notification actif avec cet identifiant"
+		}
+	}
+}

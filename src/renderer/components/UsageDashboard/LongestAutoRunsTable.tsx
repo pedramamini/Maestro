@@ -15,9 +15,11 @@
 
 import { memo, useState, useEffect, useMemo, useCallback } from 'react';
 import { Trophy } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import type { Theme } from '../../types';
 import type { StatsTimeRange } from '../../hooks/stats/useStats';
 import { captureException } from '../../utils/sentry';
+import { getActiveLocale } from '../../utils/formatters';
 
 /**
  * Auto Run session data shape from the API
@@ -102,7 +104,7 @@ function extractProjectName(path?: string): string {
  * Format date for table display
  */
 function formatDate(timestamp: number): string {
-	return new Date(timestamp).toLocaleDateString('en-US', {
+	return new Date(timestamp).toLocaleDateString(getActiveLocale(), {
 		month: 'short',
 		day: 'numeric',
 		year: 'numeric',
@@ -113,7 +115,7 @@ function formatDate(timestamp: number): string {
  * Format time for table display
  */
 function formatTime(timestamp: number): string {
-	return new Date(timestamp).toLocaleTimeString('en-US', {
+	return new Date(timestamp).toLocaleTimeString(getActiveLocale(), {
 		hour: 'numeric',
 		minute: '2-digit',
 	});
@@ -123,6 +125,7 @@ export const LongestAutoRunsTable = memo(function LongestAutoRunsTable({
 	timeRange,
 	theme,
 }: LongestAutoRunsTableProps) {
+	const { t: tA } = useTranslation('accessibility');
 	const [sessions, setSessions] = useState<AutoRunSession[]>([]);
 	const [loading, setLoading] = useState(true);
 
@@ -180,7 +183,7 @@ export const LongestAutoRunsTable = memo(function LongestAutoRunsTable({
 			style={{ backgroundColor: theme.colors.bgMain }}
 			data-testid="longest-autoruns-table"
 			role="region"
-			aria-label="Top 25 longest Auto Run sessions"
+			aria-label={tA('dashboard.top_longest_autoruns')}
 		>
 			<div className="flex items-center gap-2 mb-4">
 				<Trophy className="w-4 h-4" style={{ color: theme.colors.accent }} />

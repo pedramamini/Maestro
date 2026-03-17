@@ -31,6 +31,9 @@ const mockAbortBatchOnError = vi.fn();
 let mockActiveBatchSessionIds: string[] = [];
 let mockBatchRunStates: Record<string, BatchRunState> = {};
 
+const { tNotify } = vi.hoisted(() => ({ tNotify: vi.fn() }));
+vi.mock('../../../renderer/utils/tNotify', () => ({ tNotify }));
+
 vi.mock('../../../renderer/hooks/batch/useBatchProcessor', () => ({
 	useBatchProcessor: vi.fn(() => ({
 		batchRunStates: mockBatchRunStates,
@@ -886,7 +889,7 @@ describe('useBatchHandlers', () => {
 				});
 			});
 
-			// notifyToast is called (we can't easily check this without mocking the module,
+			// tNotify is called (we can't easily check this without mocking the module,
 			// but we verify the callback runs without error)
 		});
 

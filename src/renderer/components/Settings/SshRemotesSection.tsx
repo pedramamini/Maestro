@@ -19,6 +19,7 @@
  */
 
 import React, { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
 	Server,
 	Plus,
@@ -42,6 +43,7 @@ export interface SshRemotesSectionProps {
 }
 
 export function SshRemotesSection({ theme }: SshRemotesSectionProps) {
+	const { t } = useTranslation('settings');
 	// SSH remotes state from hook
 	const {
 		configs,
@@ -134,7 +136,7 @@ export function SshRemotesSection({ theme }: SshRemotesSectionProps) {
 			>
 				<Loader2 className="w-5 h-5 animate-spin" style={{ color: theme.colors.accent }} />
 				<span className="text-sm" style={{ color: theme.colors.textDim }}>
-					Loading SSH remotes...
+					{t('ssh_remotes.loading')}
 				</span>
 			</div>
 		);
@@ -156,12 +158,11 @@ export function SshRemotesSection({ theme }: SshRemotesSectionProps) {
 
 				{/* Content */}
 				<div className="flex-1 min-w-0">
-					<p className="text-[10px] uppercase font-bold opacity-50 mb-1">Remote Execution</p>
-					<p className="font-semibold mb-1">SSH Remote Hosts</p>
-					<p className="text-xs opacity-60 mb-3">
-						Configure remote hosts where AI agents can be executed via SSH. This allows running
-						agents on powerful remote machines or servers with specific tools installed.
+					<p className="text-[10px] uppercase font-bold opacity-50 mb-1">
+						{t('ssh_remotes.section_label')}
 					</p>
+					<p className="font-semibold mb-1">{t('ssh_remotes.title')}</p>
+					<p className="text-xs opacity-60 mb-3">{t('ssh_remotes.description')}</p>
 
 					{/* Error Display */}
 					{error && (
@@ -218,7 +219,7 @@ export function SshRemotesSection({ theme }: SshRemotesSectionProps) {
 																color: theme.colors.accent,
 															}}
 														>
-															Default
+															{t('ssh_remotes.badge_default')}
 														</span>
 													)}
 													{!config.enabled && (
@@ -229,7 +230,7 @@ export function SshRemotesSection({ theme }: SshRemotesSectionProps) {
 																color: theme.colors.warning,
 															}}
 														>
-															Disabled
+															{t('ssh_remotes.badge_disabled')}
 														</span>
 													)}
 												</div>
@@ -267,7 +268,7 @@ export function SshRemotesSection({ theme }: SshRemotesSectionProps) {
 													disabled={isTesting || !config.enabled}
 													className="p-1.5 rounded hover:bg-white/10 transition-colors disabled:opacity-50"
 													style={{ color: theme.colors.textDim }}
-													title="Test connection"
+													title={t('ssh_remotes.test_connection')}
 												>
 													{isTesting ? (
 														<Loader2 className="w-4 h-4 animate-spin" />
@@ -289,7 +290,11 @@ export function SshRemotesSection({ theme }: SshRemotesSectionProps) {
 													style={{
 														color: isDefault ? theme.colors.accent : theme.colors.textDim,
 													}}
-													title={isDefault ? 'Remove as default' : 'Set as default'}
+													title={
+														isDefault
+															? t('ssh_remotes.remove_default')
+															: t('ssh_remotes.set_default')
+													}
 												>
 													<Check className="w-4 h-4" />
 												</button>
@@ -300,7 +305,7 @@ export function SshRemotesSection({ theme }: SshRemotesSectionProps) {
 													onClick={() => handleEdit(config)}
 													className="p-1.5 rounded hover:bg-white/10 transition-colors"
 													style={{ color: theme.colors.textDim }}
-													title="Edit"
+													title={t('ssh_remotes.edit')}
 												>
 													<Edit2 className="w-4 h-4" />
 												</button>
@@ -312,7 +317,7 @@ export function SshRemotesSection({ theme }: SshRemotesSectionProps) {
 													disabled={isDeleting}
 													className="p-1.5 rounded hover:bg-white/10 transition-colors disabled:opacity-50"
 													style={{ color: theme.colors.error }}
-													title="Delete"
+													title={t('ssh_remotes.delete')}
 												>
 													{isDeleting ? (
 														<Loader2 className="w-4 h-4 animate-spin" />
@@ -339,10 +344,10 @@ export function SshRemotesSection({ theme }: SshRemotesSectionProps) {
 								style={{ color: theme.colors.textDim }}
 							/>
 							<p className="text-sm" style={{ color: theme.colors.textDim }}>
-								No SSH remotes configured
+								{t('ssh_remotes.no_remotes')}
 							</p>
 							<p className="text-xs opacity-60 mt-1" style={{ color: theme.colors.textDim }}>
-								Add a remote host to run AI agents on external machines
+								{t('ssh_remotes.no_remotes_hint')}
 							</p>
 						</div>
 					)}
@@ -358,7 +363,7 @@ export function SshRemotesSection({ theme }: SshRemotesSectionProps) {
 						}}
 					>
 						<Plus className="w-4 h-4" />
-						Add SSH Remote
+						{t('ssh_remotes.add_button')}
 					</button>
 				</div>
 			</div>

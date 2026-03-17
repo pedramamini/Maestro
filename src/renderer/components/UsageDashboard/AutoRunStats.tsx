@@ -14,9 +14,11 @@
 
 import React, { memo, useState, useEffect, useMemo, useCallback } from 'react';
 import { Play, CheckSquare, ListChecks, Target, Clock, Timer } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import type { Theme } from '../../types';
 import type { StatsTimeRange } from '../../hooks/stats/useStats';
 import { captureException } from '../../utils/sentry';
+import { getActiveLocale, formatPercent } from '../../utils/formatters';
 
 /**
  * Auto Run session data shape from the API
@@ -89,13 +91,17 @@ interface MetricCardProps {
 }
 
 function MetricCard({ icon, label, value, subValue, theme }: MetricCardProps) {
+	const { t: tA } = useTranslation('accessibility');
 	return (
 		<div
 			className="p-4 rounded-lg flex items-start gap-3"
 			style={{ backgroundColor: theme.colors.bgMain }}
 			data-testid="autorun-metric-card"
 			role="group"
-			aria-label={`${label}: ${value}${subValue ? `, ${subValue}` : ''}`}
+			aria-label={tA('dashboard.metric_label', {
+				label,
+				value: subValue ? `${value}, ${subValue}` : value,
+			})}
 		>
 			<div
 				className="flex-shrink-0 p-2 rounded-md"
@@ -162,6 +168,7 @@ export const AutoRunStats = memo(function AutoRunStats({
 	theme,
 	columns = 6,
 }: AutoRunStatsProps) {
+	const { t: tA } = useTranslation('accessibility');
 	const [sessions, setSessions] = useState<AutoRunSession[]>([]);
 	const [loading, setLoading] = useState(true);
 	const [error, setError] = useState<string | null>(null);
@@ -340,7 +347,7 @@ export const AutoRunStats = memo(function AutoRunStats({
 			className="space-y-4"
 			data-testid="autorun-stats"
 			role="region"
-			aria-label="Auto Run statistics"
+			aria-label={tA('dashboard.autorun_statistics')}
 		>
 			{/* Metrics Cards */}
 			<div
@@ -350,7 +357,7 @@ export const AutoRunStats = memo(function AutoRunStats({
 				}}
 				data-testid="autorun-metrics"
 				role="region"
-				aria-label="Auto Run summary metrics"
+				aria-label={tA('dashboard.autorun_summary_metrics')}
 			>
 				<MetricCard
 					icon={<Play className="w-4 h-4" />}
@@ -397,7 +404,7 @@ export const AutoRunStats = memo(function AutoRunStats({
 				style={{ backgroundColor: theme.colors.bgMain }}
 				data-testid="autorun-tasks-chart"
 				role="figure"
-				aria-label={`Tasks completed over time chart. ${tasksByDate.length} days of data.`}
+				aria-label={tA('dashboard.tasks_over_time', { count: tasksByDate.length })}
 			>
 				<h3 className="text-sm font-medium mb-4" style={{ color: theme.colors.textMain }}>
 					Tasks Completed Over Time
@@ -408,7 +415,7 @@ export const AutoRunStats = memo(function AutoRunStats({
 						<div
 							className="flex items-end gap-1 h-32"
 							role="list"
-							aria-label="Tasks completed by date"
+							aria-label={tA('dashboard.tasks_by_date')}
 						>
 							{tasksByDate.map((day) => {
 								const height = maxCount > 0 ? (day.count / maxCount) * 100 : 0;
@@ -438,7 +445,12 @@ export const AutoRunStats = memo(function AutoRunStats({
 										onBlur={handleMouseLeave}
 										data-testid={`task-bar-${day.date}`}
 										role="listitem"
-										aria-label={`${formatFullDate(day.date)}: ${day.count} tasks attempted, ${day.successCount} successful (${day.count > 0 ? Math.round((day.successCount / day.count) * 100) : 0}%)`}
+										aria-label={tA('dashboard.task_day', {
+											date: formatFullDate(day.date),
+											count: day.count,
+											successCount: day.successCount,
+											percent: day.count > 0 ? Math.round((day.successCount / day.count) * 100) : 0,
+										})}
 										tabIndex={0}
 									/>
 								);
@@ -484,7 +496,7 @@ export const AutoRunStats = memo(function AutoRunStats({
 									<div>{hoveredBar.count} tasks completed</div>
 									<div>
 										{hoveredBar.successCount} successful (
-										{Math.round((hoveredBar.successCount / hoveredBar.count) * 100)}%)
+										{formatPercent(Math.round((hoveredBar.successCount / hoveredBar.count) * 100))})
 									</div>
 								</div>
 							</div>
@@ -516,14 +528,17 @@ function parseLocalDate(dateStr: string): Date {
  * Format date for X-axis labels (short format)
  */
 function formatDateLabel(dateStr: string): string {
-	return parseLocalDate(dateStr).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+	return parseLocalDate(dateStr).toLocaleDateString(getActiveLocale(), {
+		month: 'short',
+		day: 'numeric',
+	});
 }
 
 /**
  * Format date for tooltip (full format)
  */
 function formatFullDate(dateStr: string): string {
-	return parseLocalDate(dateStr).toLocaleDateString('en-US', {
+	return parseLocalDate(dateStr).toLocaleDateString(getActiveLocale(), {
 		weekday: 'short',
 		month: 'short',
 		day: 'numeric',

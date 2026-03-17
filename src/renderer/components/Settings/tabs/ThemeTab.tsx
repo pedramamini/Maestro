@@ -6,6 +6,7 @@
  */
 
 import React, { useRef, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Moon, Sun, Sparkles, Check } from 'lucide-react';
 import { useSettings } from '../../../hooks';
 import { CustomThemeBuilder } from '../../CustomThemeBuilder';
@@ -32,6 +33,7 @@ export function ThemeTab({
 		customThemeBaseId,
 		setCustomThemeBaseId,
 	} = useSettings();
+	const { t } = useTranslation('settings');
 
 	const themePickerRef = useRef<HTMLDivElement>(null);
 
@@ -96,7 +98,7 @@ export function ThemeTab({
 			tabIndex={0}
 			onKeyDown={handleThemePickerKeyDown}
 			role="group"
-			aria-label="Theme picker"
+			aria-label={t('themes.picker_aria_label')}
 		>
 			{['dark', 'light', 'vibe'].map((mode) => (
 				<div key={mode}>
@@ -111,7 +113,7 @@ export function ThemeTab({
 						) : (
 							<Sparkles className="w-3 h-3" />
 						)}
-						{mode} Mode
+						{t(`themes.${mode}_mode` as 'themes.dark_mode')}
 					</div>
 					<div className="grid grid-cols-2 gap-3">
 						{groupedThemes[mode]?.map((t: Theme) => (

@@ -1,0 +1,193 @@
+{
+	"task": {
+		"completed_title": "Tarea completada",
+		"completed_message": "{{agent}} finalizo en {{duration}}",
+		"failed_title": "Tarea fallida",
+		"failed_message": "{{agent}} encontro un error"
+	},
+	"connection": {
+		"lost_title": "Conexion perdida",
+		"restored_title": "Conexion restablecida"
+	},
+	"group_chat": {
+		"error_title": "Chat grupal",
+		"create_failed_message": "No se pudo crear el chat grupal",
+		"create_failed_dynamic_message": "{{message}}"
+	},
+	"worktree": {
+		"discovered_title": "Worktrees descubiertos",
+		"discovered_message_one": "Se encontro {{count}} subagente de worktree",
+		"discovered_message_other": "Se encontraron {{count}} subagentes de worktree",
+		"disabled_title": "Worktrees desactivados",
+		"disabled_message": "Se elimino la configuracion de worktree para este agente.",
+		"disabled_with_removed_message_one": "Se elimino la configuracion de worktree para este agente. Se elimino {{count}} subagente de worktree.",
+		"disabled_with_removed_message_other": "Se elimino la configuracion de worktree para este agente. Se eliminaron {{count}} subagentes de worktree.",
+		"no_directory_title": "Error",
+		"no_directory_message": "No hay directorio de worktree configurado",
+		"created_title": "Worktree creado",
+		"created_message": "{{branch}}",
+		"create_failed_title": "Error al crear worktree",
+		"create_failed_message": "{{message}}",
+		"new_discovered_title": "Nuevo worktree descubierto",
+		"new_discovered_message": "{{name}}",
+		"agent_not_found_title": "Agente de worktree no encontrado",
+		"agent_not_found_message": "El agente de worktree seleccionado fue eliminado. Se ejecutara en el agente activo.",
+		"target_busy_title": "Agente destino ocupado",
+		"target_busy_message": "El agente destino esta ocupado. Intente de nuevo.",
+		"error_title": "Error de worktree",
+		"error_message": "{{message}}"
+	},
+	"autorun": {
+		"started_title": "Auto Run iniciado",
+		"started_message_one": "{{count}} tarea en {{docCount}} documento",
+		"started_message_other": "{{count}} tareas en {{docCount}} documentos",
+		"complete_title": "Auto Run completado",
+		"complete_stopped_message": "Se detuvo despues de completar {{completed}} de {{total}} tareas",
+		"complete_all_message_one": "Se completo exitosamente la {{total}} tarea",
+		"complete_all_message_other": "Se completaron exitosamente las {{total}} tareas",
+		"complete_partial_message": "Se completaron {{completed}} de {{total}} tareas",
+		"error_title": "Auto Run: {{errorTitle}}",
+		"error_message": "{{message}}"
+	},
+	"leaderboard": {
+		"updated_title": "Tabla de posiciones actualizada",
+		"updated_message": "{{message}}"
+	},
+	"symphony": {
+		"pr_ready_title": "Symphony: PR listo para revision",
+		"pr_ready_message": "PR abierto: {{prUrl}}",
+		"manual_needed_title": "Symphony: Se necesita finalizacion manual",
+		"manual_needed_message": "{{message}}",
+		"manual_needed_default_message": "No se pudo auto-finalizar el PR. Abra Symphony para finalizar.",
+		"auto_finalize_failed_title": "Symphony: Error en auto-finalizacion",
+		"auto_finalize_failed_message": "El PR permanece como borrador. Abra Symphony para finalizar manualmente.",
+		"error_title": "Error de Symphony",
+		"agent_not_found_message": "Agente no encontrado: {{agentType}}"
+	},
+	"pr": {
+		"created_title": "PR creado",
+		"created_message": "{{message}}",
+		"created_default_message": "Pull request creado exitosamente",
+		"failed_title": "Error al crear PR",
+		"failed_message": "{{message}}",
+		"failed_default_message": "No se pudo crear el pull request",
+		"app_created_title": "Pull request creado",
+		"app_created_message": "{{title}}"
+	},
+	"merge": {
+		"session_merged_title": "Sesion fusionada",
+		"session_merged_message": "Se creo \"{{sessionName}}\" a partir de {{sourceInfo}}{{tokenInfo}}.{{savedInfo}}",
+		"context_merged_title": "Contexto fusionado",
+		"context_merged_message": "\"{{source}}\" → \"{{target}}\"{{tokenInfo}}.{{savedInfo}}",
+		"context_transferred_title": "Contexto transferido",
+		"context_transferred_message": "Se creo \"{{sessionName}}\" con contexto transferido",
+		"failed_title": "Error en la fusion",
+		"failed_message": "{{message}}",
+		"failed_default_message": "No se pudieron fusionar los contextos",
+		"context_sent_title": "Contexto enviado",
+		"context_sent_message": "\"{{source}}\" → \"{{target}}\"{{tokenInfo}}"
+	},
+	"compact": {
+		"cannot_title": "No se puede compactar",
+		"cannot_message": "Contexto demasiado pequeno. Se necesita al menos {{percent}}% de uso, ~2k tokens u 8+ mensajes para compactar.",
+		"success_title": "Contexto compactado",
+		"success_message": "Contexto reducido en {{percent}}%. Haga clic para ver la nueva pestana.",
+		"failed_title": "Error en la compactacion",
+		"failed_message": "No se pudo compactar el contexto. Revise la pestana para mas detalles.",
+		"failed_unexpected_message": "Ocurrio un error inesperado durante la compactacion."
+	},
+	"agent": {
+		"creation_failed_title": "Error al crear agente",
+		"creation_failed_message": "{{message}}",
+		"creation_failed_default_message": "No se puede crear un agente duplicado"
+	},
+	"session": {
+		"group_removed_title": "Grupo eliminado",
+		"group_removed_message_one": "Se elimino \"{{name}}\" y {{count}} agente",
+		"group_removed_message_other": "Se elimino \"{{name}}\" y {{count}} agentes",
+		"erase_failed_title": "Error al borrar directorio",
+		"erase_failed_message": "{{message}}"
+	},
+	"export": {
+		"nothing_to_copy_title": "Nada que copiar",
+		"nothing_to_copy_message": "No hay mensajes de usuario o asistente para copiar.",
+		"context_copied_title": "Contexto copiado",
+		"context_copied_message": "Conversacion copiada al portapapeles.",
+		"copy_failed_title": "Error al copiar",
+		"copy_failed_message": "No se pudo copiar el contexto al portapapeles.",
+		"export_complete_title": "Exportacion completada",
+		"export_complete_message": "Conversacion exportada como HTML.",
+		"export_failed_title": "Error en la exportacion",
+		"export_failed_message": "No se pudo exportar la conversacion como HTML.",
+		"nothing_to_publish_title": "Nada que publicar",
+		"nothing_to_publish_message": "No hay mensajes de usuario o asistente para publicar."
+	},
+	"stats": {
+		"database_title": "Base de datos de estadisticas",
+		"database_message": "{{message}}"
+	},
+	"history": {
+		"entry_added_title": "Entrada de historial agregada",
+		"entry_added_message": "{{message}}"
+	},
+	"synopsis": {
+		"title": "Sinopsis",
+		"message": "{{message}}"
+	},
+	"playbook": {
+		"imported_title": "Playbook importado",
+		"imported_message": "Playbook importado exitosamente a {{folder}}"
+	},
+	"gist": {
+		"published_title": "Gist publicado",
+		"published_public_message": "Gist publico creado. URL copiada al portapapeles.",
+		"published_secret_message": "Gist secreto creado. URL copiada al portapapeles."
+	},
+	"debug": {
+		"test_title": "Notificacion de prueba",
+		"test_message": "Esta es una notificacion de prueba desde la consola."
+	},
+	"error": {
+		"web": {
+			"missing_session_or_command": "Falta sessionId o comando",
+			"missing_session_or_mode": "Falta sessionId o modo",
+			"missing_session": "Falta sessionId",
+			"missing_session_or_tab": "Falta sessionId o tabId",
+			"missing_reorder_params": "Falta sessionId, fromIndex o toIndex",
+			"session_not_found": "Sesion no encontrada",
+			"session_busy": "La sesion esta ocupada - espere a que la operacion actual termine",
+			"command_not_configured": "La ejecucion de comandos no esta configurada",
+			"mode_switch_not_configured": "El cambio de modo no esta configurado",
+			"session_select_not_configured": "La seleccion de sesion no esta configurada",
+			"tab_select_not_configured": "La seleccion de pestana no esta configurada",
+			"tab_create_not_configured": "La creacion de pestana no esta configurada",
+			"tab_close_not_configured": "El cierre de pestana no esta configurado",
+			"tab_rename_not_configured": "El renombrado de pestana no esta configurado",
+			"tab_star_not_configured": "El destacado de pestana no esta configurado",
+			"tab_reorder_not_configured": "La reordenacion de pestanas no esta configurada",
+			"bookmark_not_configured": "La alternancia de marcadores no esta configurada",
+			"command_failed": "Error al ejecutar comando: {{message}}",
+			"mode_switch_failed": "Error al cambiar modo: {{message}}",
+			"session_select_failed": "Error al seleccionar sesion: {{message}}",
+			"tab_select_failed": "Error al seleccionar pestana: {{message}}",
+			"tab_create_failed": "Error al crear pestana: {{message}}",
+			"tab_close_failed": "Error al cerrar pestana: {{message}}",
+			"tab_rename_failed": "Error al renombrar pestana: {{message}}",
+			"tab_star_failed": "Error al destacar pestana: {{message}}",
+			"tab_reorder_failed": "Error al reordenar pestana: {{message}}",
+			"bookmark_failed": "Error al alternar marcador: {{message}}"
+		},
+		"grooming": {
+			"agent_not_available": "El agente {{agentType}} no esta disponible",
+			"cancelled": "Preparacion cancelada por el usuario",
+			"error": "Error de preparacion: {{message}}",
+			"spawn_failed": "Error al iniciar proceso de preparacion para {{agentType}}",
+			"timeout": "La preparacion expiro sin respuesta"
+		},
+		"notification": {
+			"queue_full": "La cola de notificaciones esta llena (maximo {{max}} elementos). Espere a que los elementos actuales se completen.",
+			"not_supported": "Las notificaciones no son compatibles",
+			"no_active_process": "No hay proceso de notificacion activo con ese ID"
+		}
+	}
+}

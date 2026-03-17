@@ -229,6 +229,10 @@ export interface UseSettingsReturn {
 	colorBlindMode: boolean;
 	setColorBlindMode: (value: boolean) => void;
 
+	// Language / i18n
+	language: string;
+	setLanguage: (value: string) => void;
+
 	// Document Graph settings
 	documentGraphShowExternalLinks: boolean;
 	setDocumentGraphShowExternalLinks: (value: boolean) => void;
@@ -338,6 +342,9 @@ export function useSettings(): UseSettingsReturn {
 			document.documentElement.style.fontSize = `${store.fontSize}px`;
 		}
 	}, [store.fontSize, store.settingsLoaded]);
+
+	// Language direction attributes (dir, data-dir, lang, CSS custom properties)
+	// are now managed by DirectionProvider — see components/shared/DirectionProvider.tsx
 
 	return {
 		...store,

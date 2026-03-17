@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { X, MessageSquare, Command, Trash2, Clock, Folder, FolderOpen } from 'lucide-react';
 import { useLayerStack } from '../contexts/LayerStackContext';
+import { useI18n } from '../hooks/useI18n';
 import { MODAL_PRIORITIES } from '../constants/modalPriorities';
 import type { Session, Theme, QueuedItem } from '../types';
 
@@ -40,6 +41,7 @@ export function ExecutionQueueBrowser({
 	onSwitchSession,
 	onReorderItems,
 }: ExecutionQueueBrowserProps) {
+	const { t } = useI18n('accessibility');
 	const [viewMode, setViewMode] = useState<'current' | 'global'>('current');
 	const [dragState, setDragState] = useState<DragState | null>(null);
 	const [dropIndicator, setDropIndicator] = useState<DropIndicator | null>(null);
@@ -152,6 +154,7 @@ export function ExecutionQueueBrowser({
 						onClick={onClose}
 						className="p-1.5 rounded-md hover:opacity-80 transition-opacity"
 						style={{ color: theme.colors.textDim }}
+						aria-label={t('action.close_queue_browser')}
 					>
 						<X className="w-5 h-5" />
 					</button>
@@ -335,6 +338,7 @@ function QueueItemRow({
 	onDragEnd,
 	onDragCancel,
 }: QueueItemRowProps) {
+	const { t } = useI18n('accessibility');
 	const [isPressed, setIsPressed] = useState(false);
 	const [isHovered, setIsHovered] = useState(false);
 	const pressTimerRef = useRef<NodeJS.Timeout | null>(null);
@@ -588,6 +592,7 @@ function QueueItemRow({
 					className="p-1.5 rounded opacity-0 group-hover:opacity-100 hover:bg-red-500/20 transition-all"
 					style={{ color: theme.colors.error }}
 					title="Remove from queue"
+					aria-label={t('action.remove_from_queue')}
 				>
 					<Trash2 className="w-4 h-4" />
 				</button>

@@ -14,7 +14,9 @@
  */
 
 import React, { useEffect, useRef } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useThemeColors } from '../components/ThemeProvider';
+import { useDirection, getLogicalSide } from '../utils/rtlCoordinates';
 import { MIN_TOUCH_TARGET } from './constants';
 
 export type QuickAction = 'switch_mode';
@@ -49,6 +51,9 @@ export function QuickActionsMenu({
 	hasActiveSession,
 }: QuickActionsMenuProps) {
 	const colors = useThemeColors();
+	const { t } = useTranslation('common');
+	const { t: tA } = useTranslation('accessibility');
+	const dir = useDirection();
 	const menuRef = useRef<HTMLDivElement>(null);
 
 	// Close menu when clicking outside
@@ -89,15 +94,19 @@ export function QuickActionsMenu({
 
 	// Calculate menu position (above the anchor, centered)
 	const menuWidth = 200;
+	// Center horizontally on the anchor, clamped to stay within viewport bounds
+	const startSide = getLogicalSide('start', dir);
+	const leftValue = Math.max(
+		16,
+		Math.min(anchorPosition.x - menuWidth / 2, window.innerWidth - menuWidth - 16)
+	);
+	// In RTL, convert physical left offset to a right offset for inset-inline-start
+	const startValue = dir === 'rtl' ? window.innerWidth - leftValue - menuWidth : leftValue;
 	const menuStyle: React.CSSProperties = {
 		position: 'fixed',
 		// Position above the anchor point with some padding
 		bottom: `calc(100vh - ${anchorPosition.y}px + 12px)`,
-		// Center horizontally on the anchor, but keep within screen bounds
-		left: Math.max(
-			16,
-			Math.min(anchorPosition.x - menuWidth / 2, window.innerWidth - menuWidth - 16)
-		),
+		[startSide]: startValue,
 		width: `${menuWidth}px`,
 		zIndex: 200,
 		// Appearance
@@ -119,7 +128,7 @@ export function QuickActionsMenu({
 	}> = [
 		{
 			action: 'switch_mode',
-			label: inputMode === 'ai' ? 'Switch to Terminal' : 'Switch to AI',
+			label: inputMode === 'ai' ? t('mobile.switch_to_terminal') : t('mobile.switch_to_ai'),
 			icon:
 				inputMode === 'ai' ? (
 					// Terminal icon
@@ -169,8 +178,8 @@ export function QuickActionsMenu({
 				style={{
 					position: 'fixed',
 					top: 0,
-					left: 0,
-					right: 0,
+					insetInlineStart: 0,
+					insetInlineEnd: 0,
 					bottom: 0,
 					backgroundColor: 'rgba(0, 0, 0, 0.2)',
 					zIndex: 199,
@@ -181,7 +190,7 @@ export function QuickActionsMenu({
 			/>
 
 			{/* Menu container */}
-			<div ref={menuRef} role="menu" aria-label="Quick actions" style={menuStyle}>
+			<div ref={menuRef} role="menu" aria-label={tA('mobile.quick_actions')} style={menuStyle}>
 				{menuItems.map((item, index) => (
 					<button
 						key={item.action}
@@ -202,7 +211,7 @@ export function QuickActionsMenu({
 							color: item.disabled ? colors.textDim : colors.textMain,
 							fontSize: '15px',
 							fontWeight: 500,
-							textAlign: 'left',
+							textAlign: 'start',
 							cursor: item.disabled ? 'default' : 'pointer',
 							opacity: item.disabled ? 0.5 : 1,
 							transition: 'background-color 150ms ease',

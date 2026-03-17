@@ -5,6 +5,7 @@
  */
 
 import { useState, useRef, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import type { Theme } from '../types';
 import { MODAL_PRIORITIES } from '../constants/modalPriorities';
 import { Modal, ModalFooter, FormInput } from './ui';
@@ -24,6 +25,7 @@ export function RenameGroupChatModal({
 	onClose,
 	onRename,
 }: RenameGroupChatModalProps): JSX.Element | null {
+	const { t } = useTranslation('modals');
 	const [name, setName] = useState(currentName);
 	const inputRef = useRef<HTMLInputElement>(null);
 
@@ -48,7 +50,7 @@ export function RenameGroupChatModal({
 	return (
 		<Modal
 			theme={theme}
-			title="Rename Group Chat"
+			title={t('rename_group_chat.title')}
 			priority={MODAL_PRIORITIES.RENAME_GROUP_CHAT}
 			onClose={onClose}
 			initialFocusRef={inputRef}
@@ -57,7 +59,7 @@ export function RenameGroupChatModal({
 					theme={theme}
 					onCancel={onClose}
 					onConfirm={handleRename}
-					confirmLabel="Rename"
+					confirmLabel={t('rename_group_chat.rename_button')}
 					confirmDisabled={!canRename}
 				/>
 			}
@@ -65,11 +67,11 @@ export function RenameGroupChatModal({
 			<FormInput
 				ref={inputRef}
 				theme={theme}
-				label="Chat Name"
+				label={t('rename_group_chat.chat_name_label')}
 				value={name}
 				onChange={setName}
 				onSubmit={canRename ? handleRename : undefined}
-				placeholder="Enter new name..."
+				placeholder={t('rename_group_chat.placeholder')}
 				autoFocus
 			/>
 		</Modal>

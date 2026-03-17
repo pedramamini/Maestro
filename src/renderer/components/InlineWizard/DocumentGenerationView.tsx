@@ -13,6 +13,7 @@
  */
 
 import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 import { ChevronDown, ChevronRight, FileText, Check } from 'lucide-react';
 import type { Theme } from '../../types';
 import type { GeneratedDocument } from '../Wizard/WizardContext';
@@ -77,6 +78,7 @@ function CreatedFileEntry({
 	theme: Theme;
 	onToggle: () => void;
 }): JSX.Element {
+	const { t } = useTranslation('modals');
 	const taskCount = countTasks(doc.content);
 	const fileSize = new Blob([doc.content]).size;
 
@@ -139,7 +141,7 @@ function CreatedFileEntry({
 								color: theme.colors.accent,
 							}}
 						>
-							{taskCount} {taskCount === 1 ? 'task' : 'tasks'}
+							{t('wizard.inline_generation.task_count', { count: taskCount })}
 						</span>
 					)}
 					{/* File size */}
@@ -180,6 +182,7 @@ function CreatedFilesList({
 	documents: GeneratedDocument[];
 	theme: Theme;
 }): JSX.Element | null {
+	const { t } = useTranslation('modals');
 	const [expandedFiles, setExpandedFiles] = useState<Set<string>>(new Set());
 	const userToggledFilesRef = useRef<Set<string>>(new Set());
 	const lastAutoExpandedRef = useRef<string | null>(null);
@@ -250,7 +253,7 @@ function CreatedFilesList({
 					className="text-xs font-medium uppercase tracking-wide"
 					style={{ color: theme.colors.success }}
 				>
-					Work Plans Drafted ({documents.length})
+					{t('wizard.inline_generation.work_plans_header', { count: documents.length })}
 				</span>
 			</div>
 			<div
@@ -314,6 +317,8 @@ export function DocumentGenerationView({
 	onCancel,
 	subfolderName,
 }: DocumentGenerationViewProps): JSX.Element {
+	const { t } = useTranslation('modals');
+
 	// Calculate total tasks
 	const totalTasks = documents.reduce((sum, doc) => sum + countTasks(doc.content), 0);
 
@@ -345,7 +350,7 @@ export function DocumentGenerationView({
 				className="flex flex-col h-full items-center justify-center p-6"
 				style={{ backgroundColor: theme.colors.bgMain }}
 			>
-				<p style={{ color: theme.colors.textDim }}>No documents generated yet.</p>
+				<p style={{ color: theme.colors.textDim }}>{t('wizard.inline_generation.no_documents')}</p>
 				{onCancel && (
 					<button
 						onClick={onCancel}
@@ -355,7 +360,7 @@ export function DocumentGenerationView({
 							color: theme.colors.textDim,
 						}}
 					>
-						Cancel
+						{t('wizard.inline_generation.cancel_button')}
 					</button>
 				)}
 			</div>
@@ -403,13 +408,15 @@ export function DocumentGenerationView({
 					className="text-lg font-semibold mb-1 text-center"
 					style={{ color: theme.colors.textMain }}
 				>
-					{isComplete ? 'Documentation generation complete.' : 'Generating Auto Run Documents...'}
+					{isComplete
+						? t('wizard.inline_generation.complete_title')
+						: t('wizard.inline_generation.generating_title')}
 				</h3>
 
 				{/* Subtitle: location message when complete, elapsed time during generation */}
 				{isComplete ? (
 					<p className="text-sm text-center max-w-md" style={{ color: theme.colors.textDim }}>
-						Available under{' '}
+						{t('wizard.inline_generation.available_under')}{' '}
 						<span style={{ color: theme.colors.accent, fontWeight: 500 }}>
 							{subfolderName || 'Auto Run Docs'}/
 						</span>
@@ -417,12 +424,11 @@ export function DocumentGenerationView({
 				) : (
 					<>
 						<p className="text-sm text-center max-w-md" style={{ color: theme.colors.textDim }}>
-							This may take a while. We're creating detailed task documents based on your project
-							requirements.
+							{t('wizard.inline_generation.subtitle')}
 						</p>
 						{elapsedMs > 0 && (
 							<p className="text-xs mt-1 font-mono" style={{ color: theme.colors.textDim }}>
-								Elapsed: {formatElapsedTime(elapsedMs)}
+								{t('wizard.inline_generation.elapsed', { time: formatElapsedTime(elapsedMs) })}
 							</p>
 						)}
 					</>
@@ -435,7 +441,7 @@ export function DocumentGenerationView({
 							{totalTasks}
 						</span>
 						<span className="text-lg font-medium" style={{ color: theme.colors.textMain }}>
-							{totalTasks === 1 ? 'Task' : 'Tasks'} Planned
+							{t('wizard.inline_generation.tasks_planned', { count: totalTasks })}
 						</span>
 					</div>
 				) : !isComplete ? (
@@ -466,7 +472,7 @@ export function DocumentGenerationView({
 							color: 'white',
 						}}
 					>
-						Exit Wizard
+						{t('wizard.inline_generation.exit_wizard_button')}
 					</button>
 				) : (
 					<>
@@ -481,7 +487,7 @@ export function DocumentGenerationView({
 									border: `1px solid ${theme.colors.border}`,
 								}}
 							>
-								Cancel
+								{t('wizard.inline_generation.cancel_button')}
 							</button>
 						)}
 

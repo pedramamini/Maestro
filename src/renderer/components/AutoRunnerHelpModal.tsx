@@ -14,6 +14,7 @@ import {
 	Image,
 	Variable,
 } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import type { Theme } from '../types';
 import { MODAL_PRIORITIES } from '../constants/modalPriorities';
 import { Modal } from './ui/Modal';
@@ -25,10 +26,11 @@ interface AutoRunnerHelpModalProps {
 }
 
 export function AutoRunnerHelpModal({ theme, onClose }: AutoRunnerHelpModalProps) {
+	const { t } = useTranslation('modals');
 	return (
 		<Modal
 			theme={theme}
-			title="Auto Run Guide"
+			title={t('autorun_help.title')}
 			priority={MODAL_PRIORITIES.CONFIRM}
 			onClose={onClose}
 			width={672}
@@ -44,7 +46,7 @@ export function AutoRunnerHelpModal({ theme, onClose }: AutoRunnerHelpModalProps
 						color: 'white',
 					}}
 				>
-					Got it
+					{t('autorun_help.got_it_button')}
 				</button>
 			}
 		>
@@ -52,11 +54,11 @@ export function AutoRunnerHelpModal({ theme, onClose }: AutoRunnerHelpModalProps
 				{/* Introduction */}
 				<section>
 					<p className="text-sm leading-relaxed" style={{ color: theme.colors.textDim }}>
-						Auto Run is a file-system-based document runner that automates AI-driven task execution.
-						Create markdown documents with checkbox tasks, and let AI agents work through them one
-						by one, each with a fresh context window. Run single documents or chain multiple
-						documents together for complex workflows—a collection of Auto Run documents is called a{' '}
-						<strong style={{ color: theme.colors.textMain }}>Playbook</strong>.
+						{t('autorun_help.intro.description_before')}{' '}
+						<strong style={{ color: theme.colors.textMain }}>
+							{t('autorun_help.intro.playbook_label')}
+						</strong>
+						.
 					</p>
 				</section>
 
@@ -64,18 +66,16 @@ export function AutoRunnerHelpModal({ theme, onClose }: AutoRunnerHelpModalProps
 				<section>
 					<div className="flex items-center gap-2 mb-3">
 						<FolderOpen className="w-5 h-5" style={{ color: theme.colors.accent }} />
-						<h3 className="font-bold">Setting Up a Runner Docs Folder</h3>
+						<h3 className="font-bold">{t('autorun_help.setup.title')}</h3>
 					</div>
 					<div className="text-sm space-y-2 pl-7" style={{ color: theme.colors.textDim }}>
+						<p>{t('autorun_help.setup.description')}</p>
 						<p>
-							When you first open the Auto Run tab, you'll be prompted to select a folder containing
-							your task documents. This folder will store all your markdown files with tasks to
-							automate.
-						</p>
-						<p>
-							You can change this folder at any time by clicking{' '}
-							<strong style={{ color: theme.colors.textMain }}>"Change Folder"</strong> in the
-							document dropdown.
+							{t('autorun_help.setup.change_folder_before')}{' '}
+							<strong style={{ color: theme.colors.textMain }}>
+								{t('autorun_help.setup.change_folder_label')}
+							</strong>{' '}
+							{t('autorun_help.setup.change_folder_after')}
 						</p>
 					</div>
 				</section>
@@ -84,12 +84,12 @@ export function AutoRunnerHelpModal({ theme, onClose }: AutoRunnerHelpModalProps
 				<section>
 					<div className="flex items-center gap-2 mb-3">
 						<FileText className="w-5 h-5" style={{ color: theme.colors.accent }} />
-						<h3 className="font-bold">Document Format</h3>
+						<h3 className="font-bold">{t('autorun_help.format.title')}</h3>
 					</div>
 					<div className="text-sm space-y-2 pl-7" style={{ color: theme.colors.textDim }}>
 						<p>
-							Create markdown files (<code>.md</code>) in your Runner Docs folder. Each file can
-							contain multiple tasks defined as markdown checkboxes:
+							{t('autorun_help.format.description_before')} (<code>.md</code>){' '}
+							{t('autorun_help.format.description_after')}
 						</p>
 						<div
 							className="font-mono text-xs p-3 rounded border"
@@ -109,9 +109,8 @@ export function AutoRunnerHelpModal({ theme, onClose }: AutoRunnerHelpModalProps
 							<br />- [ ] Review and optimize database queries
 						</div>
 						<p>
-							Tasks are processed from top to bottom. When an AI agent completes a task, it checks
-							off the box (<code>- [x]</code>) and exits. The next agent picks up the next unchecked
-							task.
+							{t('autorun_help.format.processing_description_before')} (<code>- [x]</code>){' '}
+							{t('autorun_help.format.processing_description_after')}
 						</p>
 					</div>
 				</section>
@@ -120,7 +119,7 @@ export function AutoRunnerHelpModal({ theme, onClose }: AutoRunnerHelpModalProps
 				<section>
 					<div className="flex items-center gap-2 mb-3">
 						<CheckSquare className="w-5 h-5" style={{ color: theme.colors.accent }} />
-						<h3 className="font-bold">Creating Tasks</h3>
+						<h3 className="font-bold">{t('autorun_help.tasks.title')}</h3>
 					</div>
 					<div className="text-sm space-y-2 pl-7" style={{ color: theme.colors.textDim }}>
 						<div
@@ -129,7 +128,10 @@ export function AutoRunnerHelpModal({ theme, onClose }: AutoRunnerHelpModalProps
 						>
 							<Keyboard className="w-4 h-4" style={{ color: theme.colors.accent }} />
 							<span>
-								<strong style={{ color: theme.colors.textMain }}>Quick Insert:</strong> Press{' '}
+								<strong style={{ color: theme.colors.textMain }}>
+									{t('autorun_help.tasks.quick_insert_label')}
+								</strong>{' '}
+								{t('autorun_help.tasks.quick_insert_press')}{' '}
 								<kbd
 									className="px-1.5 py-0.5 rounded text-[10px] font-mono font-bold"
 									style={{
@@ -139,16 +141,16 @@ export function AutoRunnerHelpModal({ theme, onClose }: AutoRunnerHelpModalProps
 								>
 									{formatShortcutKeys(['Meta', 'l'])}
 								</kbd>{' '}
-								to insert a new checkbox at your cursor.
+								{t('autorun_help.tasks.quick_insert_action')}
 							</span>
 						</div>
+						<p>{t('autorun_help.tasks.description')}</p>
 						<p>
-							Write clear, specific task descriptions. Each task should be independently
-							completable—the AI starts fresh for each one without context from previous tasks.
-						</p>
-						<p>
-							<strong style={{ color: theme.colors.textMain }}>Tip:</strong> Prefix tasks with
-							unique identifiers (e.g., <code>FEAT-001:</code>) for easy tracking in history logs.
+							<strong style={{ color: theme.colors.textMain }}>
+								{t('autorun_help.tasks.tip_label')}
+							</strong>{' '}
+							{t('autorun_help.tasks.tip_description_before')} (<code>FEAT-001:</code>){' '}
+							{t('autorun_help.tasks.tip_description_after')}
 						</p>
 					</div>
 				</section>
@@ -157,17 +159,14 @@ export function AutoRunnerHelpModal({ theme, onClose }: AutoRunnerHelpModalProps
 				<section>
 					<div className="flex items-center gap-2 mb-3">
 						<Image className="w-5 h-5" style={{ color: theme.colors.accent }} />
-						<h3 className="font-bold">Image Attachments</h3>
+						<h3 className="font-bold">{t('autorun_help.images.title')}</h3>
 					</div>
 					<div className="text-sm space-y-2 pl-7" style={{ color: theme.colors.textDim }}>
 						<p>
-							Paste images directly into your documents or click the camera button to attach files.
-							Images are saved to an <code>images/</code> subfolder and linked with relative paths.
+							{t('autorun_help.images.description_before')} <code>images/</code>{' '}
+							{t('autorun_help.images.description_after')}
 						</p>
-						<p>
-							Use images to provide visual context—screenshots of bugs, UI mockups, diagrams, or
-							reference materials that help the AI understand the task.
-						</p>
+						<p>{t('autorun_help.images.context_description')}</p>
 					</div>
 				</section>
 
@@ -175,22 +174,18 @@ export function AutoRunnerHelpModal({ theme, onClose }: AutoRunnerHelpModalProps
 				<section>
 					<div className="flex items-center gap-2 mb-3">
 						<Play className="w-5 h-5" style={{ color: theme.colors.accent }} />
-						<h3 className="font-bold">Running a Single Document</h3>
+						<h3 className="font-bold">{t('autorun_help.single_doc.title')}</h3>
 					</div>
 					<div className="text-sm space-y-2 pl-7" style={{ color: theme.colors.textDim }}>
 						<p>
-							Click <strong style={{ color: theme.colors.textMain }}>Run</strong> to configure
-							auto-run. By default, the currently selected document is ready to run.
+							{t('autorun_help.single_doc.click_run_before')}{' '}
+							<strong style={{ color: theme.colors.textMain }}>
+								{t('autorun_help.single_doc.run_label')}
+							</strong>{' '}
+							{t('autorun_help.single_doc.click_run_after')}
 						</p>
-						<p>
-							The runner spawns a fresh AI session for each unchecked task. When a task completes,
-							the agent checks it off and exits. If tasks remain, another agent is spawned for the
-							next task.
-						</p>
-						<p>
-							The document is provided to the agent as a file path, giving it direct access to read
-							and modify tasks.
-						</p>
+						<p>{t('autorun_help.single_doc.spawn_description')}</p>
+						<p>{t('autorun_help.single_doc.file_path_description')}</p>
 					</div>
 				</section>
 
@@ -198,19 +193,23 @@ export function AutoRunnerHelpModal({ theme, onClose }: AutoRunnerHelpModalProps
 				<section>
 					<div className="flex items-center gap-2 mb-3">
 						<Settings className="w-5 h-5" style={{ color: theme.colors.accent }} />
-						<h3 className="font-bold">Running Multiple Documents</h3>
+						<h3 className="font-bold">{t('autorun_help.multi_doc.title')}</h3>
 					</div>
 					<div className="text-sm space-y-2 pl-7" style={{ color: theme.colors.textDim }}>
 						<p>
-							Click <strong style={{ color: theme.colors.textMain }}>"+ Add Docs"</strong> in the
-							configuration to select additional documents. Documents are processed sequentially in
-							the order shown.
+							{t('autorun_help.multi_doc.add_docs_before')}{' '}
+							<strong style={{ color: theme.colors.textMain }}>
+								{t('autorun_help.multi_doc.add_docs_label')}
+							</strong>{' '}
+							{t('autorun_help.multi_doc.add_docs_after')}
 						</p>
 						<p>
-							<strong style={{ color: theme.colors.textMain }}>Drag to reorder:</strong> Use the
-							grip handle to rearrange documents in the queue.
+							<strong style={{ color: theme.colors.textMain }}>
+								{t('autorun_help.multi_doc.drag_reorder_label')}
+							</strong>{' '}
+							{t('autorun_help.multi_doc.drag_reorder_description')}
 						</p>
-						<p>Documents with zero unchecked tasks are automatically skipped.</p>
+						<p>{t('autorun_help.multi_doc.skip_description')}</p>
 					</div>
 				</section>
 
@@ -218,31 +217,33 @@ export function AutoRunnerHelpModal({ theme, onClose }: AutoRunnerHelpModalProps
 				<section>
 					<div className="flex items-center gap-2 mb-3">
 						<Variable className="w-5 h-5" style={{ color: theme.colors.accent }} />
-						<h3 className="font-bold">Template Variables</h3>
+						<h3 className="font-bold">{t('autorun_help.variables.title')}</h3>
 					</div>
 					<div className="text-sm space-y-2 pl-7" style={{ color: theme.colors.textDim }}>
-						<p>
-							Use template variables in your documents and agent prompts to inject dynamic values at
-							runtime. Variables are replaced with actual values before being sent to the AI.
-						</p>
+						<p>{t('autorun_help.variables.description')}</p>
 						<div
 							className="flex items-center gap-2 px-3 py-2 rounded"
 							style={{ backgroundColor: theme.colors.accent + '15' }}
 						>
 							<Keyboard className="w-4 h-4" style={{ color: theme.colors.accent }} />
 							<span>
-								<strong style={{ color: theme.colors.textMain }}>Quick Insert:</strong> Type{' '}
+								<strong style={{ color: theme.colors.textMain }}>
+									{t('autorun_help.variables.quick_insert_label')}
+								</strong>{' '}
+								{t('autorun_help.variables.quick_insert_type')}{' '}
 								<code
 									className="px-1.5 py-0.5 rounded text-xs font-mono"
 									style={{ backgroundColor: theme.colors.bgActivity }}
 								>
 									{'{{'}
 								</code>{' '}
-								to open an autocomplete dropdown with all available variables.
+								{t('autorun_help.variables.quick_insert_action')}
 							</span>
 						</div>
 						<p>
-							<strong style={{ color: theme.colors.textMain }}>Available variables:</strong>
+							<strong style={{ color: theme.colors.textMain }}>
+								{t('autorun_help.variables.available_label')}
+							</strong>
 						</p>
 						<div
 							className="font-mono text-xs p-3 rounded border space-y-1"
@@ -252,40 +253,47 @@ export function AutoRunnerHelpModal({ theme, onClose }: AutoRunnerHelpModalProps
 							}}
 						>
 							<div>
-								<code style={{ color: theme.colors.accent }}>{'{{AGENT_NAME}}'}</code> — Agent name
+								<code style={{ color: theme.colors.accent }}>{'{{AGENT_NAME}}'}</code> —{' '}
+								{t('autorun_help.variables.agent_name_description')}
 							</div>
 							<div>
-								<code style={{ color: theme.colors.accent }}>{'{{AGENT_PATH}}'}</code> — Agent home
-								directory path
+								<code style={{ color: theme.colors.accent }}>{'{{AGENT_PATH}}'}</code> —{' '}
+								{t('autorun_help.variables.agent_path_description')}
 							</div>
 							<div>
-								<code style={{ color: theme.colors.accent }}>{'{{TAB_NAME}}'}</code> — Custom tab
-								name
+								<code style={{ color: theme.colors.accent }}>{'{{TAB_NAME}}'}</code> —{' '}
+								{t('autorun_help.variables.tab_name_description')}
 							</div>
 							<div>
-								<code style={{ color: theme.colors.accent }}>{'{{GIT_BRANCH}}'}</code> — Current git
-								branch
+								<code style={{ color: theme.colors.accent }}>{'{{GIT_BRANCH}}'}</code> —{' '}
+								{t('autorun_help.variables.git_branch_description')}
 							</div>
 							<div>
-								<code style={{ color: theme.colors.accent }}>{'{{DATE}}'}</code> — Current date
-								(YYYY-MM-DD)
+								<code style={{ color: theme.colors.accent }}>{'{{DATE}}'}</code> —{' '}
+								{t('autorun_help.variables.date_description')}
 							</div>
 							<div>
-								<code style={{ color: theme.colors.accent }}>{'{{LOOP_NUMBER}}'}</code> — Current
-								loop iteration
+								<code style={{ color: theme.colors.accent }}>{'{{LOOP_NUMBER}}'}</code> —{' '}
+								{t('autorun_help.variables.loop_number_description')}
 							</div>
 							<div>
-								<code style={{ color: theme.colors.accent }}>{'{{DOCUMENT_NAME}}'}</code> — Current
-								document name
+								<code style={{ color: theme.colors.accent }}>{'{{DOCUMENT_NAME}}'}</code> —{' '}
+								{t('autorun_help.variables.document_name_description')}
 							</div>
-							<div style={{ color: theme.colors.textDim }}>...and more</div>
+							<div style={{ color: theme.colors.textDim }}>
+								...{t('autorun_help.variables.and_more')}
+							</div>
 						</div>
 						<p>
-							Variables work in both the{' '}
-							<strong style={{ color: theme.colors.textMain }}>agent prompt</strong> (in Playbook
-							settings) and within{' '}
-							<strong style={{ color: theme.colors.textMain }}>document content</strong>. Use them
-							to create reusable templates that adapt to different contexts.
+							{t('autorun_help.variables.usage_before')}{' '}
+							<strong style={{ color: theme.colors.textMain }}>
+								{t('autorun_help.variables.agent_prompt_label')}
+							</strong>{' '}
+							{t('autorun_help.variables.usage_middle')}{' '}
+							<strong style={{ color: theme.colors.textMain }}>
+								{t('autorun_help.variables.document_content_label')}
+							</strong>
+							. {t('autorun_help.variables.usage_after')}
 						</p>
 					</div>
 				</section>
@@ -294,26 +302,24 @@ export function AutoRunnerHelpModal({ theme, onClose }: AutoRunnerHelpModalProps
 				<section>
 					<div className="flex items-center gap-2 mb-3">
 						<RotateCcw className="w-5 h-5" style={{ color: theme.colors.accent }} />
-						<h3 className="font-bold">Reset on Completion</h3>
+						<h3 className="font-bold">{t('autorun_help.reset.title')}</h3>
 					</div>
 					<div className="text-sm space-y-2 pl-7" style={{ color: theme.colors.textDim }}>
 						<p>
-							Enable the reset toggle (<RotateCcw className="w-3 h-3 inline" />) on any document to
-							keep it available for repeated runs. When enabled, Auto Run creates a{' '}
-							<strong style={{ color: theme.colors.textMain }}>working copy</strong> in the{' '}
-							<code>Runs/</code> subfolder and processes that copy—
-							<em>the original document is never modified</em>.
+							{t('autorun_help.reset.description_before')} (<RotateCcw className="w-3 h-3 inline" />
+							) {t('autorun_help.reset.description_middle')}{' '}
+							<strong style={{ color: theme.colors.textMain }}>
+								{t('autorun_help.reset.working_copy_label')}
+							</strong>{' '}
+							{t('autorun_help.reset.description_in')} <code>Runs/</code>{' '}
+							{t('autorun_help.reset.description_after')}
+							<em>{t('autorun_help.reset.original_never_modified')}</em>.
 						</p>
 						<p>
-							Working copies are named with timestamps (e.g.,{' '}
-							<code>TASK-1735192800000-loop-1.md</code>) and serve as an audit log of each loop's
-							work. You can delete them manually when no longer needed.
+							{t('autorun_help.reset.timestamps_before')} <code>TASK-1735192800000-loop-1.md</code>){' '}
+							{t('autorun_help.reset.timestamps_after')}
 						</p>
-						<p>
-							Reset-enabled documents can be duplicated in the queue, allowing the same document to
-							run multiple times in a single batch. Since originals are untouched, interruptions
-							leave your source documents pristine.
-						</p>
+						<p>{t('autorun_help.reset.duplicate_description')}</p>
 					</div>
 				</section>
 
@@ -321,18 +327,17 @@ export function AutoRunnerHelpModal({ theme, onClose }: AutoRunnerHelpModalProps
 				<section>
 					<div className="flex items-center gap-2 mb-3">
 						<Repeat className="w-5 h-5" style={{ color: theme.colors.accent }} />
-						<h3 className="font-bold">Loop Mode</h3>
+						<h3 className="font-bold">{t('autorun_help.loop.title')}</h3>
 					</div>
 					<div className="text-sm space-y-2 pl-7" style={{ color: theme.colors.textDim }}>
 						<p>
-							When running multiple documents, enable{' '}
-							<strong style={{ color: theme.colors.textMain }}>Loop</strong> to continuously cycle
-							through the document queue until all documents have zero tasks remaining.
+							{t('autorun_help.loop.description_before')}{' '}
+							<strong style={{ color: theme.colors.textMain }}>
+								{t('autorun_help.loop.loop_label')}
+							</strong>{' '}
+							{t('autorun_help.loop.description_after')}
 						</p>
-						<p>
-							Combined with reset-on-completion, this creates perpetual workflows—perfect for
-							monitoring tasks, recurring maintenance, or continuous integration scenarios.
-						</p>
+						<p>{t('autorun_help.loop.perpetual_description')}</p>
 					</div>
 				</section>
 
@@ -340,29 +345,32 @@ export function AutoRunnerHelpModal({ theme, onClose }: AutoRunnerHelpModalProps
 				<section>
 					<div className="flex items-center gap-2 mb-3">
 						<BookMarked className="w-5 h-5" style={{ color: theme.colors.accent }} />
-						<h3 className="font-bold">Playbooks</h3>
+						<h3 className="font-bold">{t('autorun_help.playbooks.title')}</h3>
 					</div>
 					<div className="text-sm space-y-2 pl-7" style={{ color: theme.colors.textDim }}>
 						<p>
-							A <strong style={{ color: theme.colors.textMain }}>Playbook</strong> is a collection
-							of Auto Run documents configured to run together. Save your batch run configurations
-							for quick reuse. A playbook stores:
+							{t('autorun_help.playbooks.description_before')}{' '}
+							<strong style={{ color: theme.colors.textMain }}>
+								{t('autorun_help.playbooks.playbook_label')}
+							</strong>{' '}
+							{t('autorun_help.playbooks.description_after')}
 						</p>
 						<ul className="list-disc ml-4 space-y-1">
-							<li>Document selection and order</li>
-							<li>Reset-on-completion settings per document</li>
-							<li>Loop mode preference</li>
-							<li>Custom agent prompt</li>
+							<li>{t('autorun_help.playbooks.item_doc_selection')}</li>
+							<li>{t('autorun_help.playbooks.item_reset_settings')}</li>
+							<li>{t('autorun_help.playbooks.item_loop_mode')}</li>
+							<li>{t('autorun_help.playbooks.item_agent_prompt')}</li>
 						</ul>
+						<p>{t('autorun_help.playbooks.load_description')}</p>
 						<p>
-							Load a saved playbook with one click and modify it as needed—changes can be saved back
-							or discarded.
-						</p>
-						<p>
-							<strong style={{ color: theme.colors.textMain }}>Sharing Playbooks:</strong> Export
-							playbooks as ZIP files to share with others, or import playbooks you've received.
-							Browse the <strong style={{ color: theme.colors.textMain }}>Playbook Exchange</strong>{' '}
-							to discover and download community-contributed playbooks for common workflows.
+							<strong style={{ color: theme.colors.textMain }}>
+								{t('autorun_help.playbooks.sharing_label')}
+							</strong>{' '}
+							{t('autorun_help.playbooks.sharing_description_before')}{' '}
+							<strong style={{ color: theme.colors.textMain }}>
+								{t('autorun_help.playbooks.exchange_label')}
+							</strong>{' '}
+							{t('autorun_help.playbooks.sharing_description_after')}
 						</p>
 					</div>
 				</section>
@@ -371,17 +379,21 @@ export function AutoRunnerHelpModal({ theme, onClose }: AutoRunnerHelpModalProps
 				<section>
 					<div className="flex items-center gap-2 mb-3">
 						<History className="w-5 h-5" style={{ color: theme.colors.accent }} />
-						<h3 className="font-bold">History & Tracking</h3>
+						<h3 className="font-bold">{t('autorun_help.history.title')}</h3>
 					</div>
 					<div className="text-sm space-y-2 pl-7" style={{ color: theme.colors.textDim }}>
 						<p>
-							Completed tasks appear in the{' '}
-							<strong style={{ color: theme.colors.textMain }}>History</strong> panel with an{' '}
-							<span style={{ color: theme.colors.warning }}>AUTO</span> label.
+							{t('autorun_help.history.description_before')}{' '}
+							<strong style={{ color: theme.colors.textMain }}>
+								{t('autorun_help.history.history_label')}
+							</strong>{' '}
+							{t('autorun_help.history.description_middle')}{' '}
+							<span style={{ color: theme.colors.warning }}>AUTO</span>{' '}
+							{t('autorun_help.history.description_after')}
 						</p>
 						<p>
-							Click the session ID pill to jump directly to that AI conversation and review what the
-							agent did. Use <code>/history</code> to add manual summaries.
+							{t('autorun_help.history.session_pill_before')} <code>/history</code>{' '}
+							{t('autorun_help.history.session_pill_after')}
 						</p>
 					</div>
 				</section>
@@ -390,23 +402,26 @@ export function AutoRunnerHelpModal({ theme, onClose }: AutoRunnerHelpModalProps
 				<section>
 					<div className="flex items-center gap-2 mb-3">
 						<Eye className="w-5 h-5" style={{ color: theme.colors.warning }} />
-						<h3 className="font-bold">Read-Only Mode</h3>
+						<h3 className="font-bold">{t('autorun_help.readonly.title')}</h3>
 					</div>
 					<div className="text-sm space-y-2 pl-7" style={{ color: theme.colors.textDim }}>
 						<p>
-							While Auto Run is active, the AI interpreter operates in{' '}
-							<strong style={{ color: theme.colors.warning }}>read-only mode</strong>. You can send
-							messages to analyze code, but file modifications queue until Auto Run completes.
+							{t('autorun_help.readonly.description_before')}{' '}
+							<strong style={{ color: theme.colors.warning }}>
+								{t('autorun_help.readonly.readonly_label')}
+							</strong>
+							. {t('autorun_help.readonly.description_after')}
 						</p>
 						<p>
-							The input shows a <span style={{ color: theme.colors.warning }}>READ-ONLY</span>{' '}
-							indicator as a reminder. This prevents conflicts between manual and automated work.
+							{t('autorun_help.readonly.indicator_before')}{' '}
+							<span style={{ color: theme.colors.warning }}>READ-ONLY</span>{' '}
+							{t('autorun_help.readonly.indicator_after')}
 						</p>
 						<p>
-							<strong style={{ color: theme.colors.textMain }}>Tip:</strong> For parallel work
-							without read-only restrictions, create a worktree session from the git branch menu in
-							the session list. Worktree sessions operate in isolated directories, allowing Auto Run
-							and manual work to happen simultaneously.
+							<strong style={{ color: theme.colors.textMain }}>
+								{t('autorun_help.readonly.tip_label')}
+							</strong>{' '}
+							{t('autorun_help.readonly.tip_description')}
 						</p>
 					</div>
 				</section>
@@ -415,15 +430,17 @@ export function AutoRunnerHelpModal({ theme, onClose }: AutoRunnerHelpModalProps
 				<section>
 					<div className="flex items-center gap-2 mb-3">
 						<Square className="w-5 h-5" style={{ color: theme.colors.error }} />
-						<h3 className="font-bold">Stopping Auto Run</h3>
+						<h3 className="font-bold">{t('autorun_help.stopping.title')}</h3>
 					</div>
 					<div className="text-sm space-y-2 pl-7" style={{ color: theme.colors.textDim }}>
 						<p>
-							Click <strong style={{ color: theme.colors.error }}>Stop</strong> in the header or
-							Auto Run panel to gracefully stop. The current task completes before stopping—no work
-							is left incomplete.
+							{t('autorun_help.stopping.description_before')}{' '}
+							<strong style={{ color: theme.colors.error }}>
+								{t('autorun_help.stopping.stop_label')}
+							</strong>{' '}
+							{t('autorun_help.stopping.description_after')}
 						</p>
-						<p>Completed tasks remain checked. Resume anytime by clicking Run again.</p>
+						<p>{t('autorun_help.stopping.resume_description')}</p>
 					</div>
 				</section>
 
@@ -431,7 +448,7 @@ export function AutoRunnerHelpModal({ theme, onClose }: AutoRunnerHelpModalProps
 				<section>
 					<div className="flex items-center gap-2 mb-3">
 						<Keyboard className="w-5 h-5" style={{ color: theme.colors.accent }} />
-						<h3 className="font-bold">Keyboard Shortcuts</h3>
+						<h3 className="font-bold">{t('autorun_help.shortcuts.title')}</h3>
 					</div>
 					<div className="text-sm pl-7" style={{ color: theme.colors.textDim }}>
 						<div className="space-y-2">
@@ -445,7 +462,7 @@ export function AutoRunnerHelpModal({ theme, onClose }: AutoRunnerHelpModalProps
 								>
 									{formatShortcutKeys(['Meta', 'Shift', '1'])}
 								</kbd>
-								<span>Open Auto Run tab</span>
+								<span>{t('autorun_help.shortcuts.open_autorun')}</span>
 							</div>
 							<div className="flex items-center gap-3">
 								<kbd
@@ -457,7 +474,7 @@ export function AutoRunnerHelpModal({ theme, onClose }: AutoRunnerHelpModalProps
 								>
 									{formatShortcutKeys(['Meta', 'e'])}
 								</kbd>
-								<span>Toggle Edit/Preview mode</span>
+								<span>{t('autorun_help.shortcuts.toggle_edit_preview')}</span>
 							</div>
 							<div className="flex items-center gap-3">
 								<kbd
@@ -469,7 +486,7 @@ export function AutoRunnerHelpModal({ theme, onClose }: AutoRunnerHelpModalProps
 								>
 									{formatShortcutKeys(['Meta', 'l'])}
 								</kbd>
-								<span>Insert checkbox at cursor</span>
+								<span>{t('autorun_help.shortcuts.insert_checkbox')}</span>
 							</div>
 							<div className="flex items-center gap-3">
 								<kbd
@@ -481,7 +498,7 @@ export function AutoRunnerHelpModal({ theme, onClose }: AutoRunnerHelpModalProps
 								>
 									{formatShortcutKeys(['Meta', 'z'])}
 								</kbd>
-								<span>Undo</span>
+								<span>{t('autorun_help.shortcuts.undo')}</span>
 							</div>
 							<div className="flex items-center gap-3">
 								<kbd
@@ -493,7 +510,7 @@ export function AutoRunnerHelpModal({ theme, onClose }: AutoRunnerHelpModalProps
 								>
 									{formatShortcutKeys(['Meta', 'Shift', 'z'])}
 								</kbd>
-								<span>Redo</span>
+								<span>{t('autorun_help.shortcuts.redo')}</span>
 							</div>
 						</div>
 					</div>

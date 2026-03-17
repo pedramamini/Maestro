@@ -12,6 +12,7 @@ import type { WizardStep } from './Wizard/WizardContext';
 import { useListNavigation } from '../hooks';
 import { useUIStore } from '../stores/uiStore';
 import { useFileExplorerStore } from '../stores/fileExplorerStore';
+import { useTranslation } from 'react-i18next';
 
 interface QuickAction {
 	id: string;
@@ -209,6 +210,23 @@ export const QuickActionsModal = memo(function QuickActionsModal(props: QuickAct
 		setAutoScrollAiMode,
 	} = props;
 
+	const { t: _t, i18n } = useTranslation(['menus', 'common']);
+	const { t: tA } = useTranslation('accessibility');
+
+	// Dual-index search: wrap t() to build a map of translated → English labels.
+	// When the UI is non-English, users can search commands in either language.
+	const englishLabelMap = new Map<string, string>();
+	const t = (key: string, opts?: Record<string, unknown>): string => {
+		const translated = _t(key, opts as any) as string;
+		if (i18n.language !== 'en') {
+			const english = _t(key, { ...opts, lng: 'en' } as any) as string;
+			if (translated !== english) {
+				englishLabelMap.set(translated, english);
+			}
+		}
+		return translated;
+	};
+
 	// UI store actions for search commands (avoid threading more props through 3-layer chain)
 	const setActiveFocus = useUIStore((s) => s.setActiveFocus);
 	const storeSetSessionFilterOpen = useUIStore((s) => s.setSessionFilterOpen);
@@ -313,9 +331,9 @@ export const QuickActionsModal = memo(function QuickActionsModal(props: QuickAct
 		if (s.parentSessionId) {
 			const parentSession = sessions.find((p) => p.id === s.parentSessionId);
 			const parentName = parentSession?.name || 'Unknown';
-			label = `Jump to ${parentName} subagent: ${s.name}`;
+			label = t('commands.jump_to_subagent', { parent: parentName, name: s.name });
 		} else {
-			label = `Jump to: ${s.name}`;
+			label = t('commands.jump_to', { name: s.name });
 		}
 
 		return {
@@ -339,12 +357,12 @@ export const QuickActionsModal = memo(function QuickActionsModal(props: QuickAct
 		groupChats && onOpenGroupChat
 			? groupChats.map((gc) => ({
 					id: `groupchat-${gc.id}`,
-					label: `Group Chat: ${gc.name}`,
+					label: t('commands.group_chat_name', { name: gc.name }),
 					action: () => {
 						onOpenGroupChat(gc.id);
 						setQuickActionOpen(false);
 					},
-					subtext: `${gc.participants.length} participant${gc.participants.length !== 1 ? 's' : ''}`,
+					subtext: t('commands.participants', { count: gc.participants.length }),
 				}))
 			: [];
 
@@ -353,7 +371,7 @@ export const QuickActionsModal = memo(function QuickActionsModal(props: QuickAct
 		...groupChatActions,
 		{
 			id: 'new',
-			label: 'Create New Agent',
+			label: t('commands.create_new_agent'),
 			shortcut: shortcuts.newInstance,
 			action: addNewSession,
 		},
@@ -361,7 +379,7 @@ export const QuickActionsModal = memo(function QuickActionsModal(props: QuickAct
 			? [
 					{
 						id: 'wizard',
-						label: 'New Agent Wizard',
+						label: t('commands.new_agent_wizard'),
 						shortcut: shortcuts.openWizard,
 						action: () => {
 							openWizard();
@@ -374,7 +392,7 @@ export const QuickActionsModal = memo(function QuickActionsModal(props: QuickAct
 			? [
 					{
 						id: 'rename',
-						label: `Rename Agent: ${activeSession.name}`,
+						label: t('commands.rename_agent', { name: activeSession.name }),
 						action: () => {
 							setRenameInstanceValue(activeSession.name);
 							setRenameInstanceModalOpen(true);
@@ -387,7 +405,7 @@ export const QuickActionsModal = memo(function QuickActionsModal(props: QuickAct
 			? [
 					{
 						id: 'editAgent',
-						label: `Edit Agent: ${activeSession.name}`,
+						label: t('commands.edit_agent', { name: activeSession.name }),
 						shortcut: shortcuts.agentSettings,
 						action: () => {
 							onEditAgent(activeSession);
@@ -401,8 +419,8 @@ export const QuickActionsModal = memo(function QuickActionsModal(props: QuickAct
 					{
 						id: 'toggleBookmark',
 						label: activeSession.bookmarked
-							? `Unbookmark: ${activeSession.name}`
-							: `Bookmark: ${activeSession.name}`,
+							? t('commands.unbookmark', { name: activeSession.name })
+							: t('commands.bookmark', { name: activeSession.name }),
 						action: () => {
 							setSessions((prev) =>
 								prev.map((s) =>
@@ -418,7 +436,7 @@ export const QuickActionsModal = memo(function QuickActionsModal(props: QuickAct
 			? [
 					{
 						id: 'renameGroup',
-						label: 'Rename Group',
+						label: t('commands.rename_group'),
 						action: () => {
 							const group = groups.find((g) => g.id === activeSession.groupId);
 							if (group) {
@@ -436,7 +454,7 @@ export const QuickActionsModal = memo(function QuickActionsModal(props: QuickAct
 			? [
 					{
 						id: 'moveToGroup',
-						label: 'Move to Group...',
+						label: t('commands.move_to_group'),
 						action: () => {
 							setMode('move-to-group');
 							setSelectedIndex(0);
@@ -444,16 +462,16 @@ export const QuickActionsModal = memo(function QuickActionsModal(props: QuickAct
 					},
 				]
 			: []),
-		{ id: 'createGroup', label: 'Create New Group', action: handleCreateGroup },
+		{ id: 'createGroup', label: t('commands.create_new_group'), action: handleCreateGroup },
 		{
 			id: 'toggleSidebar',
-			label: 'Toggle Sidebar',
+			label: t('commands.toggle_sidebar'),
 			shortcut: shortcuts.toggleSidebar,
 			action: () => setLeftSidebarOpen((p) => !p),
 		},
 		{
 			id: 'toggleRight',
-			label: 'Toggle Right Panel',
+			label: t('commands.toggle_right_panel'),
 			shortcut: shortcuts.toggleRightPanel,
 			action: () => setRightPanelOpen((p) => !p),
 		},
@@ -461,7 +479,7 @@ export const QuickActionsModal = memo(function QuickActionsModal(props: QuickAct
 			? [
 					{
 						id: 'switchMode',
-						label: 'Switch AI/Shell Mode',
+						label: t('commands.switch_mode'),
 						shortcut: shortcuts.toggleMode,
 						action: toggleInputMode,
 					},
@@ -471,7 +489,7 @@ export const QuickActionsModal = memo(function QuickActionsModal(props: QuickAct
 			? [
 					{
 						id: 'tabSwitcher',
-						label: 'Tab Switcher',
+						label: t('commands.tab_switcher'),
 						shortcut: tabShortcuts?.tabSwitcher,
 						action: () => {
 							onOpenTabSwitcher();
@@ -484,7 +502,7 @@ export const QuickActionsModal = memo(function QuickActionsModal(props: QuickAct
 			? [
 					{
 						id: 'renameTab',
-						label: 'Rename Tab',
+						label: t('commands.rename_tab'),
 						shortcut: tabShortcuts?.renameTab,
 						action: () => {
 							onRenameTab();
@@ -497,7 +515,7 @@ export const QuickActionsModal = memo(function QuickActionsModal(props: QuickAct
 			? [
 					{
 						id: 'toggleReadOnly',
-						label: 'Toggle Read-Only Mode',
+						label: t('commands.toggle_read_only'),
 						shortcut: tabShortcuts?.toggleReadOnlyMode,
 						action: () => {
 							onToggleReadOnlyMode();
@@ -510,7 +528,7 @@ export const QuickActionsModal = memo(function QuickActionsModal(props: QuickAct
 			? [
 					{
 						id: 'toggleShowThinking',
-						label: 'Toggle Show Thinking',
+						label: t('commands.toggle_show_thinking'),
 						shortcut: tabShortcuts?.toggleShowThinking,
 						action: () => {
 							onToggleTabShowThinking();
@@ -523,9 +541,11 @@ export const QuickActionsModal = memo(function QuickActionsModal(props: QuickAct
 			? [
 					{
 						id: 'toggleMarkdown',
-						label: 'Toggle Edit/Preview',
+						label: t('commands.toggle_edit_preview'),
 						shortcut: shortcuts.toggleMarkdownMode,
-						subtext: markdownEditMode ? 'Currently in edit mode' : 'Currently in preview mode',
+						subtext: markdownEditMode
+							? t('commands.currently_edit_mode')
+							: t('commands.currently_preview_mode'),
 						action: () => {
 							onToggleMarkdownEditMode();
 							setQuickActionOpen(false);
@@ -538,9 +558,9 @@ export const QuickActionsModal = memo(function QuickActionsModal(props: QuickAct
 			? [
 					{
 						id: 'closeAllTabs',
-						label: 'Close All Tabs',
+						label: t('commands.close_all_tabs'),
 						shortcut: tabShortcuts?.closeAllTabs,
-						subtext: `Close all ${activeSession.aiTabs.length} tabs (creates new tab)`,
+						subtext: t('commands.close_all_tabs_desc', { count: activeSession.aiTabs.length }),
 						action: () => {
 							onCloseAllTabs();
 							setQuickActionOpen(false);
@@ -552,9 +572,11 @@ export const QuickActionsModal = memo(function QuickActionsModal(props: QuickAct
 			? [
 					{
 						id: 'closeOtherTabs',
-						label: 'Close Other Tabs',
+						label: t('commands.close_other_tabs'),
 						shortcut: tabShortcuts?.closeOtherTabs,
-						subtext: `Keep only current tab, close ${activeSession.aiTabs.length - 1} others`,
+						subtext: t('commands.close_other_tabs_desc', {
+							count: activeSession.aiTabs.length - 1,
+						}),
 						action: () => {
 							onCloseOtherTabs();
 							setQuickActionOpen(false);
@@ -574,7 +596,7 @@ export const QuickActionsModal = memo(function QuickActionsModal(props: QuickAct
 			? [
 					{
 						id: 'closeTabsLeft',
-						label: 'Close Tabs to Left',
+						label: t('commands.close_tabs_left'),
 						shortcut: tabShortcuts?.closeTabsLeft,
 						action: () => {
 							onCloseTabsLeft();
@@ -595,7 +617,7 @@ export const QuickActionsModal = memo(function QuickActionsModal(props: QuickAct
 			? [
 					{
 						id: 'closeTabsRight',
-						label: 'Close Tabs to Right',
+						label: t('commands.close_tabs_right'),
 						shortcut: tabShortcuts?.closeTabsRight,
 						action: () => {
 							onCloseTabsRight();
@@ -608,7 +630,7 @@ export const QuickActionsModal = memo(function QuickActionsModal(props: QuickAct
 			? [
 					{
 						id: 'clearTerminal',
-						label: 'Clear Terminal History',
+						label: t('commands.clear_terminal'),
 						action: () => {
 							setSessions((prev) =>
 								prev.map((s) => (s.id === activeSessionId ? { ...s, shellLogs: [] } : s))
@@ -622,7 +644,7 @@ export const QuickActionsModal = memo(function QuickActionsModal(props: QuickAct
 			? [
 					{
 						id: 'kill',
-						label: `Remove Agent: ${activeSession.name}`,
+						label: t('commands.remove_agent', { name: activeSession.name }),
 						shortcut: shortcuts.killInstance,
 						action: () => deleteSession(activeSessionId),
 					},
@@ -630,7 +652,7 @@ export const QuickActionsModal = memo(function QuickActionsModal(props: QuickAct
 			: []),
 		{
 			id: 'settings',
-			label: 'Settings',
+			label: t('commands.settings'),
 			shortcut: shortcuts.settings,
 			action: () => {
 				setSettingsModalOpen(true);
@@ -639,7 +661,7 @@ export const QuickActionsModal = memo(function QuickActionsModal(props: QuickAct
 		},
 		{
 			id: 'theme',
-			label: 'Change Theme',
+			label: t('commands.change_theme'),
 			action: () => {
 				setSettingsModalOpen(true);
 				setSettingsTab('theme');
@@ -648,7 +670,7 @@ export const QuickActionsModal = memo(function QuickActionsModal(props: QuickAct
 		},
 		{
 			id: 'configureEnvVars',
-			label: 'Configure Global Environment Variables',
+			label: t('commands.configure_env_vars'),
 			action: () => {
 				setSettingsModalOpen(true);
 				setSettingsTab('general');
@@ -657,7 +679,7 @@ export const QuickActionsModal = memo(function QuickActionsModal(props: QuickAct
 		},
 		{
 			id: 'shortcuts',
-			label: 'View Shortcuts',
+			label: t('commands.view_shortcuts'),
 			shortcut: shortcuts.help,
 			action: () => {
 				setShortcutsHelpOpen(true);
@@ -668,8 +690,8 @@ export const QuickActionsModal = memo(function QuickActionsModal(props: QuickAct
 			? [
 					{
 						id: 'tour',
-						label: 'Start Introductory Tour',
-						subtext: 'Take a guided tour of the interface',
+						label: t('commands.start_tour'),
+						subtext: t('commands.start_tour_desc'),
 						action: () => {
 							startTour();
 							setQuickActionOpen(false);
@@ -679,7 +701,7 @@ export const QuickActionsModal = memo(function QuickActionsModal(props: QuickAct
 			: []),
 		{
 			id: 'logs',
-			label: 'View System Logs',
+			label: t('commands.view_system_logs'),
 			shortcut: shortcuts.systemLogs,
 			action: () => {
 				setLogViewerOpen(true);
@@ -688,7 +710,7 @@ export const QuickActionsModal = memo(function QuickActionsModal(props: QuickAct
 		},
 		{
 			id: 'processes',
-			label: 'View System Processes',
+			label: t('commands.view_system_processes'),
 			shortcut: shortcuts.processMonitor,
 			action: () => {
 				setProcessMonitorOpen(true);
@@ -697,7 +719,7 @@ export const QuickActionsModal = memo(function QuickActionsModal(props: QuickAct
 		},
 		{
 			id: 'usageDashboard',
-			label: 'Usage Dashboard',
+			label: t('commands.usage_dashboard'),
 			shortcut: shortcuts.usageDashboard,
 			action: () => {
 				setUsageDashboardOpen(true);
@@ -708,7 +730,7 @@ export const QuickActionsModal = memo(function QuickActionsModal(props: QuickAct
 			? [
 					{
 						id: 'agentSessions',
-						label: `View Agent Sessions for ${activeSession.name}`,
+						label: t('commands.view_agent_sessions', { name: activeSession.name }),
 						shortcut: shortcuts.agentSessions,
 						action: () => {
 							setActiveAgentSessionId(null);
@@ -722,9 +744,9 @@ export const QuickActionsModal = memo(function QuickActionsModal(props: QuickAct
 			? [
 					{
 						id: 'summarizeAndContinue',
-						label: 'Context: Compact',
+						label: t('commands.context_compact'),
 						shortcut: tabShortcuts?.summarizeAndContinue,
-						subtext: 'Compact context into a fresh tab',
+						subtext: t('commands.context_compact_desc'),
 						action: () => {
 							onSummarizeAndContinue();
 							setQuickActionOpen(false);
@@ -736,9 +758,9 @@ export const QuickActionsModal = memo(function QuickActionsModal(props: QuickAct
 			? [
 					{
 						id: 'mergeSession',
-						label: 'Context: Merge Into',
+						label: t('commands.context_merge'),
 						shortcut: shortcuts.mergeSession,
-						subtext: 'Merge current context into another session',
+						subtext: t('commands.context_merge_desc'),
 						action: () => {
 							onOpenMergeSession();
 							setQuickActionOpen(false);
@@ -750,9 +772,9 @@ export const QuickActionsModal = memo(function QuickActionsModal(props: QuickAct
 			? [
 					{
 						id: 'sendToAgent',
-						label: 'Context: Send to Agent',
+						label: t('commands.context_send'),
 						shortcut: shortcuts.sendToAgent,
-						subtext: 'Transfer context to a different AI agent',
+						subtext: t('commands.context_send_desc'),
 						action: () => {
 							onOpenSendToAgent();
 							setQuickActionOpen(false);
@@ -764,7 +786,7 @@ export const QuickActionsModal = memo(function QuickActionsModal(props: QuickAct
 			? [
 					{
 						id: 'gitDiff',
-						label: 'View Git Diff',
+						label: t('commands.view_git_diff'),
 						shortcut: shortcuts.viewGitDiff,
 						action: async () => {
 							const cwd =
@@ -790,7 +812,7 @@ export const QuickActionsModal = memo(function QuickActionsModal(props: QuickAct
 			? [
 					{
 						id: 'gitLog',
-						label: 'View Git Log',
+						label: t('commands.view_git_log'),
 						shortcut: shortcuts.viewGitLog,
 						action: () => {
 							setGitLogOpen(true);
@@ -803,7 +825,7 @@ export const QuickActionsModal = memo(function QuickActionsModal(props: QuickAct
 			? [
 					{
 						id: 'openRepo',
-						label: 'Open Repository in Browser',
+						label: t('commands.open_repo_browser'),
 						action: async () => {
 							const cwd =
 								activeSession.inputMode === 'terminal'
@@ -816,17 +838,16 @@ export const QuickActionsModal = memo(function QuickActionsModal(props: QuickAct
 								} else {
 									notifyToast({
 										type: 'error',
-										title: 'No Remote URL',
-										message: 'Could not find a remote URL for this repository',
+										title: t('commands.no_remote_url'),
+										message: t('commands.no_remote_url_desc'),
 									});
 								}
 							} catch (error) {
 								console.error('Failed to open repository in browser:', error);
 								notifyToast({
 									type: 'error',
-									title: 'Error',
-									message:
-										error instanceof Error ? error.message : 'Failed to open repository in browser',
+									title: t('common:error'),
+									message: error instanceof Error ? error.message : t('commands.failed_open_repo'),
 								});
 							}
 							setQuickActionOpen(false);
@@ -842,8 +863,8 @@ export const QuickActionsModal = memo(function QuickActionsModal(props: QuickAct
 			? [
 					{
 						id: 'createPR',
-						label: `Create Pull Request: ${activeSession.worktreeBranch}`,
-						subtext: 'Open PR from this worktree branch',
+						label: t('commands.create_pr', { branch: activeSession.worktreeBranch }),
+						subtext: t('commands.create_pr_desc'),
 						action: () => {
 							onOpenCreatePR(activeSession);
 							setQuickActionOpen(false);
@@ -855,8 +876,8 @@ export const QuickActionsModal = memo(function QuickActionsModal(props: QuickAct
 			? [
 					{
 						id: 'refreshGitFileState',
-						label: 'Refresh Files, Git, History',
-						subtext: 'Reload file tree, git status, and history',
+						label: t('commands.refresh_files'),
+						subtext: t('commands.refresh_files_desc'),
 						action: async () => {
 							await onRefreshGitFileState();
 							setQuickActionOpen(false);
@@ -866,7 +887,7 @@ export const QuickActionsModal = memo(function QuickActionsModal(props: QuickAct
 			: []),
 		{
 			id: 'devtools',
-			label: 'Toggle JavaScript Console',
+			label: t('commands.toggle_devtools'),
 			action: () => {
 				window.maestro.devtools.toggle();
 				setQuickActionOpen(false);
@@ -874,7 +895,7 @@ export const QuickActionsModal = memo(function QuickActionsModal(props: QuickAct
 		},
 		{
 			id: 'about',
-			label: 'About Maestro',
+			label: t('commands.about_maestro'),
 			action: () => {
 				setAboutModalOpen(true);
 				setQuickActionOpen(false);
@@ -882,8 +903,8 @@ export const QuickActionsModal = memo(function QuickActionsModal(props: QuickAct
 		},
 		{
 			id: 'website',
-			label: 'Maestro Website',
-			subtext: 'Open the Maestro website',
+			label: t('commands.maestro_website'),
+			subtext: t('commands.maestro_website_desc'),
 			action: () => {
 				window.maestro.shell.openExternal('https://runmaestro.ai/');
 				setQuickActionOpen(false);
@@ -891,8 +912,8 @@ export const QuickActionsModal = memo(function QuickActionsModal(props: QuickAct
 		},
 		{
 			id: 'docs',
-			label: 'Documentation and User Guide',
-			subtext: 'Open the Maestro documentation',
+			label: t('commands.documentation'),
+			subtext: t('commands.documentation_desc'),
 			action: () => {
 				window.maestro.shell.openExternal('https://docs.runmaestro.ai/');
 				setQuickActionOpen(false);
@@ -900,8 +921,8 @@ export const QuickActionsModal = memo(function QuickActionsModal(props: QuickAct
 		},
 		{
 			id: 'discord',
-			label: 'Join Discord',
-			subtext: 'Join the Maestro community',
+			label: t('commands.join_discord'),
+			subtext: t('commands.join_discord_desc'),
 			action: () => {
 				window.maestro.shell.openExternal('https://runmaestro.ai/discord');
 				setQuickActionOpen(false);
@@ -911,7 +932,7 @@ export const QuickActionsModal = memo(function QuickActionsModal(props: QuickAct
 			? [
 					{
 						id: 'updateCheck',
-						label: 'Check for Updates',
+						label: t('commands.check_updates'),
 						action: () => {
 							setUpdateCheckModalOpen(true);
 							setQuickActionOpen(false);
@@ -921,8 +942,8 @@ export const QuickActionsModal = memo(function QuickActionsModal(props: QuickAct
 			: []),
 		{
 			id: 'createDebugPackage',
-			label: 'Create Debug Package',
-			subtext: 'Generate a support bundle for bug reporting',
+			label: t('commands.create_debug_package'),
+			subtext: t('commands.create_debug_package_desc'),
 			action: () => {
 				setQuickActionOpen(false);
 				if (setDebugPackageModalOpen) {
@@ -931,8 +952,8 @@ export const QuickActionsModal = memo(function QuickActionsModal(props: QuickAct
 					// Fallback to direct API call if modal not available
 					notifyToast({
 						type: 'info',
-						title: 'Debug Package',
-						message: 'Creating debug package...',
+						title: t('commands.debug_package'),
+						message: t('commands.debug_package_creating'),
 					});
 					window.maestro.debug
 						.createPackage()
@@ -940,22 +961,22 @@ export const QuickActionsModal = memo(function QuickActionsModal(props: QuickAct
 							if (result.success && result.path) {
 								notifyToast({
 									type: 'success',
-									title: 'Debug Package Created',
-									message: `Saved to ${result.path}`,
+									title: t('commands.debug_package_created'),
+									message: t('commands.debug_package_saved', { path: result.path }),
 								});
 							} else if (result.error !== 'Cancelled by user') {
 								notifyToast({
 									type: 'error',
-									title: 'Debug Package Failed',
-									message: result.error || 'Unknown error',
+									title: t('commands.debug_package_failed'),
+									message: result.error || t('commands.unknown_error'),
 								});
 							}
 						})
 						.catch((error) => {
 							notifyToast({
 								type: 'error',
-								title: 'Debug Package Failed',
-								message: error instanceof Error ? error.message : 'Unknown error',
+								title: t('commands.debug_package_failed'),
+								message: error instanceof Error ? error.message : t('commands.unknown_error'),
 							});
 						});
 				}
@@ -963,7 +984,7 @@ export const QuickActionsModal = memo(function QuickActionsModal(props: QuickAct
 		},
 		{
 			id: 'goToFiles',
-			label: 'Go to Files Tab',
+			label: t('commands.go_to_files'),
 			shortcut: shortcuts.goToFiles,
 			action: () => {
 				setRightPanelOpen(true);
@@ -973,7 +994,7 @@ export const QuickActionsModal = memo(function QuickActionsModal(props: QuickAct
 		},
 		{
 			id: 'goToHistory',
-			label: 'Go to History Tab',
+			label: t('commands.go_to_history'),
 			shortcut: shortcuts.goToHistory,
 			action: () => {
 				setRightPanelOpen(true);
@@ -983,7 +1004,7 @@ export const QuickActionsModal = memo(function QuickActionsModal(props: QuickAct
 		},
 		{
 			id: 'goToAutoRun',
-			label: 'Go to Auto Run Tab',
+			label: t('commands.go_to_autorun'),
 			shortcut: shortcuts.goToAutoRun,
 			action: () => {
 				setRightPanelOpen(true);
@@ -996,8 +1017,8 @@ export const QuickActionsModal = memo(function QuickActionsModal(props: QuickAct
 			? [
 					{
 						id: 'openPlaybookExchange',
-						label: 'Playbook Exchange',
-						subtext: 'Browse and import community playbooks',
+						label: t('commands.playbook_exchange'),
+						subtext: t('commands.playbook_exchange_desc'),
 						action: () => {
 							onOpenPlaybookExchange();
 							setQuickActionOpen(false);
@@ -1010,9 +1031,9 @@ export const QuickActionsModal = memo(function QuickActionsModal(props: QuickAct
 			? [
 					{
 						id: 'openSymphony',
-						label: 'Maestro Symphony',
+						label: t('commands.symphony'),
 						shortcut: shortcuts.openSymphony,
-						subtext: 'Contribute to open source projects',
+						subtext: t('commands.symphony_desc'),
 						action: () => {
 							onOpenSymphony();
 							setQuickActionOpen(false);
@@ -1025,9 +1046,9 @@ export const QuickActionsModal = memo(function QuickActionsModal(props: QuickAct
 			? [
 					{
 						id: 'directorNotes',
-						label: "Director's Notes",
+						label: t('commands.director_notes'),
 						shortcut: shortcuts.directorNotes,
-						subtext: 'View unified history and AI synopsis across all sessions',
+						subtext: t('commands.director_notes_desc'),
 						action: () => {
 							onOpenDirectorNotes();
 							setQuickActionOpen(false);
@@ -1041,8 +1062,8 @@ export const QuickActionsModal = memo(function QuickActionsModal(props: QuickAct
 					{
 						id: 'toggleAutoScroll',
 						label: autoScrollAiMode
-							? 'Disable Auto-Scroll AI Output'
-							: 'Enable Auto-Scroll AI Output',
+							? t('commands.disable_auto_scroll')
+							: t('commands.enable_auto_scroll'),
 						shortcut: shortcuts.toggleAutoScroll,
 						action: () => {
 							setAutoScrollAiMode(!autoScrollAiMode);
@@ -1056,8 +1077,8 @@ export const QuickActionsModal = memo(function QuickActionsModal(props: QuickAct
 			? [
 					{
 						id: 'lastDocumentGraph',
-						label: 'Open Last Document Graph',
-						subtext: `Re-open: ${lastGraphFocusFile}`,
+						label: t('commands.open_last_graph'),
+						subtext: t('commands.open_last_graph_desc', { file: lastGraphFocusFile }),
 						action: () => {
 							onOpenLastDocumentGraph();
 							setQuickActionOpen(false);
@@ -1073,8 +1094,8 @@ export const QuickActionsModal = memo(function QuickActionsModal(props: QuickAct
 			? [
 					{
 						id: 'resetAutoRunTasks',
-						label: `Reset Finished Tasks in ${autoRunSelectedDocument}`,
-						subtext: `Uncheck ${autoRunCompletedTaskCount} completed task${autoRunCompletedTaskCount !== 1 ? 's' : ''}`,
+						label: t('commands.reset_auto_run_tasks', { document: autoRunSelectedDocument }),
+						subtext: t('commands.reset_auto_run_tasks_desc', { count: autoRunCompletedTaskCount }),
 						action: () => {
 							onAutoRunResetTasks();
 							setQuickActionOpen(false);
@@ -1086,7 +1107,7 @@ export const QuickActionsModal = memo(function QuickActionsModal(props: QuickAct
 			? [
 					{
 						id: 'fuzzyFileSearch',
-						label: 'Fuzzy File Search',
+						label: t('commands.fuzzy_file_search'),
 						shortcut: shortcuts.fuzzyFileSearch,
 						action: () => {
 							setFuzzyFileSearchOpen(true);
@@ -1098,8 +1119,8 @@ export const QuickActionsModal = memo(function QuickActionsModal(props: QuickAct
 		// Search actions - focus search inputs in various panels
 		{
 			id: 'searchAgents',
-			label: 'Search: Agents',
-			subtext: 'Filter agents in the sidebar',
+			label: t('commands.search_agents'),
+			subtext: t('commands.search_agents_desc'),
 			action: () => {
 				setQuickActionOpen(false);
 				setLeftSidebarOpen(true);
@@ -1109,8 +1130,8 @@ export const QuickActionsModal = memo(function QuickActionsModal(props: QuickAct
 		},
 		{
 			id: 'searchMessages',
-			label: 'Search: Message History',
-			subtext: 'Search messages in the current conversation',
+			label: t('commands.search_messages'),
+			subtext: t('commands.search_messages_desc'),
 			action: () => {
 				setQuickActionOpen(false);
 				setActiveFocus('main');
@@ -1119,8 +1140,8 @@ export const QuickActionsModal = memo(function QuickActionsModal(props: QuickAct
 		},
 		{
 			id: 'searchFiles',
-			label: 'Search: Files',
-			subtext: 'Filter files in the file explorer',
+			label: t('commands.search_files'),
+			subtext: t('commands.search_files_desc'),
 			action: () => {
 				setQuickActionOpen(false);
 				setRightPanelOpen(true);
@@ -1131,8 +1152,8 @@ export const QuickActionsModal = memo(function QuickActionsModal(props: QuickAct
 		},
 		{
 			id: 'searchHistory',
-			label: 'Search: History',
-			subtext: 'Search in the history panel',
+			label: t('commands.search_history'),
+			subtext: t('commands.search_history_desc'),
 			action: () => {
 				setQuickActionOpen(false);
 				setRightPanelOpen(true);
@@ -1146,8 +1167,8 @@ export const QuickActionsModal = memo(function QuickActionsModal(props: QuickAct
 			? [
 					{
 						id: 'publishGist',
-						label: 'Publish Document as GitHub Gist',
-						subtext: 'Share current file as a public or secret gist',
+						label: t('commands.publish_gist'),
+						subtext: t('commands.publish_gist_desc'),
 						action: () => {
 							onPublishGist();
 							setQuickActionOpen(false);
@@ -1160,7 +1181,7 @@ export const QuickActionsModal = memo(function QuickActionsModal(props: QuickAct
 			? [
 					{
 						id: 'newGroupChat',
-						label: 'New Group Chat',
+						label: t('commands.new_group_chat'),
 						action: () => {
 							onNewGroupChat();
 							setQuickActionOpen(false);
@@ -1172,7 +1193,7 @@ export const QuickActionsModal = memo(function QuickActionsModal(props: QuickAct
 			? [
 					{
 						id: 'closeGroupChat',
-						label: 'Close Group Chat',
+						label: t('commands.close_group_chat'),
 						action: () => {
 							onCloseGroupChat();
 							setQuickActionOpen(false);
@@ -1184,7 +1205,9 @@ export const QuickActionsModal = memo(function QuickActionsModal(props: QuickAct
 			? [
 					{
 						id: 'deleteGroupChat',
-						label: `Remove Group Chat: ${groupChats.find((c) => c.id === activeGroupChatId)?.name || 'Group Chat'}`,
+						label: t('commands.remove_group_chat', {
+							name: groupChats.find((c) => c.id === activeGroupChatId)?.name || 'Group Chat',
+						}),
 						shortcut: shortcuts.killInstance,
 						action: () => {
 							onDeleteGroupChat(activeGroupChatId);
@@ -1196,8 +1219,8 @@ export const QuickActionsModal = memo(function QuickActionsModal(props: QuickAct
 		// Debug commands - only visible when user types "debug"
 		{
 			id: 'debugResetBusy',
-			label: 'Debug: Reset Busy State',
-			subtext: 'Clear stuck thinking/busy state for all sessions',
+			label: t('commands.debug_reset_busy'),
+			subtext: t('commands.debug_reset_busy_desc'),
 			action: () => {
 				// Reset all sessions and tabs to idle state
 				setSessions((prev) =>
@@ -1223,8 +1246,8 @@ export const QuickActionsModal = memo(function QuickActionsModal(props: QuickAct
 			? [
 					{
 						id: 'debugResetSession',
-						label: 'Debug: Reset Current Session',
-						subtext: `Clear busy state for ${activeSession.name}`,
+						label: t('commands.debug_reset_session'),
+						subtext: t('commands.debug_reset_session_desc', { name: activeSession.name }),
 						action: () => {
 							setSessions((prev) =>
 								prev.map((s) => {
@@ -1252,8 +1275,8 @@ export const QuickActionsModal = memo(function QuickActionsModal(props: QuickAct
 			: []),
 		{
 			id: 'debugLogSessions',
-			label: 'Debug: Log Session State',
-			subtext: 'Print session state to console',
+			label: t('commands.debug_log_session'),
+			subtext: t('commands.debug_log_session_desc'),
 			action: () => {
 				console.log(
 					'[Debug] All sessions:',
@@ -1278,8 +1301,8 @@ export const QuickActionsModal = memo(function QuickActionsModal(props: QuickAct
 			? [
 					{
 						id: 'debugPlayground',
-						label: 'Debug: Playground',
-						subtext: 'Open the developer playground',
+						label: t('commands.debug_playground'),
+						subtext: t('commands.debug_playground_desc'),
 						action: () => {
 							setPlaygroundOpen(true);
 							setQuickActionOpen(false);
@@ -1291,8 +1314,10 @@ export const QuickActionsModal = memo(function QuickActionsModal(props: QuickAct
 			? [
 					{
 						id: 'debugReleaseQueued',
-						label: 'Debug: Release Next Queued Item',
-						subtext: `Process next item from queue (${activeSession.executionQueue.length} queued)`,
+						label: t('commands.debug_release_queued'),
+						subtext: t('commands.debug_release_queued_desc', {
+							count: activeSession.executionQueue.length,
+						}),
 						action: () => {
 							onDebugReleaseQueuedItem();
 							setQuickActionOpen(false);
@@ -1304,8 +1329,8 @@ export const QuickActionsModal = memo(function QuickActionsModal(props: QuickAct
 			? [
 					{
 						id: 'debugWizardPhaseReview',
-						label: 'Debug: Wizard → Review Playbooks',
-						subtext: 'Jump directly to Phase Review step (requires existing Auto Run docs)',
+						label: t('commands.debug_wizard_review'),
+						subtext: t('commands.debug_wizard_review_desc'),
 						action: () => {
 							setDebugWizardModalOpen(true);
 							setQuickActionOpen(false);
@@ -1315,24 +1340,32 @@ export const QuickActionsModal = memo(function QuickActionsModal(props: QuickAct
 			: []),
 		{
 			id: 'debugCopyInstallGuid',
-			label: 'Debug: Copy Install GUID to Clipboard',
-			subtext: 'Copy your unique installation identifier',
+			label: t('commands.debug_copy_guid'),
+			subtext: t('commands.debug_copy_guid_desc'),
 			action: async () => {
 				try {
 					const installationId = await window.maestro.leaderboard.getInstallationId();
 					if (installationId) {
 						await safeClipboardWrite(installationId);
-						notifyToast({ type: 'success', title: 'Install GUID Copied', message: installationId });
+						notifyToast({
+							type: 'success',
+							title: t('commands.install_guid_copied'),
+							message: installationId,
+						});
 						console.log('[Debug] Installation GUID copied to clipboard:', installationId);
 					} else {
-						notifyToast({ type: 'error', title: 'Error', message: 'No installation GUID found' });
+						notifyToast({
+							type: 'error',
+							title: t('common:error'),
+							message: t('commands.no_guid_found'),
+						});
 						console.warn('[Debug] No installation GUID found');
 					}
 				} catch (err) {
 					notifyToast({
 						type: 'error',
-						title: 'Error',
-						message: 'Failed to copy installation GUID',
+						title: t('common:error'),
+						message: t('commands.failed_copy_guid'),
 					});
 					console.error('[Debug] Failed to copy installation GUID:', err);
 				}
@@ -1344,19 +1377,19 @@ export const QuickActionsModal = memo(function QuickActionsModal(props: QuickAct
 	const groupActions: QuickAction[] = [
 		{
 			id: 'back',
-			label: '← Back to main menu',
+			label: t('commands.back_to_main'),
 			action: () => {
 				setMode('main');
 				setSelectedIndex(0);
 			},
 		},
-		{ id: 'no-group', label: '📁 No Group (Root)', action: () => handleMoveToGroup('') },
+		{ id: 'no-group', label: t('commands.no_group_root'), action: () => handleMoveToGroup('') },
 		...groups.map((g) => ({
 			id: `group-${g.id}`,
 			label: `${g.emoji} ${g.name}`,
 			action: () => handleMoveToGroup(g.id),
 		})),
-		{ id: 'create-new', label: '+ Create New Group', action: handleCreateGroup },
+		{ id: 'create-new', label: t('commands.create_new_group_option'), action: handleCreateGroup },
 	];
 
 	const actions = mode === 'main' ? mainActions : groupActions;
@@ -1372,7 +1405,11 @@ export const QuickActionsModal = memo(function QuickActionsModal(props: QuickAct
 			if (isDebugCommand && !showDebugCommands) {
 				return false;
 			}
-			return a.label.toLowerCase().includes(searchLower);
+			// Match against translated label
+			if (a.label.toLowerCase().includes(searchLower)) return true;
+			// Dual-index: also match against English fallback for non-English locales
+			const englishLabel = englishLabelMap.get(a.label);
+			return englishLabel ? englishLabel.toLowerCase().includes(searchLower) : false;
 		})
 		.sort((a, b) => a.label.localeCompare(b.label));
 
@@ -1459,7 +1496,7 @@ export const QuickActionsModal = memo(function QuickActionsModal(props: QuickAct
 				ref={modalRef}
 				role="dialog"
 				aria-modal="true"
-				aria-label="Quick Actions"
+				aria-label={tA('modal.quick_actions')}
 				tabIndex={-1}
 				className="w-[600px] rounded-xl shadow-2xl border overflow-hidden flex flex-col max-h-[550px] outline-none"
 				style={{ backgroundColor: theme.colors.bgActivity, borderColor: theme.colors.border }}
@@ -1473,7 +1510,7 @@ export const QuickActionsModal = memo(function QuickActionsModal(props: QuickAct
 						<input
 							ref={inputRef}
 							className="flex-1 bg-transparent outline-none text-lg"
-							placeholder="Enter new name..."
+							placeholder={t('commands.rename_placeholder')}
 							style={{ color: theme.colors.textMain }}
 							value={renameValue}
 							onChange={(e) => setRenameValue(e.target.value)}
@@ -1486,8 +1523,10 @@ export const QuickActionsModal = memo(function QuickActionsModal(props: QuickAct
 							className="flex-1 bg-transparent outline-none text-lg placeholder-opacity-50"
 							placeholder={
 								mode === 'move-to-group'
-									? `Move ${activeSession?.name || 'session'} to...`
-									: 'Type a command or jump to agent...'
+									? t('commands.search_placeholder_move', {
+											name: activeSession?.name || 'session',
+										})
+									: t('commands.search_placeholder')
 							}
 							style={{ color: theme.colors.textMain }}
 							value={search}
@@ -1557,7 +1596,9 @@ export const QuickActionsModal = memo(function QuickActionsModal(props: QuickAct
 							);
 						})}
 						{filtered.length === 0 && (
-							<div className="px-4 py-4 text-center opacity-50 text-sm">No actions found</div>
+							<div className="px-4 py-4 text-center opacity-50 text-sm">
+								{t('commands.no_actions_found')}
+							</div>
 						)}
 					</div>
 				)}

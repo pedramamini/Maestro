@@ -30,8 +30,10 @@ import {
 	Zap,
 	PanelTop,
 } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import type { Theme, Session } from '../../types';
 import type { StatsAggregation } from '../../hooks/stats/useStats';
+import { formatPercent } from '../../utils/formatters';
 
 interface SummaryCardsProps {
 	/** Aggregated stats data from the API */
@@ -98,6 +100,7 @@ const MetricCard = memo(function MetricCard({
 	theme,
 	animationIndex = 0,
 }: MetricCardProps) {
+	const { t: tA } = useTranslation('accessibility');
 	return (
 		<div
 			className="p-4 rounded-lg flex items-start gap-3 dashboard-card-enter"
@@ -107,7 +110,7 @@ const MetricCard = memo(function MetricCard({
 			}}
 			data-testid="metric-card"
 			role="group"
-			aria-label={`${label}: ${value}`}
+			aria-label={tA('dashboard.metric_label', { label, value })}
 		>
 			<div
 				className="flex-shrink-0 p-2 rounded-md"
@@ -149,6 +152,7 @@ export const SummaryCards = memo(function SummaryCards({
 	columns = 3,
 	sessions,
 }: SummaryCardsProps) {
+	const { t: tA } = useTranslation('accessibility');
 	// Count agent sessions (exclude terminal-only sessions) for accurate total
 	const agentCount = useMemo(() => {
 		if (sessions) {
@@ -178,7 +182,9 @@ export const SummaryCards = memo(function SummaryCards({
 			// Calculate interactive percentage
 			const totalBySource = data.bySource.user + data.bySource.auto;
 			const ratio =
-				totalBySource > 0 ? `${Math.round((data.bySource.user / totalBySource) * 100)}%` : 'N/A';
+				totalBySource > 0
+					? formatPercent(Math.round((data.bySource.user / totalBySource) * 100))
+					: 'N/A';
 
 			// Find peak usage hour (hour with most queries)
 			const hourWithMostQueries = data.byHour.reduce(
@@ -191,7 +197,7 @@ export const SummaryCards = memo(function SummaryCards({
 			const totalByLocation = data.byLocation.local + data.byLocation.remote;
 			const localPercent =
 				totalByLocation > 0
-					? `${Math.round((data.byLocation.local / totalByLocation) * 100)}%`
+					? formatPercent(Math.round((data.byLocation.local / totalByLocation) * 100))
 					: 'N/A';
 
 			// Calculate queries per session using agent count for consistency
@@ -267,7 +273,7 @@ export const SummaryCards = memo(function SummaryCards({
 			}}
 			data-testid="summary-cards"
 			role="region"
-			aria-label="Usage summary metrics"
+			aria-label={tA('dashboard.usage_summary_metrics')}
 		>
 			{metrics.map((metric, index) => (
 				<MetricCard

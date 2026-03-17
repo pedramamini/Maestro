@@ -147,6 +147,7 @@ vi.mock('../../../renderer/utils/shortcutFormatter', () => ({
 		return keys.map((k: string) => keyMap[k] || k.toUpperCase()).join('+');
 	}),
 	isMacOS: vi.fn(() => false),
+	getShortcutLabel: vi.fn((_id: string, fallback: string) => fallback),
 }));
 
 // Mock remarkFileLinks

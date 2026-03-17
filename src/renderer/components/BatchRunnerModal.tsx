@@ -15,6 +15,7 @@ import {
 	LayoutGrid,
 	Loader2,
 } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import type { Theme, BatchDocumentEntry, BatchRunConfig, WorktreeRunTarget } from '../types';
 import { useLayerStack } from '../contexts/LayerStackContext';
 import { MODAL_PRIORITIES } from '../constants/modalPriorities';
@@ -33,6 +34,7 @@ import {
 } from '../hooks';
 import { generateId } from '../utils/ids';
 import { formatMetaKey } from '../utils/shortcutFormatter';
+import { getActiveLocale } from '../utils/formatters';
 
 // Re-export for external consumers
 export { DEFAULT_BATCH_PROMPT, validateAgentPromptHasTaskReference } from '../hooks';
@@ -64,20 +66,29 @@ interface BatchRunnerModalProps {
 }
 
 // Helper function to format the last modified date
-function formatLastModified(timestamp: number): string {
+// Accepts a t() function for i18n support
+function formatLastModified(timestamp: number, t: (key: any, opts?: any) => string): string {
 	const date = new Date(timestamp);
 	const now = new Date();
 	const diffMs = now.getTime() - date.getTime();
 	const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+	const timeStr = date.toLocaleTimeString(getActiveLocale(), {
+		hour: '2-digit',
+		minute: '2-digit',
+	});
 
 	if (diffDays === 0) {
-		return `today at ${date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+		return t('batch_runner.today_at', { time: timeStr });
 	} else if (diffDays === 1) {
-		return `yesterday at ${date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+		return t('batch_runner.yesterday_at', { time: timeStr });
 	} else if (diffDays < 7) {
-		return `${diffDays} days ago`;
+		return t('batch_runner.days_ago', { count: diffDays });
 	} else {
-		return date.toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' });
+		return date.toLocaleDateString(getActiveLocale(), {
+			month: 'short',
+			day: 'numeric',
+			year: 'numeric',
+		});
 	}
 }
 
@@ -99,6 +110,9 @@ export function BatchRunnerModal(props: BatchRunnerModalProps) {
 		sessionId,
 		onOpenMarketplace,
 	} = props;
+
+	const { t } = useTranslation('modals');
+	const { t: tA } = useTranslation('accessibility');
 
 	// Worktree run target state
 	const [worktreeTarget, setWorktreeTarget] = useState<WorktreeRunTarget | null>(null);
@@ -180,12 +194,9 @@ export function BatchRunnerModal(props: BatchRunnerModalProps) {
 	// Handler for closing with unsaved changes check
 	const handleCloseWithConfirmation = useCallback(() => {
 		if (hasUnsavedConfigChanges()) {
-			showConfirmation(
-				'You have unsaved changes to your Auto Run configuration. Close without saving?',
-				() => {
-					onClose();
-				}
-			);
+			showConfirmation(t('batch_runner.unsaved_changes_confirm'), () => {
+				onClose();
+			});
 		} else {
 			onClose();
 		}
@@ -347,7 +358,7 @@ export function BatchRunnerModal(props: BatchRunnerModalProps) {
 	}, []);
 
 	const handleReset = () => {
-		showConfirmation('Reset the prompt to the default? Your customizations will be lost.', () => {
+		showConfirmation(t('batch_runner.reset_prompt_confirm'), () => {
 			setPrompt(DEFAULT_BATCH_PROMPT);
 		});
 	};
@@ -408,7 +419,7 @@ export function BatchRunnerModal(props: BatchRunnerModalProps) {
 			className="fixed inset-0 modal-overlay flex items-center justify-center z-[9999] animate-in fade-in duration-200"
 			role="dialog"
 			aria-modal="true"
-			aria-label="Auto Run Configuration"
+			aria-label={tA('modal.autorun_config')}
 			tabIndex={-1}
 		>
 			<div
@@ -421,7 +432,7 @@ export function BatchRunnerModal(props: BatchRunnerModalProps) {
 					style={{ borderColor: theme.colors.border }}
 				>
 					<h2 className="text-sm font-bold" style={{ color: theme.colors.textMain }}>
-						Auto Run Configuration
+						{t('batch_runner.title')}
 					</h2>
 					<div className="flex items-center gap-4">
 						{/* Total Task Count Badge */}
@@ -444,7 +455,7 @@ export function BatchRunnerModal(props: BatchRunnerModalProps) {
 								className="text-xs font-medium"
 								style={{ color: hasNoTasks ? theme.colors.error : theme.colors.success }}
 							>
-								{totalTaskCount === 1 ? 'task' : 'tasks'}
+								{t('batch_runner.tasks_label', { count: totalTaskCount })}
 							</span>
 						</div>
 						<button onClick={handleCloseWithConfirmation} style={{ color: theme.colors.textDim }}>
@@ -470,7 +481,9 @@ export function BatchRunnerModal(props: BatchRunnerModalProps) {
 									>
 										<FolderOpen className="w-4 h-4" style={{ color: theme.colors.accent }} />
 										<span className="text-sm">
-											{loadedPlaybook ? loadedPlaybook.name : 'Load Playbook'}
+											{loadedPlaybook
+												? loadedPlaybook.name
+												: t('batch_runner.load_playbook_button')}
 										</span>
 										<ChevronDown className="w-3.5 h-3.5" style={{ color: theme.colors.textDim }} />
 									</button>
@@ -503,7 +516,7 @@ export function BatchRunnerModal(props: BatchRunnerModalProps) {
 															className="text-[10px] shrink-0"
 															style={{ color: theme.colors.textDim }}
 														>
-															{pb.documents.length} doc{pb.documents.length !== 1 ? 's' : ''}
+															{t('batch_runner.doc_count', { count: pb.documents.length })}
 														</span>
 														<button
 															onClick={(e) => {
@@ -512,7 +525,7 @@ export function BatchRunnerModal(props: BatchRunnerModalProps) {
 															}}
 															className="p-1 rounded hover:bg-white/10 transition-colors shrink-0"
 															style={{ color: theme.colors.textDim }}
-															title="Export playbook"
+															title={t('batch_runner.export_playbook_tooltip')}
 														>
 															<Download className="w-3 h-3" />
 														</button>
@@ -520,7 +533,7 @@ export function BatchRunnerModal(props: BatchRunnerModalProps) {
 															onClick={(e) => handleDeletePlaybook(pb, e)}
 															className="p-1 rounded hover:bg-white/10 transition-colors shrink-0"
 															style={{ color: theme.colors.textDim }}
-															title="Delete playbook"
+															title={t('batch_runner.delete_playbook_tooltip')}
 														>
 															<X className="w-3 h-3" />
 														</button>
@@ -541,7 +554,7 @@ export function BatchRunnerModal(props: BatchRunnerModalProps) {
 													style={{ color: theme.colors.accent }}
 												>
 													<Upload className="w-3.5 h-3.5" />
-													Import Playbook
+													{t('batch_runner.import_playbook_button')}
 												</button>
 											</div>
 										</div>
@@ -555,10 +568,10 @@ export function BatchRunnerModal(props: BatchRunnerModalProps) {
 									onClick={onOpenMarketplace}
 									className="flex items-center gap-2 px-3 py-1.5 rounded-lg border hover:bg-white/5 transition-colors"
 									style={{ borderColor: theme.colors.border, color: theme.colors.textMain }}
-									title="Browse Playbook Exchange"
+									title={t('batch_runner.browse_exchange_tooltip')}
 								>
 									<LayoutGrid className="w-4 h-4" style={{ color: theme.colors.accent }} />
-									<span className="text-sm">Playbook Exchange</span>
+									<span className="text-sm">{t('batch_runner.playbook_exchange_button')}</span>
 								</button>
 							)}
 						</div>
@@ -573,7 +586,7 @@ export function BatchRunnerModal(props: BatchRunnerModalProps) {
 									style={{ borderColor: theme.colors.border, color: theme.colors.textMain }}
 								>
 									<Bookmark className="w-4 h-4" style={{ color: theme.colors.accent }} />
-									<span className="text-sm">Save as Playbook</span>
+									<span className="text-sm">{t('batch_runner.save_as_playbook_button')}</span>
 								</button>
 							)}
 
@@ -584,30 +597,34 @@ export function BatchRunnerModal(props: BatchRunnerModalProps) {
 										onClick={handleDiscardChanges}
 										className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border hover:bg-white/5 transition-colors"
 										style={{ borderColor: theme.colors.border, color: theme.colors.textDim }}
-										title="Discard changes and reload original playbook configuration"
+										title={t('batch_runner.discard_tooltip')}
 									>
 										<RotateCcw className="w-3.5 h-3.5" />
-										<span className="text-sm">Discard</span>
+										<span className="text-sm">{t('batch_runner.discard_button')}</span>
 									</button>
 									<button
 										onClick={() => setShowSavePlaybookModal(true)}
 										disabled={savingPlaybook}
 										className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border hover:bg-white/5 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
 										style={{ borderColor: theme.colors.border, color: theme.colors.textMain }}
-										title="Save as a new playbook with a different name"
+										title={t('batch_runner.save_as_new_tooltip')}
 									>
 										<Bookmark className="w-3.5 h-3.5" />
-										<span className="text-sm">Save as New</span>
+										<span className="text-sm">{t('batch_runner.save_as_new_button')}</span>
 									</button>
 									<button
 										onClick={handleSaveUpdate}
 										disabled={savingPlaybook}
 										className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border hover:bg-white/5 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
 										style={{ borderColor: theme.colors.accent, color: theme.colors.accent }}
-										title="Save changes to the loaded playbook"
+										title={t('batch_runner.save_update_tooltip')}
 									>
 										<Save className="w-3.5 h-3.5" />
-										<span className="text-sm">{savingPlaybook ? 'Saving...' : 'Save Update'}</span>
+										<span className="text-sm">
+											{savingPlaybook
+												? t('batch_runner.saving_button')
+												: t('batch_runner.save_update_button')}
+										</span>
 									</button>
 								</>
 							)}
@@ -650,7 +667,7 @@ export function BatchRunnerModal(props: BatchRunnerModalProps) {
 									className="text-xs font-bold uppercase"
 									style={{ color: theme.colors.textDim }}
 								>
-									Agent Prompt
+									{t('batch_runner.agent_prompt_label')}
 								</label>
 								{isModified && (
 									<span
@@ -660,7 +677,7 @@ export function BatchRunnerModal(props: BatchRunnerModalProps) {
 											color: theme.colors.accent,
 										}}
 									>
-										CUSTOMIZED
+										{t('batch_runner.customized_badge')}
 									</span>
 								)}
 							</div>
@@ -669,17 +686,17 @@ export function BatchRunnerModal(props: BatchRunnerModalProps) {
 								disabled={!isModified}
 								className="flex items-center gap-1 text-xs px-2 py-1 rounded hover:bg-white/10 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
 								style={{ color: theme.colors.textDim }}
-								title="Reset to default prompt"
+								title={t('batch_runner.reset_tooltip')}
 							>
 								<RotateCcw className="w-3 h-3" />
-								Reset
+								{t('batch_runner.reset_button')}
 							</button>
 						</div>
 						<div className="text-[10px] mb-2" style={{ color: theme.colors.textDim }}>
-							This prompt is sent to the AI agent for each document in the queue.{' '}
+							{t('batch_runner.prompt_description')}{' '}
 							{isModified && lastModifiedAt && (
 								<span style={{ color: theme.colors.textMain }}>
-									Last modified {formatLastModified(lastModifiedAt)}.
+									{t('batch_runner.last_modified', { time: formatLastModified(lastModifiedAt, t) })}
 								</span>
 							)}
 						</div>
@@ -699,7 +716,7 @@ export function BatchRunnerModal(props: BatchRunnerModalProps) {
 										className="text-xs font-bold uppercase"
 										style={{ color: theme.colors.textDim }}
 									>
-										Template Variables
+										{t('batch_runner.template_variables_label')}
 									</span>
 								</div>
 								{variablesExpanded ? (
@@ -714,8 +731,7 @@ export function BatchRunnerModal(props: BatchRunnerModalProps) {
 									style={{ borderColor: theme.colors.border }}
 								>
 									<p className="text-[10px] mb-2" style={{ color: theme.colors.textDim }}>
-										Use these variables in your prompt. They will be replaced with actual values at
-										runtime.
+										{t('batch_runner.template_variables_description')}
 									</p>
 									<div className="grid grid-cols-2 gap-x-4 gap-y-1 max-h-48 overflow-y-auto scrollbar-thin">
 										{TEMPLATE_VARIABLES.map(({ variable, description }) => (
@@ -768,13 +784,13 @@ export function BatchRunnerModal(props: BatchRunnerModalProps) {
 									color: theme.colors.textMain,
 									minHeight: '200px',
 								}}
-								placeholder="Enter the system prompt for auto-run..."
+								placeholder={t('batch_runner.prompt_placeholder')}
 							/>
 							<button
 								onClick={() => setPromptComposerOpen(true)}
 								className="absolute top-2 right-2 p-1.5 rounded hover:bg-white/10 transition-colors"
 								style={{ color: theme.colors.textDim }}
-								title="Expand editor"
+								title={t('batch_runner.expand_editor_tooltip')}
 							>
 								<Maximize2 className="w-4 h-4" />
 							</button>
@@ -788,7 +804,7 @@ export function BatchRunnerModal(props: BatchRunnerModalProps) {
 									color: theme.colors.error,
 								}}
 							>
-								Agent prompt cannot be empty. Reset to default or provide a prompt.
+								{t('batch_runner.empty_prompt_error')}
 							</div>
 						)}
 						{!isPromptEmpty && !hasValidPrompt && (
@@ -799,8 +815,7 @@ export function BatchRunnerModal(props: BatchRunnerModalProps) {
 									color: theme.colors.error,
 								}}
 							>
-								Agent prompt must reference Markdown tasks (e.g., include checkbox syntax like
-								&quot;- [ ]&quot; or the phrase &quot;markdown task&quot;).
+								{t('batch_runner.invalid_prompt_error')}
 							</div>
 						)}
 					</div>
@@ -819,7 +834,7 @@ export function BatchRunnerModal(props: BatchRunnerModalProps) {
 						>
 							{formatMetaKey()} + Drag
 						</span>
-						<span>to copy document</span>
+						<span>{t('batch_runner.copy_document_hint')}</span>
 					</div>
 
 					{/* Right side: Buttons */}
@@ -829,17 +844,21 @@ export function BatchRunnerModal(props: BatchRunnerModalProps) {
 							className="px-4 py-2 rounded border hover:bg-white/5 transition-colors"
 							style={{ borderColor: theme.colors.border, color: theme.colors.textMain }}
 						>
-							Cancel
+							{t('batch_runner.cancel_button')}
 						</button>
 						<button
 							onClick={handleSave}
 							disabled={!hasUnsavedChanges}
 							className="flex items-center gap-2 px-4 py-2 rounded border hover:bg-white/5 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
 							style={{ borderColor: theme.colors.border, color: theme.colors.success }}
-							title={hasUnsavedChanges ? 'Save prompt for this session' : 'No unsaved changes'}
+							title={
+								hasUnsavedChanges
+									? t('batch_runner.save_prompt_tooltip')
+									: t('batch_runner.no_unsaved_changes_tooltip')
+							}
 						>
 							<Save className="w-4 h-4" />
-							Save
+							{t('batch_runner.save_button')}
 						</button>
 						<button
 							onClick={handleGo}
@@ -865,18 +884,18 @@ export function BatchRunnerModal(props: BatchRunnerModalProps) {
 							}}
 							title={
 								isPreparingWorktree
-									? 'Preparing worktree...'
+									? t('batch_runner.preparing_worktree_tooltip')
 									: isPromptEmpty
-										? 'Agent prompt cannot be empty'
+										? t('batch_runner.empty_prompt_tooltip')
 										: !hasValidPrompt
-											? 'Agent prompt must reference Markdown tasks (e.g., checkbox syntax "- [ ]")'
+											? t('batch_runner.invalid_prompt_tooltip')
 											: documents.length === 0
-												? 'No documents selected'
+												? t('batch_runner.no_documents_tooltip')
 												: documents.length === missingDocCount
-													? 'All selected documents are missing'
+													? t('batch_runner.all_documents_missing_tooltip')
 													: hasNoTasks
-														? 'No unchecked tasks in documents'
-														: 'Start auto-run'
+														? t('batch_runner.no_tasks_tooltip')
+														: t('batch_runner.start_auto_run_tooltip')
 							}
 						>
 							{isPreparingWorktree ? (
@@ -884,7 +903,9 @@ export function BatchRunnerModal(props: BatchRunnerModalProps) {
 							) : (
 								<Play className="w-4 h-4" />
 							)}
-							{isPreparingWorktree ? 'Preparing Worktree...' : 'Go'}
+							{isPreparingWorktree
+								? t('batch_runner.preparing_worktree_button')
+								: t('batch_runner.go_button')}
 						</button>
 					</div>
 				</div>
@@ -896,8 +917,10 @@ export function BatchRunnerModal(props: BatchRunnerModalProps) {
 					theme={theme}
 					onSave={handleSaveAsPlaybook}
 					onCancel={() => setShowSavePlaybookModal(false)}
-					title="Save as Playbook"
-					saveButtonText={savingPlaybook ? 'Saving...' : 'Save'}
+					title={t('batch_runner.save_as_playbook_title')}
+					saveButtonText={
+						savingPlaybook ? t('batch_runner.saving_button') : t('batch_runner.save_button')
+					}
 				/>
 			)}
 
