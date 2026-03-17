@@ -1870,8 +1870,10 @@ function MaestroConsoleInner() {
 							// Normalize separators to forward slash for comparison
 							const normalized = name.replace(/\\/g, '/');
 							const normalizedFolder = (folderPath || '').replace(/\\/g, '/');
-							// Case-insensitive prefix check for cross-platform compatibility (e.g., Windows drive letters)
-							if (normalizedFolder && normalized.toLowerCase().startsWith(normalizedFolder.toLowerCase() + '/')) {
+							// Case-insensitive prefix check for cross-platform compatibility (Windows drive letters)
+							const normalizedLower = normalized.toLowerCase();
+							const folderLower = normalizedFolder.toLowerCase();
+							if (normalizedFolder && normalizedLower.startsWith(folderLower + '/')) {
 								name = normalized.substring(normalizedFolder.length + 1);
 							} else {
 								// Fallback for paths not under folderPath: use basename only
