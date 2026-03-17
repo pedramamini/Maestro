@@ -317,6 +317,18 @@ describe('auto-run command', () => {
 		expect(resolveAgentId).toHaveBeenCalledWith('session-123');
 	});
 
+	it('should handle resolveAgentId throwing with clean error message', async () => {
+		vi.mocked(existsSync).mockReturnValue(true);
+		vi.mocked(resolveAgentId).mockImplementationOnce(() => {
+			throw new Error('Agent not found');
+		});
+
+		await autoRun(['/path/to/doc.md'], { agent: 'bad-id' });
+
+		expect(consoleErrorSpy).toHaveBeenCalledWith(expect.stringContaining('Agent not found'));
+		expect(processExitSpy).toHaveBeenCalledWith(1);
+	});
+
 	it('should error when server returns failure', async () => {
 		vi.mocked(existsSync).mockReturnValue(true);
 		vi.mocked(resolveAgentId).mockReturnValue('agent-123');

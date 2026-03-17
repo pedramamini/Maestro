@@ -110,7 +110,7 @@ To set up and optionally launch an auto-run with documents you've created:
 maestro-cli auto-run doc1.md doc2.md [--agent <id>] [--prompt "Custom instructions"] [--launch] [--save-as "My Playbook"]
 ```
 
-**Important:** When launching an auto-run via CLI, always pass `--agent {{AGENT_ID}}` to ensure the correct agent executes the run. Without `--agent`, the CLI picks an arbitrary agent. You can find your Agent ID in the Session Information section above.
+**Important:** When launching an auto-run via CLI, always pass `--agent {{AGENT_ID}}` to ensure the correct agent executes the run. Without `--agent`, the CLI selects the first available agent, which may not be the one you intended. You can find your Agent ID in the Session Information section above.
 
 Example using your own agent:
 
