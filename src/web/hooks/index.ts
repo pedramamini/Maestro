@@ -22,6 +22,8 @@ export type {
 	SessionRemovedMessage,
 	ThemeMessage,
 	ErrorMessage,
+	GroupData,
+	GroupsChangedMessage,
 	TypedServerMessage,
 	WebSocketEventHandlers,
 	UseWebSocketOptions,
@@ -182,3 +184,10 @@ export type {
 	UseMobileAutoReconnectDeps,
 	UseMobileAutoReconnectReturn,
 } from './useMobileAutoReconnect';
+
+export {
+	useAgentManagement,
+	default as useAgentManagementDefault,
+} from './useAgentManagement';
+
+export type { UseAgentManagementReturn } from './useAgentManagement';

@@ -125,6 +125,7 @@ export type ServerMessageType =
 	| 'autorun_docs_changed'
 	| 'notification_event'
 	| 'settings_changed'
+	| 'groups_changed'
 	| 'tabs_changed'
 	| 'pong'
 	| 'subscribed'
@@ -339,6 +340,25 @@ export interface SettingsChangedMessage extends ServerMessage {
 }
 
 /**
+ * Group data for web clients
+ */
+export interface GroupData {
+	id: string;
+	name: string;
+	emoji: string | null;
+	sessionIds: string[];
+}
+
+/**
+ * Groups changed message from server
+ * Sent when groups are created, renamed, deleted, or membership changes
+ */
+export interface GroupsChangedMessage extends ServerMessage {
+	type: 'groups_changed';
+	groups: GroupData[];
+}
+
+/**
  * Tabs changed message from server
  * Sent when tabs are added, removed, or active tab changes in a session
  */
@@ -379,6 +399,7 @@ export type TypedServerMessage =
 	| AutoRunDocsChangedMessage
 	| NotificationEventMessage
 	| SettingsChangedMessage
+	| GroupsChangedMessage
 	| TabsChangedMessage
 	| ErrorMessage
 	| ServerMessage;
@@ -424,6 +445,8 @@ export interface WebSocketEventHandlers {
 	onNotificationEvent?: (event: NotificationEventMessage) => void;
 	/** Called when settings are changed (from web or desktop) */
 	onSettingsChanged?: (settings: SettingsChangedMessage['settings']) => void;
+	/** Called when groups are changed (created, renamed, deleted, membership) */
+	onGroupsChanged?: (groups: GroupData[]) => void;
 	/** Called when tabs change in a session */
 	onTabsChanged?: (sessionId: string, aiTabs: AITabData[], activeTabId: string) => void;
 	/** Called when connection state changes */
@@ -792,6 +815,12 @@ export function useWebSocket(options: UseWebSocketOptions = {}): UseWebSocketRet
 					case 'settings_changed': {
 						const settingsMsg = message as SettingsChangedMessage;
 						handlersRef.current?.onSettingsChanged?.(settingsMsg.settings);
+						break;
+					}
+
+					case 'groups_changed': {
+						const groupsMsg = message as GroupsChangedMessage;
+						handlersRef.current?.onGroupsChanged?.(groupsMsg.groups);
 						break;
 					}
 
