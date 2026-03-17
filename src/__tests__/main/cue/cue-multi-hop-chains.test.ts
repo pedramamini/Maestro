@@ -474,10 +474,9 @@ describe('CueEngine multi-hop completion chains', () => {
 		engine.stop();
 	});
 
-	it('circular chain A -> B -> A is bounded', async () => {
-		// The chain depth guard (MAX_CHAIN_DEPTH=10) prevents infinite synchronous recursion.
-		// With async onCueRun each hop runs in a separate microtask, so we cap the mock
-		// to stop the engine after a bounded number of calls and verify it loops as expected.
+	it('circular chain A -> B -> A is bounded by MAX_CHAIN_DEPTH', async () => {
+		// The chain depth guard (MAX_CHAIN_DEPTH=10) is propagated through AgentCompletionData
+		// across async hops. When depth reaches the limit, notifyAgentCompleted aborts and logs.
 		const sessions = [
 			createMockSession({ id: 'a', name: 'A', cwd: '/proj/a', projectRoot: '/proj/a' }),
 			createMockSession({ id: 'b', name: 'B', cwd: '/proj/b', projectRoot: '/proj/b' }),
@@ -519,10 +518,6 @@ describe('CueEngine multi-hop completion chains', () => {
 			return null;
 		});
 
-		let engine: CueEngine;
-		let callCount = 0;
-		const maxCalls = 10;
-
 		const onCueRun = vi.fn(
 			async (request: {
 				runId: string;
@@ -532,12 +527,7 @@ describe('CueEngine multi-hop completion chains', () => {
 				event: CueEvent;
 				timeoutMs: number;
 			}) => {
-				callCount++;
 				const session = sessions.find((s) => s.id === request.sessionId);
-				// Stop the engine after maxCalls to break the infinite async chain
-				if (callCount >= maxCalls) {
-					engine.stop();
-				}
 				const result: CueRunResult = {
 					runId: request.runId,
 					sessionId: request.sessionId,
@@ -563,28 +553,37 @@ describe('CueEngine multi-hop completion chains', () => {
 			onCueRun: onCueRun as CueEngineDeps['onCueRun'],
 			onLog,
 		});
-		engine = new CueEngine(deps);
+		const engine = new CueEngine(deps);
 		engine.start();
 
-		await vi.advanceTimersByTimeAsync(0);
+		// Flush all async hops until the chain depth guard fires
+		for (let i = 0; i < 15; i++) {
+			await vi.advanceTimersByTimeAsync(0);
+		}
 
-		// The circular chain ran multiple hops before being stopped
-		expect(callCount).toBeGreaterThanOrEqual(maxCalls);
+		// The chain ran but was stopped by MAX_CHAIN_DEPTH
+		expect(onCueRun).toHaveBeenCalled();
+		const callCount = onCueRun.mock.calls.length;
+		// Should be bounded — heartbeat(1) + chain hops limited by depth 10
+		expect(callCount).toBeLessThanOrEqual(12);
 
 		// Verify the chain alternated between A and B sessions
 		const sessionIds = onCueRun.mock.calls.map((call) => call[0].sessionId);
-		// First call is heartbeat for A, then alternates: B, A, B, A, ...
 		expect(sessionIds[0]).toBe('a');
-		expect(sessionIds[1]).toBe('b');
-		expect(sessionIds[2]).toBe('a');
+		if (callCount > 1) expect(sessionIds[1]).toBe('b');
 
-		// The engine did not crash
+		// The depth-exceeded error was logged
+		const errorLogs = onLog.mock.calls.filter(
+			(call) => call[0] === 'error' && (call[1] as string).includes('Max chain depth')
+		);
+		expect(errorLogs.length).toBeGreaterThan(0);
+
 		engine.stop();
 	});
 
-	it('self-referencing subscription is bounded', async () => {
+	it('self-referencing subscription is bounded by MAX_CHAIN_DEPTH', async () => {
 		// A session watching its own completion creates a loop.
-		// We cap onCueRun calls and verify the loop ran as expected.
+		// The chain depth propagated via AgentCompletionData stops it.
 		const sessions = [
 			createMockSession({ id: 'self', name: 'Self', cwd: '/proj/self', projectRoot: '/proj/self' }),
 		];
@@ -610,10 +609,7 @@ describe('CueEngine multi-hop completion chains', () => {
 
 		mockLoadCueConfig.mockReturnValue(configSelf);
 
-		let engine: CueEngine;
 		let callCount = 0;
-		const maxCalls = 10;
-
 		const onCueRun = vi.fn(
 			async (request: {
 				runId: string;
@@ -624,10 +620,6 @@ describe('CueEngine multi-hop completion chains', () => {
 				timeoutMs: number;
 			}) => {
 				callCount++;
-				// Stop the engine after maxCalls to break the self-referencing loop
-				if (callCount >= maxCalls) {
-					engine.stop();
-				}
 				const result: CueRunResult = {
 					runId: request.runId,
 					sessionId: request.sessionId,
@@ -653,13 +645,13 @@ describe('CueEngine multi-hop completion chains', () => {
 			onCueRun: onCueRun as CueEngineDeps['onCueRun'],
 			onLog,
 		});
-		engine = new CueEngine(deps);
+		const engine = new CueEngine(deps);
 		engine.start();
 
-		await vi.advanceTimersByTimeAsync(0);
-
-		// The self-referencing loop ran multiple times before being stopped
-		expect(callCount).toBeGreaterThanOrEqual(maxCalls);
+		// Flush all async hops until the chain depth guard fires
+		for (let i = 0; i < 15; i++) {
+			await vi.advanceTimersByTimeAsync(0);
+		}
 
 		// All calls target the same session
 		const sessionIds = onCueRun.mock.calls.map((call) => call[0].sessionId);
@@ -667,13 +659,20 @@ describe('CueEngine multi-hop completion chains', () => {
 
 		// First call is the heartbeat, subsequent calls are self-triggered completions
 		expect(onCueRun.mock.calls[0][0].subscriptionName).toBe('heartbeat-self');
-		expect(onCueRun.mock.calls[1][0].subscriptionName).toBe('on-self-done');
+		if (callCount > 1) {
+			expect(onCueRun.mock.calls[1][0].subscriptionName).toBe('on-self-done');
+		}
 
-		// The engine did not crash
+		// The depth-exceeded error was logged
+		const errorLogs = onLog.mock.calls.filter(
+			(call) => call[0] === 'error' && (call[1] as string).includes('Max chain depth')
+		);
+		expect(errorLogs.length).toBeGreaterThan(0);
+
 		engine.stop();
 	});
 
-	it('fan-in -> fan-out combination dispatches to all targets after all sources complete', () => {
+	it('fan-in -> fan-out combination dispatches to all targets after all sources complete', async () => {
 		const sessions = [
 			createMockSession({
 				id: 'source-a',
@@ -737,6 +736,7 @@ describe('CueEngine multi-hop completion chains', () => {
 
 		// Second source completes — fan-in should fire, then fan-out dispatches
 		engine.notifyAgentCompleted('source-b', { sessionName: 'SourceB', stdout: 'output-b' });
+		await vi.advanceTimersByTimeAsync(0);
 
 		// Fan-out should dispatch to both TargetX and TargetY
 		expect(deps.onCueRun).toHaveBeenCalledTimes(2);

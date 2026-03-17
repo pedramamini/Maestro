@@ -258,6 +258,7 @@ describe('cue-filter', () => {
 		describe('empty filter', () => {
 			it('matches everything when filter is empty', () => {
 				expect(matchesFilter({ any: 'value' }, {})).toBe(true);
+				expect(matchesFilter({}, {})).toBe(true);
 			});
 		});
 	});
@@ -270,11 +271,6 @@ describe('cue-filter', () => {
 			expect(
 				matchesFilter({ size: 500, path: 'src/app.ts' }, { size: '>1000', path: 'src/**/*.ts' })
 			).toBe(false);
-		});
-
-		it('empty filter object matches everything', () => {
-			expect(matchesFilter({ any: 'value' }, {})).toBe(true);
-			expect(matchesFilter({}, {})).toBe(true);
 		});
 	});
 

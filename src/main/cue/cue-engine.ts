@@ -134,6 +134,7 @@ interface QueuedEvent {
 	outputPrompt?: string;
 	subscriptionName: string;
 	queuedAt: number;
+	chainDepth?: number;
 }
 
 export class CueEngine {
@@ -150,8 +151,6 @@ export class CueEngine {
 	/** Tracks "subName:HH:MM" keys that time.scheduled already fired, preventing double-fire on config refresh */
 	private scheduledFiredKeys = new Set<string>();
 	private heartbeatInterval: ReturnType<typeof setInterval> | null = null;
-	/** Tracks recursive chain depth to prevent infinite loops (A triggers B triggers A) */
-	private chainDepth = 0;
 	private deps: CueEngineDeps;
 
 	constructor(deps: CueEngineDeps) {
@@ -514,26 +513,17 @@ export class CueEngine {
 	notifyAgentCompleted(sessionId: string, completionData?: AgentCompletionData): void {
 		if (!this.enabled) return;
 
-		// Guard against infinite chain loops (A triggers B triggers A)
-		this.chainDepth++;
-		if (this.chainDepth > MAX_CHAIN_DEPTH) {
+		// Guard against infinite chain loops (A triggers B triggers A).
+		// chainDepth is propagated through AgentCompletionData so it persists across async hops.
+		const chainDepth = completionData?.chainDepth ?? 0;
+		if (chainDepth >= MAX_CHAIN_DEPTH) {
 			this.deps.onLog(
 				'error',
 				`[CUE] Max chain depth (${MAX_CHAIN_DEPTH}) exceeded — aborting to prevent infinite loop`
 			);
-			this.chainDepth--;
 			return;
 		}
 
-		try {
-			this.notifyAgentCompletedInner(sessionId, completionData);
-		} finally {
-			this.chainDepth--;
-		}
-	}
-
-	/** Inner implementation of notifyAgentCompleted (separated for chain depth tracking) */
-	private notifyAgentCompletedInner(sessionId: string, completionData?: AgentCompletionData): void {
 		// Resolve the completing session's name for matching
 		const allSessions = this.deps.getSessions();
 		const completingSession = allSessions.find((s) => s.id === sessionId);
@@ -582,7 +572,7 @@ export class CueEngine {
 					}
 
 					this.deps.onLog('cue', `[CUE] "${sub.name}" triggered (agent.completed)`);
-					this.dispatchSubscription(ownerSessionId, sub, event, completingName);
+					this.dispatchSubscription(ownerSessionId, sub, event, completingName, chainDepth);
 				} else {
 					// Fan-in: track completions with data
 					this.handleFanIn(
@@ -624,7 +614,8 @@ export class CueEngine {
 		ownerSessionId: string,
 		sub: CueSubscription,
 		event: CueEvent,
-		sourceSessionName: string
+		sourceSessionName: string,
+		chainDepth?: number
 	): void {
 		if (sub.fan_out && sub.fan_out.length > 0) {
 			// Fan-out: fire against each target session
@@ -655,7 +646,8 @@ export class CueEngine {
 					sub.prompt_file ?? sub.prompt,
 					fanOutEvent,
 					sub.name,
-					sub.output_prompt
+					sub.output_prompt,
+					chainDepth
 				);
 			}
 		} else {
@@ -664,7 +656,8 @@ export class CueEngine {
 				sub.prompt_file ?? sub.prompt,
 				event,
 				sub.name,
-				sub.output_prompt
+				sub.output_prompt,
+				chainDepth
 			);
 		}
 	}
@@ -1179,7 +1172,8 @@ export class CueEngine {
 		prompt: string,
 		event: CueEvent,
 		subscriptionName: string,
-		outputPrompt?: string
+		outputPrompt?: string,
+		chainDepth?: number
 	): void {
 		// Look up the config for this session to get concurrency settings
 		const state = this.sessions.get(sessionId);
@@ -1209,6 +1203,7 @@ export class CueEngine {
 				outputPrompt,
 				subscriptionName,
 				queuedAt: Date.now(),
+				chainDepth,
 			});
 
 			this.deps.onLog(
@@ -1220,7 +1215,7 @@ export class CueEngine {
 
 		// Slot available — dispatch immediately
 		this.activeRunCount.set(sessionId, currentCount + 1);
-		this.doExecuteCueRun(sessionId, prompt, event, subscriptionName, outputPrompt);
+		this.doExecuteCueRun(sessionId, prompt, event, subscriptionName, outputPrompt, chainDepth);
 	}
 
 	/**
@@ -1235,7 +1230,8 @@ export class CueEngine {
 		prompt: string,
 		event: CueEvent,
 		subscriptionName: string,
-		outputPrompt?: string
+		outputPrompt?: string,
+		chainDepth?: number
 	): Promise<void> {
 		const session = this.deps.getSessions().find((s) => s.id === sessionId);
 		const state = this.sessions.get(sessionId);
@@ -1405,6 +1401,7 @@ export class CueEngine {
 					durationMs: result.durationMs,
 					stdout: result.stdout,
 					triggeredBy: subscriptionName,
+					chainDepth: (chainDepth ?? 0) + 1,
 				});
 			}
 		}
@@ -1447,7 +1444,8 @@ export class CueEngine {
 				entry.prompt,
 				entry.event,
 				entry.subscriptionName,
-				entry.outputPrompt
+				entry.outputPrompt,
+				entry.chainDepth
 			);
 		}
 

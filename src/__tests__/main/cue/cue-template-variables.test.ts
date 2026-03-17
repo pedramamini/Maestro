@@ -101,6 +101,7 @@ describe('Cue template variable substitution', () => {
 			ghBranch: 'feature-x',
 			ghBaseBranch: 'main',
 			ghAssignees: 'bob,charlie',
+			ghMergedAt: '2026-03-15T12:00:00Z',
 		});
 		const template = [
 			'type={{CUE_GH_TYPE}}',
@@ -115,10 +116,11 @@ describe('Cue template variable substitution', () => {
 			'branch={{CUE_GH_BRANCH}}',
 			'base={{CUE_GH_BASE_BRANCH}}',
 			'assignees={{CUE_GH_ASSIGNEES}}',
+			'merged={{CUE_GH_MERGED_AT}}',
 		].join(' ');
 		const result = substituteTemplateVariables(template, ctx);
 		expect(result).toBe(
-			'type=pull_request num=42 title=Add feature X author=alice url=https://github.com/owner/repo/pull/42 body=This PR adds feature X labels=enhancement,priority state=open repo=owner/repo branch=feature-x base=main assignees=bob,charlie'
+			'type=pull_request num=42 title=Add feature X author=alice url=https://github.com/owner/repo/pull/42 body=This PR adds feature X labels=enhancement,priority state=open repo=owner/repo branch=feature-x base=main assignees=bob,charlie merged=2026-03-15T12:00:00Z'
 		);
 	});
 
@@ -154,7 +156,7 @@ describe('Cue template variable substitution', () => {
 		expect(result).toBe('output=Line 1\nLine "2"\nCurly {braces} and {{double}}');
 	});
 
-	it('handles truncated 5000-char sourceOutput', () => {
+	it('preserves 5000-char sourceOutput without truncation', () => {
 		const longOutput = 'x'.repeat(5000);
 		const ctx = makeContext({ sourceOutput: longOutput });
 		const template = '{{CUE_SOURCE_OUTPUT}}';

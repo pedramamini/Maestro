@@ -563,7 +563,7 @@ describe('CueModal', () => {
 	});
 
 	describe('edge cases', () => {
-		it('renders without crash when status has many sessions', async () => {
+		it('renders without crash when status has many sessions', () => {
 			const manySessions = Array.from({ length: 20 }, (_, i) => ({
 				...mockSession,
 				sessionId: `sess-${i}`,
@@ -577,17 +577,16 @@ describe('CueModal', () => {
 				sessions: manySessions,
 			};
 
-			const { container } = render(<CueModal theme={mockTheme} onClose={mockOnClose} />);
+			render(<CueModal theme={mockTheme} onClose={mockOnClose} />);
 			fireEvent.click(screen.getByText('Dashboard'));
 
 			// All 20 sessions should be rendered
 			for (let i = 0; i < 20; i++) {
 				expect(screen.getByText(`Session ${i}`)).toBeInTheDocument();
 			}
-			expect(container).toBeTruthy();
 		});
 
-		it('renders activity log entries with long names', async () => {
+		it('renders activity log entries with long names', () => {
 			const longName = 'A'.repeat(200);
 			const longSubName = 'B'.repeat(200);
 			const longNameRun = {
@@ -602,11 +601,9 @@ describe('CueModal', () => {
 				activityLog: [longNameRun],
 			};
 
-			const { container } = render(<CueModal theme={mockTheme} onClose={mockOnClose} />);
+			render(<CueModal theme={mockTheme} onClose={mockOnClose} />);
 			fireEvent.click(screen.getByText('Dashboard'));
 
-			// Should render without crashing
-			expect(container).toBeTruthy();
 			expect(screen.getByText(/completed in 5s/)).toBeInTheDocument();
 		});
 	});

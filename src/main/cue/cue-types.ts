@@ -149,6 +149,8 @@ export interface AgentCompletionData {
 	durationMs?: number;
 	stdout?: string;
 	triggeredBy?: string;
+	/** Tracks how many chained hops have occurred to prevent infinite loops */
+	chainDepth?: number;
 }
 
 /** Session data with subscriptions for the Cue Graph visualization */
