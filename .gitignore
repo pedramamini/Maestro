@@ -26,6 +26,7 @@ src/generated/
 *.log
 tmp/
 scratch/
+dogfood-output/
 
 # Environment
 .env

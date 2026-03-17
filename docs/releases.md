@@ -17,7 +17,7 @@ Maestro can update itself automatically! This feature was introduced in **v0.8.7
 
 **Latest: v0.15.2** | Released March 12, 2026
 
-### Major 0.15.x Additions
+# Major 0.15.x Additions
 
 🎶 **Maestro Symphony** — Contribute to open source with AI assistance! Browse curated issues from projects with the `runmaestro.ai` label, clone repos with one click, and automatically process the relevant Auto Run playbooks. Track your contributions, streaks, and stats. You're contributing CPU and tokens towards your favorite open source projects and features.
 
@@ -87,7 +87,7 @@ Changes in this point release include:
 
 - Desktop app performance improvements (more to come on this, we want Maestro blazing fast) 🐌
 - Added local manifest feature for custom playbooks 📖
-- Agents are now inherently aware of your activity history as seen in the history panel 📜 (this is built-in cross-context memory!)
+- Agents are now inherently aware of your activity history as seen in the history panel 📜 (this is built-in cross context memory!)
 - Added markdown rendering support for AI responses in mobile view 📱
 - Bugfix in tracking costs from JSONL files that were aged out 🏦
 - Added BlueSky social media handle for leaderboard 🦋
@@ -104,7 +104,7 @@ The major contributions to 0.14.x remain:
 
 🧙‍♂️ Added an in-tab wizard for generating Auto Run Playbooks via `/wizard` or a new button in the Auto Run panel.
 
-### Smaller Changes in 0.14.x
+# Smaller Changes in 014.x
 
 - Improved User Dashboard, available from hamburger menu, command palette or hotkey 🎛️
 - Leaderboard tracking now works across multiple systems and syncs level from cloud 🏆
@@ -173,11 +173,11 @@ The big changes in the v0.12.x line are the following three:
 
 ## GitHub Spec-Kit Integration
 
-🎯 Added [GitHub Spec-Kit](https://github.com/github/spec-kit) commands into Maestro with a built-in updater to grab the latest prompts from the repository. We do override `/speckit-implement` (the final step) to create Auto Run docs and guide the user through their execution, which thanks to Worktrees from v0.11.x allows us to run in parallel!
+🎯 Added [GitHub Spec-Kit](https://github.com/github/spec-kit) commands into Maestro with a built in updater to grab the latest prompts from the repository. We do override `/speckit-implement` (the final step) to create Auto Run docs and guide the user through their execution, which thanks to Wortrees from v0.11.x allows us to run in parallel!
 
 ## Context Management Tools
 
-📖 Added context management options from tab right-click menu. You can now compress, merge, and transfer contexts between agents. You will receive (configurable) warnings at 60% and 80% context consumption with a hint to compact.
+📖 Added context management options from tab right-click menu. You can now compress, merge, and transfer contexts between agents. You will received (configurable) warnings at 60% and 80% context consumption with a hint to compact.
 
 ## Changes Specific to v0.12.3:
 
@@ -198,9 +198,9 @@ The big changes in the v0.12.x line are the following three:
 
 **Latest: v0.11.0** | Released December 22, 2025
 
-🌳 GitHub Worktree support was added. Any agent bound to a Git repository has the option to enable worktrees, each of which show up as a sub-agent with their own write-lock and Auto Run capability. Now you can truly develop in parallel on the same project and issue PRs when you're ready, all from within Maestro. Huge improvement, major thanks to @petersilberman.
+🌳 Github Worktree support was added. Any agent bound to a Git repository has the option to enable worktrees, each of which show up as a sub-agent with their own write-lock and Auto Run capability. Now you can truly develop in parallel on the same project and issue PRs when you're ready, all from within Maestro. Huge improvement, major thanks to @petersilberman.
 
-### Other Changes
+# Other Changes
 
 - @ file mentions now include documents from your Auto Run folder (which may not live in your agent working directory) 🗄️
 - The wizard is now capable of detecting and continuing on past started projects 🧙
@@ -263,7 +263,7 @@ The big changes in the v0.12.x line are the following three:
 - Implemented fuzzy file search in quick actions for instant navigation 🔍
 - Added "clear" command support to clean terminal shell logs 🧹
 - Simplified search highlighting by integrating into markdown pipeline ✨
-- Enhanced update checker to filter pre-release tags like -rc, -beta 🚀
+- Enhanced update checker to filter prerelease tags like -rc, -beta 🚀
 - Fixed RPM package compatibility for OpenSUSE Tumbleweed 🐧 (H/T @JOduMonT)
 - Added libuuid1 support alongside standard libuuid dependency 📦
 - Introduced Cmd+Shift+U shortcut for tab unread toggle ⌨️
@@ -292,7 +292,7 @@ The big changes in the v0.12.x line are the following three:
 
 Minor bugfixes on top of v0.7.3:
 
-### Onboarding, Wizard, and Tours
+# Onboarding, Wizard, and Tours
 
 - Implemented comprehensive onboarding wizard with integrated tour system 🚀
 - Added project-understanding confidence display to wizard UI 🎨
@@ -300,7 +300,7 @@ Minor bugfixes on top of v0.7.3:
 - Added analytics tracking for wizard and tour completion 📈
 - Added First Run Celebration modal with confetti animation 🎉
 
-### UI / UX Enhancements
+# UI / UX Enhancements
 
 - Added expand-to-fullscreen button for Auto Run interface 🖥️
 - Created dedicated modal component and improved modal priority constants for expanded Auto Run view 📐
@@ -310,18 +310,18 @@ Minor bugfixes on top of v0.7.3:
 - Implemented drag-and-drop reordering for execution queue items 🎯
 - Enhanced toast context with agent name for OS notifications 📢
 
-### Auto Run Workflow Improvements
+# Auto Run Workflow Improvements
 
 - Created phase document generation for Auto Run workflow 📄
 - Added real-time log streaming to the LogViewer component 📊
 
-### Application Behavior / Core Fixes
+# Application Behavior / Core Fixes
 
 - Added validation to prevent nested worktrees inside the main repository 🚫
 - Fixed process manager to properly emit exit events on errors 🔧
 - Fixed process exit handling to ensure proper cleanup 🧹
 
-### Update System
+# Update System
 
 - Implemented automatic update checking on application startup 🚀
 - Added settings toggle for enabling/disabling startup update checks ⚙️
