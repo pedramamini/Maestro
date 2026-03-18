@@ -395,14 +395,27 @@ export function useAutoRunHandlers(
 				}
 			}
 
+			// Resolve the Auto Run folder path for the target session.
+			// When dispatching to a worktree, use the target session's own
+			// autoRunFolderPath (resolved relative to its cwd by buildWorktreeSession).
+			// Fall back to activeSession's path if the target doesn't have one set.
+			let folderPath = activeSession.autoRunFolderPath;
+			if (targetSessionId !== activeSession.id) {
+				const targetSession = useSessionStore
+					.getState()
+					.sessions.find((s) => s.id === targetSessionId);
+				if (targetSession?.autoRunFolderPath) {
+					folderPath = targetSession.autoRunFolderPath;
+				}
+			}
+
 			window.maestro.logger.log('info', 'Starting batch run', 'AutoRunHandlers', {
 				sessionId: targetSessionId,
-				folderPath: activeSession.autoRunFolderPath,
+				folderPath,
 				isWorktreeTarget: targetSessionId !== activeSession.id,
 			});
 			setBatchRunnerModalOpen(false);
-			// Documents stay with the parent session's autoRunFolderPath; execution targets the worktree agent
-			startBatchRun(targetSessionId, config, activeSession.autoRunFolderPath);
+			startBatchRun(targetSessionId, config, folderPath);
 		},
 		[activeSession, startBatchRun, setBatchRunnerModalOpen]
 	);
