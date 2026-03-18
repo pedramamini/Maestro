@@ -55,6 +55,9 @@ import type {
 	StopGroupChatCallback,
 	SendGroupChatMessageCallback,
 	GroupChatState,
+	MergeContextCallback,
+	TransferContextCallback,
+	SummarizeContextCallback,
 } from '../types';
 
 const LOG_CONTEXT = 'CallbackRegistry';
@@ -105,6 +108,9 @@ export interface WebServerCallbacks {
 	getGroupChatState: GetGroupChatStateCallback | null;
 	stopGroupChat: StopGroupChatCallback | null;
 	sendGroupChatMessage: SendGroupChatMessageCallback | null;
+	mergeContext: MergeContextCallback | null;
+	transferContext: TransferContextCallback | null;
+	summarizeContext: SummarizeContextCallback | null;
 }
 
 export class CallbackRegistry {
@@ -151,6 +157,9 @@ export class CallbackRegistry {
 		getGroupChatState: null,
 		stopGroupChat: null,
 		sendGroupChatMessage: null,
+		mergeContext: null,
+		transferContext: null,
+		summarizeContext: null,
 	};
 
 	// ============ Getter Methods ============
@@ -385,6 +394,21 @@ export class CallbackRegistry {
 		return this.callbacks.sendGroupChatMessage(chatId, message);
 	}
 
+	async mergeContext(sourceSessionId: string, targetSessionId: string): Promise<boolean> {
+		if (!this.callbacks.mergeContext) return false;
+		return this.callbacks.mergeContext(sourceSessionId, targetSessionId);
+	}
+
+	async transferContext(sourceSessionId: string, targetSessionId: string): Promise<boolean> {
+		if (!this.callbacks.transferContext) return false;
+		return this.callbacks.transferContext(sourceSessionId, targetSessionId);
+	}
+
+	async summarizeContext(sessionId: string): Promise<boolean> {
+		if (!this.callbacks.summarizeContext) return false;
+		return this.callbacks.summarizeContext(sessionId);
+	}
+
 	// ============ Setter Methods ============
 
 	setGetSessionsCallback(callback: GetSessionsCallback): void {
@@ -559,6 +583,18 @@ export class CallbackRegistry {
 
 	setSendGroupChatMessageCallback(callback: SendGroupChatMessageCallback): void {
 		this.callbacks.sendGroupChatMessage = callback;
+	}
+
+	setMergeContextCallback(callback: MergeContextCallback): void {
+		this.callbacks.mergeContext = callback;
+	}
+
+	setTransferContextCallback(callback: TransferContextCallback): void {
+		this.callbacks.transferContext = callback;
+	}
+
+	setSummarizeContextCallback(callback: SummarizeContextCallback): void {
+		this.callbacks.summarizeContext = callback;
 	}
 
 	// ============ Check Methods ============

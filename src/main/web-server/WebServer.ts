@@ -96,6 +96,9 @@ import type {
 	SendGroupChatMessageCallback,
 	GroupChatMessage,
 	GroupChatState,
+	MergeContextCallback,
+	TransferContextCallback,
+	SummarizeContextCallback,
 } from './types';
 
 // Logger context for all web server logs
@@ -436,6 +439,18 @@ export class WebServer {
 		this.callbackRegistry.setSendGroupChatMessageCallback(callback);
 	}
 
+	setMergeContextCallback(callback: MergeContextCallback): void {
+		this.callbackRegistry.setMergeContextCallback(callback);
+	}
+
+	setTransferContextCallback(callback: TransferContextCallback): void {
+		this.callbackRegistry.setTransferContextCallback(callback);
+	}
+
+	setSummarizeContextCallback(callback: SummarizeContextCallback): void {
+		this.callbackRegistry.setSummarizeContextCallback(callback);
+	}
+
 	broadcastGroupsChanged(groups: GroupData[]): void {
 		this.broadcastService.broadcastGroupsChanged(groups);
 	}
@@ -718,6 +733,14 @@ export class WebServer {
 
 	broadcastGroupChatStateChange(chatId: string, state: Partial<GroupChatState>): void {
 		this.broadcastService.broadcastGroupChatStateChange(chatId, state);
+	}
+
+	broadcastContextOperationProgress(sessionId: string, operation: string, progress: number): void {
+		this.broadcastService.broadcastContextOperationProgress(sessionId, operation, progress);
+	}
+
+	broadcastContextOperationComplete(sessionId: string, operation: string, success: boolean): void {
+		this.broadcastService.broadcastContextOperationComplete(sessionId, operation, success);
 	}
 
 	// ============ Server Lifecycle ============

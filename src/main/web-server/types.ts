@@ -530,3 +530,11 @@ export type GetGroupChatStateCallback = (chatId: string) => Promise<GroupChatSta
 export type StopGroupChatCallback = (chatId: string) => Promise<boolean>;
 export type SendGroupChatMessageCallback = (chatId: string, message: string) => Promise<boolean>;
 export type GetGroupChatsCallback = () => Promise<GroupChatState[]>;
+
+// =============================================================================
+// Context Management Callback Types
+// =============================================================================
+
+export type MergeContextCallback = (sourceSessionId: string, targetSessionId: string) => Promise<boolean>;
+export type TransferContextCallback = (sourceSessionId: string, targetSessionId: string) => Promise<boolean>;
+export type SummarizeContextCallback = (sessionId: string) => Promise<boolean>;

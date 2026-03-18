@@ -147,6 +147,9 @@ export interface MessageHandlerCallbacks {
 	getGroupChatState: (chatId: string) => Promise<GroupChatState | null>;
 	stopGroupChat: (chatId: string) => Promise<boolean>;
 	sendGroupChatMessage: (chatId: string, message: string) => Promise<boolean>;
+	mergeContext: (sourceSessionId: string, targetSessionId: string) => Promise<boolean>;
+	transferContext: (sourceSessionId: string, targetSessionId: string) => Promise<boolean>;
+	summarizeContext: (sessionId: string) => Promise<boolean>;
 }
 
 /**
@@ -347,6 +350,18 @@ export class WebSocketMessageHandler {
 
 			case 'stop_group_chat':
 				this.handleStopGroupChat(client, message);
+				break;
+
+			case 'merge_context':
+				this.handleMergeContext(client, message);
+				break;
+
+			case 'transfer_context':
+				this.handleTransferContext(client, message);
+				break;
+
+			case 'summarize_context':
+				this.handleSummarizeContext(client, message);
 				break;
 
 			default:
@@ -1833,6 +1848,111 @@ export class WebSocketMessageHandler {
 			})
 			.catch((error) => {
 				this.sendError(client, `Failed to stop group chat: ${error.message}`);
+			});
+	}
+
+	/**
+	 * Handle merge_context message - merge context from source to target session
+	 */
+	private handleMergeContext(client: WebClient, message: WebClientMessage): void {
+		const sourceSessionId = message.sourceSessionId as string;
+		const targetSessionId = message.targetSessionId as string;
+
+		if (!sourceSessionId || !targetSessionId) {
+			this.sendError(client, 'Missing sourceSessionId or targetSessionId');
+			return;
+		}
+
+		if (sourceSessionId === targetSessionId) {
+			this.sendError(client, 'Source and target sessions must be different');
+			return;
+		}
+
+		if (!this.callbacks.mergeContext) {
+			this.sendError(client, 'Context merge not configured');
+			return;
+		}
+
+		this.callbacks
+			.mergeContext(sourceSessionId, targetSessionId)
+			.then((success) => {
+				this.send(client, {
+					type: 'merge_context_result',
+					success,
+					requestId: message.requestId,
+					timestamp: Date.now(),
+				});
+			})
+			.catch((error) => {
+				this.sendError(client, `Failed to merge context: ${error.message}`);
+			});
+	}
+
+	/**
+	 * Handle transfer_context message - transfer context from source to target session
+	 */
+	private handleTransferContext(client: WebClient, message: WebClientMessage): void {
+		const sourceSessionId = message.sourceSessionId as string;
+		const targetSessionId = message.targetSessionId as string;
+
+		if (!sourceSessionId || !targetSessionId) {
+			this.sendError(client, 'Missing sourceSessionId or targetSessionId');
+			return;
+		}
+
+		if (sourceSessionId === targetSessionId) {
+			this.sendError(client, 'Source and target sessions must be different');
+			return;
+		}
+
+		if (!this.callbacks.transferContext) {
+			this.sendError(client, 'Context transfer not configured');
+			return;
+		}
+
+		this.callbacks
+			.transferContext(sourceSessionId, targetSessionId)
+			.then((success) => {
+				this.send(client, {
+					type: 'transfer_context_result',
+					success,
+					requestId: message.requestId,
+					timestamp: Date.now(),
+				});
+			})
+			.catch((error) => {
+				this.sendError(client, `Failed to transfer context: ${error.message}`);
+			});
+	}
+
+	/**
+	 * Handle summarize_context message - summarize context for a session
+	 */
+	private handleSummarizeContext(client: WebClient, message: WebClientMessage): void {
+		const sessionId = message.sessionId as string;
+
+		if (!sessionId) {
+			this.sendError(client, 'Missing sessionId');
+			return;
+		}
+
+		if (!this.callbacks.summarizeContext) {
+			this.sendError(client, 'Context summarize not configured');
+			return;
+		}
+
+		this.callbacks
+			.summarizeContext(sessionId)
+			.then((success) => {
+				this.send(client, {
+					type: 'summarize_context_result',
+					success,
+					requestId: message.requestId,
+					timestamp: Date.now(),
+				});
+			})
+			.catch((error) => {
+				this.sendError(client, `Failed to summarize context: ${error.message}`);
 			});
 	}
 

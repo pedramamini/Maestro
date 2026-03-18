@@ -398,4 +398,30 @@ export class BroadcastService {
 			timestamp: Date.now(),
 		});
 	}
+
+	/**
+	 * Broadcast context operation progress to all connected web clients
+	 */
+	broadcastContextOperationProgress(sessionId: string, operation: string, progress: number): void {
+		this.broadcastToAll({
+			type: 'context_operation_progress',
+			sessionId,
+			operation,
+			progress,
+			timestamp: Date.now(),
+		});
+	}
+
+	/**
+	 * Broadcast context operation completion to all connected web clients
+	 */
+	broadcastContextOperationComplete(sessionId: string, operation: string, success: boolean): void {
+		this.broadcastToAll({
+			type: 'context_operation_complete',
+			sessionId,
+			operation,
+			success,
+			timestamp: Date.now(),
+		});
+	}
 }
