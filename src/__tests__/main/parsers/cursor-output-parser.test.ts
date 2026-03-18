@@ -172,6 +172,30 @@ describe('CursorOutputParser', () => {
 				expect(event?.toolName).toBe('read');
 			});
 
+			it('should use toolType field when present (strip ToolCall suffix)', () => {
+				const line = JSON.stringify({
+					type: 'tool_call',
+					subtype: 'started',
+					toolType: 'searchToolCall',
+					args: { query: 'hello' },
+				});
+
+				const event = parser.parseJsonLine(line);
+				expect(event?.toolName).toBe('search');
+			});
+
+			it('should use toolType field as-is when no ToolCall suffix', () => {
+				const line = JSON.stringify({
+					type: 'tool_call',
+					subtype: 'started',
+					toolType: 'bash',
+					args: { command: 'ls' },
+				});
+
+				const event = parser.parseJsonLine(line);
+				expect(event?.toolName).toBe('bash');
+			});
+
 			it('should handle tool_call with unknown subtype', () => {
 				const line = JSON.stringify({
 					type: 'tool_call',
@@ -318,17 +342,13 @@ describe('CursorOutputParser', () => {
 
 	describe('isResultMessage', () => {
 		it('should return true for result events', () => {
-			const event = parser.parseJsonLine(
-				JSON.stringify({ type: 'result', duration_ms: 100 })
-			);
+			const event = parser.parseJsonLine(JSON.stringify({ type: 'result', duration_ms: 100 }));
 			expect(event).not.toBeNull();
 			expect(parser.isResultMessage(event!)).toBe(true);
 		});
 
 		it('should return false for non-result events', () => {
-			const initEvent = parser.parseJsonLine(
-				JSON.stringify({ type: 'system', subtype: 'init' })
-			);
+			const initEvent = parser.parseJsonLine(JSON.stringify({ type: 'system', subtype: 'init' }));
 			expect(parser.isResultMessage(initEvent!)).toBe(false);
 
 			const textEvent = parser.parseJsonLine(
@@ -340,9 +360,7 @@ describe('CursorOutputParser', () => {
 
 	describe('extractSessionId', () => {
 		it('should return null when no session ID is present', () => {
-			const event = parser.parseJsonLine(
-				JSON.stringify({ type: 'system', subtype: 'init' })
-			);
+			const event = parser.parseJsonLine(JSON.stringify({ type: 'system', subtype: 'init' }));
 			expect(parser.extractSessionId(event!)).toBeNull();
 		});
 
@@ -357,9 +375,7 @@ describe('CursorOutputParser', () => {
 
 	describe('extractUsage', () => {
 		it('should return null - Cursor does not expose usage in CLI output', () => {
-			const event = parser.parseJsonLine(
-				JSON.stringify({ type: 'system', subtype: 'init' })
-			);
+			const event = parser.parseJsonLine(JSON.stringify({ type: 'system', subtype: 'init' }));
 			expect(parser.extractUsage(event!)).toBeNull();
 		});
 
@@ -379,12 +395,9 @@ describe('CursorOutputParser', () => {
 	});
 
 	describe('extractSlashCommands', () => {
-		it('should return known commands for init events', () => {
-			const event = parser.parseJsonLine(
-				JSON.stringify({ type: 'system', subtype: 'init' })
-			);
-			const commands = parser.extractSlashCommands(event!);
-			expect(commands).toEqual(['/plan', '/ask', '/sandbox', '/max-mode']);
+		it('should return null for init events (Cursor does not expose commands in stream-json)', () => {
+			const event = parser.parseJsonLine(JSON.stringify({ type: 'system', subtype: 'init' }));
+			expect(parser.extractSlashCommands(event!)).toBeNull();
 		});
 
 		it('should return null for non-init events', () => {
@@ -409,8 +422,8 @@ describe('CursorOutputParser', () => {
 			expect(error?.agentId).toBe('cursor');
 		});
 
-		it('should detect CURSOR_API_KEY errors from JSON', () => {
-			const line = JSON.stringify({ type: 'error', error: 'CURSOR_API_KEY is not set' });
+		it('should detect not authenticated errors from JSON', () => {
+			const line = JSON.stringify({ type: 'error', error: 'not authenticated' });
 			const error = parser.detectErrorFromLine(line);
 			expect(error).not.toBeNull();
 			expect(error?.type).toBe('auth_expired');

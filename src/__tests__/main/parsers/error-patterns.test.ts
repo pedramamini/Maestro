@@ -22,6 +22,7 @@ const CLAUDE_ERROR_PATTERNS = getErrorPatterns('claude-code');
 const OPENCODE_ERROR_PATTERNS = getErrorPatterns('opencode');
 const CODEX_ERROR_PATTERNS = getErrorPatterns('codex');
 const CURSOR_ERROR_PATTERNS = getErrorPatterns('cursor');
+const FACTORY_DROID_ERROR_PATTERNS = getErrorPatterns('factory-droid');
 
 describe('error-patterns', () => {
 	describe('CLAUDE_ERROR_PATTERNS', () => {
@@ -607,12 +608,6 @@ describe('error-patterns', () => {
 				expect(result?.type).toBe('auth_expired');
 			});
 
-			it('should match "CURSOR_API_KEY"', () => {
-				const result = matchErrorPattern(CURSOR_ERROR_PATTERNS, 'CURSOR_API_KEY is not set');
-				expect(result).not.toBeNull();
-				expect(result?.type).toBe('auth_expired');
-			});
-
 			it('should match "not authenticated"', () => {
 				const result = matchErrorPattern(CURSOR_ERROR_PATTERNS, 'not authenticated');
 				expect(result).not.toBeNull();
@@ -953,6 +948,7 @@ describe('error-patterns', () => {
 			registerErrorPatterns('opencode', OPENCODE_ERROR_PATTERNS);
 			registerErrorPatterns('codex', CODEX_ERROR_PATTERNS);
 			registerErrorPatterns('cursor', CURSOR_ERROR_PATTERNS);
+			registerErrorPatterns('factory-droid', FACTORY_DROID_ERROR_PATTERNS);
 		});
 
 		it('should register custom patterns', () => {
@@ -994,6 +990,8 @@ describe('error-patterns', () => {
 			registerErrorPatterns('claude-code', CLAUDE_ERROR_PATTERNS);
 			registerErrorPatterns('opencode', OPENCODE_ERROR_PATTERNS);
 			registerErrorPatterns('codex', CODEX_ERROR_PATTERNS);
+			registerErrorPatterns('cursor', CURSOR_ERROR_PATTERNS);
+			registerErrorPatterns('factory-droid', FACTORY_DROID_ERROR_PATTERNS);
 		});
 
 		it('should clear all registered patterns', () => {

@@ -197,6 +197,7 @@ export const AGENT_DEFINITIONS: AgentDefinition[] = [
 		// --force enables direct file changes without confirmation (YOLO mode, required by Maestro)
 		// --output-format stream-json for structured parsing (same flag name as Claude Code)
 		args: ['-p', '--output-format', 'stream-json', '--force'],
+		requiresPty: false, // Batch-only agent (requiresPromptToStart: true in capabilities)
 		resumeArgs: (sessionId: string) => ['--resume', sessionId],
 		readOnlyArgs: ['--mode', 'ask'], // Read-only exploration mode (no file changes)
 		readOnlyCliEnforced: true, // CLI enforces read-only via --mode ask

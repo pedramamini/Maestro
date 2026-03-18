@@ -92,14 +92,12 @@ export function initializeOutputParsers(): void {
 }
 
 /**
- * Check if parsers have been initialized
- * @returns true if at least one parser is registered
+ * Ensure parsers are initialized (idempotent).
+ * Uses the registry size as the source of truth so that
+ * clearing the registry (e.g., in tests) allows re-initialization.
  */
-let _initialized = false;
-
 export function ensureParsersInitialized(): void {
-	if (!_initialized) {
+	if (getAllOutputParsers().length === 0) {
 		initializeOutputParsers();
-		_initialized = true;
 	}
 }

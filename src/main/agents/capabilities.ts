@@ -236,7 +236,7 @@ export const AGENT_CAPABILITIES: Record<string, AgentCapabilities> = {
 	 * https://cursor.com/docs/cli/overview
 	 *
 	 * Capabilities based on CLI documentation research (2026-03-17).
-	 * See docs/cursor-cli-research.md for investigation details.
+	 * See AGENT_SUPPORT.md for investigation details.
 	 */
 	cursor: {
 		supportsResume: true, // --resume="chat-id" or --continue
@@ -245,7 +245,7 @@ export const AGENT_CAPABILITIES: Record<string, AgentCapabilities> = {
 		supportsSessionId: false, // Not documented in stream-json output
 		supportsImageInput: false, // No dedicated image flag; images referenced via file path in prompt
 		supportsImageInputOnResume: false, // No image flag available
-		supportsSlashCommands: true, // /plan, /ask, /sandbox, /max-mode
+		supportsSlashCommands: false, // Cursor supports slash commands but they are not exposed in stream-json output
 		supportsSessionStorage: false, // Sessions stored locally but exact disk format unknown
 		supportsCostTracking: false, // Not exposed in CLI output
 		supportsUsageStats: false, // Not exposed in CLI output

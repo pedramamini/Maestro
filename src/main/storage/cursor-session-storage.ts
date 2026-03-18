@@ -6,7 +6,7 @@
  * are not publicly documented. Until the storage format is discovered and
  * verified, this implementation returns empty results for all operations.
  *
- * See docs/cursor-cli-research.md for details on what is known.
+ * See AGENT_SUPPORT.md for details on what is known.
  *
  * When Cursor's session storage format becomes documented or discoverable,
  * this class should be updated with real implementations similar to

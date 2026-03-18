@@ -685,11 +685,6 @@ const CURSOR_ERROR_PATTERNS: AgentErrorPatterns = {
 			recoverable: true,
 		},
 		{
-			pattern: /CURSOR_API_KEY/i,
-			message: 'Cursor API key not set. Please set CURSOR_API_KEY environment variable.',
-			recoverable: true,
-		},
-		{
 			pattern: /authentication.*failed/i,
 			message: 'Authentication failed. Please verify your Cursor API key.',
 			recoverable: true,
@@ -963,8 +958,9 @@ export const SSH_ERROR_PATTERNS: AgentErrorPatterns = {
 		},
 		{
 			// Agent command not found for cursor (binary is called "agent")
+			// Use stricter matching to avoid false positives from compound names like ssh-agent
 			pattern:
-				/bash:.*\bagent\b.*command not found|sh:.*\bagent\b.*command not found|zsh:.*command not found:.*\bagent\b/i,
+				/bash:\s*agent:.*command not found|sh:\s*agent:.*command not found|zsh:.*command not found:\s*agent\s*$/im,
 			message: 'Cursor agent command not found. Ensure Cursor CLI is installed.',
 			recoverable: false,
 		},
@@ -973,7 +969,7 @@ export const SSH_ERROR_PATTERNS: AgentErrorPatterns = {
 			// More specific pattern: requires path-like structure before the binary name
 			// Matches: "/usr/local/bin/claude: No such file or directory"
 			// Does NOT match: "claude: error: File 'foo.txt': No such file or directory" (normal file errors)
-			pattern: /\/[^\s:]*\/(claude|opencode|codex|agent):\s*No such file or directory/i,
+			pattern: /\/[^\s:]*\/(claude|opencode|codex|droid|agent):\s*No such file or directory/i,
 			message: 'Agent binary not found at the specified path. Ensure the agent is installed.',
 			recoverable: false,
 		},

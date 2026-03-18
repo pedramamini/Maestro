@@ -16,7 +16,7 @@
  * - Tool calls use subtypes "started"/"completed" instead of separate event types
  * - Binary name is `agent` (not `cursor`)
  *
- * @see docs/cursor-cli-research.md
+ * @see AGENT_SUPPORT.md
  */
 
 import type { ToolType, AgentError } from '../../shared/types';
@@ -39,6 +39,8 @@ interface CursorRawMessage {
 	subtype?: string;
 	model?: string;
 	duration_ms?: number;
+	/** Tool type name from Cursor (e.g., "writeToolCall", "readToolCall", "searchToolCall") */
+	toolType?: string;
 	message?: {
 		role?: string;
 		content?: CursorContentBlock[] | string;
@@ -206,17 +208,20 @@ export class CursorOutputParser implements AgentOutputParser {
 	 * Strip the "ToolCall" suffix for cleaner display.
 	 */
 	private extractToolName(msg: CursorRawMessage): string | undefined {
-		// Check args for path-based tool identification
+		// Primary: use the toolType field if present (e.g., "writeToolCall" -> "write")
+		if (msg.toolType) {
+			return msg.toolType.replace(/ToolCall$/i, '') || msg.toolType;
+		}
+
+		// Fallback: infer from args structure
 		const args = msg.args as Record<string, unknown> | undefined;
 		if (args?.path) {
-			// If it has a path arg, try to derive tool name from context
 			if (msg.subtype === 'started' && args.content !== undefined) {
 				return 'write';
 			}
 			return 'read';
 		}
 
-		// Fallback: use subtype or generic name
 		return undefined;
 	}
 
@@ -266,13 +271,10 @@ export class CursorOutputParser implements AgentOutputParser {
 	/**
 	 * Extract slash commands from an event.
 	 * Cursor supports slash commands (/plan, /ask, /sandbox, /max-mode)
-	 * but they are not reported in stream-json init events.
-	 * Return known commands from documentation.
+	 * but they are not reported in stream-json init events, so we
+	 * return null rather than hardcoding a list that may go stale.
 	 */
-	extractSlashCommands(event: ParsedEvent): string[] | null {
-		if (event.type === 'init') {
-			return ['/plan', '/ask', '/sandbox', '/max-mode'];
-		}
+	extractSlashCommands(_event: ParsedEvent): string[] | null {
 		return null;
 	}
 
@@ -324,8 +326,9 @@ export class CursorOutputParser implements AgentOutputParser {
 
 		if (obj.type === 'error' || obj.error) {
 			parsedJson = parsed;
-			errorText = extractErrorText(obj.error as CursorRawMessage['error']);
-			if (errorText === 'Unknown error') errorText = null;
+			const extracted = extractErrorText(obj.error as CursorRawMessage['error']);
+			errorText =
+				extracted !== 'Unknown error' ? extracted : obj.type === 'error' ? 'Agent error' : null;
 		}
 
 		if (!errorText) {
