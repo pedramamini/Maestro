@@ -18,6 +18,7 @@ import { buildAgentArgs, applyAgentConfigOverrides } from '../utils/agent-args';
 import { wrapSpawnWithSsh, type SshSpawnWrapConfig } from '../utils/ssh-spawn-wrapper';
 import type { SshRemoteSettingsStore } from '../utils/ssh-remote-resolver';
 import { getOutputParser } from '../parsers';
+import { buildExpandedEnv } from '../../shared/pathUtils';
 
 const SIGKILL_DELAY_MS = 5000;
 const MAX_HISTORY_RESPONSE_LENGTH = 10000;
@@ -302,10 +303,7 @@ export async function executeCuePrompt(config: CueExecutionConfig): Promise<CueR
 	onLog('cue', `[CUE] Executing run ${runId}: "${subscription.name}" → ${command} (${event.type})`);
 
 	return new Promise<CueRunResult>((resolve) => {
-		const env = {
-			...process.env,
-			...(spawnEnvVars || {}),
-		};
+		const env = buildExpandedEnv(spawnEnvVars);
 
 		const child = spawn(command, spawnArgs, {
 			cwd: spawnCwd,
