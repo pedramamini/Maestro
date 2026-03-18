@@ -604,8 +604,8 @@ export function useBatchProcessor({
 	/**
 	 * Start a batch processing run for a specific session with multi-document support.
 	 * Note: sessionId and folderPath can belong to different sessions when running
-	 * in a worktree — the parent session owns the Auto Run documents (folderPath)
-	 * while the worktree agent (sessionId) executes the tasks.
+	 * in a worktree. The folderPath is resolved from the target session's own
+	 * autoRunFolderPath (rebased onto its cwd) or falls back to the parent's path.
 	 */
 	const startBatchRun = useCallback(
 		async (sessionId: string, config: BatchRunConfig, folderPath: string) => {

@@ -214,6 +214,52 @@ describe('buildWorktreeSession', () => {
 			});
 			expect(session.autoRunFolderPath).toBeUndefined();
 		});
+
+		it('should treat empty string autoRunFolderPath as undefined', () => {
+			const parent = createMockParentSession({
+				autoRunFolderPath: '',
+			});
+			const session = buildWorktreeSession({
+				parentSession: parent,
+				path: '/worktrees/feature-x',
+				name: 'feature-x',
+				defaultSaveToHistory: true,
+				defaultShowThinking: 'off',
+			});
+			expect(session.autoRunFolderPath).toBeUndefined();
+		});
+
+		it('should rebase when autoRunFolderPath equals parent cwd exactly', () => {
+			const parent = createMockParentSession({
+				cwd: '/projects/main',
+				autoRunFolderPath: '/projects/main',
+			});
+			const session = buildWorktreeSession({
+				parentSession: parent,
+				path: '/worktrees/feature-x',
+				name: 'feature-x',
+				defaultSaveToHistory: true,
+				defaultShowThinking: 'off',
+			});
+			expect(session.autoRunFolderPath).toBe('/worktrees/feature-x');
+		});
+
+		it('should handle case-insensitive matching on Windows-style paths', () => {
+			const parent = createMockParentSession({
+				cwd: 'C:\\Users\\Admin\\Software\\Maestro',
+				autoRunFolderPath: 'c:\\users\\admin\\software\\Maestro\\Auto Run Docs',
+			});
+			const session = buildWorktreeSession({
+				parentSession: parent,
+				path: 'C:\\Users\\Admin\\Software\\Maestro-worktree',
+				name: 'worktree',
+				defaultSaveToHistory: true,
+				defaultShowThinking: 'off',
+			});
+			expect(session.autoRunFolderPath).toBe(
+				'C:\\Users\\Admin\\Software\\Maestro-worktree\\Auto Run Docs'
+			);
+		});
 	});
 
 	it('should create initial AI tab with correct settings', () => {

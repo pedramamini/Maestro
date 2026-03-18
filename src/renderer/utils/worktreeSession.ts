@@ -56,12 +56,17 @@ function resolveWorktreeAutoRunPath(
 	if (!isAbsolute) return parentAutoRunPath;
 
 	// Check if the absolute path is under the parent's cwd
+	// Use case-insensitive comparison for Windows (drive letters, directory names)
 	const normalizedParentCwd = norm(parentCwd);
 	const prefix = normalizedParentCwd.endsWith('/')
 		? normalizedParentCwd
 		: normalizedParentCwd + '/';
 
-	if (normalized === normalizedParentCwd || normalized.startsWith(prefix)) {
+	const normalizedLower = normalized.toLowerCase();
+	const parentCwdLower = normalizedParentCwd.toLowerCase();
+	const prefixLower = prefix.toLowerCase();
+
+	if (normalizedLower === parentCwdLower || normalizedLower.startsWith(prefixLower)) {
 		const relativePart = normalized.slice(normalizedParentCwd.length);
 		const result = norm(worktreeCwd) + relativePart;
 		// Preserve original separator style
