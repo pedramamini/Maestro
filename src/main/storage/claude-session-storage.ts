@@ -209,6 +209,15 @@ async function parseSessionFile(
 	stats: { size: number; mtimeMs: number }
 ): Promise<AgentSessionInfo | null> {
 	try {
+		// Skip files larger than 100MB to avoid RangeError: Invalid string length
+		const MAX_SESSION_FILE_SIZE = 100 * 1024 * 1024;
+		if (stats.size > MAX_SESSION_FILE_SIZE) {
+			logger.warn(`Skipping oversized session file: ${filePath}`, LOG_CONTEXT, {
+				size: stats.size,
+			});
+			return null;
+		}
+
 		const content = await fs.readFile(filePath, 'utf-8');
 		return parseSessionContent(content, sessionId, projectPath, stats);
 	} catch (error) {
