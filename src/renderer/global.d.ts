@@ -399,6 +399,14 @@ interface MaestroAPI {
 			callback: (sessionId: string, groupId: string | null, responseChannel: string) => void
 		) => () => void;
 		sendRemoteMoveSessionToGroupResponse: (responseChannel: string, success: boolean) => void;
+		onRemoteGetGitStatus: (
+			callback: (sessionId: string, responseChannel: string) => void
+		) => () => void;
+		sendRemoteGetGitStatusResponse: (responseChannel: string, result: any) => void;
+		onRemoteGetGitDiff: (
+			callback: (sessionId: string, filePath: string | undefined, responseChannel: string) => void
+		) => () => void;
+		sendRemoteGetGitDiffResponse: (responseChannel: string, result: any) => void;
 		onStderr: (callback: (sessionId: string, data: string) => void) => () => void;
 		onCommandExit: (callback: (sessionId: string, code: number) => void) => () => void;
 		onUsage: (callback: (sessionId: string, usageStats: UsageStats) => void) => () => void;

@@ -86,6 +86,8 @@ import type {
 	CreateSessionCallback,
 	DeleteSessionCallback,
 	RenameSessionCallback,
+	GetGitStatusCallback,
+	GetGitDiffCallback,
 	GroupData,
 } from './types';
 
@@ -399,6 +401,14 @@ export class WebServer {
 		this.callbackRegistry.setRenameSessionCallback(callback);
 	}
 
+	setGetGitStatusCallback(callback: GetGitStatusCallback): void {
+		this.callbackRegistry.setGetGitStatusCallback(callback);
+	}
+
+	setGetGitDiffCallback(callback: GetGitDiffCallback): void {
+		this.callbackRegistry.setGetGitDiffCallback(callback);
+	}
+
 	broadcastGroupsChanged(groups: GroupData[]): void {
 		this.broadcastService.broadcastGroupsChanged(groups);
 	}
@@ -587,6 +597,10 @@ export class WebServer {
 				this.callbackRegistry.deleteSession(sessionId),
 			renameSession: async (sessionId: string, newName: string) =>
 				this.callbackRegistry.renameSession(sessionId, newName),
+			getGitStatus: async (sessionId: string) =>
+				this.callbackRegistry.getGitStatus(sessionId),
+			getGitDiff: async (sessionId: string, filePath?: string) =>
+				this.callbackRegistry.getGitDiff(sessionId, filePath),
 		});
 	}
 

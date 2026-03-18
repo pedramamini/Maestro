@@ -576,6 +576,124 @@ export function useRemoteIntegration(deps: UseRemoteIntegrationDeps): UseRemoteI
 		};
 	}, []);
 
+	// Handle remote get git status from web interface
+	// Uses existing git IPC infrastructure (window.maestro.git.status + window.maestro.git.branch)
+	useEffect(() => {
+		const unsubscribe = window.maestro.process.onRemoteGetGitStatus(
+			async (sessionId: string, responseChannel: string) => {
+				try {
+					// Look up the session's cwd
+					const session = sessionsRef.current.find((s) => s.id === sessionId);
+					if (!session) {
+						window.maestro.process.sendRemoteGetGitStatusResponse(responseChannel, {
+							branch: '',
+							files: [],
+							ahead: 0,
+							behind: 0,
+						});
+						return;
+					}
+
+					const cwd = session.cwd;
+
+					// Run git status --porcelain and git branch in parallel
+					const [statusResult, branchResult] = await Promise.all([
+						window.maestro.git.status(cwd),
+						window.maestro.git.branch(cwd),
+					]);
+
+					// Parse status output
+					const statusLines = (statusResult.stdout || '')
+						.replace(/\s+$/, '')
+						.split('\n')
+						.filter((line: string) => line.length > 0);
+
+					const files = statusLines.map((line: string) => {
+						const status = line.substring(0, 2);
+						const filePath = line.substring(3).split(' -> ')[0];
+						// Staged if index column (first char) is not space or ?
+						const staged = status[0] !== ' ' && status[0] !== '?';
+						return { path: filePath, status: status.trim(), staged };
+					});
+
+					const branch = (branchResult.stdout || '').trim();
+
+					// Get ahead/behind info
+					let ahead = 0;
+					let behind = 0;
+					try {
+						const infoResult = await window.maestro.git.info(cwd);
+						ahead = infoResult.ahead || 0;
+						behind = infoResult.behind || 0;
+					} catch {
+						// ahead/behind not available, that's fine
+					}
+
+					window.maestro.process.sendRemoteGetGitStatusResponse(responseChannel, {
+						branch,
+						files,
+						ahead,
+						behind,
+					});
+				} catch {
+					window.maestro.process.sendRemoteGetGitStatusResponse(responseChannel, {
+						branch: '',
+						files: [],
+						ahead: 0,
+						behind: 0,
+					});
+				}
+			}
+		);
+		return () => {
+			unsubscribe();
+		};
+	}, []);
+
+	// Handle remote get git diff from web interface
+	// Uses existing git IPC infrastructure (window.maestro.git.diff)
+	useEffect(() => {
+		const unsubscribe = window.maestro.process.onRemoteGetGitDiff(
+			async (sessionId: string, filePath: string | undefined, responseChannel: string) => {
+				try {
+					// Look up the session's cwd
+					const session = sessionsRef.current.find((s) => s.id === sessionId);
+					if (!session) {
+						window.maestro.process.sendRemoteGetGitDiffResponse(responseChannel, {
+							diff: '',
+							files: [],
+						});
+						return;
+					}
+
+					const cwd = session.cwd;
+					const diffResult = await window.maestro.git.diff(cwd, filePath);
+					const diff = diffResult.stdout || '';
+
+					// Extract changed file paths from diff output
+					const fileMatches = diff.match(/^diff --git a\/.+ b\/(.+)$/gm) || [];
+					const files = fileMatches.map((line: string) => {
+						const match = line.match(/^diff --git a\/.+ b\/(.+)$/);
+						return match ? match[1] : '';
+					}).filter(Boolean);
+
+					window.maestro.process.sendRemoteGetGitDiffResponse(responseChannel, {
+						diff,
+						files,
+					});
+				} catch {
+					window.maestro.process.sendRemoteGetGitDiffResponse(responseChannel, {
+						diff: '',
+						files: [],
+					});
+				}
+			}
+		);
+		return () => {
+			unsubscribe();
+		};
+	}, []);
+
 	// Handle remote session/group management from web interface
 	// These dispatch CustomEvents for App.tsx to handle via existing session/group management hooks
 	useEffect(() => {

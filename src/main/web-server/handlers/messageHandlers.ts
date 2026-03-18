@@ -32,7 +32,7 @@
 import path from 'path';
 import { WebSocket } from 'ws';
 import { logger } from '../../utils/logger';
-import type { AutoRunDocument, AutoRunState, WebSettings, SettingValue, GroupData } from '../types';
+import type { AutoRunDocument, AutoRunState, WebSettings, SettingValue, GroupData, GitStatusResult, GitDiffResult } from '../types';
 
 // Logger context for all message handler logs
 const LOG_CONTEXT = 'WebServer';
@@ -140,6 +140,8 @@ export interface MessageHandlerCallbacks {
 	createSession: (name: string, toolType: string, cwd: string, groupId?: string) => Promise<{ sessionId: string } | null>;
 	deleteSession: (sessionId: string) => Promise<boolean>;
 	renameSession: (sessionId: string, newName: string) => Promise<boolean>;
+	getGitStatus: (sessionId: string) => Promise<GitStatusResult>;
+	getGitDiff: (sessionId: string, filePath?: string) => Promise<GitDiffResult>;
 }
 
 /**
@@ -312,6 +314,14 @@ export class WebSocketMessageHandler {
 
 			case 'move_session_to_group':
 				this.handleMoveSessionToGroup(client, message);
+				break;
+
+			case 'get_git_status':
+				this.handleGetGitStatus(client, message);
+				break;
+
+			case 'get_git_diff':
+				this.handleGetGitDiff(client, message);
 				break;
 
 			default:
@@ -1576,6 +1586,69 @@ export class WebSocketMessageHandler {
 			})
 			.catch((error) => {
 				this.sendError(client, `Failed to move session to group: ${error.message}`);
+			});
+	}
+
+	/**
+	 * Handle get_git_status message - fetch git status for a session
+	 */
+	private handleGetGitStatus(client: WebClient, message: WebClientMessage): void {
+		const sessionId = message.sessionId as string;
+
+		if (!sessionId) {
+			this.sendError(client, 'Missing sessionId');
+			return;
+		}
+
+		if (!this.callbacks.getGitStatus) {
+			this.sendError(client, 'Git status not configured');
+			return;
+		}
+
+		this.callbacks
+			.getGitStatus(sessionId)
+			.then((status) => {
+				this.send(client, {
+					type: 'git_status',
+					sessionId,
+					status,
+					requestId: message.requestId,
+				});
+			})
+			.catch((error) => {
+				this.sendError(client, `Failed to get git status: ${error.message}`);
+			});
+	}
+
+	/**
+	 * Handle get_git_diff message - fetch git diff for a session
+	 */
+	private handleGetGitDiff(client: WebClient, message: WebClientMessage): void {
+		const sessionId = message.sessionId as string;
+		const filePath = message.filePath as string | undefined;
+
+		if (!sessionId) {
+			this.sendError(client, 'Missing sessionId');
+			return;
+		}
+
+		if (!this.callbacks.getGitDiff) {
+			this.sendError(client, 'Git diff not configured');
+			return;
+		}
+
+		this.callbacks
+			.getGitDiff(sessionId, filePath)
+			.then((diff) => {
+				this.send(client, {
+					type: 'git_diff',
+					sessionId,
+					diff,
+					requestId: message.requestId,
+				});
+			})
+			.catch((error) => {
+				this.sendError(client, `Failed to get git diff: ${error.message}`);
 			});
 	}
 

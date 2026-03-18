@@ -45,6 +45,10 @@ import type {
 	WebSettings,
 	SettingValue,
 	GroupData,
+	GetGitStatusCallback,
+	GetGitDiffCallback,
+	GitStatusResult,
+	GitDiffResult,
 } from '../types';
 
 const LOG_CONTEXT = 'CallbackRegistry';
@@ -88,6 +92,8 @@ export interface WebServerCallbacks {
 	createSession: CreateSessionCallback | null;
 	deleteSession: DeleteSessionCallback | null;
 	renameSession: RenameSessionCallback | null;
+	getGitStatus: GetGitStatusCallback | null;
+	getGitDiff: GetGitDiffCallback | null;
 }
 
 export class CallbackRegistry {
@@ -127,6 +133,8 @@ export class CallbackRegistry {
 		createSession: null,
 		deleteSession: null,
 		renameSession: null,
+		getGitStatus: null,
+		getGitDiff: null,
 	};
 
 	// ============ Getter Methods ============
@@ -326,6 +334,16 @@ export class CallbackRegistry {
 		return this.callbacks.renameSession(sessionId, newName);
 	}
 
+	async getGitStatus(sessionId: string): Promise<GitStatusResult> {
+		if (!this.callbacks.getGitStatus) return { branch: '', files: [], ahead: 0, behind: 0 };
+		return this.callbacks.getGitStatus(sessionId);
+	}
+
+	async getGitDiff(sessionId: string, filePath?: string): Promise<GitDiffResult> {
+		if (!this.callbacks.getGitDiff) return { diff: '', files: [] };
+		return this.callbacks.getGitDiff(sessionId, filePath);
+	}
+
 	// ============ Setter Methods ============
 
 	setGetSessionsCallback(callback: GetSessionsCallback): void {
@@ -472,6 +490,14 @@ export class CallbackRegistry {
 
 	setRenameSessionCallback(callback: RenameSessionCallback): void {
 		this.callbacks.renameSession = callback;
+	}
+
+	setGetGitStatusCallback(callback: GetGitStatusCallback): void {
+		this.callbacks.getGitStatus = callback;
+	}
+
+	setGetGitDiffCallback(callback: GetGitDiffCallback): void {
+		this.callbacks.getGitDiff = callback;
 	}
 
 	// ============ Check Methods ============

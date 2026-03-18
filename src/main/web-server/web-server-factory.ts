@@ -1012,6 +1012,84 @@ export function createWebServerFactory(deps: WebServerFactoryDependencies) {
 			});
 		});
 
+		// Set up callback for web server to get git status
+		// Uses IPC request-response pattern with timeout
+		server.setGetGitStatusCallback(async (sessionId: string) => {
+			const mainWindow = getMainWindow();
+			if (!mainWindow) {
+				logger.warn('mainWindow is null for getGitStatus', 'WebServer');
+				return { branch: '', files: [], ahead: 0, behind: 0 };
+			}
+
+			return new Promise((resolve) => {
+				const responseChannel = `remote:getGitStatus:response:${randomUUID()}`;
+				let resolved = false;
+
+				const handleResponse = (_event: Electron.IpcMainEvent, result: any) => {
+					if (resolved) return;
+					resolved = true;
+					clearTimeout(timeoutId);
+					resolve(result || { branch: '', files: [], ahead: 0, behind: 0 });
+				};
+
+				ipcMain.once(responseChannel, handleResponse);
+				if (!isWebContentsAvailable(mainWindow)) {
+					logger.warn('webContents is not available for getGitStatus', 'WebServer');
+					ipcMain.removeListener(responseChannel, handleResponse);
+					resolve({ branch: '', files: [], ahead: 0, behind: 0 });
+					return;
+				}
+				mainWindow.webContents.send('remote:getGitStatus', sessionId, responseChannel);
+
+				const timeoutId = setTimeout(() => {
+					if (resolved) return;
+					resolved = true;
+					ipcMain.removeListener(responseChannel, handleResponse);
+					logger.warn(`getGitStatus callback timed out for session ${sessionId}`, 'WebServer');
+					resolve({ branch: '', files: [], ahead: 0, behind: 0 });
+				}, 10000);
+			});
+		});
+
+		// Set up callback for web server to get git diff
+		// Uses IPC request-response pattern with timeout
+		server.setGetGitDiffCallback(async (sessionId: string, filePath?: string) => {
+			const mainWindow = getMainWindow();
+			if (!mainWindow) {
+				logger.warn('mainWindow is null for getGitDiff', 'WebServer');
+				return { diff: '', files: [] };
+			}
+
+			return new Promise((resolve) => {
+				const responseChannel = `remote:getGitDiff:response:${randomUUID()}`;
+				let resolved = false;
+
+				const handleResponse = (_event: Electron.IpcMainEvent, result: any) => {
+					if (resolved) return;
+					resolved = true;
+					clearTimeout(timeoutId);
+					resolve(result || { diff: '', files: [] });
+				};
+
+				ipcMain.once(responseChannel, handleResponse);
+				if (!isWebContentsAvailable(mainWindow)) {
+					logger.warn('webContents is not available for getGitDiff', 'WebServer');
+					ipcMain.removeListener(responseChannel, handleResponse);
+					resolve({ diff: '', files: [] });
+					return;
+				}
+				mainWindow.webContents.send('remote:getGitDiff', sessionId, filePath, responseChannel);
+
+				const timeoutId = setTimeout(() => {
+					if (resolved) return;
+					resolved = true;
+					ipcMain.removeListener(responseChannel, handleResponse);
+					logger.warn(`getGitDiff callback timed out for session ${sessionId}`, 'WebServer');
+					resolve({ diff: '', files: [] });
+				}, 10000);
+			});
+		});
+
 		// Set up callback for web server to stop Auto Run
 		// Fire-and-forget pattern (like interrupt)
 		server.setStopAutoRunCallback(async (sessionId: string) => {

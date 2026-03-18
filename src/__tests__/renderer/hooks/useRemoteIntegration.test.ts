@@ -180,6 +180,14 @@ describe('useRemoteIntegration', () => {
 			return () => {};
 		}),
 		sendRemoteMoveSessionToGroupResponse: vi.fn(),
+		onRemoteGetGitStatus: vi.fn().mockImplementation(() => {
+			return () => {};
+		}),
+		sendRemoteGetGitStatusResponse: vi.fn(),
+		onRemoteGetGitDiff: vi.fn().mockImplementation(() => {
+			return () => {};
+		}),
+		sendRemoteGetGitDiffResponse: vi.fn(),
 	};
 
 	const mockLive = {
