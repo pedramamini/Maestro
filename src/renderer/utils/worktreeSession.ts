@@ -44,7 +44,8 @@ export function isPathUnderRoot(filePath: string, root: string): boolean {
 	const normalizedFile = normSep(filePath);
 	const normalizedRoot = normSep(root);
 	const prefix = normalizedRoot.endsWith('/') ? normalizedRoot : normalizedRoot + '/';
-	const isWin = /^[A-Za-z]:/.test(filePath);
+	// Either argument having a drive letter means we're on Windows
+	const isWin = /^[A-Za-z]:/.test(filePath) || /^[A-Za-z]:/.test(root);
 	if (isWin) {
 		return (
 			normalizedFile.toLowerCase() === normalizedRoot.toLowerCase() ||

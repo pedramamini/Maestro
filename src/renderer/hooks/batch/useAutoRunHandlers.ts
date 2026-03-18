@@ -431,6 +431,11 @@ export function useAutoRunHandlers(
 									);
 								} else {
 									copyFailed = true;
+									window.maestro.logger.log(
+										'warn',
+										`Failed to read doc "${doc.filename}" from source folder`,
+										'AutoRunHandlers'
+									);
 								}
 							} catch (err) {
 								copyFailed = true;
