@@ -4,6 +4,7 @@ on:
   pull_request:
     branches:
       - main
+      - rc
       - '*-RC'
   push:
     branches: [main]
