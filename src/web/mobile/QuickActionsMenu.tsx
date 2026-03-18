@@ -32,6 +32,7 @@ const CATEGORY_ORDER = [
 	'Agent',
 	'Auto Run',
 	'Group Chat',
+	'Cue',
 	'Settings',
 	'View',
 ];

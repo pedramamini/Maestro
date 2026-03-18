@@ -50,7 +50,9 @@ import { AgentCreationSheet } from './AgentCreationSheet';
 import { GroupChatPanel } from './GroupChatPanel';
 import { GroupChatSetupSheet } from './GroupChatSetupSheet';
 import { ContextManagementSheet } from './ContextManagementSheet';
+import { CuePanel } from './CuePanel';
 import { useGroupChat } from '../hooks/useGroupChat';
+import { useCue } from '../hooks/useCue';
 import { useAutoRun, type LaunchConfig } from '../hooks/useAutoRun';
 import { useSettings, type WebSettings } from '../hooks/useSettings';
 import { useAgentManagement } from '../hooks/useAgentManagement';
@@ -82,12 +84,14 @@ interface MobileHeaderProps {
 	onAutoRunTap?: () => void;
 	onGroupChatTap?: () => void;
 	groupChatCount?: number;
+	onCueTap?: () => void;
+	hasRunningCue?: boolean;
 	onNotificationTap?: () => void;
 	onSettingsTap?: () => void;
 	notificationCount?: number;
 }
 
-function MobileHeader({ activeSession, autoRunState, onAutoRunTap, onGroupChatTap, groupChatCount = 0, onNotificationTap, onSettingsTap, notificationCount = 0 }: MobileHeaderProps) {
+function MobileHeader({ activeSession, autoRunState, onAutoRunTap, onGroupChatTap, groupChatCount = 0, onCueTap, hasRunningCue = false, onNotificationTap, onSettingsTap, notificationCount = 0 }: MobileHeaderProps) {
 	const colors = useThemeColors();
 	const { isSession, goToDashboard } = useMaestroMode();
 
@@ -402,6 +406,58 @@ function MobileHeader({ activeSession, autoRunState, onAutoRunTap, onGroupChatTa
 						>
 							{groupChatCount}
 						</span>
+					)}
+				</button>
+
+				{/* Cue automation button */}
+				<button
+					onClick={onCueTap}
+					style={{
+						width: '36px',
+						height: '36px',
+						display: 'flex',
+						alignItems: 'center',
+						justifyContent: 'center',
+						borderRadius: '8px',
+						backgroundColor: hasRunningCue ? `${colors.accent}20` : 'transparent',
+						border: hasRunningCue ? `1px solid ${colors.accent}` : `1px solid ${colors.border}`,
+						color: hasRunningCue ? colors.accent : colors.textDim,
+						cursor: 'pointer',
+						touchAction: 'manipulation',
+						WebkitTapHighlightColor: 'transparent',
+						flexShrink: 0,
+						position: 'relative',
+					}}
+					aria-label="Maestro Cue"
+					title="Maestro Cue"
+				>
+					{/* Lightning bolt icon */}
+					<svg
+						width="14"
+						height="14"
+						viewBox="0 0 24 24"
+						fill={hasRunningCue ? 'currentColor' : 'none'}
+						stroke="currentColor"
+						strokeWidth="2"
+						strokeLinecap="round"
+						strokeLinejoin="round"
+					>
+						<polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
+					</svg>
+					{/* Activity dot when running */}
+					{hasRunningCue && (
+						<span
+							style={{
+								position: 'absolute',
+								top: '-2px',
+								right: '-2px',
+								width: '8px',
+								height: '8px',
+								borderRadius: '50%',
+								backgroundColor: colors.success,
+								animation: 'pulse 1.5s ease-in-out infinite',
+							}}
+						/>
 					)}
 				</button>
 
@@ -724,6 +780,9 @@ export default function MobileApp() {
 
 	// Context management sheet state
 	const [showContextManagement, setShowContextManagement] = useState(false);
+
+	// Cue panel state
+	const [showCuePanel, setShowCuePanel] = useState(false);
 
 	// Git diff viewer state
 	const [gitDiffFile, setGitDiffFile] = useState<string | null>(null);
@@ -1115,6 +1174,9 @@ export default function MobileApp() {
 	// Git status hook — uses WebSocket for git status/diff
 	const gitStatus = useGitStatus(sendRequest, isActuallyConnected, activeSessionId || undefined);
 
+	// Cue automation hook — uses WebSocket for Cue subscription/activity management
+	const cue = useCue(sendRequest, send, isActuallyConnected);
+
 	// Keep settings changed ref in sync
 	useEffect(() => {
 		settingsChangedRef.current = settingsHook.handleSettingsChanged;
@@ -1264,6 +1326,26 @@ export default function MobileApp() {
 			await groupChat.loadChatState(activeGroupChatId);
 		}
 	}, [activeGroupChatId, groupChat]);
+
+	// Cue panel handlers
+	const hasRunningCue = useMemo(
+		() => cue.activity.some((entry) => entry.status === 'running'),
+		[cue.activity],
+	);
+
+	const handleCueTap = useCallback(() => {
+		setShowCuePanel(true);
+		triggerHaptic(HAPTIC_PATTERNS.tap);
+	}, []);
+
+	const handleCloseCuePanel = useCallback(() => {
+		setShowCuePanel(false);
+	}, []);
+
+	const handleCueRefresh = useCallback(() => {
+		cue.loadSubscriptions();
+		cue.loadActivity();
+	}, [cue]);
 
 	// Handle opening the right drawer on a specific tab
 	const handleOpenRightDrawer = useCallback((tab: RightDrawerTab = 'files') => {
@@ -1636,6 +1718,15 @@ export default function MobileApp() {
 			action: () => setShowGroupChatList(true),
 		});
 
+		// --- Cue Automation ---
+		acts.push({
+			id: 'cue-dashboard',
+			label: 'Maestro Cue',
+			category: 'Cue',
+			icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>,
+			action: () => setShowCuePanel(true),
+		});
+
 		// --- Settings ---
 		acts.push({
 			id: 'settings-open',
@@ -1899,6 +1990,8 @@ export default function MobileApp() {
 				onAutoRunTap={handleOpenAutoRunPanel}
 				onGroupChatTap={handleGroupChatTap}
 				groupChatCount={activeGroupChats.length}
+				onCueTap={handleCueTap}
+				hasRunningCue={hasRunningCue}
 				onNotificationTap={handleOpenNotificationSettings}
 				onSettingsTap={handleOpenSettingsPanel}
 				notificationCount={notificationCount}
@@ -2079,6 +2172,18 @@ export default function MobileApp() {
 					onSendMessage={handleGroupChatSendMessage}
 					onStop={handleGroupChatStop}
 					onBack={handleGroupChatBack}
+				/>
+			)}
+
+			{/* Cue automation panel — full-screen overlay */}
+			{showCuePanel && (
+				<CuePanel
+					subscriptions={cue.subscriptions}
+					activity={cue.activity}
+					isLoading={cue.isLoading}
+					onToggleSubscription={cue.toggleSubscription}
+					onRefresh={handleCueRefresh}
+					onClose={handleCloseCuePanel}
 				/>
 			)}
 

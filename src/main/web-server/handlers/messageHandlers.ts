@@ -32,7 +32,7 @@
 import path from 'path';
 import { WebSocket } from 'ws';
 import { logger } from '../../utils/logger';
-import type { AutoRunDocument, AutoRunState, WebSettings, SettingValue, GroupData, GitStatusResult, GitDiffResult, GroupChatState } from '../types';
+import type { AutoRunDocument, AutoRunState, WebSettings, SettingValue, GroupData, GitStatusResult, GitDiffResult, GroupChatState, CueSubscriptionInfo, CueActivityEntry } from '../types';
 
 // Logger context for all message handler logs
 const LOG_CONTEXT = 'WebServer';
@@ -150,6 +150,9 @@ export interface MessageHandlerCallbacks {
 	mergeContext: (sourceSessionId: string, targetSessionId: string) => Promise<boolean>;
 	transferContext: (sourceSessionId: string, targetSessionId: string) => Promise<boolean>;
 	summarizeContext: (sessionId: string) => Promise<boolean>;
+	getCueSubscriptions: (sessionId?: string) => Promise<CueSubscriptionInfo[]>;
+	toggleCueSubscription: (subscriptionId: string, enabled: boolean) => Promise<boolean>;
+	getCueActivity: (sessionId?: string, limit?: number) => Promise<CueActivityEntry[]>;
 }
 
 /**
@@ -1974,6 +1977,11 @@ export class WebSocketMessageHandler {
 	private handleGetCueSubscriptions(client: WebClient, message: WebClientMessage): void {
 		const sessionId = message.sessionId as string | undefined;
 
+		if (!this.callbacks.getCueSubscriptions) {
+			this.sendError(client, 'Cue subscriptions not available');
+			return;
+		}
+
 		this.callbacks
 			.getCueSubscriptions(sessionId)
 			.then((subscriptions) => {
@@ -2006,6 +2014,11 @@ export class WebSocketMessageHandler {
 			return;
 		}
 
+		if (!this.callbacks.toggleCueSubscription) {
+			this.sendError(client, 'Cue toggle not available');
+			return;
+		}
+
 		this.callbacks
 			.toggleCueSubscription(subscriptionId, enabled)
 			.then((success) => {
@@ -2029,6 +2042,11 @@ export class WebSocketMessageHandler {
 	private handleGetCueActivity(client: WebClient, message: WebClientMessage): void {
 		const sessionId = message.sessionId as string | undefined;
 		const limit = (message.limit as number) ?? 50;
+
+		if (!this.callbacks.getCueActivity) {
+			this.sendError(client, 'Cue activity not available');
+			return;
+		}
 
 		this.callbacks
 			.getCueActivity(sessionId, limit)
