@@ -1095,7 +1095,7 @@ describe('agents IPC handlers', () => {
 			expect(execFileNoThrow).not.toHaveBeenCalled();
 		});
 
-		it('should return built-in commands for opencode', async () => {
+		it('should return empty array when no custom commands exist for opencode', async () => {
 			const mockAgent = {
 				id: 'opencode',
 				available: true,
@@ -1112,13 +1112,12 @@ describe('agents IPC handlers', () => {
 			const handler = handlers.get('agents:discoverSlashCommands');
 			const result = await handler!({} as any, 'opencode', '/test');
 
-			expect(result).toEqual(
-				expect.arrayContaining(['init', 'review', 'undo', 'redo', 'share', 'help', 'models'])
-			);
+			// No built-in commands — only custom .md commands are discoverable
+			expect(result).toEqual([]);
 			expect(execFileNoThrow).not.toHaveBeenCalled();
 		});
 
-		it('should discover opencode commands from project .opencode/commands/*.md', async () => {
+		it('should discover opencode commands from project .opencode/commands/*.md with prompt content', async () => {
 			const mockAgent = {
 				id: 'opencode',
 				available: true,
@@ -1135,17 +1134,86 @@ describe('agents IPC handlers', () => {
 				}
 				throw enoent;
 			});
-			vi.mocked(fs.promises.readFile).mockRejectedValue(enoent);
+			vi.mocked(fs.promises.readFile).mockImplementation(async (filePath) => {
+				const p = String(filePath);
+				if (p.endsWith('deploy.md')) return 'Deploy the application to production';
+				if (p.endsWith('lint.md')) return 'Run linting on the codebase';
+				throw enoent;
+			});
 
 			const handler = handlers.get('agents:discoverSlashCommands');
 			const result = await handler!({} as any, 'opencode', '/test');
 
-			expect(result).toContain('deploy');
-			expect(result).toContain('lint');
+			const names = result.map((c: any) => c.name);
+			expect(names).toContain('deploy');
+			expect(names).toContain('lint');
 			// Non-.md files should be ignored
-			expect(result).not.toContain('README.txt');
-			// Built-ins should still be present
-			expect(result).toContain('init');
+			expect(names).not.toContain('README.txt');
+			// Custom commands should have prompt content
+			const deployCmd = result.find((c: any) => c.name === 'deploy');
+			expect(deployCmd.prompt).toBe('Deploy the application to production');
+		});
+
+		it('should discover opencode commands from ~/.opencode/commands/ (home directory)', async () => {
+			const mockAgent = {
+				id: 'opencode',
+				available: true,
+				path: '/usr/bin/opencode',
+			};
+
+			mockAgentDetector.getAgent.mockResolvedValue(mockAgent);
+
+			const enoent = Object.assign(new Error('ENOENT'), { code: 'ENOENT' });
+			const homeDir = require('os').homedir();
+			vi.mocked(fs.promises.readdir).mockImplementation(async (dir) => {
+				if (String(dir) === `${homeDir}/.opencode/commands`) {
+					return ['octest.md'] as any;
+				}
+				throw enoent;
+			});
+			vi.mocked(fs.promises.readFile).mockImplementation(async (filePath) => {
+				const p = String(filePath);
+				if (p.endsWith('octest.md')) return 'Report your status.';
+				throw enoent;
+			});
+
+			const handler = handlers.get('agents:discoverSlashCommands');
+			const result = await handler!({} as any, 'opencode', '/test');
+
+			const names = result.map((c: any) => c.name);
+			expect(names).toContain('octest');
+			const octest = result.find((c: any) => c.name === 'octest');
+			expect(octest.prompt).toBe('Report your status.');
+		});
+
+		it('should strip YAML frontmatter from command .md files', async () => {
+			const mockAgent = {
+				id: 'opencode',
+				available: true,
+				path: '/usr/bin/opencode',
+			};
+
+			mockAgentDetector.getAgent.mockResolvedValue(mockAgent);
+
+			const enoent = Object.assign(new Error('ENOENT'), { code: 'ENOENT' });
+			vi.mocked(fs.promises.readdir).mockImplementation(async (dir) => {
+				if (String(dir).includes('/test/.opencode/commands')) {
+					return ['deploy.md'] as any;
+				}
+				throw enoent;
+			});
+			vi.mocked(fs.promises.readFile).mockImplementation(async (filePath) => {
+				const p = String(filePath);
+				if (p.endsWith('deploy.md'))
+					return '---\ndescription: Deploy cmd\nagent: build\n---\n\nDeploy the app.';
+				throw enoent;
+			});
+
+			const handler = handlers.get('agents:discoverSlashCommands');
+			const result = await handler!({} as any, 'opencode', '/test');
+
+			const deployCmd = result.find((c: any) => c.name === 'deploy');
+			expect(deployCmd.prompt).toBe('Deploy the app.');
 		});
 
 		it('should discover opencode commands from opencode.json config', async () => {
@@ -1161,7 +1229,7 @@ describe('agents IPC handlers', () => {
 			vi.mocked(fs.promises.readdir).mockRejectedValue(enoent);
 			vi.mocked(fs.promises.readFile).mockImplementation(async (filePath) => {
 				if (String(filePath).includes('/test/opencode.json')) {
-					return JSON.stringify({ command: { 'my-cmd': { description: 'test' } } });
+					return JSON.stringify({ command: { 'my-cmd': { prompt: 'Do the thing' } } });
 				}
 				throw enoent;
 			});
@@ -1169,8 +1237,11 @@ describe('agents IPC handlers', () => {
 			const handler = handlers.get('agents:discoverSlashCommands');
 			const result = await handler!({} as any, 'opencode', '/test');
 
-			expect(result).toContain('my-cmd');
-			expect(result).toContain('init');
+			const names = result.map((c: any) => c.name);
+			expect(names).toContain('my-cmd');
+			// Config commands should have prompt content
+			const myCmd = result.find((c: any) => c.name === 'my-cmd');
+			expect(myCmd.prompt).toBe('Do the thing');
 		});
 
 		it('should ignore array values in opencode.json command property', async () => {
@@ -1194,14 +1265,11 @@ describe('agents IPC handlers', () => {
 			const handler = handlers.get('agents:discoverSlashCommands');
 			const result = await handler!({} as any, 'opencode', '/test');
 
-			// Should only have built-in commands (array config ignored)
-			expect(result).toEqual(
-				expect.arrayContaining(['init', 'review', 'undo', 'redo', 'share', 'help', 'models'])
-			);
-			expect(result).not.toContain('not');
+			// Array config ignored, no built-ins — result should be empty
+			expect(result).toEqual([]);
 		});
 
-		it('should gracefully handle malformed opencode.json and still return built-in commands', async () => {
+		it('should gracefully handle malformed opencode.json and return empty array', async () => {
 			const mockAgent = {
 				id: 'opencode',
 				available: true,
@@ -1222,10 +1290,8 @@ describe('agents IPC handlers', () => {
 			const handler = handlers.get('agents:discoverSlashCommands');
 			const result = await handler!({} as any, 'opencode', '/test');
 
-			// Malformed JSON should be skipped gracefully — built-ins still present
-			expect(result).toEqual(
-				expect.arrayContaining(['init', 'review', 'undo', 'redo', 'share', 'help', 'models'])
-			);
+			// Malformed JSON skipped gracefully, no built-ins — empty result
+			expect(result).toEqual([]);
 		});
 
 		it('should rethrow non-ENOENT errors for opencode discovery', async () => {

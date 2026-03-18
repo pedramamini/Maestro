@@ -171,14 +171,14 @@ export function createAgentsApi() {
 			ipcRenderer.invoke('agents:getModels', agentId, forceRefresh, sshRemoteId),
 
 		/**
-		 * Discover available slash commands for an agent by spawning it briefly
-		 * Returns array of command names (e.g., ['compact', 'help', 'my-custom-command'])
+		 * Discover available slash commands for an agent.
+		 * Returns command names (strings) for Claude Code, or objects with name+prompt for OpenCode.
 		 */
 		discoverSlashCommands: (
 			agentId: string,
 			cwd: string,
 			customPath?: string
-		): Promise<string[] | null> =>
+		): Promise<(string | { name: string; prompt?: string })[] | null> =>
 			ipcRenderer.invoke('agents:discoverSlashCommands', agentId, cwd, customPath),
 	};
 }

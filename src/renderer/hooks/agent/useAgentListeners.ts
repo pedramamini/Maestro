@@ -983,11 +983,19 @@ export function useAgentListeners(deps: UseAgentListenersDeps): void {
 				setSessions((prev) =>
 					prev.map((s) => {
 						if (s.id !== actualSessionId) return s;
-						const commands = slashCommands.map((cmd) => ({
+						const newCommands = slashCommands.map((cmd) => ({
 							command: cmd.startsWith('/') ? cmd : `/${cmd}`,
 							description: getSlashCommandDescription(cmd, s.toolType),
 						}));
-						return { ...s, agentCommands: commands };
+						// Merge with existing commands, preserving prompt data from
+						// disk-discovered commands (e.g., OpenCode .md files)
+						const existingByName = new Map((s.agentCommands || []).map((c) => [c.command, c]));
+						for (const cmd of newCommands) {
+							if (!existingByName.has(cmd.command)) {
+								existingByName.set(cmd.command, cmd);
+							}
+						}
+						return { ...s, agentCommands: Array.from(existingByName.values()) };
 					})
 				);
 			}

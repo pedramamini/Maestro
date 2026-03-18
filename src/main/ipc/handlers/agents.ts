@@ -29,39 +29,63 @@ const handlerOpts = (
 	operation,
 });
 
-// OpenCode built-in slash commands (always available)
-const OPENCODE_BUILTIN_COMMANDS = ['init', 'review', 'undo', 'redo', 'share', 'help', 'models'];
-
 /**
  * Discover OpenCode slash commands by reading from disk.
  *
- * OpenCode commands come from three sources:
- * 1. Built-in commands (init, review, undo, redo, share, help, models)
- * 2. Project-local custom commands: .opencode/commands/*.md
- * 3. Global custom commands: $XDG_CONFIG_HOME/opencode/commands/*.md
- * 4. Config-based commands: opencode.json "command" property
+ * OpenCode commands come from these sources (checked in priority order):
+ * 1. Project-local custom commands: .opencode/commands/*.md
+ * 2. User-global custom commands: ~/.opencode/commands/*.md
+ * 3. XDG custom commands: $XDG_CONFIG_HOME/opencode/commands/*.md
+ * 4. Config-based commands: opencode.json "command" property (project, home, XDG)
+ *
+ * Built-in commands (init, review, undo, redo, share, help, models) are excluded
+ * because they only work in OpenCode's interactive TUI mode — they have no prompt
+ * .md file and cannot be executed via batch mode (`opencode run`).
  *
  * Unlike Claude Code (which emits commands via init event), OpenCode commands
  * are statically defined on disk and can be discovered without spawning the agent.
  */
-async function discoverOpenCodeSlashCommands(cwd: string): Promise<string[]> {
-	const commands = new Set<string>(OPENCODE_BUILTIN_COMMANDS);
+interface DiscoveredCommand {
+	name: string;
+	prompt?: string; // .md file content for custom commands; absent for built-ins
+}
+
+async function discoverOpenCodeSlashCommands(cwd: string): Promise<DiscoveredCommand[]> {
+	const commands = new Map<string, DiscoveredCommand>();
 	const globalConfigBase = process.env.XDG_CONFIG_HOME || path.join(os.homedir(), '.config');
 
-	// Helper: read .md filenames from a commands directory
+	// Strip YAML frontmatter (---\n...\n---) from command file content,
+	// returning only the body text that serves as the prompt.
+	const stripFrontmatter = (content: string): string => {
+		const trimmed = content.trimStart();
+		if (!trimmed.startsWith('---')) return content;
+		const endIndex = trimmed.indexOf('\n---', 3);
+		if (endIndex === -1) return content;
+		return trimmed.slice(endIndex + 4).trim();
+	};
+
+	// Helper: read .md files from a commands directory (name + content)
 	const addCommandsFromDir = async (dir: string) => {
+		let files: string[];
 		try {
-			const files = await fs.promises.readdir(dir);
-			for (const file of files) {
-				if (file.endsWith('.md')) {
-					commands.add(file.replace(/\.md$/, ''));
-				}
-			}
+			files = await fs.promises.readdir(dir);
 		} catch (error: any) {
 			if (error?.code === 'ENOENT') {
 				logger.debug(`OpenCode commands directory not found: ${dir}`, LOG_CONTEXT);
-			} else {
-				throw error;
+				return;
+			}
+			throw error;
+		}
+		for (const file of files) {
+			if (!file.endsWith('.md')) continue;
+			const name = file.replace(/\.md$/, '');
+			if (commands.has(name)) continue; // project-local wins over global
+			try {
+				const raw = await fs.promises.readFile(path.join(dir, file), 'utf-8');
+				const prompt = stripFrontmatter(raw);
+				commands.set(name, { name, prompt: prompt || undefined });
+			} catch (error: any) {
+				if (error?.code !== 'ENOENT') throw error;
 			}
 		}
 	};
@@ -86,21 +110,33 @@ async function discoverOpenCodeSlashCommands(cwd: string): Promise<string[]> {
 			return;
 		}
 		if (config.command && typeof config.command === 'object' && !Array.isArray(config.command)) {
-			for (const name of Object.keys(config.command)) {
-				commands.add(name);
+			for (const [name, value] of Object.entries(config.command)) {
+				if (commands.has(name)) continue;
+				const prompt =
+					typeof value === 'string'
+						? value
+						: typeof (value as any)?.prompt === 'string'
+							? (value as any).prompt
+							: undefined;
+				commands.set(name, { name, prompt });
 			}
 		}
 	};
 
-	// Read all four sources concurrently
-	await Promise.all([
-		addCommandsFromDir(path.join(cwd, '.opencode', 'commands')),
-		addCommandsFromDir(path.join(globalConfigBase, 'opencode', 'commands')),
-		addCommandsFromConfig(path.join(cwd, 'opencode.json')),
-		addCommandsFromConfig(path.join(globalConfigBase, 'opencode', 'opencode.json')),
-	]);
+	// OpenCode home directory (e.g., ~/.opencode/) — used for global commands and config
+	const opencodeHome = path.join(os.homedir(), '.opencode');
 
-	const commandList = Array.from(commands);
+	// Project-local directories take priority (read first), then global locations
+	await addCommandsFromDir(path.join(cwd, '.opencode', 'commands'));
+	await addCommandsFromDir(path.join(opencodeHome, 'commands'));
+	await addCommandsFromDir(path.join(globalConfigBase, 'opencode', 'commands'));
+
+	// Config files (project-local first, then home, then XDG)
+	await addCommandsFromConfig(path.join(cwd, 'opencode.json'));
+	await addCommandsFromConfig(path.join(opencodeHome, 'opencode.json'));
+	await addCommandsFromConfig(path.join(globalConfigBase, 'opencode', 'opencode.json'));
+
+	const commandList = Array.from(commands.values());
 	logger.info(`Discovered ${commandList.length} OpenCode slash commands`, LOG_CONTEXT);
 	return commandList;
 }
