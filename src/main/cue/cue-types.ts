@@ -35,6 +35,23 @@ export type CueEventType =
 	| 'github.issue'
 	| 'task.pending';
 
+/** All valid event type values (used for validation) */
+export const CUE_EVENT_TYPES: CueEventType[] = [
+	'time.heartbeat',
+	'time.scheduled',
+	'file.changed',
+	'agent.completed',
+	'github.pull_request',
+	'github.issue',
+	'task.pending',
+];
+
+/** Valid GitHub state filters for polling triggers */
+export type CueGitHubState = 'open' | 'closed' | 'merged' | 'all';
+
+/** All valid GitHub state values */
+export const CUE_GITHUB_STATES: CueGitHubState[] = ['open', 'closed', 'merged', 'all'];
+
 /** A Cue subscription defines a trigger-prompt pairing */
 export interface CueSubscription {
 	name: string;
@@ -53,6 +70,8 @@ export interface CueSubscription {
 	filter?: Record<string, string | number | boolean>;
 	repo?: string;
 	poll_minutes?: number;
+	/** GitHub state filter: "open" (default), "closed", "merged" (PRs only), or "all" */
+	gh_state?: CueGitHubState;
 	/** Session ID of the agent that owns this subscription. When set, only that agent activates it. */
 	agent_id?: string;
 	/** Human-readable label for the trigger (e.g. "Morning Check"). Editor metadata, ignored by engine. */
@@ -130,6 +149,8 @@ export interface AgentCompletionData {
 	durationMs?: number;
 	stdout?: string;
 	triggeredBy?: string;
+	/** Tracks how many chained hops have occurred to prevent infinite loops */
+	chainDepth?: number;
 }
 
 /** Session data with subscriptions for the Cue Graph visualization */

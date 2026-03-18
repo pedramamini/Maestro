@@ -39,12 +39,16 @@ interface NodeConfigPanelProps {
 	selectedNode: PipelineNode | null;
 	pipelines: CuePipeline[];
 	hasOutgoingEdge?: boolean;
+	/** Whether the selected agent has incoming edges from other agents (not triggers) */
+	hasIncomingAgentEdges?: boolean;
 	/** Incoming trigger edges for the selected agent node (for per-edge prompts) */
 	incomingTriggerEdges?: IncomingTriggerEdgeInfo[];
 	onUpdateNode: (nodeId: string, data: Partial<TriggerNodeData | AgentNodeData>) => void;
 	onUpdateEdgePrompt?: (edgeId: string, prompt: string) => void;
 	onDeleteNode: (nodeId: string) => void;
 	onSwitchToAgent?: (sessionId: string) => void;
+	triggerDrawerOpen?: boolean;
+	agentDrawerOpen?: boolean;
 }
 
 const EVENT_ICONS: Record<CueEventType, typeof Clock> = {
@@ -386,7 +390,7 @@ function EdgePromptRow({
 						fontFamily: 'inherit',
 						lineHeight: 1.4,
 						marginTop: 4,
-						...(expanded ? { flex: 1, minHeight: 0 } : {}),
+						...(expanded ? { flex: 1, minHeight: 0 } : { minHeight: 56 }),
 					}}
 				/>
 			</label>
@@ -401,6 +405,7 @@ function AgentConfig({
 	node,
 	pipelines,
 	hasOutgoingEdge,
+	hasIncomingAgentEdges,
 	incomingTriggerEdges,
 	onUpdateNode,
 	onUpdateEdgePrompt,
@@ -410,6 +415,7 @@ function AgentConfig({
 	node: PipelineNode;
 	pipelines: CuePipeline[];
 	hasOutgoingEdge?: boolean;
+	hasIncomingAgentEdges?: boolean;
 	incomingTriggerEdges?: IncomingTriggerEdgeInfo[];
 	onUpdateNode: NodeConfigPanelProps['onUpdateNode'];
 	onUpdateEdgePrompt?: (edgeId: string, prompt: string) => void;
@@ -508,16 +514,52 @@ function AgentConfig({
 								value={localInputPrompt}
 								onChange={handleInputPromptChange}
 								rows={expanded ? undefined : 3}
-								placeholder="Prompt sent when this agent receives data from the pipeline..."
+								placeholder={
+									hasIncomingAgentEdges && data.includeUpstreamOutput !== false
+										? 'Instructions for this agent. Upstream output is auto-included via {{CUE_SOURCE_OUTPUT}}.'
+										: hasIncomingAgentEdges
+											? 'Instructions for this agent. Use {{CUE_SOURCE_OUTPUT}} to include upstream output.'
+											: 'Prompt sent when this agent receives data from the pipeline...'
+								}
 								style={{
 									...inputStyle,
 									resize: 'vertical',
 									fontFamily: 'inherit',
 									lineHeight: 1.4,
-									...(expanded ? { flex: 1, minHeight: 0 } : {}),
+									...(expanded ? { flex: 1, minHeight: 0 } : { minHeight: 72 }),
 								}}
 							/>
 						</label>
+						{hasIncomingAgentEdges && (
+							<>
+								<label
+									style={{
+										display: 'flex',
+										alignItems: 'center',
+										gap: 6,
+										fontSize: 11,
+										color: '#9ca3af',
+										cursor: 'pointer',
+										marginTop: 2,
+									}}
+								>
+									<input
+										type="checkbox"
+										checked={data.includeUpstreamOutput !== false}
+										onChange={(e) =>
+											onUpdateNode(node.id, {
+												includeUpstreamOutput: e.target.checked,
+											} as Partial<AgentNodeData>)
+										}
+										style={{ accentColor: '#06b6d4' }}
+									/>
+									Auto-include upstream output
+								</label>
+								<div style={{ color: '#6b7280', fontSize: 10, marginTop: 2 }}>
+									Use {'{{CUE_SOURCE_OUTPUT}}'} in your prompt to control placement.
+								</div>
+							</>
+						)}
 						<div style={{ color: '#6b7280', fontSize: 10, textAlign: 'right', flexShrink: 0 }}>
 							{localInputPrompt.length} chars
 						</div>
@@ -562,7 +604,7 @@ function AgentConfig({
 								fontFamily: 'inherit',
 								lineHeight: 1.4,
 								cursor: outputDisabled ? 'not-allowed' : undefined,
-								...(expanded ? { flex: 1, minHeight: 0 } : {}),
+								...(expanded ? { flex: 1, minHeight: 0 } : { minHeight: 72 }),
 							}}
 						/>
 					</label>
@@ -633,11 +675,14 @@ export function NodeConfigPanel({
 	selectedNode,
 	pipelines,
 	hasOutgoingEdge,
+	hasIncomingAgentEdges,
 	incomingTriggerEdges,
 	onUpdateNode,
 	onUpdateEdgePrompt,
 	onDeleteNode,
 	onSwitchToAgent,
+	triggerDrawerOpen,
+	agentDrawerOpen,
 }: NodeConfigPanelProps) {
 	const [expanded, setExpanded] = useState(false);
 	const isVisible = selectedNode !== null;
@@ -651,14 +696,16 @@ export function NodeConfigPanel({
 	const Icon = triggerData ? (EVENT_ICONS[triggerData.eventType] ?? Zap) : null;
 	const ExpandIcon = expanded ? ChevronsDown : ChevronsUp;
 
+	const collapsedHeight = isTrigger ? 'auto' : 240;
+
 	return (
 		<div
 			style={{
 				position: 'absolute',
 				bottom: 0,
-				left: 220,
-				right: 240,
-				height: expanded ? '80%' : 200,
+				left: triggerDrawerOpen ? 220 : 0,
+				right: agentDrawerOpen ? 240 : 0,
+				height: expanded ? '80%' : collapsedHeight,
 				backgroundColor: '#1a1a2e',
 				borderTop: '1px solid #333',
 				borderLeft: '1px solid #333',
@@ -669,7 +716,7 @@ export function NodeConfigPanel({
 				flexDirection: 'column',
 				zIndex: 10,
 				animation: 'slideUp 0.15s ease-out',
-				transition: 'height 0.2s ease-out',
+				transition: isTrigger ? undefined : 'height 0.2s ease-out',
 			}}
 		>
 			<style>{`
@@ -730,24 +777,26 @@ export function NodeConfigPanel({
 					)}
 				</div>
 				<div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-					<button
-						onClick={() => setExpanded((v) => !v)}
-						style={{
-							display: 'flex',
-							alignItems: 'center',
-							padding: 4,
-							color: '#6b7280',
-							backgroundColor: 'transparent',
-							border: 'none',
-							borderRadius: 4,
-							cursor: 'pointer',
-						}}
-						onMouseEnter={(e) => (e.currentTarget.style.color = '#e4e4e7')}
-						onMouseLeave={(e) => (e.currentTarget.style.color = '#6b7280')}
-						title={expanded ? 'Collapse panel' : 'Expand panel'}
-					>
-						<ExpandIcon size={14} />
-					</button>
+					{!isTrigger && (
+						<button
+							onClick={() => setExpanded((v) => !v)}
+							style={{
+								display: 'flex',
+								alignItems: 'center',
+								padding: 4,
+								color: '#6b7280',
+								backgroundColor: 'transparent',
+								border: 'none',
+								borderRadius: 4,
+								cursor: 'pointer',
+							}}
+							onMouseEnter={(e) => (e.currentTarget.style.color = '#e4e4e7')}
+							onMouseLeave={(e) => (e.currentTarget.style.color = '#6b7280')}
+							title={expanded ? 'Collapse panel' : 'Expand panel'}
+						>
+							<ExpandIcon size={14} />
+						</button>
+					)}
 					<button
 						onClick={() => onDeleteNode(selectedNode.id)}
 						style={{
@@ -772,8 +821,8 @@ export function NodeConfigPanel({
 			{/* Content */}
 			<div
 				style={{
-					flex: 1,
-					overflow: expanded ? 'hidden' : 'auto',
+					flex: isTrigger ? undefined : 1,
+					overflow: 'auto',
 					padding: '12px 16px',
 					display: 'flex',
 					flexDirection: 'column',
@@ -786,6 +835,7 @@ export function NodeConfigPanel({
 						node={selectedNode}
 						pipelines={pipelines}
 						hasOutgoingEdge={hasOutgoingEdge}
+						hasIncomingAgentEdges={hasIncomingAgentEdges}
 						incomingTriggerEdges={incomingTriggerEdges}
 						onUpdateNode={onUpdateNode}
 						onUpdateEdgePrompt={onUpdateEdgePrompt}

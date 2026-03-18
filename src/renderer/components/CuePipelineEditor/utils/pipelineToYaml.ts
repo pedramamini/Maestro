@@ -18,6 +18,22 @@ import type {
 import type { CueSubscription, CueSettings } from '../../../../main/cue/cue-types';
 import { cuePromptFilePath } from '../../../../shared/maestro-paths';
 
+const SOURCE_OUTPUT_VAR = '{{CUE_SOURCE_OUTPUT}}';
+
+/**
+ * Ensures the prompt for an agent.completed chain subscription includes the
+ * {{CUE_SOURCE_OUTPUT}} template variable so upstream agent output is passed through.
+ *
+ * - If the prompt already contains the variable (case-insensitive), returns as-is.
+ * - If the prompt is empty/whitespace, returns the bare variable.
+ * - Otherwise prepends the variable above the user's prompt.
+ */
+export function ensureSourceOutputVariable(prompt: string): string {
+	if (prompt.toUpperCase().includes(SOURCE_OUTPUT_VAR.toUpperCase())) return prompt;
+	if (!prompt.trim()) return SOURCE_OUTPUT_VAR;
+	return `${SOURCE_OUTPUT_VAR}\n\n${prompt}`;
+}
+
 /** Result of converting pipelines to YAML, including external prompt files */
 export interface PipelineYamlResult {
 	yaml: string;
@@ -206,11 +222,14 @@ function buildChain(
 
 		const subName = `${pipelineName}-chain-${subscriptions.length}`;
 
+		const shouldInjectSource = targetData.includeUpstreamOutput !== false;
 		const sub: CueSubscription = {
 			name: subName,
 			event: 'agent.completed',
 			enabled: true,
-			prompt: targetData.inputPrompt ?? '',
+			prompt: shouldInjectSource
+				? ensureSourceOutputVariable(targetData.inputPrompt ?? '')
+				: (targetData.inputPrompt ?? ''),
 			output_prompt: targetData.outputPrompt || undefined,
 		};
 

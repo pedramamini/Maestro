@@ -11,8 +11,6 @@ import {
 	uncheckAllTasks,
 	writeDoc,
 } from './agent-spawner';
-import { readAccountsFromStore, getAccountByIdOrName, getDefaultAccount } from './account-reader';
-import type { CLIAccountInfo } from './account-reader';
 import { addHistoryEntry, readGroups } from './storage';
 import { substituteTemplateVariables, TemplateContext } from '../../shared/templateVariables';
 import { registerCliActivity, unregisterCliActivity } from '../../shared/cli-activity';
@@ -58,35 +56,6 @@ function isGitRepo(cwd: string): boolean {
 }
 
 /**
- * Resolve the account configDir for a given task, based on CLI options.
- * - If --account is set, use that specific account.
- * - If --account-rotation is set, round-robin through active accounts.
- * - Otherwise, use the default account if one exists.
- */
-async function resolveAccountConfigDir(
-	taskIndex: number,
-	accountOption?: string,
-	accountRotation?: boolean,
-	cachedAccounts?: CLIAccountInfo[] | null,
-): Promise<string | undefined> {
-	if (accountOption) {
-		const account = await getAccountByIdOrName(accountOption);
-		return account?.configDir;
-	}
-
-	if (accountRotation) {
-		const accounts = cachedAccounts ?? await readAccountsFromStore();
-		const activeAccounts = accounts.filter((a) => a.status === 'active');
-		if (activeAccounts.length === 0) return undefined;
-		const account = activeAccounts[taskIndex % activeAccounts.length];
-		return account.configDir;
-	}
-
-	const defaultAccount = await getDefaultAccount();
-	return defaultAccount?.configDir;
-}
-
-/**
  * Process a playbook and yield JSONL events
  */
 export async function* runPlaybook(
@@ -98,18 +67,9 @@ export async function* runPlaybook(
 		writeHistory?: boolean;
 		debug?: boolean;
 		verbose?: boolean;
-		account?: string;
-		accountRotation?: boolean;
 	} = {}
 ): AsyncGenerator<JsonlEvent> {
-	const {
-		dryRun = false,
-		writeHistory = true,
-		debug = false,
-		verbose = false,
-		account: accountOption,
-		accountRotation = false,
-	} = options;
+	const { dryRun = false, writeHistory = true, debug = false, verbose = false } = options;
 	const batchStartTime = Date.now();
 
 	// Get git branch and group name for template variable substitution
@@ -118,9 +78,6 @@ export async function* runPlaybook(
 	const groups = readGroups();
 	const sessionGroup = groups.find((g) => g.id === session.groupId);
 	const groupName = sessionGroup?.name;
-
-	// Pre-cache accounts for rotation if enabled (avoids re-reading store per task)
-	const cachedAccounts = accountRotation ? await readAccountsFromStore() : null;
 
 	// Register CLI activity so desktop app knows this session is busy
 	registerCliActivity({
@@ -261,7 +218,6 @@ export async function* runPlaybook(
 	let totalCompletedTasks = 0;
 	let totalCost = 0;
 	let loopIteration = 0;
-	let globalTaskIndex = 0; // Used for account rotation round-robin
 
 	// Per-loop tracking
 	let loopStartTime = Date.now();
@@ -483,17 +439,10 @@ export async function* runPlaybook(
 					};
 				}
 
-				// Resolve account for this task (account multiplexing)
-				const configDir = await resolveAccountConfigDir(
-					globalTaskIndex,
-					accountOption,
-					accountRotation,
-					cachedAccounts,
-				);
-				globalTaskIndex++;
-
 				// Spawn agent with combined prompt + document
-				const result = await spawnAgent(session.toolType, session.cwd, finalPrompt, undefined, configDir);
+				const result = await spawnAgent(session.toolType, session.cwd, finalPrompt, undefined, {
+					customModel: session.customModel,
+				});
 
 				const elapsedMs = Date.now() - taskStartTime;
 
@@ -525,13 +474,13 @@ export async function* runPlaybook(
 				let fullSynopsis = shortSummary;
 
 				if (result.success && result.agentSessionId) {
-					// Request synopsis from the agent (same account as the task)
+					// Request synopsis from the agent
 					const synopsisResult = await spawnAgent(
 						session.toolType,
 						session.cwd,
 						BATCH_SYNOPSIS_PROMPT,
 						result.agentSessionId,
-						configDir
+						{ customModel: session.customModel }
 					);
 
 					if (synopsisResult.success && synopsisResult.response) {

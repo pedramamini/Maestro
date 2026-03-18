@@ -214,6 +214,65 @@ subscriptions:
 			expect(result!.subscriptions[0].prompt).toBe('Inline prompt text');
 		});
 
+		it('resolves output_prompt_file to output_prompt content', () => {
+			mockExistsSync.mockReturnValue(true);
+			mockReadFileSync.mockImplementation((p: string) => {
+				if (String(p).endsWith('.maestro/prompts/format-output.md')) {
+					return 'Format the output as markdown';
+				}
+				return `
+subscriptions:
+  - name: test-sub
+    event: time.heartbeat
+    prompt: Do the thing
+    output_prompt_file: .maestro/prompts/format-output.md
+    interval_minutes: 5
+`;
+			});
+
+			const result = loadCueConfig('/projects/test');
+			expect(result).not.toBeNull();
+			expect(result!.subscriptions[0].output_prompt).toBe('Format the output as markdown');
+			expect(result!.subscriptions[0].output_prompt_file).toBe('.maestro/prompts/format-output.md');
+		});
+
+		it('keeps inline output_prompt when both output_prompt and output_prompt_file exist', () => {
+			mockExistsSync.mockReturnValue(true);
+			mockReadFileSync.mockReturnValue(`
+subscriptions:
+  - name: test-sub
+    event: time.heartbeat
+    prompt: Do the thing
+    output_prompt: Inline output prompt
+    output_prompt_file: .maestro/prompts/should-be-ignored.md
+    interval_minutes: 5
+`);
+
+			const result = loadCueConfig('/projects/test');
+			expect(result!.subscriptions[0].output_prompt).toBe('Inline output prompt');
+		});
+
+		it('sets output_prompt to undefined when output_prompt_file is missing', () => {
+			mockExistsSync.mockReturnValue(true);
+			mockReadFileSync.mockImplementation((p: string) => {
+				if (String(p).endsWith('.maestro/prompts/missing.md')) {
+					throw new Error('ENOENT: no such file or directory');
+				}
+				return `
+subscriptions:
+  - name: test-sub
+    event: time.heartbeat
+    prompt: Do the thing
+    output_prompt_file: .maestro/prompts/missing.md
+    interval_minutes: 5
+`;
+			});
+
+			const result = loadCueConfig('/projects/test');
+			expect(result).not.toBeNull();
+			expect(result!.subscriptions[0].output_prompt).toBeUndefined();
+		});
+
 		it('handles agent.completed with source_session array', () => {
 			mockExistsSync.mockReturnValue(true);
 			mockReadFileSync.mockReturnValue(`
@@ -550,6 +609,83 @@ subscriptions:
 				expect.arrayContaining([expect.stringContaining('"filter" must be a plain object')])
 			);
 		});
+
+		it('rejects unknown event types with a helpful message', () => {
+			const result = validateCueConfig({
+				subscriptions: [{ name: 'typo', event: 'file.change', prompt: 'Do it', watch: 'src/**' }],
+			});
+			expect(result.valid).toBe(false);
+			expect(result.errors).toEqual(
+				expect.arrayContaining([expect.stringContaining('unknown event type "file.change"')])
+			);
+			expect(result.errors[0]).toContain('Valid types:');
+		});
+
+		it('rejects completely bogus event types', () => {
+			const result = validateCueConfig({
+				subscriptions: [{ name: 'bogus', event: 'webhook.incoming', prompt: 'Run' }],
+			});
+			expect(result.valid).toBe(false);
+			expect(result.errors).toEqual(
+				expect.arrayContaining([expect.stringContaining('unknown event type "webhook.incoming"')])
+			);
+		});
+
+		it('does not reject known event types as unknown', () => {
+			const knownTypes = [
+				{ event: 'time.heartbeat', interval_minutes: 5 },
+				{ event: 'time.scheduled', schedule_times: ['09:00'] },
+				{ event: 'file.changed', watch: '**/*.ts' },
+				{ event: 'agent.completed', source_session: 'agent-1' },
+				{ event: 'github.pull_request' },
+				{ event: 'github.issue' },
+				{ event: 'task.pending', watch: '*.md' },
+			];
+			for (const typeConfig of knownTypes) {
+				const result = validateCueConfig({
+					subscriptions: [{ name: 'test', prompt: 'Run', ...typeConfig }],
+				});
+				expect(result.errors.filter((e: string) => e.includes('unknown event type'))).toHaveLength(
+					0
+				);
+			}
+		});
+
+		it('rejects invalid gh_state values for GitHub triggers', () => {
+			const result = validateCueConfig({
+				subscriptions: [
+					{ name: 'test', event: 'github.pull_request', prompt: 'Run', gh_state: 'invalid' },
+				],
+			});
+			expect(result.valid).toBe(false);
+			expect(result.errors).toEqual(
+				expect.arrayContaining([expect.stringContaining('"gh_state" must be one of')])
+			);
+		});
+
+		it('rejects gh_state "merged" for github.issue events', () => {
+			const result = validateCueConfig({
+				subscriptions: [{ name: 'test', event: 'github.issue', prompt: 'Run', gh_state: 'merged' }],
+			});
+			expect(result.valid).toBe(false);
+			expect(result.errors).toEqual(
+				expect.arrayContaining([
+					expect.stringContaining('"merged" is only valid for github.pull_request'),
+				])
+			);
+		});
+
+		it('accepts valid gh_state values for GitHub triggers', () => {
+			for (const ghState of ['open', 'closed', 'merged', 'all']) {
+				const result = validateCueConfig({
+					subscriptions: [
+						{ name: 'test', event: 'github.pull_request', prompt: 'Run', gh_state: ghState },
+					],
+				});
+				const ghStateErrors = result.errors.filter((e: string) => e.includes('gh_state'));
+				expect(ghStateErrors).toHaveLength(0);
+			}
+		});
 	});
 
 	describe('loadCueConfig with GitHub events', () => {
@@ -583,6 +719,50 @@ subscriptions:
 			expect(result).not.toBeNull();
 			expect(result!.subscriptions[0].poll_minutes).toBeUndefined();
 			expect(result!.subscriptions[0].repo).toBeUndefined();
+		});
+
+		it('parses gh_state from YAML', () => {
+			mockExistsSync.mockReturnValue(true);
+			mockReadFileSync.mockReturnValue(`
+subscriptions:
+  - name: merged-prs
+    event: github.pull_request
+    prompt: Review merged PR
+    gh_state: merged
+`);
+
+			const result = loadCueConfig('/projects/test');
+			expect(result).not.toBeNull();
+			expect(result!.subscriptions[0].gh_state).toBe('merged');
+		});
+
+		it('ignores invalid gh_state values during parsing', () => {
+			mockExistsSync.mockReturnValue(true);
+			mockReadFileSync.mockReturnValue(`
+subscriptions:
+  - name: bad-state
+    event: github.pull_request
+    prompt: Review
+    gh_state: invalid
+`);
+
+			const result = loadCueConfig('/projects/test');
+			expect(result).not.toBeNull();
+			expect(result!.subscriptions[0].gh_state).toBeUndefined();
+		});
+
+		it('defaults gh_state to undefined when not specified', () => {
+			mockExistsSync.mockReturnValue(true);
+			mockReadFileSync.mockReturnValue(`
+subscriptions:
+  - name: pr-watch
+    event: github.pull_request
+    prompt: Review
+`);
+
+			const result = loadCueConfig('/projects/test');
+			expect(result).not.toBeNull();
+			expect(result!.subscriptions[0].gh_state).toBeUndefined();
 		});
 	});
 
@@ -805,6 +985,55 @@ subscriptions:
 		});
 	});
 
+	describe('loadCueConfig with label', () => {
+		it('parses label field from YAML', () => {
+			mockExistsSync.mockReturnValue(true);
+			mockReadFileSync.mockReturnValue(`
+subscriptions:
+  - name: morning-check
+    event: time.heartbeat
+    prompt: Do morning checks
+    interval_minutes: 60
+    label: Morning Check
+`);
+
+			const result = loadCueConfig('/projects/test');
+			expect(result).not.toBeNull();
+			expect(result!.subscriptions[0].label).toBe('Morning Check');
+		});
+
+		it('defaults label to undefined when not specified', () => {
+			mockExistsSync.mockReturnValue(true);
+			mockReadFileSync.mockReturnValue(`
+subscriptions:
+  - name: no-label
+    event: time.heartbeat
+    prompt: Do stuff
+    interval_minutes: 5
+`);
+
+			const result = loadCueConfig('/projects/test');
+			expect(result).not.toBeNull();
+			expect(result!.subscriptions[0].label).toBeUndefined();
+		});
+
+		it('ignores non-string label values', () => {
+			mockExistsSync.mockReturnValue(true);
+			mockReadFileSync.mockReturnValue(`
+subscriptions:
+  - name: bad-label
+    event: time.heartbeat
+    prompt: Do stuff
+    interval_minutes: 5
+    label: 12345
+`);
+
+			const result = loadCueConfig('/projects/test');
+			expect(result).not.toBeNull();
+			expect(result!.subscriptions[0].label).toBeUndefined();
+		});
+	});
+
 	describe('loadCueConfig with filter', () => {
 		it('parses filter field from YAML', () => {
 			mockExistsSync.mockReturnValue(true);
@@ -847,7 +1076,353 @@ subscriptions:
 				exitCode: 0,
 			});
 		});
+	});
 
+	describe('validateCueConfig — name validation', () => {
+		it('rejects empty string subscription name', () => {
+			const result = validateCueConfig({
+				subscriptions: [
+					{ name: '', event: 'time.heartbeat', prompt: 'Do it', interval_minutes: 5 },
+				],
+			});
+			expect(result.valid).toBe(false);
+			expect(result.errors).toEqual(
+				expect.arrayContaining([
+					expect.stringContaining('"name" is required and must be a non-empty string'),
+				])
+			);
+		});
+
+		it('rejects whitespace-only subscription name', () => {
+			const result = validateCueConfig({
+				subscriptions: [
+					{ name: '   ', event: 'time.heartbeat', prompt: 'Do it', interval_minutes: 5 },
+				],
+			});
+			expect(result.valid).toBe(false);
+			expect(result.errors).toEqual(
+				expect.arrayContaining([
+					expect.stringContaining('"name" is required and must be a non-empty string'),
+				])
+			);
+		});
+
+		it('rejects duplicate subscription names', () => {
+			const result = validateCueConfig({
+				subscriptions: [
+					{ name: 'dupe', event: 'time.heartbeat', prompt: 'First', interval_minutes: 5 },
+					{ name: 'dupe', event: 'file.changed', prompt: 'Second', watch: 'src/**' },
+				],
+			});
+			expect(result.valid).toBe(false);
+			expect(result.errors).toEqual(
+				expect.arrayContaining([expect.stringContaining('duplicate subscription name "dupe"')])
+			);
+		});
+
+		it('accepts unique subscription names', () => {
+			const result = validateCueConfig({
+				subscriptions: [
+					{ name: 'sub-a', event: 'time.heartbeat', prompt: 'First', interval_minutes: 5 },
+					{ name: 'sub-b', event: 'file.changed', prompt: 'Second', watch: 'src/**' },
+				],
+			});
+			// Check no name-related errors
+			const nameErrors = result.errors.filter(
+				(e: string) => e.includes('duplicate') || e.includes('"name"')
+			);
+			expect(nameErrors).toHaveLength(0);
+		});
+
+		it('detects duplicates after trimming whitespace', () => {
+			const result = validateCueConfig({
+				subscriptions: [
+					{ name: 'watcher', event: 'time.heartbeat', prompt: 'First', interval_minutes: 5 },
+					{ name: '  watcher  ', event: 'file.changed', prompt: 'Second', watch: 'src/**' },
+				],
+			});
+			expect(result.valid).toBe(false);
+			expect(result.errors).toEqual(
+				expect.arrayContaining([expect.stringContaining('duplicate subscription name "watcher"')])
+			);
+		});
+	});
+
+	describe('validateCueConfig — schedule_times range validation', () => {
+		it('rejects schedule_times with hour out of range (25:00)', () => {
+			const result = validateCueConfig({
+				subscriptions: [
+					{
+						name: 'test',
+						event: 'time.scheduled',
+						prompt: 'Do it',
+						schedule_times: ['25:00'],
+					},
+				],
+			});
+			expect(result.valid).toBe(false);
+			expect(result.errors).toEqual(
+				expect.arrayContaining([expect.stringContaining('invalid hour (0-23) or minute (0-59)')])
+			);
+		});
+
+		it('rejects schedule_times with minute out of range (12:60)', () => {
+			const result = validateCueConfig({
+				subscriptions: [
+					{
+						name: 'test',
+						event: 'time.scheduled',
+						prompt: 'Do it',
+						schedule_times: ['12:60'],
+					},
+				],
+			});
+			expect(result.valid).toBe(false);
+			expect(result.errors).toEqual(
+				expect.arrayContaining([expect.stringContaining('invalid hour (0-23) or minute (0-59)')])
+			);
+		});
+
+		it('rejects schedule_times with both hour and minute out of range (99:99)', () => {
+			const result = validateCueConfig({
+				subscriptions: [
+					{
+						name: 'test',
+						event: 'time.scheduled',
+						prompt: 'Do it',
+						schedule_times: ['99:99'],
+					},
+				],
+			});
+			expect(result.valid).toBe(false);
+			expect(result.errors).toEqual(
+				expect.arrayContaining([expect.stringContaining('invalid hour (0-23) or minute (0-59)')])
+			);
+		});
+
+		it('accepts schedule_times with valid boundary value 00:00', () => {
+			const result = validateCueConfig({
+				subscriptions: [
+					{
+						name: 'test',
+						event: 'time.scheduled',
+						prompt: 'Do it',
+						schedule_times: ['00:00'],
+					},
+				],
+			});
+			const timeErrors = result.errors.filter((e: string) => e.includes('invalid hour'));
+			expect(timeErrors).toHaveLength(0);
+		});
+
+		it('accepts schedule_times with valid boundary value 23:59', () => {
+			const result = validateCueConfig({
+				subscriptions: [
+					{
+						name: 'test',
+						event: 'time.scheduled',
+						prompt: 'Do it',
+						schedule_times: ['23:59'],
+					},
+				],
+			});
+			const timeErrors = result.errors.filter((e: string) => e.includes('invalid hour'));
+			expect(timeErrors).toHaveLength(0);
+		});
+	});
+
+	describe('validateCueConfig — interval_minutes upper bound', () => {
+		it('rejects interval_minutes above 10080 (7 days)', () => {
+			const result = validateCueConfig({
+				subscriptions: [
+					{
+						name: 'test',
+						event: 'time.heartbeat',
+						prompt: 'Do it',
+						interval_minutes: 10081,
+					},
+				],
+			});
+			expect(result.valid).toBe(false);
+			expect(result.errors).toEqual(expect.arrayContaining([expect.stringContaining('10080')]));
+		});
+
+		it('accepts interval_minutes at upper bound (10080)', () => {
+			const result = validateCueConfig({
+				subscriptions: [
+					{
+						name: 'test',
+						event: 'time.heartbeat',
+						prompt: 'Do it',
+						interval_minutes: 10080,
+					},
+				],
+			});
+			const intervalErrors = result.errors.filter((e: string) => e.includes('interval_minutes'));
+			expect(intervalErrors).toHaveLength(0);
+		});
+
+		it('rejects NaN interval_minutes', () => {
+			const result = validateCueConfig({
+				subscriptions: [
+					{
+						name: 'test',
+						event: 'time.heartbeat',
+						prompt: 'Do it',
+						interval_minutes: NaN,
+					},
+				],
+			});
+			expect(result.valid).toBe(false);
+			expect(result.errors).toEqual(
+				expect.arrayContaining([expect.stringContaining('interval_minutes')])
+			);
+		});
+
+		it('rejects Infinity interval_minutes', () => {
+			const result = validateCueConfig({
+				subscriptions: [
+					{
+						name: 'test',
+						event: 'time.heartbeat',
+						prompt: 'Do it',
+						interval_minutes: Infinity,
+					},
+				],
+			});
+			expect(result.valid).toBe(false);
+			expect(result.errors).toEqual(
+				expect.arrayContaining([expect.stringContaining('interval_minutes')])
+			);
+		});
+
+		it('accepts normal interval_minutes value', () => {
+			const result = validateCueConfig({
+				subscriptions: [
+					{
+						name: 'test',
+						event: 'time.heartbeat',
+						prompt: 'Do it',
+						interval_minutes: 60,
+					},
+				],
+			});
+			const intervalErrors = result.errors.filter((e: string) => e.includes('interval_minutes'));
+			expect(intervalErrors).toHaveLength(0);
+		});
+	});
+
+	describe('watch glob validation (Fix 6)', () => {
+		it('accepts valid glob pattern for file.changed', () => {
+			const result = validateCueConfig({
+				subscriptions: [
+					{
+						name: 'good-glob',
+						event: 'file.changed',
+						prompt: 'test',
+						watch: '**/*.ts',
+					},
+				],
+			});
+			expect(result.valid).toBe(true);
+		});
+
+		it('accepts valid glob pattern for task.pending', () => {
+			const result = validateCueConfig({
+				subscriptions: [
+					{
+						name: 'good-task-glob',
+						event: 'task.pending',
+						prompt: 'test',
+						watch: 'docs/**/*.md',
+					},
+				],
+			});
+			expect(result.valid).toBe(true);
+		});
+
+		it('rejects empty watch string for file.changed', () => {
+			const result = validateCueConfig({
+				subscriptions: [
+					{
+						name: 'empty-glob',
+						event: 'file.changed',
+						prompt: 'test',
+						watch: '',
+					},
+				],
+			});
+			expect(result.valid).toBe(false);
+			expect(result.errors.some((e: string) => e.includes('watch'))).toBe(true);
+		});
+
+		it('rejects empty watch string for task.pending', () => {
+			const result = validateCueConfig({
+				subscriptions: [
+					{
+						name: 'empty-task-glob',
+						event: 'task.pending',
+						prompt: 'test',
+						watch: '',
+					},
+				],
+			});
+			expect(result.valid).toBe(false);
+			expect(result.errors.some((e: string) => e.includes('watch'))).toBe(true);
+		});
+
+		it('picomatch accepts unbalanced bracket pattern without throwing', () => {
+			// picomatch treats [*.ts as a literal — it does NOT throw
+			// so the try/catch validation passes it as valid
+			const result = validateCueConfig({
+				subscriptions: [
+					{
+						name: 'unbalanced-bracket',
+						event: 'file.changed',
+						prompt: 'test',
+						watch: '[*.ts',
+					},
+				],
+			});
+			// picomatch does not throw on this pattern, so validation passes
+			expect(result.valid).toBe(true);
+		});
+
+		it('accepts complex valid glob patterns', () => {
+			const patterns = ['src/**/*.{ts,tsx}', '*.md', 'docs/**/README.md', '!node_modules/**'];
+			for (const watch of patterns) {
+				const result = validateCueConfig({
+					subscriptions: [
+						{
+							name: `glob-${watch.replace(/[^a-z]/gi, '')}`,
+							event: 'file.changed',
+							prompt: 'test',
+							watch,
+						},
+					],
+				});
+				const watchErrors = result.errors.filter((e: string) => e.includes('glob pattern'));
+				expect(watchErrors).toHaveLength(0);
+			}
+		});
+
+		it('rejects non-string watch value for file.changed', () => {
+			const result = validateCueConfig({
+				subscriptions: [
+					{
+						name: 'non-string-watch',
+						event: 'file.changed',
+						prompt: 'test',
+						watch: 123 as unknown as string,
+					},
+				],
+			});
+			expect(result.valid).toBe(false);
+			expect(result.errors.some((e: string) => e.includes('watch'))).toBe(true);
+		});
+	});
+
+	describe('loadCueConfig with filter (continued)', () => {
 		it('ignores filter with invalid nested values', () => {
 			mockExistsSync.mockReturnValue(true);
 			mockReadFileSync.mockReturnValue(`

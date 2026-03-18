@@ -1817,7 +1817,6 @@ export const MainPanel = React.memo(
 														: undefined
 												}
 												autoScrollAiMode={autoScrollAiMode}
-												setAutoScrollAiMode={useSettingsStore.getState().setAutoScrollAiMode}
 												userMessageAlignment={userMessageAlignment}
 												onOpenInTab={props.onOpenSavedFileInTab}
 											/>

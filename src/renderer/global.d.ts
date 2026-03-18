@@ -75,8 +75,13 @@ interface AgentCapabilities {
 	supportsResultMessages: boolean;
 	supportsModelSelection: boolean;
 	supportsStreamJsonInput: boolean;
+	supportsThinkingDisplay: boolean;
 	supportsContextMerge: boolean;
 	supportsContextExport: boolean;
+	supportsWizard: boolean;
+	supportsGroupChatModeration: boolean;
+	usesJsonLineOutput: boolean;
+	usesCombinedContextWindow: boolean;
 }
 
 interface AgentConfig {
@@ -90,6 +95,8 @@ interface AgentConfig {
 	args?: string[];
 	hidden?: boolean;
 	configOptions?: AgentConfigOption[];
+	yoloModeArgs?: string[];
+	readOnlyCliEnforced?: boolean;
 	capabilities?: AgentCapabilities;
 }
 
@@ -112,6 +119,10 @@ interface AgentCapabilities {
 	supportsStreamJsonInput: boolean;
 	supportsContextMerge: boolean;
 	supportsContextExport: boolean;
+	supportsWizard: boolean;
+	supportsGroupChatModeration: boolean;
+	usesJsonLineOutput: boolean;
+	usesCombinedContextWindow: boolean;
 }
 
 interface DirectoryEntry {
@@ -327,6 +338,27 @@ interface MaestroAPI {
 			callback: (sessionId: string, fromIndex: number, toIndex: number) => void
 		) => () => void;
 		onRemoteToggleBookmark: (callback: (sessionId: string) => void) => () => void;
+		onRemoteOpenFileTab: (callback: (sessionId: string, filePath: string) => void) => () => void;
+		onRemoteRefreshFileTree: (callback: (sessionId: string) => void) => () => void;
+		onRemoteRefreshAutoRunDocs: (callback: (sessionId: string) => void) => () => void;
+		onRemoteConfigureAutoRun: (
+			callback: (
+				sessionId: string,
+				config: {
+					documents: Array<{ filename: string; resetOnCompletion?: boolean }>;
+					prompt?: string;
+					loopEnabled?: boolean;
+					maxLoops?: number;
+					saveAsPlaybook?: string;
+					launch?: boolean;
+				},
+				responseChannel: string
+			) => void
+		) => () => void;
+		sendRemoteConfigureAutoRunResponse: (
+			responseChannel: string,
+			result: { success: boolean; playbookId?: string; error?: string }
+		) => void;
 		onStderr: (callback: (sessionId: string, data: string) => void) => () => void;
 		onCommandExit: (callback: (sessionId: string, code: number) => void) => () => void;
 		onUsage: (callback: (sessionId: string, usageStats: UsageStats) => void) => () => void;
@@ -2681,7 +2713,12 @@ interface MaestroAPI {
 	accounts: {
 		list: () => Promise<unknown[]>;
 		get: (id: string) => Promise<unknown>;
-		add: (params: { name: string; email: string; configDir: string; agentType?: string }) => Promise<unknown>;
+		add: (params: {
+			name: string;
+			email: string;
+			configDir: string;
+			agentType?: string;
+		}) => Promise<unknown>;
 		update: (id: string, updates: Record<string, unknown>) => Promise<unknown>;
 		remove: (id: string) => Promise<unknown>;
 		setDefault: (id: string) => Promise<unknown>;
@@ -2699,35 +2736,191 @@ interface MaestroAPI {
 		getDefault: () => Promise<unknown>;
 		selectNext: (excludeIds?: string[]) => Promise<unknown>;
 		validateBaseDir: () => Promise<{ valid: boolean; baseDir: string; errors: string[] }>;
-		discoverExisting: () => Promise<Array<{ configDir: string; name: string; email: string | null; hasAuth: boolean; agentType: string }>>;
-		createDirectory: (name: string) => Promise<{ success: boolean; configDir: string; error?: string }>;
-		validateSymlinks: (configDir: string) => Promise<{ valid: boolean; broken: string[]; missing: string[] }>;
+		discoverExisting: () => Promise<
+			Array<{
+				configDir: string;
+				name: string;
+				email: string | null;
+				hasAuth: boolean;
+				agentType: string;
+			}>
+		>;
+		createDirectory: (
+			name: string
+		) => Promise<{ success: boolean; configDir: string; error?: string }>;
+		validateSymlinks: (
+			configDir: string
+		) => Promise<{ valid: boolean; broken: string[]; missing: string[] }>;
 		repairSymlinks: (configDir: string) => Promise<{ repaired: string[]; errors: string[] }>;
 		readEmail: (configDir: string) => Promise<string | null>;
 		getLoginCommand: (configDir: string) => Promise<string | null>;
 		removeDirectory: (configDir: string) => Promise<{ success: boolean; error?: string }>;
-		validateRemoteDir: (params: { sshConfig: { host: string; user?: string; port?: number }; configDir: string }) => Promise<{ exists: boolean; hasAuth: boolean; symlinksValid: boolean; error?: string }>;
+		validateRemoteDir: (params: {
+			sshConfig: { host: string; user?: string; port?: number };
+			configDir: string;
+		}) => Promise<{ exists: boolean; hasAuth: boolean; symlinksValid: boolean; error?: string }>;
 		syncCredentials: (configDir: string) => Promise<{ success: boolean; error?: string }>;
-		onUsageUpdate: (handler: (data: { accountId: string; usagePercent: number | null; totalTokens: number; inputTokens: number; outputTokens: number; cacheReadTokens: number; cacheCreationTokens: number; limitTokens: number; windowStart: number; windowEnd: number; queryCount: number; costUsd: number }) => void) => () => void;
-		onLimitWarning: (handler: (data: { accountId: string; accountName: string; usagePercent: number; sessionId: string }) => void) => () => void;
-		onLimitReached: (handler: (data: { accountId: string; accountName: string; usagePercent: number; sessionId: string }) => void) => () => void;
-		onThrottled: (handler: (data: { accountId: string; accountName: string; sessionId: string; reason: string; message: string; tokensAtThrottle: number; autoSwitchAvailable: boolean; noAlternatives?: boolean }) => void) => () => void;
-		onSwitchPrompt: (handler: (data: { sessionId: string; fromAccountId: string; fromAccountName: string; toAccountId: string; toAccountName: string; reason: string; tokensAtThrottle: number }) => void) => () => void;
-		onSwitchExecute: (handler: (data: { sessionId: string; fromAccountId: string; fromAccountName: string; toAccountId: string; toAccountName: string; reason: string; automatic: boolean }) => void) => () => void;
-		onStatusChanged: (handler: (data: { accountId: string; accountName: string; oldStatus: string; newStatus: string; recoveredBy?: string }) => void) => () => void;
-		onAssigned: (handler: (data: { sessionId: string; accountId: string; accountName: string }) => void) => () => void;
-		reconcileSessions: (activeSessionIds: string[]) => Promise<{ success: boolean; removed: number; corrections: Array<{ sessionId: string; accountId: string | null; accountName: string | null; configDir: string | null; status: 'valid' | 'removed' | 'inactive' }>; error?: string }>;
+		onUsageUpdate: (
+			handler: (data: {
+				accountId: string;
+				usagePercent: number | null;
+				totalTokens: number;
+				inputTokens: number;
+				outputTokens: number;
+				cacheReadTokens: number;
+				cacheCreationTokens: number;
+				limitTokens: number;
+				windowStart: number;
+				windowEnd: number;
+				queryCount: number;
+				costUsd: number;
+			}) => void
+		) => () => void;
+		onLimitWarning: (
+			handler: (data: {
+				accountId: string;
+				accountName: string;
+				usagePercent: number;
+				sessionId: string;
+			}) => void
+		) => () => void;
+		onLimitReached: (
+			handler: (data: {
+				accountId: string;
+				accountName: string;
+				usagePercent: number;
+				sessionId: string;
+			}) => void
+		) => () => void;
+		onThrottled: (
+			handler: (data: {
+				accountId: string;
+				accountName: string;
+				sessionId: string;
+				reason: string;
+				message: string;
+				tokensAtThrottle: number;
+				autoSwitchAvailable: boolean;
+				noAlternatives?: boolean;
+			}) => void
+		) => () => void;
+		onSwitchPrompt: (
+			handler: (data: {
+				sessionId: string;
+				fromAccountId: string;
+				fromAccountName: string;
+				toAccountId: string;
+				toAccountName: string;
+				reason: string;
+				tokensAtThrottle: number;
+			}) => void
+		) => () => void;
+		onSwitchExecute: (
+			handler: (data: {
+				sessionId: string;
+				fromAccountId: string;
+				fromAccountName: string;
+				toAccountId: string;
+				toAccountName: string;
+				reason: string;
+				automatic: boolean;
+			}) => void
+		) => () => void;
+		onStatusChanged: (
+			handler: (data: {
+				accountId: string;
+				accountName: string;
+				oldStatus: string;
+				newStatus: string;
+				recoveredBy?: string;
+			}) => void
+		) => () => void;
+		onAssigned: (
+			handler: (data: { sessionId: string; accountId: string; accountName: string }) => void
+		) => () => void;
+		reconcileSessions: (
+			activeSessionIds: string[]
+		) => Promise<{
+			success: boolean;
+			removed: number;
+			corrections: Array<{
+				sessionId: string;
+				accountId: string | null;
+				accountName: string | null;
+				configDir: string | null;
+				status: 'valid' | 'removed' | 'inactive';
+			}>;
+			error?: string;
+		}>;
 		cleanupSession: (sessionId: string) => Promise<{ success: boolean; error?: string }>;
-		executeSwitch: (params: { sessionId: string; fromAccountId: string; toAccountId: string; reason: string; automatic: boolean }) => Promise<{ success: boolean; event?: unknown; error?: string }>;
-		onSwitchStarted: (handler: (data: { sessionId: string; fromAccountId: string; toAccountId: string; toAccountName: string }) => void) => () => void;
-		onSwitchRespawn: (handler: (data: { sessionId: string; toAccountId: string; toAccountName: string; configDir: string; lastPrompt: string | null; reason: string }) => void) => () => void;
-		onSwitchCompleted: (handler: (data: { sessionId: string; fromAccountId: string; toAccountId: string; reason: string; automatic: boolean; timestamp: number; fromAccountName: string; toAccountName: string }) => void) => () => void;
-		onSwitchFailed: (handler: (data: { sessionId: string; fromAccountId: string; toAccountId: string; error: string }) => void) => () => void;
+		executeSwitch: (params: {
+			sessionId: string;
+			fromAccountId: string;
+			toAccountId: string;
+			reason: string;
+			automatic: boolean;
+		}) => Promise<{ success: boolean; event?: unknown; error?: string }>;
+		onSwitchStarted: (
+			handler: (data: {
+				sessionId: string;
+				fromAccountId: string;
+				toAccountId: string;
+				toAccountName: string;
+			}) => void
+		) => () => void;
+		onSwitchRespawn: (
+			handler: (data: {
+				sessionId: string;
+				toAccountId: string;
+				toAccountName: string;
+				configDir: string;
+				lastPrompt: string | null;
+				reason: string;
+			}) => void
+		) => () => void;
+		onSwitchCompleted: (
+			handler: (data: {
+				sessionId: string;
+				fromAccountId: string;
+				toAccountId: string;
+				reason: string;
+				automatic: boolean;
+				timestamp: number;
+				fromAccountName: string;
+				toAccountName: string;
+			}) => void
+		) => () => void;
+		onSwitchFailed: (
+			handler: (data: {
+				sessionId: string;
+				fromAccountId: string;
+				toAccountId: string;
+				error: string;
+			}) => void
+		) => () => void;
 		triggerAuthRecovery: (sessionId: string) => Promise<{ success: boolean; error?: string }>;
-		onAuthRecoveryStarted: (handler: (data: { sessionId: string; accountId: string; accountName: string }) => void) => () => void;
-		onAuthRecoveryCompleted: (handler: (data: { sessionId: string; accountId: string; accountName: string }) => void) => () => void;
-		onAuthRecoveryFailed: (handler: (data: { sessionId: string; accountId: string; accountName?: string; error: string }) => void) => () => void;
-		onRecoveryAvailable: (handler: (data: { recoveredAccountIds: string[]; recoveredCount: number; stillThrottledCount: number; totalAccounts: number }) => void) => () => void;
+		onAuthRecoveryStarted: (
+			handler: (data: { sessionId: string; accountId: string; accountName: string }) => void
+		) => () => void;
+		onAuthRecoveryCompleted: (
+			handler: (data: { sessionId: string; accountId: string; accountName: string }) => void
+		) => () => void;
+		onAuthRecoveryFailed: (
+			handler: (data: {
+				sessionId: string;
+				accountId: string;
+				accountName?: string;
+				error: string;
+			}) => void
+		) => () => void;
+		onRecoveryAvailable: (
+			handler: (data: {
+				recoveredAccountIds: string[];
+				recoveredCount: number;
+				stillThrottledCount: number;
+				totalAccounts: number;
+			}) => void
+		) => () => void;
 		checkRecovery: () => Promise<{ recovered: string[] }>;
 	};
 
@@ -2911,6 +3104,7 @@ interface MaestroAPI {
 		triggerSubscription: (subscriptionName: string) => Promise<boolean>;
 		getQueueStatus: () => Promise<Record<string, number>>;
 		refreshSession: (sessionId: string, projectRoot: string) => Promise<void>;
+		removeSession: (sessionId: string) => Promise<void>;
 		readYaml: (projectRoot: string) => Promise<string | null>;
 		writeYaml: (
 			projectRoot: string,
@@ -2954,27 +3148,34 @@ interface MaestroAPI {
 			lastErrorAt: number | null;
 			sessionsWithErrors: number;
 		} | null>;
-		getAllErrorStats: () => Promise<Record<string, {
-			toolType: string;
-			activeErrorCount: number;
-			totalErrorsInWindow: number;
-			lastErrorAt: number | null;
-			sessionsWithErrors: number;
-		}>>;
+		getAllErrorStats: () => Promise<
+			Record<
+				string,
+				{
+					toolType: string;
+					activeErrorCount: number;
+					totalErrorsInWindow: number;
+					lastErrorAt: number | null;
+					sessionsWithErrors: number;
+				}
+			>
+		>;
 		clearSessionErrors: (sessionId: string) => Promise<void>;
-		onFailoverSuggest: (handler: (data: {
-			sessionId: string;
-			sessionName: string;
-			currentProvider: string;
-			suggestedProvider: string;
-			errorCount: number;
-			windowMs: number;
-			recentErrors: Array<{
-				type: string;
-				message: string;
-				timestamp: number;
-			}>;
-		}) => void) => () => void;
+		onFailoverSuggest: (
+			handler: (data: {
+				sessionId: string;
+				sessionName: string;
+				currentProvider: string;
+				suggestedProvider: string;
+				errorCount: number;
+				windowMs: number;
+				recentErrors: Array<{
+					type: string;
+					message: string;
+					timestamp: number;
+				}>;
+			}) => void
+		) => () => void;
 	};
 
 	// WakaTime API (CLI check, API key validation)

@@ -48,6 +48,7 @@ vi.mock('../../../renderer/stores/settingsStore', () => ({
 
 const mockSessionState: Record<string, unknown> = {
 	sessionsLoaded: false,
+	initialFileTreeReady: false,
 };
 
 vi.mock('../../../renderer/stores/sessionStore', () => ({
@@ -193,6 +194,7 @@ function resetStores() {
 	};
 
 	mockSessionState.sessionsLoaded = false;
+	mockSessionState.initialFileTreeReady = false;
 	mockTabStoreState.fileGistUrls = {};
 }
 
@@ -263,14 +265,25 @@ describe('useAppInitialization', () => {
 			expect((window as any).__hideSplash).not.toHaveBeenCalled();
 		});
 
-		it('should call __hideSplash after rAF + delay when both loaded', async () => {
+		it('should show file tree loading progress when sessions loaded but file tree not ready', () => {
+			mockSettingsState.settingsLoaded = true;
+			mockSessionState.sessionsLoaded = true;
+			mockSessionState.initialFileTreeReady = false;
+			renderHook(() => useAppInitialization());
+
+			expect((window as any).__updateSplash).toHaveBeenCalledWith(80, 'Indexing the score...');
+			expect((window as any).__hideSplash).not.toHaveBeenCalled();
+		});
+
+		it('should call __hideSplash after rAF + delay when all three gates pass', async () => {
 			vi.useFakeTimers();
 			mockSettingsState.settingsLoaded = true;
 			mockSessionState.sessionsLoaded = true;
+			mockSessionState.initialFileTreeReady = true;
 			renderHook(() => useAppInitialization());
 
-			// Should update to 80% first
-			expect((window as any).__updateSplash).toHaveBeenCalledWith(80, 'The concertmaster rises...');
+			// Should update to 90% first
+			expect((window as any).__updateSplash).toHaveBeenCalledWith(90, 'The concertmaster rises...');
 
 			// __hideSplash not called yet (waiting for rAF + timeout)
 			expect((window as any).__hideSplash).not.toHaveBeenCalled();

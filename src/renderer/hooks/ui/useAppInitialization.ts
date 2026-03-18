@@ -56,6 +56,7 @@ export function useAppInitialization(): AppInitializationReturn {
 	// --- Store selectors ---
 	const settingsLoaded = useSettingsStore((s) => s.settingsLoaded);
 	const sessionsLoaded = useSessionStore((s) => s.sessionsLoaded);
+	const initialFileTreeReady = useSessionStore((s) => s.initialFileTreeReady);
 	const suppressWindowsWarning = useSettingsStore((s) => s.suppressWindowsWarning);
 	const enableBetaUpdates = useSettingsStore((s) => s.enableBetaUpdates);
 	const checkForUpdatesOnStartup = useSettingsStore((s) => s.checkForUpdatesOnStartup);
@@ -73,9 +74,9 @@ export function useAppInitialization(): AppInitializationReturn {
 
 	// --- Splash screen coordination ---
 	// Progress stages: 0-40% React bootstrap (splash.js), 40-60% settings,
-	// 60-80% sessions, 80-95% UI rendering, 95-100% ready.
-	// We wait for the React tree to paint with loaded data before dismissing,
-	// so the user doesn't see an unresponsive interface.
+	// 60-80% sessions, 80-90% file tree, 90-95% UI rendering, 95-100% ready.
+	// We wait for settings, sessions, AND the initial file tree load before
+	// dismissing, so the user doesn't see "Loading files..." or an unresponsive UI.
 	useEffect(() => {
 		if (settingsLoaded && !sessionsLoaded) {
 			window.__updateSplash?.(60, 'Warming up the ensemble...');
@@ -83,8 +84,11 @@ export function useAppInitialization(): AppInitializationReturn {
 		if (!settingsLoaded && sessionsLoaded) {
 			window.__updateSplash?.(60, 'Warming up the ensemble...');
 		}
-		if (settingsLoaded && sessionsLoaded) {
-			window.__updateSplash?.(80, 'The concertmaster rises...');
+		if (settingsLoaded && sessionsLoaded && !initialFileTreeReady) {
+			window.__updateSplash?.(80, 'Indexing the score...');
+		}
+		if (settingsLoaded && sessionsLoaded && initialFileTreeReady) {
+			window.__updateSplash?.(90, 'The concertmaster rises...');
 			// Wait for React to render the UI with loaded data before hiding splash.
 			// Double rAF ensures at least one full paint cycle has completed,
 			// then a short delay lets the file tree and heavy components settle.
@@ -97,7 +101,7 @@ export function useAppInitialization(): AppInitializationReturn {
 				});
 			});
 		}
-	}, [settingsLoaded, sessionsLoaded]);
+	}, [settingsLoaded, sessionsLoaded, initialFileTreeReady]);
 
 	// --- GitHub CLI availability check ---
 	useEffect(() => {

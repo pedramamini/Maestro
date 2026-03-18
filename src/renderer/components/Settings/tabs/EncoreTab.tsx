@@ -31,6 +31,7 @@ import type { AccountProfile } from '../../../../shared/account-types';
 import { AgentConfigPanel } from '../../shared/AgentConfigPanel';
 import { AGENT_TILES } from '../../Wizard/screens/AgentSelectionScreen';
 import { getModalActions } from '../../../stores/modalStore';
+import { isBetaAgent } from '../../../../shared/agentMetadata';
 
 export interface EncoreTabProps {
 	theme: Theme;
@@ -58,6 +59,60 @@ export function EncoreTab({ theme, isOpen }: EncoreTabProps) {
 		wakatimeDetailedTracking,
 		setWakatimeDetailedTracking,
 	} = useSettings();
+
+	// Symphony registry URL management
+	const [newRegistryUrl, setNewRegistryUrl] = useState('');
+	const [registryUrlError, setRegistryUrlError] = useState<string | null>(null);
+
+	const canonicalizeUrl = (raw: string): string => {
+		const u = new URL(raw.trim());
+		u.hash = '';
+		return u.href;
+	};
+
+	const handleAddRegistryUrl = () => {
+		const trimmed = newRegistryUrl.trim();
+		if (!trimmed) {
+			setRegistryUrlError('URL cannot be empty');
+			return;
+		}
+		let canonical: string;
+		try {
+			const parsed = new URL(trimmed);
+			if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') {
+				setRegistryUrlError('URL must use HTTP or HTTPS');
+				return;
+			}
+			canonical = canonicalizeUrl(trimmed);
+		} catch {
+			setRegistryUrlError('Invalid URL format');
+			return;
+		}
+		try {
+			if (canonical === canonicalizeUrl(SYMPHONY_REGISTRY_URL)) {
+				setRegistryUrlError('This is the default registry URL');
+				return;
+			}
+		} catch {
+			/* default URL should always parse */
+		}
+		const existing = new Set(
+			symphonyRegistryUrls.map((u) => {
+				try {
+					return canonicalizeUrl(u);
+				} catch {
+					return u.trim();
+				}
+			})
+		);
+		if (existing.has(canonical)) {
+			setRegistryUrlError('URL already added');
+			return;
+		}
+		setSymphonyRegistryUrls([...symphonyRegistryUrls, canonical]);
+		setNewRegistryUrl('');
+		setRegistryUrlError(null);
+	};
 
 	// Centralized agent configuration via shared hook
 	const ac = useAgentConfiguration({
@@ -134,10 +189,6 @@ export function EncoreTab({ theme, isOpen }: EncoreTabProps) {
 		const throttled = virtuososAccounts.filter((a) => a.status === 'throttled').length;
 		return { active, throttled, total: virtuososAccounts.length };
 	}, [virtuososAccounts]);
-
-	// Symphony registry URL management
-	const [newRegistryUrl, setNewRegistryUrl] = useState('');
-	const [registryUrlError, setRegistryUrlError] = useState<string | null>(null);
 
 	// Check WakaTime CLI availability when section renders or toggle is enabled
 	useEffect(() => {
@@ -219,56 +270,6 @@ export function EncoreTab({ theme, isOpen }: EncoreTabProps) {
 		setStatsClearResult(null);
 	}, [isOpen]);
 
-	const canonicalizeUrl = (raw: string): string => {
-		const u = new URL(raw.trim());
-		u.hash = '';
-		return u.href;
-	};
-
-	const handleAddRegistryUrl = () => {
-		const trimmed = newRegistryUrl.trim();
-		if (!trimmed) {
-			setRegistryUrlError('URL cannot be empty');
-			return;
-		}
-		let canonical: string;
-		try {
-			const parsed = new URL(trimmed);
-			if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') {
-				setRegistryUrlError('URL must use HTTP or HTTPS');
-				return;
-			}
-			canonical = canonicalizeUrl(trimmed);
-		} catch {
-			setRegistryUrlError('Invalid URL format');
-			return;
-		}
-		try {
-			if (canonical === canonicalizeUrl(SYMPHONY_REGISTRY_URL)) {
-				setRegistryUrlError('This is the default registry URL');
-				return;
-			}
-		} catch {
-			/* default URL should always parse */
-		}
-		const existing = new Set(
-			symphonyRegistryUrls.map((u) => {
-				try {
-					return canonicalizeUrl(u);
-				} catch {
-					return u.trim();
-				}
-			})
-		);
-		if (existing.has(canonical)) {
-			setRegistryUrlError('URL already added');
-			return;
-		}
-		setSymphonyRegistryUrls([...symphonyRegistryUrls, canonical]);
-		setNewRegistryUrl('');
-		setRegistryUrlError(null);
-	};
-
 	const dnAvailableTiles = AGENT_TILES.filter((tile) => {
 		if (!tile.supported) return false;
 		return ac.detectedAgents.some((a: AgentConfig) => a.id === tile.id);
@@ -324,7 +325,10 @@ export function EncoreTab({ theme, isOpen }: EncoreTabProps) {
 				<button
 					className="w-full flex items-center justify-between p-4 text-left"
 					onClick={() =>
-						setEncoreFeatures({ ...encoreFeatures, usageStats: !encoreFeatures.usageStats })
+						setEncoreFeatures({
+							...encoreFeatures,
+							usageStats: !encoreFeatures.usageStats,
+						})
 					}
 				>
 					<div className="flex items-center gap-3">
@@ -682,7 +686,10 @@ export function EncoreTab({ theme, isOpen }: EncoreTabProps) {
 				<button
 					className="w-full flex items-center justify-between p-4 text-left"
 					onClick={() =>
-						setEncoreFeatures({ ...encoreFeatures, symphony: !encoreFeatures.symphony })
+						setEncoreFeatures({
+							...encoreFeatures,
+							symphony: !encoreFeatures.symphony,
+						})
 					}
 				>
 					<div className="flex items-center gap-3">
@@ -748,7 +755,10 @@ export function EncoreTab({ theme, isOpen }: EncoreTabProps) {
 								</span>
 								<span
 									className="text-[10px] px-1.5 py-0.5 rounded flex-shrink-0"
-									style={{ color: theme.colors.textDim, backgroundColor: theme.colors.border }}
+									style={{
+										color: theme.colors.textDim,
+										backgroundColor: theme.colors.border,
+									}}
 								>
 									default
 								</span>
@@ -821,7 +831,10 @@ export function EncoreTab({ theme, isOpen }: EncoreTabProps) {
 									onClick={handleAddRegistryUrl}
 									disabled={!newRegistryUrl.trim()}
 									className="flex items-center gap-1.5 px-3 py-2 rounded text-sm font-medium transition-colors disabled:opacity-50"
-									style={{ backgroundColor: theme.colors.accent, color: theme.colors.bgMain }}
+									style={{
+										backgroundColor: theme.colors.accent,
+										color: theme.colors.bgMain,
+									}}
 								>
 									<Plus className="w-4 h-4" /> Add
 								</button>
@@ -829,6 +842,70 @@ export function EncoreTab({ theme, isOpen }: EncoreTabProps) {
 						</div>
 					</div>
 				)}
+			</div>
+
+			{/* Maestro Cue Feature Section */}
+			<div
+				className="rounded-lg border"
+				style={{
+					borderColor: encoreFeatures.maestroCue ? theme.colors.accent : theme.colors.border,
+					backgroundColor: encoreFeatures.maestroCue ? `${theme.colors.accent}08` : 'transparent',
+				}}
+			>
+				<button
+					className="w-full flex items-center justify-between p-4 text-left"
+					onClick={() =>
+						setEncoreFeatures({
+							...encoreFeatures,
+							maestroCue: !encoreFeatures.maestroCue,
+						})
+					}
+				>
+					<div className="flex items-center gap-3">
+						<Zap
+							className="w-5 h-5"
+							style={{
+								color: encoreFeatures.maestroCue ? theme.colors.accent : theme.colors.textDim,
+							}}
+						/>
+						<div>
+							<div
+								className="text-sm font-bold flex items-center gap-2"
+								style={{ color: theme.colors.textMain }}
+							>
+								Maestro Cue
+								<span
+									className="px-1.5 py-0.5 rounded text-[9px] font-bold uppercase"
+									style={{
+										backgroundColor: theme.colors.warning + '30',
+										color: theme.colors.warning,
+									}}
+								>
+									Beta
+								</span>
+							</div>
+							<div className="text-xs mt-0.5" style={{ color: theme.colors.textDim }}>
+								Event-driven automation — trigger agent prompts on timers, file changes, and agent
+								completions
+							</div>
+						</div>
+					</div>
+					<div
+						className={`relative w-10 h-5 rounded-full transition-colors ${encoreFeatures.maestroCue ? '' : 'opacity-50'}`}
+						style={{
+							backgroundColor: encoreFeatures.maestroCue
+								? theme.colors.accent
+								: theme.colors.border,
+						}}
+					>
+						<div
+							className="absolute top-0.5 w-4 h-4 rounded-full bg-white transition-transform"
+							style={{
+								transform: encoreFeatures.maestroCue ? 'translateX(22px)' : 'translateX(2px)',
+							}}
+						/>
+					</div>
+				</button>
 			</div>
 
 			{/* Director's Notes Feature Section */}
@@ -944,10 +1021,7 @@ export function EncoreTab({ theme, isOpen }: EncoreTabProps) {
 											aria-label="Select synopsis provider agent"
 										>
 											{dnAvailableTiles.map((tile) => {
-												const isBeta =
-													tile.id === 'codex' ||
-													tile.id === 'opencode' ||
-													tile.id === 'factory-droid';
+												const isBeta = isBetaAgent(tile.id);
 												return (
 													<option key={tile.id} value={tile.id}>
 														{tile.name}

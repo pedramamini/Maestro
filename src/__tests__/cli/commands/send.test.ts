@@ -16,8 +16,7 @@ import type { SessionInfo } from '../../../shared/types';
 // Mock agent-spawner
 vi.mock('../../../cli/services/agent-spawner', () => ({
 	spawnAgent: vi.fn(),
-	detectClaude: vi.fn(),
-	detectCodex: vi.fn(),
+	detectAgent: vi.fn(),
 }));
 
 // Mock storage
@@ -31,8 +30,21 @@ vi.mock('../../../main/parsers/usage-aggregator', () => ({
 	estimateContextUsage: vi.fn(),
 }));
 
+// Mock agent definitions
+vi.mock('../../../main/agents/definitions', () => ({
+	getAgentDefinition: vi.fn((agentId: string) => {
+		const defs: Record<string, { name: string; binaryName: string }> = {
+			'claude-code': { name: 'Claude Code', binaryName: 'claude' },
+			codex: { name: 'Codex', binaryName: 'codex' },
+			opencode: { name: 'OpenCode', binaryName: 'opencode' },
+			'factory-droid': { name: 'Factory Droid', binaryName: 'droid' },
+		};
+		return defs[agentId] || undefined;
+	}),
+}));
+
 import { send } from '../../../cli/commands/send';
-import { spawnAgent, detectClaude, detectCodex } from '../../../cli/services/agent-spawner';
+import { spawnAgent, detectAgent } from '../../../cli/services/agent-spawner';
 import { resolveAgentId, getSessionById } from '../../../cli/services/storage';
 import { estimateContextUsage } from '../../../main/parsers/usage-aggregator';
 
@@ -58,7 +70,7 @@ describe('send command', () => {
 	it('should query an agent and return JSON response for new session', async () => {
 		vi.mocked(resolveAgentId).mockReturnValue('agent-abc-123');
 		vi.mocked(getSessionById).mockReturnValue(mockAgent());
-		vi.mocked(detectClaude).mockResolvedValue({ available: true, path: '/usr/bin/claude' });
+		vi.mocked(detectAgent).mockResolvedValue({ available: true, path: '/usr/bin/claude' });
 		vi.mocked(spawnAgent).mockResolvedValue({
 			success: true,
 			response: 'Hello from Claude!',
@@ -84,22 +96,23 @@ describe('send command', () => {
 			undefined,
 			{ readOnlyMode: undefined }
 		);
-		expect(consoleSpy).toHaveBeenCalledTimes(1);
 
 		const output = JSON.parse(consoleSpy.mock.calls[0][0]);
-		expect(output.success).toBe(true);
-		expect(output.agentId).toBe('agent-abc-123');
-		expect(output.agentName).toBe('Test Agent');
-		expect(output.sessionId).toBe('session-xyz-789');
-		expect(output.response).toBe('Hello from Claude!');
-		expect(output.usage).toEqual({
-			inputTokens: 1000,
-			outputTokens: 500,
-			cacheReadInputTokens: 200,
-			cacheCreationInputTokens: 100,
-			totalCostUsd: 0.05,
-			contextWindow: 200000,
-			contextUsagePercent: 1,
+		expect(output).toEqual({
+			agentId: 'agent-abc-123',
+			agentName: 'Test Agent',
+			sessionId: 'session-xyz-789',
+			response: 'Hello from Claude!',
+			success: true,
+			usage: {
+				inputTokens: 1000,
+				outputTokens: 500,
+				cacheReadInputTokens: 200,
+				cacheCreationInputTokens: 100,
+				totalCostUsd: 0.05,
+				contextWindow: 200000,
+				contextUsagePercent: 1,
+			},
 		});
 		expect(processExitSpy).not.toHaveBeenCalled();
 	});
@@ -107,7 +120,7 @@ describe('send command', () => {
 	it('should resume an existing session when --session is provided', async () => {
 		vi.mocked(resolveAgentId).mockReturnValue('agent-abc-123');
 		vi.mocked(getSessionById).mockReturnValue(mockAgent());
-		vi.mocked(detectClaude).mockResolvedValue({ available: true, path: '/usr/bin/claude' });
+		vi.mocked(detectAgent).mockResolvedValue({ available: true, path: '/usr/bin/claude' });
 		vi.mocked(spawnAgent).mockResolvedValue({
 			success: true,
 			response: 'Follow-up response',
@@ -142,7 +155,7 @@ describe('send command', () => {
 	it('should use the agent cwd from Maestro session', async () => {
 		vi.mocked(resolveAgentId).mockReturnValue('agent-abc-123');
 		vi.mocked(getSessionById).mockReturnValue(mockAgent({ cwd: '/custom/project/path' }));
-		vi.mocked(detectClaude).mockResolvedValue({ available: true, path: '/usr/bin/claude' });
+		vi.mocked(detectAgent).mockResolvedValue({ available: true, path: '/usr/bin/claude' });
 		vi.mocked(spawnAgent).mockResolvedValue({
 			success: true,
 			response: 'Done',
@@ -165,7 +178,7 @@ describe('send command', () => {
 		vi.mocked(getSessionById).mockReturnValue(
 			mockAgent({ id: 'agent-codex-1', toolType: 'codex' })
 		);
-		vi.mocked(detectCodex).mockResolvedValue({ available: true, path: '/usr/bin/codex' });
+		vi.mocked(detectAgent).mockResolvedValue({ available: true, path: '/usr/bin/codex' });
 		vi.mocked(spawnAgent).mockResolvedValue({
 			success: true,
 			response: 'Codex response',
@@ -174,8 +187,7 @@ describe('send command', () => {
 
 		await send('agent-codex', 'Use codex', {});
 
-		expect(detectCodex).toHaveBeenCalled();
-		expect(detectClaude).not.toHaveBeenCalled();
+		expect(detectAgent).toHaveBeenCalledWith('codex');
 		expect(spawnAgent).toHaveBeenCalledWith('codex', expect.any(String), 'Use codex', undefined, {
 			readOnlyMode: undefined,
 		});
@@ -184,7 +196,7 @@ describe('send command', () => {
 	it('should pass readOnlyMode when --read-only flag is set', async () => {
 		vi.mocked(resolveAgentId).mockReturnValue('agent-abc-123');
 		vi.mocked(getSessionById).mockReturnValue(mockAgent());
-		vi.mocked(detectClaude).mockResolvedValue({ available: true, path: '/usr/bin/claude' });
+		vi.mocked(detectAgent).mockResolvedValue({ available: true, path: '/usr/bin/claude' });
 		vi.mocked(spawnAgent).mockResolvedValue({
 			success: true,
 			response: 'Read-only response',
@@ -232,20 +244,20 @@ describe('send command', () => {
 	it('should exit with error when Claude CLI is not found', async () => {
 		vi.mocked(resolveAgentId).mockReturnValue('agent-abc-123');
 		vi.mocked(getSessionById).mockReturnValue(mockAgent());
-		vi.mocked(detectClaude).mockResolvedValue({ available: false });
+		vi.mocked(detectAgent).mockResolvedValue({ available: false });
 
 		await send('agent-abc', 'Hello', {});
 
 		const output = JSON.parse(consoleSpy.mock.calls[0][0]);
 		expect(output.success).toBe(false);
-		expect(output.code).toBe('CLAUDE_NOT_FOUND');
+		expect(output.code).toBe('CLAUDE_CODE_NOT_FOUND');
 		expect(processExitSpy).toHaveBeenCalledWith(1);
 	});
 
 	it('should handle agent failure with error in response', async () => {
 		vi.mocked(resolveAgentId).mockReturnValue('agent-abc-123');
 		vi.mocked(getSessionById).mockReturnValue(mockAgent());
-		vi.mocked(detectClaude).mockResolvedValue({ available: true, path: '/usr/bin/claude' });
+		vi.mocked(detectAgent).mockResolvedValue({ available: true, path: '/usr/bin/claude' });
 		vi.mocked(spawnAgent).mockResolvedValue({
 			success: false,
 			error: 'Agent crashed',
@@ -276,7 +288,7 @@ describe('send command', () => {
 	it('should handle null usage stats gracefully', async () => {
 		vi.mocked(resolveAgentId).mockReturnValue('agent-abc-123');
 		vi.mocked(getSessionById).mockReturnValue(mockAgent());
-		vi.mocked(detectClaude).mockResolvedValue({ available: true, path: '/usr/bin/claude' });
+		vi.mocked(detectAgent).mockResolvedValue({ available: true, path: '/usr/bin/claude' });
 		vi.mocked(spawnAgent).mockResolvedValue({
 			success: true,
 			response: 'OK',

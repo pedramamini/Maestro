@@ -293,6 +293,10 @@ export const XTerminal = forwardRef<XTerminalHandle, XTerminalProps>(function XT
 		// Cmd+[ / Cmd+] (navigate tabs), etc. from reaching the app-level handler.
 		// Returning false from this handler tells xterm to NOT handle the key itself,
 		// so the browser's normal event propagation continues to the window listener.
+		//
+		// NOTE: This only works if the macOS native menu (src/main/index.ts) does NOT
+		// register conflicting accelerators. E.g., { role: 'close' } would steal Cmd+W
+		// at the NSMenu level before it reaches the renderer.
 		term.attachCustomKeyEventHandler((e: KeyboardEvent) => {
 			// Let Ctrl+Shift+` through for new-terminal-tab shortcut
 			if (e.ctrlKey && e.shiftKey && e.code === 'Backquote') return false;
@@ -300,6 +304,12 @@ export const XTerminal = forwardRef<XTerminalHandle, XTerminalProps>(function XT
 			if (e.metaKey) return false;
 			// Let Ctrl+Shift combos through (cross-platform app shortcuts)
 			if (e.ctrlKey && e.shiftKey) return false;
+			// Let Alt key combos through so Maestro shortcuts like Alt+Q (Cue),
+			// Alt+J (jump to terminal), Alt+Shift+U (toggle tab unread) work.
+			// macOptionIsMeta is not enabled, so Alt doesn't send escape sequences
+			// by default — these events would just produce dead/special characters
+			// that aren't useful in the terminal context.
+			if (e.altKey) return false;
 			return true;
 		});
 

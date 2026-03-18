@@ -10,8 +10,6 @@ Maestro Cue is an event-driven automation engine that watches for things happeni
 Maestro Cue is an **Encore Feature** — it's disabled by default. Enable it in **Settings > Encore Features** to access the shortcut, modal, and automation engine.
 </Note>
 
-![Encore Features settings panel](./screenshots/encore-features.png)
-
 ## What Can Cue Do?
 
 A few examples of what you can automate with Cue:
@@ -53,8 +51,8 @@ Open the Cue dashboard to monitor and manage all automation activity.
 
 **Keyboard shortcut:**
 
-- macOS: `Cmd+Shift+Q`
-- Windows/Linux: `Ctrl+Shift+Q`
+- macOS: `Option+Q`
+- Windows/Linux: `Alt+Q`
 
 **From Quick Actions:**
 
@@ -147,10 +145,10 @@ See [Advanced Patterns](./maestro-cue-advanced) for full documentation.
 
 ## Keyboard Shortcuts
 
-| Shortcut                       | Action         |
-| ------------------------------ | -------------- |
-| `Cmd+Shift+Q` / `Ctrl+Shift+Q` | Open Cue Modal |
-| `Esc`                          | Close modal    |
+| Shortcut             | Action         |
+| -------------------- | -------------- |
+| `Option+Q` / `Alt+Q` | Open Cue Modal |
+| `Esc`                | Close modal    |
 
 ## History Integration
 

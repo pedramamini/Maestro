@@ -11,12 +11,13 @@ import * as crypto from 'crypto';
 import * as fs from 'fs';
 import * as path from 'path';
 import type { CueEvent, CueRunResult, CueRunStatus, CueSubscription } from './cue-types';
-import type { HistoryEntry, SessionInfo } from '../../shared/types';
+import type { HistoryEntry, SessionInfo, ToolType } from '../../shared/types';
 import { substituteTemplateVariables, type TemplateContext } from '../../shared/templateVariables';
 import { getAgentDefinition, getAgentCapabilities } from '../agents';
 import { buildAgentArgs, applyAgentConfigOverrides } from '../utils/agent-args';
 import { wrapSpawnWithSsh, type SshSpawnWrapConfig } from '../utils/ssh-spawn-wrapper';
 import type { SshRemoteSettingsStore } from '../utils/ssh-remote-resolver';
+import { getOutputParser } from '../parsers';
 
 const SIGKILL_DELAY_MS = 5000;
 const MAX_HISTORY_RESPONSE_LENGTH = 10000;
@@ -46,6 +47,34 @@ export interface CueExecutionConfig {
 
 /** Map of active Cue processes by runId */
 const activeProcesses = new Map<string, ChildProcess>();
+
+/**
+ * Extract clean human-readable text from agent stdout.
+ * For agents that output JSON/NDJSON (like OpenCode --format json), parses each
+ * line and collects text from 'result' events. Falls back to raw stdout when no
+ * parser is available or no result-text events are found (e.g. plain-text agents).
+ */
+function extractCleanStdout(rawStdout: string, toolType: string): string {
+	if (!rawStdout.trim()) {
+		return rawStdout;
+	}
+
+	const parser = getOutputParser(toolType as ToolType);
+	if (!parser) {
+		return rawStdout;
+	}
+
+	const textParts: string[] = [];
+	for (const line of rawStdout.split('\n')) {
+		if (!line.trim()) continue;
+		const event = parser.parseJsonLine(line);
+		if (event?.type === 'result' && event.text) {
+			textParts.push(event.text);
+		}
+	}
+
+	return textParts.length > 0 ? textParts.join('\n') : rawStdout;
+}
 
 /**
  * Execute a Cue-triggered prompt by spawning an agent process.
@@ -163,6 +192,7 @@ export async function executeCuePrompt(config: CueExecutionConfig): Promise<CueR
 			ghBranch: String(event.payload.head_branch ?? ''),
 			ghBaseBranch: String(event.payload.base_branch ?? ''),
 			ghAssignees: String(event.payload.assignees ?? ''),
+			ghMergedAt: String(event.payload.merged_at ?? ''),
 		};
 	}
 
@@ -219,37 +249,19 @@ export async function executeCuePrompt(config: CueExecutionConfig): Promise<CueR
 	// Determine the command to use
 	let command = customPath || agentDef.command;
 
-	// 6. Apply SSH wrapping if configured
+	// 6. Apply SSH wrapping if configured.
+	// For SSH: wrapSpawnWithSsh appends the prompt itself (via promptArgs/noPromptSeparator/'--, prompt').
+	//          Pass finalArgs WITHOUT the prompt so the wrapper handles it cleanly.
+	// For local: append the prompt below after the SSH check (same logic as ChildProcessSpawner).
 	let spawnArgs = finalArgs;
 	let spawnCwd = projectRoot;
 	let spawnEnvVars = effectiveEnvVars;
 	let prompt: string | undefined = substitutedPrompt;
 
-	let sendPromptViaStdin = false;
-
-	if (sshRemoteConfig?.enabled) {
-		if (!sshStore) {
-			const message = `SSH is enabled for session "${session.name}" but SSH settings store is unavailable`;
-			onLog('error', message);
-			return {
-				runId,
-				sessionId: session.id,
-				sessionName: session.name,
-				subscriptionName: subscription.name,
-				event,
-				status: 'failed',
-				stdout: '',
-				stderr: message,
-				exitCode: null,
-				durationMs: Date.now() - startTime,
-				startedAt,
-				endedAt: new Date().toISOString(),
-			};
-		}
-
+	if (sshRemoteConfig?.enabled && sshStore) {
 		const sshWrapConfig: SshSpawnWrapConfig = {
 			command,
-			args: finalArgs,
+			args: finalArgs, // No prompt yet — wrapSpawnWithSsh appends it via config.prompt
 			cwd: projectRoot,
 			prompt: substitutedPrompt,
 			customEnvVars: effectiveEnvVars,
@@ -264,13 +276,25 @@ export async function executeCuePrompt(config: CueExecutionConfig): Promise<CueR
 		spawnCwd = sshResult.cwd;
 		spawnEnvVars = sshResult.customEnvVars;
 		prompt = sshResult.prompt;
-		sendPromptViaStdin = Boolean(sshResult.prompt);
 
 		if (sshResult.sshRemoteUsed) {
 			onLog(
 				'cue',
 				`[CUE] Using SSH remote: ${sshResult.sshRemoteUsed.name || sshResult.sshRemoteUsed.host}`
 			);
+		}
+	}
+
+	// For local execution: append prompt as a positional CLI argument.
+	// SSH mode skips this — wrapSpawnWithSsh already embedded the prompt in spawnArgs.
+	// Mirrors ChildProcessSpawner logic: promptArgs > noPromptSeparator > '--' separator.
+	if (!sshRemoteConfig?.enabled) {
+		if (agentDef.promptArgs) {
+			spawnArgs = [...spawnArgs, ...agentDef.promptArgs(substitutedPrompt)];
+		} else if (agentDef.noPromptSeparator) {
+			spawnArgs = [...spawnArgs, substitutedPrompt];
+		} else {
+			spawnArgs = [...spawnArgs, '--', substitutedPrompt];
 		}
 	}
 
@@ -312,7 +336,7 @@ export async function executeCuePrompt(config: CueExecutionConfig): Promise<CueR
 				subscriptionName: subscription.name,
 				event,
 				status,
-				stdout,
+				stdout: extractCleanStdout(stdout, toolType),
 				stderr,
 				exitCode,
 				durationMs: Date.now() - startTime,
@@ -349,7 +373,7 @@ export async function executeCuePrompt(config: CueExecutionConfig): Promise<CueR
 		// For agents with promptArgs (like OpenCode -p), the prompt is in the args
 		// For others (like Claude --print), if prompt was passed via args separator, skip stdin
 		// When SSH wrapping returns a prompt, it means "send via stdin"
-		if (prompt && sendPromptViaStdin) {
+		if (prompt && sshRemoteConfig?.enabled) {
 			// SSH large prompt mode — send via stdin
 			child.stdin?.write(prompt);
 			child.stdin?.end();
@@ -394,9 +418,9 @@ export function stopCueRun(runId: string): boolean {
 
 	child.kill('SIGTERM');
 
-	// Escalate to SIGKILL after delay if process hasn't exited
+	// Escalate to SIGKILL after delay
 	setTimeout(() => {
-		if (child.exitCode === null && child.signalCode === null) {
+		if (!child.killed) {
 			child.kill('SIGKILL');
 		}
 	}, SIGKILL_DELAY_MS);

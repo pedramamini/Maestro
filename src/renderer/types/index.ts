@@ -783,6 +783,10 @@ export interface AgentCapabilities {
 	supportsThinkingDisplay?: boolean;
 	supportsContextMerge?: boolean;
 	supportsContextExport?: boolean;
+	supportsWizard?: boolean;
+	supportsGroupChatModeration?: boolean;
+	usesJsonLineOutput?: boolean;
+	usesCombinedContextWindow?: boolean;
 }
 
 export interface AgentConfig {
@@ -797,6 +801,7 @@ export interface AgentConfig {
 	hidden?: boolean; // If true, agent is hidden from UI (internal use only)
 	configOptions?: AgentConfigOption[]; // Agent-specific configuration options
 	yoloModeArgs?: string[]; // Args for YOLO/full-access mode (e.g., ['--dangerously-skip-permissions'])
+	readOnlyCliEnforced?: boolean; // Whether the agent's CLI enforces read-only mode (false = prompt-only enforcement)
 	capabilities?: AgentCapabilities; // Agent capabilities (added at runtime)
 }
 

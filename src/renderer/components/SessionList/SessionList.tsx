@@ -130,6 +130,7 @@ function SessionListInner(props: SessionListProps) {
 	);
 	const maestroCueEnabled = useSettingsStore((s) => s.encoreFeatures.maestroCue);
 	const activeBatchSessionIds = useBatchStore(useShallow(selectActiveBatchSessionIds));
+
 	const groupChats = useGroupChatStore((s) => s.groupChats);
 	const activeGroupChatId = useGroupChatStore((s) => s.activeGroupChatId);
 	const groupChatState = useGroupChatStore((s) => s.groupChatState);
@@ -1277,8 +1278,8 @@ function SessionListInner(props: SessionListProps) {
 					}}
 					onEdit={() => onEditAgent(contextMenuSession)}
 					onDuplicate={() => {
-						setDuplicatingSessionId(contextMenuSession.id);
 						onNewAgentSession();
+						setDuplicatingSessionId(contextMenuSession.id);
 						setContextMenu(null);
 					}}
 					onToggleBookmark={() => toggleBookmark(contextMenuSession.id)}

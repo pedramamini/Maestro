@@ -68,6 +68,14 @@ vi.mock('../../../renderer/stores/sessionStore', () => ({
 	},
 }));
 
+// Mock modalStore getModalActions
+const mockOpenCueYamlEditor = vi.fn();
+vi.mock('../../../renderer/stores/modalStore', () => ({
+	getModalActions: () => ({
+		openCueYamlEditor: mockOpenCueYamlEditor,
+	}),
+}));
+
 // Mock window.maestro.cue
 const mockGetGraphData = vi.fn().mockResolvedValue([]);
 const mockDeleteYaml = vi.fn().mockResolvedValue(undefined);
@@ -462,7 +470,7 @@ describe('CueModal', () => {
 			expect(screen.getByText('Edit YAML')).toBeInTheDocument();
 		});
 
-		it('should open CueYamlEditor when Edit YAML is clicked', () => {
+		it('should call openCueYamlEditor with sessionId and projectRoot when Edit YAML is clicked', () => {
 			mockUseCueReturn = {
 				...defaultUseCueReturn,
 				sessions: [mockSession],
@@ -470,10 +478,10 @@ describe('CueModal', () => {
 
 			render(<CueModal theme={mockTheme} onClose={mockOnClose} />);
 			fireEvent.click(screen.getByText('Dashboard'));
-
 			fireEvent.click(screen.getByText('Edit YAML'));
 
-			expect(screen.getByTestId('cue-yaml-editor')).toBeInTheDocument();
+			expect(mockOpenCueYamlEditor).toHaveBeenCalledOnce();
+			expect(mockOpenCueYamlEditor).toHaveBeenCalledWith('sess-1', '/test/project');
 		});
 	});
 
@@ -551,6 +559,52 @@ describe('CueModal', () => {
 
 			// Should close without confirmation
 			expect(mockOnClose).toHaveBeenCalledOnce();
+		});
+	});
+
+	describe('edge cases', () => {
+		it('renders without crash when status has many sessions', () => {
+			const manySessions = Array.from({ length: 20 }, (_, i) => ({
+				...mockSession,
+				sessionId: `sess-${i}`,
+				sessionName: `Session ${i}`,
+				subscriptionCount: i + 1,
+				activeRuns: i % 3,
+			}));
+
+			mockUseCueReturn = {
+				...defaultUseCueReturn,
+				sessions: manySessions,
+			};
+
+			render(<CueModal theme={mockTheme} onClose={mockOnClose} />);
+			fireEvent.click(screen.getByText('Dashboard'));
+
+			// All 20 sessions should be rendered
+			for (let i = 0; i < 20; i++) {
+				expect(screen.getByText(`Session ${i}`)).toBeInTheDocument();
+			}
+		});
+
+		it('renders activity log entries with long names', () => {
+			const longName = 'A'.repeat(200);
+			const longSubName = 'B'.repeat(200);
+			const longNameRun = {
+				...mockCompletedRun,
+				runId: 'run-long',
+				sessionName: longName,
+				subscriptionName: longSubName,
+			};
+
+			mockUseCueReturn = {
+				...defaultUseCueReturn,
+				activityLog: [longNameRun],
+			};
+
+			render(<CueModal theme={mockTheme} onClose={mockOnClose} />);
+			fireEvent.click(screen.getByText('Dashboard'));
+
+			expect(screen.getByText(/completed in 5s/)).toBeInTheDocument();
 		});
 	});
 

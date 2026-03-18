@@ -21,6 +21,7 @@ export const DEFAULT_SHORTCUTS: Record<string, Shortcut> = {
 	moveToGroup: { id: 'moveToGroup', label: 'Move Session to Group', keys: ['Meta', 'Shift', 'm'] },
 	toggleMode: { id: 'toggleMode', label: 'Switch AI/Shell Mode', keys: ['Meta', 'j'] },
 	quickAction: { id: 'quickAction', label: 'Quick Actions', keys: ['Meta', 'k'] },
+	agentSwitcher: { id: 'agentSwitcher', label: 'Switch Agent', keys: ['Meta', 'o'] },
 	help: { id: 'help', label: 'Show Shortcuts', keys: ['Meta', '/'] },
 	settings: { id: 'settings', label: 'Open Settings', keys: ['Meta', ','] },
 	agentSettings: { id: 'agentSettings', label: 'Open Agent Settings', keys: ['Alt', 'Meta', ','] },
@@ -78,8 +79,8 @@ export const DEFAULT_SHORTCUTS: Record<string, Shortcut> = {
 		label: "Director's Notes",
 		keys: ['Meta', 'Shift', 'o'],
 	},
-	maestroCue: {
-		id: 'maestroCue',
+	openCue: {
+		id: 'openCue',
 		label: 'Maestro Cue',
 		keys: ['Alt', 'q'],
 	},
@@ -97,6 +98,11 @@ export const DEFAULT_SHORTCUTS: Record<string, Shortcut> = {
 		id: 'jumpToTerminal',
 		label: 'Jump to Terminal Tab',
 		keys: ['Alt', 'j'],
+	},
+	fontSizeReset: {
+		id: 'fontSizeReset',
+		label: 'Reset Font Size',
+		keys: ['Meta', 'Shift', '0'],
 	},
 };
 
@@ -148,11 +154,6 @@ export const FIXED_SHORTCUTS: Record<string, Shortcut> = {
 		id: 'fontSizeDecrease',
 		label: 'Decrease Font Size',
 		keys: ['Meta', '-'],
-	},
-	fontSizeReset: {
-		id: 'fontSizeReset',
-		label: 'Reset Font Size',
-		keys: ['Meta', '0'],
 	},
 };
 

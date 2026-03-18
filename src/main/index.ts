@@ -9,7 +9,7 @@ import { ProcessManager } from './process-manager';
 import { WebServer } from './web-server';
 import { AgentDetector } from './agents';
 import { CueEngine } from './cue/cue-engine';
-import type { ToolType } from '../shared/types';
+import { executeCuePrompt, recordCueHistoryEntry, stopCueRun } from './cue/cue-executor';
 import { logger } from './utils/logger';
 import { tunnelManager } from './tunnel-manager';
 import { powerManager } from './power-manager';
@@ -49,6 +49,7 @@ import {
 	registerFilesystemHandlers,
 	registerAttachmentsHandlers,
 	registerWebHandlers,
+	ensureCliServer,
 	registerLeaderboardHandlers,
 	registerNotificationsHandlers,
 	registerSymphonyHandlers,
@@ -129,6 +130,7 @@ import {
 import { setupProcessListeners as setupProcessListenersModule } from './process-listeners';
 import { setupWakaTimeListener } from './process-listeners/wakatime-listener';
 import { WakaTimeManager } from './wakatime-manager';
+import type { TemplateContext } from '../shared/templateVariables';
 
 // ============================================================================
 // Data Directory Configuration (MUST happen before any Store initialization)
@@ -257,6 +259,15 @@ const windowStateStore = getWindowStateStore();
 const claudeSessionOriginsStore = getClaudeSessionOriginsStore();
 const agentSessionOriginsStore = getAgentSessionOriginsStore();
 
+function getAgentConfigForAgent(agentId: string): Record<string, any> {
+	const allConfigs = agentConfigsStore.get('configs', {});
+	return allConfigs[agentId] || {};
+}
+
+function getCustomEnvVarsForAgent(agentId: string): Record<string, string> | undefined {
+	return getAgentConfigForAgent(agentId).customEnvVars as Record<string, string> | undefined;
+}
+
 // Note: History storage is now handled by HistoryManager which uses per-session files
 // in the history/ directory. The legacy maestro-history.json file is migrated automatically.
 // See src/main/history-manager.ts for details.
@@ -371,75 +382,87 @@ app.whenReady().then(async () => {
 				id: s.id,
 				name: s.name,
 				toolType: s.toolType,
-				cwd: s.cwd || s.fullPath || os.homedir(),
-				projectRoot: s.cwd || s.fullPath || os.homedir(),
+				cwd: s.cwd || s.projectRoot || s.fullPath || os.homedir(),
+				projectRoot: s.projectRoot || s.cwd || s.fullPath || os.homedir(),
 			}));
 		},
-		onCueRun: async (sessionId, prompt, event) => {
-			const session = sessionsStore.get('sessions', []).find((s: any) => s.id === sessionId);
-			if (!session) {
-				logger.error(`[CUE] Session not found: ${sessionId}`, 'Cue');
-				return {
-					runId: event.id,
-					sessionId,
-					sessionName: '',
-					subscriptionName: event.triggerName,
-					event,
-					status: 'failed' as const,
-					stdout: '',
-					stderr: 'Session not found',
-					exitCode: null,
-					durationMs: 0,
-					startedAt: new Date().toISOString(),
-					endedAt: new Date().toISOString(),
-				};
+		onCueRun: async ({ runId, sessionId, prompt, subscriptionName, event, timeoutMs }) => {
+			const storedSessions = sessionsStore.get('sessions', []) as Array<Record<string, any>>;
+			const storedSession = storedSessions.find((s) => s.id === sessionId);
+			if (!storedSession) {
+				throw new Error(`Cue target session not found: ${sessionId}`);
 			}
 
-			const { executeCuePrompt } = await import('./cue/cue-executor');
-			const agentConfigs = agentConfigsStore.get('configs', {}) as Record<string, any>;
-			const sessionConfig = agentConfigs[session.toolType] || {};
-			const projectRoot = session.cwd || session.fullPath || os.homedir();
-			const toolType = session.toolType as ToolType;
-			return await executeCuePrompt({
-				runId: event.id,
+			const projectRoot =
+				storedSession.projectRoot || storedSession.cwd || storedSession.fullPath || os.homedir();
+			const templateContext: TemplateContext = {
 				session: {
-					id: session.id,
-					name: session.name,
-					toolType,
+					id: storedSession.id,
+					name: storedSession.name,
+					toolType: storedSession.toolType,
 					cwd: projectRoot,
 					projectRoot,
+					fullPath: storedSession.fullPath,
+					autoRunFolderPath: storedSession.autoRunFolderPath,
 				},
-				subscription: { name: event.triggerName, event: event.type, enabled: true, prompt },
+				conductorProfile: (store.get('conductorProfile', '') as string) || undefined,
+			};
+
+			const agentConfigValues = getAgentConfigForAgent(storedSession.toolType);
+			const result = await executeCuePrompt({
+				runId,
+				session: {
+					id: storedSession.id,
+					name: storedSession.name,
+					toolType: storedSession.toolType,
+					cwd: projectRoot,
+					projectRoot,
+					autoRunFolderPath: storedSession.autoRunFolderPath,
+				},
+				subscription: {
+					name: subscriptionName,
+					event: event.type,
+					enabled: true,
+					prompt,
+				},
 				event,
 				promptPath: prompt,
-				toolType,
+				toolType: storedSession.toolType,
 				projectRoot,
-				templateContext: {
-					session: {
-						id: session.id,
-						name: session.name,
-						toolType: session.toolType as string,
-						cwd: projectRoot,
-						projectRoot,
-					},
-				},
-				timeoutMs: 30 * 60 * 1000, // 30 minute default; engine handles timeout_minutes config
-				sshRemoteConfig: session.sshRemoteConfig,
-				customPath: sessionConfig.customPath,
-				customArgs: sessionConfig.customArgs,
-				customEnvVars: sessionConfig.customEnvVars,
-				customModel: sessionConfig.customModel,
+				templateContext,
+				timeoutMs,
+				sshRemoteConfig: storedSession.sessionSshRemoteConfig,
+				customPath: agentConfigValues.customPath as string | undefined,
+				customArgs: storedSession.customArgs,
+				customEnvVars: storedSession.customEnvVars,
+				customModel: storedSession.customModel,
 				onLog: (level, message) => {
 					if (level === 'error') {
 						logger.error(message, 'Cue');
+					} else if (level === 'warn') {
+						logger.warn(message, 'Cue');
+					} else if (level === 'debug') {
+						logger.debug(message, 'Cue');
 					} else {
 						logger.cue(message, 'Cue');
 					}
 				},
 				sshStore: createSshRemoteStoreAdapter(store),
-				agentConfigValues: sessionConfig,
+				agentConfigValues,
 			});
+
+			const historyEntry = recordCueHistoryEntry(result, {
+				id: storedSession.id,
+				name: storedSession.name,
+				toolType: storedSession.toolType,
+				cwd: projectRoot,
+				projectRoot,
+				autoRunFolderPath: storedSession.autoRunFolderPath,
+			});
+			historyManager.addEntry(storedSession.id, projectRoot, historyEntry);
+			return result;
 		},
+		onStopCueRun: (runId) => stopCueRun(runId),
 		onLog: (_level, message, data) => {
 			logger.cue(message, 'Cue', data);
 			// Push activity updates to renderer
@@ -490,7 +513,10 @@ app.whenReady().then(async () => {
 	try {
 		accountRegistry = new AccountRegistry(getAccountStore());
 		accountThrottleHandler = new AccountThrottleHandler(
-			accountRegistry, getStatsDB, safeSend, logger
+			accountRegistry,
+			getStatsDB,
+			safeSend,
+			logger
 		);
 		logger.info('Account registry initialized', 'Startup');
 	} catch (error) {
@@ -502,7 +528,10 @@ app.whenReady().then(async () => {
 	if (accountRegistry && processManager && agentDetector) {
 		try {
 			accountAuthRecovery = new AccountAuthRecovery(
-				processManager, accountRegistry, agentDetector, safeSend
+				processManager,
+				accountRegistry,
+				agentDetector,
+				safeSend
 			);
 			logger.info('Account auth recovery initialized', 'Startup');
 		} catch (error) {
@@ -527,11 +556,7 @@ app.whenReady().then(async () => {
 	// Initialize account switcher for manual account switching from renderer
 	if (accountRegistry && processManager) {
 		try {
-			accountSwitcher = new AccountSwitcher(
-				processManager,
-				accountRegistry,
-				safeSend,
-			);
+			accountSwitcher = new AccountSwitcher(processManager, accountRegistry, safeSend);
 			logger.info('Account switcher initialized', 'Startup');
 		} catch (error) {
 			logger.error(`Failed to initialize account switcher: ${error}`, 'Startup');
@@ -555,7 +580,7 @@ app.whenReady().then(async () => {
 				const sessions = sessionsStore.get('sessions', []) as any[];
 				const session = sessions.find((s: any) => s.id === sessionId);
 				return session?.name || sessionId;
-			},
+			}
 		);
 		logger.info('Provider error tracker initialized', 'Startup');
 	} catch (error) {
@@ -581,13 +606,20 @@ app.whenReady().then(async () => {
 	// "Show Previous Tab" (Cmd+Shift+{) and "Show Next Tab" (Cmd+Shift+})
 	// menu items into the default Window menu. Without this, those keyboard
 	// events are intercepted at the NSMenu level and never reach the renderer.
+	//
+	// IMPORTANT: Do NOT include { role: 'close' } in the Window submenu.
+	// The 'close' role registers Cmd+W as a native accelerator, which intercepts
+	// the keystroke at the NSMenu level before it reaches the renderer. This
+	// breaks Cmd+W tab-close shortcuts in both AI and terminal modes. Window
+	// closing is handled by the app lifecycle (Cmd+Q quits, red traffic light
+	// hides) so the native Close menu item is unnecessary.
 	if (isMacOS()) {
 		const template: Electron.MenuItemConstructorOptions[] = [
 			{ role: 'appMenu' },
 			{ role: 'editMenu' },
 			{
 				label: 'Window',
-				submenu: [{ role: 'minimize' }, { role: 'zoom' }, { role: 'close' }],
+				submenu: [{ role: 'minimize' }, { role: 'zoom' }],
 			},
 		];
 		Menu.setApplicationMenu(Menu.buildFromTemplate(template));
@@ -609,8 +641,14 @@ app.whenReady().then(async () => {
 	// Start CLI activity watcher (Phase 4 refactoring)
 	cliWatcher.start();
 
-	// Note: Web server is not auto-started - it starts when user enables web interface
-	// via live:startServer IPC call from the renderer
+	// Auto-start CLI server for CLI IPC (writes discovery file for CLI to connect)
+	await ensureCliServer({
+		getWebServer: () => webServer,
+		setWebServer: (server) => {
+			webServer = server;
+		},
+		createWebServer,
+	});
 
 	app.on('activate', () => {
 		if (BrowserWindow.getAllWindows().length === 0) {
@@ -763,17 +801,6 @@ function setupIpcHandlers() {
 	// Pass the shared claudeSessionOriginsStore so session names/stars are consistent
 	initializeSessionStorages({ claudeSessionOriginsStore });
 	registerAgentSessionsHandlers({ getMainWindow: () => mainWindow, agentSessionOriginsStore });
-
-	// Helper to get agent config values (custom args/env vars, model, etc.)
-	const getAgentConfigForAgent = (agentId: string): Record<string, any> => {
-		const allConfigs = agentConfigsStore.get('configs', {});
-		return allConfigs[agentId] || {};
-	};
-
-	// Helper to get custom env vars for an agent
-	const getCustomEnvVarsForAgent = (agentId: string): Record<string, string> | undefined => {
-		return getAgentConfigForAgent(agentId).customEnvVars as Record<string, string> | undefined;
-	};
 
 	// Register Group Chat handlers
 	registerGroupChatHandlers({

@@ -23,12 +23,12 @@ import { useLayerStack } from '../contexts/LayerStackContext';
 import { MODAL_PRIORITIES } from '../constants/modalPriorities';
 import { useCue } from '../hooks/useCue';
 import type { CueSessionStatus, CueRunResult } from '../hooks/useCue';
-import { CueYamlEditor } from './CueYamlEditor';
 import { CueHelpContent } from './CueHelpModal';
 // Kept for reference - visual pipeline editor replaces this
 // import { CueGraphView } from './CueGraphView';
 import { CuePipelineEditor } from './CuePipelineEditor';
 import { useSessionStore } from '../stores/sessionStore';
+import { getModalActions } from '../stores/modalStore';
 import type { CuePipeline } from '../../shared/cue-pipeline-types';
 import { getPipelineColorForAgent } from './CuePipelineEditor/pipelineColors';
 import { graphSessionsToPipelines } from './CuePipelineEditor/utils/yamlToPipeline';
@@ -516,11 +516,8 @@ function ActivityLog({
 				const isFailed = entry.status === 'failed' || entry.status === 'timeout';
 				const eventType = entry.event.type;
 				const filePayload =
-					eventType === 'file.changed' &&
-					(entry.event.payload?.filename || entry.event.payload?.path)
-						? ` (${String(entry.event.payload.filename ?? entry.event.payload.path)
-								.split('/')
-								.pop()})`
+					eventType === 'file.changed' && entry.event.payload?.file
+						? ` (${String(entry.event.payload.file).split('/').pop()})`
 						: '';
 				const taskPayload =
 					eventType === 'task.pending' && entry.event.payload?.filename
@@ -735,11 +732,8 @@ export function CueModal({ theme, onClose, cueShortcutKeys }: CueModalProps) {
 	const pipelineDirtyRef = useRef(false);
 	pipelineDirtyRef.current = pipelineDirty;
 
-	// YAML editor state
-	const [yamlEditorSession, setYamlEditorSession] = useState<CueSessionStatus | null>(null);
-
 	const handleEditYaml = useCallback((session: CueSessionStatus) => {
-		setYamlEditorSession(session);
+		getModalActions().openCueYamlEditor(session.sessionId, session.projectRoot);
 	}, []);
 
 	const handleViewInPipeline = useCallback((_session: CueSessionStatus) => {
@@ -1035,15 +1029,7 @@ export function CueModal({ theme, onClose, cueShortcutKeys }: CueModalProps) {
 				</div>,
 				document.body
 			)}
-			{yamlEditorSession && (
-				<CueYamlEditor
-					isOpen={true}
-					onClose={() => setYamlEditorSession(null)}
-					projectRoot={yamlEditorSession.projectRoot}
-					sessionId={yamlEditorSession.sessionId}
-					theme={theme}
-				/>
-			)}
+			{showHelp && <CueHelpContent theme={theme} cueShortcutKeys={cueShortcutKeys} />}
 		</>
 	);
 }

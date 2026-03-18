@@ -221,6 +221,7 @@ describe('TerminalOutput', () => {
 			expect(userMessageContainer).not.toBeNull();
 			expect(userMessageContainer!.className).toContain('flex');
 		});
+
 		it('shows delivered checkmark for delivered messages', () => {
 			const logs: LogEntry[] = [
 				createLogEntry({ text: 'Delivered message', source: 'user', delivered: true }),
@@ -389,7 +390,6 @@ describe('TerminalOutput', () => {
 
 			expect(mockUnregisterLayer).toHaveBeenCalled();
 		});
-
 	});
 
 	describe('keyboard navigation', () => {
@@ -1537,7 +1537,6 @@ describe('TerminalOutput', () => {
 			// And markdown should be rendered
 			expect(screen.getByTestId('react-markdown')).toBeInTheDocument();
 		});
-
 	});
 
 	describe('tool log detail extraction', () => {
@@ -2097,7 +2096,6 @@ describe('TerminalOutput', () => {
 
 			expect(screen.getByText(/日本語テスト.*🎉.*émojis/)).toBeInTheDocument();
 		});
-
 	});
 });
 

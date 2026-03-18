@@ -54,7 +54,7 @@ export interface UseFileExplorerEffectsDeps {
 			sshRemoteId?: string;
 			lastModified?: number;
 		},
-		options?: { openInNewTab?: boolean }
+		options?: { openInNewTab?: boolean; targetSessionId?: string }
 	) => void;
 }
 

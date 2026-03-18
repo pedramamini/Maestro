@@ -3,6 +3,7 @@
  * Extracted from main/index.ts for better modularity.
  */
 
+import { randomUUID } from 'crypto';
 import { BrowserWindow, ipcMain } from 'electron';
 import { WebServer } from './WebServer';
 import { getThemeById } from '../themes';
@@ -322,15 +323,21 @@ export function createWebServerFactory(deps: WebServerFactoryDependencies) {
 		// Set up callback for web server to select/switch to a session in the desktop
 		// This forwards to the renderer which handles state updates and broadcasts
 		// If tabId is provided, also switches to that tab within the session
-		server.setSelectSessionCallback(async (sessionId: string, tabId?: string) => {
+		server.setSelectSessionCallback(async (sessionId: string, tabId?: string, focus?: boolean) => {
 			logger.info(
-				`[Web→Desktop] Session select callback invoked: session=${sessionId}, tab=${tabId || 'none'}`,
+				`[Web→Desktop] Session select callback invoked: session=${sessionId}, tab=${tabId || 'none'}, focus=${focus || false}`,
 				'WebServer'
 			);
 			const mainWindow = getMainWindow();
 			if (!mainWindow) {
 				logger.warn('mainWindow is null for selectSession', 'WebServer');
 				return false;
+			}
+
+			// When focus is requested, bring the window to the foreground
+			if (focus) {
+				mainWindow.show();
+				mainWindow.focus();
 			}
 
 			// Forward to renderer - it will handle session selection and broadcasts
@@ -484,6 +491,88 @@ export function createWebServerFactory(deps: WebServerFactoryDependencies) {
 			}
 			mainWindow.webContents.send('remote:toggleBookmark', sessionId);
 			return true;
+		});
+
+		server.setOpenFileTabCallback(async (sessionId: string, filePath: string) => {
+			const mainWindow = getMainWindow();
+			if (!mainWindow) {
+				logger.warn('mainWindow is null for openFileTab', 'WebServer');
+				return false;
+			}
+
+			if (!isWebContentsAvailable(mainWindow)) {
+				logger.warn('webContents is not available for openFileTab', 'WebServer');
+				return false;
+			}
+			mainWindow.webContents.send('remote:openFileTab', sessionId, filePath);
+			return true;
+		});
+
+		server.setRefreshFileTreeCallback(async (sessionId: string) => {
+			const mainWindow = getMainWindow();
+			if (!mainWindow) {
+				logger.warn('mainWindow is null for refreshFileTree', 'WebServer');
+				return false;
+			}
+
+			if (!isWebContentsAvailable(mainWindow)) {
+				logger.warn('webContents is not available for refreshFileTree', 'WebServer');
+				return false;
+			}
+			mainWindow.webContents.send('remote:refreshFileTree', sessionId);
+			return true;
+		});
+
+		server.setRefreshAutoRunDocsCallback(async (sessionId: string) => {
+			const mainWindow = getMainWindow();
+			if (!mainWindow) {
+				logger.warn('mainWindow is null for refreshAutoRunDocs', 'WebServer');
+				return false;
+			}
+
+			if (!isWebContentsAvailable(mainWindow)) {
+				logger.warn('webContents is not available for refreshAutoRunDocs', 'WebServer');
+				return false;
+			}
+			mainWindow.webContents.send('remote:refreshAutoRunDocs', sessionId);
+			return true;
+		});
+
+		server.setConfigureAutoRunCallback(async (sessionId: string, config: any) => {
+			const mainWindow = getMainWindow();
+			if (!mainWindow) {
+				logger.warn('mainWindow is null for configureAutoRun', 'WebServer');
+				return { success: false, error: 'Main window not available' };
+			}
+
+			return new Promise((resolve) => {
+				const responseChannel = `remote:configureAutoRun:response:${randomUUID()}`;
+				let resolved = false;
+
+				const handleResponse = (_event: Electron.IpcMainEvent, result: any) => {
+					if (resolved) return;
+					resolved = true;
+					clearTimeout(timeoutId);
+					resolve(result || { success: false, error: 'No response' });
+				};
+
+				ipcMain.once(responseChannel, handleResponse);
+				if (!isWebContentsAvailable(mainWindow)) {
+					logger.warn('webContents is not available for configureAutoRun', 'WebServer');
+					ipcMain.removeListener(responseChannel, handleResponse);
+					resolve({ success: false, error: 'Web contents not available' });
+					return;
+				}
+				mainWindow.webContents.send('remote:configureAutoRun', sessionId, config, responseChannel);
+
+				const timeoutId = setTimeout(() => {
+					if (resolved) return;
+					resolved = true;
+					ipcMain.removeListener(responseChannel, handleResponse);
+					logger.warn(`configureAutoRun callback timed out for session ${sessionId}`, 'WebServer');
+					resolve({ success: false, error: 'Timeout' });
+				}, 10000);
+			});
 		});
 
 		return server;

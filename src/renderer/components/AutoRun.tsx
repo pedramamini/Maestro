@@ -113,6 +113,9 @@ interface AutoRunProps {
 	batchRunState?: BatchRunState;
 	onOpenBatchRunner?: () => void;
 	onStopBatchRun?: (sessionId?: string) => void;
+
+	// Auto-follow: when enabled during a batch run, suppresses focus-stealing and scrolls to active task
+	autoFollowEnabled?: boolean;
 	// Error handling callbacks (Phase 5.10)
 	onSkipCurrentDocument?: () => void;
 	onAbortBatchOnError?: () => void;
@@ -482,6 +485,7 @@ const AutoRunInner = forwardRef<AutoRunHandle, AutoRunProps>(function AutoRunInn
 		batchRunState,
 		onOpenBatchRunner,
 		onStopBatchRun,
+		autoFollowEnabled,
 		// Error handling callbacks (Phase 5.10)
 		onSkipCurrentDocument: _onSkipCurrentDocument,
 		onAbortBatchOnError,
@@ -507,6 +511,10 @@ const AutoRunInner = forwardRef<AutoRunHandle, AutoRunProps>(function AutoRunInn
 		false;
 	const isAgentBusy = sessionState === 'busy' || sessionState === 'connecting';
 	const isAutoRunActive = batchRunState?.isRunning || false;
+	const isRunningRef = useRef(isAutoRunActive);
+	useEffect(() => {
+		isRunningRef.current = isAutoRunActive;
+	}, [isAutoRunActive]);
 	const isStopping = batchRunState?.isStopping || false;
 	// Error state (Phase 5.10)
 	const isErrorPaused = batchRunState?.errorPaused || false;
@@ -939,12 +947,15 @@ const AutoRunInner = forwardRef<AutoRunHandle, AutoRunProps>(function AutoRunInn
 
 	// Auto-focus the active element after mode change
 	useEffect(() => {
+		// Skip focus when auto-follow is driving changes during a batch run
+		if (autoFollowEnabled && isRunningRef.current) return;
+
 		if (mode === 'edit' && textareaRef.current) {
 			textareaRef.current.focus();
 		} else if (mode === 'preview' && previewRef.current) {
 			previewRef.current.focus();
 		}
-	}, [mode]);
+	}, [mode, autoFollowEnabled]);
 
 	// Handle document selection change - focus the appropriate element
 	// Note: Content syncing and editing state reset is handled by the main sync effect above
@@ -957,6 +968,9 @@ const AutoRunInner = forwardRef<AutoRunHandle, AutoRunProps>(function AutoRunInn
 		prevFocusSelectedFileRef.current = selectedFile;
 
 		if (isNewDocument) {
+			// Skip focus when auto-follow is driving changes during a batch run
+			if (autoFollowEnabled && isRunningRef.current) return;
+
 			// Focus on document change
 			requestAnimationFrame(() => {
 				if (mode === 'edit' && textareaRef.current) {
@@ -966,7 +980,39 @@ const AutoRunInner = forwardRef<AutoRunHandle, AutoRunProps>(function AutoRunInn
 				}
 			});
 		}
-	}, [selectedFile, mode]);
+	}, [selectedFile, mode, autoFollowEnabled]);
+
+	// Auto-follow: scroll to the first unchecked task when batch is running
+	useEffect(() => {
+		if (!autoFollowEnabled || !batchRunState?.isRunning || mode !== 'preview') return;
+
+		const timeout = setTimeout(() => {
+			// Wait for React to commit new content before querying the DOM
+			requestAnimationFrame(() => {
+				if (!previewRef.current) return;
+
+				const checkboxes = previewRef.current.querySelectorAll('input[type="checkbox"]');
+				if (checkboxes.length === 0) return;
+				for (const checkbox of checkboxes) {
+					if (!(checkbox as HTMLInputElement).checked) {
+						const li = (checkbox as HTMLElement).closest('li');
+						if (li) {
+							li.scrollIntoView({ behavior: 'smooth', block: 'center' });
+						}
+						break;
+					}
+				}
+			});
+		}, 150);
+
+		return () => clearTimeout(timeout);
+	}, [
+		batchRunState?.currentDocumentIndex,
+		batchRunState?.currentTaskIndex,
+		batchRunState?.isRunning,
+		autoFollowEnabled,
+		mode,
+	]);
 
 	// Debounced preview scroll handler to avoid triggering re-renders on every scroll event
 	// We only save scroll position to ref immediately (for local use), but delay parent notification
@@ -1808,116 +1854,121 @@ const AutoRunInner = forwardRef<AutoRunHandle, AutoRunProps>(function AutoRunInn
 			)}
 
 			{/* Recovery Indicator - shown when all accounts are rate-limited and waiting for recovery */}
-			{isErrorPaused && batchError && batchError.type === 'rate_limited' && batchError.message?.includes('All virtuosos') && (
-				<div
-					className="mx-2 mb-2 p-3 rounded-lg border"
-					style={{
-						backgroundColor: `${theme.colors.accent}15`,
-						borderColor: theme.colors.accent,
-					}}
-				>
-					<div className="flex items-center gap-2">
-						<span className="relative flex h-3 w-3 flex-shrink-0">
-							<span
-								className="animate-ping absolute inline-flex h-full w-full rounded-full opacity-75"
-								style={{ backgroundColor: theme.colors.accent }}
-							/>
-							<span
-								className="relative inline-flex rounded-full h-3 w-3"
-								style={{ backgroundColor: theme.colors.accent }}
-							/>
-						</span>
-						<span className="text-xs" style={{ color: theme.colors.accent }}>
-							Waiting for virtuoso recovery — will auto-resume
-						</span>
-						<button
-							onClick={() => window.maestro.accounts.checkRecovery()}
-							className="text-xs underline opacity-70 hover:opacity-100 transition-opacity ml-auto flex-shrink-0"
-							style={{ color: theme.colors.accent }}
-						>
-							Check Now
-						</button>
-						{onAbortBatchOnError && (
+			{isErrorPaused &&
+				batchError &&
+				batchError.type === 'rate_limited' &&
+				batchError.message?.includes('All virtuosos') && (
+					<div
+						className="mx-2 mb-2 p-3 rounded-lg border"
+						style={{
+							backgroundColor: `${theme.colors.accent}15`,
+							borderColor: theme.colors.accent,
+						}}
+					>
+						<div className="flex items-center gap-2">
+							<span className="relative flex h-3 w-3 flex-shrink-0">
+								<span
+									className="animate-ping absolute inline-flex h-full w-full rounded-full opacity-75"
+									style={{ backgroundColor: theme.colors.accent }}
+								/>
+								<span
+									className="relative inline-flex rounded-full h-3 w-3"
+									style={{ backgroundColor: theme.colors.accent }}
+								/>
+							</span>
+							<span className="text-xs" style={{ color: theme.colors.accent }}>
+								Waiting for virtuoso recovery — will auto-resume
+							</span>
 							<button
-								onClick={onAbortBatchOnError}
-								className="flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-medium transition-colors hover:opacity-80 flex-shrink-0"
-								style={{
-									backgroundColor: theme.colors.error,
-									color: 'white',
-								}}
-								title="Stop Auto Run completely"
+								onClick={() => window.maestro.accounts.checkRecovery()}
+								className="text-xs underline opacity-70 hover:opacity-100 transition-opacity ml-auto flex-shrink-0"
+								style={{ color: theme.colors.accent }}
 							>
-								<XCircle className="w-3 h-3" />
-								Abort
+								Check Now
 							</button>
-						)}
+							{onAbortBatchOnError && (
+								<button
+									onClick={onAbortBatchOnError}
+									className="flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-medium transition-colors hover:opacity-80 flex-shrink-0"
+									style={{
+										backgroundColor: theme.colors.error,
+										color: 'white',
+									}}
+									title="Stop Auto Run completely"
+								>
+									<XCircle className="w-3 h-3" />
+									Abort
+								</button>
+							)}
+						</div>
 					</div>
-				</div>
-			)}
+				)}
 
 			{/* Error Banner (Phase 5.10) - shown when batch is paused due to agent error */}
-			{isErrorPaused && batchError && !(batchError.type === 'rate_limited' && batchError.message?.includes('All virtuosos')) && (
-				<div
-					className="mx-2 mb-2 p-3 rounded-lg border"
-					style={{
-						backgroundColor: `${theme.colors.error}15`,
-						borderColor: theme.colors.error,
-					}}
-				>
-					<div className="flex items-start gap-2">
-						<AlertTriangle
-							className="w-4 h-4 mt-0.5 flex-shrink-0"
-							style={{ color: theme.colors.error }}
-						/>
-						<div className="flex-1 min-w-0">
-							<div className="text-xs font-semibold mb-1" style={{ color: theme.colors.error }}>
-								Auto Run Paused
-							</div>
-							<div className="text-xs mb-2" style={{ color: theme.colors.textMain }}>
-								{batchError.message}
-								{errorDocumentName && (
-									<span style={{ color: theme.colors.textDim }}>
-										{' '}
-										— while processing <strong>{errorDocumentName}</strong>
-									</span>
-								)}
-							</div>
-							<div className="flex gap-2 flex-wrap">
-								{/* Resume button - for recoverable errors */}
-								{batchError.recoverable && onResumeAfterError && (
-									<button
-										onClick={onResumeAfterError}
-										className="flex items-center gap-1.5 px-2 py-1 rounded text-[10px] font-medium transition-colors hover:opacity-80"
-										style={{
-											backgroundColor: theme.colors.accent,
-											color: theme.colors.accentForeground,
-										}}
-										title="Retry and resume Auto Run"
-									>
-										<Play className="w-3 h-3" />
-										Resume
-									</button>
-								)}
-								{/* Abort button */}
-								{onAbortBatchOnError && (
-									<button
-										onClick={onAbortBatchOnError}
-										className="flex items-center gap-1.5 px-2 py-1 rounded text-[10px] font-medium transition-colors hover:opacity-80"
-										style={{
-											backgroundColor: theme.colors.error,
-											color: 'white',
-										}}
-										title="Stop Auto Run completely"
-									>
-										<XCircle className="w-3 h-3" />
-										Abort Run
-									</button>
-								)}
+			{isErrorPaused &&
+				batchError &&
+				!(batchError.type === 'rate_limited' && batchError.message?.includes('All virtuosos')) && (
+					<div
+						className="mx-2 mb-2 p-3 rounded-lg border"
+						style={{
+							backgroundColor: `${theme.colors.error}15`,
+							borderColor: theme.colors.error,
+						}}
+					>
+						<div className="flex items-start gap-2">
+							<AlertTriangle
+								className="w-4 h-4 mt-0.5 flex-shrink-0"
+								style={{ color: theme.colors.error }}
+							/>
+							<div className="flex-1 min-w-0">
+								<div className="text-xs font-semibold mb-1" style={{ color: theme.colors.error }}>
+									Auto Run Paused
+								</div>
+								<div className="text-xs mb-2" style={{ color: theme.colors.textMain }}>
+									{batchError.message}
+									{errorDocumentName && (
+										<span style={{ color: theme.colors.textDim }}>
+											{' '}
+											— while processing <strong>{errorDocumentName}</strong>
+										</span>
+									)}
+								</div>
+								<div className="flex gap-2 flex-wrap">
+									{/* Resume button - for recoverable errors */}
+									{batchError.recoverable && onResumeAfterError && (
+										<button
+											onClick={onResumeAfterError}
+											className="flex items-center gap-1.5 px-2 py-1 rounded text-[10px] font-medium transition-colors hover:opacity-80"
+											style={{
+												backgroundColor: theme.colors.accent,
+												color: theme.colors.accentForeground,
+											}}
+											title="Retry and resume Auto Run"
+										>
+											<Play className="w-3 h-3" />
+											Resume
+										</button>
+									)}
+									{/* Abort button */}
+									{onAbortBatchOnError && (
+										<button
+											onClick={onAbortBatchOnError}
+											className="flex items-center gap-1.5 px-2 py-1 rounded text-[10px] font-medium transition-colors hover:opacity-80"
+											style={{
+												backgroundColor: theme.colors.error,
+												color: 'white',
+											}}
+											title="Stop Auto Run completely"
+										>
+											<XCircle className="w-3 h-3" />
+											Abort Run
+										</button>
+									)}
+								</div>
 							</div>
 						</div>
 					</div>
-				</div>
-			)}
+				)}
 
 			{/* Attached Images Preview (edit mode) - only when folder selected */}
 			{folderPath && mode === 'edit' && attachmentsList.length > 0 && (
@@ -2279,7 +2330,9 @@ export const AutoRun = memo(AutoRunInner, (prevProps, nextProps) => {
 		// UI control props
 		prevProps.hideTopControls === nextProps.hideTopControls &&
 		// External change detection
-		prevProps.contentVersion === nextProps.contentVersion
+		prevProps.contentVersion === nextProps.contentVersion &&
+		// Auto-follow state
+		prevProps.autoFollowEnabled === nextProps.autoFollowEnabled
 		// Note: initialCursorPosition, initialEditScrollPos, initialPreviewScrollPos
 		// are intentionally NOT compared - they're only used on mount
 		// Note: documentTree is derived from documentList, comparing documentList is sufficient

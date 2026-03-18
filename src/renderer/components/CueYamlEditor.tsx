@@ -121,7 +121,6 @@ export function CueYamlEditor({
 	const chatEndRef = useRef<HTMLDivElement>(null);
 
 	const validateTimerRef = useRef<ReturnType<typeof setTimeout>>();
-	const validateSeqRef = useRef(0);
 	const yamlTextareaRef = useRef<HTMLTextAreaElement>(null);
 
 	const session = useSessionStore(selectSessionById(sessionId));
@@ -193,14 +192,11 @@ export function CueYamlEditor({
 			clearTimeout(validateTimerRef.current);
 		}
 		validateTimerRef.current = setTimeout(async () => {
-			const seq = ++validateSeqRef.current;
 			try {
 				const result = await window.maestro.cue.validateYaml(content);
-				if (seq !== validateSeqRef.current) return;
 				setIsValid(result.valid);
 				setValidationErrors(result.errors);
 			} catch {
-				if (seq !== validateSeqRef.current) return;
 				setIsValid(false);
 				setValidationErrors(['Failed to validate YAML']);
 			}

@@ -338,12 +338,12 @@ export function HamburgerMenuContent({
 							Event-driven automation
 						</div>
 					</div>
-					{shortcuts.maestroCue && (
+					{shortcuts.openCue && (
 						<span
 							className="text-xs font-mono px-1.5 py-0.5 rounded"
 							style={{ backgroundColor: theme.colors.bgActivity, color: theme.colors.textDim }}
 						>
-							{formatShortcutKeys(shortcuts.maestroCue.keys)}
+							{formatShortcutKeys(shortcuts.openCue.keys)}
 						</span>
 					)}
 				</button>

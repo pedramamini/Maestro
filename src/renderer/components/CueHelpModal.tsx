@@ -931,7 +931,7 @@ export function CueHelpContent({ theme, cueShortcutKeys }: CueHelpContentProps) 
 									border: `1px solid ${theme.colors.border}`,
 								}}
 							>
-								{formatShortcutKeys(cueShortcutKeys ?? DEFAULT_SHORTCUTS.maestroCue.keys)}
+								{formatShortcutKeys(cueShortcutKeys ?? DEFAULT_SHORTCUTS.openCue.keys)}
 							</kbd>{' '}
 							to open the Cue dashboard. The Pipeline Editor is the default tab.
 						</span>

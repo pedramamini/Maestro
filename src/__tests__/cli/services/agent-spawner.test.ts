@@ -80,6 +80,8 @@ import {
 	writeDoc,
 	getClaudeCommand,
 	detectClaude,
+	detectAgent,
+	getAgentCommand,
 	spawnAgent,
 	AgentResult,
 } from '../../../cli/services/agent-spawner';
@@ -678,6 +680,92 @@ Some text with [x] in it that's not a checkbox
 		});
 	});
 
+	describe('detectAgent', () => {
+		beforeEach(() => {
+			vi.resetModules();
+		});
+
+		it('should detect agent with custom path from settings', async () => {
+			mockGetAgentCustomPath.mockReturnValue('/custom/path/to/codex');
+			vi.mocked(fs.promises.stat).mockResolvedValue({
+				isFile: () => true,
+			} as fs.Stats);
+			vi.mocked(fs.promises.access).mockResolvedValue(undefined);
+
+			const { detectAgent: freshDetectAgent } = await import('../../../cli/services/agent-spawner');
+
+			const result = await freshDetectAgent('codex');
+			expect(result.available).toBe(true);
+			expect(result.path).toBe('/custom/path/to/codex');
+			expect(result.source).toBe('settings');
+		});
+
+		it('should fall back to PATH detection when custom path is invalid', async () => {
+			mockGetAgentCustomPath.mockReturnValue('/invalid/path');
+			vi.mocked(fs.promises.stat).mockRejectedValue(new Error('ENOENT'));
+			mockSpawn.mockReturnValue(mockChild);
+
+			const { detectAgent: freshDetectAgent } = await import('../../../cli/services/agent-spawner');
+
+			const resultPromise = freshDetectAgent('codex');
+			await new Promise((resolve) => setTimeout(resolve, 0));
+			mockStdout.emit('data', Buffer.from('/usr/local/bin/codex\n'));
+			await new Promise((resolve) => setTimeout(resolve, 0));
+			mockChild.emit('close', 0);
+
+			const result = await resultPromise;
+			expect(result.available).toBe(true);
+			expect(result.path).toBe('/usr/local/bin/codex');
+			expect(result.source).toBe('path');
+		});
+
+		it('should return unavailable when agent is not found', async () => {
+			mockGetAgentCustomPath.mockReturnValue(undefined);
+			mockSpawn.mockReturnValue(mockChild);
+
+			const { detectAgent: freshDetectAgent } = await import('../../../cli/services/agent-spawner');
+
+			const resultPromise = freshDetectAgent('opencode');
+			await new Promise((resolve) => setTimeout(resolve, 0));
+			mockChild.emit('close', 1);
+
+			const result = await resultPromise;
+			expect(result.available).toBe(false);
+		});
+
+		it('should cache results across calls', async () => {
+			mockGetAgentCustomPath.mockReturnValue('/custom/droid');
+			vi.mocked(fs.promises.stat).mockResolvedValue({
+				isFile: () => true,
+			} as fs.Stats);
+			vi.mocked(fs.promises.access).mockResolvedValue(undefined);
+
+			const { detectAgent: freshDetectAgent } = await import('../../../cli/services/agent-spawner');
+
+			const result1 = await freshDetectAgent('factory-droid');
+			expect(result1.available).toBe(true);
+
+			vi.mocked(fs.promises.stat).mockClear();
+
+			const result2 = await freshDetectAgent('factory-droid');
+			expect(result2.available).toBe(true);
+			expect(result2.source).toBe('settings');
+		});
+	});
+
+	describe('getAgentCommand', () => {
+		it('should return default command for unknown agent', async () => {
+			vi.resetModules();
+			const { getAgentCommand: freshGetAgentCommand } =
+				await import('../../../cli/services/agent-spawner');
+
+			// Before detection, should return the binaryName from definitions
+			const command = freshGetAgentCommand('claude-code');
+			expect(command).toBeTruthy();
+			expect(typeof command).toBe('string');
+		});
+	});
+
 	describe('spawnAgent', () => {
 		beforeEach(() => {
 			mockSpawn.mockReturnValue(mockChild);
@@ -1088,7 +1176,8 @@ Some text with [x] in it that's not a checkbox
 			expect(args).toContain('plan');
 			// Should still have base args
 			expect(args).toContain('--print');
-			expect(args).toContain('--dangerously-skip-permissions');
+			// Should NOT have permission bypass in read-only mode
+			expect(args).not.toContain('--dangerously-skip-permissions');
 
 			mockStdout.emit('data', Buffer.from('{"type":"result","result":"Done"}\n'));
 			mockChild.emit('close', 0);
@@ -1105,6 +1194,8 @@ Some text with [x] in it that's not a checkbox
 			const [, args] = mockSpawn.mock.calls[0];
 			expect(args).not.toContain('--permission-mode');
 			expect(args).not.toContain('plan');
+			// Should have permission bypass in normal mode
+			expect(args).toContain('--dangerously-skip-permissions');
 
 			mockStdout.emit('data', Buffer.from('{"type":"result","result":"Done"}\n'));
 			mockChild.emit('close', 0);

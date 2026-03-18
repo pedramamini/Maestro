@@ -36,6 +36,10 @@ vi.mock('../../../main/web-server/WebServer', () => {
 			setStarTabCallback = vi.fn();
 			setReorderTabCallback = vi.fn();
 			setToggleBookmarkCallback = vi.fn();
+			setOpenFileTabCallback = vi.fn();
+			setRefreshFileTreeCallback = vi.fn();
+			setRefreshAutoRunDocsCallback = vi.fn();
+			setConfigureAutoRunCallback = vi.fn();
 
 			constructor(port: number) {
 				this.port = port;
@@ -255,6 +259,13 @@ describe('web-server/web-server-factory', () => {
 			expect(server.setNewTabCallback).toHaveBeenCalled();
 			expect(server.setCloseTabCallback).toHaveBeenCalled();
 			expect(server.setRenameTabCallback).toHaveBeenCalled();
+		});
+
+		it('should register file and auto-run callbacks', () => {
+			expect(server.setOpenFileTabCallback).toHaveBeenCalled();
+			expect(server.setRefreshFileTreeCallback).toHaveBeenCalled();
+			expect(server.setRefreshAutoRunDocsCallback).toHaveBeenCalled();
+			expect(server.setConfigureAutoRunCallback).toHaveBeenCalled();
 		});
 	});
 

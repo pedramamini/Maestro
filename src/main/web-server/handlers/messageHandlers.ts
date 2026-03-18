@@ -16,8 +16,13 @@
  * - new_tab: Create a new tab within a session
  * - close_tab: Close a tab within a session
  * - rename_tab: Rename a tab within a session
+ * - open_file_tab: Open a file in a preview tab
+ * - refresh_file_tree: Refresh the file tree for a session
+ * - refresh_auto_run_docs: Refresh auto-run documents for a session
+ * - configure_auto_run: Configure and optionally launch an auto-run session
  */
 
+import path from 'path';
 import { WebSocket } from 'ws';
 import { logger } from '../../utils/logger';
 
@@ -29,12 +34,15 @@ const LOG_CONTEXT = 'WebServer';
  */
 export interface WebClientMessage {
 	type: string;
+	requestId?: string;
 	sessionId?: string;
 	tabId?: string;
 	command?: string;
 	mode?: 'ai' | 'terminal';
 	inputMode?: 'ai' | 'terminal';
 	newName?: string;
+	filePath?: string;
+	focus?: boolean;
 	[key: string]: unknown;
 }
 
@@ -77,7 +85,7 @@ export interface MessageHandlerCallbacks {
 		inputMode?: 'ai' | 'terminal'
 	) => Promise<boolean>;
 	switchMode: (sessionId: string, mode: 'ai' | 'terminal') => Promise<boolean>;
-	selectSession: (sessionId: string, tabId?: string) => Promise<boolean>;
+	selectSession: (sessionId: string, tabId?: string, focus?: boolean) => Promise<boolean>;
 	selectTab: (sessionId: string, tabId: string) => Promise<boolean>;
 	newTab: (sessionId: string) => Promise<{ tabId: string } | null>;
 	closeTab: (sessionId: string, tabId: string) => Promise<boolean>;
@@ -85,6 +93,20 @@ export interface MessageHandlerCallbacks {
 	starTab: (sessionId: string, tabId: string, starred: boolean) => Promise<boolean>;
 	reorderTab: (sessionId: string, fromIndex: number, toIndex: number) => Promise<boolean>;
 	toggleBookmark: (sessionId: string) => Promise<boolean>;
+	openFileTab: (sessionId: string, filePath: string) => Promise<boolean>;
+	refreshFileTree: (sessionId: string) => Promise<boolean>;
+	refreshAutoRunDocs: (sessionId: string) => Promise<boolean>;
+	configureAutoRun: (
+		sessionId: string,
+		config: {
+			documents: Array<{ filename: string; resetOnCompletion?: boolean }>;
+			prompt?: string;
+			loopEnabled?: boolean;
+			maxLoops?: number;
+			saveAsPlaybook?: string;
+			launch?: boolean;
+		}
+	) => Promise<{ success: boolean; playbookId?: string; error?: string }>;
 	getSessions: () => Array<{
 		id: string;
 		name: string;
@@ -194,6 +216,22 @@ export class WebSocketMessageHandler {
 				this.handleToggleBookmark(client, message);
 				break;
 
+			case 'open_file_tab':
+				this.handleOpenFileTab(client, message);
+				break;
+
+			case 'refresh_file_tree':
+				this.handleRefreshFileTree(client, message);
+				break;
+
+			case 'refresh_auto_run_docs':
+				this.handleRefreshAutoRunDocs(client, message);
+				break;
+
+			case 'configure_auto_run':
+				this.handleConfigureAutoRun(client, message);
+				break;
+
 			default:
 				this.handleUnknown(client, message);
 		}
@@ -213,7 +251,11 @@ export class WebSocketMessageHandler {
 		if (message.sessionId) {
 			client.subscribedSessionId = message.sessionId as string;
 		}
-		this.send(client, { type: 'subscribed', sessionId: message.sessionId });
+		this.send(client, {
+			type: 'subscribed',
+			sessionId: message.sessionId,
+			requestId: message.requestId,
+		});
 	}
 
 	/**
@@ -278,7 +320,12 @@ export class WebSocketMessageHandler {
 			this.callbacks
 				.executeCommand(sessionId, command, clientInputMode)
 				.then((success) => {
-					this.send(client, { type: 'command_result', success, sessionId });
+					this.send(client, {
+						type: 'command_result',
+						success,
+						sessionId,
+						requestId: message.requestId,
+					});
 					if (!success) {
 						logger.warn(
 							`[Web Command] ${mode} command rejected for session ${sessionId}`,
@@ -326,7 +373,13 @@ export class WebSocketMessageHandler {
 		this.callbacks
 			.switchMode(sessionId, mode)
 			.then((success) => {
-				this.send(client, { type: 'mode_switch_result', success, sessionId, mode });
+				this.send(client, {
+					type: 'mode_switch_result',
+					success,
+					sessionId,
+					mode,
+					requestId: message.requestId,
+				});
 				logger.debug(
 					`Mode switch for session ${sessionId} to ${mode}: ${success ? 'success' : 'failed'}`,
 					LOG_CONTEXT
@@ -343,8 +396,9 @@ export class WebSocketMessageHandler {
 	private handleSelectSession(client: WebClient, message: WebClientMessage): void {
 		const sessionId = message.sessionId as string;
 		const tabId = message.tabId as string | undefined;
+		const focus = message.focus as boolean | undefined;
 		logger.info(
-			`[Web] Received select_session message: session=${sessionId}, tab=${tabId || 'none'}`,
+			`[Web] Received select_session message: session=${sessionId}, tab=${tabId || 'none'}, focus=${focus || false}`,
 			LOG_CONTEXT
 		);
 
@@ -365,7 +419,7 @@ export class WebSocketMessageHandler {
 			LOG_CONTEXT
 		);
 		this.callbacks
-			.selectSession(sessionId, tabId)
+			.selectSession(sessionId, tabId, focus)
 			.then((success) => {
 				if (success) {
 					// Subscribe client to this session's output so they receive session_output messages
@@ -374,7 +428,12 @@ export class WebSocketMessageHandler {
 				} else {
 					logger.warn(`Failed to select session ${sessionId} in desktop`, LOG_CONTEXT);
 				}
-				this.send(client, { type: 'select_session_result', success, sessionId });
+				this.send(client, {
+					type: 'select_session_result',
+					success,
+					sessionId,
+					requestId: message.requestId,
+				});
 			})
 			.catch((error) => {
 				this.sendError(client, `Failed to select session: ${error.message}`);
@@ -429,7 +488,13 @@ export class WebSocketMessageHandler {
 		this.callbacks
 			.selectTab(sessionId, tabId)
 			.then((success) => {
-				this.send(client, { type: 'select_tab_result', success, sessionId, tabId });
+				this.send(client, {
+					type: 'select_tab_result',
+					success,
+					sessionId,
+					tabId,
+					requestId: message.requestId,
+				});
 			})
 			.catch((error) => {
 				this.sendError(client, `Failed to select tab: ${error.message}`);
@@ -461,6 +526,7 @@ export class WebSocketMessageHandler {
 					success: !!result,
 					sessionId,
 					tabId: result?.tabId,
+					requestId: message.requestId,
 				});
 			})
 			.catch((error) => {
@@ -492,7 +558,13 @@ export class WebSocketMessageHandler {
 		this.callbacks
 			.closeTab(sessionId, tabId)
 			.then((success) => {
-				this.send(client, { type: 'close_tab_result', success, sessionId, tabId });
+				this.send(client, {
+					type: 'close_tab_result',
+					success,
+					sessionId,
+					tabId,
+					requestId: message.requestId,
+				});
 			})
 			.catch((error) => {
 				this.sendError(client, `Failed to close tab: ${error.message}`);
@@ -531,6 +603,7 @@ export class WebSocketMessageHandler {
 					sessionId,
 					tabId,
 					newName: newName || '',
+					requestId: message.requestId,
 				});
 			})
 			.catch((error) => {
@@ -563,7 +636,14 @@ export class WebSocketMessageHandler {
 		this.callbacks
 			.starTab(sessionId, tabId, !!starred)
 			.then((success) => {
-				this.send(client, { type: 'star_tab_result', success, sessionId, tabId, starred });
+				this.send(client, {
+					type: 'star_tab_result',
+					success,
+					sessionId,
+					tabId,
+					starred,
+					requestId: message.requestId,
+				});
 			})
 			.catch((error) => {
 				this.sendError(client, `Failed to star tab: ${error.message}`);
@@ -601,6 +681,7 @@ export class WebSocketMessageHandler {
 					sessionId,
 					fromIndex,
 					toIndex,
+					requestId: message.requestId,
 				});
 			})
 			.catch((error) => {
@@ -628,10 +709,235 @@ export class WebSocketMessageHandler {
 		this.callbacks
 			.toggleBookmark(sessionId)
 			.then((success) => {
-				this.send(client, { type: 'toggle_bookmark_result', success, sessionId });
+				this.send(client, {
+					type: 'toggle_bookmark_result',
+					success,
+					sessionId,
+					requestId: message.requestId,
+				});
 			})
 			.catch((error) => {
 				this.sendError(client, `Failed to toggle bookmark: ${error.message}`);
+			});
+	}
+
+	/**
+	 * Handle refresh_file_tree message - refresh the file tree for a session
+	 */
+	private handleRefreshFileTree(client: WebClient, message: WebClientMessage): void {
+		const sessionId = message.sessionId as string;
+		logger.info(`[Web] Received refresh_file_tree message: session=${sessionId}`, LOG_CONTEXT);
+
+		if (!sessionId) {
+			this.sendError(client, 'Missing sessionId');
+			return;
+		}
+
+		if (!this.callbacks.refreshFileTree) {
+			this.sendError(client, 'File tree refresh not configured');
+			return;
+		}
+
+		this.callbacks
+			.refreshFileTree(sessionId)
+			.then((success) => {
+				this.send(client, {
+					type: 'refresh_file_tree_result',
+					success,
+					sessionId,
+					requestId: message.requestId,
+				});
+			})
+			.catch((error) => {
+				this.sendError(client, `Failed to refresh file tree: ${error.message}`);
+			});
+	}
+
+	/**
+	 * Handle refresh_auto_run_docs message - refresh auto-run documents for a session
+	 */
+	private handleRefreshAutoRunDocs(client: WebClient, message: WebClientMessage): void {
+		const sessionId = message.sessionId as string;
+		logger.info(`[Web] Received refresh_auto_run_docs message: session=${sessionId}`, LOG_CONTEXT);
+
+		if (!sessionId) {
+			this.sendError(client, 'Missing sessionId');
+			return;
+		}
+
+		if (!this.callbacks.refreshAutoRunDocs) {
+			this.sendError(client, 'Auto-run docs refresh not configured');
+			return;
+		}
+
+		this.callbacks
+			.refreshAutoRunDocs(sessionId)
+			.then((success) => {
+				this.send(client, {
+					type: 'refresh_auto_run_docs_result',
+					success,
+					sessionId,
+					requestId: message.requestId,
+				});
+			})
+			.catch((error) => {
+				this.sendError(client, `Failed to refresh auto-run docs: ${error.message}`);
+			});
+	}
+
+	/**
+	 * Handle configure_auto_run message - configure and optionally launch an auto-run
+	 */
+	private handleConfigureAutoRun(client: WebClient, message: WebClientMessage): void {
+		const sessionId = message.sessionId as string;
+		const documents = message.documents as
+			| Array<{ filename: string; resetOnCompletion?: boolean }>
+			| undefined;
+		logger.info(
+			`[Web] Received configure_auto_run message: session=${sessionId}, documents=${documents?.length || 0}`,
+			LOG_CONTEXT
+		);
+
+		if (!sessionId) {
+			this.sendError(client, 'Missing sessionId');
+			return;
+		}
+
+		if (!documents || !Array.isArray(documents) || documents.length === 0) {
+			this.sendError(client, 'Missing or empty documents array');
+			return;
+		}
+
+		// Validate each document entry
+		for (const doc of documents) {
+			if (typeof doc !== 'object' || doc === null) {
+				this.sendError(client, 'Each document must be an object');
+				return;
+			}
+			if (typeof doc.filename !== 'string' || doc.filename.trim() === '') {
+				this.sendError(client, 'Each document must have a non-empty string filename');
+				return;
+			}
+			if (doc.resetOnCompletion !== undefined && typeof doc.resetOnCompletion !== 'boolean') {
+				this.sendError(client, 'resetOnCompletion must be a boolean if provided');
+				return;
+			}
+		}
+
+		if (!this.callbacks.configureAutoRun) {
+			this.sendError(client, 'Auto-run configuration not configured');
+			return;
+		}
+
+		// Validate and coerce optional config fields at the WebSocket boundary
+		if (message.loopEnabled !== undefined && typeof message.loopEnabled !== 'boolean') {
+			this.sendError(client, 'loopEnabled must be a boolean');
+			return;
+		}
+		if (message.maxLoops !== undefined) {
+			const maxLoops = Number(message.maxLoops);
+			if (!Number.isFinite(maxLoops) || maxLoops < 0) {
+				this.sendError(client, 'maxLoops must be a finite non-negative number');
+				return;
+			}
+		}
+		if (message.launch !== undefined && typeof message.launch !== 'boolean') {
+			this.sendError(client, 'launch must be a boolean');
+			return;
+		}
+		if (
+			message.saveAsPlaybook !== undefined &&
+			(typeof message.saveAsPlaybook !== 'string' || message.saveAsPlaybook.trim() === '')
+		) {
+			this.sendError(client, 'saveAsPlaybook must be a non-empty string');
+			return;
+		}
+
+		const config = {
+			documents,
+			prompt: message.prompt as string | undefined,
+			loopEnabled: message.loopEnabled as boolean | undefined,
+			maxLoops: message.maxLoops !== undefined ? Number(message.maxLoops) : undefined,
+			saveAsPlaybook: message.saveAsPlaybook as string | undefined,
+			launch: message.launch as boolean | undefined,
+		};
+
+		this.callbacks
+			.configureAutoRun(sessionId, config)
+			.then((result) => {
+				this.send(client, {
+					type: 'configure_auto_run_result',
+					success: result.success,
+					playbookId: result.playbookId,
+					error: result.error,
+					sessionId,
+					requestId: message.requestId,
+				});
+			})
+			.catch((error) => {
+				this.sendError(client, `Failed to configure auto-run: ${error.message}`);
+			});
+	}
+
+	/**
+	 * Handle open_file_tab message - open a file in a preview tab
+	 */
+	private handleOpenFileTab(client: WebClient, message: WebClientMessage): void {
+		const sessionId = message.sessionId as string;
+		const filePath = message.filePath as string;
+		logger.info(
+			`[Web] Received open_file_tab message: session=${sessionId}, filePath=${filePath}`,
+			LOG_CONTEXT
+		);
+
+		// Helper to send typed error responses with requestId (prevents client timeouts)
+		const sendErrorResult = (error: string) => {
+			this.send(client, {
+				type: 'open_file_tab_result',
+				success: false,
+				error,
+				sessionId,
+				requestId: message.requestId,
+			});
+		};
+
+		if (!sessionId || !filePath) {
+			sendErrorResult('Missing sessionId or filePath');
+			return;
+		}
+
+		// Path traversal protection: resolve against session root
+		const sessions = this.callbacks.getSessions?.();
+		const session = sessions?.find((s) => s.id === sessionId);
+		if (!session?.cwd) {
+			sendErrorResult('Session not found or has no working directory');
+			return;
+		}
+		const sessionRoot = path.resolve(session.cwd);
+		const resolved = path.resolve(sessionRoot, filePath);
+		if (!resolved.startsWith(sessionRoot + path.sep) && resolved !== sessionRoot) {
+			sendErrorResult('Invalid file path: path is outside the agent working directory');
+			return;
+		}
+
+		if (!this.callbacks.openFileTab) {
+			sendErrorResult('File tab opening not configured');
+			return;
+		}
+
+		this.callbacks
+			.openFileTab(sessionId, resolved)
+			.then((success) => {
+				this.send(client, {
+					type: 'open_file_tab_result',
+					success,
+					sessionId,
+					filePath,
+					requestId: message.requestId,
+				});
+			})
+			.catch((error) => {
+				sendErrorResult(`Failed to open file tab: ${error.message}`);
 			});
 	}
 

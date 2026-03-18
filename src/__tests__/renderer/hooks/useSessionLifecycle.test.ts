@@ -549,8 +549,30 @@ describe('useSessionLifecycle', () => {
 			);
 		});
 
-		it('kills both AI and terminal processes', async () => {
-			const session = createMockSession({ id: 'session-1' });
+		it('kills AI, legacy terminal, and terminal tab PTY processes', async () => {
+			const session = createMockSession({
+				id: 'session-1',
+				terminalTabs: [
+					{
+						id: 'tab-t1',
+						name: null,
+						shellType: 'zsh',
+						pid: 111,
+						cwd: '/tmp',
+						createdAt: Date.now(),
+						state: 'idle',
+					},
+					{
+						id: 'tab-t2',
+						name: null,
+						shellType: 'zsh',
+						pid: 222,
+						cwd: '/tmp',
+						createdAt: Date.now(),
+						state: 'idle',
+					},
+				],
+			});
 			useSessionStore.setState({ sessions: [session], activeSessionId: 'session-1' });
 
 			const { result } = renderHook(() => useSessionLifecycle(createDeps()));
@@ -561,6 +583,8 @@ describe('useSessionLifecycle', () => {
 
 			expect(window.maestro.process.kill).toHaveBeenCalledWith('session-1-ai');
 			expect(window.maestro.process.kill).toHaveBeenCalledWith('session-1-terminal');
+			expect(window.maestro.process.kill).toHaveBeenCalledWith('session-1-terminal-tab-t1');
+			expect(window.maestro.process.kill).toHaveBeenCalledWith('session-1-terminal-tab-t2');
 		});
 
 		it('deletes all associated playbooks', async () => {

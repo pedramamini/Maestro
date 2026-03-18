@@ -79,10 +79,8 @@ export function useCue(): UseCueReturn {
 	const [queueStatus, setQueueStatus] = useState<Record<string, number>>({});
 	const [loading, setLoading] = useState(true);
 	const mountedRef = useRef(true);
-	const refreshSeqRef = useRef(0);
 
 	const refresh = useCallback(async () => {
-		const seq = ++refreshSeqRef.current;
 		try {
 			const [statusData, runsData, logData, queueData] = await Promise.all([
 				window.maestro.cue.getStatus(),
@@ -90,7 +88,7 @@ export function useCue(): UseCueReturn {
 				window.maestro.cue.getActivityLog(100),
 				window.maestro.cue.getQueueStatus(),
 			]);
-			if (!mountedRef.current || seq !== refreshSeqRef.current) return;
+			if (!mountedRef.current) return;
 			setSessions(statusData);
 			setActiveRuns(runsData);
 			setActivityLog(logData);
@@ -98,7 +96,7 @@ export function useCue(): UseCueReturn {
 		} catch {
 			// Let Sentry capture if truly unexpected
 		} finally {
-			if (mountedRef.current && seq === refreshSeqRef.current) {
+			if (mountedRef.current) {
 				setLoading(false);
 			}
 		}

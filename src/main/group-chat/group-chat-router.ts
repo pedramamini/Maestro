@@ -351,7 +351,7 @@ export async function routeUserMessage(
 						sshStore ?? undefined,
 						// Pass account registry and group-level account ID for multiplexing
 						accountRegistryRef ?? undefined,
-						chat.accountId,
+						chat.accountId
 					);
 					existingParticipantNames.add(participantName);
 
@@ -515,7 +515,15 @@ ${message}${imageContext}`;
 				sessionCustomArgs: chat.moderatorConfig?.customArgs,
 				sessionCustomEnvVars: chat.moderatorConfig?.customEnvVars,
 			});
-			const finalArgs = configResolution.args;
+
+			// For Gemini CLI: only disable workspace sandbox when read-only mode is
+			// CLI-enforced. Without hard read-only enforcement, removing the sandbox
+			// would give the moderator unsandboxed write capability.
+			// The CWD is already set to the group chat folder to avoid "path not in workspace" errors.
+			const geminiCanBeUnsandboxed =
+				chat.moderatorAgentId === 'gemini-cli' && !!agent.readOnlyCliEnforced;
+			const geminiNoSandbox = geminiCanBeUnsandboxed ? ['--no-sandbox'] : [];
+			const finalArgs = [...configResolution.args, ...geminiNoSandbox];
 			console.log(`[GroupChat:Debug] Args: ${JSON.stringify(finalArgs)}`);
 
 			console.log(`[GroupChat:Debug] Full prompt length: ${fullPrompt.length} chars`);
@@ -545,6 +553,7 @@ ${message}${imageContext}`;
 					getCustomEnvVarsCallback?.(chat.moderatorAgentId);
 				let spawnShell: string | undefined;
 				let spawnRunInShell = false;
+				let spawnSshStdinScript: string | undefined;
 
 				// Inject CLAUDE_CONFIG_DIR for account multiplexing (moderator)
 				if (accountRegistryRef) {
@@ -554,7 +563,7 @@ ${message}${imageContext}`;
 						chat.moderatorAgentId,
 						envToInject,
 						accountRegistryRef,
-						chat.accountId,
+						chat.accountId
 					);
 					if (assignedId) {
 						spawnEnvVars = envToInject;
@@ -585,6 +594,7 @@ ${message}${imageContext}`;
 					spawnCwd = sshWrapped.cwd;
 					spawnPrompt = sshWrapped.prompt;
 					spawnEnvVars = sshWrapped.customEnvVars;
+					spawnSshStdinScript = sshWrapped.sshStdinScript;
 					if (sshWrapped.sshRemoteUsed) {
 						console.log(`[GroupChat:Debug] SSH remote used: ${sshWrapped.sshRemoteUsed.name}`);
 					}
@@ -617,6 +627,7 @@ ${message}${imageContext}`;
 					runInShell: spawnRunInShell,
 					sendPromptViaStdin: winConfig.sendPromptViaStdin,
 					sendPromptViaStdinRaw: winConfig.sendPromptViaStdinRaw,
+					sshStdinScript: spawnSshStdinScript,
 				});
 
 				console.log(`[GroupChat:Debug] Spawn result: ${JSON.stringify(spawnResult)}`);
@@ -779,7 +790,7 @@ export async function routeModeratorResponse(
 						sshStore ?? undefined,
 						// Pass account registry and group-level account ID for multiplexing
 						accountRegistryRef ?? undefined,
-						chat.accountId,
+						chat.accountId
 					);
 					existingParticipantNames.add(participantName);
 
@@ -949,16 +960,19 @@ export async function routeModeratorResponse(
 					getCustomEnvVarsCallback?.(participant.agentId);
 				let finalSpawnShell: string | undefined;
 				let finalSpawnRunInShell = false;
+				let finalSshStdinScript: string | undefined;
 
 				// Inject CLAUDE_CONFIG_DIR for account multiplexing (participant batch spawn)
 				if (accountRegistryRef) {
-					const envToInject: Record<string, string> = finalSpawnEnvVars ? { ...finalSpawnEnvVars } : {};
+					const envToInject: Record<string, string> = finalSpawnEnvVars
+						? { ...finalSpawnEnvVars }
+						: {};
 					const assignedId = injectAccountEnv(
 						sessionId,
 						participant.agentId,
 						envToInject,
 						accountRegistryRef,
-						updatedChat.accountId,
+						updatedChat.accountId
 					);
 					if (assignedId) {
 						finalSpawnEnvVars = envToInject;
@@ -991,6 +1005,7 @@ export async function routeModeratorResponse(
 					finalSpawnCwd = sshWrapped.cwd;
 					finalSpawnPrompt = sshWrapped.prompt;
 					finalSpawnEnvVars = sshWrapped.customEnvVars;
+					finalSshStdinScript = sshWrapped.sshStdinScript;
 					if (sshWrapped.sshRemoteUsed) {
 						console.log(`[GroupChat:Debug] SSH remote used: ${sshWrapped.sshRemoteUsed.name}`);
 					}
@@ -1025,6 +1040,7 @@ export async function routeModeratorResponse(
 					runInShell: finalSpawnRunInShell,
 					sendPromptViaStdin: winConfig.sendPromptViaStdin,
 					sendPromptViaStdinRaw: winConfig.sendPromptViaStdinRaw,
+					sshStdinScript: finalSshStdinScript,
 				});
 
 				console.log(
@@ -1316,7 +1332,13 @@ Review the agent responses above. Either:
 		sessionCustomArgs: chat.moderatorConfig?.customArgs,
 		sessionCustomEnvVars: chat.moderatorConfig?.customEnvVars,
 	});
-	const finalArgs = configResolution.args;
+
+	// For Gemini CLI: only disable workspace sandbox when read-only mode is
+	// CLI-enforced (same rationale as moderator spawn above)
+	const geminiCanBeUnsandboxed =
+		chat.moderatorAgentId === 'gemini-cli' && !!agent.readOnlyCliEnforced;
+	const geminiSynthNoSandbox = geminiCanBeUnsandboxed ? ['--no-sandbox'] : [];
+	const finalArgs = [...configResolution.args, ...geminiSynthNoSandbox];
 	console.log(`[GroupChat:Debug] Args: ${JSON.stringify(finalArgs)}`);
 
 	console.log(`[GroupChat:Debug] Synthesis prompt length: ${synthesisPrompt.length} chars`);
@@ -1328,6 +1350,47 @@ Review the agent responses above. Either:
 		groupChatEmitters.emitStateChange?.(groupChatId, 'moderator-thinking');
 		console.log(`[GroupChat:Debug] Emitted state change: moderator-thinking`);
 
+		// Prepare spawn config with potential SSH wrapping
+		let spawnCommand = command;
+		let spawnArgs = finalArgs;
+		let spawnCwd = os.homedir();
+		let spawnPrompt: string | undefined = synthesisPrompt;
+		let spawnEnvVars =
+			configResolution.effectiveCustomEnvVars ?? getCustomEnvVarsCallback?.(chat.moderatorAgentId);
+		let spawnSshStdinScript: string | undefined;
+
+		// Apply SSH wrapping if configured
+		if (sshStore && chat.moderatorConfig?.sshRemoteConfig) {
+			console.log(`[GroupChat:Debug] Applying SSH wrapping for synthesis moderator...`);
+			const sshWrapped = await wrapSpawnWithSsh(
+				{
+					command,
+					args: finalArgs,
+					cwd: os.homedir(),
+					prompt: synthesisPrompt,
+					customEnvVars:
+						configResolution.effectiveCustomEnvVars ??
+						getCustomEnvVarsCallback?.(chat.moderatorAgentId),
+					promptArgs: agent.promptArgs,
+					noPromptSeparator: agent.noPromptSeparator,
+					agentBinaryName: agent.binaryName,
+				},
+				chat.moderatorConfig.sshRemoteConfig,
+				sshStore
+			);
+			spawnCommand = sshWrapped.command;
+			spawnArgs = sshWrapped.args;
+			spawnCwd = sshWrapped.cwd;
+			spawnPrompt = sshWrapped.prompt;
+			spawnEnvVars = sshWrapped.customEnvVars;
+			spawnSshStdinScript = sshWrapped.sshStdinScript;
+			if (sshWrapped.sshRemoteUsed) {
+				console.log(
+					`[GroupChat:Debug] SSH remote used for synthesis: ${sshWrapped.sshRemoteUsed.name}`
+				);
+			}
+		}
+
 		// Get Windows-specific spawn config (shell, stdin mode) - handles SSH exclusion
 		const winConfig = getWindowsSpawnConfig(
 			chat.moderatorAgentId,
@@ -1338,39 +1401,37 @@ Review the agent responses above. Either:
 		}
 
 		// Inject CLAUDE_CONFIG_DIR for account multiplexing (synthesis moderator)
-		let synthesisEnvVars =
-			configResolution.effectiveCustomEnvVars ??
-			getCustomEnvVarsCallback?.(chat.moderatorAgentId);
 		if (accountRegistryRef) {
-			const envToInject: Record<string, string> = synthesisEnvVars ? { ...synthesisEnvVars } : {};
+			const envToInject: Record<string, string> = spawnEnvVars ? { ...spawnEnvVars } : {};
 			const assignedId = injectAccountEnv(
 				sessionId,
 				chat.moderatorAgentId,
 				envToInject,
 				accountRegistryRef,
-				chat.accountId,
+				chat.accountId
 			);
 			if (assignedId) {
-				synthesisEnvVars = envToInject;
+				spawnEnvVars = envToInject;
 			}
 		}
 
 		const spawnResult = processManager.spawn({
 			sessionId,
 			toolType: chat.moderatorAgentId,
-			cwd: os.homedir(),
-			command,
-			args: finalArgs,
+			cwd: spawnCwd,
+			command: spawnCommand,
+			args: spawnArgs,
 			readOnlyMode: true,
-			prompt: synthesisPrompt,
+			prompt: spawnPrompt,
 			contextWindow: getContextWindowValue(agent, agentConfigValues),
-			customEnvVars: synthesisEnvVars,
+			customEnvVars: spawnEnvVars,
 			promptArgs: agent.promptArgs,
 			noPromptSeparator: agent.noPromptSeparator,
 			shell: winConfig.shell,
 			runInShell: winConfig.runInShell,
 			sendPromptViaStdin: winConfig.sendPromptViaStdin,
 			sendPromptViaStdinRaw: winConfig.sendPromptViaStdinRaw,
+			sshStdinScript: spawnSshStdinScript,
 		});
 
 		console.log(`[GroupChat:Debug] Synthesis spawn result: ${JSON.stringify(spawnResult)}`);
@@ -1512,6 +1573,7 @@ export async function respawnParticipantWithRecovery(
 		configResolution.effectiveCustomEnvVars ?? getCustomEnvVarsCallback?.(participant.agentId);
 	let finalSpawnShell: string | undefined;
 	let finalSpawnRunInShell = false;
+	let finalSshStdinScript: string | undefined;
 
 	// Inject CLAUDE_CONFIG_DIR for account multiplexing (recovery spawn)
 	if (accountRegistryRef) {
@@ -1521,7 +1583,7 @@ export async function respawnParticipantWithRecovery(
 			participant.agentId,
 			envToInject,
 			accountRegistryRef,
-			chat.accountId,
+			chat.accountId
 		);
 		if (assignedId) {
 			finalSpawnEnvVars = envToInject;
@@ -1553,6 +1615,7 @@ export async function respawnParticipantWithRecovery(
 		finalSpawnCwd = sshWrapped.cwd;
 		finalSpawnPrompt = sshWrapped.prompt;
 		finalSpawnEnvVars = sshWrapped.customEnvVars;
+		finalSshStdinScript = sshWrapped.sshStdinScript;
 		if (sshWrapped.sshRemoteUsed) {
 			console.log(
 				`[GroupChat:Debug] SSH remote used for recovery: ${sshWrapped.sshRemoteUsed.name}`
@@ -1584,6 +1647,7 @@ export async function respawnParticipantWithRecovery(
 		runInShell: finalSpawnRunInShell,
 		sendPromptViaStdin: winConfig.sendPromptViaStdin,
 		sendPromptViaStdinRaw: winConfig.sendPromptViaStdinRaw,
+		sshStdinScript: finalSshStdinScript,
 	});
 
 	console.log(`[GroupChat:Debug] Recovery spawn result: ${JSON.stringify(spawnResult)}`);

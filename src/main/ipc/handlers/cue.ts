@@ -166,6 +166,17 @@ export function registerCueHandlers(deps: CueHandlerDependencies): void {
 		)
 	);
 
+	// Remove a session from Cue tracking
+	ipcMain.handle(
+		'cue:removeSession',
+		withIpcErrorLogging(
+			handlerOpts('removeSession'),
+			async (options: { sessionId: string }): Promise<void> => {
+				requireEngine().removeSession(options.sessionId);
+			}
+		)
+	);
+
 	// Get all sessions with their subscriptions (for graph visualization)
 	ipcMain.handle(
 		'cue:getGraphData',

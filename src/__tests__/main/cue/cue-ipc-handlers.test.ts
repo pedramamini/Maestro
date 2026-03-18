@@ -77,6 +77,12 @@ import * as yaml from 'js-yaml';
 // Create a mock CueEngine
 function createMockEngine() {
 	return {
+		getSettings: vi.fn().mockReturnValue({
+			timeout_minutes: 30,
+			timeout_on_fail: 'break',
+			max_concurrent: 1,
+			queue_size: 10,
+		}),
 		getStatus: vi.fn().mockReturnValue([]),
 		getActiveRuns: vi.fn().mockReturnValue([]),
 		getActivityLog: vi.fn().mockReturnValue([]),
@@ -84,7 +90,11 @@ function createMockEngine() {
 		stop: vi.fn(),
 		stopRun: vi.fn().mockReturnValue(true),
 		stopAll: vi.fn(),
+		triggerSubscription: vi.fn().mockReturnValue(true),
+		getQueueStatus: vi.fn().mockReturnValue(new Map()),
 		refreshSession: vi.fn(),
+		removeSession: vi.fn(),
+		getGraphData: vi.fn().mockReturnValue([]),
 		isEnabled: vi.fn().mockReturnValue(false),
 	};
 }
@@ -120,6 +130,7 @@ describe('Cue IPC Handlers', () => {
 			});
 
 			const expectedChannels = [
+				'cue:getSettings',
 				'cue:getStatus',
 				'cue:getActiveRuns',
 				'cue:getActivityLog',
@@ -127,7 +138,11 @@ describe('Cue IPC Handlers', () => {
 				'cue:disable',
 				'cue:stopRun',
 				'cue:stopAll',
+				'cue:triggerSubscription',
+				'cue:getQueueStatus',
 				'cue:refreshSession',
+				'cue:removeSession',
+				'cue:getGraphData',
 				'cue:readYaml',
 				'cue:writeYaml',
 				'cue:deleteYaml',
@@ -217,6 +232,14 @@ describe('Cue IPC Handlers', () => {
 			const handler = registerAndGetHandler('cue:disable');
 			await handler(null);
 			expect(mockEngine.stop).toHaveBeenCalledOnce();
+		});
+	});
+
+	describe('cue:removeSession', () => {
+		it('should call engine.removeSession()', async () => {
+			const handler = registerAndGetHandler('cue:removeSession');
+			await handler(null, { sessionId: 's1' });
+			expect(mockEngine.removeSession).toHaveBeenCalledWith('s1');
 		});
 	});
 
@@ -331,6 +354,65 @@ describe('Cue IPC Handlers', () => {
 				valid: false,
 				errors: ['YAML parse error: bad indentation'],
 			});
+		});
+	});
+
+	describe('edge cases', () => {
+		it('cue:getStatus returns empty array when engine not started', async () => {
+			// Engine exists but getStatus returns empty (no sessions registered)
+			mockEngine.getStatus.mockReturnValue([]);
+
+			const handler = registerAndGetHandler('cue:getStatus');
+			const result = await handler(null);
+			expect(result).toEqual([]);
+			expect(mockEngine.getStatus).toHaveBeenCalledOnce();
+		});
+
+		it('cue:getActivityLog with limit returns bounded results', async () => {
+			const manyEntries = Array.from({ length: 10 }, (_, i) => ({
+				runId: `r${i}`,
+				sessionId: 's1',
+				sessionName: 'Test',
+				subscriptionName: 'timer',
+				event: {
+					id: `e${i}`,
+					type: 'time.heartbeat',
+					timestamp: new Date().toISOString(),
+					triggerName: 'timer',
+					payload: {},
+				},
+				status: 'completed',
+				stdout: '',
+				stderr: '',
+				exitCode: 0,
+				durationMs: 100,
+				startedAt: new Date().toISOString(),
+				endedAt: new Date().toISOString(),
+			}));
+
+			// Simulate engine returning only the last 2 entries (bounded by limit)
+			mockEngine.getActivityLog.mockReturnValue(manyEntries.slice(-2));
+
+			const handler = registerAndGetHandler('cue:getActivityLog');
+			const result = await handler(null, { limit: 2 });
+
+			expect(result).toHaveLength(2);
+			expect(mockEngine.getActivityLog).toHaveBeenCalledWith(2);
+		});
+
+		it('cue:validateYaml handles empty content', async () => {
+			// Empty string: yaml.load returns undefined/null for empty input
+			vi.mocked(yaml.load).mockReturnValue(undefined);
+			vi.mocked(validateCueConfig).mockReturnValue({
+				valid: false,
+				errors: ['Config must have a "subscriptions" array'],
+			});
+
+			const handler = registerAndGetHandler('cue:validateYaml');
+			const result = (await handler(null, { content: '' })) as { valid: boolean; errors: string[] };
+
+			expect(result.valid).toBe(false);
+			expect(result.errors.length).toBeGreaterThan(0);
 		});
 	});
 

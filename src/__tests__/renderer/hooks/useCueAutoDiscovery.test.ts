@@ -13,12 +13,16 @@ import type { Session, EncoreFeatureFlags } from '../../../renderer/types';
 
 // Mock Cue API
 const mockRefreshSession = vi.fn();
+const mockRemoveSession = vi.fn();
+const mockEnable = vi.fn();
 const mockDisable = vi.fn();
 
 beforeEach(() => {
 	vi.clearAllMocks();
 
 	mockRefreshSession.mockResolvedValue(undefined);
+	mockRemoveSession.mockResolvedValue(undefined);
+	mockEnable.mockResolvedValue(undefined);
 	mockDisable.mockResolvedValue(undefined);
 
 	(window as any).maestro = {
@@ -26,6 +30,8 @@ beforeEach(() => {
 		cue: {
 			...(window as any).maestro?.cue,
 			refreshSession: mockRefreshSession,
+			removeSession: mockRemoveSession,
+			enable: mockEnable,
 			disable: mockDisable,
 		},
 	};
@@ -137,17 +143,18 @@ describe('useCueAutoDiscovery', () => {
 			);
 
 			mockRefreshSession.mockClear();
+			mockRemoveSession.mockClear();
 
 			// Remove session s2
 			const updatedSessions = [makeSession('s1', '/project/a')];
 			rerender({ sessions: updatedSessions, encore: encoreFeatures });
 
-			expect(mockRefreshSession).toHaveBeenCalledWith('s2', '');
+			expect(mockRemoveSession).toHaveBeenCalledWith('s2');
 		});
 	});
 
 	describe('encore feature toggle', () => {
-		it('should scan all sessions when maestroCue is toggled ON', () => {
+		it('should enable Cue and scan all sessions when maestroCue is toggled ON', async () => {
 			const sessions = [makeSession('s1', '/project/a'), makeSession('s2', '/project/b')];
 
 			useSessionStore.setState({ sessionsLoaded: true });
@@ -157,10 +164,13 @@ describe('useCueAutoDiscovery', () => {
 			});
 
 			mockRefreshSession.mockClear();
+			mockEnable.mockClear();
 
 			// Toggle maestroCue ON
 			rerender({ sessions, encore: makeEncoreFeatures(true) });
+			await act(async () => {});
 
+			expect(mockEnable).toHaveBeenCalledTimes(1);
 			expect(mockRefreshSession).toHaveBeenCalledTimes(2);
 			expect(mockRefreshSession).toHaveBeenCalledWith('s1', '/project/a');
 			expect(mockRefreshSession).toHaveBeenCalledWith('s2', '/project/b');

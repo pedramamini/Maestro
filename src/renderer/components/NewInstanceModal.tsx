@@ -7,10 +7,10 @@ import { validateNewSession, validateEditSession } from '../utils/sessionValidat
 import { FormInput } from './ui/FormInput';
 import { Modal, ModalFooter } from './ui/Modal';
 import { AgentConfigPanel } from './shared/AgentConfigPanel';
-import { AccountSelector } from './AccountSelector';
 import { SshRemoteSelector } from './shared/SshRemoteSelector';
 import { formatShortcutKeys } from '../utils/shortcutFormatter';
 import { safeClipboardWrite } from '../utils/clipboard';
+import { isBetaAgent, getAgentDisplayName } from '../../shared/agentMetadata';
 import { buildMaestroUrl } from '../utils/buildMaestroUrl';
 
 // Maximum character length for nudge message
@@ -70,13 +70,11 @@ interface EditAgentModalProps {
 			enabled: boolean;
 			remoteId: string | null;
 			workingDirOverride?: string;
-		},
-		accountId?: string,
+		}
 	) => void;
 	theme: any;
 	session: Session | null;
 	existingSessions: Session[];
-	onSwitchProvider?: () => void; // Opens SwitchProviderModal (Virtuosos)
 }
 
 // Supported agents that are fully implemented
@@ -812,9 +810,7 @@ export function NewInstanceModal({
 													)}
 													<span className="font-medium">{agent.name}</span>
 													{/* "Beta" badge for Codex, OpenCode, and Factory Droid */}
-													{(agent.id === 'codex' ||
-														agent.id === 'opencode' ||
-														agent.id === 'factory-droid') && (
+													{isBetaAgent(agent.id) && (
 														<span
 															className="text-[9px] px-1.5 py-0.5 rounded font-bold uppercase"
 															style={{
@@ -1233,7 +1229,6 @@ export function EditAgentModal({
 	theme,
 	session,
 	existingSessions,
-	onSwitchProvider,
 }: EditAgentModalProps) {
 	const [instanceName, setInstanceName] = useState('');
 	const [nudgeMessage, setNudgeMessage] = useState('');
@@ -1251,8 +1246,6 @@ export function EditAgentModal({
 	const [selectedToolType, setSelectedToolType] = useState<ToolType>(
 		session?.toolType ?? 'claude-code'
 	);
-	// Account multiplexing
-	const [selectedAccountId, setSelectedAccountId] = useState<string | undefined>(undefined);
 	// SSH Remote configuration
 	const [sshRemotes, setSshRemotes] = useState<SshRemoteConfig[]>([]);
 	const [sshRemoteConfig, setSshRemoteConfig] = useState<AgentSshRemoteConfig | undefined>(
@@ -1352,9 +1345,6 @@ export function EditAgentModal({
 				setCustomEnvVars(session.customEnvVars ?? {});
 				setCustomModel(session.customModel ?? '');
 			}
-
-			// Load account assignment
-			setSelectedAccountId(session.accountId);
 		}
 	}, [isOpen, session, selectedToolType]);
 
@@ -1488,8 +1478,7 @@ export function EditAgentModal({
 			Object.keys(customEnvVars).length > 0 ? customEnvVars : undefined,
 			modelValue,
 			contextWindowValue,
-			sessionSshRemoteConfig,
-			selectedAccountId || undefined,
+			sessionSshRemoteConfig
 		);
 		onClose();
 	}, [
@@ -1503,7 +1492,6 @@ export function EditAgentModal({
 		sshRemoteConfig,
 		selectedToolType,
 		providerChanged,
-		selectedAccountId,
 		onSave,
 		onClose,
 		existingSessions,
@@ -1537,12 +1525,6 @@ export function EditAgentModal({
 		}
 	}, [selectedToolType]);
 
-	// Handle account selection in edit modal (local state only — actual switch happens on save)
-	const handleSwitchAccount = useCallback((toAccountId: string) => {
-		if (!session || toAccountId === selectedAccountId) return;
-		setSelectedAccountId(toAccountId);
-	}, [session, selectedAccountId]);
-
 	// Check if form is valid for submission
 	const isFormValid = useMemo(() => {
 		// Remote path validation is informational only - don't block save
@@ -1568,14 +1550,7 @@ export function EditAgentModal({
 
 	if (!isOpen || !session) return null;
 
-	// Get agent name for display
-	const agentNameMap: Record<string, string> = {
-		'claude-code': 'Claude Code',
-		codex: 'Codex',
-		opencode: 'OpenCode',
-		'factory-droid': 'Factory Droid',
-	};
-	const agentName = agentNameMap[selectedToolType] || selectedToolType;
+	const agentName = getAgentDisplayName(selectedToolType);
 
 	return (
 		<div onKeyDown={handleKeyDown} role="group" aria-label="Edit agent dialog">
@@ -1667,7 +1642,7 @@ export function EditAgentModal({
 						>
 							{SUPPORTED_AGENTS.map((agentId) => (
 								<option key={agentId} value={agentId}>
-									{agentNameMap[agentId] || agentId}
+									{getAgentDisplayName(agentId)}
 								</option>
 							))}
 						</select>
@@ -1743,28 +1718,6 @@ export function EditAgentModal({
 							</div>
 						)}
 					</div>
-
-					{/* Account Selector (Claude Code only) */}
-					{session.toolType === 'claude-code' && (
-						<div>
-							<label
-								className="block text-xs font-bold opacity-70 uppercase mb-2"
-								style={{ color: theme.colors.textMain }}
-							>
-								Account
-							</label>
-							<AccountSelector
-								theme={theme}
-								sessionId={session.id}
-								currentAccountId={selectedAccountId}
-								currentAccountName={session.accountName}
-								onSwitchAccount={handleSwitchAccount}
-							/>
-							<p className="mt-1 text-xs" style={{ color: theme.colors.textDim }}>
-								Claude account used for this agent. Changing takes effect on next message.
-							</p>
-						</div>
-					)}
 
 					{/* Nudge Message */}
 					<div>

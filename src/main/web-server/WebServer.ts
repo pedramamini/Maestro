@@ -62,6 +62,10 @@ import type {
 	StarTabCallback,
 	ReorderTabCallback,
 	ToggleBookmarkCallback,
+	OpenFileTabCallback,
+	RefreshFileTreeCallback,
+	RefreshAutoRunDocsCallback,
+	ConfigureAutoRunCallback,
 	GetThemeCallback,
 	GetCustomCommandsCallback,
 	GetHistoryCallback,
@@ -301,6 +305,22 @@ export class WebServer {
 		this.callbackRegistry.setToggleBookmarkCallback(callback);
 	}
 
+	setOpenFileTabCallback(callback: OpenFileTabCallback): void {
+		this.callbackRegistry.setOpenFileTabCallback(callback);
+	}
+
+	setRefreshFileTreeCallback(callback: RefreshFileTreeCallback): void {
+		this.callbackRegistry.setRefreshFileTreeCallback(callback);
+	}
+
+	setRefreshAutoRunDocsCallback(callback: RefreshAutoRunDocsCallback): void {
+		this.callbackRegistry.setRefreshAutoRunDocsCallback(callback);
+	}
+
+	setConfigureAutoRunCallback(callback: ConfigureAutoRunCallback): void {
+		this.callbackRegistry.setConfigureAutoRunCallback(callback);
+	}
+
 	setGetHistoryCallback(callback: GetHistoryCallback): void {
 		this.callbackRegistry.setGetHistoryCallback(callback);
 	}
@@ -437,8 +457,8 @@ export class WebServer {
 				this.callbackRegistry.executeCommand(sessionId, command, inputMode),
 			switchMode: async (sessionId: string, mode: 'ai' | 'terminal') =>
 				this.callbackRegistry.switchMode(sessionId, mode),
-			selectSession: async (sessionId: string, tabId?: string) =>
-				this.callbackRegistry.selectSession(sessionId, tabId),
+			selectSession: async (sessionId: string, tabId?: string, focus?: boolean) =>
+				this.callbackRegistry.selectSession(sessionId, tabId, focus),
 			selectTab: async (sessionId: string, tabId: string) =>
 				this.callbackRegistry.selectTab(sessionId, tabId),
 			newTab: async (sessionId: string) => this.callbackRegistry.newTab(sessionId),
@@ -451,6 +471,14 @@ export class WebServer {
 			reorderTab: async (sessionId: string, fromIndex: number, toIndex: number) =>
 				this.callbackRegistry.reorderTab(sessionId, fromIndex, toIndex),
 			toggleBookmark: async (sessionId: string) => this.callbackRegistry.toggleBookmark(sessionId),
+			openFileTab: async (sessionId: string, filePath: string) =>
+				this.callbackRegistry.openFileTab(sessionId, filePath),
+			refreshFileTree: async (sessionId: string) =>
+				this.callbackRegistry.refreshFileTree(sessionId),
+			refreshAutoRunDocs: async (sessionId: string) =>
+				this.callbackRegistry.refreshAutoRunDocs(sessionId),
+			configureAutoRun: async (sessionId: string, config: any) =>
+				this.callbackRegistry.configureAutoRun(sessionId, config),
 			getSessions: () => this.callbackRegistry.getSessions(),
 			getLiveSessionInfo: (sessionId: string) =>
 				this.liveSessionManager.getLiveSessionInfo(sessionId),

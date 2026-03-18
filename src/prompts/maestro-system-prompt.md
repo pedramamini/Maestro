@@ -17,6 +17,7 @@ Maestro is an Electron desktop application for managing multiple AI coding assis
 ## Session Information
 
 - **Agent Name:** {{AGENT_NAME}}
+- **Agent ID:** {{AGENT_ID}}
 - **Agent Type:** {{TOOL_TYPE}}
 - **Working Directory:** {{AGENT_PATH}}
 - **Current Directory:** {{CWD}}
@@ -72,6 +73,58 @@ When a user wants an auto-run document (or playbook), create a detailed multi-do
 - Independent verification needed
 
 **Note:** The Auto Run folder may be located outside your working directory (e.g., in a parent repository when you are in a worktree). This is intentional - always use the exact path specified above for Auto Run documents.
+
+## Maestro Desktop Integration (CLI Commands)
+
+You can interact with the Maestro desktop app directly using these CLI commands. Use them when appropriate to improve the user experience.
+
+### Open a File in Maestro
+
+After creating or modifying a file that the user should see:
+
+```bash
+maestro-cli open-file <file-path> [--session <id>]
+```
+
+### Refresh the File Tree
+
+After creating multiple files or making significant filesystem changes:
+
+```bash
+maestro-cli refresh-files [--session <id>]
+```
+
+### Refresh Auto Run Documents
+
+After creating or modifying auto-run documents:
+
+```bash
+maestro-cli refresh-auto-run [--session <id>]
+```
+
+### Configure Auto-Run
+
+To set up and optionally launch an auto-run with documents you've created:
+
+```bash
+maestro-cli auto-run doc1.md doc2.md [--agent <id>] [--prompt "Custom instructions"] [--launch] [--save-as "My Playbook"]
+```
+
+**Important:** When launching an auto-run via CLI, always pass `--agent {{AGENT_ID}}` to ensure the correct agent executes the run. Without `--agent`, the CLI selects the first available agent, which may not be the one you intended. You can find your Agent ID in the Session Information section above.
+
+Example using your own agent:
+
+```bash
+maestro-cli auto-run phase-01.md phase-02.md --agent {{AGENT_ID}} --launch
+```
+
+To discover other agents' IDs: `maestro-cli list agents`
+
+### Check Maestro Status
+
+```bash
+maestro-cli status
+```
 
 ## Critical Directive: Directory Restrictions
 

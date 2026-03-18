@@ -5,7 +5,6 @@
  * - Font family selection and loading
  * - Custom font management (add/remove)
  * - Font size toggle buttons
- * - Terminal width toggle buttons
  * - Max log buffer toggle buttons
  * - Max output lines toggle buttons
  * - User message alignment toggle
@@ -27,7 +26,6 @@ import type { Theme } from '../../../../../renderer/types';
 // --- Mock setters (module-level for assertion access) ---
 const mockSetFontFamily = vi.fn();
 const mockSetFontSize = vi.fn();
-const mockSetTerminalWidth = vi.fn();
 const mockSetMaxLogBuffer = vi.fn();
 const mockSetMaxOutputLines = vi.fn();
 const mockSetUserMessageAlignment = vi.fn();
@@ -48,8 +46,6 @@ vi.mock('../../../../../renderer/hooks/settings/useSettings', () => ({
 		setFontFamily: mockSetFontFamily,
 		fontSize: 14,
 		setFontSize: mockSetFontSize,
-		terminalWidth: 100,
-		setTerminalWidth: mockSetTerminalWidth,
 		maxLogBuffer: 5000,
 		setMaxLogBuffer: mockSetMaxLogBuffer,
 		maxOutputLines: 25,
@@ -562,7 +558,6 @@ describe('DisplayTab', () => {
 	});
 
 	// =========================================================================
-	// =========================================================================
 	// Max Log Buffer
 	// =========================================================================
 
@@ -629,7 +624,7 @@ describe('DisplayTab', () => {
 			});
 
 			expect(
-				screen.getByText(/Maximum number of log messages to keep in memory/)
+				screen.getByText(/Maximum number of system log messages retained in memory/)
 			).toBeInTheDocument();
 		});
 	});

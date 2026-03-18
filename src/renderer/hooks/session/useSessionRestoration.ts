@@ -409,6 +409,8 @@ export function useSessionRestoration(): SessionRestorationReturn {
 					}
 				} else {
 					setSessions([]);
+					// No sessions means no file tree to load — unblock splash immediately
+					useSessionStore.getState().setInitialFileTreeReady(true);
 				}
 
 				// Handle groups
@@ -430,6 +432,8 @@ export function useSessionRestoration(): SessionRestorationReturn {
 				console.error('Failed to load sessions/groups:', e);
 				setSessions([]);
 				setGroups([]);
+				// Error loading sessions — no file tree to wait for
+				useSessionStore.getState().setInitialFileTreeReady(true);
 			} finally {
 				// Mark initial load as complete to enable persistence
 				initialLoadComplete.current = true;

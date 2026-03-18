@@ -14,7 +14,7 @@ import {
 	FolderOpen,
 	Hash,
 	Play,
-	User,
+	ExternalLink,
 } from 'lucide-react';
 import type { Session, Group, Theme, GroupChat } from '../types';
 import { useLayerStack } from '../contexts/LayerStackContext';
@@ -72,6 +72,7 @@ interface ProcessNode {
 	participantName?: string; // For group chat participant processes
 	command?: string; // The command used to spawn this process
 	args?: string[]; // The arguments passed to the command
+	sshRemote?: { name: string; host: string }; // SSH remote info if running remotely
 }
 
 // Format runtime in human readable format (e.g., "2m 30s", "1h 5m", "3d 2h")
@@ -358,6 +359,10 @@ export function ProcessMonitor(props: ProcessMonitorProps) {
 
 		// Build session node with active processes
 		const buildSessionNode = (session: Session): ProcessNode => {
+			const sshRemote = session.sshRemote
+				? { name: session.sshRemote.name, host: session.sshRemote.host }
+				: undefined;
+
 			const sessionNode: ProcessNode = {
 				id: `session-${session.id}`,
 				type: 'session',
@@ -365,6 +370,7 @@ export function ProcessMonitor(props: ProcessMonitorProps) {
 				sessionId: session.id,
 				expanded: expandedNodes.has(`session-${session.id}`),
 				children: [],
+				sshRemote,
 			};
 
 			// Get active processes for this session
@@ -430,6 +436,7 @@ export function ProcessMonitor(props: ProcessMonitorProps) {
 					isAutoRun,
 					command: proc.command,
 					args: proc.args,
+					sshRemote,
 				});
 			});
 
@@ -845,13 +852,22 @@ export function ProcessMonitor(props: ProcessMonitorProps) {
 
 			return (
 				<div key={node.id}>
-					<button
-						ref={isSelected ? (selectedNodeRef as React.RefObject<HTMLButtonElement>) : null}
+					<div
+						ref={isSelected ? (selectedNodeRef as React.RefObject<HTMLDivElement>) : null}
+						role="button"
+						tabIndex={0}
 						onClick={() => {
 							setSelectedNodeId(node.id);
 							toggleNode(node.id);
 						}}
-						className="w-full text-left px-4 py-2 flex items-center gap-2 hover:bg-opacity-5"
+						onKeyDown={(e) => {
+							if (e.key === 'Enter' || e.key === ' ') {
+								e.preventDefault();
+								setSelectedNodeId(node.id);
+								toggleNode(node.id);
+							}
+						}}
+						className="w-full text-left px-4 py-2 flex items-center gap-2 hover:bg-opacity-5 group"
 						style={{
 							paddingLeft: `${paddingLeft}px`,
 							backgroundColor: isSelected ? `${theme.colors.accent}25` : 'transparent',
@@ -899,9 +915,43 @@ export function ProcessMonitor(props: ProcessMonitorProps) {
 									{activeCount} running
 								</span>
 							)}
+							<span
+								className="px-1.5 py-0.5 rounded text-xs"
+								style={{
+									backgroundColor: node.sshRemote
+										? `${theme.colors.accent}20`
+										: `${theme.colors.textDim}15`,
+									color: node.sshRemote ? theme.colors.accent : theme.colors.textDim,
+								}}
+								title={
+									node.sshRemote
+										? `SSH: ${node.sshRemote.name} (${node.sshRemote.host})`
+										: 'Running locally'
+								}
+							>
+								{node.sshRemote ? `SSH: ${node.sshRemote.name}` : 'Local'}
+							</span>
 							<span>Session: {node.sessionId?.substring(0, 8)}...</span>
 						</span>
-					</button>
+						{node.sessionId && onNavigateToSession && (
+							<button
+								className="p-1 rounded opacity-0 group-hover:opacity-100 hover:bg-opacity-20 transition-opacity flex-shrink-0"
+								style={{ color: theme.colors.accent }}
+								onClick={(e) => {
+									e.stopPropagation();
+									onNavigateToSession(node.sessionId!);
+									onClose();
+								}}
+								onMouseEnter={(e) =>
+									(e.currentTarget.style.backgroundColor = `${theme.colors.accent}20`)
+								}
+								onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
+								title="Jump to agent"
+							>
+								<ExternalLink className="w-4 h-4" />
+							</button>
+						)}
+					</div>
 					{isExpanded && hasChildren && (
 						<div>{node.children!.map((child) => renderNode(child, depth + 1))}</div>
 					)}
@@ -1003,28 +1053,44 @@ export function ProcessMonitor(props: ProcessMonitorProps) {
 								GENERATING
 							</span>
 						)}
-						{/* Account badge — show if session has an account assigned */}
-						{(() => {
-							const sess = sessions.find(s => s.id === node.agentSessionId);
-							if (sess?.accountName) {
-								return (
-									<span
-										className="flex-shrink-0"
-										style={{
-											fontSize: '9px',
-											padding: '1px 5px',
-											borderRadius: '3px',
-											backgroundColor: theme.colors.accentDim || (theme.colors.accent + '20'),
-											color: theme.colors.accent,
-											fontWeight: 500,
-										}}
-									>
-										{sess.accountName}
-									</span>
-								);
-							}
-							return null;
-						})()}
+						{/* Jump to agent button */}
+						{node.sessionId && onNavigateToSession && !isGroupChatProcess && !isWizardProcess && (
+							<button
+								className="p-1 rounded opacity-0 group-hover:opacity-100 hover:bg-opacity-20 transition-opacity flex-shrink-0"
+								style={{ color: theme.colors.accent }}
+								onClick={(e) => {
+									e.stopPropagation();
+									onNavigateToSession(node.sessionId!, node.tabId);
+									onClose();
+								}}
+								onMouseEnter={(e) =>
+									(e.currentTarget.style.backgroundColor = `${theme.colors.accent}20`)
+								}
+								onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
+								title={node.tabId ? 'Jump to tab' : 'Jump to agent'}
+							>
+								<ExternalLink className="w-4 h-4" />
+							</button>
+						)}
+						{/* Jump to group chat button */}
+						{isGroupChatProcess && node.groupChatId && onNavigateToGroupChat && (
+							<button
+								className="p-1 rounded opacity-0 group-hover:opacity-100 hover:bg-opacity-20 transition-opacity flex-shrink-0"
+								style={{ color: theme.colors.accent }}
+								onClick={(e) => {
+									e.stopPropagation();
+									onNavigateToGroupChat(node.groupChatId!);
+									onClose();
+								}}
+								onMouseEnter={(e) =>
+									(e.currentTarget.style.backgroundColor = `${theme.colors.accent}20`)
+								}
+								onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
+								title="Jump to group chat"
+							>
+								<ExternalLink className="w-4 h-4" />
+							</button>
+						)}
 						{/* Kill button */}
 						{node.processSessionId && (
 							<button
@@ -1088,6 +1154,18 @@ export function ProcessMonitor(props: ProcessMonitorProps) {
 						>
 							Running
 						</span>
+						{node.sshRemote && (
+							<span
+								className="text-xs px-1.5 py-0.5 rounded"
+								style={{
+									backgroundColor: `${theme.colors.accent}20`,
+									color: theme.colors.accent,
+								}}
+								title={`SSH: ${node.sshRemote.name} (${node.sshRemote.host})`}
+							>
+								SSH
+							</span>
+						)}
 					</div>
 				</div>
 			);
@@ -1429,30 +1507,6 @@ export function ProcessMonitor(props: ProcessMonitorProps) {
 								{new Date(detailView.startTime).toLocaleString()}
 							</span>
 						</div>
-
-						{/* Account Info */}
-						{(() => {
-							const sess = sessions.find(s => s.id === detailView.agentSessionId);
-							if (sess?.accountId) {
-								return (
-									<div className="p-4 rounded-lg" style={{ backgroundColor: theme.colors.bgMain }}>
-										<div className="flex items-center gap-2 mb-2">
-											<User className="w-4 h-4" style={{ color: theme.colors.accent }} />
-											<span
-												className="text-xs font-medium uppercase tracking-wide"
-												style={{ color: theme.colors.textDim }}
-											>
-												Virtuoso
-											</span>
-										</div>
-										<span className="text-sm" style={{ color: theme.colors.textMain }}>
-											{sess.accountName || sess.accountId}
-										</span>
-									</div>
-								);
-							}
-							return null;
-						})()}
 					</div>
 				</div>
 

@@ -390,4 +390,33 @@ describe('reconcileMissedTimeEvents', () => {
 
 		expect(dispatched).toHaveLength(0);
 	});
+
+	it('does not reconcile time.scheduled subscriptions (by design)', () => {
+		// time.scheduled triggers re-check on their 60s interval after wake,
+		// so reconciliation is intentionally not needed for them.
+		const sessions = new Map<string, ReconcileSessionInfo>();
+		sessions.set('session-1', {
+			config: createConfig([
+				{
+					name: 'daily-standup',
+					event: 'time.scheduled',
+					enabled: true,
+					prompt: 'run standup',
+					schedule_times: ['09:00'],
+					schedule_days: ['mon', 'tue', 'wed', 'thu', 'fri'],
+				},
+			]),
+			sessionName: 'Test',
+		});
+
+		const config = makeConfig({
+			sleepStartMs: Date.now() - 2 * 60 * 60 * 1000, // 2 hours ago
+			wakeTimeMs: Date.now(),
+			sessions,
+		});
+
+		reconcileMissedTimeEvents(config);
+
+		expect(dispatched).toHaveLength(0);
+	});
 });

@@ -46,6 +46,11 @@ vi.mock('lucide-react', () => ({
 			⊗
 		</span>
 	),
+	ExternalLink: ({ className, style }: { className?: string; style?: React.CSSProperties }) => (
+		<span data-testid="external-link-icon" className={className} style={style}>
+			↗
+		</span>
+	),
 }));
 
 // Mock layer stack context
@@ -698,6 +703,132 @@ describe('ProcessMonitor', () => {
 
 			// Should be a span, not a button
 			expect(screen.queryByTitle('Click to navigate to this session')).not.toBeInTheDocument();
+		});
+
+		it('should show jump-to button on process rows that navigates to agent tab', async () => {
+			const process = createActiveProcess({ sessionId: 'session-1-ai-tab-1' });
+			getActiveProcessesMock().mockResolvedValue([process]);
+
+			const session = createSession();
+			render(
+				<ProcessMonitor
+					theme={theme}
+					sessions={[session]}
+					groups={[]}
+					onClose={onClose}
+					onNavigateToSession={onNavigateToSession}
+				/>
+			);
+
+			await waitFor(() => {
+				expect(screen.getByTitle('Jump to tab')).toBeInTheDocument();
+			});
+
+			fireEvent.click(screen.getByTitle('Jump to tab'));
+			expect(onNavigateToSession).toHaveBeenCalledWith('session-1', 'tab-1');
+			expect(onClose).toHaveBeenCalled();
+		});
+
+		it('should show jump-to button on session rows that navigates to agent', async () => {
+			const process = createActiveProcess({ sessionId: 'session-1-ai-tab-1' });
+			getActiveProcessesMock().mockResolvedValue([process]);
+
+			const session = createSession();
+			render(
+				<ProcessMonitor
+					theme={theme}
+					sessions={[session]}
+					groups={[]}
+					onClose={onClose}
+					onNavigateToSession={onNavigateToSession}
+				/>
+			);
+
+			await waitFor(() => {
+				expect(screen.getByTitle('Jump to agent')).toBeInTheDocument();
+			});
+
+			fireEvent.click(screen.getByTitle('Jump to agent'));
+			expect(onNavigateToSession).toHaveBeenCalledWith('session-1');
+			expect(onClose).toHaveBeenCalled();
+		});
+
+		it('should not show jump-to buttons when onNavigateToSession is not provided', async () => {
+			const process = createActiveProcess({ sessionId: 'session-1-ai-tab-1' });
+			getActiveProcessesMock().mockResolvedValue([process]);
+
+			const session = createSession();
+			render(<ProcessMonitor theme={theme} sessions={[session]} groups={[]} onClose={onClose} />);
+
+			await waitFor(() => {
+				expect(screen.getByText('abc12345...')).toBeInTheDocument();
+			});
+
+			expect(screen.queryByTitle('Jump to agent')).not.toBeInTheDocument();
+			expect(screen.queryByTitle('Jump to tab')).not.toBeInTheDocument();
+		});
+	});
+
+	describe('SSH/Local indicator', () => {
+		it('should show "Local" badge on session row for local sessions', async () => {
+			const process = createActiveProcess({ sessionId: 'session-1-ai-tab-1' });
+			getActiveProcessesMock().mockResolvedValue([process]);
+
+			const session = createSession();
+			render(<ProcessMonitor theme={theme} sessions={[session]} groups={[]} onClose={onClose} />);
+
+			await waitFor(() => {
+				expect(screen.getByTitle('Running locally')).toBeInTheDocument();
+				expect(screen.getByText('Local')).toBeInTheDocument();
+			});
+		});
+
+		it('should show SSH badge on session row for SSH sessions', async () => {
+			const process = createActiveProcess({ sessionId: 'session-1-ai-tab-1' });
+			getActiveProcessesMock().mockResolvedValue([process]);
+
+			const session = createSession({
+				sshRemote: { id: 'remote-1', name: 'dev-box', host: '192.168.1.100' },
+			});
+			render(<ProcessMonitor theme={theme} sessions={[session]} groups={[]} onClose={onClose} />);
+
+			await waitFor(() => {
+				expect(screen.getByText('SSH: dev-box')).toBeInTheDocument();
+				// Both session row and process row have SSH badges with this title
+				const sshTitles = screen.getAllByTitle('SSH: dev-box (192.168.1.100)');
+				expect(sshTitles.length).toBeGreaterThanOrEqual(1);
+			});
+		});
+
+		it('should show SSH badge on process row for SSH sessions', async () => {
+			const process = createActiveProcess({ sessionId: 'session-1-ai-tab-1' });
+			getActiveProcessesMock().mockResolvedValue([process]);
+
+			const session = createSession({
+				sshRemote: { id: 'remote-1', name: 'prod-server', host: '10.0.0.5' },
+			});
+			render(<ProcessMonitor theme={theme} sessions={[session]} groups={[]} onClose={onClose} />);
+
+			await waitFor(() => {
+				// Process row should have the SSH badge
+				const sshBadges = screen.getAllByText('SSH');
+				expect(sshBadges.length).toBeGreaterThanOrEqual(1);
+			});
+		});
+
+		it('should not show SSH badge on process row for local sessions', async () => {
+			const process = createActiveProcess({ sessionId: 'session-1-ai-tab-1' });
+			getActiveProcessesMock().mockResolvedValue([process]);
+
+			const session = createSession();
+			render(<ProcessMonitor theme={theme} sessions={[session]} groups={[]} onClose={onClose} />);
+
+			await waitFor(() => {
+				expect(screen.getByText('Test Session - AI Agent (claude-code)')).toBeInTheDocument();
+			});
+
+			// No SSH badge should appear on process rows
+			expect(screen.queryByText('SSH')).not.toBeInTheDocument();
 		});
 	});
 

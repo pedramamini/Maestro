@@ -11,7 +11,8 @@
  */
 
 import { useEffect, useMemo, useCallback } from 'react';
-import type { Session, ToolType, SessionState, LogEntry, CustomAICommand } from '../../types';
+import type { Session, SessionState, LogEntry, CustomAICommand } from '../../types';
+import { hasCapabilityCached } from '../agent/useAgentCapabilities';
 import { useSessionStore } from '../../stores/sessionStore';
 import { useSettingsStore } from '../../stores/settingsStore';
 import { useUIStore } from '../../stores/uiStore';
@@ -20,6 +21,7 @@ import { generateId } from '../../utils/ids';
 import { substituteTemplateVariables } from '../../utils/templateVariables';
 import { gitService } from '../../services/git';
 import { captureException } from '../../utils/sentry';
+import { filterYoloArgs } from '../../utils/agentArgs';
 
 // ============================================================================
 // Dependencies interface
@@ -153,15 +155,17 @@ export function useRemoteHandlers(deps: UseRemoteHandlersDeps): UseRemoteHandler
 							state: 'busy' as SessionState,
 							busySource: 'terminal',
 							// TODO: Remove shellLogs once terminal tabs migration is complete
-							...(!(s.terminalTabs?.length) && { shellLogs: [
-								...s.shellLogs,
-								{
-									id: generateId(),
-									timestamp: Date.now(),
-									source: 'user',
-									text: command,
-								},
-							] }),
+							...(!s.terminalTabs?.length && {
+								shellLogs: [
+									...s.shellLogs,
+									{
+										id: generateId(),
+										timestamp: Date.now(),
+										source: 'user',
+										text: command,
+									},
+								],
+							}),
 						};
 					})
 				);
@@ -199,15 +203,17 @@ export function useRemoteHandlers(deps: UseRemoteHandlersDeps): UseRemoteHandler
 								busySource: undefined,
 								thinkingStartTime: undefined,
 								// TODO: Remove shellLogs once terminal tabs migration is complete
-								...(!(s.terminalTabs?.length) && { shellLogs: [
-									...s.shellLogs,
-									{
-										id: generateId(),
-										timestamp: Date.now(),
-										source: 'system',
-										text: `Error: Failed to run command - ${errorMessage}`,
-									},
-								] }),
+								...(!s.terminalTabs?.length && {
+									shellLogs: [
+										...s.shellLogs,
+										{
+											id: generateId(),
+											timestamp: Date.now(),
+											source: 'system',
+											text: `Error: Failed to run command - ${errorMessage}`,
+										},
+									],
+								}),
 							};
 						})
 					);
@@ -215,9 +221,8 @@ export function useRemoteHandlers(deps: UseRemoteHandlersDeps): UseRemoteHandler
 				return;
 			}
 
-			// Handle AI mode for batch-mode agents (Claude Code, Codex, OpenCode)
-			const supportedBatchAgents: ToolType[] = ['claude-code', 'codex', 'opencode'];
-			if (!supportedBatchAgents.includes(session.toolType)) {
+			// Handle AI mode for batch-mode agents
+			if (!hasCapabilityCached(session.toolType, 'supportsBatchMode')) {
 				console.log('[Remote] Not a batch-mode agent, skipping');
 				return;
 			}
@@ -325,13 +330,7 @@ export function useRemoteHandlers(deps: UseRemoteHandlersDeps): UseRemoteHandler
 
 				// Filter out YOLO/skip-permissions flags when read-only mode is active
 				const agentArgs = agent.args ?? [];
-				const spawnArgs = isReadOnly
-					? agentArgs.filter(
-							(arg) =>
-								arg !== '--dangerously-skip-permissions' &&
-								arg !== '--dangerously-bypass-approvals-and-sandbox'
-						)
-					: [...agentArgs];
+				const spawnArgs = isReadOnly ? filterYoloArgs(agentArgs, agent) : [...agentArgs];
 
 				// Include tab ID in targetSessionId for proper output routing
 				const targetSessionId = `${sessionId}-ai-${activeTab?.id || 'default'}`;

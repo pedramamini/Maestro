@@ -61,7 +61,7 @@ export function useCueAutoDiscovery(sessions: Session[], encoreFeatures: EncoreF
 		// --- Detect removed sessions ---
 		for (const prevId of prevIds) {
 			if (!currentIds.has(prevId)) {
-				window.maestro.cue.refreshSession(prevId, '').catch(() => {});
+				window.maestro.cue.removeSession(prevId).catch(() => {});
 			}
 		}
 
@@ -79,12 +79,18 @@ export function useCueAutoDiscovery(sessions: Session[], encoreFeatures: EncoreF
 		if (wasEnabled === isEnabled) return;
 
 		if (isEnabled) {
-			// Feature was just enabled — scan all existing sessions
-			for (const session of sessions) {
-				if (session.projectRoot) {
-					window.maestro.cue.refreshSession(session.id, session.projectRoot).catch(() => {});
-				}
-			}
+			window.maestro.cue
+				.enable()
+				.then(() =>
+					Promise.all(
+						sessions
+							.filter((session) => !!session.projectRoot)
+							.map((session) =>
+								window.maestro.cue.refreshSession(session.id, session.projectRoot).catch(() => {})
+							)
+					)
+				)
+				.catch(() => {});
 		} else {
 			// Feature was just disabled — stop the engine
 			window.maestro.cue.disable().catch(() => {});

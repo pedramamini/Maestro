@@ -8,13 +8,17 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as yaml from 'js-yaml';
 import * as chokidar from 'chokidar';
+import picomatch from 'picomatch';
 import {
 	type CueConfig,
 	type CueSubscription,
 	type CueSettings,
 	type CueScheduleDay,
+	type CueGitHubState,
 	DEFAULT_CUE_SETTINGS,
 	CUE_SCHEDULE_DAYS,
+	CUE_EVENT_TYPES,
+	CUE_GITHUB_STATES,
 } from './cue-types';
 import { CUE_CONFIG_PATH, LEGACY_CUE_CONFIG_PATH } from '../../shared/maestro-paths';
 
@@ -125,21 +129,18 @@ export function loadCueConfig(projectRoot: string): CueConfig | null {
 							? (sub.schedule_days as CueScheduleDay[])
 							: undefined,
 					watch: typeof sub.watch === 'string' ? sub.watch : undefined,
-					source_session:
-						typeof sub.source_session === 'string'
-							? sub.source_session
-							: Array.isArray(sub.source_session) &&
-								  sub.source_session.every((s: unknown) => typeof s === 'string')
-								? sub.source_session
-								: undefined,
-					fan_out:
-						Array.isArray(sub.fan_out) && sub.fan_out.every((s: unknown) => typeof s === 'string')
-							? sub.fan_out
-							: undefined,
+					source_session: sub.source_session,
+					fan_out: Array.isArray(sub.fan_out) ? sub.fan_out : undefined,
 					filter,
 					repo: typeof sub.repo === 'string' ? sub.repo : undefined,
 					poll_minutes: typeof sub.poll_minutes === 'number' ? sub.poll_minutes : undefined,
+					gh_state:
+						typeof sub.gh_state === 'string' &&
+						CUE_GITHUB_STATES.includes(sub.gh_state as CueGitHubState)
+							? (sub.gh_state as CueGitHubState)
+							: undefined,
 					agent_id: typeof sub.agent_id === 'string' ? sub.agent_id : undefined,
+					label: typeof sub.label === 'string' ? sub.label : undefined,
 				});
 			}
 		}
@@ -148,9 +149,7 @@ export function loadCueConfig(projectRoot: string): CueConfig | null {
 	const rawSettings = parsed.settings as Record<string, unknown> | undefined;
 	const settings: CueSettings = {
 		timeout_minutes:
-			typeof rawSettings?.timeout_minutes === 'number' &&
-			Number.isFinite(rawSettings.timeout_minutes) &&
-			rawSettings.timeout_minutes > 0
+			typeof rawSettings?.timeout_minutes === 'number'
 				? rawSettings.timeout_minutes
 				: DEFAULT_CUE_SETTINGS.timeout_minutes,
 		timeout_on_fail:
@@ -208,6 +207,17 @@ export function watchCueYaml(projectRoot: string, onChange: () => void): () => v
 	};
 }
 
+/** Validates a glob pattern via picomatch, pushing an error if invalid. */
+function validateGlobPattern(pattern: string, prefix: string, errors: string[]): void {
+	try {
+		picomatch(pattern);
+	} catch (e) {
+		errors.push(
+			`${prefix}: "watch" value "${pattern}" is not a valid glob pattern: ${e instanceof Error ? e.message : String(e)}`
+		);
+	}
+}
+
 /**
  * Validates a CueConfig-shaped object. Returns validation result with error messages.
  */
@@ -223,6 +233,7 @@ export function validateCueConfig(config: unknown): { valid: boolean; errors: st
 	if (!Array.isArray(cfg.subscriptions)) {
 		errors.push('Config must have a "subscriptions" array');
 	} else {
+		const seenNames = new Set<string>();
 		for (let i = 0; i < cfg.subscriptions.length; i++) {
 			const sub = cfg.subscriptions[i] as Record<string, unknown>;
 			const prefix = `subscriptions[${i}]`;
@@ -232,8 +243,13 @@ export function validateCueConfig(config: unknown): { valid: boolean; errors: st
 				continue;
 			}
 
-			if (!sub.name || typeof sub.name !== 'string') {
-				errors.push(`${prefix}: "name" is required and must be a string`);
+			const normalized = sub.name && typeof sub.name === 'string' ? String(sub.name).trim() : '';
+			if (!normalized) {
+				errors.push(`${prefix}: "name" is required and must be a non-empty string`);
+			} else if (seenNames.has(normalized)) {
+				errors.push(`${prefix}: duplicate subscription name "${normalized}"`);
+			} else {
+				seenNames.add(normalized);
 			}
 
 			if (!sub.event || typeof sub.event !== 'string') {
@@ -248,9 +264,14 @@ export function validateCueConfig(config: unknown): { valid: boolean; errors: st
 
 			const event = sub.event as string;
 			if (event === 'time.heartbeat') {
-				if (typeof sub.interval_minutes !== 'number' || sub.interval_minutes <= 0) {
+				if (
+					typeof sub.interval_minutes !== 'number' ||
+					!Number.isFinite(sub.interval_minutes) ||
+					sub.interval_minutes <= 0 ||
+					sub.interval_minutes > 10080
+				) {
 					errors.push(
-						`${prefix}: "interval_minutes" is required and must be a positive number for time.heartbeat events`
+						`${prefix}: "interval_minutes" is required and must be a positive number no greater than 10080 (7 days) for time.heartbeat events`
 					);
 				}
 			} else if (event === 'time.scheduled') {
@@ -263,6 +284,13 @@ export function validateCueConfig(config: unknown): { valid: boolean; errors: st
 					for (const t of sub.schedule_times as string[]) {
 						if (typeof t !== 'string' || !timeRegex.test(t)) {
 							errors.push(`${prefix}: schedule_times value "${t}" must be in HH:MM format`);
+						} else {
+							const [h, m] = t.split(':').map(Number);
+							if (h < 0 || h > 23 || m < 0 || m > 59) {
+								errors.push(
+									`${prefix}: schedule_times value "${t}" has invalid hour (0-23) or minute (0-59)`
+								);
+							}
 						}
 					}
 				}
@@ -286,6 +314,8 @@ export function validateCueConfig(config: unknown): { valid: boolean; errors: st
 					errors.push(
 						`${prefix}: "watch" is required and must be a non-empty string for file.changed events`
 					);
+				} else {
+					validateGlobPattern(sub.watch as string, prefix, errors);
 				}
 			} else if (event === 'agent.completed') {
 				if (!sub.source_session) {
@@ -294,19 +324,14 @@ export function validateCueConfig(config: unknown): { valid: boolean; errors: st
 					errors.push(
 						`${prefix}: "source_session" must be a string or array of strings for agent.completed events`
 					);
-				} else if (
-					Array.isArray(sub.source_session) &&
-					!sub.source_session.every(
-						(s: unknown) => typeof s === 'string' && (s as string).length > 0
-					)
-				) {
-					errors.push(`${prefix}: "source_session" array must contain only non-empty strings`);
 				}
 			} else if (event === 'task.pending') {
 				if (!sub.watch || typeof sub.watch !== 'string') {
 					errors.push(
 						`${prefix}: "watch" is required and must be a non-empty glob string for task.pending events`
 					);
+				} else {
+					validateGlobPattern(sub.watch as string, prefix, errors);
 				}
 				if (sub.poll_minutes !== undefined) {
 					if (typeof sub.poll_minutes !== 'number' || sub.poll_minutes < 1) {
@@ -325,6 +350,27 @@ export function validateCueConfig(config: unknown): { valid: boolean; errors: st
 						errors.push(`${prefix}: "poll_minutes" must be a number >= 1 for ${event} events`);
 					}
 				}
+				if (sub.gh_state !== undefined) {
+					if (
+						typeof sub.gh_state !== 'string' ||
+						!CUE_GITHUB_STATES.includes(sub.gh_state as CueGitHubState)
+					) {
+						errors.push(`${prefix}: "gh_state" must be one of: ${CUE_GITHUB_STATES.join(', ')}`);
+					}
+					if (sub.gh_state === 'merged' && event === 'github.issue') {
+						errors.push(
+							`${prefix}: "gh_state" value "merged" is only valid for github.pull_request events`
+						);
+					}
+				}
+			} else if (
+				sub.event &&
+				typeof sub.event === 'string' &&
+				!CUE_EVENT_TYPES.includes(event as any)
+			) {
+				errors.push(
+					`${prefix}: unknown event type "${event}". Valid types: ${CUE_EVENT_TYPES.join(', ')}`
+				);
 			}
 
 			// Validate filter field
@@ -355,15 +401,6 @@ export function validateCueConfig(config: unknown): { valid: boolean; errors: st
 			errors.push('"settings" must be an object');
 		} else {
 			const settings = cfg.settings as Record<string, unknown>;
-			if (settings.timeout_minutes !== undefined) {
-				if (
-					typeof settings.timeout_minutes !== 'number' ||
-					!Number.isFinite(settings.timeout_minutes) ||
-					settings.timeout_minutes <= 0
-				) {
-					errors.push('"settings.timeout_minutes" must be a positive number');
-				}
-			}
 			if (settings.timeout_on_fail !== undefined) {
 				if (settings.timeout_on_fail !== 'break' && settings.timeout_on_fail !== 'continue') {
 					errors.push('"settings.timeout_on_fail" must be "break" or "continue"');
