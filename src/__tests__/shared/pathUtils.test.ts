@@ -265,6 +265,8 @@ describe('buildExpandedPath', () => {
 			process.env.PATH = '/opt/homebrew/bin:/usr/bin';
 			const result = buildExpandedPath();
 
+			// Use hardcoded ':' since this test models Unix behavior
+			// (path.delimiter is a compile-time constant that doesn't follow process.platform mocks)
 			const pathParts = result.split(':');
 			const homebrewCount = pathParts.filter((p) => p === '/opt/homebrew/bin').length;
 			expect(homebrewCount).toBe(1);
