@@ -1294,6 +1294,42 @@ describe('agents IPC handlers', () => {
 			expect(result).toEqual([]);
 		});
 
+		it('should honor OPENCODE_CONFIG env var for config discovery', async () => {
+			const mockAgent = {
+				id: 'opencode',
+				available: true,
+				path: '/usr/bin/opencode',
+			};
+
+			mockAgentDetector.getAgent.mockResolvedValue(mockAgent);
+
+			const originalEnv = process.env.OPENCODE_CONFIG;
+			process.env.OPENCODE_CONFIG = '/custom/path/opencode.json';
+
+			const enoent = Object.assign(new Error('ENOENT'), { code: 'ENOENT' });
+			vi.mocked(fs.promises.readdir).mockRejectedValue(enoent);
+			vi.mocked(fs.promises.readFile).mockImplementation(async (filePath) => {
+				if (String(filePath) === '/custom/path/opencode.json') {
+					return JSON.stringify({ command: { 'env-cmd': { prompt: 'From env config' } } });
+				}
+				throw enoent;
+			});
+
+			const handler = handlers.get('agents:discoverSlashCommands');
+			const result = await handler!({} as any, 'opencode', '/test');
+
+			const envCmd = result.find((c: any) => c.name === 'env-cmd');
+			expect(envCmd).toBeDefined();
+			expect(envCmd.prompt).toBe('From env config');
+
+			// Restore env
+			if (originalEnv === undefined) {
+				delete process.env.OPENCODE_CONFIG;
+			} else {
+				process.env.OPENCODE_CONFIG = originalEnv;
+			}
+		});
+
 		it('should rethrow non-ENOENT errors for opencode discovery', async () => {
 			const mockAgent = {
 				id: 'opencode',

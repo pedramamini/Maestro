@@ -6,7 +6,7 @@ import * as os from 'os';
 import { AgentDetector, AGENT_DEFINITIONS, getAgentCapabilities } from '../../agents';
 import { execFileNoThrow } from '../../utils/execFile';
 import { logger } from '../../utils/logger';
-import { getWhichCommand } from '../../../shared/platformDetection';
+import { getWhichCommand, isWindows } from '../../../shared/platformDetection';
 import {
 	withIpcErrorLogging,
 	requireDependency,
@@ -36,7 +36,10 @@ const handlerOpts = (
  * 1. Project-local custom commands: .opencode/commands/*.md
  * 2. User-global custom commands: ~/.opencode/commands/*.md
  * 3. XDG custom commands: $XDG_CONFIG_HOME/opencode/commands/*.md
- * 4. Config-based commands: opencode.json "command" property (project, home, XDG)
+ * 4. Config-based commands from opencode.json "command" property, resolved
+ *    platform-aware: OPENCODE_CONFIG env var (if set), then project-local,
+ *    then platform-specific locations (POSIX: ~/.opencode/, ~/.config/opencode/;
+ *    Windows: %LOCALAPPDATA%/opencode/)
  *
  * Built-in commands (init, review, undo, redo, share, help, models) are excluded
  * because they only work in OpenCode's interactive TUI mode — they have no prompt
@@ -124,17 +127,43 @@ async function discoverOpenCodeSlashCommands(cwd: string): Promise<DiscoveredCom
 	};
 
 	// OpenCode home directory (e.g., ~/.opencode/) — used for global commands and config
-	const opencodeHome = path.join(os.homedir(), '.opencode');
+	const home = os.homedir();
+	const opencodeHome = path.join(home, '.opencode');
 
 	// Project-local directories take priority (read first), then global locations
 	await addCommandsFromDir(path.join(cwd, '.opencode', 'commands'));
 	await addCommandsFromDir(path.join(opencodeHome, 'commands'));
 	await addCommandsFromDir(path.join(globalConfigBase, 'opencode', 'commands'));
 
-	// Config files (project-local first, then home, then XDG)
-	await addCommandsFromConfig(path.join(cwd, 'opencode.json'));
-	await addCommandsFromConfig(path.join(opencodeHome, 'opencode.json'));
-	await addCommandsFromConfig(path.join(globalConfigBase, 'opencode', 'opencode.json'));
+	// Build platform-aware config file paths in precedence order.
+	// Honor OPENCODE_CONFIG env var first (explicit user override), then probe
+	// platform-specific locations matching OpenCode's own resolution logic.
+	const configPaths: string[] = [];
+
+	if (process.env.OPENCODE_CONFIG) {
+		configPaths.push(process.env.OPENCODE_CONFIG);
+	}
+
+	if (isWindows()) {
+		const localAppData = process.env.LOCALAPPDATA || path.join(home, 'AppData', 'Local');
+		configPaths.push(
+			path.join(cwd, 'opencode.json'),
+			path.join(localAppData, 'opencode', 'opencode.json'),
+			path.join(home, '.opencode.json'),
+			path.join(opencodeHome, 'opencode.json')
+		);
+	} else {
+		configPaths.push(
+			path.join(cwd, 'opencode.json'),
+			path.join(opencodeHome, 'opencode.json'),
+			path.join(home, '.opencode.json'),
+			path.join(globalConfigBase, 'opencode', 'opencode.json')
+		);
+	}
+
+	for (const configPath of configPaths) {
+		await addCommandsFromConfig(configPath);
+	}
 
 	const commandList = Array.from(commands.values());
 	logger.info(`Discovered ${commandList.length} OpenCode slash commands`, LOG_CONTEXT);
