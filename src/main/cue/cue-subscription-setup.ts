@@ -219,6 +219,13 @@ export function setupScheduledSubscription(
 
 		deps.onLog('cue', `[CUE] "${sub.name}" triggered (time.scheduled, ${currentTime})`);
 		state.lastTriggered = event.timestamp;
+
+		// Refresh next trigger time so the UI shows a future time, not this past one
+		const nextMs = calculateNextScheduledTime(times, sub.schedule_days);
+		if (nextMs != null) {
+			state.nextTriggers.set(sub.name, nextMs);
+		}
+
 		deps.executeCueRun(
 			session.id,
 			sub.prompt_file ?? sub.prompt,

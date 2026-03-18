@@ -457,6 +457,53 @@ describe('CueEngine Concurrency Control', () => {
 		});
 	});
 
+	describe('stopRun concurrency slot release', () => {
+		it('stopRun frees the concurrency slot so queued events dispatch immediately', async () => {
+			const deps = createMockDeps({
+				onCueRun: vi.fn(() => new Promise<CueRunResult>(() => {})), // Never resolves
+			});
+			const config = createMockConfig({
+				settings: {
+					timeout_minutes: 30,
+					timeout_on_fail: 'break',
+					max_concurrent: 1,
+					queue_size: 10,
+				},
+				subscriptions: [
+					{
+						name: 'timer',
+						event: 'time.heartbeat',
+						enabled: true,
+						prompt: 'test',
+						interval_minutes: 1,
+					},
+				],
+			});
+			mockLoadCueConfig.mockReturnValue(config);
+			const engine = new CueEngine(deps);
+			engine.start();
+
+			// First run starts immediately
+			await vi.advanceTimersByTimeAsync(10);
+			expect(engine.getActiveRuns()).toHaveLength(1);
+
+			// Second event gets queued (max_concurrent = 1)
+			vi.advanceTimersByTime(1 * 60 * 1000);
+			expect(engine.getQueueStatus().get('session-1')).toBe(1);
+
+			// Stop the active run — should free the slot and drain the queue
+			const activeRun = engine.getActiveRuns()[0];
+			engine.stopRun(activeRun.runId);
+
+			// The queued event should have been dispatched (onCueRun called again)
+			expect(deps.onCueRun).toHaveBeenCalledTimes(2);
+			expect(engine.getQueueStatus().size).toBe(0);
+
+			engine.stopAll();
+			engine.stop();
+		});
+	});
+
 	describe('clearQueue', () => {
 		it('clears queued events for a specific session', async () => {
 			const deps = createMockDeps({

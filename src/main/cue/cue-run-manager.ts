@@ -268,12 +268,15 @@ export function createCueRunManager(deps: CueRunManagerDeps): CueRunManager {
 			result.durationMs = Date.now() - new Date(result.startedAt).getTime();
 			activeRuns.delete(runId);
 
-			// Decrement active run count and drain queue
-			const count = activeRunCount.get(sessionId) ?? 1;
-			activeRunCount.set(sessionId, Math.max(0, count - 1));
-			drainQueue(sessionId);
-
 			const wasManuallyStopped = manuallyStoppedRuns.has(runId);
+
+			// Only decrement here for non-stopped runs — stopRun already decremented eagerly
+			if (!wasManuallyStopped) {
+				const count = activeRunCount.get(sessionId) ?? 1;
+				activeRunCount.set(sessionId, Math.max(0, count - 1));
+				drainQueue(sessionId);
+			}
+
 			if (wasManuallyStopped) {
 				try {
 					updateCueEventStatus(runId, 'stopped');
@@ -363,6 +366,13 @@ export function createCueRunManager(deps: CueRunManagerDeps): CueRunManager {
 			run.result.durationMs = Date.now() - new Date(run.result.startedAt).getTime();
 
 			activeRuns.delete(runId);
+
+			// Free the concurrency slot immediately so queued events can proceed.
+			// The finally block in doExecuteCueRun skips its decrement for manually stopped runs.
+			const count = activeRunCount.get(run.result.sessionId) ?? 1;
+			activeRunCount.set(run.result.sessionId, Math.max(0, count - 1));
+			drainQueue(run.result.sessionId);
+
 			deps.onRunStopped(run.result);
 			deps.onLog('cue', `[CUE] Run stopped: ${runId}`, {
 				type: 'runStopped',
@@ -374,7 +384,7 @@ export function createCueRunManager(deps: CueRunManagerDeps): CueRunManager {
 		},
 
 		stopAll(): void {
-			for (const [runId] of activeRuns) {
+			for (const runId of [...activeRuns.keys()]) {
 				this.stopRun(runId);
 			}
 			eventQueue.clear();

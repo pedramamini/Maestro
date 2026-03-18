@@ -1888,6 +1888,47 @@ describe('CueEngine', () => {
 			engine.stop();
 		});
 
+		it('refreshes nextTriggers after time.scheduled fires', async () => {
+			// Monday 2026-03-09 at 08:59 — next trigger should be 09:00 today
+			vi.setSystemTime(new Date('2026-03-09T08:59:00'));
+
+			const config = createMockConfig({
+				subscriptions: [
+					{
+						name: 'refresh-schedule',
+						event: 'time.scheduled',
+						enabled: true,
+						prompt: 'check',
+						schedule_times: ['09:00'],
+					},
+				],
+			});
+			mockLoadCueConfig.mockReturnValue(config);
+			const deps = createMockDeps();
+			const engine = new CueEngine(deps);
+			engine.start();
+
+			const statusBefore = engine.getStatus();
+			const subBefore = statusBefore.find((s) => s.sessionId === 'session-1');
+			const nextBefore = subBefore!.nextTrigger!;
+			// nextTrigger should be pointing at 09:00 today (ISO string)
+			const nextBeforeDate = new Date(nextBefore);
+			expect(nextBeforeDate.getHours()).toBe(9);
+			expect(nextBeforeDate.getMinutes()).toBe(0);
+
+			// Advance to 09:00 — the subscription fires
+			vi.advanceTimersByTime(60_000);
+			await vi.advanceTimersByTimeAsync(10);
+
+			// After firing, nextTrigger should have advanced to a future time (tomorrow 09:00)
+			const statusAfter = engine.getStatus();
+			const subAfter = statusAfter.find((s) => s.sessionId === 'session-1');
+			expect(subAfter!.nextTrigger).toBeDefined();
+			expect(new Date(subAfter!.nextTrigger!).getTime()).toBeGreaterThan(nextBeforeDate.getTime());
+
+			engine.stop();
+		});
+
 		it('uses prompt_file when configured', async () => {
 			// Monday at 08:59 — fires at 09:00
 			vi.setSystemTime(new Date('2026-03-09T08:59:00'));
