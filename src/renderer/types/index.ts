@@ -961,6 +961,7 @@ export interface EncoreFeatureFlags {
 	symphony: boolean;
 	maestroCue: boolean;
 	virtuosos: boolean;
+	teamOrchestration: boolean;
 }
 
 // Director's Notes settings for synopsis generation
