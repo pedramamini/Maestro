@@ -10,8 +10,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import type { CueConfig, CueEvent, CueRunResult } from '../../../main/cue/cue-types';
-import type { SessionInfo } from '../../../shared/types';
+import type { CueConfig } from '../../../main/cue/cue-types';
 
 // Track cue-db calls
 const mockInitCueDb = vi.fn();
@@ -52,19 +51,10 @@ vi.mock('crypto', () => ({
 	randomUUID: vi.fn(() => `uuid-${Math.random().toString(36).slice(2, 8)}`),
 }));
 
-import { CueEngine, type CueEngineDeps } from '../../../main/cue/cue-engine';
+import { CueEngine } from '../../../main/cue/cue-engine';
+import { createMockDeps } from './cue-test-helpers';
 
-function createMockSession(overrides: Partial<SessionInfo> = {}): SessionInfo {
-	return {
-		id: 'session-1',
-		name: 'Test Session',
-		toolType: 'claude-code',
-		cwd: '/projects/test',
-		projectRoot: '/projects/test',
-		...overrides,
-	};
-}
-
+/** Sleep-wake tests need a config with a default timer subscription */
 function createMockConfig(overrides: Partial<CueConfig> = {}): CueConfig {
 	return {
 		subscriptions: [
@@ -77,28 +67,6 @@ function createMockConfig(overrides: Partial<CueConfig> = {}): CueConfig {
 			},
 		],
 		settings: { timeout_minutes: 30, timeout_on_fail: 'break', max_concurrent: 1, queue_size: 10 },
-		...overrides,
-	};
-}
-
-function createMockDeps(overrides: Partial<CueEngineDeps> = {}): CueEngineDeps {
-	return {
-		getSessions: vi.fn(() => [createMockSession()]),
-		onCueRun: vi.fn(async () => ({
-			runId: 'run-1',
-			sessionId: 'session-1',
-			sessionName: 'Test Session',
-			subscriptionName: 'test',
-			event: {} as CueEvent,
-			status: 'completed' as const,
-			stdout: 'output',
-			stderr: '',
-			exitCode: 0,
-			durationMs: 100,
-			startedAt: new Date().toISOString(),
-			endedAt: new Date().toISOString(),
-		})),
-		onLog: vi.fn(),
 		...overrides,
 	};
 }

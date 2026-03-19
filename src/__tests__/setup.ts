@@ -404,6 +404,18 @@ const mockMaestro = {
 		importPlaybook: vi.fn().mockResolvedValue({ success: true, playbook: {}, importedDocs: [] }),
 		onManifestChanged: vi.fn().mockReturnValue(() => {}),
 	},
+	live: {
+		toggle: vi.fn().mockResolvedValue({ live: false, url: null }),
+		getStatus: vi.fn().mockResolvedValue({ live: false, url: null }),
+		getDashboardUrl: vi.fn().mockResolvedValue(null),
+		getLiveSessions: vi.fn().mockResolvedValue([]),
+		broadcastActiveSession: vi.fn().mockResolvedValue(undefined),
+		startServer: vi.fn().mockResolvedValue({ success: true, url: 'http://localhost:3000' }),
+		stopServer: vi.fn().mockResolvedValue({ success: true }),
+		persistCurrentToken: vi.fn().mockResolvedValue({ success: true }),
+		clearPersistentToken: vi.fn().mockResolvedValue({ success: true }),
+		disableAll: vi.fn().mockResolvedValue({ success: true, count: 0 }),
+	},
 	web: {
 		broadcastAutoRunState: vi.fn(),
 		broadcastSessionState: vi.fn(),
@@ -548,15 +560,21 @@ const mockMaestro = {
 		updateSwitchConfig: vi.fn().mockResolvedValue({}),
 		getDefault: vi.fn().mockResolvedValue(null),
 		selectNext: vi.fn().mockResolvedValue(null),
-		validateBaseDir: vi.fn().mockResolvedValue({ valid: true, baseDir: '/home/test/.claude', errors: [] }),
+		validateBaseDir: vi
+			.fn()
+			.mockResolvedValue({ valid: true, baseDir: '/home/test/.claude', errors: [] }),
 		discoverExisting: vi.fn().mockResolvedValue([]),
-		createDirectory: vi.fn().mockResolvedValue({ success: true, configDir: '/home/test/.claude-test' }),
+		createDirectory: vi
+			.fn()
+			.mockResolvedValue({ success: true, configDir: '/home/test/.claude-test' }),
 		validateSymlinks: vi.fn().mockResolvedValue({ valid: true, broken: [], missing: [] }),
 		repairSymlinks: vi.fn().mockResolvedValue({ repaired: [], errors: [] }),
 		readEmail: vi.fn().mockResolvedValue(null),
 		getLoginCommand: vi.fn().mockResolvedValue(null),
 		removeDirectory: vi.fn().mockResolvedValue({ success: true }),
-		validateRemoteDir: vi.fn().mockResolvedValue({ exists: true, hasAuth: true, symlinksValid: true }),
+		validateRemoteDir: vi
+			.fn()
+			.mockResolvedValue({ exists: true, hasAuth: true, symlinksValid: true }),
 		syncCredentials: vi.fn().mockResolvedValue({ success: true }),
 		onUsageUpdate: vi.fn().mockReturnValue(() => {}),
 		onLimitWarning: vi.fn().mockReturnValue(() => {}),

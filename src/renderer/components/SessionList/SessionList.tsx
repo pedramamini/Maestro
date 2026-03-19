@@ -118,6 +118,7 @@ function SessionListInner(props: SessionListProps) {
 	const groupChatsExpanded = useUIStore((s) => s.groupChatsExpanded);
 	const shortcuts = useSettingsStore((s) => s.shortcuts);
 	const leftSidebarWidthState = useSettingsStore((s) => s.leftSidebarWidth);
+	const persistentWebLink = useSettingsStore((s) => s.persistentWebLink);
 	const webInterfaceUseCustomPort = useSettingsStore((s) => s.webInterfaceUseCustomPort);
 	const webInterfaceCustomPort = useSettingsStore((s) => s.webInterfaceCustomPort);
 	const ungroupedCollapsed = useSettingsStore((s) => s.ungroupedCollapsed);
@@ -131,6 +132,47 @@ function SessionListInner(props: SessionListProps) {
 	const maestroCueEnabled = useSettingsStore((s) => s.encoreFeatures.maestroCue);
 	const activeBatchSessionIds = useBatchStore(useShallow(selectActiveBatchSessionIds));
 
+	// Cue session status map: sessionId → { count, active } (only active when Encore Feature enabled)
+	const [cueSessionMap, setCueSessionMap] = useState<
+		Map<string, { count: number; active: boolean }>
+	>(new Map());
+	useEffect(() => {
+		if (!maestroCueEnabled) {
+			setCueSessionMap(new Map());
+			return;
+		}
+
+		let mounted = true;
+
+		const fetchCueStatus = async () => {
+			try {
+				const statuses = await window.maestro.cue.getStatus();
+				if (!mounted) return;
+				const map = new Map<string, { count: number; active: boolean }>();
+				for (const s of statuses) {
+					if (s.subscriptionCount > 0) {
+						map.set(s.sessionId, {
+							count: s.subscriptionCount,
+							active: s.activeRuns > 0,
+						});
+					}
+				}
+				setCueSessionMap(map);
+			} catch {
+				// Cue engine may not be initialized yet
+			}
+		};
+
+		fetchCueStatus();
+		const unsubscribe = window.maestro.cue.onActivityUpdate(() => {
+			fetchCueStatus();
+		});
+
+		return () => {
+			mounted = false;
+			unsubscribe();
+		};
+	}, [maestroCueEnabled]);
 	const groupChats = useGroupChatStore((s) => s.groupChats);
 	const activeGroupChatId = useGroupChatStore((s) => s.activeGroupChatId);
 	const groupChatState = useGroupChatStore((s) => s.groupChatState);
@@ -154,6 +196,7 @@ function SessionListInner(props: SessionListProps) {
 	);
 	const setSessions = useSessionStore.getState().setSessions;
 	const setGroups = useSessionStore.getState().setGroups;
+	const setPersistentWebLink = useSettingsStore.getState().setPersistentWebLink;
 	const setWebInterfaceUseCustomPort = useSettingsStore.getState().setWebInterfaceUseCustomPort;
 	const setWebInterfaceCustomPort = useSettingsStore.getState().setWebInterfaceCustomPort;
 	const setUngroupedCollapsed = useSettingsStore.getState().setUngroupedCollapsed;
@@ -373,39 +416,6 @@ function SessionListInner(props: SessionListProps) {
 	// when only branch data changes (we only need file counts here)
 	const { getFileCount } = useGitFileStatus();
 
-	// Cue subscription counts per session (only when Maestro Cue is enabled)
-	const [cueSessionMap, setCueSessionMap] = useState<Map<string, number>>(new Map());
-	useEffect(() => {
-		if (!maestroCueEnabled) {
-			setCueSessionMap(new Map());
-			return;
-		}
-		let cancelled = false;
-		const fetchCueStatus = async () => {
-			try {
-				const statuses = await window.maestro.cue.getStatus();
-				if (cancelled) return;
-				const map = new Map<string, number>();
-				for (const s of statuses) {
-					if (s.enabled && s.subscriptionCount > 0) {
-						map.set(s.sessionId, s.subscriptionCount);
-					}
-				}
-				setCueSessionMap(map);
-			} catch {
-				// Cue API may not be available
-			}
-		};
-		fetchCueStatus();
-		const unsubscribe = window.maestro.cue.onActivityUpdate(() => fetchCueStatus());
-		const interval = setInterval(fetchCueStatus, 30_000);
-		return () => {
-			cancelled = true;
-			unsubscribe();
-			clearInterval(interval);
-		};
-	}, [maestroCueEnabled]);
-
 	const {
 		sortedWorktreeChildrenByParentId,
 		sortedSessionIndexById,
@@ -515,7 +525,8 @@ function SessionListInner(props: SessionListProps) {
 					gitFileCount={getFileCount(session.id)}
 					isInBatch={activeBatchSessionIds.includes(session.id)}
 					jumpNumber={getSessionJumpNumber(session.id)}
-					cueSubscriptionCount={cueSessionMap.get(session.id)}
+					cueSubscriptionCount={cueSessionMap.get(session.id)?.count}
+					cueActiveRun={cueSessionMap.get(session.id)?.active}
 					onSelect={selectHandlers.get(session.id)!}
 					onDragStart={dragStartHandlers.get(session.id)!}
 					onDragOver={handleDragOver}
@@ -581,7 +592,8 @@ function SessionListInner(props: SessionListProps) {
 										gitFileCount={getFileCount(child.id)}
 										isInBatch={activeBatchSessionIds.includes(child.id)}
 										jumpNumber={getSessionJumpNumber(child.id)}
-										cueSubscriptionCount={cueSessionMap.get(child.id)}
+										cueSubscriptionCount={cueSessionMap.get(child.id)?.count}
+										cueActiveRun={cueSessionMap.get(child.id)?.active}
 										onSelect={selectHandlers.get(child.id)!}
 										onDragStart={dragStartHandlers.get(child.id)!}
 										onContextMenu={contextMenuHandlers.get(child.id)!}
@@ -758,6 +770,8 @@ function SessionListInner(props: SessionListProps) {
 										copyFlash={copyFlash}
 										setCopyFlash={setCopyFlash}
 										handleTunnelToggle={handleTunnelToggle}
+										persistentWebLink={persistentWebLink}
+										setPersistentWebLink={setPersistentWebLink}
 										webInterfaceUseCustomPort={webInterfaceUseCustomPort}
 										webInterfaceCustomPort={webInterfaceCustomPort}
 										setWebInterfaceUseCustomPort={setWebInterfaceUseCustomPort}

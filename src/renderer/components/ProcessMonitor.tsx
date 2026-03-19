@@ -395,9 +395,10 @@ export function ProcessMonitor(props: ProcessMonitorProps) {
 				// Get session name for process label
 				const sessionName = session.name;
 
-				// Look up Claude session ID from the tab if this is an AI process
+				// Look up Claude session ID and tab name from the tab if this is an AI process
 				let agentSessionId: string | undefined;
 				let tabId: string | undefined;
+				let tabName: string | undefined;
 				if (processType === 'ai' || processType === 'batch' || processType === 'synopsis') {
 					tabId = parseTabId(proc.sessionId) || undefined;
 					if (session.aiTabs) {
@@ -406,6 +407,9 @@ export function ProcessMonitor(props: ProcessMonitorProps) {
 							const tab = session.aiTabs.find((t) => t.id === tabId);
 							if (tab?.agentSessionId) {
 								agentSessionId = tab.agentSessionId;
+							}
+							if (tab?.name) {
+								tabName = tab.name;
 							}
 						}
 						// Fall back to active tab if no tab ID match
@@ -419,10 +423,15 @@ export function ProcessMonitor(props: ProcessMonitorProps) {
 					}
 				}
 
+				// Build the display label, including tab name if available
+				const displayLabel = tabName
+					? `${sessionName} - ${label} - ${tabName}`
+					: `${sessionName} - ${label}`;
+
 				sessionNode.children!.push({
 					id: `process-${proc.sessionId}`,
 					type: 'process',
-					label: `${sessionName} - ${label}`,
+					label: displayLabel,
 					pid: proc.pid,
 					processType,
 					sessionId: session.id,

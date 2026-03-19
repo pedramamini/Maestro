@@ -79,6 +79,15 @@ vi.mock('../../../renderer/stores/tabStore', () => ({
 	},
 }));
 
+// Mock notifyToast — TerminalView shows error toasts on spawn failure
+const { mockNotifyToast } = vi.hoisted(() => ({
+	mockNotifyToast: vi.fn().mockReturnValue('toast-id'),
+}));
+
+vi.mock('../../../renderer/stores/notificationStore', () => ({
+	notifyToast: (...args: unknown[]) => mockNotifyToast(...args),
+}));
+
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
@@ -297,9 +306,9 @@ describe('TerminalView — auto-close on shell exit', () => {
 		vi.useRealTimers();
 	});
 
-	it('does NOT auto-close when shell exits within 2s of creation (startup failure)', async () => {
+	it('auto-closes and shows error toast when shell exits within 2s of creation (startup failure)', async () => {
 		vi.useFakeTimers();
-		// Tab just created — exit within 2s is treated as startup failure
+		// Tab just created — exit within 2s is a startup failure
 		const tab = makeTab({ pid: 1234, state: 'busy', createdAt: Date.now() });
 		const session = makeSession([tab]);
 
@@ -319,8 +328,14 @@ describe('TerminalView — auto-close on shell exit', () => {
 			vi.advanceTimersByTime(1);
 		});
 
-		// Tab should NOT be closed — error overlay shown instead
-		expect(mockCloseTerminalTab).not.toHaveBeenCalled();
+		// Tab should be closed and error toast shown
+		expect(mockCloseTerminalTab).toHaveBeenCalledWith('tab-1');
+		expect(mockNotifyToast).toHaveBeenCalledWith(
+			expect.objectContaining({
+				type: 'error',
+				title: 'Failed to start terminal',
+			})
+		);
 		vi.useRealTimers();
 	});
 });

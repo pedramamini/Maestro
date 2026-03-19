@@ -14,7 +14,6 @@
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import type { CueConfig, CueEvent } from '../../../main/cue/cue-types';
-import type { SessionInfo } from '../../../shared/types';
 
 // Mock the yaml loader
 const mockLoadCueConfig = vi.fn<(projectRoot: string) => CueConfig | null>();
@@ -52,47 +51,7 @@ vi.mock('crypto', () => ({
 }));
 
 import { CueEngine, type CueEngineDeps } from '../../../main/cue/cue-engine';
-
-function createMockSession(overrides: Partial<SessionInfo> = {}): SessionInfo {
-	return {
-		id: 'session-1',
-		name: 'Test Session',
-		toolType: 'claude-code',
-		cwd: '/projects/test',
-		projectRoot: '/projects/test',
-		...overrides,
-	};
-}
-
-function createMockConfig(overrides: Partial<CueConfig> = {}): CueConfig {
-	return {
-		subscriptions: [],
-		settings: { timeout_minutes: 30, timeout_on_fail: 'break', max_concurrent: 1, queue_size: 10 },
-		...overrides,
-	};
-}
-
-function createMockDeps(overrides: Partial<CueEngineDeps> = {}): CueEngineDeps {
-	return {
-		getSessions: vi.fn(() => [createMockSession()]),
-		onCueRun: vi.fn(async () => ({
-			runId: 'run-1',
-			sessionId: 'session-1',
-			sessionName: 'Test Session',
-			subscriptionName: 'test',
-			event: {} as CueEvent,
-			status: 'completed' as const,
-			stdout: 'output',
-			stderr: '',
-			exitCode: 0,
-			durationMs: 100,
-			startedAt: new Date().toISOString(),
-			endedAt: new Date().toISOString(),
-		})) as CueEngineDeps['onCueRun'],
-		onLog: vi.fn(),
-		...overrides,
-	};
-}
+import { createMockSession, createMockConfig, createMockDeps } from './cue-test-helpers';
 
 describe('CueEngine completion chains', () => {
 	beforeEach(() => {

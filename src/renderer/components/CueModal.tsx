@@ -24,39 +24,14 @@ import { MODAL_PRIORITIES } from '../constants/modalPriorities';
 import { useCue } from '../hooks/useCue';
 import type { CueSessionStatus, CueRunResult } from '../hooks/useCue';
 import { CueHelpContent } from './CueHelpModal';
-// Kept for reference - visual pipeline editor replaces this
-// import { CueGraphView } from './CueGraphView';
 import { CuePipelineEditor } from './CuePipelineEditor';
 import { useSessionStore } from '../stores/sessionStore';
 import { getModalActions } from '../stores/modalStore';
-import type { CuePipeline } from '../../shared/cue-pipeline-types';
+import type { CuePipeline, CueGraphSession } from '../../shared/cue-pipeline-types';
 import { getPipelineColorForAgent } from './CuePipelineEditor/pipelineColors';
 import { graphSessionsToPipelines } from './CuePipelineEditor/utils/yamlToPipeline';
 
 type CueModalTab = 'dashboard' | 'pipeline';
-
-interface CueGraphSession {
-	sessionId: string;
-	sessionName: string;
-	toolType: string;
-	subscriptions: Array<{
-		name: string;
-		event: string;
-		enabled: boolean;
-		prompt?: string;
-		output_prompt?: string;
-		interval_minutes?: number;
-		schedule_times?: string[];
-		schedule_days?: string[];
-		watch?: string;
-		source_session?: string | string[];
-		fan_out?: string[];
-		filter?: Record<string, string | number | boolean>;
-		repo?: string;
-		poll_minutes?: number;
-		agent_id?: string;
-	}>;
-}
 
 interface CueModalProps {
 	theme: Theme;
@@ -1029,7 +1004,6 @@ export function CueModal({ theme, onClose, cueShortcutKeys }: CueModalProps) {
 				</div>,
 				document.body
 			)}
-			{showHelp && <CueHelpContent theme={theme} cueShortcutKeys={cueShortcutKeys} />}
 		</>
 	);
 }

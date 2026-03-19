@@ -15,7 +15,6 @@
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import type { CueConfig, CueEvent, CueRunResult } from '../../../main/cue/cue-types';
-import type { SessionInfo } from '../../../shared/types';
 
 // Mock the yaml loader
 const mockLoadCueConfig = vi.fn<(projectRoot: string) => CueConfig | null>();
@@ -53,48 +52,7 @@ import {
 	calculateNextScheduledTime,
 	type CueEngineDeps,
 } from '../../../main/cue/cue-engine';
-
-function createMockSession(overrides: Partial<SessionInfo> = {}): SessionInfo {
-	return {
-		id: 'session-1',
-		name: 'Test Session',
-		toolType: 'claude-code',
-		cwd: '/projects/test',
-		projectRoot: '/projects/test',
-		...overrides,
-	};
-}
-
-function createMockConfig(overrides: Partial<CueConfig> = {}): CueConfig {
-	return {
-		subscriptions: [],
-		settings: { timeout_minutes: 30, timeout_on_fail: 'break', max_concurrent: 1, queue_size: 10 },
-		...overrides,
-	};
-}
-
-function createMockDeps(overrides: Partial<CueEngineDeps> = {}): CueEngineDeps {
-	return {
-		getSessions: vi.fn(() => [createMockSession()]),
-		onCueRun: vi.fn(async (request: Parameters<CueEngineDeps['onCueRun']>[0]) => ({
-			runId: 'run-1',
-			sessionId: 'session-1',
-			sessionName: 'Test Session',
-			subscriptionName: request.subscriptionName,
-			event: request.event,
-			status: 'completed' as const,
-			stdout: 'output',
-			stderr: '',
-			exitCode: 0,
-			durationMs: 100,
-			startedAt: new Date().toISOString(),
-			endedAt: new Date().toISOString(),
-		})),
-		onStopCueRun: vi.fn(() => true),
-		onLog: vi.fn(),
-		...overrides,
-	};
-}
+import { createMockSession, createMockConfig, createMockDeps } from './cue-test-helpers';
 
 describe('CueEngine', () => {
 	let yamlWatcherCleanup: ReturnType<typeof vi.fn>;
@@ -926,6 +884,39 @@ describe('CueEngine', () => {
 			expect(activeRun).toBeDefined();
 			expect(engine.stopRun(activeRun.runId)).toBe(true);
 			expect(deps.onStopCueRun).toHaveBeenCalledWith(activeRun.runId);
+
+			engine.stop();
+		});
+
+		it('stopRun adds the stopped run to the activity log', async () => {
+			const deps = createMockDeps({
+				onCueRun: vi.fn(() => new Promise<CueRunResult>(() => {})),
+			});
+			const config = createMockConfig({
+				subscriptions: [
+					{
+						name: 'timer',
+						event: 'time.heartbeat',
+						enabled: true,
+						prompt: 'test',
+						interval_minutes: 60,
+					},
+				],
+			});
+			mockLoadCueConfig.mockReturnValue(config);
+			const engine = new CueEngine(deps);
+			engine.start();
+
+			await vi.advanceTimersByTimeAsync(10);
+
+			const activeRun = engine.getActiveRuns()[0];
+			expect(activeRun).toBeDefined();
+			engine.stopRun(activeRun.runId);
+
+			const log = engine.getActivityLog();
+			expect(log).toHaveLength(1);
+			expect(log[0].runId).toBe(activeRun.runId);
+			expect(log[0].status).toBe('stopped');
 
 			engine.stop();
 		});
@@ -1893,6 +1884,47 @@ describe('CueEngine', () => {
 			expect(sessionStatus).toBeDefined();
 			expect(sessionStatus!.subscriptionCount).toBe(1);
 			expect(sessionStatus!.nextTrigger).toBeDefined();
+
+			engine.stop();
+		});
+
+		it('refreshes nextTriggers after time.scheduled fires', async () => {
+			// Monday 2026-03-09 at 08:59 — next trigger should be 09:00 today
+			vi.setSystemTime(new Date('2026-03-09T08:59:00'));
+
+			const config = createMockConfig({
+				subscriptions: [
+					{
+						name: 'refresh-schedule',
+						event: 'time.scheduled',
+						enabled: true,
+						prompt: 'check',
+						schedule_times: ['09:00'],
+					},
+				],
+			});
+			mockLoadCueConfig.mockReturnValue(config);
+			const deps = createMockDeps();
+			const engine = new CueEngine(deps);
+			engine.start();
+
+			const statusBefore = engine.getStatus();
+			const subBefore = statusBefore.find((s) => s.sessionId === 'session-1');
+			const nextBefore = subBefore!.nextTrigger!;
+			// nextTrigger should be pointing at 09:00 today (ISO string)
+			const nextBeforeDate = new Date(nextBefore);
+			expect(nextBeforeDate.getHours()).toBe(9);
+			expect(nextBeforeDate.getMinutes()).toBe(0);
+
+			// Advance to 09:00 — the subscription fires
+			vi.advanceTimersByTime(60_000);
+			await vi.advanceTimersByTimeAsync(10);
+
+			// After firing, nextTrigger should have advanced to a future time (tomorrow 09:00)
+			const statusAfter = engine.getStatus();
+			const subAfter = statusAfter.find((s) => s.sessionId === 'session-1');
+			expect(subAfter!.nextTrigger).toBeDefined();
+			expect(new Date(subAfter!.nextTrigger!).getTime()).toBeGreaterThan(nextBeforeDate.getTime());
 
 			engine.stop();
 		});

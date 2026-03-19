@@ -41,11 +41,6 @@ vi.mock('../../../renderer/components/CueYamlEditor', () => ({
 		isOpen ? <div data-testid="cue-yaml-editor">YAML Editor Mock</div> : null,
 }));
 
-// Mock CueGraphView (kept for reference - replaced by CuePipelineEditor)
-vi.mock('../../../renderer/components/CueGraphView', () => ({
-	CueGraphView: () => null,
-}));
-
 // Capture the onDirtyChange callback from CuePipelineEditor
 let capturedOnDirtyChange: ((isDirty: boolean) => void) | undefined;
 

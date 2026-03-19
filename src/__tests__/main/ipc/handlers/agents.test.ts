@@ -67,6 +67,10 @@ vi.mock('../../../../main/utils/execFile', () => ({
 // Mock fs
 vi.mock('fs', () => ({
 	existsSync: vi.fn(),
+	promises: {
+		readdir: vi.fn(),
+		readFile: vi.fn(),
+	},
 }));
 
 // Mock ssh-command-builder for remote model discovery tests
@@ -1043,7 +1047,7 @@ describe('agents IPC handlers', () => {
 				],
 				'/test/project'
 			);
-			expect(result).toEqual(['/help', '/compact', '/clear']);
+			expect(result).toEqual([{ name: '/help' }, { name: '/compact' }, { name: '/clear' }]);
 		});
 
 		it('should use custom path if provided', async () => {
@@ -1075,7 +1079,23 @@ describe('agents IPC handlers', () => {
 			expect(execFileNoThrow).toHaveBeenCalledWith('/custom/claude', expect.any(Array), '/test');
 		});
 
-		it('should return null for non-Claude Code agents', async () => {
+		it('should return null for unsupported agents', async () => {
+			const mockAgent = {
+				id: 'codex',
+				available: true,
+				path: '/usr/bin/codex',
+			};
+
+			mockAgentDetector.getAgent.mockResolvedValue(mockAgent);
+
+			const handler = handlers.get('agents:discoverSlashCommands');
+			const result = await handler!({} as any, 'codex', '/test');
+
+			expect(result).toBeNull();
+			expect(execFileNoThrow).not.toHaveBeenCalled();
+		});
+
+		it('should return empty array when no custom commands exist for opencode', async () => {
 			const mockAgent = {
 				id: 'opencode',
 				available: true,
@@ -1084,11 +1104,250 @@ describe('agents IPC handlers', () => {
 
 			mockAgentDetector.getAgent.mockResolvedValue(mockAgent);
 
+			// All disk reads return ENOENT (no custom commands)
+			const enoent = Object.assign(new Error('ENOENT'), { code: 'ENOENT' });
+			vi.mocked(fs.promises.readdir).mockRejectedValue(enoent);
+			vi.mocked(fs.promises.readFile).mockRejectedValue(enoent);
+
 			const handler = handlers.get('agents:discoverSlashCommands');
 			const result = await handler!({} as any, 'opencode', '/test');
 
-			expect(result).toBeNull();
+			// No built-in commands — only custom .md commands are discoverable
+			expect(result).toEqual([]);
 			expect(execFileNoThrow).not.toHaveBeenCalled();
+		});
+
+		it('should discover opencode commands from project .opencode/commands/*.md with prompt content', async () => {
+			const mockAgent = {
+				id: 'opencode',
+				available: true,
+				path: '/usr/bin/opencode',
+			};
+
+			mockAgentDetector.getAgent.mockResolvedValue(mockAgent);
+
+			const enoent = Object.assign(new Error('ENOENT'), { code: 'ENOENT' });
+			// Project commands dir has custom .md files
+			vi.mocked(fs.promises.readdir).mockImplementation(async (dir) => {
+				if (String(dir).includes('/test/.opencode/commands')) {
+					return ['deploy.md', 'lint.md', 'README.txt'] as any;
+				}
+				throw enoent;
+			});
+			vi.mocked(fs.promises.readFile).mockImplementation(async (filePath) => {
+				const p = String(filePath);
+				if (p.endsWith('deploy.md')) return 'Deploy the application to production';
+				if (p.endsWith('lint.md')) return 'Run linting on the codebase';
+				throw enoent;
+			});
+
+			const handler = handlers.get('agents:discoverSlashCommands');
+			const result = await handler!({} as any, 'opencode', '/test');
+
+			const names = result.map((c: any) => c.name);
+			expect(names).toContain('deploy');
+			expect(names).toContain('lint');
+			// Non-.md files should be ignored
+			expect(names).not.toContain('README.txt');
+			// Custom commands should have prompt content
+			const deployCmd = result.find((c: any) => c.name === 'deploy');
+			expect(deployCmd.prompt).toBe('Deploy the application to production');
+		});
+
+		it('should discover opencode commands from ~/.opencode/commands/ (home directory)', async () => {
+			const mockAgent = {
+				id: 'opencode',
+				available: true,
+				path: '/usr/bin/opencode',
+			};
+
+			mockAgentDetector.getAgent.mockResolvedValue(mockAgent);
+
+			const enoent = Object.assign(new Error('ENOENT'), { code: 'ENOENT' });
+			const homeDir = require('os').homedir();
+			vi.mocked(fs.promises.readdir).mockImplementation(async (dir) => {
+				if (String(dir) === `${homeDir}/.opencode/commands`) {
+					return ['octest.md'] as any;
+				}
+				throw enoent;
+			});
+			vi.mocked(fs.promises.readFile).mockImplementation(async (filePath) => {
+				const p = String(filePath);
+				if (p.endsWith('octest.md')) return 'Report your status.';
+				throw enoent;
+			});
+
+			const handler = handlers.get('agents:discoverSlashCommands');
+			const result = await handler!({} as any, 'opencode', '/test');
+
+			const names = result.map((c: any) => c.name);
+			expect(names).toContain('octest');
+			const octest = result.find((c: any) => c.name === 'octest');
+			expect(octest.prompt).toBe('Report your status.');
+		});
+
+		it('should strip YAML frontmatter from command .md files', async () => {
+			const mockAgent = {
+				id: 'opencode',
+				available: true,
+				path: '/usr/bin/opencode',
+			};
+
+			mockAgentDetector.getAgent.mockResolvedValue(mockAgent);
+
+			const enoent = Object.assign(new Error('ENOENT'), { code: 'ENOENT' });
+			vi.mocked(fs.promises.readdir).mockImplementation(async (dir) => {
+				if (String(dir).includes('/test/.opencode/commands')) {
+					return ['deploy.md'] as any;
+				}
+				throw enoent;
+			});
+			vi.mocked(fs.promises.readFile).mockImplementation(async (filePath) => {
+				const p = String(filePath);
+				if (p.endsWith('deploy.md'))
+					return '---\ndescription: Deploy cmd\nagent: build\n---\n\nDeploy the app.';
+				throw enoent;
+			});
+
+			const handler = handlers.get('agents:discoverSlashCommands');
+			const result = await handler!({} as any, 'opencode', '/test');
+
+			const deployCmd = result.find((c: any) => c.name === 'deploy');
+			expect(deployCmd.prompt).toBe('Deploy the app.');
+		});
+
+		it('should discover opencode commands from opencode.json config', async () => {
+			const mockAgent = {
+				id: 'opencode',
+				available: true,
+				path: '/usr/bin/opencode',
+			};
+
+			mockAgentDetector.getAgent.mockResolvedValue(mockAgent);
+
+			const enoent = Object.assign(new Error('ENOENT'), { code: 'ENOENT' });
+			vi.mocked(fs.promises.readdir).mockRejectedValue(enoent);
+			vi.mocked(fs.promises.readFile).mockImplementation(async (filePath) => {
+				if (String(filePath).includes('/test/opencode.json')) {
+					return JSON.stringify({ command: { 'my-cmd': { prompt: 'Do the thing' } } });
+				}
+				throw enoent;
+			});
+
+			const handler = handlers.get('agents:discoverSlashCommands');
+			const result = await handler!({} as any, 'opencode', '/test');
+
+			const names = result.map((c: any) => c.name);
+			expect(names).toContain('my-cmd');
+			// Config commands should have prompt content
+			const myCmd = result.find((c: any) => c.name === 'my-cmd');
+			expect(myCmd.prompt).toBe('Do the thing');
+		});
+
+		it('should ignore array values in opencode.json command property', async () => {
+			const mockAgent = {
+				id: 'opencode',
+				available: true,
+				path: '/usr/bin/opencode',
+			};
+
+			mockAgentDetector.getAgent.mockResolvedValue(mockAgent);
+
+			const enoent = Object.assign(new Error('ENOENT'), { code: 'ENOENT' });
+			vi.mocked(fs.promises.readdir).mockRejectedValue(enoent);
+			vi.mocked(fs.promises.readFile).mockImplementation(async (filePath) => {
+				if (String(filePath).includes('/test/opencode.json')) {
+					return JSON.stringify({ command: ['not', 'an', 'object'] });
+				}
+				throw enoent;
+			});
+
+			const handler = handlers.get('agents:discoverSlashCommands');
+			const result = await handler!({} as any, 'opencode', '/test');
+
+			// Array config ignored, no built-ins — result should be empty
+			expect(result).toEqual([]);
+		});
+
+		it('should gracefully handle malformed opencode.json and return empty array', async () => {
+			const mockAgent = {
+				id: 'opencode',
+				available: true,
+				path: '/usr/bin/opencode',
+			};
+
+			mockAgentDetector.getAgent.mockResolvedValue(mockAgent);
+
+			const enoent = Object.assign(new Error('ENOENT'), { code: 'ENOENT' });
+			vi.mocked(fs.promises.readdir).mockRejectedValue(enoent);
+			vi.mocked(fs.promises.readFile).mockImplementation(async (filePath) => {
+				if (String(filePath).includes('/test/opencode.json')) {
+					return '{ invalid json, }';
+				}
+				throw enoent;
+			});
+
+			const handler = handlers.get('agents:discoverSlashCommands');
+			const result = await handler!({} as any, 'opencode', '/test');
+
+			// Malformed JSON skipped gracefully, no built-ins — empty result
+			expect(result).toEqual([]);
+		});
+
+		it('should honor OPENCODE_CONFIG env var for config discovery', async () => {
+			const mockAgent = {
+				id: 'opencode',
+				available: true,
+				path: '/usr/bin/opencode',
+			};
+
+			mockAgentDetector.getAgent.mockResolvedValue(mockAgent);
+
+			const originalEnv = process.env.OPENCODE_CONFIG;
+			process.env.OPENCODE_CONFIG = '/custom/path/opencode.json';
+
+			const enoent = Object.assign(new Error('ENOENT'), { code: 'ENOENT' });
+			vi.mocked(fs.promises.readdir).mockRejectedValue(enoent);
+			vi.mocked(fs.promises.readFile).mockImplementation(async (filePath) => {
+				if (String(filePath) === '/custom/path/opencode.json') {
+					return JSON.stringify({ command: { 'env-cmd': { prompt: 'From env config' } } });
+				}
+				throw enoent;
+			});
+
+			const handler = handlers.get('agents:discoverSlashCommands');
+			const result = await handler!({} as any, 'opencode', '/test');
+
+			const envCmd = result.find((c: any) => c.name === 'env-cmd');
+			expect(envCmd).toBeDefined();
+			expect(envCmd.prompt).toBe('From env config');
+
+			// Restore env
+			if (originalEnv === undefined) {
+				delete process.env.OPENCODE_CONFIG;
+			} else {
+				process.env.OPENCODE_CONFIG = originalEnv;
+			}
+		});
+
+		it('should rethrow non-ENOENT errors for opencode discovery', async () => {
+			const mockAgent = {
+				id: 'opencode',
+				available: true,
+				path: '/usr/bin/opencode',
+			};
+
+			mockAgentDetector.getAgent.mockResolvedValue(mockAgent);
+
+			// Permission error (not ENOENT)
+			const permError = Object.assign(new Error('EACCES'), { code: 'EACCES' });
+			vi.mocked(fs.promises.readdir).mockRejectedValue(permError);
+			vi.mocked(fs.promises.readFile).mockRejectedValue(
+				Object.assign(new Error('ENOENT'), { code: 'ENOENT' })
+			);
+
+			const handler = handlers.get('agents:discoverSlashCommands');
+			await expect(handler!({} as any, 'opencode', '/test')).rejects.toThrow('EACCES');
 		});
 
 		it('should return null when agent is not available', async () => {

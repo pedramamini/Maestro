@@ -31,7 +31,7 @@ describe('TriggerDrawer', () => {
 		expect(screen.getByText('Heartbeat')).toBeInTheDocument();
 		expect(screen.getByText('Scheduled')).toBeInTheDocument();
 		expect(screen.getByText('File Change')).toBeInTheDocument();
-		expect(screen.getByText('Agent Done')).toBeInTheDocument();
+		expect(screen.queryByText('Agent Done')).not.toBeInTheDocument();
 		expect(screen.getByText('Pull Request')).toBeInTheDocument();
 		expect(screen.getByText('Issue')).toBeInTheDocument();
 		expect(screen.getByText('Pending Task')).toBeInTheDocument();
@@ -43,7 +43,7 @@ describe('TriggerDrawer', () => {
 		expect(screen.getByText('Run every N minutes')).toBeInTheDocument();
 		expect(screen.getByText('Run at specific times & days')).toBeInTheDocument();
 		expect(screen.getByText('Watch for file modifications')).toBeInTheDocument();
-		expect(screen.getByText('After an agent finishes')).toBeInTheDocument();
+		expect(screen.queryByText('After an agent finishes')).not.toBeInTheDocument();
 	});
 
 	it('should filter triggers by label', () => {
@@ -110,6 +110,26 @@ describe('TriggerDrawer', () => {
 
 		const drawer = container.firstChild as HTMLElement;
 		expect(drawer.style.transform).toBe('translateX(0)');
+	});
+
+	it('should render exactly 6 trigger types (no agent.completed)', () => {
+		const { container } = render(
+			<TriggerDrawer isOpen={true} onClose={() => {}} theme={mockTheme} />
+		);
+
+		// Each trigger item is a draggable div; count them
+		const draggableItems = container.querySelectorAll('[draggable="true"]');
+		expect(draggableItems.length).toBe(6);
+	});
+
+	it('should not show agent.completed when filtering by "agent"', () => {
+		render(<TriggerDrawer isOpen={true} onClose={() => {}} theme={mockTheme} />);
+
+		const input = screen.getByPlaceholderText('Filter triggers...');
+		fireEvent.change(input, { target: { value: 'agent' } });
+
+		// No trigger items should match since agent.completed was removed
+		expect(screen.getByText('No triggers match')).toBeInTheDocument();
 	});
 
 	it('should make trigger items draggable', () => {

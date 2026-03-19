@@ -45,6 +45,7 @@ export interface SessionItemProps {
 	isInBatch?: boolean;
 	jumpNumber?: string | null; // Session jump shortcut number (1-9, 0)
 	cueSubscriptionCount?: number; // Number of active Cue subscriptions (0 or undefined = no indicator)
+	cueActiveRun?: boolean; // Whether a Cue pipeline is currently running for this agent
 	accountUsagePercent?: number | null; // Usage % for assigned account (passed from parent to avoid N hook instances)
 
 	// Handlers
@@ -87,6 +88,7 @@ export const SessionItem = memo(function SessionItem({
 	isInBatch = false,
 	jumpNumber,
 	cueSubscriptionCount,
+	cueActiveRun,
 	accountUsagePercent,
 	onSelect,
 	onDragStart,
@@ -172,8 +174,8 @@ export const SessionItem = memo(function SessionItem({
 						</span>
 						{cueSubscriptionCount != null && cueSubscriptionCount > 0 && (
 							<span
-								className="shrink-0 flex items-center"
-								title={`Maestro Cue active (${cueSubscriptionCount} subscription${cueSubscriptionCount === 1 ? '' : 's'})`}
+								className={`shrink-0 flex items-center${cueActiveRun ? ' animate-pulse' : ''}`}
+								title={`Maestro Cue ${cueActiveRun ? 'running' : 'active'} (${cueSubscriptionCount} subscription${cueSubscriptionCount === 1 ? '' : 's'})`}
 							>
 								<Zap className="w-3 h-3" style={{ color: '#2dd4bf' }} fill="#2dd4bf" />
 							</span>

@@ -114,6 +114,34 @@ export interface PipelineLayoutState {
 	viewport?: PipelineViewport;
 }
 
+/** Session data with subscriptions for the Cue graph/pipeline visualization (renderer-safe mirror of cue-types.ts CueGraphSession) */
+export interface CueGraphSession {
+	sessionId: string;
+	sessionName: string;
+	toolType: string;
+	subscriptions: Array<{
+		name: string;
+		event: CueEventType;
+		enabled: boolean;
+		prompt?: string;
+		prompt_file?: string;
+		output_prompt?: string;
+		output_prompt_file?: string;
+		interval_minutes?: number;
+		schedule_times?: string[];
+		schedule_days?: string[];
+		watch?: string;
+		source_session?: string | string[];
+		fan_out?: string[];
+		filter?: Record<string, string | number | boolean>;
+		repo?: string;
+		poll_minutes?: number;
+		gh_state?: string;
+		agent_id?: string;
+		label?: string;
+	}>;
+}
+
 /** Returns the first unused color from the palette, cycling if all used. */
 export function getNextPipelineColor(existingPipelines: CuePipeline[]): string {
 	const usedColors = new Set(existingPipelines.map((p) => p.color));

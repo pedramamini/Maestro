@@ -1,14 +1,5 @@
 import { memo, useState, useMemo } from 'react';
-import {
-	Clock,
-	FileText,
-	Zap,
-	GitPullRequest,
-	GitBranch,
-	CheckSquare,
-	Search,
-	X,
-} from 'lucide-react';
+import { Clock, FileText, GitPullRequest, GitBranch, CheckSquare, Search, X } from 'lucide-react';
 import type { CueEventType } from '../../../../shared/cue-pipeline-types';
 import type { Theme } from '../../../types';
 
@@ -47,13 +38,6 @@ const TRIGGER_ITEMS: TriggerItem[] = [
 		description: 'Watch for file modifications',
 		icon: FileText,
 		color: '#3b82f6',
-	},
-	{
-		eventType: 'agent.completed',
-		label: 'Agent Done',
-		description: 'After an agent finishes',
-		icon: Zap,
-		color: '#22c55e',
 	},
 	{
 		eventType: 'github.pull_request',

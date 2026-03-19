@@ -719,6 +719,8 @@ interface MaestroAPI {
 		disableAll: () => Promise<{ success: boolean; count: number }>;
 		startServer: () => Promise<{ success: boolean; url?: string; error?: string }>;
 		stopServer: () => Promise<{ success: boolean; error?: string }>;
+		persistCurrentToken: () => Promise<{ success: boolean; message?: string }>;
+		clearPersistentToken: () => Promise<{ success: boolean; message?: string }>;
 	};
 	agents: {
 		detect: (sshRemoteId?: string) => Promise<AgentConfig[]>;
@@ -762,7 +764,7 @@ interface MaestroAPI {
 			agentId: string,
 			cwd: string,
 			customPath?: string
-		) => Promise<string[] | null>;
+		) => Promise<{ name: string; prompt?: string }[] | null>;
 	};
 	// Agent Sessions API - all methods accept optional sshRemoteId for SSH remote session storage access
 	agentSessions: {
@@ -2838,9 +2840,7 @@ interface MaestroAPI {
 		onAssigned: (
 			handler: (data: { sessionId: string; accountId: string; accountName: string }) => void
 		) => () => void;
-		reconcileSessions: (
-			activeSessionIds: string[]
-		) => Promise<{
+		reconcileSessions: (activeSessionIds: string[]) => Promise<{
 			success: boolean;
 			removed: number;
 			corrections: Array<{

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Check } from 'lucide-react';
 import type { Theme, HistoryEntry } from '../../types';
-import { LOOKBACK_OPTIONS } from './historyConstants';
+import { LOOKBACK_OPTIONS, CUE_COLOR } from './historyConstants';
 
 // Activity bar graph component with configurable lookback window
 export interface ActivityGraphProps {
@@ -61,10 +61,14 @@ export const ActivityGraph: React.FC<ActivityGraphProps> = ({
 
 	// Group entries into buckets
 	const bucketData = useMemo(() => {
-		const buckets: { auto: number; user: number }[] = Array.from({ length: bucketCount }, () => ({
-			auto: 0,
-			user: 0,
-		}));
+		const buckets: { auto: number; user: number; cue: number }[] = Array.from(
+			{ length: bucketCount },
+			() => ({
+				auto: 0,
+				user: 0,
+				cue: 0,
+			})
+		);
 
 		entries.forEach((entry) => {
 			if (entry.timestamp >= startTime && entry.timestamp <= endTime) {
@@ -77,6 +81,8 @@ export const ActivityGraph: React.FC<ActivityGraphProps> = ({
 						buckets[bucketIndex].auto++;
 					} else if (entry.type === 'USER') {
 						buckets[bucketIndex].user++;
+					} else if (entry.type === 'CUE') {
+						buckets[bucketIndex].cue++;
 					}
 				}
 			}
@@ -87,12 +93,13 @@ export const ActivityGraph: React.FC<ActivityGraphProps> = ({
 
 	// Find max value for scaling
 	const maxValue = useMemo(() => {
-		return Math.max(1, ...bucketData.map((h) => h.auto + h.user));
+		return Math.max(1, ...bucketData.map((h) => h.auto + h.user + h.cue));
 	}, [bucketData]);
 
 	// Total counts for summary tooltip
 	const totalAuto = useMemo(() => bucketData.reduce((sum, h) => sum + h.auto, 0), [bucketData]);
 	const totalUser = useMemo(() => bucketData.reduce((sum, h) => sum + h.user, 0), [bucketData]);
+	const totalCue = useMemo(() => bucketData.reduce((sum, h) => sum + h.cue, 0), [bucketData]);
 
 	// Get time range label for tooltip
 	const getTimeRangeLabel = (index: number) => {
@@ -131,7 +138,7 @@ export const ActivityGraph: React.FC<ActivityGraphProps> = ({
 
 	// Handle bar click
 	const handleBarClick = (index: number) => {
-		const total = bucketData[index].auto + bucketData[index].user;
+		const total = bucketData[index].auto + bucketData[index].user + bucketData[index].cue;
 		if (total > 0 && onBarClick) {
 			const { start, end } = getBucketTimeRange(index);
 			onBarClick(start, end);
@@ -216,7 +223,7 @@ export const ActivityGraph: React.FC<ActivityGraphProps> = ({
 			className="flex-1 min-w-0 flex flex-col relative mt-0.5"
 			title={
 				hoveredIndex === null
-					? `${isHistorical ? `Viewing: ${formatReferenceTime()} • ` : ''}${lookbackConfig.label}: ${totalAuto} auto, ${totalUser} user (right-click to change)`
+					? `${isHistorical ? `Viewing: ${formatReferenceTime()} • ` : ''}${lookbackConfig.label}: ${totalAuto} auto, ${totalUser} user${totalCue > 0 ? `, ${totalCue} cue` : ''} (right-click to change)`
 					: undefined
 			}
 			onContextMenu={handleContextMenu}
@@ -298,6 +305,12 @@ export const ActivityGraph: React.FC<ActivityGraphProps> = ({
 								{bucketData[hoveredIndex].user}
 							</span>
 						</div>
+						<div className="flex items-center justify-between gap-3">
+							<span style={{ color: CUE_COLOR }}>Cue</span>
+							<span className="font-bold" style={{ color: CUE_COLOR }}>
+								{bucketData[hoveredIndex].cue}
+							</span>
+						</div>
 					</div>
 				</div>
 			)}
@@ -308,9 +321,10 @@ export const ActivityGraph: React.FC<ActivityGraphProps> = ({
 				style={{ borderColor: theme.colors.border }}
 			>
 				{bucketData.map((bucket, index) => {
-					const total = bucket.auto + bucket.user;
+					const total = bucket.auto + bucket.user + bucket.cue;
 					const heightPercent = total > 0 ? (total / maxValue) * 100 : 0;
 					const autoPercent = total > 0 ? (bucket.auto / total) * 100 : 0;
+					const cuePercent = total > 0 ? (bucket.cue / total) * 100 : 0;
 					const userPercent = total > 0 ? (bucket.user / total) * 100 : 0;
 					const isHovered = hoveredIndex === index;
 
@@ -343,6 +357,16 @@ export const ActivityGraph: React.FC<ActivityGraphProps> = ({
 										style={{
 											height: `${autoPercent}%`,
 											backgroundColor: theme.colors.warning,
+											minHeight: '1px',
+										}}
+									/>
+								)}
+								{/* Cue portion (middle) - cyan */}
+								{bucket.cue > 0 && (
+									<div
+										style={{
+											height: `${cuePercent}%`,
+											backgroundColor: CUE_COLOR,
 											minHeight: '1px',
 										}}
 									/>

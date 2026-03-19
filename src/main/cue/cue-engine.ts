@@ -25,67 +25,28 @@ import type {
 } from './cue-types';
 import { DEFAULT_CUE_SETTINGS } from './cue-types';
 import { loadCueConfig, watchCueYaml } from './cue-yaml-loader';
-import { createCueFileWatcher } from './cue-file-watcher';
-import { createCueGitHubPoller } from './cue-github-poller';
-import { createCueTaskScanner } from './cue-task-scanner';
 import { matchesFilter, describeFilter } from './cue-filter';
 import {
-	initCueDb,
-	closeCueDb,
-	updateHeartbeat,
-	getLastHeartbeat,
-	pruneCueEvents,
-	recordCueEvent,
-	updateCueEventStatus,
-} from './cue-db';
-import { reconcileMissedTimeEvents } from './cue-reconciler';
-import type { ReconcileSessionInfo } from './cue-reconciler';
-
-const ACTIVITY_LOG_MAX = 500;
-const DEFAULT_FILE_DEBOUNCE_MS = 5000;
-const SOURCE_OUTPUT_MAX_CHARS = 5000;
-const HEARTBEAT_INTERVAL_MS = 30_000; // 30 seconds
-const SLEEP_THRESHOLD_MS = 120_000; // 2 minutes
-const EVENT_PRUNE_AGE_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
+	setupHeartbeatSubscription,
+	setupScheduledSubscription,
+	setupFileWatcherSubscription,
+	setupGitHubPollerSubscription,
+	setupTaskScannerSubscription,
+	type SubscriptionSetupDeps,
+} from './cue-subscription-setup';
+import { initCueDb, closeCueDb, pruneCueEvents } from './cue-db';
+import { createCueActivityLog } from './cue-activity-log';
+import type { CueActivityLog } from './cue-activity-log';
+import { createCueHeartbeat, EVENT_PRUNE_AGE_MS } from './cue-heartbeat';
+import type { CueHeartbeat } from './cue-heartbeat';
+import { createCueFanInTracker, SOURCE_OUTPUT_MAX_CHARS } from './cue-fan-in-tracker';
+import type { CueFanInTracker } from './cue-fan-in-tracker';
+import { createCueRunManager } from './cue-run-manager';
+import type { CueRunManager } from './cue-run-manager';
 const MAX_CHAIN_DEPTH = 10;
 
-const DAY_NAMES = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'] as const;
-
-/**
- * Calculates the next occurrence of a scheduled time.
- * Returns a timestamp in ms, or null if inputs are invalid.
- */
-export function calculateNextScheduledTime(times: string[], days?: string[]): number | null {
-	if (times.length === 0) return null;
-
-	const now = new Date();
-	const candidates: number[] = [];
-
-	// Check up to 7 days ahead to find the next match
-	for (let dayOffset = 0; dayOffset < 7; dayOffset++) {
-		const candidate = new Date(now);
-		candidate.setDate(candidate.getDate() + dayOffset);
-		const dayName = DAY_NAMES[candidate.getDay()];
-
-		if (days && days.length > 0 && !days.includes(dayName)) continue;
-
-		for (const time of times) {
-			const [hourStr, minStr] = time.split(':');
-			const hour = parseInt(hourStr, 10);
-			const min = parseInt(minStr, 10);
-			if (isNaN(hour) || isNaN(min)) continue;
-
-			const target = new Date(candidate);
-			target.setHours(hour, min, 0, 0);
-
-			if (target.getTime() > now.getTime()) {
-				candidates.push(target.getTime());
-			}
-		}
-	}
-
-	return candidates.length > 0 ? Math.min(...candidates) : null;
-}
+// Re-export for backwards compat (tests import from cue-engine)
+export { calculateNextScheduledTime } from './cue-subscription-setup';
 
 /** Dependencies injected into the CueEngine */
 export interface CueEngineDeps {
@@ -112,50 +73,67 @@ interface SessionState {
 	nextTriggers: Map<string, number>; // subscriptionName -> next trigger timestamp
 }
 
-/** Active run tracking */
-interface ActiveRun {
-	result: CueRunResult;
-	abortController?: AbortController;
-}
-
-/** Stored data for a single fan-in source completion */
-interface FanInSourceCompletion {
-	sessionId: string;
-	sessionName: string;
-	output: string;
-	truncated: boolean;
-	chainDepth: number;
-}
-
-/** A queued event waiting for a concurrency slot */
-interface QueuedEvent {
-	event: CueEvent;
-	subscription: CueSubscription;
-	prompt: string;
-	outputPrompt?: string;
-	subscriptionName: string;
-	queuedAt: number;
-	chainDepth?: number;
-}
-
 export class CueEngine {
 	private enabled = false;
 	private sessions = new Map<string, SessionState>();
-	private activeRuns = new Map<string, ActiveRun>();
-	private activityLog: CueRunResult[] = [];
-	private fanInTrackers = new Map<string, Map<string, FanInSourceCompletion>>();
-	private fanInTimers = new Map<string, ReturnType<typeof setTimeout>>();
+	private activityLog: CueActivityLog = createCueActivityLog();
+	private fanInTracker!: CueFanInTracker;
+	private runManager!: CueRunManager;
 	private pendingYamlWatchers = new Map<string, () => void>();
-	private activeRunCount = new Map<string, number>();
-	private eventQueue = new Map<string, QueuedEvent[]>();
-	private manuallyStoppedRuns = new Set<string>();
 	/** Tracks "subName:HH:MM" keys that time.scheduled already fired, preventing double-fire on config refresh */
 	private scheduledFiredKeys = new Set<string>();
-	private heartbeatInterval: ReturnType<typeof setInterval> | null = null;
+	private heartbeat: CueHeartbeat;
 	private deps: CueEngineDeps;
 
 	constructor(deps: CueEngineDeps) {
 		this.deps = deps;
+		this.runManager = createCueRunManager({
+			getSessions: deps.getSessions,
+			getSessionSettings: (sessionId) => this.sessions.get(sessionId)?.config.settings,
+			onCueRun: deps.onCueRun,
+			onStopCueRun: deps.onStopCueRun,
+			onLog: deps.onLog,
+			onRunCompleted: (sessionId, result, subscriptionName, chainDepth) => {
+				this.pushActivityLog(result);
+				this.notifyAgentCompleted(sessionId, {
+					sessionName: result.sessionName,
+					status: result.status,
+					exitCode: result.exitCode,
+					durationMs: result.durationMs,
+					stdout: result.stdout,
+					triggeredBy: subscriptionName,
+					chainDepth: (chainDepth ?? 0) + 1,
+				});
+			},
+			onRunStopped: (result) => {
+				this.pushActivityLog(result);
+			},
+		});
+		this.fanInTracker = createCueFanInTracker({
+			onLog: deps.onLog,
+			getSessions: deps.getSessions,
+			dispatchSubscription: (ownerSessionId, sub, event, sourceSessionName, chainDepth) => {
+				this.dispatchSubscription(ownerSessionId, sub, event, sourceSessionName, chainDepth);
+			},
+		});
+		this.heartbeat = createCueHeartbeat({
+			onLog: deps.onLog,
+			getSessions: () => {
+				const result = new Map<string, { config: CueConfig; sessionName: string }>();
+				const allSessions = deps.getSessions();
+				for (const [sessionId, state] of this.sessions) {
+					const session = allSessions.find((s) => s.id === sessionId);
+					result.set(sessionId, {
+						config: state.config,
+						sessionName: session?.name ?? sessionId,
+					});
+				}
+				return result;
+			},
+			onDispatch: (sessionId, sub, event) => {
+				this.dispatchSubscription(sessionId, sub, event, sessionId);
+			},
+		});
 	}
 
 	/** Enable the engine and scan all sessions for Cue configs */
@@ -179,10 +157,10 @@ export class CueEngine {
 		}
 
 		// Detect sleep gap from previous heartbeat
-		this.detectSleepAndReconcile();
+		this.heartbeat.detectSleepAndReconcile();
 
 		// Start heartbeat writer (30s interval)
-		this.startHeartbeat();
+		this.heartbeat.start();
 	}
 
 	/** Disable the engine, clearing all timers and watchers */
@@ -201,14 +179,13 @@ export class CueEngine {
 		}
 		this.pendingYamlWatchers.clear();
 
-		// Clear concurrency state
-		this.eventQueue.clear();
-		this.activeRunCount.clear();
-		this.manuallyStoppedRuns.clear();
+		// Clear concurrency and fan-in state
+		this.runManager.reset();
+		this.fanInTracker.reset();
 		this.scheduledFiredKeys.clear();
 
 		// Stop heartbeat and close database
-		this.stopHeartbeat();
+		this.heartbeat.stop();
 		try {
 			closeCueDb();
 		} catch {
@@ -262,8 +239,7 @@ export class CueEngine {
 	removeSession(sessionId: string): void {
 		this.teardownSession(sessionId);
 		this.sessions.delete(sessionId);
-		this.clearQueue(sessionId);
-		this.activeRunCount.delete(sessionId);
+		this.runManager.clearQueue(sessionId);
 
 		const pendingWatcher = this.pendingYamlWatchers.get(sessionId);
 		if (pendingWatcher) {
@@ -287,9 +263,7 @@ export class CueEngine {
 
 			reportedSessionIds.add(sessionId);
 
-			const activeRunCount = [...this.activeRuns.values()].filter(
-				(r) => r.result.sessionId === sessionId
-			).length;
+			const activeRunCount = this.runManager.getActiveRunCount(sessionId);
 
 			let nextTrigger: string | undefined;
 			if (state.nextTriggers.size > 0) {
@@ -338,46 +312,23 @@ export class CueEngine {
 
 	/** Returns currently running Cue executions */
 	getActiveRuns(): CueRunResult[] {
-		return [...this.activeRuns.values()].map((r) => r.result);
+		return this.runManager.getActiveRuns();
 	}
 
 	/** Returns recent completed/failed runs */
 	getActivityLog(limit?: number): CueRunResult[] {
-		if (limit !== undefined) {
-			return this.activityLog.slice(-limit);
-		}
-		return [...this.activityLog];
+		return this.activityLog.getAll(limit);
 	}
 
 	/** Stops a specific running execution */
 	stopRun(runId: string): boolean {
-		const run = this.activeRuns.get(runId);
-		if (!run) return false;
-
-		this.manuallyStoppedRuns.add(runId);
-		this.deps.onStopCueRun?.(runId);
-		run.abortController?.abort();
-		run.result.status = 'stopped';
-		run.result.endedAt = new Date().toISOString();
-		run.result.durationMs = Date.now() - new Date(run.result.startedAt).getTime();
-
-		this.activeRuns.delete(runId);
-		this.pushActivityLog(run.result);
-		this.deps.onLog('cue', `[CUE] Run stopped: ${runId}`, {
-			type: 'runStopped',
-			runId,
-			sessionId: run.result.sessionId,
-			subscriptionName: run.result.subscriptionName,
-		});
-		return true;
+		const result = this.runManager.stopRun(runId);
+		return result;
 	}
 
 	/** Stops all running executions and clears all queues */
 	stopAll(): void {
-		for (const [runId] of this.activeRuns) {
-			this.stopRun(runId);
-		}
-		this.eventQueue.clear();
+		this.runManager.stopAll();
 	}
 
 	/** Returns master enabled state */
@@ -387,13 +338,7 @@ export class CueEngine {
 
 	/** Returns queue depth per session (for the Cue Modal) */
 	getQueueStatus(): Map<string, number> {
-		const result = new Map<string, number>();
-		for (const [sessionId, queue] of this.eventQueue) {
-			if (queue.length > 0) {
-				result.set(sessionId, queue.length);
-			}
-		}
-		return result;
+		return this.runManager.getQueueStatus();
 	}
 
 	/** Returns the merged Cue settings from the first available session config */
@@ -476,7 +421,7 @@ export class CueEngine {
 
 	/** Clears queued events for a session */
 	clearQueue(sessionId: string): void {
-		this.eventQueue.delete(sessionId);
+		this.runManager.clearQueue(sessionId);
 	}
 
 	/**
@@ -576,9 +521,9 @@ export class CueEngine {
 					this.dispatchSubscription(ownerSessionId, sub, event, completingName, chainDepth);
 				} else {
 					// Fan-in: track completions with data
-					this.handleFanIn(
+					this.fanInTracker.handleCompletion(
 						ownerSessionId,
-						state,
+						state.config.settings,
 						sub,
 						sources,
 						sessionId,
@@ -592,16 +537,7 @@ export class CueEngine {
 
 	/** Clear all fan-in state for a session (when Cue is disabled or session removed) */
 	clearFanInState(sessionId: string): void {
-		for (const key of [...this.fanInTrackers.keys()]) {
-			if (key.startsWith(`${sessionId}:`)) {
-				this.fanInTrackers.delete(key);
-				const timer = this.fanInTimers.get(key);
-				if (timer) {
-					clearTimeout(timer);
-					this.fanInTimers.delete(key);
-				}
-			}
-		}
+		this.fanInTracker.clearForSession(sessionId);
 	}
 
 	// --- Private methods ---
@@ -642,7 +578,7 @@ export class CueEngine {
 						fanOutIndex: i,
 					},
 				};
-				this.executeCueRun(
+				this.runManager.execute(
 					targetSession.id,
 					sub.prompt_file ?? sub.prompt,
 					fanOutEvent,
@@ -652,159 +588,13 @@ export class CueEngine {
 				);
 			}
 		} else {
-			this.executeCueRun(
+			this.runManager.execute(
 				ownerSessionId,
 				sub.prompt_file ?? sub.prompt,
 				event,
 				sub.name,
 				sub.output_prompt,
 				chainDepth
-			);
-		}
-	}
-
-	/**
-	 * Handle fan-in logic: track which sources have completed, fire when all done.
-	 * Supports timeout handling based on the subscription's settings.
-	 */
-	private handleFanIn(
-		ownerSessionId: string,
-		state: SessionState,
-		sub: CueSubscription,
-		sources: string[],
-		completedSessionId: string,
-		completedSessionName: string,
-		completionData?: AgentCompletionData
-	): void {
-		const key = `${ownerSessionId}:${sub.name}`;
-
-		if (!this.fanInTrackers.has(key)) {
-			this.fanInTrackers.set(key, new Map());
-		}
-		const tracker = this.fanInTrackers.get(key)!;
-		const rawOutput = completionData?.stdout ?? '';
-		tracker.set(completedSessionId, {
-			sessionId: completedSessionId,
-			sessionName: completedSessionName,
-			output: rawOutput.slice(-SOURCE_OUTPUT_MAX_CHARS),
-			truncated: rawOutput.length > SOURCE_OUTPUT_MAX_CHARS,
-			chainDepth: completionData?.chainDepth ?? 0,
-		});
-
-		// Start timeout timer on first source completion
-		if (tracker.size === 1 && !this.fanInTimers.has(key)) {
-			const timeoutMs = (state.config.settings.timeout_minutes ?? 30) * 60 * 1000;
-			const timer = setTimeout(() => {
-				this.handleFanInTimeout(key, ownerSessionId, state, sub, sources);
-			}, timeoutMs);
-			this.fanInTimers.set(key, timer);
-		}
-
-		const remaining = sources.length - tracker.size;
-		if (remaining > 0) {
-			this.deps.onLog(
-				'cue',
-				`[CUE] Fan-in "${sub.name}": waiting for ${remaining} more session(s)`
-			);
-			return;
-		}
-
-		// All sources completed — clear timer and fire
-		const timer = this.fanInTimers.get(key);
-		if (timer) {
-			clearTimeout(timer);
-			this.fanInTimers.delete(key);
-		}
-		this.fanInTrackers.delete(key);
-
-		const completions = [...tracker.values()];
-		const event: CueEvent = {
-			id: crypto.randomUUID(),
-			type: 'agent.completed',
-			timestamp: new Date().toISOString(),
-			triggerName: sub.name,
-			payload: {
-				completedSessions: completions.map((c) => c.sessionId),
-				sourceSession: completions.map((c) => c.sessionName).join(', '),
-				sourceOutput: completions.map((c) => c.output).join('\n---\n'),
-				outputTruncated: completions.some((c) => c.truncated),
-			},
-		};
-		const maxChainDepth = Math.max(...completions.map((c) => c.chainDepth));
-		this.deps.onLog('cue', `[CUE] "${sub.name}" triggered (agent.completed, fan-in complete)`);
-		this.dispatchSubscription(
-			ownerSessionId,
-			sub,
-			event,
-			completions.map((c) => c.sessionName).join(', '),
-			maxChainDepth
-		);
-	}
-
-	/**
-	 * Handle fan-in timeout. Behavior depends on timeout_on_fail setting:
-	 * - 'break': log failure and clear the tracker
-	 * - 'continue': fire the downstream subscription with partial data
-	 */
-	private handleFanInTimeout(
-		key: string,
-		ownerSessionId: string,
-		state: SessionState,
-		sub: CueSubscription,
-		sources: string[]
-	): void {
-		this.fanInTimers.delete(key);
-		const tracker = this.fanInTrackers.get(key);
-		if (!tracker) return;
-
-		const completedNames = [...tracker.values()].map((c) => c.sessionName);
-		const completedIds = [...tracker.keys()];
-
-		// Determine which sources haven't completed yet
-		const allSessions = this.deps.getSessions();
-		const timedOutSources = sources.filter((src) => {
-			const session = allSessions.find((s) => s.name === src || s.id === src);
-			const sessionId = session?.id ?? src;
-			return !completedIds.includes(sessionId) && !completedIds.includes(src);
-		});
-
-		if (state.config.settings.timeout_on_fail === 'continue') {
-			// Fire with partial data
-			const completions = [...tracker.values()];
-			this.fanInTrackers.delete(key);
-
-			const event: CueEvent = {
-				id: crypto.randomUUID(),
-				type: 'agent.completed',
-				timestamp: new Date().toISOString(),
-				triggerName: sub.name,
-				payload: {
-					completedSessions: completions.map((c) => c.sessionId),
-					timedOutSessions: timedOutSources,
-					sourceSession: completions.map((c) => c.sessionName).join(', '),
-					sourceOutput: completions.map((c) => c.output).join('\n---\n'),
-					outputTruncated: completions.some((c) => c.truncated),
-					partial: true,
-				},
-			};
-			const maxChainDepth = Math.max(...completions.map((c) => c.chainDepth));
-			this.deps.onLog(
-				'cue',
-				`[CUE] Fan-in "${sub.name}" timed out (continue mode) — firing with ${completedNames.length}/${sources.length} sources`
-			);
-			this.dispatchSubscription(
-				ownerSessionId,
-				sub,
-				event,
-				completedNames.join(', '),
-				maxChainDepth
-			);
-		} else {
-			// 'break' mode — log failure and clear
-			this.fanInTrackers.delete(key);
-			this.deps.onLog(
-				'cue',
-				`[CUE] Fan-in "${sub.name}" timed out (break mode) — ${completedNames.length}/${sources.length} completed, waiting for: ${timedOutSources.join(', ')}`
 			);
 		}
 	}
@@ -847,21 +637,30 @@ export class CueEngine {
 		}
 
 		// Set up subscriptions
+		const setupDeps: SubscriptionSetupDeps = {
+			enabled: () => this.enabled,
+			scheduledFiredKeys: this.scheduledFiredKeys,
+			onLog: this.deps.onLog,
+			executeCueRun: (sid, prompt, event, subName, outputPrompt) => {
+				this.runManager.execute(sid, prompt, event, subName, outputPrompt);
+			},
+		};
+
 		for (const sub of config.subscriptions) {
 			if (sub.enabled === false) continue;
 			// Skip subscriptions bound to a different agent
 			if (sub.agent_id && sub.agent_id !== session.id) continue;
 
 			if (sub.event === 'time.heartbeat' && sub.interval_minutes) {
-				this.setupHeartbeatSubscription(session, state, sub);
+				setupHeartbeatSubscription(setupDeps, session, state, sub);
 			} else if (sub.event === 'time.scheduled' && sub.schedule_times?.length) {
-				this.setupScheduledSubscription(session, state, sub);
+				setupScheduledSubscription(setupDeps, session, state, sub);
 			} else if (sub.event === 'file.changed' && sub.watch) {
-				this.setupFileWatcherSubscription(session, state, sub);
+				setupFileWatcherSubscription(setupDeps, session, state, sub);
 			} else if (sub.event === 'task.pending' && sub.watch) {
-				this.setupTaskScannerSubscription(session, state, sub);
+				setupTaskScannerSubscription(setupDeps, session, state, sub);
 			} else if (sub.event === 'github.pull_request' || sub.event === 'github.issue') {
-				this.setupGitHubPollerSubscription(session, state, sub);
+				setupGitHubPollerSubscription(setupDeps, session, state, sub);
 			}
 			// agent.completed subscriptions are handled reactively via notifyAgentCompleted
 		}
@@ -873,604 +672,8 @@ export class CueEngine {
 		);
 	}
 
-	private setupHeartbeatSubscription(
-		session: SessionInfo,
-		state: SessionState,
-		sub: {
-			name: string;
-			prompt: string;
-			prompt_file?: string;
-			output_prompt?: string;
-			interval_minutes?: number;
-			filter?: Record<string, string | number | boolean>;
-		}
-	): void {
-		const intervalMs = (sub.interval_minutes ?? 0) * 60 * 1000;
-		if (intervalMs <= 0) return;
-
-		// Fire immediately on first setup
-		const immediateEvent: CueEvent = {
-			id: crypto.randomUUID(),
-			type: 'time.heartbeat',
-			timestamp: new Date().toISOString(),
-			triggerName: sub.name,
-			payload: { interval_minutes: sub.interval_minutes },
-		};
-
-		// Check payload filter (even for timer events)
-		if (!sub.filter || matchesFilter(immediateEvent.payload, sub.filter)) {
-			this.deps.onLog('cue', `[CUE] "${sub.name}" triggered (time.heartbeat, initial)`);
-			this.executeCueRun(
-				session.id,
-				sub.prompt_file ?? sub.prompt,
-				immediateEvent,
-				sub.name,
-				sub.output_prompt
-			);
-		} else {
-			this.deps.onLog(
-				'cue',
-				`[CUE] "${sub.name}" filter not matched (${describeFilter(sub.filter)})`
-			);
-		}
-
-		// Then on the interval
-		const timer = setInterval(() => {
-			if (!this.enabled) return;
-
-			const event: CueEvent = {
-				id: crypto.randomUUID(),
-				type: 'time.heartbeat',
-				timestamp: new Date().toISOString(),
-				triggerName: sub.name,
-				payload: { interval_minutes: sub.interval_minutes },
-			};
-
-			// Check payload filter
-			if (sub.filter && !matchesFilter(event.payload, sub.filter)) {
-				this.deps.onLog(
-					'cue',
-					`[CUE] "${sub.name}" filter not matched (${describeFilter(sub.filter)})`
-				);
-				return;
-			}
-
-			this.deps.onLog('cue', `[CUE] "${sub.name}" triggered (time.heartbeat)`);
-			state.lastTriggered = event.timestamp;
-			state.nextTriggers.set(sub.name, Date.now() + intervalMs);
-			this.executeCueRun(
-				session.id,
-				sub.prompt_file ?? sub.prompt,
-				event,
-				sub.name,
-				sub.output_prompt
-			);
-		}, intervalMs);
-
-		state.nextTriggers.set(sub.name, Date.now() + intervalMs);
-		state.timers.push(timer);
-	}
-
-	private setupScheduledSubscription(
-		session: SessionInfo,
-		state: SessionState,
-		sub: {
-			name: string;
-			prompt: string;
-			prompt_file?: string;
-			output_prompt?: string;
-			schedule_times?: string[];
-			schedule_days?: string[];
-			filter?: Record<string, string | number | boolean>;
-		}
-	): void {
-		const times = sub.schedule_times ?? [];
-		if (times.length === 0) return;
-
-		const checkAndFire = () => {
-			if (!this.enabled) return;
-
-			const now = new Date();
-			const dayNames = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
-			const currentDay = dayNames[now.getDay()];
-			const currentTime = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
-
-			// Check day filter (if specified, current day must match)
-			if (sub.schedule_days && sub.schedule_days.length > 0) {
-				if (!sub.schedule_days.includes(currentDay)) {
-					return;
-				}
-			}
-
-			// Check if current time matches any scheduled time
-			if (!times.includes(currentTime)) {
-				// Evict stale fired-keys from previous minutes
-				for (const key of this.scheduledFiredKeys) {
-					if (key.startsWith(`${session.id}:${sub.name}:`) && !key.endsWith(`:${currentTime}`)) {
-						this.scheduledFiredKeys.delete(key);
-					}
-				}
-				return;
-			}
-
-			// Guard against double-fire (e.g., config refresh within the same minute)
-			const firedKey = `${session.id}:${sub.name}:${currentTime}`;
-			if (this.scheduledFiredKeys.has(firedKey)) {
-				return;
-			}
-			this.scheduledFiredKeys.add(firedKey);
-
-			const event: CueEvent = {
-				id: crypto.randomUUID(),
-				type: 'time.scheduled',
-				timestamp: now.toISOString(),
-				triggerName: sub.name,
-				payload: {
-					schedule_times: sub.schedule_times,
-					schedule_days: sub.schedule_days,
-					matched_time: currentTime,
-					matched_day: currentDay,
-				},
-			};
-
-			if (sub.filter && !matchesFilter(event.payload, sub.filter)) {
-				this.deps.onLog(
-					'cue',
-					`[CUE] "${sub.name}" filter not matched (${describeFilter(sub.filter)})`
-				);
-				return;
-			}
-
-			this.deps.onLog('cue', `[CUE] "${sub.name}" triggered (time.scheduled, ${currentTime})`);
-			state.lastTriggered = event.timestamp;
-			this.executeCueRun(
-				session.id,
-				sub.prompt_file ?? sub.prompt,
-				event,
-				sub.name,
-				sub.output_prompt
-			);
-		};
-
-		// Check every 60 seconds to catch scheduled times
-		const timer = setInterval(checkAndFire, 60_000);
-		state.timers.push(timer);
-
-		// Calculate and track the next trigger time
-		const nextMs = calculateNextScheduledTime(times, sub.schedule_days);
-		if (nextMs != null) {
-			state.nextTriggers.set(sub.name, nextMs);
-		}
-	}
-
-	private setupFileWatcherSubscription(
-		session: SessionInfo,
-		state: SessionState,
-		sub: {
-			name: string;
-			prompt: string;
-			prompt_file?: string;
-			output_prompt?: string;
-			watch?: string;
-			filter?: Record<string, string | number | boolean>;
-		}
-	): void {
-		if (!sub.watch) return;
-
-		const cleanup = createCueFileWatcher({
-			watchGlob: sub.watch,
-			projectRoot: session.projectRoot,
-			debounceMs: DEFAULT_FILE_DEBOUNCE_MS,
-			triggerName: sub.name,
-			onLog: (level, message) => this.deps.onLog(level as MainLogLevel, message),
-			onEvent: (event) => {
-				if (!this.enabled) return;
-
-				// Check payload filter
-				if (sub.filter && !matchesFilter(event.payload, sub.filter)) {
-					this.deps.onLog(
-						'cue',
-						`[CUE] "${sub.name}" filter not matched (${describeFilter(sub.filter)})`
-					);
-					return;
-				}
-
-				this.deps.onLog('cue', `[CUE] "${sub.name}" triggered (file.changed)`);
-				state.lastTriggered = event.timestamp;
-				this.executeCueRun(
-					session.id,
-					sub.prompt_file ?? sub.prompt,
-					event,
-					sub.name,
-					sub.output_prompt
-				);
-			},
-		});
-
-		state.watchers.push(cleanup);
-	}
-
-	private setupGitHubPollerSubscription(
-		session: SessionInfo,
-		state: SessionState,
-		sub: CueSubscription
-	): void {
-		const cleanup = createCueGitHubPoller({
-			eventType: sub.event as 'github.pull_request' | 'github.issue',
-			repo: sub.repo,
-			pollMinutes: sub.poll_minutes ?? 5,
-			projectRoot: session.projectRoot,
-			triggerName: sub.name,
-			subscriptionId: `${session.id}:${sub.name}`,
-			ghState: sub.gh_state,
-			onLog: (level, message) => this.deps.onLog(level as MainLogLevel, message),
-			onEvent: (event) => {
-				if (!this.enabled) return;
-
-				// Check payload filter
-				if (sub.filter && !matchesFilter(event.payload, sub.filter)) {
-					this.deps.onLog(
-						'cue',
-						`[CUE] "${sub.name}" filter not matched (${describeFilter(sub.filter)})`
-					);
-					return;
-				}
-
-				this.deps.onLog('cue', `[CUE] "${sub.name}" triggered (${sub.event})`);
-				state.lastTriggered = event.timestamp;
-				this.executeCueRun(
-					session.id,
-					sub.prompt_file ?? sub.prompt,
-					event,
-					sub.name,
-					sub.output_prompt
-				);
-			},
-		});
-
-		state.watchers.push(cleanup);
-	}
-
-	private setupTaskScannerSubscription(
-		session: SessionInfo,
-		state: SessionState,
-		sub: CueSubscription
-	): void {
-		if (!sub.watch) return;
-
-		const cleanup = createCueTaskScanner({
-			watchGlob: sub.watch,
-			pollMinutes: sub.poll_minutes ?? 1,
-			projectRoot: session.projectRoot,
-			triggerName: sub.name,
-			onLog: (level, message) => this.deps.onLog(level as MainLogLevel, message),
-			onEvent: (event) => {
-				if (!this.enabled) return;
-
-				// Check payload filter
-				if (sub.filter && !matchesFilter(event.payload, sub.filter)) {
-					this.deps.onLog(
-						'cue',
-						`[CUE] "${sub.name}" filter not matched (${describeFilter(sub.filter)})`
-					);
-					return;
-				}
-
-				this.deps.onLog(
-					'cue',
-					`[CUE] "${sub.name}" triggered (task.pending: ${event.payload.taskCount} task(s) in ${event.payload.filename})`
-				);
-				state.lastTriggered = event.timestamp;
-				this.executeCueRun(
-					session.id,
-					sub.prompt_file ?? sub.prompt,
-					event,
-					sub.name,
-					sub.output_prompt
-				);
-			},
-		});
-
-		state.watchers.push(cleanup);
-	}
-
-	/**
-	 * Gate for concurrency control. Checks if a slot is available for this session.
-	 * If at limit, queues the event. Otherwise dispatches immediately.
-	 */
-	private executeCueRun(
-		sessionId: string,
-		prompt: string,
-		event: CueEvent,
-		subscriptionName: string,
-		outputPrompt?: string,
-		chainDepth?: number
-	): void {
-		// Look up the config for this session to get concurrency settings
-		const state = this.sessions.get(sessionId);
-		const maxConcurrent = state?.config.settings.max_concurrent ?? 1;
-		const queueSize = state?.config.settings.queue_size ?? 10;
-		const currentCount = this.activeRunCount.get(sessionId) ?? 0;
-
-		if (currentCount >= maxConcurrent) {
-			// At concurrency limit — queue the event
-			const sessionName =
-				this.deps.getSessions().find((s) => s.id === sessionId)?.name ?? sessionId;
-			if (!this.eventQueue.has(sessionId)) {
-				this.eventQueue.set(sessionId, []);
-			}
-			const queue = this.eventQueue.get(sessionId)!;
-
-			if (queue.length >= queueSize) {
-				// Drop the oldest entry
-				queue.shift();
-				this.deps.onLog('cue', `[CUE] Queue full for "${sessionName}", dropping oldest event`);
-			}
-
-			queue.push({
-				event,
-				subscription: { name: subscriptionName, event: event.type, enabled: true, prompt },
-				prompt,
-				outputPrompt,
-				subscriptionName,
-				queuedAt: Date.now(),
-				chainDepth,
-			});
-
-			this.deps.onLog(
-				'cue',
-				`[CUE] Event queued for "${sessionName}" (${queue.length}/${queueSize} in queue, ${currentCount}/${maxConcurrent} concurrent)`
-			);
-			return;
-		}
-
-		// Slot available — dispatch immediately
-		this.activeRunCount.set(sessionId, currentCount + 1);
-		this.doExecuteCueRun(sessionId, prompt, event, subscriptionName, outputPrompt, chainDepth);
-	}
-
-	/**
-	 * Actually executes a Cue run. Called when a concurrency slot is available.
-	 *
-	 * If outputPrompt is provided, a second run is executed after the main task
-	 * completes successfully. The output prompt receives the main task's stdout
-	 * as context, and its output replaces the stdout passed downstream.
-	 */
-	private async doExecuteCueRun(
-		sessionId: string,
-		prompt: string,
-		event: CueEvent,
-		subscriptionName: string,
-		outputPrompt?: string,
-		chainDepth?: number
-	): Promise<void> {
-		const session = this.deps.getSessions().find((s) => s.id === sessionId);
-		const state = this.sessions.get(sessionId);
-		const runId = crypto.randomUUID();
-		const abortController = new AbortController();
-
-		const result: CueRunResult = {
-			runId,
-			sessionId,
-			sessionName: session?.name ?? 'Unknown',
-			subscriptionName,
-			event,
-			status: 'running',
-			stdout: '',
-			stderr: '',
-			exitCode: null,
-			durationMs: 0,
-			startedAt: new Date().toISOString(),
-			endedAt: '',
-		};
-
-		this.activeRuns.set(runId, { result, abortController });
-		const timeoutMs = (state?.config.settings.timeout_minutes ?? 30) * 60 * 1000;
-		try {
-			recordCueEvent({
-				id: runId,
-				type: event.type,
-				triggerName: event.triggerName,
-				sessionId,
-				subscriptionName,
-				status: 'running',
-				payload: JSON.stringify(event.payload),
-			});
-		} catch {
-			// Non-fatal if DB is unavailable
-		}
-		this.deps.onLog('cue', `[CUE] Run started: ${subscriptionName}`, {
-			type: 'runStarted',
-			runId,
-			sessionId,
-			subscriptionName,
-		});
-
-		try {
-			const runResult = await this.deps.onCueRun({
-				runId,
-				sessionId,
-				prompt,
-				subscriptionName,
-				event,
-				timeoutMs,
-			});
-			if (this.manuallyStoppedRuns.has(runId)) {
-				return;
-			}
-			result.status = runResult.status;
-			result.stdout = runResult.stdout;
-			result.stderr = runResult.stderr;
-			result.exitCode = runResult.exitCode;
-
-			// Execute output prompt if the main task succeeded and an output prompt is configured
-			if (outputPrompt && result.status === 'completed') {
-				this.deps.onLog(
-					'cue',
-					`[CUE] "${subscriptionName}" executing output prompt for downstream handoff`
-				);
-
-				const outputRunId = crypto.randomUUID();
-				const outputEvent: CueEvent = {
-					...event,
-					id: crypto.randomUUID(),
-					payload: {
-						...event.payload,
-						sourceOutput: result.stdout.substring(0, SOURCE_OUTPUT_MAX_CHARS),
-						outputPromptPhase: true,
-					},
-				};
-
-				try {
-					recordCueEvent({
-						id: outputRunId,
-						type: event.type,
-						triggerName: event.triggerName,
-						sessionId,
-						subscriptionName: `${subscriptionName}:output`,
-						status: 'running',
-						payload: JSON.stringify(outputEvent.payload),
-					});
-				} catch {
-					// Non-fatal if DB is unavailable
-				}
-
-				const contextPrompt = `${outputPrompt}\n\n---\n\nContext from completed task:\n${result.stdout.substring(0, SOURCE_OUTPUT_MAX_CHARS)}`;
-				const outputResult = await this.deps.onCueRun({
-					runId: outputRunId,
-					sessionId,
-					prompt: contextPrompt,
-					subscriptionName: `${subscriptionName}:output`,
-					event: outputEvent,
-					timeoutMs,
-				});
-
-				try {
-					updateCueEventStatus(outputRunId, outputResult.status);
-				} catch {
-					// Non-fatal if DB is unavailable
-				}
-
-				if (this.manuallyStoppedRuns.has(runId)) {
-					return;
-				}
-
-				if (outputResult.status === 'completed') {
-					result.stdout = outputResult.stdout;
-				} else {
-					this.deps.onLog(
-						'cue',
-						`[CUE] "${subscriptionName}" output prompt failed (${outputResult.status}), using main task output`
-					);
-				}
-			}
-		} catch (error) {
-			if (this.manuallyStoppedRuns.has(runId)) {
-				return;
-			}
-			result.status = 'failed';
-			result.stderr = error instanceof Error ? error.message : String(error);
-		} finally {
-			result.endedAt = new Date().toISOString();
-			result.durationMs = Date.now() - new Date(result.startedAt).getTime();
-			this.activeRuns.delete(runId);
-
-			// Decrement active run count and drain queue
-			const count = this.activeRunCount.get(sessionId) ?? 1;
-			this.activeRunCount.set(sessionId, Math.max(0, count - 1));
-			this.drainQueue(sessionId);
-
-			const wasManuallyStopped = this.manuallyStoppedRuns.has(runId);
-			if (wasManuallyStopped) {
-				try {
-					updateCueEventStatus(runId, 'stopped');
-				} catch {
-					// Non-fatal if DB is unavailable
-				}
-				this.manuallyStoppedRuns.delete(runId);
-			} else {
-				this.pushActivityLog(result);
-				try {
-					updateCueEventStatus(runId, result.status);
-				} catch {
-					// Non-fatal if DB is unavailable
-				}
-				this.deps.onLog('cue', `[CUE] Run finished: ${subscriptionName} (${result.status})`, {
-					type: 'runFinished',
-					runId,
-					sessionId,
-					subscriptionName,
-					status: result.status,
-				});
-
-				// Emit completion event for agent completion chains
-				// This allows downstream subscriptions to react to this Cue run's completion
-				this.notifyAgentCompleted(sessionId, {
-					sessionName: result.sessionName,
-					status: result.status,
-					exitCode: result.exitCode,
-					durationMs: result.durationMs,
-					stdout: result.stdout,
-					triggeredBy: subscriptionName,
-					chainDepth: (chainDepth ?? 0) + 1,
-				});
-			}
-		}
-	}
-
-	/**
-	 * Drain the event queue for a session, dispatching events while slots are available.
-	 * Drops stale events that have exceeded the timeout.
-	 */
-	private drainQueue(sessionId: string): void {
-		const queue = this.eventQueue.get(sessionId);
-		if (!queue || queue.length === 0) return;
-
-		const state = this.sessions.get(sessionId);
-		const maxConcurrent = state?.config.settings.max_concurrent ?? 1;
-		const timeoutMs = (state?.config.settings.timeout_minutes ?? 30) * 60 * 1000;
-		const sessionName = this.deps.getSessions().find((s) => s.id === sessionId)?.name ?? sessionId;
-
-		while (queue.length > 0) {
-			const currentCount = this.activeRunCount.get(sessionId) ?? 0;
-			if (currentCount >= maxConcurrent) break;
-
-			const entry = queue.shift()!;
-			const ageMs = Date.now() - entry.queuedAt;
-
-			// Check for stale events
-			if (ageMs > timeoutMs) {
-				const ageMinutes = Math.round(ageMs / 60000);
-				this.deps.onLog(
-					'cue',
-					`[CUE] Dropping stale queued event for "${sessionName}" (queued ${ageMinutes}m ago)`
-				);
-				continue;
-			}
-
-			// Dispatch the queued event
-			this.activeRunCount.set(sessionId, currentCount + 1);
-			this.doExecuteCueRun(
-				sessionId,
-				entry.prompt,
-				entry.event,
-				entry.subscriptionName,
-				entry.outputPrompt,
-				entry.chainDepth
-			);
-		}
-
-		// Clean up empty queue
-		if (queue.length === 0) {
-			this.eventQueue.delete(sessionId);
-		}
-	}
-
 	private pushActivityLog(result: CueRunResult): void {
 		this.activityLog.push(result);
-		if (this.activityLog.length > ACTIVITY_LOG_MAX) {
-			this.activityLog = this.activityLog.slice(-ACTIVITY_LOG_MAX);
-		}
 	}
 
 	private teardownSession(sessionId: string): void {
@@ -1500,84 +703,6 @@ export class CueEngine {
 					this.scheduledFiredKeys.delete(key);
 				}
 			}
-		}
-	}
-
-	// --- Heartbeat & Sleep Detection ---
-
-	private startHeartbeat(): void {
-		this.stopHeartbeat();
-		try {
-			updateHeartbeat();
-		} catch {
-			// Non-fatal if DB not ready
-		}
-		this.heartbeatInterval = setInterval(() => {
-			try {
-				updateHeartbeat();
-			} catch {
-				// Non-fatal
-			}
-		}, HEARTBEAT_INTERVAL_MS);
-	}
-
-	private stopHeartbeat(): void {
-		if (this.heartbeatInterval) {
-			clearInterval(this.heartbeatInterval);
-			this.heartbeatInterval = null;
-		}
-	}
-
-	/**
-	 * Check the last heartbeat to detect if the machine slept.
-	 * If a gap >= SLEEP_THRESHOLD_MS is found, run the reconciler.
-	 */
-	private detectSleepAndReconcile(): void {
-		try {
-			const lastHeartbeat = getLastHeartbeat();
-			if (lastHeartbeat === null) return; // First ever start — nothing to reconcile
-
-			const now = Date.now();
-			const gapMs = now - lastHeartbeat;
-
-			if (gapMs < SLEEP_THRESHOLD_MS) return;
-
-			const gapMinutes = Math.round(gapMs / 60_000);
-			this.deps.onLog(
-				'cue',
-				`[CUE] Sleep detected (gap: ${gapMinutes}m). Reconciling missed events.`
-			);
-
-			// Build session info map for the reconciler
-			const reconcileSessions = new Map<string, ReconcileSessionInfo>();
-			const allSessions = this.deps.getSessions();
-			for (const [sessionId, state] of this.sessions) {
-				const session = allSessions.find((s) => s.id === sessionId);
-				reconcileSessions.set(sessionId, {
-					config: state.config,
-					sessionName: session?.name ?? sessionId,
-				});
-			}
-
-			reconcileMissedTimeEvents({
-				sleepStartMs: lastHeartbeat,
-				wakeTimeMs: now,
-				sessions: reconcileSessions,
-				onDispatch: (sessionId, sub, event) => {
-					this.executeCueRun(
-						sessionId,
-						sub.prompt_file ?? sub.prompt,
-						event,
-						sub.name,
-						sub.output_prompt
-					);
-				},
-				onLog: (level, message) => {
-					this.deps.onLog(level as MainLogLevel, message);
-				},
-			});
-		} catch (error) {
-			this.deps.onLog('warn', `[CUE] Sleep detection failed: ${error}`);
 		}
 	}
 }

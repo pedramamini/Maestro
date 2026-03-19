@@ -13,7 +13,6 @@
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import type { CueConfig, CueEvent, CueRunResult } from '../../../main/cue/cue-types';
-import type { SessionInfo } from '../../../shared/types';
 
 // Mock the yaml loader
 const mockLoadCueConfig = vi.fn<(projectRoot: string) => CueConfig | null>();
@@ -35,52 +34,7 @@ vi.mock('crypto', () => ({
 }));
 
 import { CueEngine, type CueEngineDeps } from '../../../main/cue/cue-engine';
-
-function createMockSession(overrides: Partial<SessionInfo> = {}): SessionInfo {
-	return {
-		id: 'session-1',
-		name: 'Test Session',
-		toolType: 'claude-code',
-		cwd: '/projects/test',
-		projectRoot: '/projects/test',
-		...overrides,
-	};
-}
-
-function createMockConfig(overrides: Partial<CueConfig> = {}): CueConfig {
-	return {
-		subscriptions: [],
-		settings: {
-			timeout_minutes: 30,
-			timeout_on_fail: 'break',
-			max_concurrent: 1,
-			queue_size: 10,
-		},
-		...overrides,
-	};
-}
-
-function createMockDeps(overrides: Partial<CueEngineDeps> = {}): CueEngineDeps {
-	return {
-		getSessions: vi.fn(() => [createMockSession()]),
-		onCueRun: vi.fn(async () => ({
-			runId: 'run-1',
-			sessionId: 'session-1',
-			sessionName: 'Test Session',
-			subscriptionName: 'test',
-			event: {} as CueEvent,
-			status: 'completed' as const,
-			stdout: 'output',
-			stderr: '',
-			exitCode: 0,
-			durationMs: 100,
-			startedAt: new Date().toISOString(),
-			endedAt: new Date().toISOString(),
-		})),
-		onLog: vi.fn(),
-		...overrides,
-	};
-}
+import { createMockSession, createMockConfig, createMockDeps } from './cue-test-helpers';
 
 describe('CueEngine Concurrency Control', () => {
 	let yamlWatcherCleanup: ReturnType<typeof vi.fn>;
@@ -500,6 +454,53 @@ describe('CueEngine Concurrency Control', () => {
 
 			engine.stop();
 			expect(engine.getQueueStatus().size).toBe(0);
+		});
+	});
+
+	describe('stopRun concurrency slot release', () => {
+		it('stopRun frees the concurrency slot so queued events dispatch immediately', async () => {
+			const deps = createMockDeps({
+				onCueRun: vi.fn(() => new Promise<CueRunResult>(() => {})), // Never resolves
+			});
+			const config = createMockConfig({
+				settings: {
+					timeout_minutes: 30,
+					timeout_on_fail: 'break',
+					max_concurrent: 1,
+					queue_size: 10,
+				},
+				subscriptions: [
+					{
+						name: 'timer',
+						event: 'time.heartbeat',
+						enabled: true,
+						prompt: 'test',
+						interval_minutes: 1,
+					},
+				],
+			});
+			mockLoadCueConfig.mockReturnValue(config);
+			const engine = new CueEngine(deps);
+			engine.start();
+
+			// First run starts immediately
+			await vi.advanceTimersByTimeAsync(10);
+			expect(engine.getActiveRuns()).toHaveLength(1);
+
+			// Second event gets queued (max_concurrent = 1)
+			vi.advanceTimersByTime(1 * 60 * 1000);
+			expect(engine.getQueueStatus().get('session-1')).toBe(1);
+
+			// Stop the active run — should free the slot and drain the queue
+			const activeRun = engine.getActiveRuns()[0];
+			engine.stopRun(activeRun.runId);
+
+			// The queued event should have been dispatched (onCueRun called again)
+			expect(deps.onCueRun).toHaveBeenCalledTimes(2);
+			expect(engine.getQueueStatus().size).toBe(0);
+
+			engine.stopAll();
+			engine.stop();
 		});
 	});
 

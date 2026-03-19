@@ -516,7 +516,9 @@ describe('ProcessMonitor', () => {
 			render(<ProcessMonitor theme={theme} sessions={[session]} groups={[]} onClose={onClose} />);
 
 			await waitFor(() => {
-				expect(screen.getByText('Test Session - AI Agent (claude-code)')).toBeInTheDocument();
+				expect(
+					screen.getByText('Test Session - AI Agent (claude-code) - Tab 1')
+				).toBeInTheDocument();
 			});
 		});
 
@@ -824,7 +826,9 @@ describe('ProcessMonitor', () => {
 			render(<ProcessMonitor theme={theme} sessions={[session]} groups={[]} onClose={onClose} />);
 
 			await waitFor(() => {
-				expect(screen.getByText('Test Session - AI Agent (claude-code)')).toBeInTheDocument();
+				expect(
+					screen.getByText('Test Session - AI Agent (claude-code) - Tab 1')
+				).toBeInTheDocument();
 			});
 
 			// No SSH badge should appear on process rows
@@ -846,7 +850,9 @@ describe('ProcessMonitor', () => {
 
 			await waitFor(() => {
 				// All nodes should be expanded, so we should see the process
-				expect(screen.getByText('Test Session - AI Agent (claude-code)')).toBeInTheDocument();
+				expect(
+					screen.getByText('Test Session - AI Agent (claude-code) - Tab 1')
+				).toBeInTheDocument();
 			});
 		});
 
@@ -862,7 +868,9 @@ describe('ProcessMonitor', () => {
 			);
 
 			await waitFor(() => {
-				expect(screen.getByText('Test Session - AI Agent (claude-code)')).toBeInTheDocument();
+				expect(
+					screen.getByText('Test Session - AI Agent (claude-code) - Tab 1')
+				).toBeInTheDocument();
 			});
 
 			// Click the group to collapse
@@ -870,7 +878,9 @@ describe('ProcessMonitor', () => {
 
 			// Process should no longer be visible
 			await waitFor(() => {
-				expect(screen.queryByText('Test Session - AI Agent (claude-code)')).not.toBeInTheDocument();
+				expect(
+					screen.queryByText('Test Session - AI Agent (claude-code) - Tab 1')
+				).not.toBeInTheDocument();
 			});
 		});
 
@@ -886,7 +896,9 @@ describe('ProcessMonitor', () => {
 			);
 
 			await waitFor(() => {
-				expect(screen.getByText('Test Session - AI Agent (claude-code)')).toBeInTheDocument();
+				expect(
+					screen.getByText('Test Session - AI Agent (claude-code) - Tab 1')
+				).toBeInTheDocument();
 			});
 
 			// Click collapse all button
@@ -895,7 +907,9 @@ describe('ProcessMonitor', () => {
 
 			// Process should no longer be visible
 			await waitFor(() => {
-				expect(screen.queryByText('Test Session - AI Agent (claude-code)')).not.toBeInTheDocument();
+				expect(
+					screen.queryByText('Test Session - AI Agent (claude-code) - Tab 1')
+				).not.toBeInTheDocument();
 			});
 		});
 
@@ -911,7 +925,9 @@ describe('ProcessMonitor', () => {
 			);
 
 			await waitFor(() => {
-				expect(screen.getByText('Test Session - AI Agent (claude-code)')).toBeInTheDocument();
+				expect(
+					screen.getByText('Test Session - AI Agent (claude-code) - Tab 1')
+				).toBeInTheDocument();
 			});
 
 			// Collapse first
@@ -919,7 +935,9 @@ describe('ProcessMonitor', () => {
 			fireEvent.click(collapseButton);
 
 			await waitFor(() => {
-				expect(screen.queryByText('Test Session - AI Agent (claude-code)')).not.toBeInTheDocument();
+				expect(
+					screen.queryByText('Test Session - AI Agent (claude-code) - Tab 1')
+				).not.toBeInTheDocument();
 			});
 
 			// Then expand
@@ -927,7 +945,9 @@ describe('ProcessMonitor', () => {
 			fireEvent.click(expandButton);
 
 			await waitFor(() => {
-				expect(screen.getByText('Test Session - AI Agent (claude-code)')).toBeInTheDocument();
+				expect(
+					screen.getByText('Test Session - AI Agent (claude-code) - Tab 1')
+				).toBeInTheDocument();
 			});
 		});
 	});
@@ -987,7 +1007,9 @@ describe('ProcessMonitor', () => {
 			);
 
 			await waitFor(() => {
-				expect(screen.getByText('Test Session - AI Agent (claude-code)')).toBeInTheDocument();
+				expect(
+					screen.getByText('Test Session - AI Agent (claude-code) - Tab 1')
+				).toBeInTheDocument();
 			});
 
 			// Collapse first
@@ -995,7 +1017,9 @@ describe('ProcessMonitor', () => {
 			fireEvent.click(collapseButton);
 
 			await waitFor(() => {
-				expect(screen.queryByText('Test Session - AI Agent (claude-code)')).not.toBeInTheDocument();
+				expect(
+					screen.queryByText('Test Session - AI Agent (claude-code) - Tab 1')
+				).not.toBeInTheDocument();
 			});
 
 			const dialog = screen.getByRole('dialog');
@@ -1024,7 +1048,9 @@ describe('ProcessMonitor', () => {
 			);
 
 			await waitFor(() => {
-				expect(screen.getByText('Test Session - AI Agent (claude-code)')).toBeInTheDocument();
+				expect(
+					screen.getByText('Test Session - AI Agent (claude-code) - Tab 1')
+				).toBeInTheDocument();
 			});
 
 			const dialog = screen.getByRole('dialog');
@@ -1037,7 +1063,9 @@ describe('ProcessMonitor', () => {
 
 			// Should hide children
 			await waitFor(() => {
-				expect(screen.queryByText('Test Session - AI Agent (claude-code)')).not.toBeInTheDocument();
+				expect(
+					screen.queryByText('Test Session - AI Agent (claude-code) - Tab 1')
+				).not.toBeInTheDocument();
 			});
 		});
 
@@ -1053,7 +1081,9 @@ describe('ProcessMonitor', () => {
 			);
 
 			await waitFor(() => {
-				expect(screen.getByText('Test Session - AI Agent (claude-code)')).toBeInTheDocument();
+				expect(
+					screen.getByText('Test Session - AI Agent (claude-code) - Tab 1')
+				).toBeInTheDocument();
 			});
 
 			const dialog = screen.getByRole('dialog');
@@ -1066,7 +1096,9 @@ describe('ProcessMonitor', () => {
 
 			// Should hide children
 			await waitFor(() => {
-				expect(screen.queryByText('Test Session - AI Agent (claude-code)')).not.toBeInTheDocument();
+				expect(
+					screen.queryByText('Test Session - AI Agent (claude-code) - Tab 1')
+				).not.toBeInTheDocument();
 			});
 		});
 
@@ -1082,7 +1114,9 @@ describe('ProcessMonitor', () => {
 			);
 
 			await waitFor(() => {
-				expect(screen.getByText('Test Session - AI Agent (claude-code)')).toBeInTheDocument();
+				expect(
+					screen.getByText('Test Session - AI Agent (claude-code) - Tab 1')
+				).toBeInTheDocument();
 			});
 
 			const dialog = screen.getByRole('dialog');
@@ -1095,7 +1129,9 @@ describe('ProcessMonitor', () => {
 
 			// Should hide children
 			await waitFor(() => {
-				expect(screen.queryByText('Test Session - AI Agent (claude-code)')).not.toBeInTheDocument();
+				expect(
+					screen.queryByText('Test Session - AI Agent (claude-code) - Tab 1')
+				).not.toBeInTheDocument();
 			});
 		});
 
@@ -1191,7 +1227,9 @@ describe('ProcessMonitor', () => {
 			render(<ProcessMonitor theme={theme} sessions={[session]} groups={[]} onClose={onClose} />);
 
 			await waitFor(() => {
-				expect(screen.getByText('Test Session - AI Agent (claude-code)')).toBeInTheDocument();
+				expect(
+					screen.getByText('Test Session - AI Agent (claude-code) - Tab 1')
+				).toBeInTheDocument();
 			});
 
 			// Hover over process to show kill button (simulated via click)
@@ -1214,7 +1252,9 @@ describe('ProcessMonitor', () => {
 			render(<ProcessMonitor theme={theme} sessions={[session]} groups={[]} onClose={onClose} />);
 
 			await waitFor(() => {
-				expect(screen.getByText('Test Session - AI Agent (claude-code)')).toBeInTheDocument();
+				expect(
+					screen.getByText('Test Session - AI Agent (claude-code) - Tab 1')
+				).toBeInTheDocument();
 			});
 
 			// Show kill confirmation
@@ -1239,7 +1279,9 @@ describe('ProcessMonitor', () => {
 			render(<ProcessMonitor theme={theme} sessions={[session]} groups={[]} onClose={onClose} />);
 
 			await waitFor(() => {
-				expect(screen.getByText('Test Session - AI Agent (claude-code)')).toBeInTheDocument();
+				expect(
+					screen.getByText('Test Session - AI Agent (claude-code) - Tab 1')
+				).toBeInTheDocument();
 			});
 
 			// Show kill confirmation
@@ -1264,7 +1306,9 @@ describe('ProcessMonitor', () => {
 			);
 
 			await waitFor(() => {
-				expect(screen.getByText('Test Session - AI Agent (claude-code)')).toBeInTheDocument();
+				expect(
+					screen.getByText('Test Session - AI Agent (claude-code) - Tab 1')
+				).toBeInTheDocument();
 			});
 
 			// Show kill confirmation
@@ -1290,7 +1334,9 @@ describe('ProcessMonitor', () => {
 			render(<ProcessMonitor theme={theme} sessions={[session]} groups={[]} onClose={onClose} />);
 
 			await waitFor(() => {
-				expect(screen.getByText('Test Session - AI Agent (claude-code)')).toBeInTheDocument();
+				expect(
+					screen.getByText('Test Session - AI Agent (claude-code) - Tab 1')
+				).toBeInTheDocument();
 			});
 
 			// Show kill confirmation
@@ -1314,7 +1360,9 @@ describe('ProcessMonitor', () => {
 			render(<ProcessMonitor theme={theme} sessions={[session]} groups={[]} onClose={onClose} />);
 
 			await waitFor(() => {
-				expect(screen.getByText('Test Session - AI Agent (claude-code)')).toBeInTheDocument();
+				expect(
+					screen.getByText('Test Session - AI Agent (claude-code) - Tab 1')
+				).toBeInTheDocument();
 			});
 
 			// Show kill confirmation
@@ -1343,7 +1391,9 @@ describe('ProcessMonitor', () => {
 			render(<ProcessMonitor theme={theme} sessions={[session]} groups={[]} onClose={onClose} />);
 
 			await waitFor(() => {
-				expect(screen.getByText('Test Session - AI Agent (claude-code)')).toBeInTheDocument();
+				expect(
+					screen.getByText('Test Session - AI Agent (claude-code) - Tab 1')
+				).toBeInTheDocument();
 			});
 
 			// Show kill confirmation
@@ -1374,7 +1424,9 @@ describe('ProcessMonitor', () => {
 			render(<ProcessMonitor theme={theme} sessions={[session]} groups={[]} onClose={onClose} />);
 
 			await waitFor(() => {
-				expect(screen.getByText('Test Session - AI Agent (claude-code)')).toBeInTheDocument();
+				expect(
+					screen.getByText('Test Session - AI Agent (claude-code) - Tab 1')
+				).toBeInTheDocument();
 			});
 
 			// Show kill confirmation
@@ -1537,12 +1589,14 @@ describe('ProcessMonitor', () => {
 			render(<ProcessMonitor theme={theme} sessions={[session]} groups={[]} onClose={onClose} />);
 
 			await waitFor(() => {
-				expect(screen.getByText('Test Session - AI Agent (claude-code)')).toBeInTheDocument();
+				expect(
+					screen.getByText('Test Session - AI Agent (claude-code) - Tab 1')
+				).toBeInTheDocument();
 			});
 
 			// Click the process
 			const processNode = screen
-				.getByText('Test Session - AI Agent (claude-code)')
+				.getByText('Test Session - AI Agent (claude-code) - Tab 1')
 				.closest('div[tabindex="0"]');
 			fireEvent.click(processNode!);
 
@@ -1645,6 +1699,54 @@ describe('ProcessMonitor', () => {
 			getActiveProcessesMock().mockResolvedValue([process]);
 
 			const session = createSession({ aiTabs: [] });
+			render(<ProcessMonitor theme={theme} sessions={[session]} groups={[]} onClose={onClose} />);
+
+			await waitFor(() => {
+				expect(screen.getByText('Test Session - AI Agent (claude-code)')).toBeInTheDocument();
+			});
+		});
+
+		it('should include tab name in process label when available', async () => {
+			const process = createActiveProcess();
+			getActiveProcessesMock().mockResolvedValue([process]);
+
+			const session = createSession({
+				aiTabs: [
+					{
+						id: 'tab-1',
+						name: 'My Custom Tab',
+						logs: [],
+						agentSessionId: 'abc12345-6789-0123-4567-890abcdef012',
+						isStarred: false,
+						state: 'idle',
+					},
+				],
+			});
+			render(<ProcessMonitor theme={theme} sessions={[session]} groups={[]} onClose={onClose} />);
+
+			await waitFor(() => {
+				expect(
+					screen.getByText('Test Session - AI Agent (claude-code) - My Custom Tab')
+				).toBeInTheDocument();
+			});
+		});
+
+		it('should omit tab name from process label when tab name is null', async () => {
+			const process = createActiveProcess();
+			getActiveProcessesMock().mockResolvedValue([process]);
+
+			const session = createSession({
+				aiTabs: [
+					{
+						id: 'tab-1',
+						name: null,
+						logs: [],
+						agentSessionId: 'abc12345-6789-0123-4567-890abcdef012',
+						isStarred: false,
+						state: 'idle',
+					},
+				],
+			});
 			render(<ProcessMonitor theme={theme} sessions={[session]} groups={[]} onClose={onClose} />);
 
 			await waitFor(() => {

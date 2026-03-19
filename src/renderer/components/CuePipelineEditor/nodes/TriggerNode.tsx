@@ -50,7 +50,8 @@ export const TriggerNode = memo(function TriggerNode({
 	return (
 		<div
 			style={{
-				width: 220,
+				minWidth: 220,
+				maxWidth: 320,
 				height: 60,
 				borderRadius: 9999,
 				backgroundColor: `${color}18`,
@@ -100,6 +101,7 @@ export const TriggerNode = memo(function TriggerNode({
 			<div
 				style={{
 					flex: 1,
+					minWidth: 0,
 					display: 'flex',
 					flexDirection: 'column',
 					alignItems: 'center',
@@ -113,6 +115,7 @@ export const TriggerNode = memo(function TriggerNode({
 						display: 'flex',
 						alignItems: 'center',
 						gap: 6,
+						maxWidth: '100%',
 					}}
 				>
 					<Icon size={14} style={{ color, flexShrink: 0 }} />
@@ -124,8 +127,8 @@ export const TriggerNode = memo(function TriggerNode({
 							whiteSpace: 'nowrap',
 							overflow: 'hidden',
 							textOverflow: 'ellipsis',
-							maxWidth: 110,
 						}}
+						title={data.label}
 					>
 						{data.label}
 					</span>
@@ -139,8 +142,9 @@ export const TriggerNode = memo(function TriggerNode({
 							whiteSpace: 'nowrap',
 							overflow: 'hidden',
 							textOverflow: 'ellipsis',
-							maxWidth: 130,
+							maxWidth: '100%',
 						}}
+						title={data.configSummary}
 					>
 						{data.configSummary}
 					</span>

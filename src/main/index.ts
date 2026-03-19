@@ -238,6 +238,10 @@ if (crashReportingEnabled && !isDevelopment) {
 			});
 			// Add installation ID to Sentry for error correlation across installations
 			setTag('installationId', installationId);
+			// Tag release channel (rc vs stable) based on version string
+			// RC builds use -RC suffix (e.g., 0.16.1-RC), stable builds use plain semver
+			const version = app.getVersion();
+			setTag('channel', version.includes('-RC') ? 'rc' : 'stable');
 
 			// Start memory monitoring for crash diagnostics (MAESTRO-5A/4Y)
 			// Records breadcrumbs with memory state every minute, warns above 500MB heap
@@ -409,6 +413,18 @@ app.whenReady().then(async () => {
 			};
 
 			const agentConfigValues = getAgentConfigForAgent(storedSession.toolType);
+
+			// Resolve the agent's binary path using the agent detector.
+			// Without this, Cue falls back to the bare command name (e.g., 'claude')
+			// which fails with ENOENT when spawn() can't find it on PATH.
+			let resolvedAgentPath = agentConfigValues.customPath as string | undefined;
+			if (!resolvedAgentPath && agentDetector) {
+				const detectedAgent = await agentDetector.getAgent(storedSession.toolType);
+				if (detectedAgent?.available && detectedAgent.path) {
+					resolvedAgentPath = detectedAgent.path;
+				}
+			}
+
 			const result = await executeCuePrompt({
 				runId,
 				session: {
@@ -432,7 +448,7 @@ app.whenReady().then(async () => {
 				templateContext,
 				timeoutMs,
 				sshRemoteConfig: storedSession.sessionSshRemoteConfig,
-				customPath: agentConfigValues.customPath as string | undefined,
+				customPath: resolvedAgentPath,
 				customArgs: storedSession.customArgs,
 				customEnvVars: storedSession.customEnvVars,
 				customModel: storedSession.customModel,
@@ -648,6 +664,7 @@ app.whenReady().then(async () => {
 			webServer = server;
 		},
 		createWebServer,
+		settingsStore: store,
 	});
 
 	app.on('activate', () => {
@@ -709,6 +726,7 @@ function setupIpcHandlers() {
 			webServer = server;
 		},
 		createWebServer,
+		settingsStore: store,
 	});
 
 	// Git operations - extracted to src/main/ipc/handlers/git.ts
