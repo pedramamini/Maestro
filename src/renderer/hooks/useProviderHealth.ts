@@ -257,7 +257,7 @@ export function useProviderHealth(
 	// Re-fetch when time range changes
 	useEffect(() => {
 		refresh();
-	}, [timeRange]);  
+	}, [timeRange]);
 
 	// Subscribe to failover suggestions for immediate refresh (Task 4)
 	useEffect(() => {

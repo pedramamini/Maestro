@@ -439,7 +439,7 @@ export function useProviderDetail(
 	// Re-fetch when time range changes
 	useEffect(() => {
 		refresh();
-	}, [timeRange]);  
+	}, [timeRange]);
 
 	return { detail, isLoading, refresh };
 }
