@@ -348,6 +348,7 @@ describe('cue-github-poller', () => {
 			repo: 'owner/repo',
 			created_at: '2026-03-01T00:00:00Z',
 			updated_at: '2026-03-02T00:00:00Z',
+			merged_at: '',
 		});
 
 		cleanup();
@@ -598,5 +599,207 @@ describe('cue-github-poller', () => {
 
 		// Should have fired 1 event then stopped (remaining 2 skipped)
 		expect(eventCallCount).toBe(1);
+	});
+
+	describe('first poll error resilience (Fix 3)', () => {
+		it('places seed marker when first poll fails', async () => {
+			const config = makeConfig();
+
+			// First call (--version) succeeds, but pr list fails
+			let callCount = 0;
+			mockExecFile.mockImplementation(
+				(
+					cmd: string,
+					args: string[],
+					_opts: unknown,
+					cb: (err: Error | null, stdout: string, stderr: string) => void
+				) => {
+					const key = `${cmd} ${args.join(' ')}`;
+					if (key.includes('--version')) {
+						cb(null, '2.0.0', '');
+					} else if (key.includes('pr list')) {
+						callCount++;
+						cb(new Error('Network timeout'), '', '');
+					} else {
+						cb(new Error('not found'), '', '');
+					}
+				}
+			);
+
+			const cleanup = createCueGitHubPoller(config);
+			await vi.advanceTimersByTimeAsync(2000);
+
+			expect(mockMarkGitHubItemSeen).toHaveBeenCalledWith('session-1:test-sub', '__seed_marker__');
+			expect(config.onLog).toHaveBeenCalledWith('info', expect.stringContaining('seed marker set'));
+
+			cleanup();
+		});
+
+		it('second poll after first-poll error fires events for new items', async () => {
+			const config = makeConfig({ pollMinutes: 1 });
+
+			// First poll: pr list fails
+			// Second poll: pr list succeeds
+			let prListCallCount = 0;
+			mockExecFile.mockImplementation(
+				(
+					cmd: string,
+					args: string[],
+					_opts: unknown,
+					cb: (err: Error | null, stdout: string, stderr: string) => void
+				) => {
+					const key = `${cmd} ${args.join(' ')}`;
+					if (key.includes('--version')) {
+						cb(null, '2.0.0', '');
+					} else if (key.includes('pr list')) {
+						prListCallCount++;
+						if (prListCallCount === 1) {
+							cb(new Error('Network timeout'), '', '');
+						} else {
+							cb(null, JSON.stringify([samplePRs[0]]), '');
+						}
+					} else {
+						cb(new Error('not found'), '', '');
+					}
+				}
+			);
+
+			// After first poll error, seed marker is placed, so hasAnyGitHubSeen returns true
+			// This means second poll treats items as NOT first-run and fires events
+			mockHasAnyGitHubSeen.mockReturnValue(true);
+
+			const cleanup = createCueGitHubPoller(config);
+
+			// First poll at 2s — fails, seed marker placed
+			await vi.advanceTimersByTimeAsync(2000);
+			expect(config.onEvent).not.toHaveBeenCalled();
+
+			// Second poll at 2s + 1min — succeeds, fires events
+			await vi.advanceTimersByTimeAsync(60000);
+			expect(config.onEvent).toHaveBeenCalledTimes(1);
+			const event = (config.onEvent as ReturnType<typeof vi.fn>).mock.calls[0][0];
+			expect(event.payload.number).toBe(1);
+
+			cleanup();
+		});
+	});
+
+	describe('ghState parameter', () => {
+		it('passes "closed" state to gh pr list when ghState is "closed"', async () => {
+			const config = makeConfig({ ghState: 'closed' });
+			setupExecFile({
+				'--version': '2.0.0',
+				'pr list': JSON.stringify([]),
+			});
+
+			const cleanup = createCueGitHubPoller(config);
+			await vi.advanceTimersByTimeAsync(2000);
+
+			// Verify the gh command was called with --state closed
+			const prListCall = mockExecFile.mock.calls.find((call: unknown[]) =>
+				(call[1] as string[]).includes('pr')
+			);
+			expect(prListCall).toBeDefined();
+			const args = prListCall![1] as string[];
+			const stateIdx = args.indexOf('--state');
+			expect(args[stateIdx + 1]).toBe('closed');
+
+			cleanup();
+		});
+
+		it('queries closed PRs and filters by mergedAt when ghState is "merged"', async () => {
+			const mergedPRs = [
+				{
+					number: 10,
+					title: 'Merged PR',
+					author: { login: 'alice' },
+					url: 'https://github.com/owner/repo/pull/10',
+					body: 'Already merged',
+					state: 'CLOSED',
+					isDraft: false,
+					labels: [],
+					headRefName: 'feature',
+					baseRefName: 'main',
+					createdAt: '2026-03-01T00:00:00Z',
+					updatedAt: '2026-03-02T00:00:00Z',
+					mergedAt: '2026-03-02T10:00:00Z',
+				},
+				{
+					number: 11,
+					title: 'Closed but not merged',
+					author: { login: 'bob' },
+					url: 'https://github.com/owner/repo/pull/11',
+					body: 'Rejected',
+					state: 'CLOSED',
+					isDraft: false,
+					labels: [],
+					headRefName: 'bad-branch',
+					baseRefName: 'main',
+					createdAt: '2026-03-01T00:00:00Z',
+					updatedAt: '2026-03-02T00:00:00Z',
+					mergedAt: null,
+				},
+			];
+
+			const config = makeConfig({ ghState: 'merged' });
+			setupExecFile({
+				'--version': '2.0.0',
+				'pr list': JSON.stringify(mergedPRs),
+			});
+
+			const cleanup = createCueGitHubPoller(config);
+			await vi.advanceTimersByTimeAsync(2000);
+
+			// Should only fire for the merged PR (number 10), not the closed one (number 11)
+			expect(config.onEvent).toHaveBeenCalledTimes(1);
+			const firedEvent = (config.onEvent as ReturnType<typeof vi.fn>).mock.calls[0][0];
+			expect(firedEvent.payload.number).toBe(10);
+			expect(firedEvent.payload.state).toBe('merged');
+			expect(firedEvent.payload.merged_at).toBe('2026-03-02T10:00:00Z');
+
+			cleanup();
+		});
+
+		it('passes "all" state to gh issue list when ghState is "all"', async () => {
+			const config = makeConfig({ eventType: 'github.issue', ghState: 'all' });
+			setupExecFile({
+				'--version': '2.0.0',
+				'issue list': JSON.stringify([]),
+			});
+
+			const cleanup = createCueGitHubPoller(config);
+			await vi.advanceTimersByTimeAsync(2000);
+
+			const issueListCall = mockExecFile.mock.calls.find((call: unknown[]) =>
+				(call[1] as string[]).includes('issue')
+			);
+			expect(issueListCall).toBeDefined();
+			const args = issueListCall![1] as string[];
+			const stateIdx = args.indexOf('--state');
+			expect(args[stateIdx + 1]).toBe('all');
+
+			cleanup();
+		});
+
+		it('defaults to "open" state when ghState is not specified', async () => {
+			const config = makeConfig(); // no ghState
+			setupExecFile({
+				'--version': '2.0.0',
+				'pr list': JSON.stringify([]),
+			});
+
+			const cleanup = createCueGitHubPoller(config);
+			await vi.advanceTimersByTimeAsync(2000);
+
+			const prListCall = mockExecFile.mock.calls.find((call: unknown[]) =>
+				(call[1] as string[]).includes('pr')
+			);
+			expect(prListCall).toBeDefined();
+			const args = prListCall![1] as string[];
+			const stateIdx = args.indexOf('--state');
+			expect(args[stateIdx + 1]).toBe('open');
+
+			cleanup();
+		});
 	});
 });

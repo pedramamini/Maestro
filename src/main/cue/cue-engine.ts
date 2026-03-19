@@ -29,7 +29,15 @@ import { createCueFileWatcher } from './cue-file-watcher';
 import { createCueGitHubPoller } from './cue-github-poller';
 import { createCueTaskScanner } from './cue-task-scanner';
 import { matchesFilter, describeFilter } from './cue-filter';
-import { initCueDb, closeCueDb, updateHeartbeat, getLastHeartbeat, pruneCueEvents } from './cue-db';
+import {
+	initCueDb,
+	closeCueDb,
+	updateHeartbeat,
+	getLastHeartbeat,
+	pruneCueEvents,
+	recordCueEvent,
+	updateCueEventStatus,
+} from './cue-db';
 import { reconcileMissedTimeEvents } from './cue-reconciler';
 import type { ReconcileSessionInfo } from './cue-reconciler';
 
@@ -39,6 +47,7 @@ const SOURCE_OUTPUT_MAX_CHARS = 5000;
 const HEARTBEAT_INTERVAL_MS = 30_000; // 30 seconds
 const SLEEP_THRESHOLD_MS = 120_000; // 2 minutes
 const EVENT_PRUNE_AGE_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
+const MAX_CHAIN_DEPTH = 10;
 
 const DAY_NAMES = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'] as const;
 
@@ -78,21 +87,18 @@ export function calculateNextScheduledTime(times: string[], days?: string[]): nu
 	return candidates.length > 0 ? Math.min(...candidates) : null;
 }
 
-/** Parameters passed to the onCueRun callback */
-export interface CueRunParams {
-	runId: string;
-	sessionId: string;
-	prompt: string;
-	subscriptionName: string;
-	event: CueEvent;
-	timeoutMs?: number;
-}
-
 /** Dependencies injected into the CueEngine */
 export interface CueEngineDeps {
 	getSessions: () => SessionInfo[];
-	onCueRun: (params: CueRunParams) => Promise<CueRunResult>;
-	onStopCueRun: (runId: string) => boolean;
+	onCueRun: (request: {
+		runId: string;
+		sessionId: string;
+		prompt: string;
+		subscriptionName: string;
+		event: CueEvent;
+		timeoutMs: number;
+	}) => Promise<CueRunResult>;
+	onStopCueRun?: (runId: string) => boolean;
 	onLog: (level: MainLogLevel, message: string, data?: unknown) => void;
 }
 
@@ -117,6 +123,8 @@ interface FanInSourceCompletion {
 	sessionId: string;
 	sessionName: string;
 	output: string;
+	truncated: boolean;
+	chainDepth: number;
 }
 
 /** A queued event waiting for a concurrency slot */
@@ -127,6 +135,7 @@ interface QueuedEvent {
 	outputPrompt?: string;
 	subscriptionName: string;
 	queuedAt: number;
+	chainDepth?: number;
 }
 
 export class CueEngine {
@@ -139,6 +148,9 @@ export class CueEngine {
 	private pendingYamlWatchers = new Map<string, () => void>();
 	private activeRunCount = new Map<string, number>();
 	private eventQueue = new Map<string, QueuedEvent[]>();
+	private manuallyStoppedRuns = new Set<string>();
+	/** Tracks "subName:HH:MM" keys that time.scheduled already fired, preventing double-fire on config refresh */
+	private scheduledFiredKeys = new Set<string>();
 	private heartbeatInterval: ReturnType<typeof setInterval> | null = null;
 	private deps: CueEngineDeps;
 
@@ -148,6 +160,8 @@ export class CueEngine {
 
 	/** Enable the engine and scan all sessions for Cue configs */
 	start(): void {
+		if (this.enabled) return;
+
 		this.enabled = true;
 		this.deps.onLog('cue', '[CUE] Engine started');
 
@@ -173,6 +187,8 @@ export class CueEngine {
 
 	/** Disable the engine, clearing all timers and watchers */
 	stop(): void {
+		if (!this.enabled) return;
+
 		this.enabled = false;
 		for (const [sessionId] of this.sessions) {
 			this.teardownSession(sessionId);
@@ -188,6 +204,8 @@ export class CueEngine {
 		// Clear concurrency state
 		this.eventQueue.clear();
 		this.activeRunCount.clear();
+		this.manuallyStoppedRuns.clear();
+		this.scheduledFiredKeys.clear();
 
 		// Stop heartbeat and close database
 		this.stopHeartbeat();
@@ -336,15 +354,21 @@ export class CueEngine {
 		const run = this.activeRuns.get(runId);
 		if (!run) return false;
 
+		this.manuallyStoppedRuns.add(runId);
+		this.deps.onStopCueRun?.(runId);
 		run.abortController?.abort();
-		this.deps.onStopCueRun(runId);
 		run.result.status = 'stopped';
 		run.result.endedAt = new Date().toISOString();
 		run.result.durationMs = Date.now() - new Date(run.result.startedAt).getTime();
 
 		this.activeRuns.delete(runId);
 		this.pushActivityLog(run.result);
-		this.deps.onLog('cue', `[CUE] Run stopped: ${runId}`);
+		this.deps.onLog('cue', `[CUE] Run stopped: ${runId}`, {
+			type: 'runStopped',
+			runId,
+			sessionId: run.result.sessionId,
+			subscriptionName: run.result.subscriptionName,
+		});
 		return true;
 	}
 
@@ -354,7 +378,6 @@ export class CueEngine {
 			this.stopRun(runId);
 		}
 		this.eventQueue.clear();
-		this.activeRunCount.clear();
 	}
 
 	/** Returns master enabled state */
@@ -491,6 +514,17 @@ export class CueEngine {
 	notifyAgentCompleted(sessionId: string, completionData?: AgentCompletionData): void {
 		if (!this.enabled) return;
 
+		// Guard against infinite chain loops (A triggers B triggers A).
+		// chainDepth is propagated through AgentCompletionData so it persists across async hops.
+		const chainDepth = completionData?.chainDepth ?? 0;
+		if (chainDepth >= MAX_CHAIN_DEPTH) {
+			this.deps.onLog(
+				'error',
+				`[CUE] Max chain depth (${MAX_CHAIN_DEPTH}) exceeded — aborting to prevent infinite loop`
+			);
+			return;
+		}
+
 		// Resolve the completing session's name for matching
 		const allSessions = this.deps.getSessions();
 		const completingSession = allSessions.find((s) => s.id === sessionId);
@@ -524,6 +558,7 @@ export class CueEngine {
 							exitCode: completionData?.exitCode ?? null,
 							durationMs: completionData?.durationMs ?? 0,
 							sourceOutput: (completionData?.stdout ?? '').slice(-SOURCE_OUTPUT_MAX_CHARS),
+							outputTruncated: (completionData?.stdout ?? '').length > SOURCE_OUTPUT_MAX_CHARS,
 							triggeredBy: completionData?.triggeredBy,
 						},
 					};
@@ -538,7 +573,7 @@ export class CueEngine {
 					}
 
 					this.deps.onLog('cue', `[CUE] "${sub.name}" triggered (agent.completed)`);
-					this.dispatchSubscription(ownerSessionId, sub, event, completingName);
+					this.dispatchSubscription(ownerSessionId, sub, event, completingName, chainDepth);
 				} else {
 					// Fan-in: track completions with data
 					this.handleFanIn(
@@ -580,7 +615,8 @@ export class CueEngine {
 		ownerSessionId: string,
 		sub: CueSubscription,
 		event: CueEvent,
-		sourceSessionName: string
+		sourceSessionName: string,
+		chainDepth?: number
 	): void {
 		if (sub.fan_out && sub.fan_out.length > 0) {
 			// Fan-out: fire against each target session
@@ -611,7 +647,8 @@ export class CueEngine {
 					sub.prompt_file ?? sub.prompt,
 					fanOutEvent,
 					sub.name,
-					sub.output_prompt
+					sub.output_prompt,
+					chainDepth
 				);
 			}
 		} else {
@@ -620,7 +657,8 @@ export class CueEngine {
 				sub.prompt_file ?? sub.prompt,
 				event,
 				sub.name,
-				sub.output_prompt
+				sub.output_prompt,
+				chainDepth
 			);
 		}
 	}
@@ -644,10 +682,13 @@ export class CueEngine {
 			this.fanInTrackers.set(key, new Map());
 		}
 		const tracker = this.fanInTrackers.get(key)!;
+		const rawOutput = completionData?.stdout ?? '';
 		tracker.set(completedSessionId, {
 			sessionId: completedSessionId,
 			sessionName: completedSessionName,
-			output: (completionData?.stdout ?? '').slice(-SOURCE_OUTPUT_MAX_CHARS),
+			output: rawOutput.slice(-SOURCE_OUTPUT_MAX_CHARS),
+			truncated: rawOutput.length > SOURCE_OUTPUT_MAX_CHARS,
+			chainDepth: completionData?.chainDepth ?? 0,
 		});
 
 		// Start timeout timer on first source completion
@@ -686,14 +727,17 @@ export class CueEngine {
 				completedSessions: completions.map((c) => c.sessionId),
 				sourceSession: completions.map((c) => c.sessionName).join(', '),
 				sourceOutput: completions.map((c) => c.output).join('\n---\n'),
+				outputTruncated: completions.some((c) => c.truncated),
 			},
 		};
+		const maxChainDepth = Math.max(...completions.map((c) => c.chainDepth));
 		this.deps.onLog('cue', `[CUE] "${sub.name}" triggered (agent.completed, fan-in complete)`);
 		this.dispatchSubscription(
 			ownerSessionId,
 			sub,
 			event,
-			completions.map((c) => c.sessionName).join(', ')
+			completions.map((c) => c.sessionName).join(', '),
+			maxChainDepth
 		);
 	}
 
@@ -739,14 +783,22 @@ export class CueEngine {
 					timedOutSessions: timedOutSources,
 					sourceSession: completions.map((c) => c.sessionName).join(', '),
 					sourceOutput: completions.map((c) => c.output).join('\n---\n'),
+					outputTruncated: completions.some((c) => c.truncated),
 					partial: true,
 				},
 			};
+			const maxChainDepth = Math.max(...completions.map((c) => c.chainDepth));
 			this.deps.onLog(
 				'cue',
 				`[CUE] Fan-in "${sub.name}" timed out (continue mode) — firing with ${completedNames.length}/${sources.length} sources`
 			);
-			this.dispatchSubscription(ownerSessionId, sub, event, completedNames.join(', '));
+			this.dispatchSubscription(
+				ownerSessionId,
+				sub,
+				event,
+				completedNames.join(', '),
+				maxChainDepth
+			);
 		} else {
 			// 'break' mode — log failure and clear
 			this.fanInTrackers.delete(key);
@@ -775,6 +827,24 @@ export class CueEngine {
 		state.yamlWatcher = watchCueYaml(session.projectRoot, () => {
 			this.refreshSession(session.id, session.projectRoot);
 		});
+
+		// Warn about missing prompt files at setup time (not just at execution time)
+		for (const sub of config.subscriptions) {
+			if (sub.enabled === false) continue;
+			if (sub.agent_id && sub.agent_id !== session.id) continue;
+			if (sub.prompt_file && !sub.prompt) {
+				this.deps.onLog(
+					'warn',
+					`[CUE] "${sub.name}" has prompt_file "${sub.prompt_file}" but the file was not found — subscription will fail on trigger`
+				);
+			}
+			if (sub.output_prompt_file && !sub.output_prompt) {
+				this.deps.onLog(
+					'warn',
+					`[CUE] "${sub.name}" has output_prompt_file "${sub.output_prompt_file}" but the file was not found`
+				);
+			}
+		}
 
 		// Set up subscriptions
 		for (const sub of config.subscriptions) {
@@ -914,8 +984,21 @@ export class CueEngine {
 
 			// Check if current time matches any scheduled time
 			if (!times.includes(currentTime)) {
+				// Evict stale fired-keys from previous minutes
+				for (const key of this.scheduledFiredKeys) {
+					if (key.startsWith(`${session.id}:${sub.name}:`) && !key.endsWith(`:${currentTime}`)) {
+						this.scheduledFiredKeys.delete(key);
+					}
+				}
 				return;
 			}
+
+			// Guard against double-fire (e.g., config refresh within the same minute)
+			const firedKey = `${session.id}:${sub.name}:${currentTime}`;
+			if (this.scheduledFiredKeys.has(firedKey)) {
+				return;
+			}
+			this.scheduledFiredKeys.add(firedKey);
 
 			const event: CueEvent = {
 				id: crypto.randomUUID(),
@@ -979,6 +1062,7 @@ export class CueEngine {
 			projectRoot: session.projectRoot,
 			debounceMs: DEFAULT_FILE_DEBOUNCE_MS,
 			triggerName: sub.name,
+			onLog: (level, message) => this.deps.onLog(level as MainLogLevel, message),
 			onEvent: (event) => {
 				if (!this.enabled) return;
 
@@ -1018,6 +1102,7 @@ export class CueEngine {
 			projectRoot: session.projectRoot,
 			triggerName: sub.name,
 			subscriptionId: `${session.id}:${sub.name}`,
+			ghState: sub.gh_state,
 			onLog: (level, message) => this.deps.onLog(level as MainLogLevel, message),
 			onEvent: (event) => {
 				if (!this.enabled) return;
@@ -1098,7 +1183,8 @@ export class CueEngine {
 		prompt: string,
 		event: CueEvent,
 		subscriptionName: string,
-		outputPrompt?: string
+		outputPrompt?: string,
+		chainDepth?: number
 	): void {
 		// Look up the config for this session to get concurrency settings
 		const state = this.sessions.get(sessionId);
@@ -1128,6 +1214,7 @@ export class CueEngine {
 				outputPrompt,
 				subscriptionName,
 				queuedAt: Date.now(),
+				chainDepth,
 			});
 
 			this.deps.onLog(
@@ -1139,7 +1226,7 @@ export class CueEngine {
 
 		// Slot available — dispatch immediately
 		this.activeRunCount.set(sessionId, currentCount + 1);
-		this.doExecuteCueRun(sessionId, prompt, event, subscriptionName, outputPrompt);
+		this.doExecuteCueRun(sessionId, prompt, event, subscriptionName, outputPrompt, chainDepth);
 	}
 
 	/**
@@ -1154,9 +1241,11 @@ export class CueEngine {
 		prompt: string,
 		event: CueEvent,
 		subscriptionName: string,
-		outputPrompt?: string
+		outputPrompt?: string,
+		chainDepth?: number
 	): Promise<void> {
 		const session = this.deps.getSessions().find((s) => s.id === sessionId);
+		const state = this.sessions.get(sessionId);
 		const runId = crypto.randomUUID();
 		const abortController = new AbortController();
 
@@ -1176,12 +1265,28 @@ export class CueEngine {
 		};
 
 		this.activeRuns.set(runId, { result, abortController });
+		const timeoutMs = (state?.config.settings.timeout_minutes ?? 30) * 60 * 1000;
+		try {
+			recordCueEvent({
+				id: runId,
+				type: event.type,
+				triggerName: event.triggerName,
+				sessionId,
+				subscriptionName,
+				status: 'running',
+				payload: JSON.stringify(event.payload),
+			});
+		} catch {
+			// Non-fatal if DB is unavailable
+		}
+		this.deps.onLog('cue', `[CUE] Run started: ${subscriptionName}`, {
+			type: 'runStarted',
+			runId,
+			sessionId,
+			subscriptionName,
+		});
 
 		try {
-			const state = this.sessions.get(sessionId);
-			const timeoutMs = state
-				? (state.config.settings.timeout_minutes ?? 30) * 60 * 1000
-				: undefined;
 			const runResult = await this.deps.onCueRun({
 				runId,
 				sessionId,
@@ -1190,6 +1295,9 @@ export class CueEngine {
 				event,
 				timeoutMs,
 			});
+			if (this.manuallyStoppedRuns.has(runId)) {
+				return;
+			}
 			result.status = runResult.status;
 			result.stdout = runResult.stdout;
 			result.stderr = runResult.stderr;
@@ -1202,6 +1310,7 @@ export class CueEngine {
 					`[CUE] "${subscriptionName}" executing output prompt for downstream handoff`
 				);
 
+				const outputRunId = crypto.randomUUID();
 				const outputEvent: CueEvent = {
 					...event,
 					id: crypto.randomUUID(),
@@ -1212,16 +1321,39 @@ export class CueEngine {
 					},
 				};
 
+				try {
+					recordCueEvent({
+						id: outputRunId,
+						type: event.type,
+						triggerName: event.triggerName,
+						sessionId,
+						subscriptionName: `${subscriptionName}:output`,
+						status: 'running',
+						payload: JSON.stringify(outputEvent.payload),
+					});
+				} catch {
+					// Non-fatal if DB is unavailable
+				}
+
 				const contextPrompt = `${outputPrompt}\n\n---\n\nContext from completed task:\n${result.stdout.substring(0, SOURCE_OUTPUT_MAX_CHARS)}`;
-				const outputRunId = crypto.randomUUID();
 				const outputResult = await this.deps.onCueRun({
 					runId: outputRunId,
 					sessionId,
 					prompt: contextPrompt,
-					subscriptionName,
+					subscriptionName: `${subscriptionName}:output`,
 					event: outputEvent,
 					timeoutMs,
 				});
+
+				try {
+					updateCueEventStatus(outputRunId, outputResult.status);
+				} catch {
+					// Non-fatal if DB is unavailable
+				}
+
+				if (this.manuallyStoppedRuns.has(runId)) {
+					return;
+				}
 
 				if (outputResult.status === 'completed') {
 					result.stdout = outputResult.stdout;
@@ -1233,29 +1365,56 @@ export class CueEngine {
 				}
 			}
 		} catch (error) {
+			if (this.manuallyStoppedRuns.has(runId)) {
+				return;
+			}
 			result.status = 'failed';
 			result.stderr = error instanceof Error ? error.message : String(error);
 		} finally {
 			result.endedAt = new Date().toISOString();
 			result.durationMs = Date.now() - new Date(result.startedAt).getTime();
 			this.activeRuns.delete(runId);
-			this.pushActivityLog(result);
 
 			// Decrement active run count and drain queue
 			const count = this.activeRunCount.get(sessionId) ?? 1;
 			this.activeRunCount.set(sessionId, Math.max(0, count - 1));
 			this.drainQueue(sessionId);
 
-			// Emit completion event for agent completion chains
-			// This allows downstream subscriptions to react to this Cue run's completion
-			this.notifyAgentCompleted(sessionId, {
-				sessionName: result.sessionName,
-				status: result.status,
-				exitCode: result.exitCode,
-				durationMs: result.durationMs,
-				stdout: result.stdout,
-				triggeredBy: subscriptionName,
-			});
+			const wasManuallyStopped = this.manuallyStoppedRuns.has(runId);
+			if (wasManuallyStopped) {
+				try {
+					updateCueEventStatus(runId, 'stopped');
+				} catch {
+					// Non-fatal if DB is unavailable
+				}
+				this.manuallyStoppedRuns.delete(runId);
+			} else {
+				this.pushActivityLog(result);
+				try {
+					updateCueEventStatus(runId, result.status);
+				} catch {
+					// Non-fatal if DB is unavailable
+				}
+				this.deps.onLog('cue', `[CUE] Run finished: ${subscriptionName} (${result.status})`, {
+					type: 'runFinished',
+					runId,
+					sessionId,
+					subscriptionName,
+					status: result.status,
+				});
+
+				// Emit completion event for agent completion chains
+				// This allows downstream subscriptions to react to this Cue run's completion
+				this.notifyAgentCompleted(sessionId, {
+					sessionName: result.sessionName,
+					status: result.status,
+					exitCode: result.exitCode,
+					durationMs: result.durationMs,
+					stdout: result.stdout,
+					triggeredBy: subscriptionName,
+					chainDepth: (chainDepth ?? 0) + 1,
+				});
+			}
 		}
 	}
 
@@ -1296,7 +1455,8 @@ export class CueEngine {
 				entry.prompt,
 				entry.event,
 				entry.subscriptionName,
-				entry.outputPrompt
+				entry.outputPrompt,
+				entry.chainDepth
 			);
 		}
 
@@ -1329,6 +1489,18 @@ export class CueEngine {
 
 		// Clean up fan-in trackers and timers for this session
 		this.clearFanInState(sessionId);
+
+		// Clean up queued events for this session (prevents stale events after config reload)
+		this.clearQueue(sessionId);
+
+		// Clean up scheduledFiredKeys for this session's subscriptions
+		for (const sub of state.config.subscriptions) {
+			for (const key of this.scheduledFiredKeys) {
+				if (key.startsWith(`${sessionId}:${sub.name}:`)) {
+					this.scheduledFiredKeys.delete(key);
+				}
+			}
+		}
 	}
 
 	// --- Heartbeat & Sleep Detection ---

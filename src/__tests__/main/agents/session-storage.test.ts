@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import path from 'path';
 import type Store from 'electron-store';
 import type { ClaudeSessionOriginsData } from '../../../main/storage/claude-session-storage';
 import {
@@ -15,6 +16,29 @@ import {
 	clearStorageRegistry,
 } from '../../../main/agents';
 import type { ToolType } from '../../../shared/types';
+
+vi.mock('os', async () => {
+	const actual = await vi.importActual<typeof import('os')>('os');
+	const mocked = {
+		...actual,
+		homedir: vi.fn(() => '/tmp/maestro-session-storage-home'),
+		// Explicitly include tmpdir — spread of built-in modules may not reliably
+		// transfer all methods in Vitest's SSR environment.
+		tmpdir: vi.fn(() => '/tmp'),
+	};
+	return {
+		...mocked,
+		default: mocked,
+	};
+});
+
+vi.mock('electron', () => ({
+	app: {
+		getPath: vi.fn(() =>
+			path.join('/tmp/maestro-session-storage-home', 'Library', 'Application Support', 'Maestro')
+		),
+	},
+}));
 
 // Mock storage implementation for testing
 class MockSessionStorage implements AgentSessionStorage {
