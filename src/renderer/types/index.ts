@@ -978,6 +978,22 @@ export interface DirectorNotesSettings {
 	customEnvVars?: Record<string, string>;
 }
 
+// Team Orchestration settings for multi-agent coordination
+export type TerminationMode = 'moderator-decides' | 'max-iterations' | 'quality-gate';
+
+export interface TeamOrchestrationSettings {
+	/** Team Templates sub-feature */
+	enableTemplates: boolean;
+	/** Graph-based routing (advanced) */
+	enableWorkflowTopology: boolean;
+	/** Workflow graph visualization */
+	enableVisualization: boolean;
+	/** Default max loop iterations */
+	maxIterations: number;
+	/** How the system decides when a workflow is complete */
+	defaultTerminationMode: TerminationMode;
+}
+
 // Context management settings for merge and transfer operations
 export interface ContextManagementSettings {
 	autoGroomContexts: boolean; // Automatically groom contexts during transfer (default: true)
