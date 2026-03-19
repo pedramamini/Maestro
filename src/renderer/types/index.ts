@@ -197,9 +197,13 @@ export interface LogEntry {
 	// For tool execution entries - stores tool state and details
 	metadata?: {
 		toolState?: {
-			status?: 'running' | 'completed' | 'error';
+			status?: 'running' | 'completed' | 'error' | 'failed';
 			input?: unknown;
 			output?: unknown;
+		};
+		hiddenProgress?: {
+			kind: 'thinking' | 'tool';
+			toolName?: string;
 		};
 	};
 }
@@ -616,7 +620,7 @@ export interface Session {
 	// Active time tracking - cumulative milliseconds of active use
 	activeTimeMs: number;
 	// Agent slash commands available for this session (fetched per session based on cwd)
-	agentCommands?: { command: string; description: string; prompt?: string }[];
+	agentCommands?: { command: string; description: string }[];
 	// Bookmark flag - bookmarked sessions appear in a dedicated section at the top
 	bookmarked?: boolean;
 	// Pending AI command that will trigger a synopsis on completion (e.g., '/commit')
