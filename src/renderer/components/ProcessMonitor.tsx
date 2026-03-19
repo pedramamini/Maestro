@@ -72,6 +72,7 @@ interface ProcessNode {
 	participantName?: string; // For group chat participant processes
 	command?: string; // The command used to spawn this process
 	args?: string[]; // The arguments passed to the command
+	sshRemote?: { name: string; host: string }; // SSH remote info if running remotely
 }
 
 // Format runtime in human readable format (e.g., "2m 30s", "1h 5m", "3d 2h")
@@ -358,6 +359,10 @@ export function ProcessMonitor(props: ProcessMonitorProps) {
 
 		// Build session node with active processes
 		const buildSessionNode = (session: Session): ProcessNode => {
+			const sshRemote = session.sshRemote
+				? { name: session.sshRemote.name, host: session.sshRemote.host }
+				: undefined;
+
 			const sessionNode: ProcessNode = {
 				id: `session-${session.id}`,
 				type: 'session',
@@ -365,6 +370,7 @@ export function ProcessMonitor(props: ProcessMonitorProps) {
 				sessionId: session.id,
 				expanded: expandedNodes.has(`session-${session.id}`),
 				children: [],
+				sshRemote,
 			};
 
 			// Get active processes for this session
@@ -430,6 +436,7 @@ export function ProcessMonitor(props: ProcessMonitorProps) {
 					isAutoRun,
 					command: proc.command,
 					args: proc.args,
+					sshRemote,
 				});
 			});
 
@@ -908,6 +915,22 @@ export function ProcessMonitor(props: ProcessMonitorProps) {
 									{activeCount} running
 								</span>
 							)}
+							<span
+								className="px-1.5 py-0.5 rounded text-xs"
+								style={{
+									backgroundColor: node.sshRemote
+										? `${theme.colors.accent}20`
+										: `${theme.colors.textDim}15`,
+									color: node.sshRemote ? theme.colors.accent : theme.colors.textDim,
+								}}
+								title={
+									node.sshRemote
+										? `SSH: ${node.sshRemote.name} (${node.sshRemote.host})`
+										: 'Running locally'
+								}
+							>
+								{node.sshRemote ? `SSH: ${node.sshRemote.name}` : 'Local'}
+							</span>
 							<span>Session: {node.sessionId?.substring(0, 8)}...</span>
 						</span>
 						{node.sessionId && onNavigateToSession && (
@@ -1131,6 +1154,18 @@ export function ProcessMonitor(props: ProcessMonitorProps) {
 						>
 							Running
 						</span>
+						{node.sshRemote && (
+							<span
+								className="text-xs px-1.5 py-0.5 rounded"
+								style={{
+									backgroundColor: `${theme.colors.accent}20`,
+									color: theme.colors.accent,
+								}}
+								title={`SSH: ${node.sshRemote.name} (${node.sshRemote.host})`}
+							>
+								SSH
+							</span>
+						)}
 					</div>
 				</div>
 			);

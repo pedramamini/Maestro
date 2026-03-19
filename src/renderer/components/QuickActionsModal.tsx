@@ -30,7 +30,7 @@ interface QuickActionsModalProps {
 	groups: Group[];
 	setGroups: React.Dispatch<React.SetStateAction<Group[]>>;
 	shortcuts: Record<string, Shortcut>;
-	initialMode?: 'main' | 'move-to-group';
+	initialMode?: 'main' | 'move-to-group' | 'agents';
 	setQuickActionOpen: (open: boolean) => void;
 	setActiveSessionId: (id: string) => void;
 	setRenameInstanceModalOpen: (open: boolean) => void;
@@ -226,7 +226,7 @@ export const QuickActionsModal = memo(function QuickActionsModal(props: QuickAct
 	const storeSetHistorySearchFilterOpen = useUIStore((s) => s.setHistorySearchFilterOpen);
 
 	const [search, setSearch] = useState('');
-	const [mode, setMode] = useState<'main' | 'move-to-group'>(initialMode);
+	const [mode, setMode] = useState<'main' | 'move-to-group' | 'agents'>(initialMode);
 	const [renamingSession, setRenamingSession] = useState(false);
 	const [renameValue, setRenameValue] = useState('');
 	const [firstVisibleIndex, setFirstVisibleIndex] = useState(0);
@@ -1421,7 +1421,35 @@ export const QuickActionsModal = memo(function QuickActionsModal(props: QuickAct
 		{ id: 'create-new', label: '+ Create New Group', action: handleCreateGroup },
 	];
 
-	const actions = mode === 'main' ? mainActions : groupActions;
+	// Agent switcher mode: clean names only, no "Jump to:" prefix
+	const agentActions: QuickAction[] = [
+		...sessions.map((s) => ({
+			id: `jump-${s.id}`,
+			label: s.name,
+			action: () => {
+				setActiveSessionId(s.id);
+				if (s.groupId) {
+					setGroups((prev) =>
+						prev.map((g) => (g.id === s.groupId && g.collapsed ? { ...g, collapsed: false } : g))
+					);
+				}
+			},
+			subtext: s.state.toUpperCase(),
+		})),
+		...(groupChats && onOpenGroupChat
+			? groupChats.map((gc) => ({
+					id: `groupchat-${gc.id}`,
+					label: gc.name,
+					action: () => {
+						onOpenGroupChat(gc.id);
+						setQuickActionOpen(false);
+					},
+					subtext: `GROUP CHAT · ${gc.participants.length} participant${gc.participants.length !== 1 ? 's' : ''}`,
+				}))
+			: []),
+	];
+
+	const actions = mode === 'agents' ? agentActions : mode === 'main' ? mainActions : groupActions;
 
 	// Filter actions - hide "Debug:" prefixed commands unless user explicitly types "debug"
 	const searchLower = search.toLowerCase();
@@ -1436,7 +1464,15 @@ export const QuickActionsModal = memo(function QuickActionsModal(props: QuickAct
 			}
 			return a.label.toLowerCase().includes(searchLower);
 		})
-		.sort((a, b) => a.label.localeCompare(b.label));
+		.sort((a, b) => {
+			// In agents mode, sort agents first (alphabetically), then group chats at the bottom
+			if (mode === 'agents') {
+				const aIsGroup = a.id.startsWith('groupchat-');
+				const bIsGroup = b.id.startsWith('groupchat-');
+				if (aIsGroup !== bIsGroup) return aIsGroup ? 1 : -1;
+			}
+			return a.label.localeCompare(b.label);
+		});
 
 	// Use a ref for filtered actions so the onSelect callback stays stable
 	const filteredRef = useRef(filtered);
@@ -1451,7 +1487,7 @@ export const QuickActionsModal = memo(function QuickActionsModal(props: QuickAct
 			// Don't close modal if action switches modes
 			const switchesModes = selectedAction.id === 'moveToGroup' || selectedAction.id === 'back';
 			selectedAction.action();
-			if (!renamingSession && mode === 'main' && !switchesModes) {
+			if (!renamingSession && (mode === 'main' || mode === 'agents') && !switchesModes) {
 				setQuickActionOpen(false);
 			}
 		},
@@ -1521,7 +1557,7 @@ export const QuickActionsModal = memo(function QuickActionsModal(props: QuickAct
 				ref={modalRef}
 				role="dialog"
 				aria-modal="true"
-				aria-label="Quick Actions"
+				aria-label={mode === 'agents' ? 'Switch Agent' : 'Quick Actions'}
 				tabIndex={-1}
 				className="w-[600px] rounded-xl shadow-2xl border overflow-hidden flex flex-col max-h-[550px] outline-none"
 				style={{ backgroundColor: theme.colors.bgActivity, borderColor: theme.colors.border }}
@@ -1549,7 +1585,9 @@ export const QuickActionsModal = memo(function QuickActionsModal(props: QuickAct
 							placeholder={
 								mode === 'move-to-group'
 									? `Move ${activeSession?.name || 'session'} to...`
-									: 'Type a command or jump to agent...'
+									: mode === 'agents'
+										? 'Jump to agent...'
+										: 'Type a command or jump to agent...'
 							}
 							style={{ color: theme.colors.textMain }}
 							value={search}
@@ -1587,7 +1625,8 @@ export const QuickActionsModal = memo(function QuickActionsModal(props: QuickAct
 									onClick={() => {
 										const switchesModes = a.id === 'moveToGroup' || a.id === 'back';
 										a.action();
-										if (mode === 'main' && !switchesModes) setQuickActionOpen(false);
+										if ((mode === 'main' || mode === 'agents') && !switchesModes)
+											setQuickActionOpen(false);
 									}}
 									className={`w-full text-left px-4 py-3 flex items-center gap-3 hover:bg-opacity-10 ${i === selectedIndex ? 'bg-opacity-10' : ''}`}
 									style={{
