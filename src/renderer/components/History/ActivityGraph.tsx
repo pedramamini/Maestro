@@ -305,14 +305,12 @@ export const ActivityGraph: React.FC<ActivityGraphProps> = ({
 								{bucketData[hoveredIndex].user}
 							</span>
 						</div>
-						{bucketData[hoveredIndex].cue > 0 && (
-							<div className="flex items-center justify-between gap-3">
-								<span style={{ color: CUE_COLOR }}>Cue</span>
-								<span className="font-bold" style={{ color: CUE_COLOR }}>
-									{bucketData[hoveredIndex].cue}
-								</span>
-							</div>
-						)}
+						<div className="flex items-center justify-between gap-3">
+							<span style={{ color: CUE_COLOR }}>Cue</span>
+							<span className="font-bold" style={{ color: CUE_COLOR }}>
+								{bucketData[hoveredIndex].cue}
+							</span>
+						</div>
 					</div>
 				</div>
 			)}

@@ -1,53 +1,9 @@
 import { memo } from 'react';
-import { Bot, User, Zap, ExternalLink, Check, X, Clock, Award } from 'lucide-react';
-import type { Theme, HistoryEntry, HistoryEntryType } from '../../types';
+import { ExternalLink, Check, X, Clock, Award } from 'lucide-react';
+import type { Theme, HistoryEntry } from '../../types';
 import { formatElapsedTime } from '../../utils/formatters';
 import { stripMarkdown } from '../../utils/textProcessing';
-import { DoubleCheck, CUE_COLOR } from './historyConstants';
-
-// Get pill color based on entry type
-const getPillColor = (type: HistoryEntryType, theme: Theme) => {
-	switch (type) {
-		case 'AUTO':
-			return {
-				bg: theme.colors.warning + '20',
-				text: theme.colors.warning,
-				border: theme.colors.warning + '40',
-			};
-		case 'USER':
-			return {
-				bg: theme.colors.accent + '20',
-				text: theme.colors.accent,
-				border: theme.colors.accent + '40',
-			};
-		case 'CUE':
-			return {
-				bg: CUE_COLOR + '20',
-				text: CUE_COLOR,
-				border: CUE_COLOR + '40',
-			};
-		default:
-			return {
-				bg: theme.colors.bgActivity,
-				text: theme.colors.textDim,
-				border: theme.colors.border,
-			};
-	}
-};
-
-// Get icon for entry type
-const getEntryIcon = (type: HistoryEntryType) => {
-	switch (type) {
-		case 'AUTO':
-			return Bot;
-		case 'USER':
-			return User;
-		case 'CUE':
-			return Zap;
-		default:
-			return Bot;
-	}
-};
+import { DoubleCheck, getPillColor, getEntryIcon } from './historyConstants';
 
 // Format timestamp
 const formatTime = (timestamp: number) => {

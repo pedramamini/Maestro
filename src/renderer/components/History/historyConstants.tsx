@@ -1,4 +1,6 @@
 import React from 'react';
+import { Bot, User, Zap } from 'lucide-react';
+import type { Theme, HistoryEntryType } from '../../types';
 
 // Double checkmark SVG component for validated entries
 export const DoubleCheck = ({
@@ -43,6 +45,50 @@ export const LOOKBACK_OPTIONS: LookbackPeriod[] = [
 
 /** Base CUE brand color — used in ActivityGraph, HistoryFilterToggle, HistoryEntryItem */
 export const CUE_COLOR = '#06b6d4';
+
+/** Get pill color scheme based on entry type */
+export const getPillColor = (type: HistoryEntryType, theme: Theme) => {
+	switch (type) {
+		case 'AUTO':
+			return {
+				bg: theme.colors.warning + '20',
+				text: theme.colors.warning,
+				border: theme.colors.warning + '40',
+			};
+		case 'USER':
+			return {
+				bg: theme.colors.accent + '20',
+				text: theme.colors.accent,
+				border: theme.colors.accent + '40',
+			};
+		case 'CUE':
+			return {
+				bg: CUE_COLOR + '20',
+				text: CUE_COLOR,
+				border: CUE_COLOR + '40',
+			};
+		default:
+			return {
+				bg: theme.colors.bgActivity,
+				text: theme.colors.textDim,
+				border: theme.colors.border,
+			};
+	}
+};
+
+/** Get icon component for entry type */
+export const getEntryIcon = (type: HistoryEntryType) => {
+	switch (type) {
+		case 'AUTO':
+			return Bot;
+		case 'USER':
+			return User;
+		case 'CUE':
+			return Zap;
+		default:
+			return Bot;
+	}
+};
 
 // Constants for history pagination
 export const MAX_HISTORY_IN_MEMORY = 500; // Maximum entries to keep in memory

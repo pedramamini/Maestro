@@ -354,7 +354,7 @@ describe('ActivityGraph', () => {
 		expect(within(cueRow).getByText('2')).toBeInTheDocument();
 	});
 
-	it('does not show Cue row in tooltip when bucket has no CUE entries', () => {
+	it('shows Cue row with zero count in tooltip when bucket has no CUE entries', () => {
 		const entries = [
 			createMockEntry({ type: 'AUTO', timestamp: NOW - 30 * 60 * 1000 }),
 			createMockEntry({ type: 'USER', timestamp: NOW - 35 * 60 * 1000 }),
@@ -373,10 +373,13 @@ describe('ActivityGraph', () => {
 		const lastBar = bars[bars.length - 1];
 		fireEvent.mouseEnter(lastBar);
 
-		// Auto and User should appear, but not Cue
+		// All three rows should appear, Cue with 0
 		expect(screen.getByText('Auto')).toBeInTheDocument();
 		expect(screen.getByText('User')).toBeInTheDocument();
-		expect(screen.queryByText('Cue')).not.toBeInTheDocument();
+		const cueLabel = screen.getByText('Cue');
+		expect(cueLabel).toBeInTheDocument();
+		const cueRow = cueLabel.closest('div')!;
+		expect(within(cueRow).getByText('0')).toBeInTheDocument();
 	});
 
 	it('includes CUE count in summary title when present', () => {
