@@ -29,40 +29,49 @@ Maestro can update itself automatically! This feature was introduced in **v0.8.7
 
 🤖 **Factory.ai Droid Support** — Added support for the [Factory.ai](https://factory.ai/product/cli) droid agent. Full session management and output parsing integration.
 
-## Changes in v0.15.3
+## Change in v0.15.2
 
-Patch release with new features, SSH remote hardening, mobile improvements, and cross-platform fixes.
+Patch release with bug fixes, UX improvements, and cherry-picks from the 0.16.0 RC.
 
 ### New Features
 
-- **Persistent web link:** The web/mobile interface link now persists across app restarts — no need to re-enable it each session
-- **OpenCode v1.2+ session support:** Automatically reads OpenCode's new SQLite session storage format alongside the legacy JSONL format
-- **Group chat @mentions:** Use `@agent-name` syntax in the prompt composer to direct messages to specific agents in group chat
-- **Batch resume/abort:** New controls in the right panel for resuming or aborting batch operations
-- **Default worktree directory:** Worktree configuration now defaults to the parent of the agent's working directory instead of blank
+- **Cmd+0 → Last Tab:** Remapped Cmd+0 to jump to last tab; Cmd+Shift+0 now resets font size
+- **Unsent draft protection:** Confirm dialog before closing tabs with unsent draft input
+- **Read-only CLI flag:** Added `--read-only` flag to `maestro-cli send` command
+- **Gemini read-only enforcement:** Gemini `-y` flag now works in read-only mode
+- **Capability-based providers:** Replaced hardcoded agent ID checks with capability flags and shared metadata
 
 ### Bug Fixes
 
-- **Windows stop button:** Stop/cancel button now correctly terminates Claude Code agents on Windows
-- **PTY spawn failures:** Graceful error handling when terminal process spawn fails instead of silent failure
-- **Toast notification z-index:** Toast notifications now render above modal backdrops via React portal
-- **SSH remote wizard support:** Full SSH remote ID threading through wizard file operations — documents read, write, and save correctly on remote hosts
-- **Auto Run subfolder path:** Fixed disk fallback path for Auto Run document retrieval when using subfolders
-- **Git push PATH:** Resolved PATH issues that could cause git push to fail in certain environments
-- **Execution queue drag-and-drop:** Fixed drag-and-drop reordering failing when the execution queue contains only 2 items
-- **Sentry-reported crash guards:** Defensive null checks in error pattern matching, session storage readers, and CLI activity monitoring to prevent crashes reported via Sentry
-- **Version manager PATH:** Agent spawning now includes version manager binary directories (nvm, fnm, mise, etc.) in the expanded PATH
-- **WebContents crash handler:** Restored the renderer crash handler that was accidentally removed during a prior refactor
+- **Sticky overlay scroll:** Fixed sticky overlays breaking tab scroll-into-view
+- **Director's Notes stats:** Count only agents with entries in lookback window
+- **SSH remote config:** Check `sessionSshRemoteConfig` as primary SSH remote ID source
+- **.maestro file tree:** Always show .maestro directory even when dotfiles are hidden
+- **Provider hardening:** Prototype safety, capability gates, stale map cleanup
+- **Session search:** Per-session error resilience and metadata-based title matching
+- **File tree stale loads:** Load sequence counter prevents stale file tree updates
+- **File tree Unicode:** NFC normalization prevents duplicate entries
+- **File tree duplicates:** Tree-structured data resolves duplicate entries
+- **File tree auto-refresh:** Timer no longer destroyed on right panel tab switch
+- **Menu z-index:** Branding header menu renders above sidebar content
+- **Dropdown clipping:** Fixed hamburger menu and live overlay dropdown clipping
+- **Font size shortcuts:** Restored Cmd+/- font size shortcuts lost with custom menu
+- **Draft input preservation:** Replaying a previous message no longer discards current draft
+- **SSH directory collision:** Skip warning when agents are on different SSH hosts
+- **IPC error handling:** Handle expected IPC errors gracefully
+- **Auto-focus on mode switch:** Input field auto-focuses when toggling AI/Shell mode
+- **OpenCode parser:** Preserve JSON error events; reset resultEmitted on step_start
+- **NDJSON performance:** Eliminated triple JSON parsing on hot path
+- **Agent config overrides:** Apply config overrides in context groomer before spawning
+- **Stale closure fix:** Resolved model not saving in wizard agent config
 
-### Mobile
+### Visual Polish
 
-- **Remote session stability:** Stabilized mobile remote session UI with improved composer, scoped drafts, and connection handling
-
-### Internal
-
-- **RC branch CI:** CI pipelines, Sentry source maps, and CodeRabbit reviews now work on release candidate branches
-- **Cross-platform test suite:** 57 tests converted to run correctly on Windows, Linux, and macOS
-- **Shared utilities:** Extracted `getParentDir` helper to `shared/formatters` for reuse across main and renderer
+- **Light theme contrast:** Improved syntax highlighting contrast across all light themes
+- **Context warning sash:** Dark text colors in light mode for readability
+- **Session name dimming:** Use `textMain` color to prevent visual dimming
+- **Session name pill:** Allow shrinking so date doesn't collide with type pill
+- **Scroll-to-bottom arrow:** Removed noisy indicator from terminal output view
 
 ### Previous Releases in this Series
 
@@ -102,7 +111,7 @@ The major contributions to 0.14.x remain:
 - Leaderboard tracking now works across multiple systems and syncs level from cloud 🏆
 - Agent duplication. Pro tip: Consider a group of unused "Template" agents ✌️
 - New setting to prevent system from going to sleep while agents are active 🛏️
-- The tab menu has a new "Publish as GitHub Gist" option  📝
+- The tab menu has a new "Publish as GitHub Gist" option 📝
 - The tab menu has options to move the tab to the first or last position 🔀
 - [Maestro-Playbooks](https://github.com/pedramamini/Maestro-Playbooks) can now contain non-markdown assets 📙
 - Improved default shell detection 🐚
@@ -131,10 +140,12 @@ Thanks for the contributions: @t1mmen @aejfager @Crumbgrabber @whglaser @b3nw @d
 - TAKE TWO! Fixed Linux ARM64 build architecture contamination issues 🏗️
 
 ### v0.13.1 Changes
+
 - Fixed Linux ARM64 build architecture contamination issues 🏗️
 - Enhanced error handling for Auto Run batch processing 🚨
 
 ### v0.13.0 Changes
+
 - Added a global usage dashboard, data collection begins with this install 🎛️
 - Added a Playbook Exchange for downloading pre-defined Auto Run playbooks from [Maestro-Playbooks](https://github.com/pedramamini/Maestro-Playbooks) 📕
 - Bundled OpenSpec commands for structured change proposals 📝
@@ -158,15 +169,19 @@ Thanks for the contributions: @t1mmen @aejfager @Crumbgrabber @whglaser @b3nw @d
 The big changes in the v0.12.x line are the following three:
 
 ## Show Thinking
-🤔 There is now a toggle to show thinking for the agent, the default for new tabs is off, though this can be changed under Settings > General. The toggle shows next to History and Read-Only. Very similar pattern. This has been the #1 most requested feature, though personally, I don't think I'll use it as I prefer to not see the details of the work, but the results of the work. Just as we work with our colleagues. 
+
+🤔 There is now a toggle to show thinking for the agent, the default for new tabs is off, though this can be changed under Settings > General. The toggle shows next to History and Read-Only. Very similar pattern. This has been the #1 most requested feature, though personally, I don't think I'll use it as I prefer to not see the details of the work, but the results of the work. Just as we work with our colleagues.
 
 ## GitHub Spec-Kit Integration
+
 🎯 Added [GitHub Spec-Kit](https://github.com/github/spec-kit) commands into Maestro with a built in updater to grab the latest prompts from the repository. We do override `/speckit-implement` (the final step) to create Auto Run docs and guide the user through their execution, which thanks to Wortrees from v0.11.x allows us to run in parallel!
 
 ## Context Management Tools
+
 📖 Added context management options from tab right-click menu. You can now compress, merge, and transfer contexts between agents. You will received (configurable) warnings at 60% and 80% context consumption with a hint to compact.
 
 ## Changes Specific to v0.12.3:
+
 - We now have hosted documentation through Mintlify 📚
 - Export any tab conversation as self-contained themed HTML file 📄
 - Publish files as private/public Gists 🌐
@@ -279,6 +294,7 @@ The big changes in the v0.12.x line are the following three:
 Minor bugfixes on top of v0.7.3:
 
 # Onboarding, Wizard, and Tours
+
 - Implemented comprehensive onboarding wizard with integrated tour system 🚀
 - Added project-understanding confidence display to wizard UI 🎨
 - Enhanced keyboard navigation across all wizard screens ⌨️
@@ -286,6 +302,7 @@ Minor bugfixes on top of v0.7.3:
 - Added First Run Celebration modal with confetti animation 🎉
 
 # UI / UX Enhancements
+
 - Added expand-to-fullscreen button for Auto Run interface 🖥️
 - Created dedicated modal component and improved modal priority constants for expanded Auto Run view 📐
 - Enhanced user experience with fullscreen editing capabilities ✨
@@ -295,15 +312,18 @@ Minor bugfixes on top of v0.7.3:
 - Enhanced toast context with agent name for OS notifications 📢
 
 # Auto Run Workflow Improvements
+
 - Created phase document generation for Auto Run workflow 📄
 - Added real-time log streaming to the LogViewer component 📊
 
 # Application Behavior / Core Fixes
+
 - Added validation to prevent nested worktrees inside the main repository 🚫
 - Fixed process manager to properly emit exit events on errors 🔧
 - Fixed process exit handling to ensure proper cleanup 🧹
 
 # Update System
+
 - Implemented automatic update checking on application startup 🚀
 - Added settings toggle for enabling/disabling startup update checks ⚙️
 
@@ -321,6 +341,7 @@ Minor bugfixes on top of v0.7.3:
 **Latest: v0.6.1** | Released December 4, 2025
 
 In this release...
+
 - Added recursive subfolder support for Auto Run markdown files 🗂️
 - Enhanced document tree display with expandable folder navigation 🌳
 - Enabled creating documents in subfolders with path selection 📁
@@ -333,6 +354,7 @@ In this release...
 - Added support for nested folder structures in document management 🏗️
 
 Plus the pre-release ALPHA...
+
 - Template vars now set context in default autorun prompt 🚀
 - Added Enter key support for queued message confirmation dialog ⌨️
 - Kill process capability added to System Process Monitor 💀
@@ -492,6 +514,7 @@ Plus the pre-release ALPHA...
 All releases are available on the [GitHub Releases page](https://github.com/RunMaestro/Maestro/releases).
 
 Maestro is available for:
+
 - **macOS** - Apple Silicon (arm64) and Intel (x64)
 - **Windows** - x64
 - **Linux** - x64 and arm64, AppImage, deb, and rpm packages
