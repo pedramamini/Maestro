@@ -132,8 +132,10 @@ function SessionListInner(props: SessionListProps) {
 	const maestroCueEnabled = useSettingsStore((s) => s.encoreFeatures.maestroCue);
 	const activeBatchSessionIds = useBatchStore(useShallow(selectActiveBatchSessionIds));
 
-	// Cue session status map: sessionId → subscriptionCount (only active when Encore Feature enabled)
-	const [cueSessionMap, setCueSessionMap] = useState<Map<string, number>>(new Map());
+	// Cue session status map: sessionId → { count, active } (only active when Encore Feature enabled)
+	const [cueSessionMap, setCueSessionMap] = useState<
+		Map<string, { count: number; active: boolean }>
+	>(new Map());
 	useEffect(() => {
 		if (!maestroCueEnabled) {
 			setCueSessionMap(new Map());
@@ -146,10 +148,13 @@ function SessionListInner(props: SessionListProps) {
 			try {
 				const statuses = await window.maestro.cue.getStatus();
 				if (!mounted) return;
-				const map = new Map<string, number>();
+				const map = new Map<string, { count: number; active: boolean }>();
 				for (const s of statuses) {
 					if (s.subscriptionCount > 0) {
-						map.set(s.sessionId, s.subscriptionCount);
+						map.set(s.sessionId, {
+							count: s.subscriptionCount,
+							active: s.activeRuns > 0,
+						});
 					}
 				}
 				setCueSessionMap(map);
@@ -520,7 +525,8 @@ function SessionListInner(props: SessionListProps) {
 					gitFileCount={getFileCount(session.id)}
 					isInBatch={activeBatchSessionIds.includes(session.id)}
 					jumpNumber={getSessionJumpNumber(session.id)}
-					cueSubscriptionCount={cueSessionMap.get(session.id)}
+					cueSubscriptionCount={cueSessionMap.get(session.id)?.count}
+					cueActiveRun={cueSessionMap.get(session.id)?.active}
 					onSelect={selectHandlers.get(session.id)!}
 					onDragStart={dragStartHandlers.get(session.id)!}
 					onDragOver={handleDragOver}
@@ -586,7 +592,8 @@ function SessionListInner(props: SessionListProps) {
 										gitFileCount={getFileCount(child.id)}
 										isInBatch={activeBatchSessionIds.includes(child.id)}
 										jumpNumber={getSessionJumpNumber(child.id)}
-										cueSubscriptionCount={cueSessionMap.get(child.id)}
+										cueSubscriptionCount={cueSessionMap.get(child.id)?.count}
+										cueActiveRun={cueSessionMap.get(child.id)?.active}
 										onSelect={selectHandlers.get(child.id)!}
 										onDragStart={dragStartHandlers.get(child.id)!}
 										onContextMenu={contextMenuHandlers.get(child.id)!}

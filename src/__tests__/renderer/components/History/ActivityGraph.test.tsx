@@ -325,4 +325,157 @@ describe('ActivityGraph', () => {
 		const graphContainer = screen.getByTitle(/1 auto, 1 user/);
 		expect(graphContainer).toBeInTheDocument();
 	});
+
+	it('counts CUE entries in buckets', () => {
+		const entries = [
+			createMockEntry({ type: 'CUE', timestamp: NOW - 30 * 60 * 1000 }),
+			createMockEntry({ type: 'CUE', timestamp: NOW - 45 * 60 * 1000 }),
+			createMockEntry({ type: 'AUTO', timestamp: NOW - 35 * 60 * 1000 }),
+		];
+
+		const { container } = render(
+			<ActivityGraph
+				entries={entries}
+				theme={mockTheme}
+				lookbackHours={24}
+				onLookbackChange={vi.fn()}
+			/>
+		);
+
+		// Hover over the last bucket to see tooltip
+		const bars = container.querySelectorAll('.flex-1.min-w-0.flex.flex-col.justify-end');
+		const lastBar = bars[bars.length - 1];
+		fireEvent.mouseEnter(lastBar);
+
+		// Should show Cue row in tooltip
+		expect(screen.getByText('Cue')).toBeInTheDocument();
+		expect(screen.getByText('2')).toBeInTheDocument(); // 2 CUE entries
+	});
+
+	it('does not show Cue row in tooltip when bucket has no CUE entries', () => {
+		const entries = [
+			createMockEntry({ type: 'AUTO', timestamp: NOW - 30 * 60 * 1000 }),
+			createMockEntry({ type: 'USER', timestamp: NOW - 35 * 60 * 1000 }),
+		];
+
+		const { container } = render(
+			<ActivityGraph
+				entries={entries}
+				theme={mockTheme}
+				lookbackHours={24}
+				onLookbackChange={vi.fn()}
+			/>
+		);
+
+		const bars = container.querySelectorAll('.flex-1.min-w-0.flex.flex-col.justify-end');
+		const lastBar = bars[bars.length - 1];
+		fireEvent.mouseEnter(lastBar);
+
+		// Auto and User should appear, but not Cue
+		expect(screen.getByText('Auto')).toBeInTheDocument();
+		expect(screen.getByText('User')).toBeInTheDocument();
+		expect(screen.queryByText('Cue')).not.toBeInTheDocument();
+	});
+
+	it('includes CUE count in summary title when present', () => {
+		const entries = [
+			createMockEntry({ type: 'AUTO', timestamp: NOW - 1 * 60 * 60 * 1000 }),
+			createMockEntry({ type: 'CUE', timestamp: NOW - 2 * 60 * 60 * 1000 }),
+		];
+
+		render(
+			<ActivityGraph
+				entries={entries}
+				theme={mockTheme}
+				lookbackHours={168}
+				onLookbackChange={vi.fn()}
+			/>
+		);
+
+		const graphContainer = screen.getByTitle(/1 auto, 0 user, 1 cue/);
+		expect(graphContainer).toBeInTheDocument();
+	});
+
+	it('excludes CUE count from summary title when zero', () => {
+		const entries = [createMockEntry({ type: 'AUTO', timestamp: NOW - 1 * 60 * 60 * 1000 })];
+
+		render(
+			<ActivityGraph
+				entries={entries}
+				theme={mockTheme}
+				lookbackHours={168}
+				onLookbackChange={vi.fn()}
+			/>
+		);
+
+		// Title should NOT contain "cue"
+		const graphContainer = screen.getByTitle(/1 auto, 0 user \(right-click/);
+		expect(graphContainer).toBeInTheDocument();
+	});
+
+	it('makes CUE-only bars clickable', () => {
+		const onBarClick = vi.fn();
+		const entries = [createMockEntry({ type: 'CUE', timestamp: NOW - 30 * 60 * 1000 })];
+
+		const { container } = render(
+			<ActivityGraph
+				entries={entries}
+				theme={mockTheme}
+				lookbackHours={24}
+				onLookbackChange={vi.fn()}
+				onBarClick={onBarClick}
+			/>
+		);
+
+		const bars = container.querySelectorAll('.flex-1.min-w-0.flex.flex-col.justify-end');
+		const lastBar = bars[bars.length - 1];
+		fireEvent.click(lastBar);
+
+		expect(onBarClick).toHaveBeenCalledWith(expect.any(Number), expect.any(Number));
+	});
+
+	it('renders CUE bar segment with correct color in tooltip', () => {
+		const entries = [createMockEntry({ type: 'CUE', timestamp: NOW - 30 * 60 * 1000 })];
+
+		const { container } = render(
+			<ActivityGraph
+				entries={entries}
+				theme={mockTheme}
+				lookbackHours={24}
+				onLookbackChange={vi.fn()}
+			/>
+		);
+
+		// Hover to show tooltip, then verify CUE label uses the cyan color
+		const bars = container.querySelectorAll('.flex-1.min-w-0.flex.flex-col.justify-end');
+		const lastBar = bars[bars.length - 1];
+		fireEvent.mouseEnter(lastBar);
+
+		const cueLabel = screen.getByText('Cue');
+		expect(cueLabel).toHaveStyle({ color: '#06b6d4' });
+	});
+
+	it('scales bar height correctly with mixed AUTO, USER, and CUE entries', () => {
+		const entries = [
+			createMockEntry({ type: 'AUTO', timestamp: NOW - 30 * 60 * 1000 }),
+			createMockEntry({ type: 'USER', timestamp: NOW - 30 * 60 * 1000 }),
+			createMockEntry({ type: 'CUE', timestamp: NOW - 30 * 60 * 1000 }),
+		];
+
+		const { container } = render(
+			<ActivityGraph
+				entries={entries}
+				theme={mockTheme}
+				lookbackHours={24}
+				onLookbackChange={vi.fn()}
+			/>
+		);
+
+		// The bar with all 3 entries should be at 100% height (it's the max)
+		const bars = container.querySelectorAll('.flex-1.min-w-0.flex.flex-col.justify-end');
+		const lastBar = bars[bars.length - 1];
+		const barInner = lastBar.querySelector('.w-full.rounded-t-sm') as HTMLElement;
+		// height should be 100% since this is the max bucket
+		expect(barInner.style.height).toBe('100%');
+	});
 });
