@@ -2,7 +2,7 @@
  * PatternPreviewModal — Shows pattern YAML with explanation and copy button.
  */
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import { Copy, Check } from 'lucide-react';
 import type { CuePattern } from '../../constants/cuePatterns';
 import { Modal } from '../ui/Modal';
@@ -18,11 +18,22 @@ interface PatternPreviewModalProps {
 
 export function PatternPreviewModal({ pattern, theme, onClose }: PatternPreviewModalProps) {
 	const [copied, setCopied] = useState(false);
+	const copyTimeoutRef = useRef<ReturnType<typeof setTimeout>>();
+
+	useEffect(() => {
+		return () => {
+			if (copyTimeoutRef.current) clearTimeout(copyTimeoutRef.current);
+		};
+	}, []);
 
 	const handleCopy = useCallback(async () => {
-		await navigator.clipboard.writeText(pattern.yaml);
-		setCopied(true);
-		setTimeout(() => setCopied(false), 2000);
+		try {
+			await navigator.clipboard.writeText(pattern.yaml);
+			setCopied(true);
+			copyTimeoutRef.current = setTimeout(() => setCopied(false), 2000);
+		} catch {
+			// Clipboard API may fail in some contexts — non-fatal
+		}
 	}, [pattern.yaml]);
 
 	return (

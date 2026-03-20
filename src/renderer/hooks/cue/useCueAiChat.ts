@@ -61,9 +61,11 @@ export function useCueAiChat({
 
 	const session = useSessionStore(selectSessionById(sessionId));
 
-	// Reset chat state when modal opens
+	// Reset chat state when modal opens — clean up stale listeners first
 	useEffect(() => {
 		if (isOpen) {
+			aiCleanupRef.current.forEach((fn) => fn());
+			aiCleanupRef.current = [];
 			setChatMessages([]);
 			setChatInput('');
 			setChatBusy(false);
@@ -143,10 +145,16 @@ export function useCueAiChat({
 			);
 			aiCleanupRef.current.push(cleanupSessionId);
 
+			// Snapshot-and-clear pattern prevents double cleanup if both onExit and onAgentError fire
+			const runCleanup = () => {
+				const fns = aiCleanupRef.current;
+				aiCleanupRef.current = [];
+				fns.forEach((fn) => fn());
+			};
+
 			const cleanupExit = window.maestro.process.onExit((sid: string) => {
 				if (sid === spawnSessionIdRef.current) {
-					aiCleanupRef.current.forEach((fn) => fn());
-					aiCleanupRef.current = [];
+					runCleanup();
 
 					const response = aiResponseRef.current.trim() || 'Done.';
 					setChatMessages((prev) => [...prev, { role: 'assistant', text: response }]);
@@ -164,8 +172,7 @@ export function useCueAiChat({
 						const msg = error.message || 'Agent encountered an error.';
 						setChatMessages((prev) => [...prev, { role: 'assistant', text: msg }]);
 						setChatBusy(false);
-						aiCleanupRef.current.forEach((fn) => fn());
-						aiCleanupRef.current = [];
+						runCleanup();
 					}
 				}
 			);

@@ -8,7 +8,9 @@ import type { CuePipeline } from '../../../shared/cue-pipeline-types';
 
 export function formatRelativeTime(dateStr?: string): string {
 	if (!dateStr) return '—';
-	const diff = Date.now() - new Date(dateStr).getTime();
+	const parsed = new Date(dateStr).getTime();
+	if (isNaN(parsed)) return '—';
+	const diff = Date.now() - parsed;
 	if (diff < 0) return 'just now';
 	const seconds = Math.floor(diff / 1000);
 	if (seconds < 60) return `${seconds}s ago`;
@@ -29,8 +31,9 @@ export function formatDuration(ms: number): string {
 }
 
 export function formatElapsed(startedAt: string): string {
-	const diff = Date.now() - new Date(startedAt).getTime();
-	return formatDuration(Math.max(0, diff));
+	const parsed = new Date(startedAt).getTime();
+	if (isNaN(parsed)) return formatDuration(0);
+	return formatDuration(Math.max(0, Date.now() - parsed));
 }
 
 /** Maps subscription names to pipeline info by checking name prefixes. */

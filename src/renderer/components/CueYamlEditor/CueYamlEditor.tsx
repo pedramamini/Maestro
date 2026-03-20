@@ -118,23 +118,10 @@ export function CueYamlEditor({
 
 	const handleSave = useCallback(async () => {
 		if (!isValid) return;
-		try {
-			await window.maestro.cue.writeYaml(projectRoot, yamlContent);
-			await window.maestro.cue.refreshSession(sessionId, projectRoot);
-			onClose();
-		} catch {
-			// Let Sentry capture unexpected errors
-		}
-	}, [isValid, projectRoot, yamlContent, sessionId, onClose]);
-
-	const handleClose = useCallback(() => {
-		const isDirty = yamlContent !== originalContent;
-		if (isDirty) {
-			const confirmed = window.confirm('You have unsaved changes. Discard them?');
-			if (!confirmed) return;
-		}
+		await window.maestro.cue.writeYaml(projectRoot, yamlContent);
+		await window.maestro.cue.refreshSession(sessionId, projectRoot);
 		onClose();
-	}, [yamlContent, originalContent, onClose]);
+	}, [isValid, projectRoot, yamlContent, sessionId, onClose]);
 
 	// Pattern preview state
 	const [previewPattern, setPreviewPattern] = useState<CuePattern | null>(null);
@@ -173,6 +160,21 @@ export function CueYamlEditor({
 		isOpen,
 		onYamlRefresh: refreshYamlFromDisk,
 	});
+
+	const handleClose = useCallback(() => {
+		if (chatBusy) {
+			const confirmed = window.confirm(
+				'AI assist is still working. Close and cancel the operation?'
+			);
+			if (!confirmed) return;
+		}
+		const isDirty = yamlContent !== originalContent;
+		if (isDirty) {
+			const confirmed = window.confirm('You have unsaved changes. Discard them?');
+			if (!confirmed) return;
+		}
+		onClose();
+	}, [yamlContent, originalContent, chatBusy, onClose]);
 
 	if (!isOpen) return null;
 

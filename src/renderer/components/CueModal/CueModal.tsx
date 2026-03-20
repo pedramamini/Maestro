@@ -88,14 +88,21 @@ export function CueModal({ theme, onClose, cueShortcutKeys }: CueModalProps) {
 	);
 
 	const isEnabled = sessions.some((s) => s.enabled);
+	const [toggling, setToggling] = useState(false);
 
-	const handleToggle = useCallback(() => {
-		if (isEnabled) {
-			disable();
-		} else {
-			enable();
+	const handleToggle = useCallback(async () => {
+		if (toggling) return;
+		setToggling(true);
+		try {
+			if (isEnabled) {
+				await disable();
+			} else {
+				await enable();
+			}
+		} finally {
+			setToggling(false);
 		}
-	}, [isEnabled, enable, disable]);
+	}, [isEnabled, enable, disable, toggling]);
 
 	// Register layer on mount
 	useEffect(() => {
@@ -131,15 +138,23 @@ export function CueModal({ theme, onClose, cueShortcutKeys }: CueModalProps) {
 	// Tab state
 	const [activeTab, setActiveTab] = useState<CueModalTab>('pipeline');
 
+	// Graph data fetch error state
+	const [graphError, setGraphError] = useState<string | null>(null);
+
 	// Fetch graph data on mount and when tab changes (needed for both dashboard and pipeline tabs)
 	useEffect(() => {
 		let cancelled = false;
+		setGraphError(null);
 		window.maestro.cue
 			.getGraphData()
 			.then((data: CueGraphSession[]) => {
 				if (!cancelled) setGraphSessions(data);
 			})
-			.catch(() => {});
+			.catch((err: unknown) => {
+				if (!cancelled) {
+					setGraphError(err instanceof Error ? err.message : 'Failed to load graph data');
+				}
+			});
 		return () => {
 			cancelled = true;
 		};
@@ -297,7 +312,8 @@ export function CueModal({ theme, onClose, cueShortcutKeys }: CueModalProps) {
 										{/* Master toggle */}
 										<button
 											onClick={handleToggle}
-											className="flex items-center gap-2 px-3 py-1.5 rounded-md text-xs font-medium transition-colors"
+											disabled={toggling}
+											className="flex items-center gap-2 px-3 py-1.5 rounded-md text-xs font-medium transition-colors disabled:opacity-50"
 											style={{
 												backgroundColor: isEnabled
 													? `${theme.colors.accent}20`
@@ -360,7 +376,7 @@ export function CueModal({ theme, onClose, cueShortcutKeys }: CueModalProps) {
 									</div>
 								) : (
 									<>
-										{error && (
+										{(error || graphError) && (
 											<div
 												className="flex items-center gap-2 px-3 py-2 rounded-md text-xs"
 												style={{
@@ -370,7 +386,7 @@ export function CueModal({ theme, onClose, cueShortcutKeys }: CueModalProps) {
 												}}
 											>
 												<AlertTriangle className="w-3.5 h-3.5 flex-shrink-0" />
-												<span className="flex-1">{error}</span>
+												<span className="flex-1">{error || graphError}</span>
 												<button
 													onClick={refresh}
 													className="px-2 py-0.5 rounded text-xs hover:opacity-80"

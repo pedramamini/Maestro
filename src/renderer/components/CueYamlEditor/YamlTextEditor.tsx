@@ -2,7 +2,7 @@
  * YamlTextEditor — YAML textarea with line numbers gutter and validation display.
  */
 
-import { useCallback, useRef } from 'react';
+import { useCallback } from 'react';
 import type { Theme } from '../../types';
 
 interface YamlTextEditorProps {
@@ -22,8 +22,6 @@ export function YamlTextEditor({
 	isValid,
 	validationErrors,
 }: YamlTextEditorProps) {
-	const yamlTextareaRef = useRef<HTMLTextAreaElement>(null);
-
 	// Handle Tab key in textarea for indentation
 	const handleYamlKeyDown = useCallback(
 		(e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -76,7 +74,6 @@ export function YamlTextEditor({
 				</div>
 				{/* Editor textarea */}
 				<textarea
-					ref={yamlTextareaRef}
 					value={yamlContent}
 					onChange={(e) => onYamlChange(e.target.value)}
 					onKeyDown={handleYamlKeyDown}

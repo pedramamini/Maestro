@@ -5,7 +5,7 @@
  * TriggerNode, TriggerDrawer, NodeConfigPanel, and PipelineCanvas.
  */
 
-import { Clock, FileText, Zap, GitPullRequest, GitBranch, CheckSquare } from 'lucide-react';
+import { Clock, FileText, Zap, GitPullRequest, CircleDot, CheckSquare } from 'lucide-react';
 import type { CueEventType } from '../../../shared/cue-pipeline-types';
 
 /** Icon component for each event type */
@@ -15,7 +15,7 @@ export const EVENT_ICONS: Record<CueEventType, typeof Clock> = {
 	'file.changed': FileText,
 	'agent.completed': Zap,
 	'github.pull_request': GitPullRequest,
-	'github.issue': GitBranch,
+	'github.issue': CircleDot,
 	'task.pending': CheckSquare,
 };
 

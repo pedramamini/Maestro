@@ -25,6 +25,7 @@ import {
 	type CueSettings,
 	type CueSubscription,
 } from './cue-types';
+import { captureException } from '../utils/sentry';
 import { loadCueConfig, watchCueYaml } from './cue-yaml-loader';
 import { matchesFilter, describeFilter } from './cue-filter';
 import {
@@ -150,6 +151,9 @@ export class CueEngine {
 				'error',
 				`[CUE] Failed to initialize Cue database — engine will not start: ${error}`
 			);
+			captureException(error instanceof Error ? error : new Error(String(error)), {
+				extra: { operation: 'cue.dbInit' },
+			});
 			return;
 		}
 
