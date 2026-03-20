@@ -85,9 +85,7 @@ export function useSessionRestoration(): SessionRestorationReturn {
 			try {
 				const agent = await window.maestro.agents.get(toolType, sshRemoteId);
 				if (!agent) {
-					console.error(
-						`[validateAgentInBackground] Agent not found for toolType: ${toolType}`
-					);
+					console.error(`[validateAgentInBackground] Agent not found for toolType: ${toolType}`);
 					setSessions((prev) =>
 						prev.map((s) =>
 							s.id === sessionId
@@ -101,10 +99,7 @@ export function useSessionRestoration(): SessionRestorationReturn {
 					);
 				}
 			} catch (err) {
-				console.warn(
-					`[validateAgentInBackground] Agent validation failed for ${toolType}:`,
-					err
-				);
+				console.warn(`[validateAgentInBackground] Agent validation failed for ${toolType}:`, err);
 			}
 		},
 		[]
@@ -443,7 +438,7 @@ export function useSessionRestoration(): SessionRestorationReturn {
 						const sshRemoteId =
 							session.sshRemoteId ||
 							(session.sessionSshRemoteConfig?.enabled
-								? session.sessionSshRemoteConfig.remoteId
+								? session.sessionSshRemoteConfig.remoteId ?? undefined
 								: undefined);
 
 						// Validate agent availability in background (SSH-aware)
