@@ -1615,11 +1615,14 @@ export function useAgentListeners(deps: UseAgentListenersDeps): void {
 							// Move from queue to tab.logs as a delivered user message.
 							// This is the primary path for native stdin interjections
 							// (Claude Code, Factory Droid).
+							// Use the queued item's tabId as the authoritative target
+							// (parsed tabId from sessionId should match, but this is safer).
+							const targetTabId = queuedItem.tabId || tabId;
 							return {
 								...s,
 								executionQueue: s.executionQueue.filter((q) => q.id !== interjectionId),
 								aiTabs: s.aiTabs.map((tab) => {
-									if (tab.id !== tabId) return tab;
+									if (tab.id !== targetTabId) return tab;
 									return {
 										...tab,
 										logs: [

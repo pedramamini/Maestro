@@ -508,10 +508,12 @@ export function useInputProcessing(deps: UseInputProcessingDeps): UseInputProces
 
 					// Send interjection via IPC (formats stream-json in main process).
 					// On successful write, move from queue to logs immediately.
-					// We don't wait for interjection-ack — Claude Code processes
-					// interjections inline and emits a single result for the whole
-					// turn (not separate pre/post results), so the ack may never fire
-					// for the native stdin path.
+					// We don't wait for interjection-ack here because the renderer
+					// optimistically marks delivery on successful write. The main
+					// process StdoutHandler tracks the two-result cycle (pre-interjection
+					// result, then interjection response result) and emits an ack when
+					// the first result arrives. The ack promotes the queue entry to logs
+					// in useAgentListeners, but the renderer doesn't gate on it.
 					window.maestro.process
 						.writeInterjection(
 							processSessionId,
