@@ -305,6 +305,22 @@ export const AGENT_DEFINITIONS: AgentDefinition[] = [
 					'Maximum context window size in tokens. Required for context usage display. Varies by model (e.g., 400000 for Claude/GPT-5.2, 128000 for GPT-4o).',
 				default: 128000, // Default for common models (GPT-4, etc.)
 			},
+			{
+				key: 'useACP',
+				type: 'checkbox',
+				label: 'Use ACP Protocol',
+				description:
+					'Use the Agent Client Protocol (ACP) for communication instead of JSON output parsing. ACP provides a standardized protocol for agent communication.',
+				default: false, // Opt-in for now, will become default once stable
+			},
+			{
+				key: 'acpShowStreaming',
+				type: 'checkbox',
+				label: 'Show Streaming Output',
+				description:
+					'Show streaming text output in real-time when using ACP mode. Disable for cleaner output with only the final result.',
+				default: true, // Show streaming by default for better UX
+			},
 		],
 	},
 	{

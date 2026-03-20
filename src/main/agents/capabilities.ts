@@ -82,6 +82,9 @@ export interface AgentCapabilities {
 	/** Agent uses a combined input+output context window (vs separate limits) */
 	usesCombinedContextWindow: boolean;
 
+	/** Agent supports Agent Client Protocol (ACP) for JSON-RPC communication */
+	supportsACP: boolean;
+
 	/** How images should be handled on resume when -i flag is not available.
 	 * 'prompt-embed': Save images to temp files and embed file paths in the prompt text.
 	 * undefined: Use default image handling (or no special resume handling needed). */
@@ -116,6 +119,7 @@ export const DEFAULT_CAPABILITIES: AgentCapabilities = {
 	supportsGroupChatModeration: false,
 	usesJsonLineOutput: false,
 	usesCombinedContextWindow: false,
+	supportsACP: false,
 };
 
 /**
@@ -158,6 +162,7 @@ export const AGENT_CAPABILITIES: Record<string, AgentCapabilities> = {
 		supportsGroupChatModeration: true, // Can serve as group chat moderator
 		usesJsonLineOutput: false, // Uses stream-json, not JSONL
 		usesCombinedContextWindow: false, // Claude has separate input/output limits
+		supportsACP: false, // Claude Code uses stream-json output format
 	},
 
 	/**
@@ -188,6 +193,7 @@ export const AGENT_CAPABILITIES: Record<string, AgentCapabilities> = {
 		supportsGroupChatModeration: false,
 		usesJsonLineOutput: false,
 		usesCombinedContextWindow: false,
+		supportsACP: false, // Terminal is not an AI agent
 	},
 
 	/**
@@ -221,6 +227,7 @@ export const AGENT_CAPABILITIES: Record<string, AgentCapabilities> = {
 		supportsGroupChatModeration: true, // Can serve as group chat moderator
 		usesJsonLineOutput: true, // Uses JSONL output format
 		usesCombinedContextWindow: true, // OpenAI models use combined context window
+		supportsACP: false, // Codex uses JSONL output format
 		imageResumeMode: 'prompt-embed', // codex exec resume doesn't support -i; embed file paths in prompt text
 	},
 
@@ -254,6 +261,7 @@ export const AGENT_CAPABILITIES: Record<string, AgentCapabilities> = {
 		supportsGroupChatModeration: false, // PLACEHOLDER
 		usesJsonLineOutput: false, // PLACEHOLDER
 		usesCombinedContextWindow: false, // PLACEHOLDER
+		supportsACP: false, // PLACEHOLDER
 	},
 
 	/**
@@ -286,6 +294,7 @@ export const AGENT_CAPABILITIES: Record<string, AgentCapabilities> = {
 		supportsGroupChatModeration: false, // PLACEHOLDER
 		usesJsonLineOutput: false, // PLACEHOLDER
 		usesCombinedContextWindow: false, // PLACEHOLDER
+		supportsACP: false, // PLACEHOLDER
 	},
 
 	/**
@@ -319,6 +328,7 @@ export const AGENT_CAPABILITIES: Record<string, AgentCapabilities> = {
 		supportsGroupChatModeration: true, // Can serve as group chat moderator
 		usesJsonLineOutput: true, // Uses JSONL output format
 		usesCombinedContextWindow: false, // Depends on model provider
+		supportsACP: true, // OpenCode supports Agent Client Protocol
 	},
 
 	/**
@@ -351,6 +361,7 @@ export const AGENT_CAPABILITIES: Record<string, AgentCapabilities> = {
 		supportsGroupChatModeration: true, // Can serve as group chat moderator
 		usesJsonLineOutput: true, // Uses JSONL output format
 		usesCombinedContextWindow: false, // Depends on model provider
+		supportsACP: false, // Factory Droid uses JSONL output format
 	},
 
 	/**
@@ -384,6 +395,7 @@ export const AGENT_CAPABILITIES: Record<string, AgentCapabilities> = {
 		supportsGroupChatModeration: false, // PLACEHOLDER
 		usesJsonLineOutput: false, // PLACEHOLDER
 		usesCombinedContextWindow: false, // PLACEHOLDER
+		supportsACP: false, // PLACEHOLDER
 	},
 };
 
