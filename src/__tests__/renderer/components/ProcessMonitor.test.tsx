@@ -1763,9 +1763,13 @@ describe('ProcessMonitor', () => {
 
 			render(<ProcessMonitor theme={theme} sessions={[session]} groups={[]} onClose={onClose} />);
 
+			// Wait for async process list to load by confirming the regular process appears
 			await waitFor(() => {
-				expect(screen.queryByText('CUE RUNS')).not.toBeInTheDocument();
+				expect(screen.getByText('Test Session - AI Agent (claude-code)')).toBeInTheDocument();
 			});
+
+			// Only then assert CUE RUNS is absent
+			expect(screen.queryByText('CUE RUNS')).not.toBeInTheDocument();
 		});
 
 		it('shows subscription name and session name in cue process label', async () => {

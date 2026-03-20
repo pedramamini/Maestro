@@ -143,21 +143,26 @@ export const TriggerNode = memo(function TriggerNode({
 			>
 				{/* Play button — only when pipeline is saved */}
 				{data.isSaved && data.onTriggerPipeline && data.pipelineName && (
-					<div
+					<button
+						type="button"
 						onClick={(e) => {
 							e.stopPropagation();
 							if (!data.isRunning) {
 								data.onTriggerPipeline!(data.pipelineName!);
 							}
 						}}
+						disabled={data.isRunning}
+						aria-label={data.isRunning ? 'Running' : `Run ${data.pipelineName}`}
 						style={{
 							display: 'flex',
 							alignItems: 'center',
 							justifyContent: 'center',
 							cursor: data.isRunning ? 'default' : 'pointer',
 							color: data.isRunning ? '#22c55e' : `#22c55e90`,
-							padding: '4px 4px',
+							padding: 4,
 							borderRadius: 4,
+							border: 'none',
+							backgroundColor: 'transparent',
 							transition: 'color 0.15s',
 						}}
 						onMouseEnter={(e) => {
@@ -168,12 +173,8 @@ export const TriggerNode = memo(function TriggerNode({
 						}}
 						title={data.isRunning ? 'Running…' : 'Run now'}
 					>
-						{data.isRunning ? (
-							<Loader2 size={14} style={{ animation: 'spin 1s linear infinite' }} />
-						) : (
-							<Play size={14} />
-						)}
-					</div>
+						{data.isRunning ? <Loader2 size={14} className="animate-spin" /> : <Play size={14} />}
+					</button>
 				)}
 
 				{/* Gear icon */}

@@ -66,6 +66,19 @@ export interface CueProcessInfo {
 	startTime: number;
 }
 
+/** Maximum arg length before redaction (display-safe limit) */
+const MAX_SAFE_ARG_LENGTH = 200;
+
+/** Redacts sensitive/long values from spawn args for display in Process Monitor */
+function redactSpawnArgs(args: string[]): string[] {
+	return args.map((arg) => {
+		if (arg.length > MAX_SAFE_ARG_LENGTH) {
+			return `${arg.substring(0, 80)}… [${arg.length} chars redacted]`;
+		}
+		return arg;
+	});
+}
+
 /** Map of active Cue processes by runId */
 const activeProcesses = new Map<string, CueActiveProcess>();
 
@@ -337,7 +350,7 @@ export async function executeCuePrompt(config: CueExecutionConfig): Promise<CueR
 		activeProcesses.set(runId, {
 			child,
 			command,
-			args: spawnArgs,
+			args: redactSpawnArgs(spawnArgs),
 			cwd: spawnCwd,
 			toolType,
 			startTime: Date.now(),
@@ -446,9 +459,10 @@ export function stopCueRun(runId: string): boolean {
 
 	entry.child.kill('SIGTERM');
 
-	// Escalate to SIGKILL after delay
+	// Escalate to SIGKILL after delay — check exitCode to confirm the process actually exited
+	// (child.killed only indicates a signal was sent, not that the process terminated)
 	setTimeout(() => {
-		if (!entry.child.killed) {
+		if (entry.child.exitCode === null) {
 			entry.child.kill('SIGKILL');
 		}
 	}, SIGKILL_DELAY_MS);

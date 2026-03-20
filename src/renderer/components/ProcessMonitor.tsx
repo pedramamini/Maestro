@@ -79,6 +79,7 @@ interface ProcessNode {
 	command?: string; // The command used to spawn this process
 	args?: string[]; // The arguments passed to the command
 	sshRemote?: { name: string; host: string }; // SSH remote info if running remotely
+	countLabel?: string; // Override "session" in group child count (e.g., "run" for CUE RUNS)
 	cueRunId?: string; // Cue run ID for stopping via cue:stopRun
 	cueSubscriptionName?: string; // Subscription name that triggered this Cue run
 	cueEventType?: string; // Event type that triggered this Cue run
@@ -673,6 +674,7 @@ export function ProcessMonitor(props: ProcessMonitorProps) {
 				emoji: '⚡',
 				expanded: expandedNodes.has('cue-section'),
 				children: cueNodes,
+				countLabel: 'run',
 			};
 			tree.push(cueSectionNode);
 		}
@@ -894,7 +896,12 @@ export function ProcessMonitor(props: ProcessMonitorProps) {
 						<span className="font-medium flex-1 truncate">{node.label}</span>
 						{hasChildren && (
 							<span className="text-xs flex-shrink-0" style={{ color: theme.colors.textDim }}>
-								{node.children!.length} {node.children!.length === 1 ? 'session' : 'sessions'}
+								{node.children!.length}{' '}
+								{node.children!.length === 1
+									? (node.countLabel ?? 'session')
+									: node.countLabel
+										? `${node.countLabel}s`
+										: 'sessions'}
 							</span>
 						)}
 					</button>

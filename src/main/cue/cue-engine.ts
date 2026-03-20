@@ -685,13 +685,18 @@ export class CueEngine {
 		this.activityLog.push(result);
 	}
 
-	/** Check if a config has any enabled time-based subscriptions for this session */
+	/** Check if a config has any enabled time-based subscriptions that will actually schedule timers */
 	private hasTimeBasedSubscriptions(config: CueConfig, sessionId: string): boolean {
 		return config.subscriptions.some(
 			(sub) =>
 				sub.enabled !== false &&
 				(!sub.agent_id || sub.agent_id === sessionId) &&
-				(sub.event === 'time.heartbeat' || sub.event === 'time.scheduled')
+				((sub.event === 'time.heartbeat' &&
+					typeof sub.interval_minutes === 'number' &&
+					sub.interval_minutes > 0) ||
+					(sub.event === 'time.scheduled' &&
+						Array.isArray(sub.schedule_times) &&
+						sub.schedule_times.length > 0))
 		);
 	}
 

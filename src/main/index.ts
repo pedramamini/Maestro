@@ -681,9 +681,12 @@ function setupIpcHandlers() {
 		getMainWindow: () => mainWindow,
 		sessionsStore,
 		getCueProcesses: () => {
-			if (!cueEngine?.isEnabled()) return [];
+			// Always query the executor's active process map — processes may still be
+			// running even if the engine has been disabled (in-flight runs complete
+			// independently of engine state).
 			const processList = getCueProcessList();
-			const activeRuns = cueEngine.getActiveRuns();
+			if (processList.length === 0) return [];
+			const activeRuns = cueEngine?.getActiveRuns() ?? [];
 			// Merge PID/command data from executor with metadata from run manager
 			return processList.map((proc) => {
 				const run = activeRuns.find((r) => r.runId === proc.runId);

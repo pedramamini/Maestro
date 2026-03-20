@@ -362,31 +362,32 @@ export const PipelineCanvas = React.memo(function PipelineCanvas({
 			)}
 
 			{/* Config panels */}
-			{selectedNode && !selectedEdge && (
-				<NodeConfigPanel
-					selectedNode={selectedNode}
-					pipelines={pipelines}
-					hasOutgoingEdge={selectedNodeHasOutgoingEdge}
-					hasIncomingAgentEdges={hasIncomingAgentEdges}
-					incomingTriggerEdges={incomingTriggerEdges}
-					onUpdateNode={onUpdateNode}
-					onUpdateEdgePrompt={onUpdateEdgePrompt}
-					onDeleteNode={onDeleteNode}
-					onSwitchToAgent={onSwitchToSession}
-					triggerDrawerOpen={triggerDrawerOpenForConfig}
-					agentDrawerOpen={agentDrawerOpenForConfig}
-					onTriggerPipeline={onTriggerPipeline}
-					pipelineName={(() => {
-						const p = pipelines.find((pl) => pl.nodes.some((n) => n.id === selectedNode.id));
-						return p?.name;
-					})()}
-					isSaved={!isDirty}
-					isRunning={(() => {
-						const p = pipelines.find((pl) => pl.nodes.some((n) => n.id === selectedNode.id));
-						return p ? runningPipelineIds?.has(p.id) : false;
-					})()}
-				/>
-			)}
+			{selectedNode &&
+				!selectedEdge &&
+				(() => {
+					const selectedPipeline = pipelines.find((pl) =>
+						pl.nodes.some((n) => n.id === selectedNode.id)
+					);
+					return (
+						<NodeConfigPanel
+							selectedNode={selectedNode}
+							pipelines={pipelines}
+							hasOutgoingEdge={selectedNodeHasOutgoingEdge}
+							hasIncomingAgentEdges={hasIncomingAgentEdges}
+							incomingTriggerEdges={incomingTriggerEdges}
+							onUpdateNode={onUpdateNode}
+							onUpdateEdgePrompt={onUpdateEdgePrompt}
+							onDeleteNode={onDeleteNode}
+							onSwitchToAgent={onSwitchToSession}
+							triggerDrawerOpen={triggerDrawerOpenForConfig}
+							agentDrawerOpen={agentDrawerOpenForConfig}
+							onTriggerPipeline={onTriggerPipeline}
+							pipelineName={selectedPipeline?.name}
+							isSaved={!isDirty}
+							isRunning={selectedPipeline ? runningPipelineIds?.has(selectedPipeline.id) : false}
+						/>
+					);
+				})()}
 			{selectedEdge && !selectedNode && (
 				<EdgeConfigPanel
 					selectedEdge={selectedEdge}

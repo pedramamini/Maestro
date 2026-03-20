@@ -176,11 +176,7 @@ export function NodeConfigPanel({
 							}}
 							title={isRunning ? 'Running…' : 'Run now'}
 						>
-							{isRunning ? (
-								<Loader2 size={14} style={{ animation: 'spin 1s linear infinite' }} />
-							) : (
-								<Play size={14} />
-							)}
+							{isRunning ? <Loader2 size={14} className="animate-spin" /> : <Play size={14} />}
 						</button>
 					)}
 					{!isTrigger && (
