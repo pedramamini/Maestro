@@ -6,10 +6,9 @@
  * and wires them to the engine's event dispatch pipeline.
  */
 
-import * as crypto from 'crypto';
 import type { MainLogLevel } from '../../shared/logger-types';
 import type { SessionInfo } from '../../shared/types';
-import type { CueEvent, CueSubscription } from './cue-types';
+import { createCueEvent, type CueEvent, type CueSubscription } from './cue-types';
 import { createCueFileWatcher } from './cue-file-watcher';
 import { createCueGitHubPoller } from './cue-github-poller';
 import { createCueTaskScanner } from './cue-task-scanner';
@@ -94,13 +93,9 @@ export function setupHeartbeatSubscription(
 	if (intervalMs <= 0) return;
 
 	// Fire immediately on first setup
-	const immediateEvent: CueEvent = {
-		id: crypto.randomUUID(),
-		type: 'time.heartbeat',
-		timestamp: new Date().toISOString(),
-		triggerName: sub.name,
-		payload: { interval_minutes: sub.interval_minutes },
-	};
+	const immediateEvent = createCueEvent('time.heartbeat', sub.name, {
+		interval_minutes: sub.interval_minutes,
+	});
 
 	// Check payload filter (even for timer events)
 	if (!sub.filter || matchesFilter(immediateEvent.payload, sub.filter)) {
@@ -121,13 +116,9 @@ export function setupHeartbeatSubscription(
 	const timer = setInterval(() => {
 		if (!deps.enabled()) return;
 
-		const event: CueEvent = {
-			id: crypto.randomUUID(),
-			type: 'time.heartbeat',
-			timestamp: new Date().toISOString(),
-			triggerName: sub.name,
-			payload: { interval_minutes: sub.interval_minutes },
-		};
+		const event = createCueEvent('time.heartbeat', sub.name, {
+			interval_minutes: sub.interval_minutes,
+		});
 
 		// Check payload filter
 		if (sub.filter && !matchesFilter(event.payload, sub.filter)) {
@@ -200,18 +191,12 @@ export function setupScheduledSubscription(
 		}
 		deps.scheduledFiredKeys.add(firedKey);
 
-		const event: CueEvent = {
-			id: crypto.randomUUID(),
-			type: 'time.scheduled',
-			timestamp: now.toISOString(),
-			triggerName: sub.name,
-			payload: {
-				schedule_times: sub.schedule_times,
-				schedule_days: sub.schedule_days,
-				matched_time: currentTime,
-				matched_day: currentDay,
-			},
-		};
+		const event = createCueEvent('time.scheduled', sub.name, {
+			schedule_times: sub.schedule_times,
+			schedule_days: sub.schedule_days,
+			matched_time: currentTime,
+			matched_day: currentDay,
+		});
 
 		// Refresh next trigger time regardless of filter outcome so the UI stays current
 		const nextMs = calculateNextScheduledTime(times, sub.schedule_days);

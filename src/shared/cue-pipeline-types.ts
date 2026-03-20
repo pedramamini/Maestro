@@ -16,6 +16,9 @@ export type CueEventType =
 	| 'github.issue'
 	| 'task.pending';
 
+/** Cue brand color — single source of truth for all Cue UI */
+export const CUE_COLOR = '#06b6d4';
+
 /** 12 visually distinct colors suitable for dark backgrounds */
 export const PIPELINE_COLORS: string[] = [
 	'#06b6d4', // cyan
@@ -151,4 +154,23 @@ export function getNextPipelineColor(existingPipelines: CuePipeline[]): string {
 		}
 	}
 	return PIPELINE_COLORS[existingPipelines.length % PIPELINE_COLORS.length];
+}
+
+// ─── Shared pipeline-editor types ────────────────────────────────────────────
+
+/** Lightweight session descriptor used by the pipeline editor (avoids importing full Session). */
+export interface CuePipelineSessionInfo {
+	id: string;
+	groupId?: string;
+	name: string;
+	toolType: string;
+	projectRoot?: string;
+}
+
+/** Info about an incoming trigger edge for per-edge prompt editing. */
+export interface IncomingTriggerEdgeInfo {
+	edgeId: string;
+	triggerLabel: string;
+	configSummary: string;
+	prompt: string;
 }

@@ -1,6 +1,7 @@
 import React from 'react';
 import { Bot, User, Zap } from 'lucide-react';
 import type { Theme, HistoryEntryType } from '../../types';
+import { CUE_COLOR } from '../../../shared/cue-pipeline-types';
 
 // Double checkmark SVG component for validated entries
 export const DoubleCheck = ({
@@ -43,8 +44,8 @@ export const LOOKBACK_OPTIONS: LookbackPeriod[] = [
 	{ label: 'All time', hours: null, bucketCount: 24 },
 ];
 
-/** Base CUE brand color — used in ActivityGraph, HistoryFilterToggle, HistoryEntryItem */
-export const CUE_COLOR = '#06b6d4';
+// CUE_COLOR is imported above from shared/cue-pipeline-types and re-exported for History consumers
+export { CUE_COLOR };
 
 /** Get pill color scheme based on entry type */
 export const getPillColor = (type: HistoryEntryType, theme: Theme) => {

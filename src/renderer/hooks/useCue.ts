@@ -57,6 +57,7 @@ export interface UseCueReturn {
 	activityLog: CueRunResult[];
 	queueStatus: Record<string, number>;
 	loading: boolean;
+	error: string | null;
 	enable: () => Promise<void>;
 	disable: () => Promise<void>;
 	stopRun: (runId: string) => Promise<void>;
@@ -78,10 +79,12 @@ export function useCue(): UseCueReturn {
 	const [activityLog, setActivityLog] = useState<CueRunResult[]>([]);
 	const [queueStatus, setQueueStatus] = useState<Record<string, number>>({});
 	const [loading, setLoading] = useState(true);
+	const [error, setError] = useState<string | null>(null);
 	const mountedRef = useRef(true);
 
 	const refresh = useCallback(async () => {
 		try {
+			setError(null);
 			const [statusData, runsData, logData, queueData] = await Promise.all([
 				window.maestro.cue.getStatus(),
 				window.maestro.cue.getActiveRuns(),
@@ -93,8 +96,9 @@ export function useCue(): UseCueReturn {
 			setActiveRuns(runsData);
 			setActivityLog(logData);
 			setQueueStatus(queueData);
-		} catch {
-			// Let Sentry capture if truly unexpected
+		} catch (err) {
+			if (!mountedRef.current) return;
+			setError(err instanceof Error ? err.message : 'Failed to fetch Cue status');
 		} finally {
 			if (mountedRef.current) {
 				setLoading(false);
@@ -159,6 +163,7 @@ export function useCue(): UseCueReturn {
 		activityLog,
 		queueStatus,
 		loading,
+		error,
 		enable,
 		disable,
 		stopRun,

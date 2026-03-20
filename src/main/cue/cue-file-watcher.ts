@@ -6,9 +6,8 @@
  */
 
 import * as path from 'path';
-import * as crypto from 'crypto';
 import * as chokidar from 'chokidar';
-import type { CueEvent } from './cue-types';
+import { createCueEvent, type CueEvent } from './cue-types';
 
 export interface CueFileWatcherConfig {
 	watchGlob: string;
@@ -45,19 +44,13 @@ export function createCueFileWatcher(config: CueFileWatcherConfig): () => void {
 				debounceTimers.delete(filePath);
 
 				const absolutePath = path.resolve(projectRoot, filePath);
-				const event: CueEvent = {
-					id: crypto.randomUUID(),
-					type: 'file.changed',
-					timestamp: new Date().toISOString(),
-					triggerName,
-					payload: {
-						path: absolutePath,
-						filename: path.basename(filePath),
-						directory: path.dirname(absolutePath),
-						extension: path.extname(filePath),
-						changeType,
-					},
-				};
+				const event = createCueEvent('file.changed', triggerName, {
+					path: absolutePath,
+					filename: path.basename(filePath),
+					directory: path.dirname(absolutePath),
+					extension: path.extname(filePath),
+					changeType,
+				});
 
 				onEvent(event);
 			}, debounceMs)

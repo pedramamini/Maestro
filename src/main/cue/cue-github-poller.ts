@@ -6,8 +6,7 @@
  */
 
 import { execFile as cpExecFile } from 'child_process';
-import * as crypto from 'crypto';
-import type { CueEvent } from './cue-types';
+import { createCueEvent, type CueEvent } from './cue-types';
 import { isGitHubItemSeen, markGitHubItemSeen, hasAnyGitHubSeen, pruneGitHubSeen } from './cue-db';
 
 function execFileAsync(
@@ -135,29 +134,23 @@ export function createCueGitHubPoller(config: CueGitHubPollerConfig): () => void
 
 			if (isGitHubItemSeen(subscriptionId, itemKey)) continue;
 
-			const event: CueEvent = {
-				id: crypto.randomUUID(),
-				type: 'github.pull_request',
-				timestamp: new Date().toISOString(),
-				triggerName,
-				payload: {
-					type: 'pull_request',
-					number: item.number,
-					title: item.title,
-					author: item.author?.login ?? 'unknown',
-					url: item.url,
-					body: (item.body ?? '').slice(0, 5000),
-					state: item.mergedAt ? 'merged' : (item.state?.toLowerCase() ?? 'open'),
-					draft: item.isDraft ?? false,
-					labels: (item.labels ?? []).map((l: { name: string }) => l.name).join(','),
-					head_branch: item.headRefName ?? '',
-					base_branch: item.baseRefName ?? '',
-					repo,
-					created_at: item.createdAt ?? '',
-					updated_at: item.updatedAt ?? '',
-					merged_at: item.mergedAt ?? '',
-				},
-			};
+			const event = createCueEvent('github.pull_request', triggerName, {
+				type: 'pull_request',
+				number: item.number,
+				title: item.title,
+				author: item.author?.login ?? 'unknown',
+				url: item.url,
+				body: (item.body ?? '').slice(0, 5000),
+				state: item.mergedAt ? 'merged' : (item.state?.toLowerCase() ?? 'open'),
+				draft: item.isDraft ?? false,
+				labels: (item.labels ?? []).map((l: { name: string }) => l.name).join(','),
+				head_branch: item.headRefName ?? '',
+				base_branch: item.baseRefName ?? '',
+				repo,
+				created_at: item.createdAt ?? '',
+				updated_at: item.updatedAt ?? '',
+				merged_at: item.mergedAt ?? '',
+			});
 
 			onEvent(event);
 			markGitHubItemSeen(subscriptionId, itemKey);
@@ -200,26 +193,20 @@ export function createCueGitHubPoller(config: CueGitHubPollerConfig): () => void
 
 			if (isGitHubItemSeen(subscriptionId, itemKey)) continue;
 
-			const event: CueEvent = {
-				id: crypto.randomUUID(),
-				type: 'github.issue',
-				timestamp: new Date().toISOString(),
-				triggerName,
-				payload: {
-					type: 'issue',
-					number: item.number,
-					title: item.title,
-					author: item.author?.login ?? 'unknown',
-					url: item.url,
-					body: (item.body ?? '').slice(0, 5000),
-					state: item.state?.toLowerCase() ?? 'open',
-					labels: (item.labels ?? []).map((l: { name: string }) => l.name).join(','),
-					assignees: (item.assignees ?? []).map((a: { login: string }) => a.login).join(','),
-					repo,
-					created_at: item.createdAt ?? '',
-					updated_at: item.updatedAt ?? '',
-				},
-			};
+			const event = createCueEvent('github.issue', triggerName, {
+				type: 'issue',
+				number: item.number,
+				title: item.title,
+				author: item.author?.login ?? 'unknown',
+				url: item.url,
+				body: (item.body ?? '').slice(0, 5000),
+				state: item.state?.toLowerCase() ?? 'open',
+				labels: (item.labels ?? []).map((l: { name: string }) => l.name).join(','),
+				assignees: (item.assignees ?? []).map((a: { login: string }) => a.login).join(','),
+				repo,
+				created_at: item.createdAt ?? '',
+				updated_at: item.updatedAt ?? '',
+			});
 
 			onEvent(event);
 			markGitHubItemSeen(subscriptionId, itemKey);

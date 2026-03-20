@@ -42,6 +42,19 @@ vi.mock('../../../main/cue/cue-task-scanner', () => ({
 	createCueTaskScanner: (...args: unknown[]) => mockCreateCueTaskScanner(args[0]),
 }));
 
+// Mock the database
+const mockInitCueDb = vi.fn();
+const mockCloseCueDb = vi.fn();
+const mockPruneCueEvents = vi.fn();
+vi.mock('../../../main/cue/cue-db', () => ({
+	initCueDb: (...args: unknown[]) => mockInitCueDb(...args),
+	closeCueDb: () => mockCloseCueDb(),
+	pruneCueEvents: (...args: unknown[]) => mockPruneCueEvents(...args),
+	isCueDbReady: () => true,
+	recordCueEvent: vi.fn(),
+	updateCueEventStatus: vi.fn(),
+}));
+
 // Mock crypto
 vi.mock('crypto', () => ({
 	randomUUID: vi.fn(() => `uuid-${Math.random().toString(36).slice(2, 8)}`),
@@ -112,6 +125,67 @@ describe('CueEngine', () => {
 
 			expect(deps.onLog).toHaveBeenCalledWith('cue', expect.stringContaining('started'));
 			expect(deps.onLog).toHaveBeenCalledWith('cue', expect.stringContaining('stopped'));
+		});
+
+		it('does not enable when initCueDb throws', () => {
+			mockInitCueDb.mockImplementation(() => {
+				throw new Error('DB corrupted');
+			});
+			const deps = createMockDeps();
+			const engine = new CueEngine(deps);
+			engine.start();
+			expect(engine.isEnabled()).toBe(false);
+		});
+
+		it('logs error when initCueDb throws', () => {
+			mockInitCueDb.mockImplementation(() => {
+				throw new Error('DB corrupted');
+			});
+			const deps = createMockDeps();
+			const engine = new CueEngine(deps);
+			engine.start();
+			expect(deps.onLog).toHaveBeenCalledWith(
+				'error',
+				expect.stringContaining('Failed to initialize Cue database')
+			);
+		});
+
+		it('does not initialize sessions when initCueDb throws', () => {
+			mockInitCueDb.mockImplementation(() => {
+				throw new Error('DB corrupted');
+			});
+			const deps = createMockDeps();
+			const engine = new CueEngine(deps);
+			engine.start();
+			expect(mockLoadCueConfig).not.toHaveBeenCalled();
+		});
+
+		it('does not start heartbeat when initCueDb throws', () => {
+			mockInitCueDb.mockImplementation(() => {
+				throw new Error('DB corrupted');
+			});
+			const deps = createMockDeps();
+			const engine = new CueEngine(deps);
+			engine.start();
+			// Engine is not enabled, so getStatus should return empty
+			expect(engine.getStatus()).toEqual([]);
+		});
+
+		it('can retry start after DB failure', () => {
+			mockInitCueDb
+				.mockImplementationOnce(() => {
+					throw new Error('DB corrupted');
+				})
+				.mockImplementation(() => {});
+			mockLoadCueConfig.mockReturnValue(null);
+			const deps = createMockDeps();
+			const engine = new CueEngine(deps);
+
+			engine.start();
+			expect(engine.isEnabled()).toBe(false);
+
+			engine.start();
+			expect(engine.isEnabled()).toBe(true);
 		});
 	});
 

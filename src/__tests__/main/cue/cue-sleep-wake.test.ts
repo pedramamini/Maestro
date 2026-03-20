@@ -75,6 +75,8 @@ describe('CueEngine sleep/wake detection', () => {
 	beforeEach(() => {
 		vi.clearAllMocks();
 		vi.useFakeTimers();
+		// Reset mockInitCueDb to a no-op (clearAllMocks doesn't reset mockImplementation)
+		mockInitCueDb.mockReset();
 		mockWatchCueYaml.mockReturnValue(vi.fn());
 		mockLoadCueConfig.mockReturnValue(createMockConfig());
 		mockGetLastHeartbeat.mockReturnValue(null);
@@ -229,13 +231,12 @@ describe('CueEngine sleep/wake detection', () => {
 		// Should not throw
 		expect(() => engine.start()).not.toThrow();
 
-		// Should log the warning
+		// Should log the error and not enable the engine
 		expect(deps.onLog).toHaveBeenCalledWith(
-			'warn',
+			'error',
 			expect.stringContaining('Failed to initialize Cue database')
 		);
-
-		engine.stop();
+		expect(engine.isEnabled()).toBe(false);
 	});
 
 	it('should handle heartbeat read failure gracefully during sleep detection', () => {

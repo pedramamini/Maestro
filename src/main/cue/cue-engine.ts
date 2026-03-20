@@ -13,17 +13,19 @@
 import * as crypto from 'crypto';
 import type { MainLogLevel } from '../../shared/logger-types';
 import type { SessionInfo } from '../../shared/types';
-import type {
-	AgentCompletionData,
-	CueConfig,
-	CueEvent,
-	CueGraphSession,
-	CueRunResult,
-	CueSessionStatus,
-	CueSettings,
-	CueSubscription,
+import {
+	createCueEvent,
+	DEFAULT_CUE_SETTINGS,
+	type AgentCompletionData,
+	type CueConfig,
+	type CueEvent,
+	type CueGraphSession,
+	type CueRunResult,
+	type CueSessionStatus,
+	type CueSettings,
+	type CueSubscription,
 } from './cue-types';
-import { DEFAULT_CUE_SETTINGS } from './cue-types';
+import { captureException } from '../utils/sentry';
 import { loadCueConfig, watchCueYaml } from './cue-yaml-loader';
 import { matchesFilter, describeFilter } from './cue-filter';
 import {
@@ -140,16 +142,23 @@ export class CueEngine {
 	start(): void {
 		if (this.enabled) return;
 
-		this.enabled = true;
-		this.deps.onLog('cue', '[CUE] Engine started');
-
-		// Initialize Cue database and prune old events
+		// Initialize Cue database and prune old events — bail if this fails
 		try {
 			initCueDb((level, msg) => this.deps.onLog(level as MainLogLevel, msg));
 			pruneCueEvents(EVENT_PRUNE_AGE_MS);
 		} catch (error) {
-			this.deps.onLog('warn', `[CUE] Failed to initialize Cue database: ${error}`);
+			this.deps.onLog(
+				'error',
+				`[CUE] Failed to initialize Cue database — engine will not start: ${error}`
+			);
+			captureException(error instanceof Error ? error : new Error(String(error)), {
+				extra: { operation: 'cue.dbInit' },
+			});
+			return;
 		}
+
+		this.enabled = true;
+		this.deps.onLog('cue', '[CUE] Engine started');
 
 		const sessions = this.deps.getSessions();
 		for (const session of sessions) {
@@ -402,13 +411,7 @@ export class CueEngine {
 				if (sub.name !== subscriptionName) continue;
 				if (sub.agent_id && sub.agent_id !== sessionId) continue;
 
-				const event: CueEvent = {
-					id: crypto.randomUUID(),
-					type: sub.event,
-					timestamp: new Date().toISOString(),
-					triggerName: sub.name,
-					payload: { manual: true },
-				};
+				const event = createCueEvent(sub.event, sub.name, { manual: true });
 
 				this.deps.onLog('cue', `[CUE] "${sub.name}" manually triggered`);
 				state.lastTriggered = event.timestamp;
@@ -491,22 +494,16 @@ export class CueEngine {
 
 				if (sources.length === 1) {
 					// Single source — fire immediately
-					const event: CueEvent = {
-						id: crypto.randomUUID(),
-						type: 'agent.completed',
-						timestamp: new Date().toISOString(),
-						triggerName: sub.name,
-						payload: {
-							sourceSession: completingName,
-							sourceSessionId: sessionId,
-							status: completionData?.status ?? 'completed',
-							exitCode: completionData?.exitCode ?? null,
-							durationMs: completionData?.durationMs ?? 0,
-							sourceOutput: (completionData?.stdout ?? '').slice(-SOURCE_OUTPUT_MAX_CHARS),
-							outputTruncated: (completionData?.stdout ?? '').length > SOURCE_OUTPUT_MAX_CHARS,
-							triggeredBy: completionData?.triggeredBy,
-						},
-					};
+					const event = createCueEvent('agent.completed', sub.name, {
+						sourceSession: completingName,
+						sourceSessionId: sessionId,
+						status: completionData?.status ?? 'completed',
+						exitCode: completionData?.exitCode ?? null,
+						durationMs: completionData?.durationMs ?? 0,
+						sourceOutput: (completionData?.stdout ?? '').slice(-SOURCE_OUTPUT_MAX_CHARS),
+						outputTruncated: (completionData?.stdout ?? '').length > SOURCE_OUTPUT_MAX_CHARS,
+						triggeredBy: completionData?.triggeredBy,
+					});
 
 					// Check payload filter
 					if (sub.filter && !matchesFilter(event.payload, sub.filter)) {

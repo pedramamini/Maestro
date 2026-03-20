@@ -28,6 +28,16 @@ vi.mock('../../../main/cue/cue-file-watcher', () => ({
 	createCueFileWatcher: (...args: unknown[]) => mockCreateCueFileWatcher(args[0]),
 }));
 
+// Mock the database
+vi.mock('../../../main/cue/cue-db', () => ({
+	initCueDb: vi.fn(),
+	closeCueDb: vi.fn(),
+	pruneCueEvents: vi.fn(),
+	isCueDbReady: () => true,
+	recordCueEvent: vi.fn(),
+	updateCueEventStatus: vi.fn(),
+}));
+
 // Mock crypto
 vi.mock('crypto', () => ({
 	randomUUID: vi.fn(() => `uuid-${Math.random().toString(36).slice(2, 8)}`),

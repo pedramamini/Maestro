@@ -7,10 +7,15 @@
  * (or on timeout, depending on the timeout_on_fail setting).
  */
 
-import * as crypto from 'crypto';
 import type { MainLogLevel } from '../../shared/logger-types';
 import type { SessionInfo } from '../../shared/types';
-import type { AgentCompletionData, CueEvent, CueSettings, CueSubscription } from './cue-types';
+import {
+	createCueEvent,
+	type AgentCompletionData,
+	type CueEvent,
+	type CueSettings,
+	type CueSubscription,
+} from './cue-types';
 
 export const SOURCE_OUTPUT_MAX_CHARS = 5000;
 
@@ -80,20 +85,14 @@ export function createCueFanInTracker(deps: CueFanInDeps): CueFanInTracker {
 			const completions = [...tracker.values()];
 			fanInTrackers.delete(key);
 
-			const event: CueEvent = {
-				id: crypto.randomUUID(),
-				type: 'agent.completed',
-				timestamp: new Date().toISOString(),
-				triggerName: sub.name,
-				payload: {
-					completedSessions: completions.map((c) => c.sessionId),
-					timedOutSessions: timedOutSources,
-					sourceSession: completions.map((c) => c.sessionName).join(', '),
-					sourceOutput: completions.map((c) => c.output).join('\n---\n'),
-					outputTruncated: completions.some((c) => c.truncated),
-					partial: true,
-				},
-			};
+			const event = createCueEvent('agent.completed', sub.name, {
+				completedSessions: completions.map((c) => c.sessionId),
+				timedOutSessions: timedOutSources,
+				sourceSession: completions.map((c) => c.sessionName).join(', '),
+				sourceOutput: completions.map((c) => c.output).join('\n---\n'),
+				outputTruncated: completions.some((c) => c.truncated),
+				partial: true,
+			});
 			const maxChainDepth =
 				completions.length > 0 ? Math.max(...completions.map((c) => c.chainDepth)) : 0;
 			deps.onLog(
@@ -166,18 +165,12 @@ export function createCueFanInTracker(deps: CueFanInDeps): CueFanInTracker {
 			fanInTrackers.delete(key);
 
 			const completions = [...tracker.values()];
-			const event: CueEvent = {
-				id: crypto.randomUUID(),
-				type: 'agent.completed',
-				timestamp: new Date().toISOString(),
-				triggerName: sub.name,
-				payload: {
-					completedSessions: completions.map((c) => c.sessionId),
-					sourceSession: completions.map((c) => c.sessionName).join(', '),
-					sourceOutput: completions.map((c) => c.output).join('\n---\n'),
-					outputTruncated: completions.some((c) => c.truncated),
-				},
-			};
+			const event = createCueEvent('agent.completed', sub.name, {
+				completedSessions: completions.map((c) => c.sessionId),
+				sourceSession: completions.map((c) => c.sessionName).join(', '),
+				sourceOutput: completions.map((c) => c.output).join('\n---\n'),
+				outputTruncated: completions.some((c) => c.truncated),
+			});
 			const maxChainDepth =
 				completions.length > 0 ? Math.max(...completions.map((c) => c.chainDepth)) : 0;
 			deps.onLog('cue', `[CUE] "${sub.name}" triggered (agent.completed, fan-in complete)`);

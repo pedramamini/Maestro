@@ -231,11 +231,49 @@ describe('useCue', () => {
 		});
 	});
 
+	describe('error state', () => {
+		it('error is null on successful refresh', async () => {
+			const { result } = await renderAndSettle();
+			expect(result.current.error).toBeNull();
+		});
+
+		it('error is set when refresh fails', async () => {
+			mockGetStatus.mockRejectedValue(new Error('Network error'));
+			const { result } = await renderAndSettle();
+			expect(result.current.error).toBe('Network error');
+		});
+
+		it('error clears on successful retry', async () => {
+			mockGetStatus.mockRejectedValue(new Error('Network error'));
+			const { result } = await renderAndSettle();
+			expect(result.current.error).toBe('Network error');
+
+			mockGetStatus.mockResolvedValue([]);
+			await act(async () => {
+				await result.current.refresh();
+			});
+			expect(result.current.error).toBeNull();
+		});
+
+		it('error captures message from Error objects', async () => {
+			mockGetStatus.mockRejectedValue(new Error('IPC channel closed'));
+			const { result } = await renderAndSettle();
+			expect(result.current.error).toBe('IPC channel closed');
+		});
+
+		it('error uses fallback for non-Error rejections', async () => {
+			mockGetStatus.mockRejectedValue('string rejection');
+			const { result } = await renderAndSettle();
+			expect(result.current.error).toBe('Failed to fetch Cue status');
+		});
+	});
+
 	describe('return value shape', () => {
 		it('should return all expected properties', async () => {
 			const { result } = await renderAndSettle();
 
 			expect(result.current.loading).toBe(false);
+			expect(result.current.error).toBeNull();
 			expect(Array.isArray(result.current.sessions)).toBe(true);
 			expect(Array.isArray(result.current.activeRuns)).toBe(true);
 			expect(Array.isArray(result.current.activityLog)).toBe(true);
