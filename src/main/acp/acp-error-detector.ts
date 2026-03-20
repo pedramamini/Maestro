@@ -5,8 +5,8 @@
  * Maps JSON-RPC error codes and error messages to AgentErrorType for proper
  * error handling and user feedback.
  *
- * This module uses the existing OPENCODE_ERROR_PATTERNS from error-patterns.ts
- * for text-based error matching, plus JSON-RPC standard error code mapping.
+ * This module checks error patterns for all ACP-compatible agents (OpenCode,
+ * Gemini CLI, etc.) from error-patterns.ts, plus JSON-RPC standard error code mapping.
  */
 
 import type { AgentErrorType } from '../../shared/types';
@@ -155,20 +155,29 @@ function isRecoverableError(type: AgentErrorType): boolean {
 }
 
 /**
+ * ACP-compatible agent IDs for pattern matching.
+ * These agents have supportsACP: true and registered error patterns.
+ */
+const ACP_AGENT_IDS = ['opencode', 'gemini-cli'] as const;
+
+/**
  * Detect error type from an ACP error
  *
  * Uses a multi-step approach:
  * 1. Check JSON-RPC error code if present
- * 2. Match error message against OpenCode error patterns
- * 3. Fall back to 'unknown' if no match
+ * 2. Match error message against agent-specific error patterns
+ * 3. Fall back to keyword-based detection
+ * 4. Fall back to 'unknown' if no match
  *
  * @param error - The error object (can be Error, JSON-RPC error, or string)
  * @param jsonRpcCode - Optional JSON-RPC error code
+ * @param agentType - Optional agent type to check specific patterns first (e.g., 'opencode', 'gemini-cli')
  * @returns Detected error with type, message, and recoverability
  */
 export function detectAcpError(
 	error: Error | { code?: number; message?: string } | string,
-	jsonRpcCode?: number
+	jsonRpcCode?: number,
+	agentType?: string
 ): DetectedError {
 	// Extract error message
 	let message: string;
@@ -197,15 +206,32 @@ export function detectAcpError(
 		}
 	}
 
-	// Step 2: Try to match against OpenCode error patterns
-	const patterns = getErrorPatterns('opencode');
-	const patternMatch = matchErrorPattern(patterns, message);
-	if (patternMatch) {
-		return {
-			type: patternMatch.type,
-			message: patternMatch.message,
-			recoverable: patternMatch.recoverable,
-		};
+	// Step 2: Try to match against agent error patterns
+	// If agentType is specified, check that agent's patterns first
+	if (agentType) {
+		const patterns = getErrorPatterns(agentType);
+		const patternMatch = matchErrorPattern(patterns, message);
+		if (patternMatch) {
+			return {
+				type: patternMatch.type,
+				message: patternMatch.message,
+				recoverable: patternMatch.recoverable,
+			};
+		}
+	}
+
+	// Then check all ACP-compatible agents' patterns (skipping the one already checked)
+	for (const id of ACP_AGENT_IDS) {
+		if (id === agentType) continue; // Already checked above
+		const patterns = getErrorPatterns(id);
+		const patternMatch = matchErrorPattern(patterns, message);
+		if (patternMatch) {
+			return {
+				type: patternMatch.type,
+				message: patternMatch.message,
+				recoverable: patternMatch.recoverable,
+			};
+		}
 	}
 
 	// Step 3: Check for common error keywords in the message

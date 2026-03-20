@@ -222,6 +222,94 @@ describe('ACP Error Detector', () => {
 				expect(result.type).toBe('rate_limited');
 			});
 		});
+
+		describe('Gemini CLI error patterns', () => {
+			it('should match Gemini CLI Google auth failure', () => {
+				const result = detectAcpError('Google auth failed');
+				expect(result.type).toBe('auth_expired');
+				expect(result.recoverable).toBe(true);
+			});
+
+			it('should match Gemini CLI GOOGLE_API_KEY pattern', () => {
+				const result = detectAcpError('Please set GOOGLE_API_KEY environment variable');
+				expect(result.type).toBe('auth_expired');
+				expect(result.recoverable).toBe(true);
+			});
+
+			it('should match Gemini CLI GOOGLE_CLOUD_PROJECT pattern', () => {
+				const result = detectAcpError(
+					'GOOGLE_CLOUD_PROJECT not configured for this request'
+				);
+				expect(result.type).toBe('auth_expired');
+				expect(result.recoverable).toBe(true);
+			});
+
+			it('should match Gemini CLI RESOURCE_EXHAUSTED pattern', () => {
+				const result = detectAcpError('Error: RESOURCE_EXHAUSTED: quota exceeded', undefined, 'gemini-cli');
+				expect(result.type).toBe('rate_limited');
+				expect(result.recoverable).toBe(true);
+			});
+
+			it('should match Gemini CLI PERMISSION_DENIED pattern', () => {
+				const result = detectAcpError('PERMISSION_DENIED: missing required IAM role');
+				expect(result.type).toBe('permission_denied');
+				expect(result.recoverable).toBe(false);
+			});
+
+			it('should match Gemini CLI UNAVAILABLE pattern', () => {
+				const result = detectAcpError('UNAVAILABLE: service is currently down');
+				expect(result.type).toBe('network_error');
+				expect(result.recoverable).toBe(true);
+			});
+
+			it('should match Gemini CLI login required pattern', () => {
+				const result = detectAcpError('login required to access this resource');
+				expect(result.type).toBe('auth_expired');
+				expect(result.recoverable).toBe(true);
+			});
+		});
+
+		describe('agentType parameter', () => {
+			it('should prioritize specified agent patterns when agentType is provided', () => {
+				// GOOGLE_API_KEY is only in Gemini CLI patterns
+				const result = detectAcpError(
+					'Missing GOOGLE_API_KEY',
+					undefined,
+					'gemini-cli'
+				);
+				expect(result.type).toBe('auth_expired');
+			});
+
+			it('should still match patterns without agentType specified', () => {
+				// GOOGLE_API_KEY should still match via fallback to all ACP agents
+				const result = detectAcpError('Missing GOOGLE_API_KEY');
+				expect(result.type).toBe('auth_expired');
+			});
+
+			it('should check all ACP agents when agentType does not match', () => {
+				// RESOURCE_EXHAUSTED is a Gemini CLI pattern, but works for any ACP agent
+				const result = detectAcpError(
+					'RESOURCE_EXHAUSTED',
+					undefined,
+					'opencode'
+				);
+				expect(result.type).toBe('rate_limited');
+			});
+
+			it('should work with opencode agentType for OpenCode-specific patterns', () => {
+				const result = detectAcpError('invalid key error', undefined, 'opencode');
+				expect(result.type).toBe('auth_expired');
+			});
+
+			it('should fall back to keyword detection when no pattern matches', () => {
+				const result = detectAcpError(
+					'unauthorized access to resource',
+					undefined,
+					'gemini-cli'
+				);
+				expect(result.type).toBe('auth_expired');
+			});
+		});
 	});
 
 	describe('isExpectedDisconnect', () => {

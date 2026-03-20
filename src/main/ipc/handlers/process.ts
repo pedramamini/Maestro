@@ -525,6 +525,7 @@ export function registerProcessHandlers(deps: ProcessHandlerDependencies): void 
 						useACP: true,
 						acpShowStreaming,
 						acpSessionId: config.agentSessionId, // For session resume
+						acpArgs: agent?.acpArgs, // Agent-specific ACP args (e.g., ['acp'] for OpenCode, ['--acp'] for Gemini CLI)
 					});
 
 					logger.info(`ACP process spawned successfully`, LOG_CONTEXT, {

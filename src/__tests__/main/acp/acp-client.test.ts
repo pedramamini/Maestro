@@ -145,6 +145,16 @@ describe('ACPClient', () => {
 			expect(client.getIsConnected()).toBe(false);
 		});
 	});
+
+	describe('authenticate', () => {
+		it('should throw if not connected', async () => {
+			const client = new ACPClient(mockConfig);
+
+			await expect(client.authenticate('google-oauth')).rejects.toThrow(
+				'Not connected - call connect() first'
+			);
+		});
+	});
 });
 
 describe('ACP Client Utilities', () => {

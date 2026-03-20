@@ -63,6 +63,17 @@ export interface ACPProcessConfig {
 	command: string;
 	/** Additional arguments for the command (e.g., custom args, SSH wrapper) */
 	args?: string[];
+	/**
+	 * ACP-specific arguments that enable the agent's ACP mode.
+	 * These are prepended before any custom args.
+	 *
+	 * Examples:
+	 * - OpenCode: ['acp'] → `opencode acp`
+	 * - Gemini CLI: ['--acp'] → `gemini --acp`
+	 *
+	 * Defaults to ['acp'] if not specified (OpenCode convention).
+	 */
+	acpArgs?: string[];
 	/** Initial prompt to send */
 	prompt?: string;
 	/** Images to include with prompt (only used for initial prompt, not follow-ups) */
@@ -75,6 +86,12 @@ export interface ACPProcessConfig {
 	contextWindow?: number;
 	/** Auto-approve permission requests (YOLO mode) - default: false for security */
 	autoApprovePermissions?: boolean;
+	/**
+	 * Use the flat content block format for prompts.
+	 * - true (default): Use flat format { type: 'text', text: '...' } (OpenCode convention)
+	 * - false: Use spec format { text: { text: '...' } } (standard ACP, Gemini CLI)
+	 */
+	useFlatContentBlocks?: boolean;
 }
 
 /**
@@ -101,8 +118,9 @@ export class ACPProcess extends EventEmitter {
 		this.startTime = Date.now();
 
 		// Create ACP client
-		// Support custom args (SSH wrapper, custom arguments) while keeping 'acp' as first arg
-		const clientArgs = ['acp', ...(config.args || [])];
+		// Use agent-specific ACP args (e.g., ['acp'] for OpenCode, ['--acp'] for Gemini CLI)
+		// Defaults to ['acp'] for backward compatibility with OpenCode
+		const clientArgs = [...(config.acpArgs || ['acp']), ...(config.args || [])];
 		const clientConfig: ACPClientConfig = {
 			command: config.command,
 			args: clientArgs,
@@ -161,7 +179,7 @@ export class ACPProcess extends EventEmitter {
 			isBatchMode: true,
 			startTime: this.startTime,
 			command: this.config.command,
-			args: ['acp', ...(this.config.args || [])],
+			args: [...(this.config.acpArgs || ['acp']), ...(this.config.args || [])],
 		};
 	}
 
@@ -182,7 +200,25 @@ export class ACPProcess extends EventEmitter {
 			logger.info(`ACP connected to ${initResponse.agentInfo?.name}`, LOG_CONTEXT, {
 				version: initResponse.agentInfo?.version,
 				protocolVersion: initResponse.protocolVersion,
+				hasAuthMethods: !!(initResponse.authMethods && initResponse.authMethods.length > 0),
 			});
+
+			// Authenticate if the agent requires it (e.g., Gemini CLI)
+			// Auto-select the first available auth method as default
+			if (initResponse.authMethods && initResponse.authMethods.length > 0) {
+				const defaultAuth = initResponse.authMethods[0];
+				logger.info(`Agent requires authentication, using method: ${defaultAuth.id}`, LOG_CONTEXT, {
+					availableMethods: initResponse.authMethods.map((m) => m.id),
+				});
+
+				const authResponse = await this.client.authenticate(defaultAuth.id);
+				if (!authResponse.success) {
+					throw new Error(
+						`Authentication failed: ${authResponse.error || 'Unknown auth error'}`
+					);
+				}
+				logger.info('Authentication successful', LOG_CONTEXT);
+			}
 
 			// Create or load session
 			if (this.config.acpSessionId) {
@@ -237,7 +273,7 @@ export class ACPProcess extends EventEmitter {
 			}
 
 			// Detect error type using ACP error detector
-			const detectedError = detectAcpError(err);
+			const detectedError = detectAcpError(err, undefined, this.config.toolType);
 			this.emit('agent-error', this.config.sessionId, {
 				type: detectedError.type,
 				message: detectedError.message,
@@ -279,7 +315,9 @@ export class ACPProcess extends EventEmitter {
 			if (images && images.length > 0) {
 				response = await this.client.promptWithImages(this.acpSessionId, text, images);
 			} else {
-				response = await this.client.prompt(this.acpSessionId, text);
+				// Use flat content blocks for OpenCode (default), spec format for others
+				const useFlatFormat = this.config.useFlatContentBlocks !== false;
+				response = await this.client.prompt(this.acpSessionId, text, useFlatFormat);
 			}
 
 			logger.debug('Received prompt response from ACP agent', LOG_CONTEXT, {
@@ -347,7 +385,7 @@ export class ACPProcess extends EventEmitter {
 			});
 
 			// Detect error type using ACP error detector
-			const detectedError = detectAcpError(err);
+			const detectedError = detectAcpError(err, undefined, this.config.toolType);
 			this.emit('agent-error', this.config.sessionId, {
 				type: detectedError.type,
 				message: detectedError.message,
@@ -567,7 +605,7 @@ export class ACPProcess extends EventEmitter {
 			});
 
 			// Detect error type using ACP error detector
-			const detectedError = detectAcpError(error);
+			const detectedError = detectAcpError(error, undefined, this.config.toolType);
 			this.emit('agent-error', this.config.sessionId, {
 				type: detectedError.type,
 				message: detectedError.message,

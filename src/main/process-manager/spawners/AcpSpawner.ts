@@ -38,6 +38,7 @@ export class AcpSpawner {
 			customEnvVars,
 			acpSessionId,
 			acpShowStreaming = true,
+			acpArgs,
 		} = config;
 
 		logger.info(`${LOG_CONTEXT} Spawning ACP process`, LOG_CONTEXT, {
@@ -61,6 +62,7 @@ export class AcpSpawner {
 				cwd,
 				command,
 				args, // Pass through any custom args (SSH wrapper, etc.)
+				acpArgs, // Agent-specific ACP args (e.g., ['acp'] for OpenCode, ['--acp'] for Gemini CLI)
 				prompt,
 				images: acpImages,
 				acpSessionId,
@@ -69,6 +71,8 @@ export class AcpSpawner {
 				// YOLO mode: auto-approve all permission requests
 				// This matches the behavior of other agents in Maestro
 				autoApprovePermissions: true,
+				// OpenCode uses flat content blocks, other agents use spec format
+				useFlatContentBlocks: toolType === 'opencode',
 			};
 
 			// Create and configure ACP process

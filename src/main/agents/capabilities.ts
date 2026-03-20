@@ -234,8 +234,9 @@ export const AGENT_CAPABILITIES: Record<string, AgentCapabilities> = {
 	/**
 	 * Gemini CLI - Google's Gemini model CLI
 	 *
-	 * PLACEHOLDER: Most capabilities set to false until Gemini CLI is stable
-	 * and can be tested. Update this configuration when integrating the agent.
+	 * ACP support verified via @agentclientprotocol/sdk v0.16.1, protocol version 1.
+	 * Listed on agentclientprotocol.com. Uses `gemini --acp` flag to enable ACP mode.
+	 * Requires authentication call between initialize and session/new.
 	 */
 	'gemini-cli': {
 		supportsResume: false,
@@ -261,7 +262,7 @@ export const AGENT_CAPABILITIES: Record<string, AgentCapabilities> = {
 		supportsGroupChatModeration: false, // PLACEHOLDER
 		usesJsonLineOutput: false, // PLACEHOLDER
 		usesCombinedContextWindow: false, // PLACEHOLDER
-		supportsACP: false, // PLACEHOLDER
+		supportsACP: true, // Gemini CLI supports ACP via @agentclientprotocol/sdk
 	},
 
 	/**

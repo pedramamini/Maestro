@@ -104,6 +104,32 @@ export interface AuthMethod {
 }
 
 // ============================================================================
+// Authentication
+// ============================================================================
+
+/**
+ * Authentication request sent after initialize when the agent
+ * reports authMethods in the InitializeResponse.
+ *
+ * Some agents (e.g., Gemini CLI) require an explicit authenticate call
+ * between initialize and session/new. The client selects which auth
+ * method to use from the list provided in InitializeResponse.authMethods.
+ */
+export interface AuthenticateRequest {
+	/** The selected auth method ID (from InitializeResponse.authMethods) */
+	authMethodId: string;
+	/** Optional auth parameters (e.g., API key, token) */
+	params?: Record<string, unknown>;
+}
+
+export interface AuthenticateResponse {
+	/** Whether authentication was successful */
+	success: boolean;
+	/** Error message if authentication failed */
+	error?: string;
+}
+
+// ============================================================================
 // Session Management
 // ============================================================================
 

@@ -42,6 +42,13 @@ export interface ProcessConfig {
 	acpShowStreaming?: boolean;
 	/** ACP session ID for resuming a session */
 	acpSessionId?: string;
+	/**
+	 * ACP-specific arguments that enable the agent's ACP mode.
+	 * These are prepended before any custom args.
+	 * Examples: ['acp'] for OpenCode, ['--acp'] for Gemini CLI.
+	 * Defaults to ['acp'] if not specified.
+	 */
+	acpArgs?: string[];
 }
 
 /**

@@ -22,6 +22,8 @@ import type {
 	AgentCapabilities,
 	InitializeRequest,
 	InitializeResponse,
+	AuthenticateRequest,
+	AuthenticateResponse,
 	SessionId,
 	NewSessionRequest,
 	NewSessionResponse,
@@ -335,6 +337,34 @@ export class ACPClient extends EventEmitter {
 	}
 
 	/**
+	 * Authenticate with the agent.
+	 *
+	 * Some agents (e.g., Gemini CLI) require an explicit authenticate call
+	 * between initialize and session/new. Call this method after connect()
+	 * if the InitializeResponse includes authMethods.
+	 *
+	 * @param authMethodId - The ID of the auth method to use (from InitializeResponse.authMethods)
+	 * @param params - Optional auth parameters (e.g., API key, token)
+	 * @returns AuthenticateResponse indicating success or failure
+	 */
+	async authenticate(
+		authMethodId: string,
+		params?: Record<string, unknown>
+	): Promise<AuthenticateResponse> {
+		if (!this.isConnected) {
+			throw new Error('Not connected - call connect() first');
+		}
+
+		const request: AuthenticateRequest = {
+			authMethodId,
+			params,
+		};
+
+		logger.info(`Authenticating with method: ${authMethodId}`, LOG_CONTEXT);
+		return (await this.sendRequest('authenticate', request)) as AuthenticateResponse;
+	}
+
+	/**
 	 * Create a new session
 	 */
 	async newSession(cwd: string): Promise<NewSessionResponse> {
@@ -363,21 +393,34 @@ export class ACPClient extends EventEmitter {
 	/**
 	 * Send a prompt to the agent
 	 *
-	 * Note: OpenCode uses the flat ContentBlock format: { type: 'text', text: 'content' }
-	 * rather than the nested spec format { text: { text: 'content' } }.
-	 * We use ContentBlockFlat here for OpenCode compatibility.
+	 * Supports two content block formats:
+	 * - Flat format (useFlatFormat=true): { type: 'text', text: 'content' } (OpenCode convention)
+	 * - Spec format (useFlatFormat=false): { text: { text: 'content' } } (standard ACP, Gemini CLI)
+	 *
+	 * @param sessionId - The session ID
+	 * @param text - The prompt text
+	 * @param useFlatFormat - Use flat content block format (default: true for OpenCode compat)
 	 */
-	async prompt(sessionId: SessionId, text: string): Promise<PromptResponse> {
-		// OpenCode uses flat content block format
-		const contentBlock: ContentBlockFlat = {
-			type: 'text',
-			text,
-		};
-		const request: PromptRequest = {
-			sessionId,
+	async prompt(sessionId: SessionId, text: string, useFlatFormat = true): Promise<PromptResponse> {
+		let prompt: ContentBlock[];
+
+		if (useFlatFormat) {
+			// OpenCode uses flat content block format
+			const contentBlock: ContentBlockFlat = {
+				type: 'text',
+				text,
+			};
 			// Cast to ContentBlock[] since PromptRequest expects that type
 			// but we're sending the flat format that OpenCode understands
-			prompt: [contentBlock as unknown as ContentBlock],
+			prompt = [contentBlock as unknown as ContentBlock];
+		} else {
+			// Standard ACP spec format (Gemini CLI and other conforming agents)
+			prompt = [{ text: { text } }];
+		}
+
+		const request: PromptRequest = {
+			sessionId,
+			prompt,
 		};
 		return (await this.sendRequest('session/prompt', request)) as PromptResponse;
 	}
