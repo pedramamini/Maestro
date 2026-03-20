@@ -29,53 +29,60 @@ Based on https://cursor.com/docs/cli/overview, headless mode docs, and installat
 
 ## Subcommands
 
-| Subcommand | Description |
-|-----------|-------------|
-| `agent` | Start interactive session |
-| `agent "prompt"` | Start with initial prompt |
-| `agent ls` | List previous conversations |
-| `agent resume` | Resume latest conversation |
-| `agent update` | Manual update |
+| Subcommand       | Description                 |
+| ---------------- | --------------------------- |
+| `agent`          | Start interactive session   |
+| `agent "prompt"` | Start with initial prompt   |
+| `agent ls`       | List previous conversations |
+| `agent resume`   | Resume latest conversation  |
+| `agent update`   | Manual update               |
 
 ## Operational Modes
 
-| Mode | Purpose | Activation |
-|------|---------|------------|
-| Agent (default) | Full access to all tools for complex coding tasks | Default mode |
-| Plan | Design approach with clarifying questions, no file changes | `--plan`, `--mode=plan`, `/plan`, Shift+Tab |
-| Ask | Read-only exploration without making changes | `--mode=ask`, `/ask` |
+| Mode            | Purpose                                                    | Activation                                  |
+| --------------- | ---------------------------------------------------------- | ------------------------------------------- |
+| Agent (default) | Full access to all tools for complex coding tasks          | Default mode                                |
+| Plan            | Design approach with clarifying questions, no file changes | `--plan`, `--mode=plan`, `/plan`, Shift+Tab |
+| Ask             | Read-only exploration without making changes               | `--mode=ask`, `/ask`                        |
 
 ## Key Flags & Options
 
 ### Headless/Batch Mode (Non-Interactive)
+
 - **`-p, --print`**: Enables non-interactive scripting/automation mode (similar to Claude Code's `--print`)
 - **`--force` / `--yolo`**: Allows agent to make direct file changes without confirmation (YOLO mode)
 - Without `--force`, proposed changes are displayed but NOT applied
 
 ### Output Format
+
 - **`--output-format text`**: Clean, final-answer-only responses (default)
 - **`--output-format json`**: Structured analysis output
 - **`--output-format stream-json`**: Message-level progress tracking with real-time updates
 - **`--stream-partial-output`**: Incremental streaming of text deltas for live feedback
 
 ### Model Selection
+
 - **`--model "model-name"`**: Select AI model (e.g., `gpt-5.2`)
 
 ### Session Management
+
 - **`--resume="chat-id-here"`**: Resume a specific conversation by chat ID
 - **`--continue`**: Persist previous context (resume latest)
 - **`agent resume`**: Resume latest conversation (interactive)
 - **`agent ls`**: List previous conversations
 
 ### Cloud Mode
+
 - **`-c` / `--cloud`**: Start in Cloud Agent mode
 - Prepend `&` to messages for Cloud Agent handoff mid-conversation
 
 ### Sandbox
+
 - **`--sandbox <mode>`**: Control execution settings (`enabled` / `disabled`)
 - `/sandbox` interactive command
 
 ### Max Mode
+
 - `/max-mode [on|off]`: Toggle Max Mode on supported models
 
 ## Output Format (stream-json)
@@ -101,6 +108,7 @@ The `--output-format stream-json` produces structured newline-delimited JSON eve
    - Fields: `type`, `duration_ms`
 
 ### Notes on Output Format
+
 - Very similar to Claude Code's `stream-json` format
 - Uses the same `--output-format stream-json` flag name as Claude Code
 - No documented session ID field in stream-json output (may be present but undocumented)
@@ -115,8 +123,8 @@ The `--output-format stream-json` produces structured newline-delimited JSON eve
 
 ## Environment Variables
 
-| Variable | Purpose |
-|----------|---------|
+| Variable         | Purpose                                      |
+| ---------------- | -------------------------------------------- |
 | `CURSOR_API_KEY` | API authentication for headless/script usage |
 
 ## Config Files
@@ -149,23 +157,23 @@ The `--output-format stream-json` produces structured newline-delimited JSON eve
 
 ## Capabilities Summary for Maestro Integration
 
-| Capability | Supported | Notes |
-|-----------|-----------|-------|
-| Batch/headless mode | Yes | `-p` flag |
-| JSON output | Yes | `--output-format stream-json` |
-| Session resume | Yes | `--resume="id"` or `--continue` |
-| Read-only mode | Yes | `--mode=ask` (read-only) or `--mode=plan` (plan-only) |
-| YOLO/force mode | Yes | `--force` or `--yolo` |
-| Model selection | Yes | `--model "name"` |
-| Image input | Partial | Via file path in prompt text (no dedicated flag) |
-| Streaming | Yes | `--stream-partial-output` |
-| Session storage | Yes | Via `agent ls` (exact disk format unknown) |
-| Cost tracking | No | Not exposed in CLI output |
-| Token usage | No | Not exposed in CLI output |
-| Context window | Unknown | Not documented |
-| Slash commands | Yes | `/plan`, `/ask`, `/sandbox`, `/max-mode` |
-| Session ID in output | Unknown | Not documented in stream-json schema |
-| Working dir flag | No | Uses CWD, no flag |
+| Capability           | Supported | Notes                                                 |
+| -------------------- | --------- | ----------------------------------------------------- |
+| Batch/headless mode  | Yes       | `-p` flag                                             |
+| JSON output          | Yes       | `--output-format stream-json`                         |
+| Session resume       | Yes       | `--resume="id"` or `--continue`                       |
+| Read-only mode       | Yes       | `--mode=ask` (read-only) or `--mode=plan` (plan-only) |
+| YOLO/force mode      | Yes       | `--force` or `--yolo`                                 |
+| Model selection      | Yes       | `--model "name"`                                      |
+| Image input          | Partial   | Via file path in prompt text (no dedicated flag)      |
+| Streaming            | Yes       | `--stream-partial-output`                             |
+| Session storage      | Yes       | Via `agent ls` (exact disk format unknown)            |
+| Cost tracking        | No        | Not exposed in CLI output                             |
+| Token usage          | No        | Not exposed in CLI output                             |
+| Context window       | Unknown   | Not documented                                        |
+| Slash commands       | Yes       | `/plan`, `/ask`, `/sandbox`, `/max-mode`              |
+| Session ID in output | Unknown   | Not documented in stream-json schema                  |
+| Working dir flag     | No        | Uses CWD, no flag                                     |
 
 ## Recommended Maestro Configuration
 
