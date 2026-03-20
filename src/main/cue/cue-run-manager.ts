@@ -55,6 +55,10 @@ export interface CueRunManagerDeps {
 	) => void;
 	/** Called when a run is manually stopped — pushes to activity log only (no chain propagation) */
 	onRunStopped: (result: CueRunResult) => void;
+	/** Called to prevent system sleep (e.g., when a Cue run starts) */
+	onPreventSleep?: (reason: string) => void;
+	/** Called to allow system sleep (e.g., when a Cue run ends) */
+	onAllowSleep?: (reason: string) => void;
 }
 
 export interface CueRunManager {
@@ -159,6 +163,7 @@ export function createCueRunManager(deps: CueRunManagerDeps): CueRunManager {
 		};
 
 		activeRuns.set(runId, { result, abortController });
+		deps.onPreventSleep?.(`cue:run:${runId}`);
 		const timeoutMs = (settings?.timeout_minutes ?? 30) * 60 * 1000;
 		try {
 			recordCueEvent({
@@ -271,6 +276,11 @@ export function createCueRunManager(deps: CueRunManagerDeps): CueRunManager {
 
 			const wasManuallyStopped = manuallyStoppedRuns.has(runId);
 
+			// Only release sleep block here for non-stopped runs — stopRun already released eagerly
+			if (!wasManuallyStopped) {
+				deps.onAllowSleep?.(`cue:run:${runId}`);
+			}
+
 			// Only decrement here for non-stopped runs — stopRun already decremented eagerly
 			if (!wasManuallyStopped) {
 				const count = activeRunCount.get(sessionId) ?? 1;
@@ -367,6 +377,7 @@ export function createCueRunManager(deps: CueRunManagerDeps): CueRunManager {
 			run.result.durationMs = Date.now() - new Date(run.result.startedAt).getTime();
 
 			activeRuns.delete(runId);
+			deps.onAllowSleep?.(`cue:run:${runId}`);
 
 			// Free the concurrency slot immediately so queued events can proceed.
 			// The finally block in doExecuteCueRun skips its decrement for manually stopped runs.
@@ -418,6 +429,9 @@ export function createCueRunManager(deps: CueRunManagerDeps): CueRunManager {
 		},
 
 		reset(): void {
+			for (const runId of activeRuns.keys()) {
+				deps.onAllowSleep?.(`cue:run:${runId}`);
+			}
 			activeRuns.clear();
 			activeRunCount.clear();
 			eventQueue.clear();

@@ -667,7 +667,8 @@ export function GeneralTab({ theme, isOpen }: GeneralTabProps) {
 								Prevent sleep while working
 							</div>
 							<div className="text-xs opacity-50 mt-0.5" style={{ color: theme.colors.textDim }}>
-								Keeps your computer awake when AI agents are busy or Auto Run is active
+								Keeps your computer awake when AI agents are busy, Auto Run is active, or Cue
+								pipelines are scheduled
 							</div>
 						</div>
 						<button

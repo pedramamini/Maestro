@@ -462,6 +462,8 @@ app.whenReady().then(async () => {
 				mainWindow.webContents.send('cue:activityUpdate', data);
 			}
 		},
+		onPreventSleep: (reason) => powerManager.addBlockReason(reason),
+		onAllowSleep: (reason) => powerManager.removeBlockReason(reason),
 	});
 
 	logger.info('Core services initialized', 'Startup');

@@ -63,6 +63,10 @@ export interface CueEngineDeps {
 	}) => Promise<CueRunResult>;
 	onStopCueRun?: (runId: string) => boolean;
 	onLog: (level: MainLogLevel, message: string, data?: unknown) => void;
+	/** Called to prevent system sleep (e.g., when Cue has active scheduled subscriptions or runs) */
+	onPreventSleep?: (reason: string) => void;
+	/** Called to allow system sleep (e.g., when Cue scheduled subscriptions or runs end) */
+	onAllowSleep?: (reason: string) => void;
 }
 
 /** Internal state per session with an active Cue config */
@@ -110,6 +114,8 @@ export class CueEngine {
 			onRunStopped: (result) => {
 				this.pushActivityLog(result);
 			},
+			onPreventSleep: deps.onPreventSleep,
+			onAllowSleep: deps.onAllowSleep,
 		});
 		this.fanInTracker = createCueFanInTracker({
 			onLog: deps.onLog,
@@ -663,6 +669,12 @@ export class CueEngine {
 		}
 
 		this.sessions.set(session.id, state);
+
+		// Prevent system sleep if this session has time-based subscriptions
+		if (this.hasTimeBasedSubscriptions(config, session.id)) {
+			this.deps.onPreventSleep?.(`cue:schedule:${session.id}`);
+		}
+
 		this.deps.onLog(
 			'cue',
 			`[CUE] Initialized session "${session.name}" with ${config.subscriptions.filter((s) => s.enabled !== false).length} active subscription(s)`
@@ -673,9 +685,22 @@ export class CueEngine {
 		this.activityLog.push(result);
 	}
 
+	/** Check if a config has any enabled time-based subscriptions for this session */
+	private hasTimeBasedSubscriptions(config: CueConfig, sessionId: string): boolean {
+		return config.subscriptions.some(
+			(sub) =>
+				sub.enabled !== false &&
+				(!sub.agent_id || sub.agent_id === sessionId) &&
+				(sub.event === 'time.heartbeat' || sub.event === 'time.scheduled')
+		);
+	}
+
 	private teardownSession(sessionId: string): void {
 		const state = this.sessions.get(sessionId);
 		if (!state) return;
+
+		// Release sleep prevention for this session's scheduled subscriptions
+		this.deps.onAllowSleep?.(`cue:schedule:${sessionId}`);
 
 		for (const timer of state.timers) {
 			clearInterval(timer);
