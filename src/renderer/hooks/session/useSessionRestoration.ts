@@ -438,7 +438,7 @@ export function useSessionRestoration(): SessionRestorationReturn {
 						const sshRemoteId =
 							session.sshRemoteId ||
 							(session.sessionSshRemoteConfig?.enabled
-								? session.sessionSshRemoteConfig.remoteId ?? undefined
+								? (session.sessionSshRemoteConfig.remoteId ?? undefined)
 								: undefined);
 
 						// Validate agent availability in background (SSH-aware)
