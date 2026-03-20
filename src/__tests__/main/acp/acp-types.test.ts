@@ -9,6 +9,9 @@ import {
 	type SessionUpdate,
 	type ToolCallStatus,
 	type StopReason,
+	type UsageUpdate,
+	type UsageCost,
+	type ConfigOptionUpdate,
 } from '../../../main/acp/types';
 
 describe('ACP Types', () => {
@@ -211,6 +214,32 @@ describe('ACP Types', () => {
 
 			expect('plan' in update).toBe(true);
 		});
+
+		it('should recognize usage_update', () => {
+			const update: SessionUpdate = {
+				usage_update: {
+					used: 5000,
+					size: 128000,
+					cost: {
+						amount: 0.0125,
+						currency: 'USD',
+					},
+				},
+			};
+
+			expect('usage_update' in update).toBe(true);
+		});
+
+		it('should recognize config_option_update', () => {
+			const update: SessionUpdate = {
+				config_option_update: {
+					key: 'model',
+					value: 'claude-3-opus',
+				},
+			};
+
+			expect('config_option_update' in update).toBe(true);
+		});
 	});
 
 	describe('ToolCallStatus Values', () => {
@@ -238,6 +267,95 @@ describe('ACP Types', () => {
 			expect(reasons).toHaveLength(5);
 			expect(reasons).toContain('end_turn');
 			expect(reasons).toContain('cancelled');
+		});
+	});
+
+	describe('UsageUpdate Types', () => {
+		it('should allow usage update without cost', () => {
+			const usage: UsageUpdate = {
+				used: 5000,
+				size: 128000,
+			};
+
+			expect(usage.used).toBe(5000);
+			expect(usage.size).toBe(128000);
+			expect(usage.cost).toBeUndefined();
+		});
+
+		it('should allow usage update with cost', () => {
+			const usage: UsageUpdate = {
+				used: 10000,
+				size: 200000,
+				cost: {
+					amount: 0.025,
+					currency: 'USD',
+				},
+			};
+
+			expect(usage.used).toBe(10000);
+			expect(usage.size).toBe(200000);
+			expect(usage.cost?.amount).toBe(0.025);
+			expect(usage.cost?.currency).toBe('USD');
+		});
+
+		it('should allow UsageCost with different currencies', () => {
+			const usdCost: UsageCost = { amount: 0.01, currency: 'USD' };
+			const eurCost: UsageCost = { amount: 0.009, currency: 'EUR' };
+
+			expect(usdCost.currency).toBe('USD');
+			expect(eurCost.currency).toBe('EUR');
+		});
+	});
+
+	describe('ConfigOptionUpdate Types', () => {
+		it('should allow string config values', () => {
+			const config: ConfigOptionUpdate = {
+				key: 'model',
+				value: 'claude-3-opus',
+			};
+
+			expect(config.key).toBe('model');
+			expect(config.value).toBe('claude-3-opus');
+		});
+
+		it('should allow boolean config values', () => {
+			const config: ConfigOptionUpdate = {
+				key: 'streaming',
+				value: true,
+			};
+
+			expect(config.key).toBe('streaming');
+			expect(config.value).toBe(true);
+		});
+
+		it('should allow numeric config values', () => {
+			const config: ConfigOptionUpdate = {
+				key: 'maxTokens',
+				value: 4096,
+			};
+
+			expect(config.key).toBe('maxTokens');
+			expect(config.value).toBe(4096);
+		});
+
+		it('should allow object config values', () => {
+			const config: ConfigOptionUpdate = {
+				key: 'options',
+				value: { streaming: true, verbose: false },
+			};
+
+			expect(config.key).toBe('options');
+			expect(config.value).toEqual({ streaming: true, verbose: false });
+		});
+
+		it('should allow null config values', () => {
+			const config: ConfigOptionUpdate = {
+				key: 'customPrompt',
+				value: null,
+			};
+
+			expect(config.key).toBe('customPrompt');
+			expect(config.value).toBeNull();
 		});
 	});
 });

@@ -216,7 +216,7 @@ describe('ACP Adapter', () => {
 		});
 
 		describe('current_mode_update', () => {
-			it('should return null for mode updates', () => {
+			it('should convert mode update to system message', () => {
 				const update = {
 					current_mode_update: {
 						currentModeId: 'code',
@@ -225,7 +225,117 @@ describe('ACP Adapter', () => {
 
 				const event = acpUpdateToParseEvent(testSessionId, update);
 
-				expect(event).toBeNull();
+				expect(event).not.toBeNull();
+				expect(event?.type).toBe('system');
+				expect(event?.text).toBe('Mode changed to: code');
+				expect(event?.sessionId).toBe(testSessionId);
+			});
+		});
+
+		describe('usage_update', () => {
+			it('should convert usage update to usage ParsedEvent', () => {
+				const update = {
+					usage_update: {
+						used: 5000,
+						size: 128000,
+					},
+				} as unknown as SessionUpdate;
+
+				const event = acpUpdateToParseEvent(testSessionId, update);
+
+				expect(event).not.toBeNull();
+				expect(event?.type).toBe('usage');
+				expect(event?.sessionId).toBe(testSessionId);
+				expect(event?.usage).toEqual({
+					inputTokens: 5000,
+					outputTokens: 0,
+					cacheReadTokens: 0,
+					cacheCreationTokens: 0,
+					contextWindow: 128000,
+					costUsd: 0,
+				});
+			});
+
+			it('should include USD cost when provided', () => {
+				const update = {
+					usage_update: {
+						used: 10000,
+						size: 128000,
+						cost: {
+							amount: 0.0125,
+							currency: 'USD',
+						},
+					},
+				} as unknown as SessionUpdate;
+
+				const event = acpUpdateToParseEvent(testSessionId, update);
+
+				expect(event).not.toBeNull();
+				expect(event?.usage?.costUsd).toBe(0.0125);
+			});
+
+			it('should set costUsd to 0 for non-USD currencies', () => {
+				const update = {
+					usage_update: {
+						used: 10000,
+						size: 128000,
+						cost: {
+							amount: 0.01,
+							currency: 'EUR',
+						},
+					},
+				} as unknown as SessionUpdate;
+
+				const event = acpUpdateToParseEvent(testSessionId, update);
+
+				expect(event).not.toBeNull();
+				expect(event?.usage?.costUsd).toBe(0);
+			});
+		});
+
+		describe('config_option_update', () => {
+			it('should convert config option update to system message', () => {
+				const update = {
+					config_option_update: {
+						key: 'model',
+						value: 'claude-3-opus',
+					},
+				} as unknown as SessionUpdate;
+
+				const event = acpUpdateToParseEvent(testSessionId, update);
+
+				expect(event).not.toBeNull();
+				expect(event?.type).toBe('system');
+				expect(event?.text).toBe('Config updated: model = "claude-3-opus"');
+				expect(event?.sessionId).toBe(testSessionId);
+			});
+
+			it('should handle complex config values', () => {
+				const update = {
+					config_option_update: {
+						key: 'options',
+						value: { streaming: true, maxTokens: 4096 },
+					},
+				} as unknown as SessionUpdate;
+
+				const event = acpUpdateToParseEvent(testSessionId, update);
+
+				expect(event).not.toBeNull();
+				expect(event?.text).toBe('Config updated: options = {"streaming":true,"maxTokens":4096}');
+			});
+
+			it('should handle boolean config values', () => {
+				const update = {
+					config_option_update: {
+						key: 'verboseMode',
+						value: true,
+					},
+				} as unknown as SessionUpdate;
+
+				const event = acpUpdateToParseEvent(testSessionId, update);
+
+				expect(event).not.toBeNull();
+				expect(event?.text).toBe('Config updated: verboseMode = true');
 			});
 		});
 	});

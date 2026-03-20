@@ -186,8 +186,45 @@ export function acpUpdateToParseEvent(
 
 	// Mode update
 	if ('current_mode_update' in update) {
-		// Could emit a mode change event
-		return null;
+		// Emit a system message for mode changes
+		return {
+			type: 'system',
+			text: `Mode changed to: ${update.current_mode_update.currentModeId}`,
+			sessionId,
+			raw: update,
+		};
+	}
+
+	// Usage update (token usage and cost information)
+	if ('usage_update' in update) {
+		const usage = update.usage_update;
+		return {
+			type: 'usage',
+			sessionId,
+			usage: {
+				// usage_update provides cumulative context usage, not per-turn tokens
+				// Map 'used' to inputTokens as it represents tokens in context
+				inputTokens: usage.used,
+				outputTokens: 0,
+				cacheReadTokens: 0,
+				cacheCreationTokens: 0,
+				contextWindow: usage.size,
+				// Convert cost if provided
+				costUsd: usage.cost?.currency === 'USD' ? usage.cost.amount : 0,
+			},
+			raw: update,
+		};
+	}
+
+	// Config option update (session configuration changes)
+	if ('config_option_update' in update) {
+		const config = update.config_option_update;
+		return {
+			type: 'system',
+			text: `Config updated: ${config.key} = ${JSON.stringify(config.value)}`,
+			sessionId,
+			raw: update,
+		};
 	}
 
 	return null;

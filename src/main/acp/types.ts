@@ -270,7 +270,9 @@ export type SessionUpdate =
 	| { tool_call_update: ToolCallUpdate }
 	| { plan: Plan }
 	| { available_commands_update: AvailableCommandsUpdate }
-	| { current_mode_update: CurrentModeUpdate };
+	| { current_mode_update: CurrentModeUpdate }
+	| { usage_update: UsageUpdate }
+	| { config_option_update: ConfigOptionUpdate };
 
 export interface ContentChunk {
 	content: ContentBlock;
@@ -375,6 +377,48 @@ export interface AvailableCommandInput {
 
 export interface CurrentModeUpdate {
 	currentModeId: SessionModeId;
+}
+
+// ============================================================================
+// Usage Update
+// ============================================================================
+
+/**
+ * Usage update sent by agents to report token usage and cost.
+ * Based on OpenCode's ACP implementation:
+ * - used: number of tokens used in the current context
+ * - size: total context window size
+ * - cost: optional cost information with amount and currency
+ */
+export interface UsageUpdate {
+	/** Number of tokens used in the current context */
+	used: number;
+	/** Total context window size */
+	size: number;
+	/** Optional cost information */
+	cost?: UsageCost;
+}
+
+export interface UsageCost {
+	/** Cost amount (e.g., 0.0025) */
+	amount: number;
+	/** Currency code (e.g., "USD") */
+	currency: string;
+}
+
+// ============================================================================
+// Config Option Update
+// ============================================================================
+
+/**
+ * Config option update sent by agents when session configuration changes.
+ * Used to notify the client of configuration changes that occurred during the session.
+ */
+export interface ConfigOptionUpdate {
+	/** The configuration option that changed */
+	key: string;
+	/** The new value for the configuration option */
+	value: unknown;
 }
 
 // ============================================================================
