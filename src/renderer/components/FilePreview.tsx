@@ -1030,6 +1030,15 @@ export const FilePreview = React.memo(
 			setIsSaving(true);
 			try {
 				await onSave(file.path, editContent);
+				// Update lastModifiedRef so the file-change poller doesn't flag our own save
+				try {
+					const stat = await window.maestro?.fs?.stat(file.path, sshRemoteId);
+					if (stat?.modifiedAt) {
+						lastModifiedRef.current = new Date(stat.modifiedAt).getTime();
+					}
+				} catch {
+					// Non-critical — worst case the banner appears briefly
+				}
 				setCopyNotificationMessage('File Saved');
 				setShowCopyNotification(true);
 				setTimeout(() => setShowCopyNotification(false), 2000);
@@ -1041,7 +1050,7 @@ export const FilePreview = React.memo(
 			} finally {
 				setIsSaving(false);
 			}
-		}, [file, onSave, hasChanges, isSaving, editContent]);
+		}, [file, onSave, hasChanges, isSaving, editContent, sshRemoteId]);
 
 		// Track scroll position to show/hide stats bar and report changes
 		useEffect(() => {

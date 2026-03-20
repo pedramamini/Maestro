@@ -76,6 +76,10 @@ export const TerminalView = memo(
 		// Dedup spawn-failure toasts: batch rapid failures into a single notification
 		const spawnFailureCountRef = useRef(0);
 		const spawnFailureTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+		// Stable refs for callback props — prevents spawnPtyForTab from getting a new
+		// identity on every render, which would re-trigger the spawn useEffect in a loop.
+		const onTabPidChangeRef = useRef(onTabPidChange);
+		onTabPidChangeRef.current = onTabPidChange;
 
 		const closeTerminalTab = useTabStore((s) => s.closeTerminalTab);
 
@@ -169,7 +173,7 @@ export const TerminalView = memo(
 					})
 					.then((result) => {
 						if (result.success) {
-							onTabPidChange(tabId, result.pid);
+							onTabPidChangeRef.current(tabId, result.pid);
 						} else {
 							// Spawn failed — close the tab and notify via batched toast
 							setTimeout(() => closeTerminalTab(tabId), 0);
@@ -204,8 +208,8 @@ export const TerminalView = memo(
 				defaultShell,
 				shellArgs,
 				shellEnvVars,
-				onTabPidChange,
-				onTabStateChange,
+				// onTabPidChange accessed via stable ref — not a dep
+				// onTabStateChange not used in this callback
 				closeTerminalTab,
 				notifySpawnFailure,
 			]
