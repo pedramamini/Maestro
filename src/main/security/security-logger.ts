@@ -91,6 +91,9 @@ const eventListeners = new Set<SecurityEventListener>();
 // File persistence path (initialized lazily)
 let securityEventsPath: string | null = null;
 
+// Write queue for serializing file writes (prevents interleaving from concurrent calls)
+let writeQueue: Promise<void> = Promise.resolve();
+
 /**
  * Get the path to the security events file
  */
@@ -196,12 +199,25 @@ export async function logSecurityEvent(
 }
 
 /**
- * Append a security event to the JSONL file
+ * Append a security event to the JSONL file.
+ * Uses a write queue to serialize concurrent writes and prevent interleaving.
  */
 async function appendEventToFile(event: SecurityEvent): Promise<void> {
 	const filePath = getSecurityEventsPath();
 	const line = JSON.stringify(event) + '\n';
-	await fs.appendFile(filePath, line, 'utf-8');
+
+	// Chain this write onto the queue to serialize concurrent writes
+	const writePromise = writeQueue.then(async () => {
+		await fs.appendFile(filePath, line, 'utf-8');
+	});
+
+	// Update the queue to include this write (don't let it reject the queue)
+	writeQueue = writePromise.catch(() => {
+		// Errors are handled by the caller, don't let them break the chain
+	});
+
+	// Wait for this specific write to complete
+	await writePromise;
 }
 
 /**
