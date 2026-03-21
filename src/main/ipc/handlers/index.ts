@@ -55,7 +55,6 @@ import { registerDirectorNotesHandlers, DirectorNotesHandlerDependencies } from 
 import { registerCueHandlers, CueHandlerDependencies } from './cue';
 import { registerWakatimeHandlers } from './wakatime';
 import { registerSecurityHandlers } from './security';
-import { registerSpellCheckHandlers } from './spellcheck';
 import { AgentDetector } from '../../agents';
 import { ProcessManager } from '../../process-manager';
 import { WebServer } from '../../web-server';
@@ -105,7 +104,6 @@ export { registerCueHandlers };
 export type { CueHandlerDependencies };
 export { registerWakatimeHandlers };
 export { registerSecurityHandlers };
-export { registerSpellCheckHandlers };
 export type { AgentsHandlerDependencies };
 export type { ProcessHandlerDependencies };
 export type { PersistenceHandlerDependencies };
@@ -298,6 +296,4 @@ export function registerAllHandlers(deps: HandlerDependencies): void {
 	setupLoggerEventForwarding(deps.getMainWindow);
 	// Register security handlers for LLM Guard events
 	registerSecurityHandlers();
-	// Register spell-check handlers for native spell-check integration
-	registerSpellCheckHandlers();
 }

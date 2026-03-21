@@ -3039,7 +3039,6 @@ function MaestroConsoleInner() {
 					}
 					promptEnterToSend={enterToSendAI}
 					onPromptToggleEnterToSend={handlePromptToggleEnterToSend}
-					promptLlmGuardEnabled={llmGuardSettings?.enabled ?? false}
 					onCloseQueueBrowser={handleCloseQueueBrowser}
 					onRemoveQueueItem={handleRemoveQueueItem}
 					onSwitchQueueSession={handleSwitchQueueSession}
