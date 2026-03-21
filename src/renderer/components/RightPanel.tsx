@@ -33,6 +33,7 @@ import { useAutoRunAutoFollow } from '../hooks/batch/useAutoRunAutoFollow';
 import { useUIStore } from '../stores/uiStore';
 import { useSettingsStore } from '../stores/settingsStore';
 import { useFileExplorerStore } from '../stores/fileExplorerStore';
+import { captureException } from '../utils/sentry';
 import { useBatchStore } from '../stores/batchStore';
 import { useSessionStore } from '../stores/sessionStore';
 
@@ -230,8 +231,8 @@ export const RightPanel = memo(
 				const result = await window.maestro.security.getEvents(100, 0);
 				setSecurityEventIds(result.events.map((e) => e.id));
 			} catch (error) {
-				// Log error but don't throw - security events are optional UI feature
-				console.warn('[RightPanel] Failed to load security events:', error);
+				// Report error to Sentry but don't throw - security events are optional UI feature
+				captureException(error, { extra: { context: 'RightPanel.loadSecurityEventIds' } });
 			}
 		}, []);
 

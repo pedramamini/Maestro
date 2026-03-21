@@ -143,11 +143,12 @@ describe('config-export', () => {
 			expect(result.errors).toContain("'banSubstrings' must be an array");
 		});
 
-		it('should warn about invalid regex in banTopicsPatterns', () => {
+		it('should error on invalid regex in banTopicsPatterns', () => {
 			const config = { ...validConfig, banTopicsPatterns: ['valid', '[invalid'] };
 			const result = validateImportedConfig(config);
-			// Invalid regex generates a warning, not an error
-			expect(result.warnings.some((w) => w.includes('invalid regex'))).toBe(true);
+			// Invalid regex generates an error (not warning) since it would be inert in checkBannedContent
+			expect(result.valid).toBe(false);
+			expect(result.errors.some((e) => e.includes('invalid regex'))).toBe(true);
 		});
 
 		it('should validate custom patterns structure', () => {
@@ -305,10 +306,10 @@ describe('config-export', () => {
 			expect(result.success).toBe(false);
 		});
 
-		it('should return warnings for non-fatal issues', () => {
+		it('should return warnings for non-fatal issues (version mismatch)', () => {
 			const config = {
 				...validConfig,
-				banTopicsPatterns: ['valid', '[invalid-but-warn'],
+				version: 999, // Unknown version generates a warning
 			};
 			const json = JSON.stringify(config);
 			const result = parseImportedConfig(json);
@@ -316,6 +317,22 @@ describe('config-export', () => {
 			expect(result.success).toBe(true);
 			if (result.success) {
 				expect(result.warnings.length).toBeGreaterThan(0);
+				expect(result.warnings.some((w) => w.includes('version'))).toBe(true);
+			}
+		});
+
+		it('should fail on invalid regex in banTopicsPatterns', () => {
+			const config = {
+				...validConfig,
+				banTopicsPatterns: ['valid', '[invalid-regex'],
+			};
+			const json = JSON.stringify(config);
+			const result = parseImportedConfig(json);
+
+			// Invalid regex in banTopicsPatterns is now an error, not a warning
+			expect(result.success).toBe(false);
+			if (!result.success) {
+				expect(result.errors.some((e) => e.includes('invalid regex'))).toBe(true);
 			}
 		});
 

@@ -176,6 +176,7 @@ export function validateImportedConfig(data: unknown): ValidationResult {
 				'deanonymizePii',
 				'redactSecrets',
 				'detectPiiLeakage',
+				'detectOutputInjection',
 				'scanUrls',
 				'scanCode',
 			];
@@ -230,7 +231,9 @@ export function validateImportedConfig(data: unknown): ValidationResult {
 				} else {
 					const regexResult = validateRegex(pattern);
 					if (!regexResult.valid) {
-						warnings.push(`'banTopicsPatterns[${i}]' contains invalid regex: ${regexResult.error}`);
+						// Invalid regex patterns should be errors, not warnings,
+						// since they would be inert in checkBannedContent
+						errors.push(`'banTopicsPatterns[${i}]' contains invalid regex: ${regexResult.error}`);
 					}
 				}
 			}

@@ -5,6 +5,7 @@ import { stripAllAnsiCodes } from '../../utils/terminalFilter';
 import { logger } from '../../utils/logger';
 import { matchSshErrorPattern } from '../../parsers/error-patterns';
 import { runLlmGuardPost } from '../../security/llm-guard';
+import { logSecurityEvent } from '../../security/security-logger';
 import { appendToBuffer } from '../utils/bufferUtils';
 import type { ManagedProcess, AgentError } from '../types';
 
@@ -51,6 +52,34 @@ export class StderrHandler {
 				toolType: managedProcess.toolType,
 				findings: guardResult.findings.map((finding) => finding.type),
 			});
+
+			// Log security event and emit to live stream (matching StdoutHandler behavior)
+			const securityEvent = {
+				sessionId,
+				eventType: guardResult.blocked
+					? ('blocked' as const)
+					: guardResult.warned
+						? ('output_scan' as const)
+						: ('output_scan' as const),
+				findings: guardResult.findings,
+				action: guardResult.blocked
+					? ('blocked' as const)
+					: guardResult.warned
+						? ('warned' as const)
+						: guardResult.sanitizedResponse !== resultText
+							? ('sanitized' as const)
+							: ('none' as const),
+				originalLength: resultText.length,
+				sanitizedLength: guardResult.sanitizedResponse.length,
+				toolType: managedProcess.toolType,
+			};
+
+			logSecurityEvent(securityEvent).catch((err) => {
+				logger.error('[LLMGuard] Failed to log stderr security event', 'LLMGuard', { err });
+			});
+
+			// Emit to live security event stream
+			this.emitter.emit('security-event', sessionId, securityEvent);
 		}
 
 		if (guardResult.blocked) {

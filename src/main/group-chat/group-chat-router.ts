@@ -834,6 +834,10 @@ export async function routeModeratorResponse(
 		const chatHistory = await readLog(updatedChat.logPath);
 		const historyExceptLast = chatHistory.slice(-15, -1);
 
+		// Hoist LLM Guard settings fetch outside the loop to ensure all participants
+		// in a round are scanned with a consistent config snapshot
+		const llmGuardSettings = getLlmGuardSettingsCallback?.() ?? null;
+
 		for (const participantName of mentions) {
 			console.log(`[GroupChat:Debug] --- Spawning participant: @${participantName} ---`);
 
@@ -869,7 +873,6 @@ export async function routeModeratorResponse(
 			}
 
 			// Apply inter-agent security scanning (moderator -> participant)
-			const llmGuardSettings = getLlmGuardSettingsCallback?.() ?? null;
 			const interAgentResult = runLlmGuardInterAgent(
 				message,
 				'Moderator',

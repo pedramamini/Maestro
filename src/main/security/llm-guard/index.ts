@@ -1790,6 +1790,14 @@ export function mergeSecurityPolicy(
 		// Override top-level settings if explicitly set in session policy
 		...(sessionPolicy.enabled !== undefined && { enabled: sessionPolicy.enabled }),
 		...(sessionPolicy.action !== undefined && { action: sessionPolicy.action }),
+		// Deep merge groupChat settings (allows session-level interAgentScanEnabled override)
+		groupChat:
+			normalized.groupChat || sessionPolicy.groupChat
+				? {
+						...(normalized.groupChat || {}),
+						...(sessionPolicy.groupChat || {}),
+					}
+				: undefined,
 		// Deep merge input settings
 		input: {
 			...normalized.input,

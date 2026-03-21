@@ -78,8 +78,9 @@ const URL_SHORTENERS = new Set([
 
 // Regex to extract URLs from text
 // Matches http, https, ftp, and protocol-relative URLs
+// Allows percent-encoded characters in hostname (e.g., paypa%6c.com)
 const URL_REGEX =
-	/(?:https?|ftp):\/\/(?:(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]*[a-zA-Z0-9])?\.)*[a-zA-Z0-9](?:[a-zA-Z0-9-]*[a-zA-Z0-9])?(?:\.[a-zA-Z]{2,})+|(?:\d{1,3}\.){3}\d{1,3})(?::\d{1,5})?(?:\/[^\s"'<>]*)?/gi;
+	/(?:https?|ftp):\/\/(?:(?:(?:%[0-9A-Fa-f]{2}|[a-zA-Z0-9])(?:(?:%[0-9A-Fa-f]{2}|[a-zA-Z0-9-])*(?:%[0-9A-Fa-f]{2}|[a-zA-Z0-9]))?\.)*(?:%[0-9A-Fa-f]{2}|[a-zA-Z0-9])(?:(?:%[0-9A-Fa-f]{2}|[a-zA-Z0-9-])*(?:%[0-9A-Fa-f]{2}|[a-zA-Z0-9]))?(?:\.[a-zA-Z]{2,})+|(?:\d{1,3}\.){3}\d{1,3})(?::\d{1,5})?(?:\/[^\s"'<>]*)?/gi;
 
 // URL-encoded hostname characters pattern
 const ENCODED_HOSTNAME_REGEX = /%[0-9A-Fa-f]{2}/g;
