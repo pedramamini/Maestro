@@ -20,6 +20,46 @@ This guide has been split into focused sub-documents for progressive disclosure:
 
 ---
 
+## Before Writing New Code - Check Existing Utilities
+
+**MANDATORY:** Before creating any new utility function, helper, hook, component, type, or constant, check the guide docs in `docs/agent-guides/` to see if it already exists. Duplicated code is the #1 source of maintenance burden in this codebase.
+
+| Before creating... | Check this guide first |
+|--------------------|-----------------------|
+| Utility function (formatting, IDs, paths, strings) | [SHARED-UTILS.md](docs/agent-guides/SHARED-UTILS.md) |
+| IPC handler or preload bridge | [IPC-PATTERNS.md](docs/agent-guides/IPC-PATTERNS.md) |
+| Store action, selector, or hook | [STATE-PATTERNS.md](docs/agent-guides/STATE-PATTERNS.md) |
+| Agent parser, storage, or error pattern | [AGENT-INFRA.md](docs/agent-guides/AGENT-INFRA.md) |
+| UI component, modal, or theme usage | [UI-PATTERNS.md](docs/agent-guides/UI-PATTERNS.md) |
+| Test mock, factory, or setup pattern | [TEST-PATTERNS.md](docs/agent-guides/TEST-PATTERNS.md) |
+| Renderer service or constant | [RENDERER-SERVICES.md](docs/agent-guides/RENDERER-SERVICES.md) |
+| Process spawning or listener | [PROCESS-SYSTEM.md](docs/agent-guides/PROCESS-SYSTEM.md) |
+| Web/mobile hook or component | [WEB-MOBILE.md](docs/agent-guides/WEB-MOBILE.md) |
+| CLI command or playbook feature | [CLI-PLAYBOOKS.md](docs/agent-guides/CLI-PLAYBOOKS.md) |
+| Group chat or Symphony feature | [GROUP-CHAT.md](docs/agent-guides/GROUP-CHAT.md) |
+| Stats, analytics, or dashboard | [STATS-ANALYTICS.md](docs/agent-guides/STATS-ANALYTICS.md) |
+| Prompt template or SpecKit/OpenSpec | [PROMPTS-SPECS.md](docs/agent-guides/PROMPTS-SPECS.md) |
+| Cue pipeline feature | [CUE-PIPELINE.md](docs/agent-guides/CUE-PIPELINE.md) |
+| App lifecycle, updater, or power mgmt | [MAIN-LIFECYCLE.md](docs/agent-guides/MAIN-LIFECYCLE.md) |
+
+Common functions that already exist (do NOT reimplement):
+- **ID generation:** `generateId()` in `src/renderer/utils/ids.ts`, `generateUUID()` in `src/shared/uuid.ts`
+- **Format duration:** `formatDuration()` in `src/shared/formatters.ts`
+- **Format file size:** `formatSize()` in `src/shared/formatters.ts`
+- **Estimate tokens:** `estimateTokenCount()` in `src/shared/formatters.ts`
+- **Strip ANSI:** `stripAnsiCodes()` in `src/shared/stringUtils.ts`
+- **Shell escape:** `shellEscape()` in `src/main/utils/shell-escape.ts`
+- **Platform detection:** `isWindows()`, `isMacOS()`, `isLinux()` in `src/shared/platformDetection.ts`
+- **Agent display name:** `getAgentDisplayName()` in `src/shared/agentMetadata.ts`
+- **SSH remote lookup:** `getSshRemoteById()` in `src/main/stores/getters.ts`
+- **Toast notifications:** `notifyToast()` in `src/renderer/stores/notificationStore.ts`
+- **Session lookup:** `selectSessionById()` in `src/renderer/stores/sessionStore.ts`
+- **Modal layer:** `useModalLayer()` in `src/renderer/hooks/ui/useModalLayer.ts`
+
+The dedup tracker at [DEDUP-TRACKER.md](docs/agent-guides/DEDUP-TRACKER.md) lists all known duplication with grep-verified evidence in `docs/agent-guides/scans/`.
+
+---
+
 ## Agent Behavioral Guidelines
 
 Core behaviors for effective collaboration. Failures here cause the most rework.
