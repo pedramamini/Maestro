@@ -241,10 +241,13 @@ export function registerProcessHandlers(deps: ProcessHandlerDependencies): void 
 									fs.unlinkSync(tempFileToClean);
 								} catch (cleanupErr: unknown) {
 									if ((cleanupErr as NodeJS.ErrnoException).code !== 'ENOENT') {
-										captureException(cleanupErr instanceof Error ? cleanupErr : new Error(String(cleanupErr)), {
-											context: 'systemPromptTempFile cleanup (safety)',
-											file: tempFileToClean,
-										});
+										captureException(
+											cleanupErr instanceof Error ? cleanupErr : new Error(String(cleanupErr)),
+											{
+												context: 'systemPromptTempFile cleanup (safety)',
+												file: tempFileToClean,
+											}
+										);
 									}
 								}
 							}, 30_000);
