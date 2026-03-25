@@ -1338,12 +1338,12 @@ describe('tabHelpers', () => {
 		});
 
 		it('returns null if AI tab reference does not exist in aiTabs', () => {
-			const tab = createMockTab({ id: 'tab-1' });
 			const session = createMockSession({
-				aiTabs: [tab],
+				aiTabs: [],
 				unifiedTabOrder: [{ type: 'ai', id: 'non-existent' }],
 			});
 
+			// After pruning, the dead ref is removed and the order is empty
 			expect(navigateToUnifiedTabByIndex(session, 0)).toBeNull();
 		});
 
@@ -1398,8 +1398,10 @@ describe('tabHelpers', () => {
 
 		it('resets inputMode to ai when navigating from terminal tab to AI tab', () => {
 			const aiTab = createMockTab({ id: 'ai-1' });
+			const terminalTab = { id: 'term-1', shellType: 'zsh', state: 'idle' as const };
 			const session = createMockSession({
 				aiTabs: [aiTab],
+				terminalTabs: [terminalTab] as any,
 				activeTabId: 'ai-1',
 				activeFileTabId: null,
 				inputMode: 'terminal',
@@ -1419,9 +1421,11 @@ describe('tabHelpers', () => {
 
 		it('resets inputMode to ai when navigating from terminal tab to file tab', () => {
 			const fileTab = createMockFileTab({ id: 'file-1' });
+			const terminalTab = { id: 'term-1', shellType: 'zsh', state: 'idle' as const };
 			const session = createMockSession({
 				aiTabs: [],
 				filePreviewTabs: [fileTab],
+				terminalTabs: [terminalTab] as any,
 				activeFileTabId: null,
 				inputMode: 'terminal',
 				activeTerminalTabId: 'term-1',

@@ -101,17 +101,31 @@ export function getRepairedUnifiedTabOrder(session: Session): UnifiedTabRef[] {
 	const fileTabs = session.filePreviewTabs || [];
 	const terminalTabs = session.terminalTabs || [];
 
-	// Build sets of IDs already in the order
+	// Build sets of IDs that actually exist (for pruning stale entries)
+	const liveAiIds = new Set(aiTabs.map((t) => t.id));
+	const liveFileIds = new Set(fileTabs.map((t) => t.id));
+	const liveTerminalIds = new Set(terminalTabs.map((t) => t.id));
+
+	// Prune stale entries — refs in the order whose tabs no longer exist.
+	// Without this, navigation indices diverge from the rendered tab bar
+	// (buildUnifiedTabs silently skips dead refs, but navigation counted them).
+	const prunedOrder = order.filter((ref) => {
+		if (ref.type === 'ai') return liveAiIds.has(ref.id);
+		if (ref.type === 'file') return liveFileIds.has(ref.id);
+		return liveTerminalIds.has(ref.id);
+	});
+
+	// Track which live IDs are already in the pruned order
 	const aiIdsInOrder = new Set<string>();
 	const fileIdsInOrder = new Set<string>();
 	const terminalIdsInOrder = new Set<string>();
-	for (const ref of order) {
+	for (const ref of prunedOrder) {
 		if (ref.type === 'ai') aiIdsInOrder.add(ref.id);
 		else if (ref.type === 'file') fileIdsInOrder.add(ref.id);
 		else terminalIdsInOrder.add(ref.id);
 	}
 
-	// Collect orphaned tabs
+	// Collect orphaned tabs (exist in data but missing from order)
 	const orphanedRefs: UnifiedTabRef[] = [];
 	for (const tab of aiTabs) {
 		if (!aiIdsInOrder.has(tab.id)) {
@@ -129,9 +143,10 @@ export function getRepairedUnifiedTabOrder(session: Session): UnifiedTabRef[] {
 		}
 	}
 
-	// Return original if no orphans (avoids allocation)
-	if (orphanedRefs.length === 0) return order;
-	return [...order, ...orphanedRefs];
+	// Return original if nothing changed (avoids allocation)
+	if (prunedOrder.length === order.length && orphanedRefs.length === 0) return order;
+	if (orphanedRefs.length === 0) return prunedOrder;
+	return [...prunedOrder, ...orphanedRefs];
 }
 
 /**
