@@ -8,7 +8,6 @@ import React, {
 	useImperativeHandle,
 } from 'react';
 import ReactMarkdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
 import rehypeRaw from 'rehype-raw';
 import rehypeSlug from 'rehype-slug';
 import GithubSlugger from 'github-slugger';
@@ -50,6 +49,7 @@ import { formatShortcutKeys } from '../utils/shortcutFormatter';
 import { remarkFileLinks, buildFileTreeIndices } from '../utils/remarkFileLinks';
 import remarkFrontmatter from 'remark-frontmatter';
 import { remarkFrontmatterTable } from '../utils/remarkFrontmatterTable';
+import { REMARK_GFM_PLUGINS, createMarkdownComponents } from '../utils/markdownConfig';
 import type { FileNode } from '../types/fileTree';
 import { isImageFile } from '../../shared/gitUtils';
 
@@ -913,7 +913,7 @@ export const FilePreview = React.memo(
 		// Creating new arrays/objects on each render causes ReactMarkdown to re-render children
 		const remarkPlugins = useMemo(
 			() => [
-				remarkGfm,
+				...REMARK_GFM_PLUGINS,
 				remarkFrontmatter,
 				remarkFrontmatterTable,
 				remarkHighlight,
@@ -1012,35 +1012,23 @@ export const FilePreview = React.memo(
 							</SyntaxHighlighter>
 						);
 					}
-
-					// Fallback: render as-is
-					return <pre>{children}</pre>;
+					void window.maestro.shell.openExternal(href);
 				},
-				code: ({ node: _node, className, children, ...props }: any) => {
-					// Inline code only — block code is handled by the pre component above
-					return (
-						<code className={className} {...props}>
-							{children}
-						</code>
-					);
-				},
-				img: ({ node: _node, src, alt, ...props }: any) => {
+				containerRef: markdownContainerRef,
+			});
+			return {
+				...components,
+				img: ({ src, alt, ...props }: any) => {
 					// Check if this image came from file tree (set by remarkFileLinks)
-					const isFromTree = (props as any)['data-maestro-from-tree'] === 'true';
-					// Get the project root from the markdown file path (directory containing the file tree root)
-					// For FilePreview, the file.path is absolute, so we extract the root from it
-					// If image is from file tree, we need the project root to resolve correctly
-					// The project root would be the common ancestor - we'll derive it from the file path
-					// For now, use the directory where the first folder in cwd would be located
+					const isFromTree = props['data-maestro-from-tree'] === 'true';
 					let projectRootForImage: string | undefined;
+
 					if (isFromTree && cwd && file) {
-						// cwd is relative path like "People" or "OPSWAT/Meetings"
-						// We need to find where in file.path the cwd starts
+						// Resolve project root so relative image links from tree render correctly.
 						const cwdIndex = file.path.indexOf(`/${cwd}/`);
 						if (cwdIndex !== -1) {
 							projectRootForImage = file.path.substring(0, cwdIndex);
 						} else {
-							// Try to find just the first segment of cwd
 							const firstCwdSegment = cwd.split('/')[0];
 							const segmentIndex = file.path.indexOf(`/${firstCwdSegment}/`);
 							if (segmentIndex !== -1) {
@@ -1048,6 +1036,7 @@ export const FilePreview = React.memo(
 							}
 						}
 					}
+
 					return (
 						<MarkdownImage
 							src={src}
@@ -1065,9 +1054,8 @@ export const FilePreview = React.memo(
 				// pass through as strings from AI-generated HTML, which React rejects.
 				// Fixes MAESTRO-8Q
 				details: ({ node: _node, onToggle: _onToggle, ...props }: any) => <details {...props} />,
-			}),
-			[onFileClick, theme, cwd, file, showRemoteImages, sshRemoteId]
-		);
+			};
+		}, [onFileClick, theme, cwd, file, showRemoteImages, sshRemoteId]);
 
 		// Extract directory path without filename
 		const directoryPath = file ? file.path.substring(0, file.path.lastIndexOf('/')) : '';

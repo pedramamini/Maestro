@@ -373,7 +373,7 @@ describe('Cross-platform database path resolution (macOS, Windows, Linux)', () =
 			const { StatsDB } = await import('../../../main/stats');
 			const db = new StatsDB();
 
-			expect(path.dirname(db.getDbPath())).toBe(testUserData);
+			expect(path.dirname(db.getDbPath())).toBe(path.normalize(testUserData));
 		});
 	});
 
@@ -388,7 +388,9 @@ describe('Cross-platform database path resolution (macOS, Windows, Linux)', () =
 			const db = new StatsDB();
 			await db.initialize();
 
-			expect(mockFsMkdirSync).toHaveBeenCalledWith(macOsUserData, { recursive: true });
+			expect(mockFsMkdirSync).toHaveBeenCalledWith(path.normalize(macOsUserData), {
+				recursive: true,
+			});
 		});
 
 		it('should create directory on Windows if it does not exist', async () => {
@@ -414,7 +416,9 @@ describe('Cross-platform database path resolution (macOS, Windows, Linux)', () =
 			const db = new StatsDB();
 			await db.initialize();
 
-			expect(mockFsMkdirSync).toHaveBeenCalledWith(linuxUserData, { recursive: true });
+			expect(mockFsMkdirSync).toHaveBeenCalledWith(path.normalize(linuxUserData), {
+				recursive: true,
+			});
 		});
 
 		it('should use recursive option for deeply nested paths', async () => {
@@ -427,7 +431,7 @@ describe('Cross-platform database path resolution (macOS, Windows, Linux)', () =
 			const db = new StatsDB();
 			await db.initialize();
 
-			expect(mockFsMkdirSync).toHaveBeenCalledWith(deepPath, { recursive: true });
+			expect(mockFsMkdirSync).toHaveBeenCalledWith(path.normalize(deepPath), { recursive: true });
 		});
 	});
 
@@ -574,7 +578,9 @@ describe('Cross-platform database path resolution (macOS, Windows, Linux)', () =
 				const db = new StatsDB();
 				await db.initialize();
 
-				expect(mockFsMkdirSync).toHaveBeenCalledWith(platformPath, { recursive: true });
+				expect(mockFsMkdirSync).toHaveBeenCalledWith(path.normalize(platformPath), {
+					recursive: true,
+				});
 			}
 		});
 	});

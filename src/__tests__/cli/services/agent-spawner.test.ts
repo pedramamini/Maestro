@@ -52,7 +52,18 @@ vi.mock('fs', async (importOriginal) => {
 		...actual,
 		readFileSync: vi.fn(),
 		writeFileSync: vi.fn(),
+		existsSync: vi.fn(() => false),
+		readdirSync: vi.fn(() => []),
+		mkdirSync: vi.fn(),
+		createWriteStream: vi.fn(
+			() =>
+				({
+					write: vi.fn(),
+					end: vi.fn(),
+				}) as any
+		),
 		promises: {
+			...actual.promises,
 			stat: vi.fn(),
 			access: vi.fn(),
 		},
@@ -67,9 +78,18 @@ vi.mock('fs', async (importOriginal) => {
 });
 
 // Mock os module
-vi.mock('os', () => ({
-	homedir: vi.fn(() => '/Users/testuser'),
-}));
+vi.mock('os', async () => {
+	const actual = await vi.importActual<typeof import('os')>('os');
+	const mocked = {
+		...actual,
+		homedir: vi.fn(() => '/Users/testuser'),
+		tmpdir: vi.fn(() => '/tmp'),
+	};
+	return {
+		...mocked,
+		default: mocked,
+	};
+});
 
 // Mock storage service
 const mockGetAgentCustomPath = vi.fn();
