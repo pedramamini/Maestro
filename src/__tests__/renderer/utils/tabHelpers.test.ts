@@ -473,6 +473,28 @@ describe('tabHelpers', () => {
 			expect(result!.session.closedTabHistory).toHaveLength(1); // Still only the old one
 			expect(result!.session.closedTabHistory[0].tab.id).toBe('old-tab');
 		});
+
+		it('uses repaired order to find neighbor when unifiedTabOrder has stale refs', () => {
+			const tab1 = createMockTab({ id: 'tab-1' });
+			const tab2 = createMockTab({ id: 'tab-2' });
+			const session = createMockSession({
+				aiTabs: [tab1, tab2],
+				activeTabId: 'tab-2',
+				activeFileTabId: null,
+				unifiedTabOrder: [
+					{ type: 'ai', id: 'tab-1' },
+					{ type: 'ai', id: 'deleted-tab' }, // stale ref
+					{ type: 'ai', id: 'tab-2' },
+				],
+			});
+
+			// Close the active tab (tab-2). Without repaired order, the stale ref
+			// at index 1 would be the fallback neighbor and cause a bad lookup.
+			const result = closeTab(session, 'tab-2');
+			expect(result).not.toBeNull();
+			// Should fall back to tab-1 (the live tab to the left), not the stale ref
+			expect(result!.session.activeTabId).toBe('tab-1');
+		});
 	});
 
 	describe('reopenClosedTab', () => {
@@ -1338,12 +1360,12 @@ describe('tabHelpers', () => {
 		});
 
 		it('returns null if AI tab reference does not exist in aiTabs', () => {
-			const tab = createMockTab({ id: 'tab-1' });
 			const session = createMockSession({
-				aiTabs: [tab],
+				aiTabs: [],
 				unifiedTabOrder: [{ type: 'ai', id: 'non-existent' }],
 			});
 
+			// After pruning, the dead ref is removed and the order is empty
 			expect(navigateToUnifiedTabByIndex(session, 0)).toBeNull();
 		});
 
@@ -1398,8 +1420,10 @@ describe('tabHelpers', () => {
 
 		it('resets inputMode to ai when navigating from terminal tab to AI tab', () => {
 			const aiTab = createMockTab({ id: 'ai-1' });
+			const terminalTab = { id: 'term-1', shellType: 'zsh', state: 'idle' as const };
 			const session = createMockSession({
 				aiTabs: [aiTab],
+				terminalTabs: [terminalTab] as any,
 				activeTabId: 'ai-1',
 				activeFileTabId: null,
 				inputMode: 'terminal',
@@ -1419,9 +1443,11 @@ describe('tabHelpers', () => {
 
 		it('resets inputMode to ai when navigating from terminal tab to file tab', () => {
 			const fileTab = createMockFileTab({ id: 'file-1' });
+			const terminalTab = { id: 'term-1', shellType: 'zsh', state: 'idle' as const };
 			const session = createMockSession({
 				aiTabs: [],
 				filePreviewTabs: [fileTab],
+				terminalTabs: [terminalTab] as any,
 				activeFileTabId: null,
 				inputMode: 'terminal',
 				activeTerminalTabId: 'term-1',
@@ -2881,6 +2907,39 @@ describe('tabHelpers', () => {
 			const result = getRepairedUnifiedTabOrder(session);
 			expect(result).toHaveLength(1);
 			expect(result[0]).toEqual({ type: 'ai', id: 'tab-1' });
+		});
+
+		it('prunes stale entries whose tabs no longer exist', () => {
+			const tab1 = createMockTab({ id: 'tab-1' });
+			const session = createMockSession({
+				aiTabs: [tab1],
+				unifiedTabOrder: [
+					{ type: 'ai', id: 'tab-1' },
+					{ type: 'ai', id: 'deleted-tab' },
+				],
+			});
+
+			const result = getRepairedUnifiedTabOrder(session);
+			expect(result).toHaveLength(1);
+			expect(result[0]).toEqual({ type: 'ai', id: 'tab-1' });
+		});
+
+		it('removes duplicate live refs so navigation indices match buildUnifiedTabs', () => {
+			const tab1 = createMockTab({ id: 'tab-1' });
+			const tab2 = createMockTab({ id: 'tab-2' });
+			const session = createMockSession({
+				aiTabs: [tab1, tab2],
+				unifiedTabOrder: [
+					{ type: 'ai', id: 'tab-1' },
+					{ type: 'ai', id: 'tab-1' }, // duplicate
+					{ type: 'ai', id: 'tab-2' },
+				],
+			});
+
+			const result = getRepairedUnifiedTabOrder(session);
+			expect(result).toHaveLength(2);
+			expect(result[0]).toEqual({ type: 'ai', id: 'tab-1' });
+			expect(result[1]).toEqual({ type: 'ai', id: 'tab-2' });
 		});
 	});
 
