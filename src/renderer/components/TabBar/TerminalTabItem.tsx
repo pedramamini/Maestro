@@ -182,7 +182,10 @@ export const TerminalTabItem = memo(function TerminalTabItem({
 		return theme.colors.textDim;
 	}, [tab.state, tab.exitCode, theme.colors]);
 
-	const displayName = getTerminalTabDisplayName(tab, terminalIndex);
+	const displayName = useMemo(
+		() => getTerminalTabDisplayName(tab, terminalIndex),
+		[tab, terminalIndex]
+	);
 
 	const hoverBgColor = theme.mode === 'light' ? 'rgba(0, 0, 0, 0.06)' : 'rgba(255, 255, 255, 0.08)';
 

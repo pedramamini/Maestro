@@ -106,10 +106,14 @@ export function getRepairedUnifiedTabOrder(session: Session): UnifiedTabRef[] {
 	const liveFileIds = new Set(fileTabs.map((t) => t.id));
 	const liveTerminalIds = new Set(terminalTabs.map((t) => t.id));
 
-	// Prune stale entries — refs in the order whose tabs no longer exist.
-	// Without this, navigation indices diverge from the rendered tab bar
-	// (buildUnifiedTabs silently skips dead refs, but navigation counted them).
+	// Prune stale entries and duplicates — refs whose tabs no longer exist, and
+	// later duplicate refs for the same type+id (buildUnifiedTabs also skips both).
+	// Without this, navigation indices diverge from the rendered tab bar.
+	const seen = new Set<string>();
 	const prunedOrder = order.filter((ref) => {
+		const key = `${ref.type}:${ref.id}`;
+		if (seen.has(key)) return false;
+		seen.add(key);
 		if (ref.type === 'ai') return liveAiIds.has(ref.id);
 		if (ref.type === 'file') return liveFileIds.has(ref.id);
 		return liveTerminalIds.has(ref.id);

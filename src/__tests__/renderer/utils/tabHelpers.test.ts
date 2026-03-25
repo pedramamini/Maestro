@@ -2886,6 +2886,39 @@ describe('tabHelpers', () => {
 			expect(result).toHaveLength(1);
 			expect(result[0]).toEqual({ type: 'ai', id: 'tab-1' });
 		});
+
+		it('prunes stale entries whose tabs no longer exist', () => {
+			const tab1 = createMockTab({ id: 'tab-1' });
+			const session = createMockSession({
+				aiTabs: [tab1],
+				unifiedTabOrder: [
+					{ type: 'ai', id: 'tab-1' },
+					{ type: 'ai', id: 'deleted-tab' },
+				],
+			});
+
+			const result = getRepairedUnifiedTabOrder(session);
+			expect(result).toHaveLength(1);
+			expect(result[0]).toEqual({ type: 'ai', id: 'tab-1' });
+		});
+
+		it('removes duplicate live refs so navigation indices match buildUnifiedTabs', () => {
+			const tab1 = createMockTab({ id: 'tab-1' });
+			const tab2 = createMockTab({ id: 'tab-2' });
+			const session = createMockSession({
+				aiTabs: [tab1, tab2],
+				unifiedTabOrder: [
+					{ type: 'ai', id: 'tab-1' },
+					{ type: 'ai', id: 'tab-1' }, // duplicate
+					{ type: 'ai', id: 'tab-2' },
+				],
+			});
+
+			const result = getRepairedUnifiedTabOrder(session);
+			expect(result).toHaveLength(2);
+			expect(result[0]).toEqual({ type: 'ai', id: 'tab-1' });
+			expect(result[1]).toEqual({ type: 'ai', id: 'tab-2' });
+		});
 	});
 
 	describe('navigation with orphaned tabs', () => {

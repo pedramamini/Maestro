@@ -1,4 +1,4 @@
-import React, { useState, useCallback, memo, useMemo } from 'react';
+import React, { useState, useCallback, useEffect, useRef, memo, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import {
 	X,
@@ -98,6 +98,14 @@ export const FileTab = memo(function FileTab({
 	shortcutHint,
 }: FileTabProps) {
 	const [showCopied, setShowCopied] = useState<'path' | 'name' | null>(null);
+	const copyTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+	// Clear copy feedback timeout on unmount
+	useEffect(() => {
+		return () => {
+			if (copyTimeoutRef.current) clearTimeout(copyTimeoutRef.current);
+		};
+	}, []);
 
 	const {
 		isHovered,
@@ -137,7 +145,8 @@ export const FileTab = memo(function FileTab({
 			e.stopPropagation();
 			safeClipboardWrite(tab.path);
 			setShowCopied('path');
-			setTimeout(() => setShowCopied(null), 1500);
+			if (copyTimeoutRef.current) clearTimeout(copyTimeoutRef.current);
+			copyTimeoutRef.current = setTimeout(() => setShowCopied(null), 1500);
 		},
 		[tab.path]
 	);
@@ -149,7 +158,8 @@ export const FileTab = memo(function FileTab({
 			const fullName = tab.name + tab.extension;
 			safeClipboardWrite(fullName);
 			setShowCopied('name');
-			setTimeout(() => setShowCopied(null), 1500);
+			if (copyTimeoutRef.current) clearTimeout(copyTimeoutRef.current);
+			copyTimeoutRef.current = setTimeout(() => setShowCopied(null), 1500);
 		},
 		[tab.name, tab.extension]
 	);
@@ -301,9 +311,12 @@ export const FileTab = memo(function FileTab({
 		<div
 			ref={setTabRef}
 			data-tab-id={tab.id}
+			tabIndex={0}
+			role="tab"
+			aria-selected={isActive}
 			className={`
         relative flex items-center gap-1.5 px-3 py-1.5 cursor-pointer
-        transition-all duration-150 select-none shrink-0
+        transition-all duration-150 select-none shrink-0 outline-none
         ${isDragging ? 'opacity-50' : ''}
         ${isDragOver ? 'ring-2 ring-inset' : ''}
       `}
@@ -312,6 +325,12 @@ export const FileTab = memo(function FileTab({
 			onMouseDown={handleMouseDown}
 			onMouseEnter={handleMouseEnter}
 			onMouseLeave={handleMouseLeave}
+			onKeyDown={(e) => {
+				if (e.key === 'Enter' || e.key === ' ') {
+					e.preventDefault();
+					handleTabSelect();
+				}
+			}}
 			draggable
 			onDragStart={handleTabDragStart}
 			onDragOver={handleTabDragOver}

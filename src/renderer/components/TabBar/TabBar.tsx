@@ -11,6 +11,9 @@ import { NewTabPopover } from './NewTabPopover';
 import { isUnifiedTabActive, getShortcutHint } from './tabBarUtils';
 import type { TabBarProps } from './types';
 
+/** Approximate width of the sticky right "+" button area (px) */
+const STICKY_RIGHT_WIDTH = 48;
+
 /**
  * TabBar component for displaying AI session tabs.
  * Shows tabs for each Claude Code conversation within a Maestro session.
@@ -55,6 +58,18 @@ function TabBarInner({
 	onTerminalTabRename,
 	colorBlindMode,
 }: TabBarProps) {
+	// Dev-time warnings for missing handlers when unified tabs are provided
+	if (process.env.NODE_ENV !== 'production' && unifiedTabs) {
+		if (!onFileTabSelect || !onFileTabClose) {
+			console.warn('[TabBar] unifiedTabs provided but onFileTabSelect/onFileTabClose missing');
+		}
+		if (!onTerminalTabSelect || !onTerminalTabClose) {
+			console.warn(
+				'[TabBar] unifiedTabs provided but onTerminalTabSelect/onTerminalTabClose missing'
+			);
+		}
+	}
+
 	const [draggingTabId, setDraggingTabId] = useState<string | null>(null);
 	const [dragOverTabId, setDragOverTabId] = useState<string | null>(null);
 	const [showUnreadOnlyLocal, setShowUnreadOnlyLocal] = useState(false);
@@ -90,7 +105,7 @@ function TabBarInner({
 					const tabRect = tabElement.getBoundingClientRect();
 					const stickyLeftWidth = stickyLeftRef.current?.offsetWidth ?? 0;
 
-					const visibleRight = containerRect.right - 48; // approximate sticky right width
+					const visibleRight = containerRect.right - STICKY_RIGHT_WIDTH;
 					const rightOverflow = tabRect.right - visibleRight;
 					if (rightOverflow > 0) {
 						container.scrollLeft += rightOverflow + 8;
@@ -238,7 +253,6 @@ function TabBarInner({
 
 	// Shared props computed once for the rendering loop
 	const allTabs = unifiedTabs ?? [];
-	const canClose = true;
 
 	/** Render a separator bar between inactive tabs */
 	const separator = (
@@ -264,7 +278,7 @@ function TabBarInner({
 		isActive,
 		theme,
 		sessionId,
-		canClose,
+		canClose: true,
 		onSelect: onTabSelect,
 		onClose: onTabClose,
 		onDragStart: handleDragStart,

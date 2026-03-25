@@ -1,4 +1,4 @@
-import React, { useState, useCallback, memo, useMemo } from 'react';
+import React, { useState, useCallback, useEffect, useRef, memo, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { X, Star, Pencil, Loader2 } from 'lucide-react';
 import type { AITab as AITabType, Theme } from '../../types';
@@ -158,6 +158,14 @@ export const AITab = memo(function AITab({
 	tabIndex,
 }: AITabProps) {
 	const [showCopied, setShowCopied] = useState<'sessionId' | 'deepLink' | false>(false);
+	const copyTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+	// Clear copy feedback timeout on unmount
+	useEffect(() => {
+		return () => {
+			if (copyTimeoutRef.current) clearTimeout(copyTimeoutRef.current);
+		};
+	}, []);
 
 	const {
 		isHovered,
@@ -206,7 +214,8 @@ export const AITab = memo(function AITab({
 			if (tab.agentSessionId) {
 				safeClipboardWrite(tab.agentSessionId);
 				setShowCopied('sessionId');
-				setTimeout(() => setShowCopied(false), 1500);
+				if (copyTimeoutRef.current) clearTimeout(copyTimeoutRef.current);
+				copyTimeoutRef.current = setTimeout(() => setShowCopied(false), 1500);
 			}
 		},
 		[tab.agentSessionId]
@@ -218,7 +227,8 @@ export const AITab = memo(function AITab({
 			if (sessionId) {
 				safeClipboardWrite(buildSessionDeepLink(sessionId, tabId));
 				setShowCopied('deepLink');
-				setTimeout(() => setShowCopied(false), 1500);
+				if (copyTimeoutRef.current) clearTimeout(copyTimeoutRef.current);
+				copyTimeoutRef.current = setTimeout(() => setShowCopied(false), 1500);
 			}
 		},
 		[sessionId, tabId]
@@ -386,7 +396,9 @@ export const AITab = memo(function AITab({
 		[onDrop, tabId]
 	);
 
-	// Memoize display name to avoid recalculation on every render
+	// Memoize display name to avoid recalculation on every render.
+	// Deps are the specific fields getTabDisplayName reads (name, agentSessionId) —
+	// using [tab] would invalidate on every logs/state change which is too aggressive.
 	const displayName = useMemo(() => getTabDisplayName(tab), [tab.name, tab.agentSessionId]);
 
 	// Hover background varies by theme mode for proper contrast
@@ -431,9 +443,12 @@ export const AITab = memo(function AITab({
 		<div
 			ref={setTabRef}
 			data-tab-id={tab.id}
+			tabIndex={0}
+			role="tab"
+			aria-selected={isActive}
 			className={`
         relative flex items-center gap-1.5 px-3 py-1.5 cursor-pointer
-        transition-all duration-150 select-none shrink-0
+        transition-all duration-150 select-none shrink-0 outline-none
         ${isDragging ? 'opacity-50' : ''}
         ${isDragOver ? 'ring-2 ring-inset' : ''}
       `}
@@ -442,6 +457,12 @@ export const AITab = memo(function AITab({
 			onMouseDown={handleMouseDown}
 			onMouseEnter={handleMouseEnter}
 			onMouseLeave={handleMouseLeave}
+			onKeyDown={(e) => {
+				if (e.key === 'Enter' || e.key === ' ') {
+					e.preventDefault();
+					handleTabSelect();
+				}
+			}}
 			draggable
 			onDragStart={handleTabDragStart}
 			onDragOver={handleTabDragOver}

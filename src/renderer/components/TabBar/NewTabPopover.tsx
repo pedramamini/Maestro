@@ -46,6 +46,16 @@ export const NewTabPopover = memo(function NewTabPopover({
 		return () => document.removeEventListener('mousedown', handler);
 	}, [popoverOpen]);
 
+	// Auto-focus popover when opened, restore focus to button when closed
+	useEffect(() => {
+		if (popoverOpen) {
+			// Wait one frame for the portal to mount
+			requestAnimationFrame(() => popoverRef.current?.focus());
+		} else {
+			btnRef.current?.focus();
+		}
+	}, [popoverOpen]);
+
 	const handleClick = useCallback(() => {
 		if (!onNewTerminalTab) {
 			onNewTab();
@@ -57,6 +67,11 @@ export const NewTabPopover = memo(function NewTabPopover({
 		setPopoverPos({ top: rect.bottom + 4, left: rect.left });
 		setPopoverOpen((open) => !open);
 	}, [onNewTerminalTab, onNewTab]);
+
+	const closeAndDo = useCallback((action: () => void) => {
+		setPopoverOpen(false);
+		action();
+	}, []);
 
 	return (
 		<>
@@ -80,7 +95,8 @@ export const NewTabPopover = memo(function NewTabPopover({
 				createPortal(
 					<div
 						ref={popoverRef}
-						className="fixed z-50 rounded-lg shadow-xl overflow-hidden"
+						tabIndex={0}
+						className="fixed z-50 rounded-lg shadow-xl overflow-hidden outline-none"
 						style={{
 							top: popoverPos.top,
 							left: popoverPos.left,
@@ -88,14 +104,17 @@ export const NewTabPopover = memo(function NewTabPopover({
 							border: `1px solid ${theme.colors.border}`,
 							minWidth: 180,
 						}}
+						onKeyDown={(e) => {
+							if (e.key === 'Escape') {
+								e.stopPropagation();
+								setPopoverOpen(false);
+							}
+						}}
 					>
 						<button
 							className="flex items-center gap-2 w-full px-3 py-2 text-sm text-left hover:bg-white/10 transition-colors"
 							style={{ color: theme.colors.textMain }}
-							onClick={() => {
-								setPopoverOpen(false);
-								onNewTab();
-							}}
+							onClick={() => closeAndDo(onNewTab)}
 						>
 							<Plus className="w-3.5 h-3.5" style={{ color: theme.colors.textDim }} />
 							New AI Chat
@@ -106,10 +125,7 @@ export const NewTabPopover = memo(function NewTabPopover({
 						<button
 							className="flex items-center gap-2 w-full px-3 py-2 text-sm text-left hover:bg-white/10 transition-colors"
 							style={{ color: theme.colors.textMain }}
-							onClick={() => {
-								setPopoverOpen(false);
-								onNewTerminalTab?.();
-							}}
+							onClick={() => closeAndDo(() => onNewTerminalTab?.())}
 						>
 							<Terminal className="w-3.5 h-3.5" style={{ color: theme.colors.textDim }} />
 							New Terminal

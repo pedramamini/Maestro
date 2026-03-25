@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 
 export interface OverlayPosition {
 	top: number;
@@ -45,13 +45,26 @@ export function useTabHoverOverlay(options?: UseTabHoverOverlayOptions): UseTabH
 	const tabRef = useRef<HTMLDivElement | null>(null);
 	const isOverOverlayRef = useRef(false);
 
-	const setTabRef = useCallback(
-		(el: HTMLDivElement | null) => {
-			tabRef.current = el;
-			options?.registerRef?.(el);
-		},
-		[options?.registerRef]
-	);
+	// Stabilize registerRef in a ref so setTabRef doesn't recreate on every render
+	const registerRefRef = useRef(options?.registerRef);
+	useEffect(() => {
+		registerRefRef.current = options?.registerRef;
+	});
+
+	const setTabRef = useCallback((el: HTMLDivElement | null) => {
+		tabRef.current = el;
+		registerRefRef.current?.(el);
+	}, []);
+
+	// Clear any pending timeout on unmount to prevent state updates after unmount
+	useEffect(() => {
+		return () => {
+			if (hoverTimeoutRef.current) {
+				clearTimeout(hoverTimeoutRef.current);
+				hoverTimeoutRef.current = null;
+			}
+		};
+	}, []);
 
 	const handleMouseEnter = useCallback(() => {
 		setIsHovered(true);
