@@ -7,8 +7,16 @@ import { appendToBuffer } from '../utils/bufferUtils';
 import { aggregateModelUsage, type ModelStats } from '../../parsers/usage-aggregator';
 import { matchSshErrorPattern } from '../../parsers/error-patterns';
 import { FALLBACK_CONTEXT_WINDOW } from '../../../shared/agentConstants';
-import type { ManagedProcess, UsageStats, UsageTotals, AgentError } from '../types';
+import type {
+	ManagedProcess,
+	UsageStats,
+	UsageTotals,
+	AgentError,
+	SecurityEventData,
+} from '../types';
 import type { DataBufferManager } from './DataBufferManager';
+import { runLlmGuardPost } from '../../security/llm-guard';
+import { logSecurityEvent, type SecurityEventAction } from '../../security/security-logger';
 
 interface StdoutHandlerDependencies {
 	processes: Map<string, ManagedProcess>;
@@ -136,7 +144,9 @@ export class StdoutHandler {
 				bufferLength: managedProcess.jsonBuffer.length,
 			});
 		} else {
-			this.bufferManager.emitDataBuffered(sessionId, cleanedOutput);
+			// Non-JSON mode: apply output guard before emitting raw output
+			const guardedOutput = this.applyOutputGuard(sessionId, managedProcess, output);
+			this.bufferManager.emitDataBuffered(sessionId, guardedOutput);
 		}
 	}
 
@@ -231,7 +241,9 @@ export class StdoutHandler {
 				this.handleLegacyMessage(sessionId, managedProcess, parsed);
 			}
 		} else {
-			this.bufferManager.emitDataBuffered(sessionId, line);
+			// JSON parse failed: apply output guard to raw line before emitting
+			const guardedLine = this.applyOutputGuard(sessionId, managedProcess, line);
+			this.bufferManager.emitDataBuffered(sessionId, guardedLine);
 		}
 	}
 
@@ -266,13 +278,6 @@ export class StdoutHandler {
 		// Extract usage
 		const usage = outputParser.extractUsage(event);
 		if (usage) {
-			// DEBUG: Log usage extracted from parser
-			console.log('[StdoutHandler] Usage from parser (line 255 path)', {
-				sessionId,
-				toolType: managedProcess.toolType,
-				parsedUsage: usage,
-			});
-
 			const usageStats = this.buildUsageStats(managedProcess, usage);
 			// Claude Code's modelUsage reports the ACTUAL context used for each API call:
 			// - inputTokens: new input for this turn
@@ -287,12 +292,6 @@ export class StdoutHandler {
 				managedProcess.toolType === 'codex' || managedProcess.toolType === 'claude-code'
 					? normalizeUsageToDelta(managedProcess, usageStats)
 					: usageStats;
-
-			// DEBUG: Log normalized stats being emitted
-			console.log('[StdoutHandler] Emitting usage (line 255 path)', {
-				sessionId,
-				normalizedUsageStats,
-			});
 
 			this.emitter.emit('usage', sessionId, normalizedUsageStats);
 		}
@@ -333,8 +332,11 @@ export class StdoutHandler {
 				sessionId,
 				textLength: event.text.length,
 			});
-			this.emitter.emit('thinking-chunk', sessionId, event.text);
-			managedProcess.streamedText = (managedProcess.streamedText || '') + event.text;
+			// Apply output guard to streaming chunks to catch sensitive content early
+			// Store the guarded chunk to avoid double-scanning at final emit time
+			const guardedChunk = this.applyOutputGuard(sessionId, managedProcess, event.text);
+			this.emitter.emit('thinking-chunk', sessionId, guardedChunk);
+			managedProcess.streamedText = (managedProcess.streamedText || '') + guardedChunk;
 		}
 
 		// Handle tool execution events (OpenCode, Codex)
@@ -374,15 +376,16 @@ export class StdoutHandler {
 			const resultText = managedProcess.streamedText || '';
 			if (resultText) {
 				managedProcess.resultEmitted = true;
+				const guardedText = this.applyOutputGuard(sessionId, managedProcess, resultText);
 				logger.debug(
 					'[ProcessManager] Emitting final Codex result at turn completion',
 					'ProcessManager',
 					{
 						sessionId,
-						resultLength: resultText.length,
+						resultLength: guardedText.length,
 					}
 				);
-				this.bufferManager.emitDataBuffered(sessionId, resultText);
+				this.bufferManager.emitDataBuffered(sessionId, guardedText);
 			}
 		}
 
@@ -398,28 +401,35 @@ export class StdoutHandler {
 			!managedProcess.resultEmitted
 		) {
 			managedProcess.resultEmitted = true;
+			// Use event.text if available (needs guarding), otherwise use streamedText
+			// (already guarded during streaming chunks - don't double-guard)
+			const useStreamedText = !event.text && managedProcess.streamedText;
 			const resultText = event.text || managedProcess.streamedText || '';
 
-			// Log synopsis result processing (for debugging empty synopsis issue)
-			if (sessionId.includes('-synopsis-')) {
-				logger.info('[ProcessManager] Synopsis result processing', 'ProcessManager', {
-					sessionId,
-					eventText: event.text?.substring(0, 200) || '(empty)',
-					eventTextLength: event.text?.length || 0,
-					streamedText: managedProcess.streamedText?.substring(0, 200) || '(empty)',
-					streamedTextLength: managedProcess.streamedText?.length || 0,
-					resultTextLength: resultText.length,
-				});
-			}
-
 			if (resultText) {
+				// Only guard if using fresh event.text; streamedText is already guarded
+				const guardedText = useStreamedText
+					? resultText
+					: this.applyOutputGuard(sessionId, managedProcess, resultText);
+
+				// Log synopsis result processing (for debugging empty synopsis issue)
+				// Use guardedText to avoid logging raw sensitive content
+				if (sessionId.includes('-synopsis-')) {
+					logger.info('[ProcessManager] Synopsis result processing', 'ProcessManager', {
+						sessionId,
+						resultTextLength: resultText.length,
+						guardedTextLength: guardedText.length,
+						guardedTextPreview: guardedText.substring(0, 200) || '(empty)',
+					});
+				}
+
 				logger.debug('[ProcessManager] Emitting result data via parser', 'ProcessManager', {
 					sessionId,
-					resultLength: resultText.length,
+					resultLength: guardedText.length,
 					hasEventText: !!event.text,
 					hasStreamedText: !!managedProcess.streamedText,
 				});
-				this.bufferManager.emitDataBuffered(sessionId, resultText);
+				this.bufferManager.emitDataBuffered(sessionId, guardedText);
 			} else if (sessionId.includes('-synopsis-')) {
 				logger.warn(
 					'[ProcessManager] Synopsis result is empty - no text to emit',
@@ -447,11 +457,16 @@ export class StdoutHandler {
 
 		if (msgRecord.type === 'result' && msgRecord.result && !managedProcess.resultEmitted) {
 			managedProcess.resultEmitted = true;
+			const guardedText = this.applyOutputGuard(
+				sessionId,
+				managedProcess,
+				msgRecord.result as string
+			);
 			logger.debug('[ProcessManager] Emitting result data', 'ProcessManager', {
 				sessionId,
-				resultLength: (msgRecord.result as string).length,
+				resultLength: guardedText.length,
 			});
-			this.bufferManager.emitDataBuffered(sessionId, msgRecord.result as string);
+			this.bufferManager.emitDataBuffered(sessionId, guardedText);
 		}
 
 		if (msgRecord.session_id && !managedProcess.sessionIdEmitted) {
@@ -464,25 +479,11 @@ export class StdoutHandler {
 		}
 
 		if (msgRecord.modelUsage || msgRecord.usage || msgRecord.total_cost_usd !== undefined) {
-			// DEBUG: Log raw usage data from Claude Code before aggregation
-			console.log('[StdoutHandler] Raw usage data from Claude Code', {
-				sessionId,
-				modelUsage: msgRecord.modelUsage,
-				usage: msgRecord.usage,
-				totalCostUsd: msgRecord.total_cost_usd,
-			});
-
 			const usageStats = aggregateModelUsage(
 				msgRecord.modelUsage as Record<string, ModelStats> | undefined,
 				(msgRecord.usage as Record<string, unknown>) || {},
 				(msgRecord.total_cost_usd as number) || 0
 			);
-
-			// DEBUG: Log aggregated result
-			console.log('[StdoutHandler] Aggregated usage stats', {
-				sessionId,
-				usageStats,
-			});
 
 			this.emitter.emit('usage', sessionId, usageStats);
 		}
@@ -511,5 +512,67 @@ export class StdoutHandler {
 			contextWindow: usage.contextWindow || managedProcess.contextWindow || FALLBACK_CONTEXT_WINDOW,
 			reasoningTokens: usage.reasoningTokens,
 		};
+	}
+
+	private applyOutputGuard(
+		sessionId: string,
+		managedProcess: ManagedProcess,
+		resultText: string
+	): string {
+		const guardState = managedProcess.llmGuardState;
+		if (!guardState?.config?.enabled) {
+			return resultText;
+		}
+
+		const guardResult = runLlmGuardPost(resultText, guardState.vault, guardState.config);
+		if (guardResult.findings.length > 0) {
+			logger.warn('[LLMGuard] Output findings detected', 'LLMGuard', {
+				sessionId,
+				toolType: managedProcess.toolType,
+				findings: guardResult.findings.map((finding) => finding.type),
+			});
+		}
+
+		// Log and emit security event for output scan
+		if (guardResult.findings.length > 0 || guardResult.blocked || guardResult.warned) {
+			let action: SecurityEventAction = 'none';
+			if (guardResult.blocked) {
+				action = 'blocked';
+			} else if (guardResult.warned) {
+				action = 'warned';
+			} else if (guardResult.findings.length > 0) {
+				action = 'sanitized';
+			}
+
+			// Log to persistent security event store
+			logSecurityEvent({
+				sessionId,
+				tabId: managedProcess.tabId,
+				eventType: guardResult.blocked ? 'blocked' : 'output_scan',
+				findings: guardResult.findings,
+				action,
+				originalLength: resultText.length,
+				sanitizedLength: guardResult.sanitizedResponse.length,
+			}).then((event) => {
+				// Emit to ProcessManager listeners for real-time UI forwarding
+				const eventData: SecurityEventData = {
+					sessionId: event.sessionId,
+					tabId: event.tabId,
+					eventType: event.eventType,
+					findingTypes: event.findings.map((f) => f.type),
+					findingCount: event.findings.length,
+					action: event.action,
+					originalLength: event.originalLength,
+					sanitizedLength: event.sanitizedLength,
+				};
+				this.emitter.emit('security-event', eventData);
+			});
+		}
+
+		if (guardResult.blocked) {
+			return `[Maestro LLM Guard blocked response] ${guardResult.blockReason ?? 'Sensitive content detected.'}`;
+		}
+
+		return guardResult.sanitizedResponse;
 	}
 }

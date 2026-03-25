@@ -4,6 +4,8 @@ import { EventEmitter } from 'events';
 import { stripAllAnsiCodes } from '../../utils/terminalFilter';
 import { logger } from '../../utils/logger';
 import { matchSshErrorPattern } from '../../parsers/error-patterns';
+import { runLlmGuardPost } from '../../security/llm-guard';
+import { logSecurityEvent } from '../../security/security-logger';
 import { appendToBuffer } from '../utils/bufferUtils';
 import type { ManagedProcess, AgentError } from '../types';
 
@@ -31,6 +33,60 @@ export class StderrHandler {
 	constructor(deps: StderrHandlerDependencies) {
 		this.processes = deps.processes;
 		this.emitter = deps.emitter;
+	}
+
+	private applyOutputGuard(
+		sessionId: string,
+		managedProcess: ManagedProcess,
+		resultText: string
+	): string {
+		const guardState = managedProcess.llmGuardState;
+		if (!guardState?.config?.enabled) {
+			return resultText;
+		}
+
+		const guardResult = runLlmGuardPost(resultText, guardState.vault, guardState.config);
+		if (guardResult.findings.length > 0) {
+			logger.warn('[LLMGuard] Stderr output findings detected', 'LLMGuard', {
+				sessionId,
+				toolType: managedProcess.toolType,
+				findings: guardResult.findings.map((finding) => finding.type),
+			});
+
+			// Log security event and emit to live stream (matching StdoutHandler behavior)
+			const securityEvent = {
+				sessionId,
+				eventType: guardResult.blocked
+					? ('blocked' as const)
+					: guardResult.warned
+						? ('output_scan' as const)
+						: ('output_scan' as const),
+				findings: guardResult.findings,
+				action: guardResult.blocked
+					? ('blocked' as const)
+					: guardResult.warned
+						? ('warned' as const)
+						: guardResult.sanitizedResponse !== resultText
+							? ('sanitized' as const)
+							: ('none' as const),
+				originalLength: resultText.length,
+				sanitizedLength: guardResult.sanitizedResponse.length,
+				toolType: managedProcess.toolType,
+			};
+
+			logSecurityEvent(securityEvent).catch((err) => {
+				logger.error('[LLMGuard] Failed to log stderr security event', 'LLMGuard', { err });
+			});
+
+			// Emit to live security event stream
+			this.emitter.emit('security-event', sessionId, securityEvent);
+		}
+
+		if (guardResult.blocked) {
+			return `[Maestro LLM Guard blocked response] ${guardResult.blockReason ?? 'Sensitive content detected.'}`;
+		}
+
+		return guardResult.sanitizedResponse;
 	}
 
 	/**
@@ -144,7 +200,9 @@ export class StderrHandler {
 				const remainingContent = contentLines.join('\n').trim();
 				if (remainingContent) {
 					// Emit as regular data — this is the agent's response, not an error
-					this.emitter.emit('data', sessionId, remainingContent);
+					// Apply output guard to Codex stderr content as it may contain AI responses
+					const guardedContent = this.applyOutputGuard(sessionId, managedProcess, remainingContent);
+					this.emitter.emit('data', sessionId, guardedContent);
 				}
 				return;
 			}

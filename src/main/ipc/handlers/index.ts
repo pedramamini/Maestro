@@ -54,6 +54,7 @@ import { registerTabNamingHandlers, TabNamingHandlerDependencies } from './tabNa
 import { registerDirectorNotesHandlers, DirectorNotesHandlerDependencies } from './director-notes';
 import { registerCueHandlers, CueHandlerDependencies } from './cue';
 import { registerWakatimeHandlers } from './wakatime';
+import { registerSecurityHandlers } from './security';
 import { AgentDetector } from '../../agents';
 import { ProcessManager } from '../../process-manager';
 import { WebServer } from '../../web-server';
@@ -102,6 +103,7 @@ export type { DirectorNotesHandlerDependencies };
 export { registerCueHandlers };
 export type { CueHandlerDependencies };
 export { registerWakatimeHandlers };
+export { registerSecurityHandlers };
 export type { AgentsHandlerDependencies };
 export type { ProcessHandlerDependencies };
 export type { PersistenceHandlerDependencies };
@@ -292,4 +294,6 @@ export function registerAllHandlers(deps: HandlerDependencies): void {
 	});
 	// Setup logger event forwarding to renderer
 	setupLoggerEventForwarding(deps.getMainWindow);
+	// Register security handlers for LLM Guard events
+	registerSecurityHandlers();
 }
