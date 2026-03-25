@@ -238,7 +238,7 @@ export interface SettingsStoreState {
 	documentGraphPreviewCharLimit: number;
 	documentGraphLayoutType: DocumentGraphLayoutType;
 	statsCollectionEnabled: boolean;
-	defaultStatsTimeRange: 'day' | 'week' | 'month' | 'year' | 'all';
+	defaultStatsTimeRange: 'day' | 'week' | 'month' | 'quarter' | 'year' | 'all';
 	preventSleepEnabled: boolean;
 	disableGpuAcceleration: boolean;
 	disableConfetti: boolean;
@@ -313,7 +313,7 @@ export interface SettingsStoreActions {
 	setDocumentGraphPreviewCharLimit: (value: number) => void;
 	setDocumentGraphLayoutType: (value: DocumentGraphLayoutType) => void;
 	setStatsCollectionEnabled: (value: boolean) => void;
-	setDefaultStatsTimeRange: (value: 'day' | 'week' | 'month' | 'year' | 'all') => void;
+	setDefaultStatsTimeRange: (value: 'day' | 'week' | 'month' | 'quarter' | 'year' | 'all') => void;
 	setDisableGpuAcceleration: (value: boolean) => void;
 	setDisableConfetti: (value: boolean) => void;
 	setLocalIgnorePatterns: (value: string[]) => void;
@@ -1736,12 +1736,13 @@ export async function loadAllSettings(): Promise<void> {
 			patch.statsCollectionEnabled = allSettings['statsCollectionEnabled'] as boolean;
 
 		if (allSettings['defaultStatsTimeRange'] !== undefined) {
-			const validTimeRanges = ['day', 'week', 'month', 'year', 'all'];
+			const validTimeRanges = ['day', 'week', 'month', 'quarter', 'year', 'all'];
 			if (validTimeRanges.includes(allSettings['defaultStatsTimeRange'] as string)) {
 				patch.defaultStatsTimeRange = allSettings['defaultStatsTimeRange'] as
 					| 'day'
 					| 'week'
 					| 'month'
+					| 'quarter'
 					| 'year'
 					| 'all';
 			}

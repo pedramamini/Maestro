@@ -1593,6 +1593,16 @@ describe('settingsStore', () => {
 			expect(useSettingsStore.getState().defaultStatsTimeRange).toBe('week');
 		});
 
+		it('accepts quarter as valid defaultStatsTimeRange', async () => {
+			vi.mocked(window.maestro.settings.getAll).mockResolvedValue({
+				defaultStatsTimeRange: 'quarter',
+			});
+
+			await loadAllSettings();
+
+			expect(useSettingsStore.getState().defaultStatsTimeRange).toBe('quarter');
+		});
+
 		it('validates documentGraphPreviewCharLimit on load (rejects out-of-range)', async () => {
 			vi.mocked(window.maestro.settings.getAll).mockResolvedValue({
 				documentGraphPreviewCharLimit: 5000, // above 500

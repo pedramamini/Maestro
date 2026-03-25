@@ -241,8 +241,8 @@ export interface UseSettingsReturn {
 	// Stats settings
 	statsCollectionEnabled: boolean;
 	setStatsCollectionEnabled: (value: boolean) => void;
-	defaultStatsTimeRange: 'day' | 'week' | 'month' | 'year' | 'all';
-	setDefaultStatsTimeRange: (value: 'day' | 'week' | 'month' | 'year' | 'all') => void;
+	defaultStatsTimeRange: 'day' | 'week' | 'month' | 'quarter' | 'year' | 'all';
+	setDefaultStatsTimeRange: (value: 'day' | 'week' | 'month' | 'quarter' | 'year' | 'all') => void;
 
 	// Power management settings
 	preventSleepEnabled: boolean;
