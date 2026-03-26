@@ -5,11 +5,12 @@
  * TriggerNode, TriggerDrawer, NodeConfigPanel, and PipelineCanvas.
  */
 
-import { Clock, FileText, Zap, GitPullRequest, CircleDot, CheckSquare } from 'lucide-react';
+import { Clock, FileText, Zap, GitPullRequest, CircleDot, CheckSquare, Power } from 'lucide-react';
 import type { CueEventType } from '../../../shared/cue-pipeline-types';
 
 /** Icon component for each event type */
 export const EVENT_ICONS: Record<CueEventType, typeof Clock> = {
+	'app.startup': Power,
 	'time.heartbeat': Clock,
 	'time.scheduled': Clock,
 	'file.changed': FileText,
@@ -21,6 +22,7 @@ export const EVENT_ICONS: Record<CueEventType, typeof Clock> = {
 
 /** Display label for each event type */
 export const EVENT_LABELS: Record<CueEventType, string> = {
+	'app.startup': 'App Startup',
 	'time.heartbeat': 'Heartbeat Timer',
 	'time.scheduled': 'Scheduled',
 	'file.changed': 'File Change',
@@ -32,6 +34,7 @@ export const EVENT_LABELS: Record<CueEventType, string> = {
 
 /** Brand color for each event type (used in nodes, drawers, minimap) */
 export const EVENT_COLORS: Record<CueEventType, string> = {
+	'app.startup': '#10b981',
 	'time.heartbeat': '#f59e0b',
 	'time.scheduled': '#8b5cf6',
 	'file.changed': '#3b82f6',

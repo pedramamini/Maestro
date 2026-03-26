@@ -366,9 +366,6 @@ export const useAgentStore = create<AgentStore>()((set, get) => ({
 			} else if (item.type === 'command' && item.command) {
 				// Process a slash command - find matching command
 				// Check user-defined commands first, then agent-discovered commands with prompts
-				const agentCmd = session.agentCommands?.find(
-					(cmd) => cmd.command === item.command && cmd.prompt
-				);
 				const matchingCommand =
 					deps.customAICommands.find((cmd) => cmd.command === item.command) ||
 					deps.speckitCommands.find((cmd) => cmd.command === item.command) ||

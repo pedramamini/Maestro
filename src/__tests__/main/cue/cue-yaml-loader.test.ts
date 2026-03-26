@@ -1441,4 +1441,79 @@ subscriptions:
 			expect(result!.subscriptions[0].filter).toBeUndefined();
 		});
 	});
+
+	describe('validateCueConfig — app.startup', () => {
+		it('accepts a minimal app.startup subscription', () => {
+			const result = validateCueConfig({
+				subscriptions: [
+					{
+						name: 'init',
+						event: 'app.startup',
+						prompt: 'Set up workspace',
+					},
+				],
+			});
+			expect(result.valid).toBe(true);
+			expect(result.errors).toHaveLength(0);
+		});
+
+		it('accepts app.startup with optional filter', () => {
+			const result = validateCueConfig({
+				subscriptions: [
+					{
+						name: 'init-filtered',
+						event: 'app.startup',
+						prompt: 'Set up workspace',
+						filter: { reason: 'engine_start' },
+					},
+				],
+			});
+			expect(result.valid).toBe(true);
+			expect(result.errors).toHaveLength(0);
+		});
+
+		it('accepts app.startup with prompt_file instead of prompt', () => {
+			const result = validateCueConfig({
+				subscriptions: [
+					{
+						name: 'init-file',
+						event: 'app.startup',
+						prompt_file: 'prompts/init.md',
+					},
+				],
+			});
+			expect(result.valid).toBe(true);
+			expect(result.errors).toHaveLength(0);
+		});
+
+		it('rejects app.startup without prompt or prompt_file', () => {
+			const result = validateCueConfig({
+				subscriptions: [
+					{
+						name: 'init-no-prompt',
+						event: 'app.startup',
+					},
+				],
+			});
+			expect(result.valid).toBe(false);
+			expect(result.errors).toEqual(
+				expect.arrayContaining([expect.stringContaining('"prompt" or "prompt_file" is required')])
+			);
+		});
+
+		it('rejects app.startup without name', () => {
+			const result = validateCueConfig({
+				subscriptions: [
+					{
+						event: 'app.startup',
+						prompt: 'Init',
+					},
+				],
+			});
+			expect(result.valid).toBe(false);
+			expect(result.errors).toEqual(
+				expect.arrayContaining([expect.stringContaining('"name" is required')])
+			);
+		});
+	});
 });

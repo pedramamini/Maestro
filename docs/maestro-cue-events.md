@@ -1,10 +1,46 @@
 ---
 title: Cue Event Types
-description: Detailed reference for all seven Maestro Cue event types with configuration, payloads, and examples.
+description: Detailed reference for all eight Maestro Cue event types with configuration, payloads, and examples.
 icon: calendar-check
 ---
 
-Cue supports seven event types. Each type watches for a different kind of activity and produces a payload that can be injected into prompts via [template variables](./maestro-cue-advanced#template-variables).
+Cue supports eight event types. Each type watches for a different kind of activity and produces a payload that can be injected into prompts via [template variables](./maestro-cue-advanced#template-variables).
+
+## app.startup
+
+Fires exactly once when the Maestro application launches. Ideal for workspace setup, dependency installation, health checks, or any initialization that should happen once per session.
+
+**Required fields:** None beyond the universal `name`, `event`, and `prompt`.
+
+**Behavior:**
+
+- Fires once per application launch
+- Does NOT re-fire when toggling Cue on/off in Settings
+- Does not re-fire on YAML hot-reload (deduplication by subscription name)
+- Resets on session removal (so re-adding the session fires again on next app launch)
+- Not affected by sleep/wake reconciliation
+- Works with `fan_out`, `filter`, `output_prompt`, and `prompt_file`
+
+**Example:**
+
+```yaml
+subscriptions:
+  - name: init-workspace
+    event: app.startup
+    prompt: |
+      Set up the development environment:
+      1. Run `npm install` if node_modules is missing
+      2. Check that required env vars are set
+      3. Report any issues found
+```
+
+**Payload fields:**
+
+| Field    | Type   | Description               |
+| -------- | ------ | ------------------------- |
+| `reason` | string | Always `"system_startup"` |
+
+---
 
 ## time.heartbeat
 

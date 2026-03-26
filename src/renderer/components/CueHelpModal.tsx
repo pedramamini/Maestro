@@ -89,6 +89,21 @@ export function CueHelpContent({ theme, cueShortcutKeys }: CueHelpContentProps) 
 				<div className="text-sm space-y-3 pl-7" style={{ color: theme.colors.textDim }}>
 					<div>
 						<p>
+							<strong style={{ color: theme.colors.textMain }}>Startup</strong>{' '}
+							<code
+								className="px-1 rounded text-xs"
+								style={{ backgroundColor: theme.colors.bgActivity }}
+							>
+								app.startup
+							</code>
+						</p>
+						<p className="mt-1">
+							Fires once when the Maestro application starts. No additional fields required. Does
+							not re-fire on YAML hot-reload or when toggling Cue on/off.
+						</p>
+					</div>
+					<div>
+						<p>
 							<strong style={{ color: theme.colors.textMain }}>Heartbeat</strong>{' '}
 							<code
 								className="px-1 rounded text-xs"
@@ -305,6 +320,13 @@ export function CueHelpContent({ theme, cueShortcutKeys }: CueHelpContentProps) 
 						}}
 					>
 						<div>
+							# Startup
+							<br />
+							- name: "Init Workspace"
+							<br />
+							{'  '}event: app.startup
+						</div>
+						<div>
 							# Interval
 							<br />
 							- name: "Periodic Check"
@@ -478,7 +500,7 @@ export function CueHelpContent({ theme, cueShortcutKeys }: CueHelpContentProps) 
 					>
 						<div>
 							<code style={{ color: theme.colors.accent }}>{'{{CUE_EVENT_TYPE}}'}</code> — Event
-							type (time.heartbeat, time.scheduled, file.changed, agent.completed,
+							type (app.startup, time.heartbeat, time.scheduled, file.changed, agent.completed,
 							github.pull_request, github.issue, task.pending)
 						</div>
 						<div>

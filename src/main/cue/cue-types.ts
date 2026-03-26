@@ -4,6 +4,7 @@ import * as crypto from 'crypto';
  * Core type definitions for the Maestro Cue event-driven automation system.
  *
  * Cue triggers agent prompts in response to events:
+ * - app.startup: fires once when the Maestro application starts (per session, per app launch)
  * - time.heartbeat: periodic timer-based triggers ("run every X minutes")
  * - time.scheduled: cron-like triggers (specific times and days of week)
  * - file.changed: file system change triggers
@@ -29,6 +30,7 @@ export const CUE_SCHEDULE_DAYS: CueScheduleDay[] = [
 
 /** Event types that can trigger a Cue subscription */
 export type CueEventType =
+	| 'app.startup'
 	| 'time.heartbeat'
 	| 'time.scheduled'
 	| 'file.changed'
@@ -39,6 +41,7 @@ export type CueEventType =
 
 /** All valid event type values (used for validation) */
 export const CUE_EVENT_TYPES: CueEventType[] = [
+	'app.startup',
 	'time.heartbeat',
 	'time.scheduled',
 	'file.changed',

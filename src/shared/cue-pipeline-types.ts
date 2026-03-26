@@ -8,6 +8,7 @@
 
 /** Event types that can trigger a Cue subscription (mirrored from cue-types.ts for renderer access) */
 export type CueEventType =
+	| 'app.startup'
 	| 'time.heartbeat'
 	| 'time.scheduled'
 	| 'file.changed'

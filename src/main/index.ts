@@ -529,7 +529,7 @@ app.whenReady().then(async () => {
 	const encoreFeatures = store.get('encoreFeatures', {}) as Record<string, boolean>;
 	if (encoreFeatures.maestroCue && cueEngine) {
 		logger.info('Maestro Cue Encore Feature enabled — starting Cue engine', 'Startup');
-		cueEngine.start();
+		cueEngine.start(true);
 	}
 
 	// Set custom application menu to prevent macOS from injecting native

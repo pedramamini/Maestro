@@ -6,6 +6,28 @@ icon: lightbulb
 
 Complete, copy-paste-ready `.maestro/cue.yaml` configurations for common workflows. Each example is self-contained — drop it into your project's `.maestro/` directory and adjust agent names to match your Left Bar.
 
+## Workspace Initialization
+
+Run setup tasks once when the Maestro application launches — install dependencies, verify environment, run health checks.
+
+**Agents needed:** `setup-agent`
+
+```yaml
+subscriptions:
+  - name: init-workspace
+    event: app.startup
+    prompt: |
+      Initialize the workspace:
+      1. Run `npm install` if node_modules is missing or outdated
+      2. Verify required environment variables are set
+      3. Run `npm run build` to ensure the project compiles
+      Report any issues found.
+```
+
+This fires exactly once per application launch. Toggling Cue off and back on does NOT re-fire it. Only an application restart triggers it again. Editing the YAML does not re-trigger it.
+
+---
+
 ## CI-Style Pipeline
 
 Lint, test, and deploy in sequence. Each step only runs if the previous one succeeded.

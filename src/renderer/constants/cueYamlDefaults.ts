@@ -3,6 +3,11 @@ export const CUE_YAML_TEMPLATE = `# .maestro/cue.yaml
 # Define event-driven subscriptions for your agents.
 #
 # subscriptions:
+#   - name: "initialize workspace"
+#     event: app.startup
+#     prompt: prompts/workspace-init.md
+#     enabled: true
+#
 #   - name: "code review on change"
 #     event: file.changed
 #     watch: "src/**/*.ts"

@@ -38,6 +38,7 @@ export interface ActiveRunInfo {
 // ─── Exported constants & pure functions ─────────────────────────────────────
 
 export const DEFAULT_TRIGGER_LABELS: Record<CueEventType, string> = {
+	'app.startup': 'Startup',
 	'time.heartbeat': 'Heartbeat',
 	'time.scheduled': 'Scheduled',
 	'file.changed': 'File Change',
@@ -346,9 +347,17 @@ export function usePipelineState({
 
 	const createPipeline = useCallback(() => {
 		setPipelineState((prev) => {
+			// Find the highest existing pipeline number to avoid duplicates after deletions
+			let maxNum = 0;
+			for (const p of prev.pipelines) {
+				const match = p.name.match(/^Pipeline (\d+)$/);
+				if (match) {
+					maxNum = Math.max(maxNum, parseInt(match[1], 10));
+				}
+			}
 			const newPipeline: CuePipeline = {
 				id: `pipeline-${Date.now()}`,
-				name: `Pipeline ${prev.pipelines.length + 1}`,
+				name: `Pipeline ${maxNum + 1}`,
 				color: getNextPipelineColor(prev.pipelines),
 				nodes: [],
 				edges: [],

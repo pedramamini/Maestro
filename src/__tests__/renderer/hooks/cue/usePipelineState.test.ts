@@ -133,9 +133,10 @@ function makePipeline(overrides?: Partial<CuePipeline>): CuePipeline {
 // ─── DEFAULT_TRIGGER_LABELS ──────────────────────────────────────────────────
 
 describe('DEFAULT_TRIGGER_LABELS', () => {
-	it('has entries for all seven event types', () => {
+	it('has entries for all eight event types', () => {
 		const keys = Object.keys(DEFAULT_TRIGGER_LABELS);
-		expect(keys).toHaveLength(7);
+		expect(keys).toHaveLength(8);
+		expect(keys).toContain('app.startup');
 		expect(keys).toContain('time.heartbeat');
 		expect(keys).toContain('time.scheduled');
 		expect(keys).toContain('file.changed');
@@ -316,6 +317,35 @@ describe('usePipelineState', () => {
 
 		expect(result.current.pipelineState.pipelines).toHaveLength(2);
 		expect(result.current.pipelineState.pipelines[1].name).toBe('Pipeline 2');
+	});
+
+	it('createPipeline avoids duplicate names after deletion', () => {
+		vi.useFakeTimers();
+		const { result } = renderHook(() => usePipelineState(createDefaultParams()));
+
+		// Create Pipeline 1, Pipeline 2, and Pipeline 3 with distinct timestamps
+		act(() => result.current.createPipeline());
+		vi.advanceTimersByTime(1);
+		act(() => result.current.createPipeline());
+		vi.advanceTimersByTime(1);
+		act(() => result.current.createPipeline());
+		expect(result.current.pipelineState.pipelines).toHaveLength(3);
+
+		// Delete Pipeline 2 (middle one, no nodes → no confirm dialog)
+		const secondId = result.current.pipelineState.pipelines[1].id;
+		act(() => result.current.deletePipeline(secondId));
+		expect(result.current.pipelineState.pipelines).toHaveLength(2);
+
+		// Remaining: Pipeline 1 and Pipeline 3. maxNum=3, so next should be Pipeline 4 (not Pipeline 3 again)
+		vi.advanceTimersByTime(1);
+		act(() => result.current.createPipeline());
+
+		expect(result.current.pipelineState.pipelines).toHaveLength(3);
+		expect(result.current.pipelineState.pipelines[0].name).toBe('Pipeline 1');
+		expect(result.current.pipelineState.pipelines[1].name).toBe('Pipeline 3');
+		expect(result.current.pipelineState.pipelines[2].name).toBe('Pipeline 4');
+
+		vi.useRealTimers();
 	});
 
 	it('deletePipeline removes the pipeline when confirm returns true', () => {

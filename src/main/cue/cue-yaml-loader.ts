@@ -363,6 +363,8 @@ export function validateCueConfig(config: unknown): { valid: boolean; errors: st
 						);
 					}
 				}
+			} else if (event === 'app.startup') {
+				// No additional required fields — simplest trigger type
 			} else if (
 				sub.event &&
 				typeof sub.event === 'string' &&

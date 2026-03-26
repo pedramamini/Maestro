@@ -247,6 +247,15 @@ export function TriggerConfig({ node, theme, onUpdateNode }: TriggerConfigProps)
 					</label>
 				</div>
 			);
+		case 'app.startup':
+			return (
+				<div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+					{nameField}
+					<div style={{ color: theme.colors.textDim, fontSize: 12, fontStyle: 'italic' }}>
+						Fires once when the Maestro application starts. No additional configuration needed.
+					</div>
+				</div>
+			);
 		default:
 			return null;
 	}

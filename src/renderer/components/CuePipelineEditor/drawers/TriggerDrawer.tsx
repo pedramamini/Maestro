@@ -20,6 +20,13 @@ interface TriggerItem {
 
 const TRIGGER_ITEMS: TriggerItem[] = [
 	{
+		eventType: 'app.startup',
+		label: 'Startup',
+		description: 'Run once when application starts',
+		icon: EVENT_ICONS['app.startup'],
+		color: EVENT_COLORS['app.startup'],
+	},
+	{
 		eventType: 'time.heartbeat',
 		label: 'Heartbeat',
 		description: 'Run every N minutes',
