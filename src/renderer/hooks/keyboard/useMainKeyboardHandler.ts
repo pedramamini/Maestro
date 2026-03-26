@@ -97,6 +97,19 @@ export function useMainKeyboardHandler(): UseMainKeyboardHandlerReturn {
 				!e.altKey &&
 				!(e.shiftKey && e.code === 'Backquote') // Allow Ctrl+Shift+` for new terminal tab
 			) {
+				// If the event reached this window handler, xterm's textarea may have lost focus
+				// (xterm normally stopPropagation's handled Ctrl events). Re-focus and forward
+				// the control character so Ctrl+C/D/Z still work in vim/vi/nano.
+				ctx.mainPanelRef?.current?.focusActiveTerminal?.();
+				const tabId = ctx.activeSession.activeTerminalTabId;
+				if (tabId && e.key.length === 1) {
+					const code = e.key.toUpperCase().charCodeAt(0);
+					if (code >= 65 && code <= 90) {
+						e.preventDefault();
+						const termSid = `${ctx.activeSession.id}-terminal-${tabId}`;
+						window.maestro?.process?.write(termSid, String.fromCharCode(code - 64));
+					}
+				}
 				return;
 			}
 
@@ -899,6 +912,46 @@ export function useMainKeyboardHandler(): UseMainKeyboardHandlerReturn {
 				} else if (ctx.activeFocus === 'main') {
 					// Main panel search - handled by TerminalOutput component, just track here
 					trackShortcut('searchOutput');
+				}
+			}
+
+			// Terminal focus recovery: if a key event reaches this window handler while in
+			// terminal mode with no layers open, xterm's textarea likely lost focus. Normally
+			// xterm calls stopPropagation on handled events, so they never bubble to window.
+			// Re-focus the terminal and forward the missed keystroke to the PTY so interactive
+			// apps like vim/vi/nano keep working even after a transient focus loss.
+			if (
+				ctx.activeSession?.inputMode === 'terminal' &&
+				!ctx.hasOpenLayers() &&
+				!e.defaultPrevented
+			) {
+				ctx.mainPanelRef?.current?.focusActiveTerminal?.();
+
+				const tabId = ctx.activeSession.activeTerminalTabId;
+				if (tabId) {
+					const termSid = `${ctx.activeSession.id}-terminal-${tabId}`;
+					let data: string | null = null;
+					if (!e.ctrlKey && !e.metaKey && !e.altKey && e.key.length === 1) {
+						data = e.key;
+					} else if (e.key === 'Enter') {
+						data = '\r';
+					} else if (e.key === 'Backspace') {
+						data = '\x7f';
+					} else if (e.key === 'Escape') {
+						data = '\x1b';
+					} else if (e.key === 'Tab') {
+						data = '\t';
+					} else if (e.ctrlKey && !e.metaKey && !e.altKey && e.key.length === 1) {
+						// Ctrl+A..Z → send control character
+						const code = e.key.toUpperCase().charCodeAt(0);
+						if (code >= 65 && code <= 90) {
+							data = String.fromCharCode(code - 64);
+						}
+					}
+					if (data !== null) {
+						e.preventDefault();
+						window.maestro?.process?.write(termSid, data);
+					}
 				}
 			}
 		};
