@@ -616,7 +616,7 @@ export interface Session {
 	// Active time tracking - cumulative milliseconds of active use
 	activeTimeMs: number;
 	// Agent slash commands available for this session (fetched per session based on cwd)
-	agentCommands?: { command: string; description: string }[];
+	agentCommands?: { command: string; description: string; prompt?: string }[];
 	// Bookmark flag - bookmarked sessions appear in a dedicated section at the top
 	bookmarked?: boolean;
 	// Pending AI command that will trigger a synopsis on completion (e.g., '/commit')
@@ -768,6 +768,7 @@ export interface AgentCapabilities {
 	supportsGroupChatModeration?: boolean;
 	usesJsonLineOutput?: boolean;
 	usesCombinedContextWindow?: boolean;
+	supportsAppendSystemPrompt?: boolean;
 }
 
 export interface AgentConfig {
@@ -813,6 +814,8 @@ export interface ProcessConfig {
 		remoteId: string | null;
 		workingDirOverride?: string;
 	};
+	// System prompt delivery (separate from user message for token efficiency)
+	appendSystemPrompt?: string; // System prompt to pass via --append-system-prompt or embed in prompt
 	// Windows command line length workaround
 	sendPromptViaStdin?: boolean; // If true, send the prompt via stdin as JSON instead of command line
 	sendPromptViaStdinRaw?: boolean; // If true, send the prompt via stdin as raw text instead of command line
@@ -873,6 +876,24 @@ export interface OpenSpecCommand {
 
 // OpenSpec metadata for tracking version and refresh status
 export interface OpenSpecMetadata {
+	lastRefreshed: string; // ISO date
+	commitSha: string; // Git commit SHA or version tag
+	sourceVersion: string; // Semantic version
+	sourceUrl: string; // GitHub repo URL
+}
+
+// BMAD command definition (bundled from bmad-code-org/BMAD-METHOD)
+export interface BmadCommand {
+	id: string; // e.g., 'create-prd'
+	command: string; // e.g., '/bmad-bmm-create-prd'
+	description: string;
+	prompt: string;
+	isCustom: boolean; // BMAD currently ships only upstream commands
+	isModified: boolean; // true if user has edited
+}
+
+// BMAD metadata for tracking version and refresh status
+export interface BmadMetadata {
 	lastRefreshed: string; // ISO date
 	commitSha: string; // Git commit SHA or version tag
 	sourceVersion: string; // Semantic version

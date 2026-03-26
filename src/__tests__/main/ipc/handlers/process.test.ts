@@ -1877,4 +1877,239 @@ describe('process IPC handlers', () => {
 			expect(spawnCall.sshStdinScript).toContain('custom-agent');
 		});
 	});
+
+	describe('appendSystemPrompt delivery', () => {
+		const mockSshRemote = {
+			id: 'remote-1',
+			name: 'Dev Server',
+			host: 'dev.example.com',
+			port: 22,
+			username: 'devuser',
+			privateKeyPath: '~/.ssh/id_ed25519',
+			enabled: true,
+			remoteEnv: {},
+		};
+
+		it('should deliver system prompt via CLI for supported agents (local)', async () => {
+			const mockAgent = {
+				id: 'claude-code',
+				name: 'Claude Code',
+				requiresPty: true,
+				path: '/usr/local/bin/claude',
+				capabilities: {
+					supportsAppendSystemPrompt: true,
+					supportsStreamJsonInput: true,
+				},
+			};
+
+			mockAgentDetector.getAgent.mockResolvedValue(mockAgent);
+			mockProcessManager.spawn.mockReturnValue({ pid: 12345, success: true });
+
+			const handler = handlers.get('process:spawn');
+			await handler!({} as any, {
+				sessionId: 'session-1',
+				toolType: 'claude-code',
+				cwd: '/home/user/project',
+				command: 'claude',
+				args: ['--print'],
+				prompt: 'Hello world',
+				appendSystemPrompt: 'You are Maestro system prompt content',
+			});
+
+			const spawnCall = mockProcessManager.spawn.mock.calls[0][0];
+			if (process.platform === 'win32') {
+				// Windows: uses --append-system-prompt-file with temp file
+				const idx = spawnCall.args.indexOf('--append-system-prompt-file');
+				expect(idx).toBeGreaterThan(-1);
+				expect(spawnCall.args[idx + 1]).toContain('maestro-sysprompt-session-1');
+			} else {
+				// Non-Windows: passes inline
+				const idx = spawnCall.args.indexOf('--append-system-prompt');
+				expect(idx).toBeGreaterThan(-1);
+				expect(spawnCall.args[idx + 1]).toBe('You are Maestro system prompt content');
+			}
+			// User prompt should remain clean (not embedded)
+			expect(spawnCall.prompt).toBe('Hello world');
+			expect(spawnCall.prompt).not.toContain('Maestro system prompt');
+		});
+
+		it('should embed system prompt in user message for unsupported agents (local)', async () => {
+			const mockAgent = {
+				id: 'codex',
+				name: 'Codex',
+				requiresPty: false,
+				path: '/usr/local/bin/codex',
+				capabilities: {
+					supportsAppendSystemPrompt: false,
+				},
+			};
+
+			mockAgentDetector.getAgent.mockResolvedValue(mockAgent);
+			mockProcessManager.spawn.mockReturnValue({ pid: 12345, success: true });
+
+			const handler = handlers.get('process:spawn');
+			await handler!({} as any, {
+				sessionId: 'session-1',
+				toolType: 'codex',
+				cwd: '/home/user/project',
+				command: 'codex',
+				args: [],
+				prompt: 'Fix the bug',
+				appendSystemPrompt: 'You are Maestro system prompt content',
+			});
+
+			const spawnCall = mockProcessManager.spawn.mock.calls[0][0];
+			// --append-system-prompt should NOT be in args
+			expect(spawnCall.args).not.toContain('--append-system-prompt');
+			// System prompt should be embedded in the user prompt
+			expect(spawnCall.prompt).toContain('You are Maestro system prompt content');
+			expect(spawnCall.prompt).toContain('Fix the bug');
+			expect(spawnCall.prompt).toContain('# User Request');
+		});
+
+		it('should use system prompt as sole content when no user prompt for unsupported agents', async () => {
+			const mockAgent = {
+				id: 'codex',
+				name: 'Codex',
+				requiresPty: false,
+				capabilities: {
+					supportsAppendSystemPrompt: false,
+				},
+			};
+
+			mockAgentDetector.getAgent.mockResolvedValue(mockAgent);
+			mockProcessManager.spawn.mockReturnValue({ pid: 12345, success: true });
+
+			const handler = handlers.get('process:spawn');
+			await handler!({} as any, {
+				sessionId: 'session-1',
+				toolType: 'codex',
+				cwd: '/home/user/project',
+				command: 'codex',
+				args: [],
+				prompt: '', // Empty prompt
+				appendSystemPrompt: 'You are Maestro system prompt content',
+			});
+
+			const spawnCall = mockProcessManager.spawn.mock.calls[0][0];
+			// System prompt should become the sole prompt
+			expect(spawnCall.prompt).toBe('You are Maestro system prompt content');
+		});
+
+		it('should include --append-system-prompt in SSH remote args via finalArgs', async () => {
+			const mockAgent = {
+				id: 'claude-code',
+				name: 'Claude Code',
+				requiresPty: true,
+				binaryName: 'claude',
+				capabilities: {
+					supportsAppendSystemPrompt: true,
+					supportsStreamJsonInput: true,
+				},
+			};
+
+			mockAgentDetector.getAgent.mockResolvedValue(mockAgent);
+			mockSettingsStore.get.mockImplementation((key, defaultValue) => {
+				if (key === 'sshRemotes') return [mockSshRemote];
+				return defaultValue;
+			});
+			mockProcessManager.spawn.mockReturnValue({ pid: 12345, success: true });
+
+			const handler = handlers.get('process:spawn');
+			await handler!({} as any, {
+				sessionId: 'session-1',
+				toolType: 'claude-code',
+				cwd: '/home/devuser/project',
+				command: 'claude',
+				args: ['--print'],
+				prompt: 'Hello via SSH',
+				appendSystemPrompt: 'Maestro SSH system prompt',
+				sessionSshRemoteConfig: {
+					enabled: true,
+					remoteId: 'remote-1',
+				},
+			});
+
+			const spawnCall = mockProcessManager.spawn.mock.calls[0][0];
+			// Should use SSH
+			expect(spawnCall.command).toBe('ssh');
+			// The stdin script should contain --append-system-prompt in the exec command
+			expect(spawnCall.sshStdinScript).toContain('--append-system-prompt');
+			expect(spawnCall.sshStdinScript).toContain('Maestro SSH system prompt');
+			// The user prompt should be passed via stdin passthrough (after the script)
+			expect(spawnCall.sshStdinScript).toContain('Hello via SSH');
+		});
+
+		it('should embed system prompt in SSH stdin for unsupported agents', async () => {
+			const mockAgent = {
+				id: 'opencode',
+				name: 'OpenCode',
+				requiresPty: false,
+				binaryName: 'opencode',
+				capabilities: {
+					supportsAppendSystemPrompt: false,
+				},
+			};
+
+			mockAgentDetector.getAgent.mockResolvedValue(mockAgent);
+			mockSettingsStore.get.mockImplementation((key, defaultValue) => {
+				if (key === 'sshRemotes') return [mockSshRemote];
+				return defaultValue;
+			});
+			mockProcessManager.spawn.mockReturnValue({ pid: 12345, success: true });
+
+			const handler = handlers.get('process:spawn');
+			await handler!({} as any, {
+				sessionId: 'session-1',
+				toolType: 'opencode',
+				cwd: '/home/devuser/project',
+				command: 'opencode',
+				args: [],
+				prompt: 'Fix the bug remotely',
+				appendSystemPrompt: 'Maestro SSH system prompt',
+				sessionSshRemoteConfig: {
+					enabled: true,
+					remoteId: 'remote-1',
+				},
+			});
+
+			const spawnCall = mockProcessManager.spawn.mock.calls[0][0];
+			expect(spawnCall.command).toBe('ssh');
+			// --append-system-prompt should NOT be in the SSH script args
+			expect(spawnCall.sshStdinScript).not.toContain('--append-system-prompt');
+			// System prompt should be embedded in the stdin input (as part of effectivePrompt)
+			expect(spawnCall.sshStdinScript).toContain('Maestro SSH system prompt');
+			expect(spawnCall.sshStdinScript).toContain('Fix the bug remotely');
+			expect(spawnCall.sshStdinScript).toContain('# User Request');
+		});
+
+		it('should not add --append-system-prompt when appendSystemPrompt is not provided', async () => {
+			const mockAgent = {
+				id: 'claude-code',
+				name: 'Claude Code',
+				requiresPty: true,
+				capabilities: {
+					supportsAppendSystemPrompt: true,
+				},
+			};
+
+			mockAgentDetector.getAgent.mockResolvedValue(mockAgent);
+			mockProcessManager.spawn.mockReturnValue({ pid: 12345, success: true });
+
+			const handler = handlers.get('process:spawn');
+			await handler!({} as any, {
+				sessionId: 'session-1',
+				toolType: 'claude-code',
+				cwd: '/home/user/project',
+				command: 'claude',
+				args: ['--print'],
+				prompt: 'Hello world',
+				// No appendSystemPrompt
+			});
+
+			const spawnCall = mockProcessManager.spawn.mock.calls[0][0];
+			expect(spawnCall.args).not.toContain('--append-system-prompt');
+			expect(spawnCall.prompt).toBe('Hello world');
+		});
+	});
 });

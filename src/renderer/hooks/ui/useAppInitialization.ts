@@ -12,7 +12,7 @@
  *   - Beta updates setting sync
  *   - Update check on startup
  *   - Leaderboard stats sync from server
- *   - SpecKit + OpenSpec command loading
+ *   - SpecKit + OpenSpec + BMAD command loading
  *   - SSH remote configs loading
  *   - Stats DB corruption check
  *   - Notification settings sync to notificationStore
@@ -20,7 +20,7 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { SpecKitCommand, OpenSpecCommand } from '../../types';
+import type { SpecKitCommand, OpenSpecCommand, BmadCommand } from '../../types';
 import { useSessionStore } from '../../stores/sessionStore';
 import { useSettingsStore } from '../../stores/settingsStore';
 import { getModalActions } from '../../stores/modalStore';
@@ -28,6 +28,8 @@ import { useTabStore } from '../../stores/tabStore';
 import { useNotificationStore, notifyToast } from '../../stores/notificationStore';
 import { getSpeckitCommands } from '../../services/speckit';
 import { getOpenSpecCommands } from '../../services/openspec';
+import { getBmadCommands } from '../../services/bmad';
+import { captureException } from '../../utils/sentry';
 import { exposeWindowsWarningModalDebug } from '../../components/WindowsWarningModal';
 import type { GistInfo } from '../../components/GistPublishModal';
 
@@ -44,6 +46,8 @@ export interface AppInitializationReturn {
 	speckitCommands: SpecKitCommand[];
 	/** Loaded OpenSpec commands */
 	openspecCommands: OpenSpecCommand[];
+	/** Loaded BMAD commands */
+	bmadCommands: BmadCommand[];
 	/** Save a gist URL for a file path (persisted to settings) */
 	saveFileGistUrl: (filePath: string, gistInfo: GistInfo) => void;
 }
@@ -71,6 +75,7 @@ export function useAppInitialization(): AppInitializationReturn {
 	const [sshRemoteConfigs, setSshRemoteConfigs] = useState<Array<{ id: string; name: string }>>([]);
 	const [speckitCommands, setSpeckitCommands] = useState<SpecKitCommand[]>([]);
 	const [openspecCommands, setOpenspecCommands] = useState<OpenSpecCommand[]>([]);
+	const [bmadCommands, setBmadCommands] = useState<BmadCommand[]>([]);
 
 	// --- Splash screen coordination ---
 	// Progress stages: 0-40% React bootstrap (splash.js), 40-60% settings,
@@ -248,6 +253,22 @@ export function useAppInitialization(): AppInitializationReturn {
 		})();
 	}, []);
 
+	// --- BMAD commands loading ---
+	useEffect(() => {
+		(async () => {
+			try {
+				const commands = await getBmadCommands();
+				setBmadCommands(commands);
+			} catch (error) {
+				captureException(error, {
+					extra: {
+						context: 'useAppInitialization - BMAD load',
+					},
+				});
+			}
+		})();
+	}, []);
+
 	// --- SSH remote configs loading ---
 	// Non-critical: SSH may not be configured. Failures are logged but not
 	// reported to Sentry since the app functions fully without SSH remotes.
@@ -315,6 +336,7 @@ export function useAppInitialization(): AppInitializationReturn {
 		sshRemoteConfigs,
 		speckitCommands,
 		openspecCommands,
+		bmadCommands,
 		saveFileGistUrl,
 	};
 }

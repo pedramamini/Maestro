@@ -10,7 +10,7 @@
  * drill into fullResponse details as needed.
  */
 
-import { ipcMain } from 'electron';
+import { ipcMain, BrowserWindow } from 'electron';
 import { logger } from '../../utils/logger';
 import { HistoryEntry, ToolType } from '../../../shared/types';
 import { paginateEntries } from '../../../shared/history';
@@ -318,6 +318,19 @@ export function registerDirectorNotesHandlers(deps: DirectorNotesHandlerDependen
 					const allConfigs = agentConfigsStore.get('configs', {});
 					const dnAgentConfigValues = allConfigs[options.provider] || {};
 
+					// Send progress updates to all renderer windows
+					const sendProgress = (update: {
+						chunkCount: number;
+						bytesReceived: number;
+						elapsedMs: number;
+					}) => {
+						for (const win of BrowserWindow.getAllWindows()) {
+							if (!win.isDestroyed()) {
+								win.webContents.send('director-notes:synopsisProgress', update);
+							}
+						}
+					};
+
 					const result = await groomContext(
 						{
 							projectRoot: process.cwd(),
@@ -328,6 +341,7 @@ export function registerDirectorNotesHandlers(deps: DirectorNotesHandlerDependen
 							sessionCustomArgs: options.customArgs,
 							sessionCustomEnvVars: options.customEnvVars,
 							agentConfigValues: dnAgentConfigValues,
+							onProgress: sendProgress,
 						},
 						processManager,
 						agentDetector

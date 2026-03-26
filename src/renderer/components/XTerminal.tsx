@@ -1,13 +1,82 @@
-import { useEffect, useRef, useImperativeHandle, forwardRef, useCallback } from 'react';
+import { useEffect, useRef, useImperativeHandle, forwardRef, useCallback, useState } from 'react';
 import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
-import { WebLinksAddon } from '@xterm/addon-web-links';
 import { SearchAddon } from '@xterm/addon-search';
 import { Unicode11Addon } from '@xterm/addon-unicode11';
 import type { ISearchOptions } from '@xterm/addon-search';
+import type { ILink } from '@xterm/xterm';
 import '@xterm/xterm/css/xterm.css';
 import type { Theme } from '../../shared/theme-types';
 import type { ITheme } from '@xterm/xterm';
+import { LinkContextMenu, type LinkContextMenuState } from './LinkContextMenu';
+
+// ============================================================================
+// Custom key event handler logic
+// ============================================================================
+
+/**
+ * Determine how xterm should handle a keyboard event.
+ *
+ * Returns:
+ * - 'passthrough': xterm should NOT handle this key (return false to xterm) —
+ *   the event bubbles to Maestro's window-level shortcut handler instead.
+ * - 'handle': xterm should handle this key normally (return true to xterm).
+ */
+export type XtermKeyAction = 'passthrough' | 'handle' | { action: 'write'; data: string };
+
+/**
+ * Return the escape sequence for a terminal-navigation key combo, or null
+ * if the event is not a navigation shortcut.
+ *
+ * macOS conventions:
+ *   Option+Left/Right  → word backward/forward  (ESC b / ESC f)
+ *   Cmd+Left/Right     → beginning/end of line   (Ctrl-A / Ctrl-E)
+ *   Option+Backspace   → delete word backward     (ESC DEL)
+ */
+function getTerminalNavSequence(e: KeyboardEvent): string | null {
+	if (e.type !== 'keydown') return null;
+
+	// Option (Alt) + Arrow → word navigation
+	if (e.altKey && !e.metaKey && !e.ctrlKey) {
+		if (e.key === 'ArrowLeft') return '\x1bb'; // ESC b — backward word
+		if (e.key === 'ArrowRight') return '\x1bf'; // ESC f — forward word
+		if (e.key === 'Backspace') return '\x1b\x7f'; // ESC DEL — backward kill word
+	}
+
+	// Cmd (Meta) + Arrow → line navigation
+	if (e.metaKey && !e.altKey && !e.ctrlKey) {
+		if (e.key === 'ArrowLeft') return '\x01'; // Ctrl-A — beginning of line
+		if (e.key === 'ArrowRight') return '\x05'; // Ctrl-E — end of line
+	}
+
+	return null;
+}
+
+export function evaluateCustomKeyEvent(e: KeyboardEvent): XtermKeyAction {
+	// Terminal navigation shortcuts (word jump, line jump, word delete)
+	// must be checked before the blanket Alt/Meta passthrough rules.
+	const navSeq = getTerminalNavSequence(e);
+	if (navSeq) return { action: 'write', data: navSeq };
+
+	// Let Ctrl+Shift+` through for new-terminal-tab shortcut
+	if (e.ctrlKey && e.shiftKey && e.code === 'Backquote') return 'passthrough';
+	// Let all Meta (Cmd) key combos through so app shortcuts work
+	if (e.metaKey) return 'passthrough';
+	// Let Ctrl+Shift combos through (cross-platform app shortcuts)
+	if (e.ctrlKey && e.shiftKey) return 'passthrough';
+	// Let Alt key combos through so Maestro shortcuts like Alt+Q (Cue),
+	// Alt+J (jump to terminal), Alt+Shift+U (toggle tab unread) work.
+	// macOptionIsMeta is not enabled, so Alt doesn't send escape sequences
+	// by default — these events would just produce dead/special characters
+	// that aren't useful in the terminal context.
+	if (e.altKey) return 'passthrough';
+	// Let xterm.js handle Escape normally — it sends \x1b through the standard
+	// onData pipeline which writes to the PTY. Previous manual handling (writing
+	// \x1b directly and returning false on keydown) caused xterm's internal key
+	// processing state to become inconsistent (keydown blocked but keyup allowed),
+	// breaking interactive apps like vim/vi/nano that depend on Escape.
+	return 'handle';
+}
 
 // ============================================================================
 // Theme mapping
@@ -89,6 +158,13 @@ export function mapThemeToXterm(theme: Theme): ITheme {
 }
 
 // ============================================================================
+// Link detection
+// ============================================================================
+
+/** URL regex matching HTTP/HTTPS URLs, trimming trailing punctuation */
+const URL_PATTERN = /https?:\/\/[^\s<>[\]"'{}|\\^`\x00-\x1f]+[^\s<>[\]"'{}|\\^`.,;:!?)\x00-\x1f]/g;
+
+// ============================================================================
 // Types
 // ============================================================================
 
@@ -136,6 +212,10 @@ export const XTerminal = forwardRef<XTerminalHandle, XTerminalProps>(function XT
 	// Deferred WebGL load: resolved when the async import completes but the container was hidden.
 	// Applied on the next visible resize or explicit refresh() call.
 	const pendingWebglLoadRef = useRef<(() => void) | null>(null);
+
+	// Link context menu state
+	const [linkMenu, setLinkMenu] = useState<LinkContextMenuState | null>(null);
+	const hoveredLinkRef = useRef<string | null>(null);
 
 	// Expose handle to parent
 	useImperativeHandle(
@@ -244,15 +324,49 @@ export const XTerminal = forwardRef<XTerminalHandle, XTerminalProps>(function XT
 		});
 
 		const fitAddon = new FitAddon();
-		const webLinksAddon = new WebLinksAddon();
 		const searchAddon = new SearchAddon();
 		const unicode11Addon = new Unicode11Addon();
 
 		term.loadAddon(fitAddon);
-		term.loadAddon(webLinksAddon);
 		term.loadAddon(searchAddon);
 		term.loadAddon(unicode11Addon);
 		term.unicode.activeVersion = '11';
+
+		// Custom link provider: detects URLs, tracks hover for right-click context menu
+		const linkProviderDisposable = term.registerLinkProvider({
+			provideLinks(lineNumber, callback) {
+				const line = term.buffer.active.getLine(lineNumber - 1);
+				if (!line) {
+					callback(undefined);
+					return;
+				}
+				const text = line.translateToString();
+				const links: ILink[] = [];
+				let match: RegExpExecArray | null;
+				const re = new RegExp(URL_PATTERN.source, 'g');
+				while ((match = re.exec(text)) !== null) {
+					const url = match[0];
+					const startCol = match.index + 1; // 1-based
+					links.push({
+						range: {
+							start: { x: startCol, y: lineNumber },
+							end: { x: startCol + url.length - 1, y: lineNumber },
+						},
+						text: url,
+						activate(_event, linkText) {
+							window.maestro.shell.openExternal(linkText);
+						},
+						hover(_event, linkText) {
+							hoveredLinkRef.current = linkText;
+						},
+						leave() {
+							hoveredLinkRef.current = null;
+						},
+					});
+				}
+				callback(links.length > 0 ? links : undefined);
+			},
+		});
 
 		// Attempt WebGL renderer with canvas fallback.
 		// The WebGL addon must be loaded AFTER term.open() because xterm's internal link layer
@@ -298,19 +412,12 @@ export const XTerminal = forwardRef<XTerminalHandle, XTerminalProps>(function XT
 		// register conflicting accelerators. E.g., { role: 'close' } would steal Cmd+W
 		// at the NSMenu level before it reaches the renderer.
 		term.attachCustomKeyEventHandler((e: KeyboardEvent) => {
-			// Let Ctrl+Shift+` through for new-terminal-tab shortcut
-			if (e.ctrlKey && e.shiftKey && e.code === 'Backquote') return false;
-			// Let all Meta (Cmd) key combos through so app shortcuts work
-			if (e.metaKey) return false;
-			// Let Ctrl+Shift combos through (cross-platform app shortcuts)
-			if (e.ctrlKey && e.shiftKey) return false;
-			// Let Alt key combos through so Maestro shortcuts like Alt+Q (Cue),
-			// Alt+J (jump to terminal), Alt+Shift+U (toggle tab unread) work.
-			// macOptionIsMeta is not enabled, so Alt doesn't send escape sequences
-			// by default — these events would just produce dead/special characters
-			// that aren't useful in the terminal context.
-			if (e.altKey) return false;
-			return true;
+			const action = evaluateCustomKeyEvent(e);
+			if (typeof action === 'object' && action.action === 'write') {
+				window.maestro.process.write(sessionId, action.data);
+				return false;
+			}
+			return action === 'handle';
 		});
 
 		term.open(containerRef.current);
@@ -321,6 +428,18 @@ export const XTerminal = forwardRef<XTerminalHandle, XTerminalProps>(function XT
 		if (containerRef.current.offsetWidth > 0 && containerRef.current.offsetHeight > 0) {
 			fitAddon.fit();
 		}
+
+		// Right-click context menu for links
+		const termElement = containerRef.current;
+		const handleContextMenu = (e: MouseEvent) => {
+			const url = hoveredLinkRef.current;
+			if (url) {
+				e.preventDefault();
+				e.stopPropagation();
+				setLinkMenu({ x: e.clientX, y: e.clientY, url });
+			}
+		};
+		termElement.addEventListener('contextmenu', handleContextMenu);
 
 		// Load WebGL addon after open() so xterm's internal link layer is initialised.
 		import('@xterm/addon-webgl')
@@ -345,6 +464,8 @@ export const XTerminal = forwardRef<XTerminalHandle, XTerminalProps>(function XT
 		resizeObserverRef.current = resizeObserver;
 
 		return () => {
+			termElement.removeEventListener('contextmenu', handleContextMenu);
+			linkProviderDisposable.dispose();
 			resizeObserver.disconnect();
 			if (resizeTimerRef.current) clearTimeout(resizeTimerRef.current);
 			webglAddon?.dispose();
@@ -402,6 +523,8 @@ export const XTerminal = forwardRef<XTerminalHandle, XTerminalProps>(function XT
 		}
 	}, [fontFamily, fontSize]);
 
+	const dismissLinkMenu = useCallback(() => setLinkMenu(null), []);
+
 	return (
 		<div
 			style={{
@@ -413,6 +536,7 @@ export const XTerminal = forwardRef<XTerminalHandle, XTerminalProps>(function XT
 			}}
 		>
 			<div ref={containerRef} style={{ width: '100%', height: '100%', overflow: 'hidden' }} />
+			{linkMenu && <LinkContextMenu menu={linkMenu} theme={theme} onDismiss={dismissLinkMenu} />}
 		</div>
 	);
 });

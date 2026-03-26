@@ -27,6 +27,7 @@ import type {
 	DirectorNotesSettings,
 	EncoreFeatureFlags,
 } from '../../types';
+import type { FileExplorerIconTheme } from '../../utils/fileExplorerIcons/shared';
 import {
 	useSettingsStore,
 	loadAllSettings,
@@ -97,6 +98,8 @@ export interface UseSettingsReturn {
 	setChatRawTextMode: (value: boolean) => void;
 	showHiddenFiles: boolean;
 	setShowHiddenFiles: (value: boolean) => void;
+	fileExplorerIconTheme: FileExplorerIconTheme;
+	setFileExplorerIconTheme: (value: FileExplorerIconTheme) => void;
 
 	// Logging settings
 	logLevel: string;
@@ -238,8 +241,8 @@ export interface UseSettingsReturn {
 	// Stats settings
 	statsCollectionEnabled: boolean;
 	setStatsCollectionEnabled: (value: boolean) => void;
-	defaultStatsTimeRange: 'day' | 'week' | 'month' | 'year' | 'all';
-	setDefaultStatsTimeRange: (value: 'day' | 'week' | 'month' | 'year' | 'all') => void;
+	defaultStatsTimeRange: 'day' | 'week' | 'month' | 'quarter' | 'year' | 'all';
+	setDefaultStatsTimeRange: (value: 'day' | 'week' | 'month' | 'quarter' | 'year' | 'all') => void;
 
 	// Power management settings
 	preventSleepEnabled: boolean;

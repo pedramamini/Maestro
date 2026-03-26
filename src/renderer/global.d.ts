@@ -42,6 +42,8 @@ interface ProcessConfig {
 		remoteId: string | null;
 		workingDirOverride?: string;
 	};
+	// System prompt delivery (separate from user message for token efficiency)
+	appendSystemPrompt?: string; // System prompt to pass via --append-system-prompt or embed in prompt
 	// Windows command line length workaround
 	sendPromptViaStdin?: boolean; // If true, send the prompt via stdin as JSON instead of command line
 	sendPromptViaStdinRaw?: boolean; // If true, send the prompt via stdin as raw text instead of command line
@@ -80,6 +82,7 @@ interface AgentCapabilities {
 	supportsGroupChatModeration: boolean;
 	usesJsonLineOutput: boolean;
 	usesCombinedContextWindow: boolean;
+	supportsAppendSystemPrompt: boolean;
 }
 
 interface AgentConfig {
@@ -121,6 +124,7 @@ interface AgentCapabilities {
 	supportsGroupChatModeration: boolean;
 	usesJsonLineOutput: boolean;
 	usesCombinedContextWindow: boolean;
+	supportsAppendSystemPrompt: boolean;
 }
 
 interface DirectoryEntry {
@@ -293,6 +297,14 @@ interface MaestroAPI {
 				cwd: string;
 				isTerminal: boolean;
 				isBatchMode: boolean;
+				startTime?: number;
+				command?: string;
+				args?: string[];
+				isCueRun?: boolean;
+				cueRunId?: string;
+				cueSessionName?: string;
+				cueSubscriptionName?: string;
+				cueEventType?: string;
 			}>
 		>;
 		onData: (callback: (sessionId: string, data: string) => void) => () => void;
@@ -378,9 +390,18 @@ interface MaestroAPI {
 		) => () => void;
 		sendRemoteSetSettingResponse: (responseChannel: string, success: boolean) => void;
 		onRemoteCreateSession: (
-			callback: (name: string, toolType: string, cwd: string, groupId: string | undefined, responseChannel: string) => void
+			callback: (
+				name: string,
+				toolType: string,
+				cwd: string,
+				groupId: string | undefined,
+				responseChannel: string
+			) => void
 		) => () => void;
-		sendRemoteCreateSessionResponse: (responseChannel: string, result: { sessionId: string } | null) => void;
+		sendRemoteCreateSessionResponse: (
+			responseChannel: string,
+			result: { sessionId: string } | null
+		) => void;
 		onRemoteDeleteSession: (callback: (sessionId: string) => void) => () => void;
 		onRemoteRenameSession: (
 			callback: (sessionId: string, newName: string, responseChannel: string) => void
@@ -728,7 +749,9 @@ interface MaestroAPI {
 		}>;
 		directorySize: (
 			dirPath: string,
-			sshRemoteId?: string
+			sshRemoteId?: string,
+			ignorePatterns?: string[],
+			honorGitignore?: boolean
 		) => Promise<{
 			totalSize: number;
 			fileCount: number;
@@ -767,6 +790,8 @@ interface MaestroAPI {
 		disableAll: () => Promise<{ success: boolean; count: number }>;
 		startServer: () => Promise<{ success: boolean; url?: string; error?: string }>;
 		stopServer: () => Promise<{ success: boolean; error?: string }>;
+		persistCurrentToken: () => Promise<{ success: boolean; message?: string }>;
+		clearPersistentToken: () => Promise<{ success: boolean; message?: string }>;
 	};
 	agents: {
 		detect: (sshRemoteId?: string) => Promise<AgentConfig[]>;
@@ -787,7 +812,7 @@ interface MaestroAPI {
 				error: string | null;
 			} | null;
 		}>;
-		get: (agentId: string) => Promise<AgentConfig | null>;
+		get: (agentId: string, sshRemoteId?: string) => Promise<AgentConfig | null>;
 		getCapabilities: (agentId: string) => Promise<AgentCapabilities>;
 		getConfig: (agentId: string) => Promise<Record<string, any>>;
 		setConfig: (agentId: string, config: Record<string, any>) => Promise<boolean>;
@@ -810,7 +835,7 @@ interface MaestroAPI {
 			agentId: string,
 			cwd: string,
 			customPath?: string
-		) => Promise<string[] | null>;
+		) => Promise<{ name: string; prompt?: string }[] | null>;
 	};
 	// Agent Sessions API - all methods accept optional sshRemoteId for SSH remote session storage access
 	agentSessions: {
@@ -1023,6 +1048,7 @@ interface MaestroAPI {
 		openPath: (itemPath: string) => Promise<void>;
 		trashItem: (itemPath: string) => Promise<void>;
 		showItemInFolder: (itemPath: string) => Promise<void>;
+		copyImageToClipboard: (dataUrl: string) => Promise<void>;
 	};
 	tunnel: {
 		isCloudflaredInstalled: () => Promise<boolean>;
@@ -2218,6 +2244,64 @@ interface MaestroAPI {
 			error?: string;
 		}>;
 	};
+	bmad: {
+		getMetadata: () => Promise<{
+			success: boolean;
+			metadata?: {
+				lastRefreshed: string;
+				commitSha: string;
+				sourceVersion: string;
+				sourceUrl: string;
+			};
+			error?: string;
+		}>;
+		getPrompts: () => Promise<{
+			success: boolean;
+			commands?: Array<{
+				id: string;
+				command: string;
+				description: string;
+				prompt: string;
+				isCustom: boolean;
+				isModified: boolean;
+			}>;
+			error?: string;
+		}>;
+		getCommand: (slashCommand: string) => Promise<{
+			success: boolean;
+			command?: {
+				id: string;
+				command: string;
+				description: string;
+				prompt: string;
+				isCustom: boolean;
+				isModified: boolean;
+			};
+			error?: string;
+		}>;
+		savePrompt: (
+			id: string,
+			content: string
+		) => Promise<{
+			success: boolean;
+			error?: string;
+		}>;
+		resetPrompt: (id: string) => Promise<{
+			success: boolean;
+			prompt?: string;
+			error?: string;
+		}>;
+		refresh: () => Promise<{
+			success: boolean;
+			metadata?: {
+				lastRefreshed: string;
+				commitSha: string;
+				sourceVersion: string;
+				sourceUrl: string;
+			};
+			error?: string;
+		}>;
+	};
 	// Stats tracking API (global AI interaction statistics)
 	stats: {
 		// Record a query event (interactive conversation turn)
@@ -2801,6 +2885,10 @@ interface MaestroAPI {
 			};
 			error?: string;
 		}>;
+		/** Subscribe to synopsis generation progress updates. Returns cleanup function. */
+		onSynopsisProgress: (
+			callback: (update: { chunkCount: number; bytesReceived: number; elapsedMs: number }) => void
+		) => () => void;
 		/** Subscribe to new history entries as they are added in real-time. Returns cleanup function. */
 		onHistoryEntryAdded: (
 			callback: (

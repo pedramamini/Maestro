@@ -23,6 +23,7 @@ import {
 	GitPullRequest,
 	Settings2,
 	Server,
+	Bookmark,
 } from 'lucide-react';
 import { LogViewer } from './LogViewer';
 import { TerminalOutput } from './TerminalOutput';
@@ -310,6 +311,8 @@ interface MainPanelProps {
 	onPublishGist?: () => void;
 	/** Whether the current preview file has been published as a gist */
 	hasGist?: boolean;
+	/** Publish a single AI message as a GitHub Gist */
+	onPublishMessageGist?: (text: string) => void;
 
 	// Document Graph
 	onOpenInGraph?: () => void;
@@ -962,6 +965,14 @@ export const MainPanel = React.memo(
 									<div className="flex items-center gap-2 text-sm font-medium min-w-0 overflow-hidden">
 										{/* Session name - hidden at narrow widths via CSS container query */}
 										<span className="header-session-name truncate">{activeSession.name}</span>
+										{activeSession.bookmarked && (
+											<Bookmark
+												className="w-3.5 h-3.5 shrink-0"
+												style={{ color: theme.colors.accent }}
+												fill={theme.colors.accent}
+												data-testid="bookmark-icon"
+											/>
+										)}
 										<div
 											className="relative shrink-0"
 											onMouseEnter={
@@ -1819,6 +1830,8 @@ export const MainPanel = React.memo(
 												autoScrollAiMode={autoScrollAiMode}
 												userMessageAlignment={userMessageAlignment}
 												onOpenInTab={props.onOpenSavedFileInTab}
+												ghCliAvailable={props.ghCliAvailable}
+												onPublishMessageGist={props.onPublishMessageGist}
 											/>
 										)}
 									</div>
@@ -1951,7 +1964,7 @@ export const MainPanel = React.memo(
 											session={session}
 											theme={theme}
 											fontFamily={fontFamily}
-											fontSize={fontSize}
+											fontSize={Math.round(fontSize * 0.85)}
 											defaultShell={defaultShell}
 											onTabStateChange={createTabStateChangeHandler(sessionId)}
 											onTabPidChange={createTabPidChangeHandler(sessionId)}

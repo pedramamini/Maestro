@@ -8,6 +8,7 @@ import { MODAL_PRIORITIES } from '../constants/modalPriorities';
 import { gitService } from '../services/git';
 import { formatShortcutKeys } from '../utils/shortcutFormatter';
 import { safeClipboardWrite } from '../utils/clipboard';
+import { getOpenInLabel } from '../utils/platformUtils';
 import type { WizardStep } from './Wizard/WizardContext';
 import { useListNavigation } from '../hooks';
 import { useUIStore } from '../stores/uiStore';
@@ -622,6 +623,19 @@ export const QuickActionsModal = memo(function QuickActionsModal(props: QuickAct
 							setSessions((prev) =>
 								prev.map((s) => (s.id === activeSessionId ? { ...s, shellLogs: [] } : s))
 							);
+							setQuickActionOpen(false);
+						},
+					},
+				]
+			: []),
+		...(activeSession && !activeSession.sshRemote
+			? [
+					{
+						id: 'openWorkingDirectory',
+						label: `${getOpenInLabel(window.maestro?.platform || 'darwin')}: Working Directory`,
+						subtext: activeSession.projectRoot,
+						action: () => {
+							window.maestro?.shell?.openPath(activeSession.fullPath || activeSession.projectRoot);
 							setQuickActionOpen(false);
 						},
 					},

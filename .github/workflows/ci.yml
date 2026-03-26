@@ -2,11 +2,9 @@ name: CI
 
 on:
   pull_request:
-    branches:
-      - main
-      - '*-RC'
+    branches: [main, rc, '*-RC']
   push:
-    branches: [main]
+    branches: [main, rc]
 
 jobs:
   lint-and-format:

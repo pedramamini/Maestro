@@ -8,11 +8,11 @@
  * Follows the same factory pattern as cue-file-watcher.ts and cue-github-poller.ts.
  */
 
+import * as crypto from 'crypto';
 import * as fs from 'fs';
 import * as path from 'path';
-import * as crypto from 'crypto';
 import picomatch from 'picomatch';
-import type { CueEvent } from './cue-types';
+import { createCueEvent, type CueEvent } from './cue-types';
 
 export interface CueTaskScannerConfig {
 	watchGlob: string;
@@ -142,22 +142,16 @@ export function createCueTaskScanner(config: CueTaskScannerConfig): () => void {
 
 				const taskList = pendingTasks.map((t) => `L${t.line}: ${t.text}`).join('\n');
 
-				const event: CueEvent = {
-					id: crypto.randomUUID(),
-					type: 'task.pending',
-					timestamp: new Date().toISOString(),
-					triggerName,
-					payload: {
-						path: absPath,
-						filename: path.basename(relPath),
-						directory: path.dirname(absPath),
-						extension: path.extname(relPath),
-						taskCount: pendingTasks.length,
-						taskList,
-						tasks: pendingTasks,
-						content: content.slice(0, 10000),
-					},
-				};
+				const event = createCueEvent('task.pending', triggerName, {
+					path: absPath,
+					filename: path.basename(relPath),
+					directory: path.dirname(absPath),
+					extension: path.extname(relPath),
+					taskCount: pendingTasks.length,
+					taskList,
+					tasks: pendingTasks,
+					content: content.slice(0, 10000),
+				});
 
 				onEvent(event);
 			}

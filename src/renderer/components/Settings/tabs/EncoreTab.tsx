@@ -40,6 +40,10 @@ export function EncoreTab({ theme, isOpen }: EncoreTabProps) {
 		setDirectorNotesSettings,
 		symphonyRegistryUrls,
 		setSymphonyRegistryUrls,
+		statsCollectionEnabled,
+		setStatsCollectionEnabled,
+		defaultStatsTimeRange,
+		setDefaultStatsTimeRange,
 	} = useSettings();
 
 	// Symphony registry URL management
@@ -211,11 +215,61 @@ export function EncoreTab({ theme, isOpen }: EncoreTabProps) {
 							<p className="text-sm" style={{ color: theme.colors.textMain }}>
 								Enable stats collection
 							</p>
+							<button
+								onClick={() => setStatsCollectionEnabled(!statsCollectionEnabled)}
+								className={`relative w-10 h-5 rounded-full transition-colors ${statsCollectionEnabled ? '' : 'opacity-50'}`}
+								style={{
+									backgroundColor: statsCollectionEnabled
+										? theme.colors.accent
+										: theme.colors.border,
+								}}
+								aria-label="Toggle stats collection"
+							>
+								<div
+									className="absolute top-0.5 w-4 h-4 rounded-full bg-white transition-transform"
+									style={{
+										transform: statsCollectionEnabled ? 'translateX(22px)' : 'translateX(2px)',
+									}}
+								/>
+							</button>
 						</div>
 						<p className="text-xs" style={{ color: theme.colors.textDim }}>
-							Track queries and Auto Run sessions for the dashboard. Configure collection and time
-							range settings in the General tab.
+							Track queries and Auto Run sessions for the dashboard.
 						</p>
+
+						<div className="flex items-center justify-between pt-1">
+							<p className="text-sm" style={{ color: theme.colors.textMain }}>
+								Default lookback window
+							</p>
+							<div className="relative">
+								<select
+									value={defaultStatsTimeRange}
+									onChange={(e) =>
+										setDefaultStatsTimeRange(
+											e.target.value as 'day' | 'week' | 'month' | 'quarter' | 'year' | 'all'
+										)
+									}
+									className="appearance-none text-sm px-3 py-1.5 pr-8 rounded-lg border cursor-pointer"
+									style={{
+										backgroundColor: theme.colors.bgMain,
+										borderColor: theme.colors.border,
+										color: theme.colors.textMain,
+									}}
+									aria-label="Select default lookback window"
+								>
+									<option value="day">Today</option>
+									<option value="week">This Week</option>
+									<option value="month">This Month</option>
+									<option value="quarter">This Quarter</option>
+									<option value="year">This Year</option>
+									<option value="all">All Time</option>
+								</select>
+								<ChevronDown
+									className="absolute right-2 top-1/2 -translate-y-1/2 w-4 h-4 pointer-events-none"
+									style={{ color: theme.colors.textDim }}
+								/>
+							</div>
+						</div>
 					</div>
 				)}
 			</div>

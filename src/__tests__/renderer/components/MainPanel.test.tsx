@@ -599,6 +599,20 @@ describe('MainPanel', () => {
 			expect(screen.queryByText('Test Session')).not.toBeInTheDocument();
 		});
 
+		it('should show bookmark indicator when session is bookmarked', () => {
+			const session = createSession({ bookmarked: true });
+			render(<MainPanel {...defaultProps} activeSession={session} />);
+
+			expect(screen.getByTestId('bookmark-icon')).toBeInTheDocument();
+		});
+
+		it('should not show bookmark indicator when session is not bookmarked', () => {
+			const session = createSession({ bookmarked: false });
+			render(<MainPanel {...defaultProps} activeSession={session} />);
+
+			expect(screen.queryByTestId('bookmark-icon')).not.toBeInTheDocument();
+		});
+
 		it('should show Agent Sessions button in header', () => {
 			render(<MainPanel {...defaultProps} />);
 

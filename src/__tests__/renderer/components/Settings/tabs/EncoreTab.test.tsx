@@ -1519,4 +1519,125 @@ describe('EncoreTab', () => {
 			);
 		});
 	});
+
+	// ── Usage & Stats Feature Section ─────────────────────────────────────
+
+	describe('Usage & Stats feature section', () => {
+		it('should render stats collection toggle when usageStats is enabled', async () => {
+			mockUseSettingsOverrides = {
+				encoreFeatures: { usageStats: true },
+			};
+
+			render(<EncoreTab theme={mockTheme} isOpen={true} />);
+
+			await act(async () => {
+				await vi.advanceTimersByTimeAsync(50);
+			});
+
+			expect(screen.getByText('Enable stats collection')).toBeInTheDocument();
+			expect(screen.getByLabelText('Toggle stats collection')).toBeInTheDocument();
+		});
+
+		it('should not render stats controls when usageStats is disabled', async () => {
+			mockUseSettingsOverrides = {
+				encoreFeatures: { usageStats: false },
+			};
+
+			render(<EncoreTab theme={mockTheme} isOpen={true} />);
+
+			await act(async () => {
+				await vi.advanceTimersByTimeAsync(50);
+			});
+
+			expect(screen.queryByText('Enable stats collection')).not.toBeInTheDocument();
+			expect(screen.queryByText('Default lookback window')).not.toBeInTheDocument();
+		});
+
+		it('should call setStatsCollectionEnabled when toggle is clicked', async () => {
+			mockUseSettingsOverrides = {
+				encoreFeatures: { usageStats: true },
+				statsCollectionEnabled: true,
+			};
+
+			render(<EncoreTab theme={mockTheme} isOpen={true} />);
+
+			await act(async () => {
+				await vi.advanceTimersByTimeAsync(50);
+			});
+
+			fireEvent.click(screen.getByLabelText('Toggle stats collection'));
+			expect(mockSetStatsCollectionEnabled).toHaveBeenCalledWith(false);
+		});
+
+		it('should render default lookback window dropdown when usageStats is enabled', async () => {
+			mockUseSettingsOverrides = {
+				encoreFeatures: { usageStats: true },
+			};
+
+			render(<EncoreTab theme={mockTheme} isOpen={true} />);
+
+			await act(async () => {
+				await vi.advanceTimersByTimeAsync(50);
+			});
+
+			expect(screen.getByText('Default lookback window')).toBeInTheDocument();
+			const dropdown = screen.getByLabelText('Select default lookback window');
+			expect(dropdown).toBeInTheDocument();
+		});
+
+		it('should render all time range options in dropdown', async () => {
+			mockUseSettingsOverrides = {
+				encoreFeatures: { usageStats: true },
+			};
+
+			render(<EncoreTab theme={mockTheme} isOpen={true} />);
+
+			await act(async () => {
+				await vi.advanceTimersByTimeAsync(50);
+			});
+
+			const dropdown = screen.getByLabelText('Select default lookback window');
+			const options = dropdown.querySelectorAll('option');
+			expect(options).toHaveLength(6);
+			expect(options[0]).toHaveTextContent('Today');
+			expect(options[1]).toHaveTextContent('This Week');
+			expect(options[2]).toHaveTextContent('This Month');
+			expect(options[3]).toHaveTextContent('This Quarter');
+			expect(options[4]).toHaveTextContent('This Year');
+			expect(options[5]).toHaveTextContent('All Time');
+		});
+
+		it('should call setDefaultStatsTimeRange when dropdown value changes', async () => {
+			mockUseSettingsOverrides = {
+				encoreFeatures: { usageStats: true },
+				defaultStatsTimeRange: 'week',
+			};
+
+			render(<EncoreTab theme={mockTheme} isOpen={true} />);
+
+			await act(async () => {
+				await vi.advanceTimersByTimeAsync(50);
+			});
+
+			const dropdown = screen.getByLabelText('Select default lookback window');
+			fireEvent.change(dropdown, { target: { value: 'quarter' } });
+			expect(mockSetDefaultStatsTimeRange).toHaveBeenCalledWith('quarter');
+		});
+
+		it('should reflect current defaultStatsTimeRange value in dropdown', async () => {
+			mockUseSettingsOverrides = {
+				encoreFeatures: { usageStats: true },
+				defaultStatsTimeRange: 'month',
+			};
+
+			render(<EncoreTab theme={mockTheme} isOpen={true} />);
+
+			await act(async () => {
+				await vi.advanceTimersByTimeAsync(50);
+			});
+
+			const dropdown = screen.getByLabelText('Select default lookback window') as HTMLSelectElement;
+			expect(dropdown.value).toBe('month');
+		});
+	});
 });

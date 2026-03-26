@@ -14,7 +14,7 @@ import {
 	forwardRef,
 	useImperativeHandle,
 } from 'react';
-import { Eye, FileText, Copy, ChevronDown, ChevronUp } from 'lucide-react';
+import { Eye, FileText, Copy, ChevronDown, ChevronUp, Share2 } from 'lucide-react';
 import type { GroupChatMessage, GroupChatParticipant, GroupChatState, Theme } from '../types';
 import { MarkdownRenderer } from './MarkdownRenderer';
 import { stripMarkdown } from '../utils/textProcessing';
@@ -35,6 +35,10 @@ interface GroupChatMessagesProps {
 	participantColors?: Record<string, string>;
 	/** Lightbox handler for viewing images full-size */
 	onOpenLightbox?: (image: string, contextImages?: string[], source?: 'staged' | 'history') => void;
+	/** Whether gh CLI is available for gist publishing */
+	ghCliAvailable?: boolean;
+	/** Callback to publish a message as a GitHub Gist */
+	onPublishGist?: (text: string) => void;
 }
 
 /** Handle exposed via ref for scrolling to messages */
@@ -54,6 +58,8 @@ export const GroupChatMessages = forwardRef<GroupChatMessagesHandle, GroupChatMe
 			maxOutputLines = 30,
 			participantColors: externalColors,
 			onOpenLightbox,
+			ghCliAvailable,
+			onPublishGist,
 		},
 		ref
 	) {
@@ -430,6 +436,17 @@ export const GroupChatMessages = forwardRef<GroupChatMessagesHandle, GroupChatMe
 											>
 												<Copy className="w-3.5 h-3.5" />
 											</button>
+											{/* Publish to GitHub Gist */}
+											{ghCliAvailable && onPublishGist && (
+												<button
+													onClick={() => onPublishGist(msg.content)}
+													className="p-1.5 rounded opacity-0 group-hover:opacity-50 hover:!opacity-100"
+													style={{ color: theme.colors.textDim }}
+													title="Publish as GitHub Gist"
+												>
+													<Share2 className="w-3.5 h-3.5" />
+												</button>
+											)}
 										</div>
 									)}
 								</div>

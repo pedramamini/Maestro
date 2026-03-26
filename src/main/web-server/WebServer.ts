@@ -3,7 +3,7 @@
  *
  * Architecture:
  * - Single server on random port
- * - Security token (UUID) generated at startup, required in all URLs
+ * - Security token (UUID) per startup or persistent across restarts, required in all URLs
  * - Routes: /$TOKEN/ (dashboard), /$TOKEN/session/:id (session view)
  * - Live sessions: Only sessions marked as "live" appear in dashboard
  * - WebSocket: Real-time updates for session state, logs, theme
@@ -15,7 +15,7 @@
  *   http://localhost:PORT/$TOKEN/ws                → WebSocket
  *
  * Security:
- * - Token regenerated on each app restart
+ * - Token regenerated on each app restart (unless Persistent Web Link is enabled)
  * - Invalid/missing token redirects to website
  * - No access without knowing the token
  */
@@ -127,7 +127,7 @@ export class WebServer {
 	private rateLimitConfig: RateLimitConfig = { ...DEFAULT_RATE_LIMIT_CONFIG };
 	private webAssetsPath: string | null = null;
 
-	// Security token - regenerated on each app startup
+	// Security token - persistent or regenerated per startup
 	private securityToken: string;
 
 	// Local IP address for generating URLs (detected at startup)
@@ -148,7 +148,7 @@ export class WebServer {
 	private staticRoutes: StaticRoutes;
 	private wsRoute: WsRoute;
 
-	constructor(port: number = 0) {
+	constructor(port: number = 0, securityToken?: string) {
 		// Use port 0 to let OS assign a random available port
 		this.port = port;
 		this.server = Fastify({
@@ -157,9 +157,14 @@ export class WebServer {
 			},
 		});
 
-		// Generate a new security token (UUID v4)
-		this.securityToken = randomUUID();
-		logger.debug('Security token generated', LOG_CONTEXT);
+		// Use provided token (persistent mode) or generate a new one (ephemeral mode)
+		if (securityToken) {
+			this.securityToken = securityToken;
+			logger.debug('Using persistent security token', LOG_CONTEXT);
+		} else {
+			this.securityToken = randomUUID();
+			logger.debug('Security token generated', LOG_CONTEXT);
+		}
 
 		// Determine web assets path (production vs development)
 		this.webAssetsPath = this.resolveWebAssetsPath();
@@ -640,43 +645,35 @@ export class WebServer {
 			getLiveSessionInfo: (sessionId: string) =>
 				this.liveSessionManager.getLiveSessionInfo(sessionId),
 			isSessionLive: (sessionId: string) => this.liveSessionManager.isSessionLive(sessionId),
-			getAutoRunDocs: async (sessionId: string) =>
-				this.callbackRegistry.getAutoRunDocs(sessionId),
+			getAutoRunDocs: async (sessionId: string) => this.callbackRegistry.getAutoRunDocs(sessionId),
 			getAutoRunDocContent: async (sessionId: string, filename: string) =>
 				this.callbackRegistry.getAutoRunDocContent(sessionId, filename),
 			saveAutoRunDoc: async (sessionId: string, filename: string, content: string) =>
 				this.callbackRegistry.saveAutoRunDoc(sessionId, filename, content),
-			stopAutoRun: async (sessionId: string) =>
-				this.callbackRegistry.stopAutoRun(sessionId),
+			stopAutoRun: async (sessionId: string) => this.callbackRegistry.stopAutoRun(sessionId),
 			getSettings: () => this.callbackRegistry.getSettings(),
-			setSetting: async (key: string, value: any) =>
-				this.callbackRegistry.setSetting(key, value),
+			setSetting: async (key: string, value: any) => this.callbackRegistry.setSetting(key, value),
 			getGroups: () => this.callbackRegistry.getGroups(),
 			createGroup: async (name: string, emoji?: string) =>
 				this.callbackRegistry.createGroup(name, emoji),
 			renameGroup: async (groupId: string, name: string) =>
 				this.callbackRegistry.renameGroup(groupId, name),
-			deleteGroup: async (groupId: string) =>
-				this.callbackRegistry.deleteGroup(groupId),
+			deleteGroup: async (groupId: string) => this.callbackRegistry.deleteGroup(groupId),
 			moveSessionToGroup: async (sessionId: string, groupId: string | null) =>
 				this.callbackRegistry.moveSessionToGroup(sessionId, groupId),
 			createSession: async (name: string, toolType: string, cwd: string, groupId?: string) =>
 				this.callbackRegistry.createSession(name, toolType, cwd, groupId),
-			deleteSession: async (sessionId: string) =>
-				this.callbackRegistry.deleteSession(sessionId),
+			deleteSession: async (sessionId: string) => this.callbackRegistry.deleteSession(sessionId),
 			renameSession: async (sessionId: string, newName: string) =>
 				this.callbackRegistry.renameSession(sessionId, newName),
-			getGitStatus: async (sessionId: string) =>
-				this.callbackRegistry.getGitStatus(sessionId),
+			getGitStatus: async (sessionId: string) => this.callbackRegistry.getGitStatus(sessionId),
 			getGitDiff: async (sessionId: string, filePath?: string) =>
 				this.callbackRegistry.getGitDiff(sessionId, filePath),
 			getGroupChats: async () => this.callbackRegistry.getGroupChats(),
 			startGroupChat: async (topic: string, participantIds: string[]) =>
 				this.callbackRegistry.startGroupChat(topic, participantIds),
-			getGroupChatState: async (chatId: string) =>
-				this.callbackRegistry.getGroupChatState(chatId),
-			stopGroupChat: async (chatId: string) =>
-				this.callbackRegistry.stopGroupChat(chatId),
+			getGroupChatState: async (chatId: string) => this.callbackRegistry.getGroupChatState(chatId),
+			stopGroupChat: async (chatId: string) => this.callbackRegistry.stopGroupChat(chatId),
 			sendGroupChatMessage: async (chatId: string, message: string) =>
 				this.callbackRegistry.sendGroupChatMessage(chatId, message),
 			mergeContext: async (sourceSessionId: string, targetSessionId: string) =>
@@ -693,8 +690,7 @@ export class WebServer {
 				this.callbackRegistry.getCueActivity(sessionId, limit),
 			getUsageDashboard: async (timeRange: 'day' | 'week' | 'month' | 'all') =>
 				this.callbackRegistry.getUsageDashboard(timeRange),
-			getAchievements: async () =>
-				this.callbackRegistry.getAchievements(),
+			getAchievements: async () => this.callbackRegistry.getAchievements(),
 		});
 	}
 

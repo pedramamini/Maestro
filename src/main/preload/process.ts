@@ -36,6 +36,11 @@ export interface ProcessConfig {
 	readOnlyMode?: boolean; // For read-only/plan mode (uses agent's readOnlyArgs)
 	modelId?: string; // For model selection (uses agent's modelArgs builder)
 	yoloMode?: boolean; // For YOLO/full-access mode (uses agent's yoloModeArgs)
+	// System prompt delivery (separate from user message for token efficiency)
+	appendSystemPrompt?: string; // System prompt to pass via --append-system-prompt or embed in prompt
+	// Stdin-based prompt delivery (Windows workaround for CLI length limits)
+	sendPromptViaStdin?: boolean; // If true, send prompt via stdin as JSON (for stream-json compatible agents)
+	sendPromptViaStdinRaw?: boolean; // If true, send prompt via stdin as raw text (for agents without stream-json)
 	// Stats tracking options
 	querySource?: 'user' | 'auto'; // Whether this query is user-initiated or from Auto Run
 	tabId?: string; // Tab ID for multi-tab tracking
@@ -78,6 +83,16 @@ export interface ActiveProcess {
 	startTime: number;
 	command?: string;
 	args?: string[];
+	/** True if this is a Cue automation run process */
+	isCueRun?: boolean;
+	/** The Cue run ID (for stopping via cue:stopRun) */
+	cueRunId?: string;
+	/** Target session name for this Cue run */
+	cueSessionName?: string;
+	/** Subscription name that triggered this Cue run */
+	cueSubscriptionName?: string;
+	/** Event type that triggered this Cue run */
+	cueEventType?: string;
 }
 
 /**
@@ -577,11 +592,9 @@ export function createProcessApi() {
 				responseChannel: string
 			) => {
 				try {
-					Promise.resolve(callback(sessionId, filename, content, responseChannel)).catch(
-						() => {
-							ipcRenderer.send(responseChannel, false);
-						}
-					);
+					Promise.resolve(callback(sessionId, filename, content, responseChannel)).catch(() => {
+						ipcRenderer.send(responseChannel, false);
+					});
 				} catch {
 					ipcRenderer.send(responseChannel, false);
 				}
@@ -631,10 +644,22 @@ export function createProcessApi() {
 		 * Uses request-response pattern with a unique responseChannel
 		 */
 		onRemoteCreateSession: (
-			callback: (name: string, toolType: string, cwd: string, groupId: string | undefined, responseChannel: string) => void
+			callback: (
+				name: string,
+				toolType: string,
+				cwd: string,
+				groupId: string | undefined,
+				responseChannel: string
+			) => void
 		): (() => void) => {
-			const handler = (_: unknown, name: string, toolType: string, cwd: string, groupId: string | undefined, responseChannel: string) =>
-				callback(name, toolType, cwd, groupId, responseChannel);
+			const handler = (
+				_: unknown,
+				name: string,
+				toolType: string,
+				cwd: string,
+				groupId: string | undefined,
+				responseChannel: string
+			) => callback(name, toolType, cwd, groupId, responseChannel);
 			ipcRenderer.on('remote:createSession', handler);
 			return () => ipcRenderer.removeListener('remote:createSession', handler);
 		},
@@ -642,7 +667,10 @@ export function createProcessApi() {
 		/**
 		 * Send response for remote create session
 		 */
-		sendRemoteCreateSessionResponse: (responseChannel: string, result: { sessionId: string } | null): void => {
+		sendRemoteCreateSessionResponse: (
+			responseChannel: string,
+			result: { sessionId: string } | null
+		): void => {
 			ipcRenderer.send(responseChannel, result);
 		},
 
@@ -682,8 +710,12 @@ export function createProcessApi() {
 		onRemoteCreateGroup: (
 			callback: (name: string, emoji: string | undefined, responseChannel: string) => void
 		): (() => void) => {
-			const handler = (_: unknown, name: string, emoji: string | undefined, responseChannel: string) =>
-				callback(name, emoji, responseChannel);
+			const handler = (
+				_: unknown,
+				name: string,
+				emoji: string | undefined,
+				responseChannel: string
+			) => callback(name, emoji, responseChannel);
 			ipcRenderer.on('remote:createGroup', handler);
 			return () => ipcRenderer.removeListener('remote:createGroup', handler);
 		},
@@ -691,7 +723,10 @@ export function createProcessApi() {
 		/**
 		 * Send response for remote create group
 		 */
-		sendRemoteCreateGroupResponse: (responseChannel: string, result: { id: string } | null): void => {
+		sendRemoteCreateGroupResponse: (
+			responseChannel: string,
+			result: { id: string } | null
+		): void => {
 			ipcRenderer.send(responseChannel, result);
 		},
 
@@ -731,8 +766,12 @@ export function createProcessApi() {
 		onRemoteMoveSessionToGroup: (
 			callback: (sessionId: string, groupId: string | null, responseChannel: string) => void
 		): (() => void) => {
-			const handler = (_: unknown, sessionId: string, groupId: string | null, responseChannel: string) =>
-				callback(sessionId, groupId, responseChannel);
+			const handler = (
+				_: unknown,
+				sessionId: string,
+				groupId: string | null,
+				responseChannel: string
+			) => callback(sessionId, groupId, responseChannel);
 			ipcRenderer.on('remote:moveSessionToGroup', handler);
 			return () => ipcRenderer.removeListener('remote:moveSessionToGroup', handler);
 		},
@@ -778,7 +817,12 @@ export function createProcessApi() {
 		onRemoteGetGitDiff: (
 			callback: (sessionId: string, filePath: string | undefined, responseChannel: string) => void
 		): (() => void) => {
-			const handler = (_: unknown, sessionId: string, filePath: string | undefined, responseChannel: string) => {
+			const handler = (
+				_: unknown,
+				sessionId: string,
+				filePath: string | undefined,
+				responseChannel: string
+			) => {
 				try {
 					Promise.resolve(callback(sessionId, filePath, responseChannel)).catch(() => {
 						ipcRenderer.send(responseChannel, { diff: '', files: [] });
@@ -802,11 +846,8 @@ export function createProcessApi() {
 		 * Subscribe to remote get group chats from web interface
 		 * Uses request-response pattern with a unique responseChannel
 		 */
-		onRemoteGetGroupChats: (
-			callback: (responseChannel: string) => void
-		): (() => void) => {
-			const handler = (_: unknown, responseChannel: string) =>
-				callback(responseChannel);
+		onRemoteGetGroupChats: (callback: (responseChannel: string) => void): (() => void) => {
+			const handler = (_: unknown, responseChannel: string) => callback(responseChannel);
 			ipcRenderer.on('remote:getGroupChats', handler);
 			return () => ipcRenderer.removeListener('remote:getGroupChats', handler);
 		},
@@ -825,8 +866,12 @@ export function createProcessApi() {
 		onRemoteStartGroupChat: (
 			callback: (topic: string, participantIds: string[], responseChannel: string) => void
 		): (() => void) => {
-			const handler = (_: unknown, topic: string, participantIds: string[], responseChannel: string) =>
-				callback(topic, participantIds, responseChannel);
+			const handler = (
+				_: unknown,
+				topic: string,
+				participantIds: string[],
+				responseChannel: string
+			) => callback(topic, participantIds, responseChannel);
 			ipcRenderer.on('remote:startGroupChat', handler);
 			return () => ipcRenderer.removeListener('remote:startGroupChat', handler);
 		},
@@ -834,7 +879,10 @@ export function createProcessApi() {
 		/**
 		 * Send response for remote start group chat
 		 */
-		sendRemoteStartGroupChatResponse: (responseChannel: string, result: { chatId: string } | null): void => {
+		sendRemoteStartGroupChatResponse: (
+			responseChannel: string,
+			result: { chatId: string } | null
+		): void => {
 			ipcRenderer.send(responseChannel, result);
 		},
 
@@ -905,8 +953,12 @@ export function createProcessApi() {
 		onRemoteMergeContext: (
 			callback: (sourceSessionId: string, targetSessionId: string, responseChannel: string) => void
 		): (() => void) => {
-			const handler = (_: unknown, sourceSessionId: string, targetSessionId: string, responseChannel: string) =>
-				callback(sourceSessionId, targetSessionId, responseChannel);
+			const handler = (
+				_: unknown,
+				sourceSessionId: string,
+				targetSessionId: string,
+				responseChannel: string
+			) => callback(sourceSessionId, targetSessionId, responseChannel);
 			ipcRenderer.on('remote:mergeContext', handler);
 			return () => ipcRenderer.removeListener('remote:mergeContext', handler);
 		},
@@ -925,8 +977,12 @@ export function createProcessApi() {
 		onRemoteTransferContext: (
 			callback: (sourceSessionId: string, targetSessionId: string, responseChannel: string) => void
 		): (() => void) => {
-			const handler = (_: unknown, sourceSessionId: string, targetSessionId: string, responseChannel: string) =>
-				callback(sourceSessionId, targetSessionId, responseChannel);
+			const handler = (
+				_: unknown,
+				sourceSessionId: string,
+				targetSessionId: string,
+				responseChannel: string
+			) => callback(sourceSessionId, targetSessionId, responseChannel);
 			ipcRenderer.on('remote:transferContext', handler);
 			return () => ipcRenderer.removeListener('remote:transferContext', handler);
 		},
@@ -983,8 +1039,12 @@ export function createProcessApi() {
 		onRemoteToggleCueSubscription: (
 			callback: (subscriptionId: string, enabled: boolean, responseChannel: string) => void
 		): (() => void) => {
-			const handler = (_: unknown, subscriptionId: string, enabled: boolean, responseChannel: string) =>
-				callback(subscriptionId, enabled, responseChannel);
+			const handler = (
+				_: unknown,
+				subscriptionId: string,
+				enabled: boolean,
+				responseChannel: string
+			) => callback(subscriptionId, enabled, responseChannel);
 			ipcRenderer.on('remote:toggleCueSubscription', handler);
 			return () => ipcRenderer.removeListener('remote:toggleCueSubscription', handler);
 		},
@@ -1002,8 +1062,12 @@ export function createProcessApi() {
 		onRemoteGetCueActivity: (
 			callback: (sessionId: string | undefined, limit: number, responseChannel: string) => void
 		): (() => void) => {
-			const handler = (_: unknown, sessionId: string | undefined, limit: number, responseChannel: string) =>
-				callback(sessionId, limit, responseChannel);
+			const handler = (
+				_: unknown,
+				sessionId: string | undefined,
+				limit: number,
+				responseChannel: string
+			) => callback(sessionId, limit, responseChannel);
 			ipcRenderer.on('remote:getCueActivity', handler);
 			return () => ipcRenderer.removeListener('remote:getCueActivity', handler);
 		},

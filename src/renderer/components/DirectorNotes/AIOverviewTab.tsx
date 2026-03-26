@@ -14,6 +14,7 @@ type SynopsisStats = NonNullable<
 interface AIOverviewTabProps {
 	theme: Theme;
 	onSynopsisReady?: () => void;
+	onProgressChange?: (percent: number) => void;
 }
 
 // Module-level cache so synopsis survives tab switches (unmount/remount)
@@ -34,7 +35,11 @@ export function hasCachedSynopsis(): boolean {
 	return cachedSynopsis !== null;
 }
 
-export function AIOverviewTab({ theme, onSynopsisReady }: AIOverviewTabProps) {
+// Heuristic: expected chunk count for a typical synopsis generation.
+// Progress uses an asymptotic curve so the bar never stalls at 100% before completion.
+const EXPECTED_CHUNKS = 60;
+
+export function AIOverviewTab({ theme, onSynopsisReady, onProgressChange }: AIOverviewTabProps) {
 	const { directorNotesSettings } = useSettings();
 	const [lookbackDays, setLookbackDays] = useState(directorNotesSettings.defaultLookbackDays);
 	const [synopsis, setSynopsis] = useState<string>(cachedSynopsis?.content ?? '');
@@ -48,6 +53,7 @@ export function AIOverviewTab({ theme, onSynopsisReady }: AIOverviewTabProps) {
 	const [error, setError] = useState<string | null>(null);
 	const [stats, setStats] = useState<SynopsisStats | null>(cachedSynopsis?.stats ?? null);
 	const mountedRef = useRef(true);
+	const isGeneratingRef = useRef(false);
 
 	// Generate prose styles for markdown rendering
 	const proseStyles = generateTerminalProseStyles(theme, '.director-notes-content');
@@ -83,12 +89,37 @@ export function AIOverviewTab({ theme, onSynopsisReady }: AIOverviewTabProps) {
 		}
 	}, [synopsis]);
 
+	// Stable ref for onProgressChange to avoid re-subscribing
+	const onProgressChangeRef = useRef(onProgressChange);
+	onProgressChangeRef.current = onProgressChange;
+
+	// Subscribe to progress updates from main process
+	useEffect(() => {
+		const cleanup = window.maestro.directorNotes.onSynopsisProgress((update) => {
+			if (!isGeneratingRef.current) return;
+			// Asymptotic progress: approaches 95% but never reaches it before completion
+			const ratio = update.chunkCount / EXPECTED_CHUNKS;
+			const percent = Math.min(5 + 90 * (1 - Math.exp(-2 * ratio)), 95);
+			const rounded = Math.round(percent);
+			const elapsedSec = Math.floor(update.elapsedMs / 1000);
+			const kbReceived = (update.bytesReceived / 1024).toFixed(1);
+			setProgress({
+				phase: 'generating',
+				message: `${rounded}% · ${kbReceived} KB · ${elapsedSec}s`,
+				percent: rounded,
+			});
+			onProgressChangeRef.current?.(rounded);
+		});
+		return cleanup;
+	}, []);
+
 	// Generate synopsis — the handler reads history files directly via file paths,
 	// so the renderer only needs to make a single IPC call.
 	const generateSynopsis = useCallback(async () => {
 		setIsGenerating(true);
+		isGeneratingRef.current = true;
 		setError(null);
-		setProgress({ phase: 'generating', message: 'Generating synopsis...', percent: 20 });
+		setProgress({ phase: 'generating', message: 'Starting...', percent: 2 });
 
 		try {
 			const result = await window.maestro.directorNotes.generateSynopsis({
@@ -127,6 +158,7 @@ export function AIOverviewTab({ theme, onSynopsisReady }: AIOverviewTabProps) {
 			if (!mountedRef.current) return;
 			setError(err instanceof Error ? err.message : 'Failed to generate synopsis');
 		} finally {
+			isGeneratingRef.current = false;
 			if (mountedRef.current) {
 				setIsGenerating(false);
 			}
@@ -235,8 +267,8 @@ export function AIOverviewTab({ theme, onSynopsisReady }: AIOverviewTabProps) {
 				</button>
 			</div>
 
-			{/* Progress bar — only during first generation (no existing content) */}
-			{isGenerating && !synopsis && (
+			{/* Progress bar — shown during any generation (initial or regeneration) */}
+			{isGenerating && (
 				<div className="shrink-0 px-4 py-2" style={{ backgroundColor: theme.colors.bgActivity }}>
 					<div className="flex items-center gap-3">
 						<div
@@ -244,7 +276,7 @@ export function AIOverviewTab({ theme, onSynopsisReady }: AIOverviewTabProps) {
 							style={{ backgroundColor: theme.colors.border }}
 						>
 							<div
-								className="h-full transition-all duration-300"
+								className="h-full transition-all duration-500 ease-out"
 								style={{
 									width: `${progress.percent}%`,
 									backgroundColor: theme.colors.accent,
@@ -323,13 +355,25 @@ export function AIOverviewTab({ theme, onSynopsisReady }: AIOverviewTabProps) {
 					</div>
 				) : isGenerating ? (
 					<div className="flex items-center justify-center h-full">
-						<div className="text-center">
+						<div className="text-center w-64">
 							<Loader2
 								className="w-8 h-8 animate-spin mx-auto mb-3"
 								style={{ color: theme.colors.accent }}
 							/>
+							<div
+								className="h-2 rounded-full overflow-hidden mb-2"
+								style={{ backgroundColor: theme.colors.border }}
+							>
+								<div
+									className="h-full transition-all duration-500 ease-out"
+									style={{
+										width: `${progress.percent}%`,
+										backgroundColor: theme.colors.accent,
+									}}
+								/>
+							</div>
 							<p className="text-sm" style={{ color: theme.colors.textDim }}>
-								{progress.message || 'Generating synopsis...'}
+								{progress.message || 'Starting...'}
 							</p>
 						</div>
 					</div>

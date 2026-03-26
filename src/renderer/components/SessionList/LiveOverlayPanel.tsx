@@ -1,4 +1,4 @@
-import { memo, useRef, useEffect } from 'react';
+import { memo, useRef, useEffect, useState, useCallback } from 'react';
 import { Copy, ExternalLink } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import type { Theme } from '../../types';
@@ -18,6 +18,8 @@ interface LiveOverlayPanelProps {
 	copyFlash: string | null;
 	setCopyFlash: (msg: string | null) => void;
 	handleTunnelToggle: () => void;
+	persistentWebLink: boolean;
+	setPersistentWebLink: (v: boolean) => Promise<void>;
 	webInterfaceUseCustomPort: boolean;
 	webInterfaceCustomPort: number;
 	setWebInterfaceUseCustomPort: (v: boolean) => void;
@@ -40,6 +42,8 @@ export const LiveOverlayPanel = memo(function LiveOverlayPanel({
 	copyFlash,
 	setCopyFlash,
 	handleTunnelToggle,
+	persistentWebLink,
+	setPersistentWebLink,
 	webInterfaceUseCustomPort,
 	webInterfaceCustomPort,
 	setWebInterfaceUseCustomPort,
@@ -50,15 +54,41 @@ export const LiveOverlayPanel = memo(function LiveOverlayPanel({
 	restartWebServer,
 }: LiveOverlayPanelProps) {
 	const containerRef = useRef<HTMLDivElement>(null);
+	const [isPersistPending, setIsPersistPending] = useState(false);
+	const [position, setPosition] = useState<{ top: number; left: number } | null>(null);
+
 	useEffect(() => {
-		containerRef.current?.focus();
+		const el = containerRef.current;
+		if (!el) return;
+		// Position below the parent (LIVE button wrapper) using fixed positioning
+		const parent = el.parentElement;
+		if (parent) {
+			const rect = parent.getBoundingClientRect();
+			setPosition({ top: rect.bottom, left: rect.left });
+		}
+		el.focus();
 	}, []);
+
+	const handlePersistToggle = useCallback(async () => {
+		setIsPersistPending(true);
+		try {
+			await setPersistentWebLink(!persistentWebLink);
+		} finally {
+			setIsPersistPending(false);
+		}
+	}, [setPersistentWebLink, persistentWebLink]);
 
 	return (
 		<div
 			ref={containerRef}
-			className="absolute top-full left-0 pt-2 z-50 outline-none"
-			style={{ width: '280px', maxHeight: 'calc(100vh - 120px)' }}
+			className="fixed pt-2 z-50 outline-none"
+			style={{
+				width: '320px',
+				maxHeight: 'calc(100vh - 120px)',
+				top: position ? `${position.top}px` : 0,
+				left: position ? `${position.left}px` : 0,
+				visibility: position ? 'visible' : 'hidden',
+			}}
 			tabIndex={-1}
 			onKeyDown={(e) => {
 				if (tunnelStatus === 'connected') {
@@ -105,6 +135,12 @@ export const LiveOverlayPanel = memo(function LiveOverlayPanel({
 								style={{ color: theme.colors.textDim }}
 							>
 								Remote Control
+							</div>
+							<div
+								className="text-[9px] mt-0.5"
+								style={{ color: theme.colors.textDim, opacity: 0.7 }}
+							>
+								Uses Cloudflare tunnel for access outside your network
 							</div>
 							{cloudflaredInstalled === false && (
 								<div className="text-[9px] text-yellow-500 mt-1">Install cloudflared to enable</div>
@@ -170,6 +206,47 @@ export const LiveOverlayPanel = memo(function LiveOverlayPanel({
 							</button>
 						</div>
 					)}
+				</div>
+
+				{/* Persistent Web Link Toggle Section */}
+				<div className="p-3 border-b" style={{ borderColor: theme.colors.border }}>
+					<div className="flex items-center justify-between">
+						<div>
+							<div
+								className="text-[10px] uppercase font-bold"
+								style={{ color: theme.colors.textDim }}
+							>
+								Persistent Web Link
+							</div>
+							<div
+								className="text-[9px] mt-0.5"
+								style={{ color: theme.colors.textDim, opacity: 0.7 }}
+							>
+								Keep the same access token across restarts
+							</div>
+						</div>
+
+						{/* Toggle Switch */}
+						<button
+							type="button"
+							onClick={() => void handlePersistToggle()}
+							disabled={isPersistPending}
+							className={`relative w-10 h-5 rounded-full transition-colors ${
+								persistentWebLink ? 'bg-green-500' : 'bg-gray-600 hover:bg-gray-500'
+							} ${isPersistPending ? 'opacity-50 cursor-wait' : ''}`}
+							role="switch"
+							aria-checked={persistentWebLink}
+							aria-busy={isPersistPending}
+							aria-label="Persistent Web Link"
+							title={persistentWebLink ? 'Disable persistent link' : 'Enable persistent link'}
+						>
+							<div
+								className={`absolute left-0 top-0.5 w-4 h-4 rounded-full bg-white transition-transform ${
+									persistentWebLink ? 'translate-x-5' : 'translate-x-0.5'
+								}`}
+							/>
+						</button>
+					</div>
 				</div>
 
 				{/* Custom Port Toggle Section */}

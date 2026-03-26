@@ -38,10 +38,16 @@ vi.mock('crypto', () => ({
 	randomUUID: vi.fn(() => `test-uuid-${++uuidCounter}`),
 }));
 
-// Mock child_process.execFile (safe — no shell injection risk)
+// Mock child_process.execFile (safe — no shell injection via execFile)
 vi.mock('child_process', () => ({
 	default: { execFile: mockExecFile },
 	execFile: mockExecFile,
+}));
+
+// Mock cliDetection — resolveGhPath returns 'gh', getExpandedEnv returns process.env
+vi.mock('../../../main/utils/cliDetection', () => ({
+	resolveGhPath: vi.fn().mockResolvedValue('gh'),
+	getExpandedEnv: vi.fn().mockReturnValue(process.env),
 }));
 
 // Mock cue-db functions

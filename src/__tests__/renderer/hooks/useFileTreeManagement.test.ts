@@ -356,7 +356,12 @@ describe('useFileTreeManagement', () => {
 
 		// Wait for the migration effect to run
 		await waitFor(() => {
-			expect(mockDirectorySize).toHaveBeenCalledWith('/test/project', undefined);
+			expect(mockDirectorySize).toHaveBeenCalledWith(
+				'/test/project',
+				undefined,
+				undefined,
+				undefined
+			);
 		});
 
 		// Verify stats were populated

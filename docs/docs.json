@@ -67,7 +67,8 @@
 							"autorun-playbooks",
 							"playbook-exchange",
 							"speckit-commands",
-							"openspec-commands"
+							"openspec-commands",
+							"bmad-commands"
 						]
 					},
 					{

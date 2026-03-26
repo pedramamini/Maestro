@@ -5,7 +5,7 @@
  * Follows the same layout pattern as AllSessionsView (full-screen overlay).
  */
 
-import React, { useState, useCallback, useEffect, useRef } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { useThemeColors } from '../components/ThemeProvider';
 import { triggerHaptic, HAPTIC_PATTERNS } from './constants';
 import { THEMES } from '../../shared/themes';

@@ -16,7 +16,14 @@ import { DebugWizardModal } from './components/DebugWizardModal';
 import { DebugPackageModal } from './components/DebugPackageModal';
 import { WindowsWarningModal } from './components/WindowsWarningModal';
 import { GistPublishModal } from './components/GistPublishModal';
-import { MaestroWizard, useWizard, WizardResumeModal, AUTO_RUN_FOLDER_NAME } from './components/Wizard';
+import {
+	MaestroWizard,
+	useWizard,
+	WizardResumeModal,
+	AUTO_RUN_FOLDER_NAME,
+	type SerializableWizardState,
+	type WizardStep,
+} from './components/Wizard';
 import { TourOverlay } from './components/Wizard/tour';
 // CONDUCTOR_BADGES moved to useAutoRunAchievements hook
 import { EmptyStateView } from './components/EmptyStateView';
@@ -45,6 +52,8 @@ const CueModal = lazy(() => import('./components/CueModal').then((m) => ({ defau
 const CueYamlEditor = lazy(() =>
 	import('./components/CueYamlEditor').then((m) => ({ default: m.CueYamlEditor }))
 );
+
+import { captureException } from './utils/sentry';
 
 // SymphonyContributionData type moved to useSymphonyContribution hook
 
@@ -161,7 +170,15 @@ import { ToastContainer } from './components/Toast';
 
 // Import types and constants
 // Note: GroupChat, GroupChatState are imported from types (re-exported from shared)
-import type { RightPanelTab, Session, QueuedItem, CustomAICommand, ThinkingItem, AITab, ToolType } from './types';
+import type {
+	RightPanelTab,
+	Session,
+	QueuedItem,
+	CustomAICommand,
+	ThinkingItem,
+	AITab,
+	ToolType,
+} from './types';
 import { THEMES } from './constants/themes';
 import { generateId } from './utils/ids';
 import { getContextColor } from './utils/theme';
@@ -353,7 +370,7 @@ function MaestroConsoleInner() {
 	// --- WIZARD (onboarding wizard for new users) ---
 	const {
 		state: wizardState,
-		openWizard: openWizardModal,
+		openWizard: _baseOpenWizardModal,
 		restoreState: restoreWizardState,
 		loadResumeState: _loadResumeState,
 		clearResumeState,
@@ -362,6 +379,36 @@ function MaestroConsoleInner() {
 		goToStep: wizardGoToStep,
 	} = useWizard();
 
+	// Wrapper for openWizard that checks for resume state
+	const openWizardModal = useCallback(async () => {
+		try {
+			const saved = await window.maestro.settings.get('wizardResumeState');
+			// Validate saved state has a resumable step before casting
+			// These are the steps where we can resume the wizard (not agent-selection)
+			const resumableSteps: WizardStep[] = [
+				'directory-selection',
+				'conversation',
+				'preparing-plan',
+				'phase-review',
+			];
+			if (
+				saved &&
+				typeof saved === 'object' &&
+				'currentStep' in saved &&
+				typeof saved.currentStep === 'string' &&
+				resumableSteps.includes(saved.currentStep as WizardStep)
+			) {
+				useModalStore
+					.getState()
+					.openModal('wizardResume', { state: saved as SerializableWizardState });
+				return;
+			}
+		} catch (e) {
+			captureException(e, { extra: { context: 'openWizardModal', setting: 'wizardResumeState' } });
+			console.error('[App] Failed to check wizard resume state:', e);
+		}
+		_baseOpenWizardModal();
+	}, [_baseOpenWizardModal]);
 	// --- SETTINGS (from useSettings hook) ---
 	const settings = useSettings();
 	const {
@@ -581,8 +628,14 @@ function MaestroConsoleInner() {
 	} = useGroupChatStore.getState();
 
 	// --- APP INITIALIZATION (extracted hook, Phase 2G) ---
-	const { ghCliAvailable, sshRemoteConfigs, speckitCommands, openspecCommands, saveFileGistUrl } =
-		useAppInitialization();
+	const {
+		ghCliAvailable,
+		sshRemoteConfigs,
+		speckitCommands,
+		openspecCommands,
+		bmadCommands,
+		saveFileGistUrl,
+	} = useAppInitialization();
 
 	// Wrapper for setActiveSessionId that also dismisses active group chat
 	const setActiveSessionId = useCallback(
@@ -685,7 +738,7 @@ function MaestroConsoleInner() {
 	);
 
 	// Startup effects (splash, GitHub CLI, Windows warning, gist URLs, beta updates,
-	// update check, leaderboard sync, SpecKit/OpenSpec loading, SSH configs, stats DB check,
+	// update check, leaderboard sync, SpecKit/OpenSpec/BMAD loading, SSH configs, stats DB check,
 	// notification settings sync, playground debug) — provided by useAppInitialization hook
 
 	// Expose debug helpers to window for console access
@@ -716,10 +769,12 @@ function MaestroConsoleInner() {
 	const customAICommandsRef = useRef(customAICommands);
 	const speckitCommandsRef = useRef(speckitCommands);
 	const openspecCommandsRef = useRef(openspecCommands);
+	const bmadCommandsRef = useRef(bmadCommands);
 	const fileTabAutoRefreshEnabledRef = useRef(fileTabAutoRefreshEnabled);
 	customAICommandsRef.current = customAICommands;
 	speckitCommandsRef.current = speckitCommands;
 	openspecCommandsRef.current = openspecCommands;
+	bmadCommandsRef.current = bmadCommands;
 	fileTabAutoRefreshEnabledRef.current = fileTabAutoRefreshEnabled;
 
 	// Note: spawnBackgroundSynopsisRef and spawnAgentWithPromptRef are now provided by useAgentExecution hook
@@ -1099,51 +1154,58 @@ function MaestroConsoleInner() {
 		handleSummarizeAndContinue,
 	} = useSummarizeAndContinue(activeSession ?? null);
 
-	// Combine custom AI commands with spec-kit and openspec commands for input processing (slash command execution)
-	// This ensures speckit and openspec commands are processed the same way as custom commands
+	// Combine custom AI commands with bundled methodology commands for input processing.
 	const allCustomCommands = useMemo((): CustomAICommand[] => {
-		// Convert speckit commands to CustomAICommand format
 		const speckitAsCustom: CustomAICommand[] = speckitCommands.map((cmd) => ({
 			id: `speckit-${cmd.id}`,
 			command: cmd.command,
 			description: cmd.description,
 			prompt: cmd.prompt,
-			isBuiltIn: true, // Speckit commands are built-in (bundled)
+			isBuiltIn: true,
 		}));
-		// Convert openspec commands to CustomAICommand format
 		const openspecAsCustom: CustomAICommand[] = openspecCommands.map((cmd) => ({
 			id: `openspec-${cmd.id}`,
 			command: cmd.command,
 			description: cmd.description,
 			prompt: cmd.prompt,
-			isBuiltIn: true, // OpenSpec commands are built-in (bundled)
+			isBuiltIn: true,
 		}));
-		return [...customAICommands, ...speckitAsCustom, ...openspecAsCustom];
-	}, [customAICommands, speckitCommands, openspecCommands]);
+		const bmadAsCustom: CustomAICommand[] = bmadCommands.map((cmd) => ({
+			id: `bmad-${cmd.id}`,
+			command: cmd.command,
+			description: cmd.description,
+			prompt: cmd.prompt,
+			isBuiltIn: true,
+		}));
+		return [...customAICommands, ...speckitAsCustom, ...openspecAsCustom, ...bmadAsCustom];
+	}, [customAICommands, speckitCommands, openspecCommands, bmadCommands]);
 
-	// Combine built-in slash commands with custom AI commands, spec-kit commands, openspec commands, AND agent-specific commands for autocomplete
+	// Combine built-in slash commands with custom AI commands, bundled methodology
+	// commands, and agent-specific commands for autocomplete.
 	const allSlashCommands = useMemo(() => {
 		const customCommandsAsSlash = customAICommands.map((cmd) => ({
 			command: cmd.command,
 			description: cmd.description,
-			aiOnly: true, // Custom AI commands are only available in AI mode
-			prompt: cmd.prompt, // Include prompt for execution
+			aiOnly: true,
+			prompt: cmd.prompt,
 		}));
-		// Spec Kit commands (bundled from github/spec-kit)
 		const speckitCommandsAsSlash = speckitCommands.map((cmd) => ({
 			command: cmd.command,
 			description: cmd.description,
-			aiOnly: true, // Spec-kit commands are only available in AI mode
-			prompt: cmd.prompt, // Include prompt for execution
-			isSpeckit: true, // Mark as spec-kit command for special handling
+			aiOnly: true,
+			prompt: cmd.prompt,
 		}));
-		// OpenSpec commands (bundled from Fission-AI/OpenSpec)
 		const openspecCommandsAsSlash = openspecCommands.map((cmd) => ({
 			command: cmd.command,
 			description: cmd.description,
-			aiOnly: true, // OpenSpec commands are only available in AI mode
-			prompt: cmd.prompt, // Include prompt for execution
-			isOpenspec: true, // Mark as openspec command for special handling
+			aiOnly: true,
+			prompt: cmd.prompt,
+		}));
+		const bmadCommandsAsSlash = bmadCommands.map((cmd) => ({
+			command: cmd.command,
+			description: cmd.description,
+			aiOnly: true,
+			prompt: cmd.prompt,
 		}));
 		// Only include agent-specific commands if the agent supports slash commands
 		// This allows built-in and custom commands to be shown for all agents (Codex, OpenCode, etc.)
@@ -1164,12 +1226,14 @@ function MaestroConsoleInner() {
 			...customCommandsAsSlash,
 			...speckitCommandsAsSlash,
 			...openspecCommandsAsSlash,
+			...bmadCommandsAsSlash,
 			...agentCommands,
 		];
 	}, [
 		customAICommands,
 		speckitCommands,
 		openspecCommands,
+		bmadCommands,
 		activeSession?.agentCommands,
 		activeSession?.toolType,
 		hasActiveSessionCapability,
@@ -1684,6 +1748,7 @@ function MaestroConsoleInner() {
 		customAICommandsRef,
 		speckitCommandsRef,
 		openspecCommandsRef,
+		bmadCommandsRef,
 		toggleGlobalLive,
 		isLiveMode,
 		sshRemoteConfigs,
@@ -1708,6 +1773,7 @@ function MaestroConsoleInner() {
 		customAICommandsRef,
 		speckitCommandsRef,
 		openspecCommandsRef,
+		bmadCommandsRef,
 	});
 	// Bridge: keep the original processQueuedItemRef in sync
 	processQueuedItemRef.current = processQueuedItem;
@@ -1864,15 +1930,24 @@ function MaestroConsoleInner() {
 
 					const documents = (config.documents || []).map(
 						(doc: { filename: string; resetOnCompletion?: boolean }) => {
-							// Extract just the basename without .md extension.
-							// CLI sends full absolute paths (e.g., "/path/to/Auto Run Docs/temp.md")
-							// but the batch processor expects just the stem (e.g., "temp").
-							let name = doc.filename;
-							const lastSlash = Math.max(name.lastIndexOf('/'), name.lastIndexOf('\\'));
-							if (lastSlash >= 0) {
-								name = name.substring(lastSlash + 1);
+							// Compute path relative to the session's autoRunFolderPath.
+							// CLI sends full absolute paths (e.g., "/path/to/Auto Run Docs/subdir/temp.md")
+							// but the batch processor expects the path relative to folderPath without .md
+							// (e.g., "subdir/temp").
+							let name = doc.filename.replace(/\.md$/i, '');
+							// Normalize separators to forward slash for comparison
+							const normalized = name.replace(/\\/g, '/');
+							const normalizedFolder = (folderPath || '').replace(/\\/g, '/');
+							// Case-insensitive prefix check for cross-platform compatibility (Windows drive letters)
+							const normalizedLower = normalized.toLowerCase();
+							const folderLower = normalizedFolder.toLowerCase();
+							if (normalizedFolder && normalizedLower.startsWith(folderLower + '/')) {
+								name = normalized.substring(normalizedFolder.length + 1);
+							} else {
+								// Fallback for paths not under folderPath: use basename only
+								const lastSlash = Math.max(name.lastIndexOf('/'), name.lastIndexOf('\\'));
+								if (lastSlash >= 0) name = name.substring(lastSlash + 1);
 							}
-							name = name.replace(/\.md$/, '');
 							return {
 								id: generateId(),
 								filename: name,
@@ -1961,10 +2036,7 @@ function MaestroConsoleInner() {
 			try {
 				const session = sessionsRef.current.find((s) => s.id === sessionId);
 				if (!session?.autoRunFolderPath) {
-					window.maestro.process.sendRemoteGetAutoRunDocContentResponse(
-						responseChannel,
-						''
-					);
+					window.maestro.process.sendRemoteGetAutoRunDocContentResponse(responseChannel, '');
 					return;
 				}
 				const sshRemoteId =
@@ -1975,10 +2047,7 @@ function MaestroConsoleInner() {
 					sshRemoteId
 				);
 				const content = contentResult.success ? contentResult.content || '' : '';
-				window.maestro.process.sendRemoteGetAutoRunDocContentResponse(
-					responseChannel,
-					content
-				);
+				window.maestro.process.sendRemoteGetAutoRunDocContentResponse(responseChannel, content);
 			} catch (error) {
 				console.error('[Remote] Failed to get auto-run doc content:', error);
 				window.maestro.process.sendRemoteGetAutoRunDocContentResponse(responseChannel, '');
@@ -2068,7 +2137,14 @@ function MaestroConsoleInner() {
 					projectRoot: cwd,
 					isGitRepo: false,
 					aiLogs: [],
-					shellLogs: [{ id: generateId(), timestamp: Date.now(), source: 'system', text: 'Shell Session Ready.' }],
+					shellLogs: [
+						{
+							id: generateId(),
+							timestamp: Date.now(),
+							source: 'system',
+							text: 'Shell Session Ready.',
+						},
+					],
 					workLog: [],
 					contextUsage: 0,
 					inputMode: toolType === 'terminal' ? 'terminal' : 'ai',
@@ -2109,7 +2185,9 @@ function MaestroConsoleInner() {
 					isRemote: false,
 				});
 
-				window.maestro.process.sendRemoteCreateSessionResponse(responseChannel, { sessionId: newId });
+				window.maestro.process.sendRemoteCreateSessionResponse(responseChannel, {
+					sessionId: newId,
+				});
 			} catch (error) {
 				console.error('[Remote] Failed to create session:', error);
 				window.maestro.process.sendRemoteCreateSessionResponse(responseChannel, null);
@@ -2127,10 +2205,22 @@ function MaestroConsoleInner() {
 			if (!session) return;
 
 			// Kill processes
-			try { await window.maestro.process.kill(`${sessionId}-ai`); } catch { /* ignore */ }
-			try { await window.maestro.process.kill(`${sessionId}-terminal`); } catch { /* ignore */ }
+			try {
+				await window.maestro.process.kill(`${sessionId}-ai`);
+			} catch {
+				/* ignore */
+			}
+			try {
+				await window.maestro.process.kill(`${sessionId}-terminal`);
+			} catch {
+				/* ignore */
+			}
 			for (const tab of session.terminalTabs || []) {
-				try { await window.maestro.process.kill(`${sessionId}-terminal-${tab.id}`); } catch { /* ignore */ }
+				try {
+					await window.maestro.process.kill(`${sessionId}-terminal-${tab.id}`);
+				} catch {
+					/* ignore */
+				}
 			}
 
 			// Remove session
@@ -2248,9 +2338,7 @@ function MaestroConsoleInner() {
 				return;
 			}
 			setSessions((prev) =>
-				prev.map((s) =>
-					s.id === sessionId ? { ...s, groupId: groupId || undefined } : s
-				)
+				prev.map((s) => (s.id === sessionId ? { ...s, groupId: groupId || undefined } : s))
 			);
 			window.maestro.process.sendRemoteMoveSessionToGroupResponse(responseChannel, true);
 		};
@@ -3733,6 +3821,13 @@ function MaestroConsoleInner() {
 									}}
 									participantColors={groupChatParticipantColors}
 									messagesRef={groupChatMessagesRef}
+									ghCliAvailable={ghCliAvailable}
+									onPublishMessageGist={(text: string) => {
+										if (!text.trim()) return;
+										const filename = `group_chat_response_${Date.now()}.md`;
+										useTabStore.getState().setTabGistContent({ filename, content: text });
+										setGistPublishModalOpen(true);
+									}}
 								/>
 							</div>
 							<GroupChatRightPanel

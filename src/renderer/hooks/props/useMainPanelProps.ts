@@ -10,6 +10,7 @@
  */
 
 import { useMemo } from 'react';
+import { useTabStore } from '../../stores/tabStore';
 import type {
 	Session,
 	Theme,
@@ -442,6 +443,12 @@ export function useMainPanelProps(deps: UseMainPanelPropsDeps) {
 			},
 			ghCliAvailable: deps.ghCliAvailable,
 			onPublishGist: () => deps.setGistPublishModalOpen(true),
+			onPublishMessageGist: (text: string) => {
+				if (!text.trim()) return;
+				const filename = `ai_response_${Date.now()}.md`;
+				useTabStore.getState().setTabGistContent({ filename, content: text });
+				deps.setGistPublishModalOpen(true);
+			},
 			hasGist: deps.hasGist,
 			onOpenInGraph: () => {
 				if (deps.activeFileTab && deps.activeSession) {

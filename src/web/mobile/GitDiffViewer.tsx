@@ -5,7 +5,7 @@
  * from @@ hunks, and horizontal scroll for long lines.
  */
 
-import React, { useMemo } from 'react';
+import { useMemo } from 'react';
 import { useThemeColors } from '../components/ThemeProvider';
 import { triggerHaptic, HAPTIC_PATTERNS } from './constants';
 

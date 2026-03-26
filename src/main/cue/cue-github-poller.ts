@@ -6,9 +6,12 @@
  */
 
 import { execFile as cpExecFile } from 'child_process';
-import * as crypto from 'crypto';
-import type { CueEvent } from './cue-types';
+import { createCueEvent, type CueEvent } from './cue-types';
 import { isGitHubItemSeen, markGitHubItemSeen, hasAnyGitHubSeen, pruneGitHubSeen } from './cue-db';
+import { resolveGhPath, getExpandedEnv } from '../utils/cliDetection';
+
+/** Expanded env so packaged Electron can find gh in /opt/homebrew/bin, /usr/local/bin, etc. */
+const ghEnv = getExpandedEnv();
 
 function execFileAsync(
 	cmd: string,
@@ -16,7 +19,7 @@ function execFileAsync(
 	opts?: { cwd?: string; timeout?: number }
 ): Promise<{ stdout: string; stderr: string }> {
 	return new Promise((resolve, reject) => {
-		cpExecFile(cmd, args, opts ?? {}, (error, stdout, stderr) => {
+		cpExecFile(cmd, args, { ...opts, env: ghEnv }, (error, stdout, stderr) => {
 			if (error) {
 				reject(error);
 			} else {
@@ -62,28 +65,29 @@ export function createCueGitHubPoller(config: CueGitHubPollerConfig): () => void
 	let pruneInterval: ReturnType<typeof setInterval> | null = null;
 
 	// Cached state
-	let ghAvailable: boolean | null = null;
+	let ghCommand: string | null = null;
 	let resolvedRepo: string | null = config.repo ?? null;
 	/** Tracks whether a poll has been attempted (success or failure) to prevent event flooding on recovery */
 	let firstPollAttempted = false;
 
-	async function checkGhAvailable(): Promise<boolean> {
-		if (ghAvailable !== null) return ghAvailable;
+	async function resolveGh(): Promise<string | null> {
+		if (ghCommand !== null) return ghCommand;
 		try {
-			await execFileAsync('gh', ['--version']);
-			ghAvailable = true;
+			const cmd = await resolveGhPath();
+			await execFileAsync(cmd, ['--version']);
+			ghCommand = cmd;
 		} catch {
-			ghAvailable = false;
 			onLog('warn', `[CUE] GitHub CLI (gh) not found — skipping "${triggerName}"`);
+			return null;
 		}
-		return ghAvailable;
+		return ghCommand;
 	}
 
 	async function resolveRepo(): Promise<string | null> {
 		if (resolvedRepo) return resolvedRepo;
 		try {
 			const { stdout } = await execFileAsync(
-				'gh',
+				ghCommand!,
 				['repo', 'view', '--json', 'nameWithOwner', '-q', '.nameWithOwner'],
 				{ cwd: projectRoot, timeout: 10000 }
 			);
@@ -99,7 +103,7 @@ export function createCueGitHubPoller(config: CueGitHubPollerConfig): () => void
 		// For "merged" state, query closed PRs and filter by merge status client-side
 		const ghStateArg = stateFilter === 'merged' ? 'closed' : stateFilter;
 		const { stdout } = await execFileAsync(
-			'gh',
+			ghCommand!,
 			[
 				'pr',
 				'list',
@@ -135,29 +139,23 @@ export function createCueGitHubPoller(config: CueGitHubPollerConfig): () => void
 
 			if (isGitHubItemSeen(subscriptionId, itemKey)) continue;
 
-			const event: CueEvent = {
-				id: crypto.randomUUID(),
-				type: 'github.pull_request',
-				timestamp: new Date().toISOString(),
-				triggerName,
-				payload: {
-					type: 'pull_request',
-					number: item.number,
-					title: item.title,
-					author: item.author?.login ?? 'unknown',
-					url: item.url,
-					body: (item.body ?? '').slice(0, 5000),
-					state: item.mergedAt ? 'merged' : (item.state?.toLowerCase() ?? 'open'),
-					draft: item.isDraft ?? false,
-					labels: (item.labels ?? []).map((l: { name: string }) => l.name).join(','),
-					head_branch: item.headRefName ?? '',
-					base_branch: item.baseRefName ?? '',
-					repo,
-					created_at: item.createdAt ?? '',
-					updated_at: item.updatedAt ?? '',
-					merged_at: item.mergedAt ?? '',
-				},
-			};
+			const event = createCueEvent('github.pull_request', triggerName, {
+				type: 'pull_request',
+				number: item.number,
+				title: item.title,
+				author: item.author?.login ?? 'unknown',
+				url: item.url,
+				body: (item.body ?? '').slice(0, 5000),
+				state: item.mergedAt ? 'merged' : (item.state?.toLowerCase() ?? 'open'),
+				draft: item.isDraft ?? false,
+				labels: (item.labels ?? []).map((l: { name: string }) => l.name).join(','),
+				head_branch: item.headRefName ?? '',
+				base_branch: item.baseRefName ?? '',
+				repo,
+				created_at: item.createdAt ?? '',
+				updated_at: item.updatedAt ?? '',
+				merged_at: item.mergedAt ?? '',
+			});
 
 			onEvent(event);
 			markGitHubItemSeen(subscriptionId, itemKey);
@@ -170,7 +168,7 @@ export function createCueGitHubPoller(config: CueGitHubPollerConfig): () => void
 
 	async function pollIssues(repo: string): Promise<void> {
 		const { stdout } = await execFileAsync(
-			'gh',
+			ghCommand!,
 			[
 				'issue',
 				'list',
@@ -200,26 +198,20 @@ export function createCueGitHubPoller(config: CueGitHubPollerConfig): () => void
 
 			if (isGitHubItemSeen(subscriptionId, itemKey)) continue;
 
-			const event: CueEvent = {
-				id: crypto.randomUUID(),
-				type: 'github.issue',
-				timestamp: new Date().toISOString(),
-				triggerName,
-				payload: {
-					type: 'issue',
-					number: item.number,
-					title: item.title,
-					author: item.author?.login ?? 'unknown',
-					url: item.url,
-					body: (item.body ?? '').slice(0, 5000),
-					state: item.state?.toLowerCase() ?? 'open',
-					labels: (item.labels ?? []).map((l: { name: string }) => l.name).join(','),
-					assignees: (item.assignees ?? []).map((a: { login: string }) => a.login).join(','),
-					repo,
-					created_at: item.createdAt ?? '',
-					updated_at: item.updatedAt ?? '',
-				},
-			};
+			const event = createCueEvent('github.issue', triggerName, {
+				type: 'issue',
+				number: item.number,
+				title: item.title,
+				author: item.author?.login ?? 'unknown',
+				url: item.url,
+				body: (item.body ?? '').slice(0, 5000),
+				state: item.state?.toLowerCase() ?? 'open',
+				labels: (item.labels ?? []).map((l: { name: string }) => l.name).join(','),
+				assignees: (item.assignees ?? []).map((a: { login: string }) => a.login).join(','),
+				repo,
+				created_at: item.createdAt ?? '',
+				updated_at: item.updatedAt ?? '',
+			});
 
 			onEvent(event);
 			markGitHubItemSeen(subscriptionId, itemKey);
@@ -234,7 +226,7 @@ export function createCueGitHubPoller(config: CueGitHubPollerConfig): () => void
 		if (stopped) return;
 
 		try {
-			if (!(await checkGhAvailable())) return;
+			if (!(await resolveGh())) return;
 
 			const repo = await resolveRepo();
 			if (!repo) return;

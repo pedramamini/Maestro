@@ -45,8 +45,42 @@ export interface CueExecutionConfig {
 	agentConfigValues?: Record<string, unknown>;
 }
 
+/** Metadata stored alongside each active Cue process */
+interface CueActiveProcess {
+	child: ChildProcess;
+	command: string;
+	args: string[];
+	cwd: string;
+	toolType: string;
+	startTime: number;
+}
+
+/** Serializable process info for the Process Monitor */
+export interface CueProcessInfo {
+	runId: string;
+	pid: number;
+	command: string;
+	args: string[];
+	cwd: string;
+	toolType: string;
+	startTime: number;
+}
+
+const PROMPT_REDACTED = '<PROMPT_REDACTED>';
+
+/**
+ * Build a display-safe copy of spawn args by replacing the prompt payload
+ * with a fixed placeholder. The prompt is typically the last positional arg
+ * (after '--') or embedded via promptArgs; we identify it by matching the
+ * substitutedPrompt value.
+ */
+function buildDisplayArgs(args: string[], prompt: string): string[] {
+	if (!prompt) return args;
+	return args.map((arg) => (arg === prompt ? PROMPT_REDACTED : arg));
+}
+
 /** Map of active Cue processes by runId */
-const activeProcesses = new Map<string, ChildProcess>();
+const activeProcesses = new Map<string, CueActiveProcess>();
 
 /**
  * Extract clean human-readable text from agent stdout.
@@ -257,6 +291,7 @@ export async function executeCuePrompt(config: CueExecutionConfig): Promise<CueR
 	let spawnCwd = projectRoot;
 	let spawnEnvVars = effectiveEnvVars;
 	let prompt: string | undefined = substitutedPrompt;
+	let sshStdinScript: string | undefined;
 
 	if (sshRemoteConfig?.enabled && sshStore) {
 		const sshWrapConfig: SshSpawnWrapConfig = {
@@ -276,6 +311,7 @@ export async function executeCuePrompt(config: CueExecutionConfig): Promise<CueR
 		spawnCwd = sshResult.cwd;
 		spawnEnvVars = sshResult.customEnvVars;
 		prompt = sshResult.prompt;
+		sshStdinScript = sshResult.sshStdinScript;
 
 		if (sshResult.sshRemoteUsed) {
 			onLog(
@@ -313,7 +349,14 @@ export async function executeCuePrompt(config: CueExecutionConfig): Promise<CueR
 			stdio: ['pipe', 'pipe', 'pipe'],
 		});
 
-		activeProcesses.set(runId, child);
+		activeProcesses.set(runId, {
+			child,
+			command,
+			args: buildDisplayArgs(spawnArgs, substitutedPrompt),
+			cwd: spawnCwd,
+			toolType,
+			startTime: Date.now(),
+		});
 
 		let stdout = '';
 		let stderr = '';
@@ -373,8 +416,12 @@ export async function executeCuePrompt(config: CueExecutionConfig): Promise<CueR
 		// For agents with promptArgs (like OpenCode -p), the prompt is in the args
 		// For others (like Claude --print), if prompt was passed via args separator, skip stdin
 		// When SSH wrapping returns a prompt, it means "send via stdin"
-		if (prompt && sshRemoteConfig?.enabled) {
-			// SSH large prompt mode — send via stdin
+		if (sshStdinScript && sshRemoteConfig?.enabled) {
+			// SSH stdin script mode — send the full bash script (includes prompt) via stdin
+			child.stdin?.write(sshStdinScript);
+			child.stdin?.end();
+		} else if (prompt && sshRemoteConfig?.enabled) {
+			// SSH small prompt mode — send raw prompt via stdin
 			child.stdin?.write(prompt);
 			child.stdin?.end();
 		} else {
@@ -413,15 +460,17 @@ export async function executeCuePrompt(config: CueExecutionConfig): Promise<CueR
  * @returns true if the process was found and signaled, false if not found
  */
 export function stopCueRun(runId: string): boolean {
-	const child = activeProcesses.get(runId);
-	if (!child) return false;
+	const entry = activeProcesses.get(runId);
+	if (!entry) return false;
 
-	child.kill('SIGTERM');
+	entry.child.kill('SIGTERM');
 
-	// Escalate to SIGKILL after delay
+	// Escalate to SIGKILL after delay — only if the process hasn't actually exited.
+	// Check both exitCode and signalCode: either being non-null means the child has
+	// terminated. This avoids sending SIGKILL to a recycled PID.
 	setTimeout(() => {
-		if (!child.killed) {
-			child.kill('SIGKILL');
+		if (entry.child.exitCode === null && entry.child.signalCode === null) {
+			entry.child.kill('SIGKILL');
 		}
 	}, SIGKILL_DELAY_MS);
 
@@ -431,8 +480,30 @@ export function stopCueRun(runId: string): boolean {
 /**
  * Get the map of currently active processes (for testing/monitoring).
  */
-export function getActiveProcesses(): Map<string, ChildProcess> {
+export function getActiveProcesses(): Map<string, CueActiveProcess> {
 	return activeProcesses;
+}
+
+/**
+ * Get serializable info about active Cue processes (for Process Monitor).
+ * Filters out entries where the process PID is unavailable (spawn failure).
+ */
+export function getCueProcessList(): CueProcessInfo[] {
+	const result: CueProcessInfo[] = [];
+	for (const [runId, entry] of activeProcesses) {
+		if (entry.child.pid) {
+			result.push({
+				runId,
+				pid: entry.child.pid,
+				command: entry.command,
+				args: entry.args,
+				cwd: entry.cwd,
+				toolType: entry.toolType,
+				startTime: entry.startTime,
+			});
+		}
+	}
+	return result;
 }
 
 /**

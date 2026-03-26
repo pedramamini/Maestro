@@ -182,6 +182,16 @@ export class PtySpawner {
 		} catch (error) {
 			logger.error('[ProcessManager] Failed to spawn PTY process', 'ProcessManager', {
 				error: String(error),
+				sessionId,
+				toolType,
+				command,
+				args,
+				cwd,
+				shell: shell ?? '(none)',
+				isTerminal,
+				// Include errno/code when available (e.g., ENOENT, EMFILE)
+				...(error instanceof Error && 'code' in error && { code: (error as any).code }),
+				...(error instanceof Error && 'errno' in error && { errno: (error as any).errno }),
 			});
 			return { pid: -1, success: false };
 		}

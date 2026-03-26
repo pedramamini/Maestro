@@ -137,6 +137,80 @@ describe('SessionItem Cue Indicator', () => {
 		expect(zapIcon.style.color).toBe('rgb(45, 212, 191)');
 	});
 
+	it('applies animate-pulse animation class when cueActiveRun is true', () => {
+		render(
+			<SessionItem
+				{...defaultProps}
+				session={createMockSession()}
+				cueSubscriptionCount={2}
+				cueActiveRun={true}
+			/>
+		);
+
+		const zapIcon = screen.getByTestId('icon-zap');
+		const wrapper = zapIcon.closest('span[title]');
+		expect(wrapper).toHaveClass('animate-pulse');
+	});
+
+	it('does not apply animate-pulse class when cueActiveRun is false', () => {
+		render(
+			<SessionItem
+				{...defaultProps}
+				session={createMockSession()}
+				cueSubscriptionCount={2}
+				cueActiveRun={false}
+			/>
+		);
+
+		const zapIcon = screen.getByTestId('icon-zap');
+		const wrapper = zapIcon.closest('span[title]');
+		expect(wrapper).not.toHaveClass('animate-pulse');
+	});
+
+	it('does not apply animate-pulse class when cueActiveRun is undefined', () => {
+		render(
+			<SessionItem {...defaultProps} session={createMockSession()} cueSubscriptionCount={2} />
+		);
+
+		const zapIcon = screen.getByTestId('icon-zap');
+		const wrapper = zapIcon.closest('span[title]');
+		expect(wrapper).not.toHaveClass('animate-pulse');
+	});
+
+	it('shows "running" in tooltip when cueActiveRun is true', () => {
+		render(
+			<SessionItem
+				{...defaultProps}
+				session={createMockSession()}
+				cueSubscriptionCount={2}
+				cueActiveRun={true}
+			/>
+		);
+
+		const zapIcon = screen.getByTestId('icon-zap');
+		expect(zapIcon.closest('span[title]')).toHaveAttribute(
+			'title',
+			'Maestro Cue running (2 subscriptions)'
+		);
+	});
+
+	it('shows "active" in tooltip when cueActiveRun is false', () => {
+		render(
+			<SessionItem
+				{...defaultProps}
+				session={createMockSession()}
+				cueSubscriptionCount={2}
+				cueActiveRun={false}
+			/>
+		);
+
+		const zapIcon = screen.getByTestId('icon-zap');
+		expect(zapIcon.closest('span[title]')).toHaveAttribute(
+			'title',
+			'Maestro Cue active (2 subscriptions)'
+		);
+	});
+
 	it('does not show Zap icon when session is in editing mode', () => {
 		render(
 			<SessionItem

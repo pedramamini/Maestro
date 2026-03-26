@@ -9,8 +9,7 @@
  * naturally and agent completions are durable through the fan-in tracker.
  */
 
-import * as crypto from 'crypto';
-import type { CueConfig, CueEvent, CueSubscription } from './cue-types';
+import { createCueEvent, type CueConfig, type CueEvent, type CueSubscription } from './cue-types';
 
 export interface ReconcileSessionInfo {
 	config: CueConfig;
@@ -54,18 +53,12 @@ export function reconcileMissedTimeEvents(config: ReconcileConfig): void {
 				`[CUE] Reconciling "${sub.name}": ${missedCount} interval(s) missed during sleep, firing catch-up`
 			);
 
-			const event: CueEvent = {
-				id: crypto.randomUUID(),
-				type: 'time.heartbeat',
-				timestamp: new Date().toISOString(),
-				triggerName: sub.name,
-				payload: {
-					interval_minutes: sub.interval_minutes,
-					reconciled: true,
-					missedCount,
-					sleepDurationMs: gapMs,
-				},
-			};
+			const event = createCueEvent('time.heartbeat', sub.name, {
+				interval_minutes: sub.interval_minutes,
+				reconciled: true,
+				missedCount,
+				sleepDurationMs: gapMs,
+			});
 
 			// Route through normal dispatch path to respect concurrency limits
 			onDispatch(sessionId, sub, event);

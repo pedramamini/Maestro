@@ -980,15 +980,22 @@ export function useAgentListeners(deps: UseAgentListenersDeps): void {
 			(sessionId: string, slashCommands: string[]) => {
 				const actualSessionId = parseSessionId(sessionId).baseSessionId;
 
-				const commands = slashCommands.map((cmd) => ({
-					command: cmd.startsWith('/') ? cmd : `/${cmd}`,
-					description: getSlashCommandDescription(cmd),
-				}));
-
 				setSessions((prev) =>
 					prev.map((s) => {
 						if (s.id !== actualSessionId) return s;
-						return { ...s, agentCommands: commands };
+						const newCommands = slashCommands.map((cmd) => ({
+							command: cmd.startsWith('/') ? cmd : `/${cmd}`,
+							description: getSlashCommandDescription(cmd, s.toolType),
+						}));
+						// Merge with existing commands, preserving prompt data from
+						// disk-discovered commands (e.g., OpenCode .md files)
+						const existingByName = new Map((s.agentCommands || []).map((c) => [c.command, c]));
+						for (const cmd of newCommands) {
+							if (!existingByName.has(cmd.command)) {
+								existingByName.set(cmd.command, cmd);
+							}
+						}
+						return { ...s, agentCommands: Array.from(existingByName.values()) };
 					})
 				);
 			}

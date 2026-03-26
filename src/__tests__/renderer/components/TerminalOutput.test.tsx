@@ -2221,4 +2221,99 @@ describe('memoization behavior', () => {
 		);
 		expect(hasNewFont).toBe(true);
 	});
+
+	describe('gist publish button', () => {
+		it('shows gist publish button for AI messages when ghCliAvailable is true', async () => {
+			const session = createDefaultSession({
+				inputMode: 'ai',
+				tabs: [
+					{
+						id: 'tab-1',
+						logs: [{ id: '1', source: 'ai', text: 'AI response text', timestamp: Date.now() }],
+					},
+				],
+				activeTabId: 'tab-1',
+			});
+
+			const onPublishMessageGist = vi.fn();
+			const props = createDefaultProps({
+				session,
+				ghCliAvailable: true,
+				onPublishMessageGist,
+			});
+			render(<TerminalOutput {...props} />);
+
+			const gistButton = screen.getByTitle('Publish as GitHub Gist');
+			expect(gistButton).toBeInTheDocument();
+		});
+
+		it('hides gist publish button when ghCliAvailable is false', async () => {
+			const session = createDefaultSession({
+				inputMode: 'ai',
+				tabs: [
+					{
+						id: 'tab-1',
+						logs: [{ id: '1', source: 'ai', text: 'AI response text', timestamp: Date.now() }],
+					},
+				],
+				activeTabId: 'tab-1',
+			});
+
+			const props = createDefaultProps({
+				session,
+				ghCliAvailable: false,
+			});
+			render(<TerminalOutput {...props} />);
+
+			expect(screen.queryByTitle('Publish as GitHub Gist')).not.toBeInTheDocument();
+		});
+
+		it('does not show gist publish button for user messages', async () => {
+			const session = createDefaultSession({
+				inputMode: 'ai',
+				tabs: [
+					{
+						id: 'tab-1',
+						logs: [{ id: '1', source: 'user', text: 'User message', timestamp: Date.now() }],
+					},
+				],
+				activeTabId: 'tab-1',
+			});
+
+			const props = createDefaultProps({
+				session,
+				ghCliAvailable: true,
+				onPublishMessageGist: vi.fn(),
+			});
+			render(<TerminalOutput {...props} />);
+
+			expect(screen.queryByTitle('Publish as GitHub Gist')).not.toBeInTheDocument();
+		});
+
+		it('calls onPublishMessageGist with message text when clicked', async () => {
+			const session = createDefaultSession({
+				inputMode: 'ai',
+				tabs: [
+					{
+						id: 'tab-1',
+						logs: [{ id: '1', source: 'ai', text: 'AI response to share', timestamp: Date.now() }],
+					},
+				],
+				activeTabId: 'tab-1',
+			});
+
+			const onPublishMessageGist = vi.fn();
+			const props = createDefaultProps({
+				session,
+				ghCliAvailable: true,
+				onPublishMessageGist,
+			});
+			render(<TerminalOutput {...props} />);
+
+			const gistButton = screen.getByTitle('Publish as GitHub Gist');
+			fireEvent.click(gistButton);
+
+			expect(onPublishMessageGist).toHaveBeenCalledWith('AI response to share');
+		});
+	});
 });

@@ -66,7 +66,7 @@ export interface AppInfoModalsProps {
 	usageDashboardOpen: boolean;
 	onCloseUsageDashboard: () => void;
 	/** Default time range for the Usage Dashboard from settings */
-	defaultStatsTimeRange?: 'day' | 'week' | 'month' | 'year' | 'all';
+	defaultStatsTimeRange?: 'day' | 'week' | 'month' | 'quarter' | 'year' | 'all';
 	/** Enable colorblind-friendly colors for dashboard charts */
 	colorBlindMode?: boolean;
 }

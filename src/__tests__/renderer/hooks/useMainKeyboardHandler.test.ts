@@ -1937,7 +1937,7 @@ describe('useMainKeyboardHandler', () => {
 				expect(mockFocusActiveTerminal).toHaveBeenCalled();
 			});
 
-			it('Cmd+K clears terminal in terminal mode instead of opening command palette', () => {
+			it('Cmd+K opens command palette in terminal mode (not clear terminal)', () => {
 				const { result } = renderHook(() => useMainKeyboardHandler());
 
 				const mockClearActiveTerminal = vi.fn();
@@ -1961,8 +1961,34 @@ describe('useMainKeyboardHandler', () => {
 					);
 				});
 
+				expect(mockSetQuickActionOpen).toHaveBeenCalledWith(true, 'main');
+				expect(mockClearActiveTerminal).not.toHaveBeenCalled();
+			});
+
+			it('Cmd+Shift+K clears terminal in terminal mode', () => {
+				const { result } = renderHook(() => useMainKeyboardHandler());
+
+				const mockClearActiveTerminal = vi.fn();
+
+				result.current.keyboardHandlerRef.current = createTerminalTabContext({
+					isShortcut: () => false,
+					sessions: [{ id: 'session-1' }],
+					mainPanelRef: { current: { clearActiveTerminal: mockClearActiveTerminal } },
+					recordShortcutUsage: vi.fn().mockReturnValue({ newLevel: null }),
+				});
+
+				act(() => {
+					window.dispatchEvent(
+						new KeyboardEvent('keydown', {
+							key: 'k',
+							metaKey: true,
+							shiftKey: true,
+							bubbles: true,
+						})
+					);
+				});
+
 				expect(mockClearActiveTerminal).toHaveBeenCalled();
-				expect(mockSetQuickActionOpen).not.toHaveBeenCalled();
 			});
 
 			it('Cmd+Shift+R opens rename modal for terminal tab', () => {
@@ -2414,7 +2440,7 @@ describe('useMainKeyboardHandler', () => {
 	});
 
 	describe('jumpToTerminal shortcut', () => {
-		it('should navigate to closest terminal tab on Alt+J', () => {
+		it('should navigate to closest terminal tab on Opt+Cmd+J', () => {
 			const { result } = renderHook(() => useMainKeyboardHandler());
 			const mockSetSessions = vi.fn();
 			const mockSession = { id: 'test-session', name: 'Test', inputMode: 'ai' as const };
@@ -2440,6 +2466,7 @@ describe('useMainKeyboardHandler', () => {
 					new KeyboardEvent('keydown', {
 						key: 'j',
 						altKey: true,
+						metaKey: true,
 						bubbles: true,
 					})
 				);
@@ -2448,9 +2475,9 @@ describe('useMainKeyboardHandler', () => {
 			expect(mockSetSessions).toHaveBeenCalled();
 		});
 
-		it('should not navigate when no terminal tabs exist', () => {
+		it('should create a new terminal tab when no terminal tabs exist', () => {
 			const { result } = renderHook(() => useMainKeyboardHandler());
-			const mockSetSessions = vi.fn();
+			const mockHandleOpenTerminalTab = vi.fn();
 			const mockSession = { id: 'test-session', name: 'Test', inputMode: 'ai' as const };
 
 			result.current.keyboardHandlerRef.current = createMockContext({
@@ -2459,7 +2486,8 @@ describe('useMainKeyboardHandler', () => {
 				activeSession: mockSession,
 				activeGroupChatId: null,
 				navigateToClosestTerminalTab: vi.fn().mockReturnValue(null),
-				setSessions: mockSetSessions,
+				setSessions: vi.fn(),
+				handleOpenTerminalTab: mockHandleOpenTerminalTab,
 				mainPanelRef: { current: { focusActiveTerminal: vi.fn() } },
 				recordShortcutUsage: vi.fn().mockReturnValue({ newLevel: null }),
 			});
@@ -2469,12 +2497,13 @@ describe('useMainKeyboardHandler', () => {
 					new KeyboardEvent('keydown', {
 						key: 'j',
 						altKey: true,
+						metaKey: true,
 						bubbles: true,
 					})
 				);
 			});
 
-			expect(mockSetSessions).not.toHaveBeenCalled();
+			expect(mockHandleOpenTerminalTab).toHaveBeenCalled();
 		});
 
 		it('should not navigate in group chat mode', () => {
@@ -2497,6 +2526,7 @@ describe('useMainKeyboardHandler', () => {
 					new KeyboardEvent('keydown', {
 						key: 'j',
 						altKey: true,
+						metaKey: true,
 						bubbles: true,
 					})
 				);

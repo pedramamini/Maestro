@@ -325,7 +325,10 @@ describe('useWizardHandlers', () => {
 			(window as any).maestro.claude.getCommands.mockResolvedValue([
 				{ command: '/custom-cmd', description: 'Custom command' },
 			]);
-			(window as any).maestro.agents.discoverSlashCommands.mockResolvedValue(['init', 'review']);
+			(window as any).maestro.agents.discoverSlashCommands.mockResolvedValue([
+				{ name: 'init' },
+				{ name: 'review' },
+			]);
 
 			const deps = createMockDeps();
 			renderHook(() => useWizardHandlers(deps));

@@ -39,6 +39,8 @@ export interface PowerStatus {
  * Reasons follow a naming convention:
  * - "session:{sessionId}" - AI session is busy
  * - "autorun:{identifier}" - Auto Run is active
+ * - "cue:schedule:{sessionId}" - Cue session has active heartbeat/scheduled subscriptions
+ * - "cue:run:{runId}" - Cue run is executing
  */
 class PowerManager {
 	/** ID of the active powerSaveBlocker, or null if not blocking */

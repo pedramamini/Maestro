@@ -10,6 +10,7 @@ import {
 	RotateCcw,
 	AlertCircle,
 	Save,
+	Share2,
 } from 'lucide-react';
 import type { Session, Theme, LogEntry, FocusArea, AgentError } from '../types';
 import type { FileNode } from '../types/fileTree';
@@ -157,6 +158,9 @@ interface LogItemProps {
 	onShowErrorDetails?: (error: AgentError) => void;
 	// Save to file callback (AI mode only, non-user messages)
 	onSaveToFile?: (text: string) => void;
+	// Publish to GitHub Gist (AI mode only, non-user messages, requires gh CLI)
+	ghCliAvailable?: boolean;
+	onPublishGist?: (text: string) => void;
 	// Message alignment
 	userMessageAlignment: 'left' | 'right';
 }
@@ -197,6 +201,8 @@ const LogItemComponent = memo(
 		onFileClick,
 		onShowErrorDetails,
 		onSaveToFile,
+		ghCliAvailable,
+		onPublishGist,
 		userMessageAlignment,
 	}: LogItemProps) => {
 		// Ref for the log item container - used for scroll-into-view on expand
@@ -881,6 +887,17 @@ const LogItemComponent = memo(
 								<Save className="w-3.5 h-3.5" />
 							</button>
 						)}
+						{/* Publish to GitHub Gist - only for AI responses when gh CLI available */}
+						{log.source !== 'user' && isAIMode && ghCliAvailable && onPublishGist && (
+							<button
+								onClick={() => onPublishGist(log.text)}
+								className="p-1.5 rounded opacity-0 group-hover:opacity-50 hover:!opacity-100"
+								style={{ color: theme.colors.textDim }}
+								title="Publish as GitHub Gist"
+							>
+								<Share2 className="w-3.5 h-3.5" />
+							</button>
+						)}
 						{/* Delete button for user messages (both AI and terminal modes) */}
 						{log.source === 'user' &&
 							onDeleteLog &&
@@ -966,7 +983,8 @@ const LogItemComponent = memo(
 			prevProps.maxOutputLines === nextProps.maxOutputLines &&
 			prevProps.markdownEditMode === nextProps.markdownEditMode &&
 			prevProps.fontFamily === nextProps.fontFamily &&
-			prevProps.userMessageAlignment === nextProps.userMessageAlignment
+			prevProps.userMessageAlignment === nextProps.userMessageAlignment &&
+			prevProps.ghCliAvailable === nextProps.ghCliAvailable
 		);
 	}
 );
@@ -1008,6 +1026,8 @@ interface TerminalOutputProps {
 	onFileSaved?: () => void; // Callback when markdown content is saved to file (e.g., to refresh file list)
 	autoScrollAiMode?: boolean; // Whether to auto-scroll in AI mode (like terminal mode)
 	userMessageAlignment?: 'left' | 'right'; // User message bubble alignment (default: right)
+	ghCliAvailable?: boolean; // Whether gh CLI is available for gist publishing
+	onPublishMessageGist?: (text: string) => void; // Callback to publish a single message as a gist
 	onOpenInTab?: (file: {
 		path: string;
 		name: string;
@@ -1053,6 +1073,8 @@ export const TerminalOutput = memo(
 			autoScrollAiMode,
 			userMessageAlignment = 'right',
 			onOpenInTab,
+			ghCliAvailable,
+			onPublishMessageGist,
 		} = props;
 
 		// Use the forwarded ref if provided, otherwise create a local one
@@ -1726,6 +1748,8 @@ export const TerminalOutput = memo(
 							onFileClick={onFileClick}
 							onShowErrorDetails={onShowErrorDetails}
 							onSaveToFile={handleSaveToFile}
+							ghCliAvailable={ghCliAvailable}
+							onPublishGist={onPublishMessageGist}
 							userMessageAlignment={userMessageAlignment}
 						/>
 					))}

@@ -1,0 +1,8 @@
+# CodeRabbit configuration
+# Docs: https://docs.coderabbit.ai/configuration
+reviews:
+  auto_review:
+    # Review PRs targeting both main and rc branches
+    base_branches:
+      - main
+      - rc

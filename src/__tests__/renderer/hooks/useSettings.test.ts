@@ -53,6 +53,8 @@ describe('useSettings', () => {
 			markdownEditMode: false,
 			chatRawTextMode: false,
 			showHiddenFiles: true,
+			fileExplorerIconTheme: 'default',
+			terminalWidth: 100,
 			logLevel: 'info',
 			maxLogBuffer: 5000,
 			maxOutputLines: 25,
@@ -158,6 +160,7 @@ describe('useSettings', () => {
 			expect(result.current.leftSidebarWidth).toBe(256);
 			expect(result.current.rightPanelWidth).toBe(384);
 			expect(result.current.markdownEditMode).toBe(false);
+			expect(result.current.fileExplorerIconTheme).toBe('default');
 		});
 
 		it('should have correct default values for logging settings', async () => {
@@ -550,6 +553,18 @@ describe('useSettings', () => {
 
 			expect(result.current.fontSize).toBe(16);
 			expect(window.maestro.settings.set).toHaveBeenCalledWith('fontSize', 16);
+		});
+
+		it('should update fileExplorerIconTheme and persist to settings', async () => {
+			const { result } = renderHook(() => useSettings());
+			await waitForSettingsLoaded(result);
+
+			act(() => {
+				result.current.setFileExplorerIconTheme('rich');
+			});
+
+			expect(result.current.fileExplorerIconTheme).toBe('rich');
+			expect(window.maestro.settings.set).toHaveBeenCalledWith('fileExplorerIconTheme', 'rich');
 		});
 	});
 

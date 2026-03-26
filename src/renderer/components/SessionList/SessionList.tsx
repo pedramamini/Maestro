@@ -118,6 +118,7 @@ function SessionListInner(props: SessionListProps) {
 	const groupChatsExpanded = useUIStore((s) => s.groupChatsExpanded);
 	const shortcuts = useSettingsStore((s) => s.shortcuts);
 	const leftSidebarWidthState = useSettingsStore((s) => s.leftSidebarWidth);
+	const persistentWebLink = useSettingsStore((s) => s.persistentWebLink);
 	const webInterfaceUseCustomPort = useSettingsStore((s) => s.webInterfaceUseCustomPort);
 	const webInterfaceCustomPort = useSettingsStore((s) => s.webInterfaceCustomPort);
 	const ungroupedCollapsed = useSettingsStore((s) => s.ungroupedCollapsed);
@@ -131,8 +132,10 @@ function SessionListInner(props: SessionListProps) {
 	const maestroCueEnabled = useSettingsStore((s) => s.encoreFeatures.maestroCue);
 	const activeBatchSessionIds = useBatchStore(useShallow(selectActiveBatchSessionIds));
 
-	// Cue session status map: sessionId → subscriptionCount (only active when Encore Feature enabled)
-	const [cueSessionMap, setCueSessionMap] = useState<Map<string, number>>(new Map());
+	// Cue session status map: sessionId → { count, active } (only active when Encore Feature enabled)
+	const [cueSessionMap, setCueSessionMap] = useState<
+		Map<string, { count: number; active: boolean }>
+	>(new Map());
 	useEffect(() => {
 		if (!maestroCueEnabled) {
 			setCueSessionMap(new Map());
@@ -145,10 +148,13 @@ function SessionListInner(props: SessionListProps) {
 			try {
 				const statuses = await window.maestro.cue.getStatus();
 				if (!mounted) return;
-				const map = new Map<string, number>();
+				const map = new Map<string, { count: number; active: boolean }>();
 				for (const s of statuses) {
 					if (s.subscriptionCount > 0) {
-						map.set(s.sessionId, s.subscriptionCount);
+						map.set(s.sessionId, {
+							count: s.subscriptionCount,
+							active: s.activeRuns > 0,
+						});
 					}
 				}
 				setCueSessionMap(map);
@@ -190,6 +196,7 @@ function SessionListInner(props: SessionListProps) {
 	);
 	const setSessions = useSessionStore.getState().setSessions;
 	const setGroups = useSessionStore.getState().setGroups;
+	const setPersistentWebLink = useSettingsStore.getState().setPersistentWebLink;
 	const setWebInterfaceUseCustomPort = useSettingsStore.getState().setWebInterfaceUseCustomPort;
 	const setWebInterfaceCustomPort = useSettingsStore.getState().setWebInterfaceCustomPort;
 	const setUngroupedCollapsed = useSettingsStore.getState().setUngroupedCollapsed;
@@ -518,7 +525,8 @@ function SessionListInner(props: SessionListProps) {
 					gitFileCount={getFileCount(session.id)}
 					isInBatch={activeBatchSessionIds.includes(session.id)}
 					jumpNumber={getSessionJumpNumber(session.id)}
-					cueSubscriptionCount={cueSessionMap.get(session.id)}
+					cueSubscriptionCount={cueSessionMap.get(session.id)?.count}
+					cueActiveRun={cueSessionMap.get(session.id)?.active}
 					onSelect={selectHandlers.get(session.id)!}
 					onDragStart={dragStartHandlers.get(session.id)!}
 					onDragOver={handleDragOver}
@@ -584,7 +592,8 @@ function SessionListInner(props: SessionListProps) {
 										gitFileCount={getFileCount(child.id)}
 										isInBatch={activeBatchSessionIds.includes(child.id)}
 										jumpNumber={getSessionJumpNumber(child.id)}
-										cueSubscriptionCount={cueSessionMap.get(child.id)}
+										cueSubscriptionCount={cueSessionMap.get(child.id)?.count}
+										cueActiveRun={cueSessionMap.get(child.id)?.active}
 										onSelect={selectHandlers.get(child.id)!}
 										onDragStart={dragStartHandlers.get(child.id)!}
 										onContextMenu={contextMenuHandlers.get(child.id)!}
@@ -761,6 +770,8 @@ function SessionListInner(props: SessionListProps) {
 										copyFlash={copyFlash}
 										setCopyFlash={setCopyFlash}
 										handleTunnelToggle={handleTunnelToggle}
+										persistentWebLink={persistentWebLink}
+										setPersistentWebLink={setPersistentWebLink}
 										webInterfaceUseCustomPort={webInterfaceUseCustomPort}
 										webInterfaceCustomPort={webInterfaceCustomPort}
 										setWebInterfaceUseCustomPort={setWebInterfaceUseCustomPort}

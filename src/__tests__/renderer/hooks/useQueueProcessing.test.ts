@@ -204,6 +204,7 @@ describe('processQueuedItem — delegation to agentStore', () => {
 			customAICommands: [],
 			speckitCommands: [],
 			openspecCommands: [],
+			bmadCommands: [],
 		});
 	});
 
@@ -685,6 +686,7 @@ describe('startup recovery — happy path', () => {
 			customAICommands: [],
 			speckitCommands: [],
 			openspecCommands: [],
+			bmadCommands: [],
 		});
 	});
 

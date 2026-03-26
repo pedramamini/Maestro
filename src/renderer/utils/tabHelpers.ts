@@ -101,17 +101,35 @@ export function getRepairedUnifiedTabOrder(session: Session): UnifiedTabRef[] {
 	const fileTabs = session.filePreviewTabs || [];
 	const terminalTabs = session.terminalTabs || [];
 
-	// Build sets of IDs already in the order
+	// Build sets of IDs that actually exist (for pruning stale entries)
+	const liveAiIds = new Set(aiTabs.map((t) => t.id));
+	const liveFileIds = new Set(fileTabs.map((t) => t.id));
+	const liveTerminalIds = new Set(terminalTabs.map((t) => t.id));
+
+	// Prune stale entries and duplicates — refs whose tabs no longer exist, and
+	// later duplicate refs for the same type+id (buildUnifiedTabs also skips both).
+	// Without this, navigation indices diverge from the rendered tab bar.
+	const seen = new Set<string>();
+	const prunedOrder = order.filter((ref) => {
+		const key = `${ref.type}:${ref.id}`;
+		if (seen.has(key)) return false;
+		seen.add(key);
+		if (ref.type === 'ai') return liveAiIds.has(ref.id);
+		if (ref.type === 'file') return liveFileIds.has(ref.id);
+		return liveTerminalIds.has(ref.id);
+	});
+
+	// Track which live IDs are already in the pruned order
 	const aiIdsInOrder = new Set<string>();
 	const fileIdsInOrder = new Set<string>();
 	const terminalIdsInOrder = new Set<string>();
-	for (const ref of order) {
+	for (const ref of prunedOrder) {
 		if (ref.type === 'ai') aiIdsInOrder.add(ref.id);
 		else if (ref.type === 'file') fileIdsInOrder.add(ref.id);
 		else terminalIdsInOrder.add(ref.id);
 	}
 
-	// Collect orphaned tabs
+	// Collect orphaned tabs (exist in data but missing from order)
 	const orphanedRefs: UnifiedTabRef[] = [];
 	for (const tab of aiTabs) {
 		if (!aiIdsInOrder.has(tab.id)) {
@@ -129,9 +147,10 @@ export function getRepairedUnifiedTabOrder(session: Session): UnifiedTabRef[] {
 		}
 	}
 
-	// Return original if no orphans (avoids allocation)
-	if (orphanedRefs.length === 0) return order;
-	return [...order, ...orphanedRefs];
+	// Return original if nothing changed (avoids allocation)
+	if (prunedOrder.length === order.length && orphanedRefs.length === 0) return order;
+	if (orphanedRefs.length === 0) return prunedOrder;
+	return [...prunedOrder, ...orphanedRefs];
 }
 
 /**
@@ -480,11 +499,12 @@ export function closeTab(
 				newActiveTabId = updatedTabs[newIndex].id;
 			}
 		} else {
-			// Normal mode: use unifiedTabOrder to find the correct left neighbor.
+			// Normal mode: use repaired unifiedTabOrder to find the correct left neighbor.
 			// This respects the visual tab order which includes terminal and file tabs —
 			// without this, closing an AI tab that sits to the right of a terminal tab
 			// would fall back to a random AI tab instead of the adjacent terminal tab.
-			const unifiedOrder = session.unifiedTabOrder || [];
+			// We use getRepairedUnifiedTabOrder to skip stale/duplicate refs (same as rendering).
+			const unifiedOrder = getRepairedUnifiedTabOrder(session);
 			const closedUnifiedIndex = unifiedOrder.findIndex(
 				(ref) => ref.type === 'ai' && ref.id === tabId
 			);
@@ -701,24 +721,25 @@ export function closeFileTab(session: Session, tabId: string): CloseFileTabResul
 		return null;
 	}
 
-	// Find the position in unifiedTabOrder
-	const unifiedIndex = session.unifiedTabOrder.findIndex(
-		(ref) => ref.type === 'file' && ref.id === tabId
-	);
+	// Use repaired order to skip stale/duplicate refs (same as rendering)
+	const repairedOrder = getRepairedUnifiedTabOrder(session);
+
+	// Find the position in the repaired unifiedTabOrder
+	const unifiedIndex = repairedOrder.findIndex((ref) => ref.type === 'file' && ref.id === tabId);
 
 	// Create closed tab entry
 	const closedTabEntry: ClosedTabEntry = {
 		type: 'file',
 		tab: { ...tabToClose },
-		unifiedIndex: unifiedIndex !== -1 ? unifiedIndex : session.unifiedTabOrder.length,
+		unifiedIndex: unifiedIndex !== -1 ? unifiedIndex : repairedOrder.length,
 		closedAt: Date.now(),
 	};
 
 	// Remove from filePreviewTabs
 	const updatedFilePreviewTabs = session.filePreviewTabs.filter((tab) => tab.id !== tabId);
 
-	// Remove from unifiedTabOrder
-	const updatedUnifiedTabOrder = session.unifiedTabOrder.filter(
+	// Remove from unifiedTabOrder (filter from repaired order to persist the fix)
+	const updatedUnifiedTabOrder = repairedOrder.filter(
 		(ref) => !(ref.type === 'file' && ref.id === tabId)
 	);
 

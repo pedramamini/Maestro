@@ -6,10 +6,10 @@
  * Tapping a file triggers a diff view.
  */
 
-import React, { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { useThemeColors } from '../components/ThemeProvider';
 import { triggerHaptic, HAPTIC_PATTERNS } from './constants';
-import type { GitStatusResult, GitStatusFile, UseGitStatusReturn } from '../hooks/useGitStatus';
+import type { GitStatusFile, UseGitStatusReturn } from '../hooks/useGitStatus';
 
 /**
  * Props for GitStatusPanel component

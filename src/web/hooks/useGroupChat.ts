@@ -45,7 +45,7 @@ export interface UseGroupChatReturn {
  */
 export function useGroupChat(
 	sendRequest: UseWebSocketReturn['sendRequest'],
-	send: UseWebSocketReturn['send'],
+	_send: UseWebSocketReturn['send'],
 	isConnected: boolean,
 ): UseGroupChatReturn {
 	const [chats, setChats] = useState<GroupChatState[]>([]);

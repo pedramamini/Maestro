@@ -632,8 +632,7 @@ describe('restoreSession — Git info (local sessions)', () => {
 // ============================================================================
 
 describe('restoreSession — Error handling', () => {
-	it('returns error session when agent not found', async () => {
-		mockAgentsGet.mockResolvedValueOnce(null);
+	it('returns idle session even when agent is unavailable (validated in background)', async () => {
 		const session = createMockSession();
 		const { result } = renderHook(() => useSessionRestoration());
 
@@ -642,14 +641,49 @@ describe('restoreSession — Error handling', () => {
 			restored = await result.current.restoreSession(session);
 		});
 
-		expect(restored!.state).toBe('error');
-		expect(restored!.aiPid).toBe(-1);
+		// Agent validation is deferred to background - restoreSession always
+		// returns idle so it never blocks the splash screen.
+		expect(restored!.state).toBe('idle');
+		expect(restored!.aiPid).toBe(0);
 		expect(restored!.isLive).toBe(false);
 	});
 
-	it('returns error session on unexpected exception', async () => {
-		mockAgentsGet.mockRejectedValueOnce(new Error('IPC failure'));
-		const session = createMockSession();
+	it('falls back to persisted git info when git operations time out', async () => {
+		vi.useFakeTimers();
+		// Make git operations hang for this call only (never resolve within timeout)
+		mockGitService.isRepo.mockImplementationOnce(
+			() => new Promise(() => {}) // never resolves
+		);
+		const session = createMockSession({
+			isGitRepo: true,
+			gitBranches: ['persisted-branch'],
+			gitTags: ['v-persisted'],
+		});
+		const { result } = renderHook(() => useSessionRestoration());
+
+		let restored: Session;
+		const restorePromise = act(async () => {
+			restored = await result.current.restoreSession(session);
+		});
+
+		// Advance past the 5s git timeout
+		await vi.advanceTimersByTimeAsync(6000);
+		await restorePromise;
+
+		// Should use persisted values since git timed out
+		expect(restored!.isGitRepo).toBe(true);
+		expect(restored!.gitBranches).toEqual(['persisted-branch']);
+		expect(restored!.gitTags).toEqual(['v-persisted']);
+		expect(restored!.state).toBe('idle');
+		vi.useRealTimers();
+	});
+
+	it('falls back to persisted git info when git operations throw', async () => {
+		mockGitService.isRepo.mockRejectedValueOnce(new Error('ENOENT'));
+		const session = createMockSession({
+			isGitRepo: true,
+			gitBranches: ['saved-branch'],
+		});
 		const { result } = renderHook(() => useSessionRestoration());
 
 		let restored: Session;
@@ -657,8 +691,92 @@ describe('restoreSession — Error handling', () => {
 			restored = await result.current.restoreSession(session);
 		});
 
-		expect(restored!.state).toBe('error');
-		expect(restored!.aiPid).toBe(-1);
+		expect(restored!.isGitRepo).toBe(true);
+		expect(restored!.gitBranches).toEqual(['saved-branch']);
+		expect(restored!.state).toBe('idle');
+	});
+});
+
+// ============================================================================
+// validateAgentInBackground
+// ============================================================================
+
+describe('validateAgentInBackground', () => {
+	it('marks session as error when agent is not found', async () => {
+		mockAgentsGet.mockResolvedValueOnce(null);
+		const session = createMockSession({ id: 'validate-1' });
+		mockGetAll.mockResolvedValueOnce([session]);
+
+		renderHook(() => useSessionRestoration());
+
+		// Wait for mount effect + background validation
+		await act(async () => {
+			await new Promise((r) => setTimeout(r, 100));
+		});
+
+		const updated = useSessionStore.getState().sessions.find((s) => s.id === 'validate-1');
+		expect(updated?.state).toBe('error');
+		expect(updated?.aiPid).toBe(-1);
+	});
+
+	it('passes sshRemoteId to agents.get for SSH sessions', async () => {
+		const session = createMockSession({
+			id: 'ssh-validate-1',
+			sshRemoteId: 'my-remote',
+		});
+		mockGetAll.mockResolvedValueOnce([session]);
+
+		renderHook(() => useSessionRestoration());
+
+		await act(async () => {
+			await new Promise((r) => setTimeout(r, 100));
+		});
+
+		expect(mockAgentsGet).toHaveBeenCalledWith('claude-code', 'my-remote');
+	});
+
+	it('passes undefined sshRemoteId for local sessions', async () => {
+		const session = createMockSession({ id: 'local-validate-1' });
+		mockGetAll.mockResolvedValueOnce([session]);
+
+		renderHook(() => useSessionRestoration());
+
+		await act(async () => {
+			await new Promise((r) => setTimeout(r, 100));
+		});
+
+		expect(mockAgentsGet).toHaveBeenCalledWith('claude-code', undefined);
+	});
+
+	it('does not mark session as error when agent is found', async () => {
+		mockAgentsGet.mockResolvedValue({ id: 'claude-code', name: 'Claude Code' });
+		const session = createMockSession({ id: 'valid-agent-1' });
+		mockGetAll.mockResolvedValueOnce([session]);
+
+		renderHook(() => useSessionRestoration());
+
+		await act(async () => {
+			await new Promise((r) => setTimeout(r, 100));
+		});
+
+		const updated = useSessionStore.getState().sessions.find((s) => s.id === 'valid-agent-1');
+		expect(updated?.state).toBe('idle');
+	});
+
+	it('handles agents.get rejection gracefully', async () => {
+		mockAgentsGet.mockRejectedValueOnce(new Error('IPC failure'));
+		const session = createMockSession({ id: 'ipc-fail-1' });
+		mockGetAll.mockResolvedValueOnce([session]);
+
+		renderHook(() => useSessionRestoration());
+
+		await act(async () => {
+			await new Promise((r) => setTimeout(r, 100));
+		});
+
+		// Should not crash - session stays idle (validation failure is logged, not fatal)
+		const updated = useSessionStore.getState().sessions.find((s) => s.id === 'ipc-fail-1');
+		expect(updated?.state).toBe('idle');
 	});
 });
 

@@ -1,5 +1,4 @@
 import { memo, forwardRef, useImperativeHandle, useRef, useEffect, useCallback } from 'react';
-import { AlertCircle } from 'lucide-react';
 import { XTerminal, XTerminalHandle } from './XTerminal';
 import { TerminalSearchBar } from './TerminalSearchBar';
 import {
@@ -12,6 +11,7 @@ import {
 import { useSessionStore } from '../stores/sessionStore';
 import { useTabStore } from '../stores/tabStore';
 import { captureException } from '../utils/sentry';
+import { notifyToast } from '../stores/notificationStore';
 import type { Session, TerminalTab } from '../types';
 import type { Theme } from '../../shared/theme-types';
 
@@ -73,8 +73,37 @@ export const TerminalView = memo(
 		const spawnInFlightRef = useRef<Set<string>>(new Set());
 		// Track which tabs have already had the loading message written to avoid duplicates
 		const loadingWrittenRef = useRef<Set<string>>(new Set());
+		// Dedup spawn-failure toasts: batch rapid failures into a single notification
+		const spawnFailureCountRef = useRef(0);
+		const spawnFailureTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+		// Stable refs for callback props — prevents spawnPtyForTab from getting a new
+		// identity on every render, which would re-trigger the spawn useEffect in a loop.
+		const onTabPidChangeRef = useRef(onTabPidChange);
+		onTabPidChangeRef.current = onTabPidChange;
 
 		const closeTerminalTab = useTabStore((s) => s.closeTerminalTab);
+
+		// Batch spawn-failure toasts: coalesce rapid failures (e.g. session restore
+		// triggers many tabs at once) into a single toast with a count.
+		const notifySpawnFailure = useCallback((message: string) => {
+			spawnFailureCountRef.current++;
+			if (spawnFailureTimerRef.current) {
+				clearTimeout(spawnFailureTimerRef.current);
+			}
+			spawnFailureTimerRef.current = setTimeout(() => {
+				const count = spawnFailureCountRef.current;
+				spawnFailureCountRef.current = 0;
+				spawnFailureTimerRef.current = null;
+				notifyToast({
+					type: 'error',
+					title: count > 1 ? `Failed to start ${count} terminals` : 'Failed to start terminal',
+					message:
+						count > 1
+							? `${count} shell processes could not be started. Check system PTY availability.`
+							: message,
+				});
+			}, 200);
+		}, []);
 
 		const activeTab = getActiveTerminalTab(session);
 
@@ -108,7 +137,7 @@ export const TerminalView = memo(
 			[activeTab]
 		);
 
-		// Shared spawn function — used both on mount and for retry
+		// Shared spawn function — closes tab and shows error toast on failure
 		const spawnPtyForTab = useCallback(
 			(tab: TerminalTab) => {
 				const tabId = tab.id;
@@ -144,9 +173,13 @@ export const TerminalView = memo(
 					})
 					.then((result) => {
 						if (result.success) {
-							onTabPidChange(tabId, result.pid);
+							onTabPidChangeRef.current(tabId, result.pid);
 						} else {
-							onTabStateChange(tabId, 'exited', 1);
+							// Spawn failed — close the tab and notify via batched toast
+							setTimeout(() => closeTerminalTab(tabId), 0);
+							notifySpawnFailure(
+								'The shell process could not be started. Check system PTY availability.'
+							);
 						}
 					})
 					.catch((err) => {
@@ -157,7 +190,11 @@ export const TerminalView = memo(
 								operation: 'spawnTerminalTab',
 							},
 						});
-						onTabStateChange(tabId, 'exited', 1);
+						// Spawn threw — close the tab and notify via batched toast
+						setTimeout(() => closeTerminalTab(tabId), 0);
+						notifySpawnFailure(
+							err instanceof Error ? err.message : 'An unexpected error occurred.'
+						);
 					})
 					.finally(() => {
 						spawnInFlightRef.current.delete(tabId);
@@ -171,8 +208,10 @@ export const TerminalView = memo(
 				defaultShell,
 				shellArgs,
 				shellEnvVars,
-				onTabPidChange,
-				onTabStateChange,
+				// onTabPidChange accessed via stable ref — not a dep
+				// onTabStateChange not used in this callback
+				closeTerminalTab,
+				notifySpawnFailure,
 			]
 		);
 
@@ -235,21 +274,24 @@ export const TerminalView = memo(
 		}, [session.id]);
 
 		// Auto-close terminal tabs when the shell process exits.
-		// Tabs that exit within 2 seconds of creation are treated as spawn failures —
-		// they keep the error overlay (Retry button) instead of silently vanishing.
+		// Startup failures (exit within 2s) show an error toast; normal exits close silently.
 		useEffect(() => {
 			const terminalTabs = session.terminalTabs || [];
 			for (const tab of terminalTabs) {
 				const prev = prevTabStatesRef.current.get(tab.id);
 				if (prev !== undefined && prev !== 'exited' && tab.state === 'exited') {
 					const age = Date.now() - tab.createdAt;
+					const tabId = tab.id;
 					if (age < 2000) {
-						// Startup failure — leave the tab visible with error overlay
+						// Startup failure — close tab and show error toast
 						console.warn(
-							`[TerminalView] Shell exited ${age}ms after creation (exit code: ${tab.exitCode ?? '?'}). Showing error overlay.`
+							`[TerminalView] Shell exited ${age}ms after creation (exit code: ${tab.exitCode ?? '?'}). Closing tab.`
+						);
+						setTimeout(() => closeTerminalTab(tabId), 0);
+						notifySpawnFailure(
+							`Shell exited immediately${tab.exitCode != null ? ` (exit code: ${tab.exitCode})` : ''}.`
 						);
 					} else {
-						const tabId = tab.id;
 						// Close on next tick to avoid mutating state mid-render
 						setTimeout(() => closeTerminalTab(tabId), 0);
 					}
@@ -301,9 +343,6 @@ export const TerminalView = memo(
 				{terminalTabs.map((tab) => {
 					const isActive = tab.id === session.activeTerminalTabId;
 					const terminalSessionId = getTerminalSessionId(session.id, tab.id);
-					// Shell failed to start or exited immediately after startup
-					const isSpawnFailed =
-						tab.state === 'exited' && (tab.pid === 0 || Date.now() - tab.createdAt < 2000);
 
 					return (
 						<div
@@ -311,65 +350,32 @@ export const TerminalView = memo(
 							className={`absolute inset-0 ${isActive ? '' : 'invisible'}`}
 							style={{ pointerEvents: isActive ? 'auto' : 'none' }}
 						>
-							{isSpawnFailed ? (
-								// Error state overlay for spawn failures
-								<div className="absolute inset-0 flex flex-col items-center justify-center gap-3">
-									<AlertCircle className="w-8 h-8" style={{ color: theme.colors.error }} />
-									<span className="text-sm font-medium" style={{ color: theme.colors.textMain }}>
-										Failed to start terminal
-									</span>
-									{tab.exitCode !== undefined && tab.exitCode !== 0 && (
-										<span className="text-xs font-mono" style={{ color: theme.colors.textDim }}>
-											Exit code: {tab.exitCode}
-										</span>
-									)}
-									<button
-										onClick={() => {
-											// Clear the loading-written guard so 'Starting terminal...' shows again on retry
-											loadingWrittenRef.current.delete(tab.id);
-											onTabStateChange(tab.id, 'idle');
-											onTabPidChange(tab.id, 0);
-											spawnPtyForTab({ ...tab, state: 'idle', pid: 0 });
-										}}
-										className="px-3 py-1.5 rounded text-xs font-medium transition-opacity hover:opacity-80"
-										style={{
-											backgroundColor: theme.colors.accent,
-											color: theme.colors.accentForeground,
-										}}
-									>
-										Retry
-									</button>
-								</div>
-							) : (
-								<>
-									<XTerminal
-										ref={(handle) => {
-											if (handle) {
-												terminalRefs.current.set(tab.id, handle);
-												// Write loading indicator once per idle cycle — guard prevents duplicate writes on re-renders
-												if (
-													tab.pid === 0 &&
-													tab.state === 'idle' &&
-													!loadingWrittenRef.current.has(tab.id)
-												) {
-													loadingWrittenRef.current.add(tab.id);
-													setTimeout(() => {
-														handle.write('\x1b[2mStarting terminal...\x1b[0m');
-													}, 0);
-												}
-											} else {
-												terminalRefs.current.delete(tab.id);
-												// Do NOT clear loadingWrittenRef here — React calls inline ref callbacks with
-												// null then the new handle on re-renders; clearing it would cause repeated writes.
-											}
-										}}
-										sessionId={terminalSessionId}
-										theme={theme}
-										fontFamily={fontFamily}
-										fontSize={fontSize}
-									/>
-								</>
-							)}
+							<XTerminal
+								ref={(handle) => {
+									if (handle) {
+										terminalRefs.current.set(tab.id, handle);
+										// Write loading indicator once per idle cycle — guard prevents duplicate writes on re-renders
+										if (
+											tab.pid === 0 &&
+											tab.state === 'idle' &&
+											!loadingWrittenRef.current.has(tab.id)
+										) {
+											loadingWrittenRef.current.add(tab.id);
+											setTimeout(() => {
+												handle.write('\x1b[2mStarting terminal...\x1b[0m');
+											}, 0);
+										}
+									} else {
+										terminalRefs.current.delete(tab.id);
+										// Do NOT clear loadingWrittenRef here — React calls inline ref callbacks with
+										// null then the new handle on re-renders; clearing it would cause repeated writes.
+									}
+								}}
+								sessionId={terminalSessionId}
+								theme={theme}
+								fontFamily={fontFamily}
+								fontSize={fontSize}
+							/>
 						</div>
 					);
 				})}

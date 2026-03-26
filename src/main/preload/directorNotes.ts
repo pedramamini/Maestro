@@ -108,6 +108,25 @@ export function createDirectorNotesApi() {
 			ipcRenderer.invoke('director-notes:generateSynopsis', options),
 
 		/**
+		 * Subscribe to synopsis generation progress updates.
+		 * Returns a cleanup function to unsubscribe.
+		 */
+		onSynopsisProgress: (
+			callback: (update: { chunkCount: number; bytesReceived: number; elapsedMs: number }) => void
+		): (() => void) => {
+			const handler = (
+				_event: unknown,
+				update: { chunkCount: number; bytesReceived: number; elapsedMs: number }
+			) => {
+				callback(update);
+			};
+			ipcRenderer.on('director-notes:synopsisProgress', handler);
+			return () => {
+				ipcRenderer.removeListener('director-notes:synopsisProgress', handler);
+			};
+		},
+
+		/**
 		 * Subscribe to new history entries as they are added in real-time.
 		 * Returns a cleanup function to unsubscribe.
 		 */

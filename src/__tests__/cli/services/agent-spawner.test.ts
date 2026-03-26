@@ -46,13 +46,24 @@ vi.mock('child_process', async (importOriginal) => {
 });
 
 // Mock fs module
-vi.mock('fs', async (importOriginal) => {
-	const actual = await importOriginal<typeof import('fs')>();
-	return {
+vi.mock('fs', async () => {
+	const actual = await vi.importActual<typeof import('fs')>('fs');
+	const mocked = {
 		...actual,
 		readFileSync: vi.fn(),
 		writeFileSync: vi.fn(),
+		existsSync: vi.fn(() => false),
+		readdirSync: vi.fn(() => []),
+		mkdirSync: vi.fn(),
+		createWriteStream: vi.fn(
+			() =>
+				({
+					write: vi.fn(),
+					end: vi.fn(),
+				}) as any
+		),
 		promises: {
+			...actual.promises,
 			stat: vi.fn(),
 			access: vi.fn(),
 		},
@@ -60,12 +71,25 @@ vi.mock('fs', async (importOriginal) => {
 			X_OK: 1,
 		},
 	};
+	return {
+		...mocked,
+		default: mocked,
+	};
 });
 
 // Mock os module
-vi.mock('os', () => ({
-	homedir: vi.fn(() => '/Users/testuser'),
-}));
+vi.mock('os', async () => {
+	const actual = await vi.importActual<typeof import('os')>('os');
+	const mocked = {
+		...actual,
+		homedir: vi.fn(() => '/Users/testuser'),
+		tmpdir: vi.fn(() => '/tmp'),
+	};
+	return {
+		...mocked,
+		default: mocked,
+	};
+});
 
 // Mock storage service
 const mockGetAgentCustomPath = vi.fn();
@@ -1176,7 +1200,8 @@ Some text with [x] in it that's not a checkbox
 			expect(args).toContain('plan');
 			// Should still have base args
 			expect(args).toContain('--print');
-			expect(args).toContain('--dangerously-skip-permissions');
+			// Should NOT have permission bypass in read-only mode
+			expect(args).not.toContain('--dangerously-skip-permissions');
 
 			mockStdout.emit('data', Buffer.from('{"type":"result","result":"Done"}\n'));
 			mockChild.emit('close', 0);
@@ -1193,6 +1218,8 @@ Some text with [x] in it that's not a checkbox
 			const [, args] = mockSpawn.mock.calls[0];
 			expect(args).not.toContain('--permission-mode');
 			expect(args).not.toContain('plan');
+			// Should have permission bypass in normal mode
+			expect(args).toContain('--dangerously-skip-permissions');
 
 			mockStdout.emit('data', Buffer.from('{"type":"result","result":"Done"}\n'));
 			mockChild.emit('close', 0);

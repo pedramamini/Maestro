@@ -66,6 +66,11 @@ vi.mock('lucide-react', () => ({
 			🔗
 		</span>
 	),
+	FolderOpen: ({ className, style }: { className?: string; style?: React.CSSProperties }) => (
+		<span data-testid="folder-open-icon" className={className} style={style}>
+			📂
+		</span>
+	),
 	FileText: ({ className, style }: { className?: string; style?: React.CSSProperties }) => (
 		<span data-testid="filetext-icon" className={className} style={style}>
 			📄
@@ -162,16 +167,28 @@ vi.mock('../../../renderer/utils/theme', () => ({
 		if (type === 'deleted') return <span data-testid="deleted-icon">-</span>;
 		return <span data-testid="file-icon">📄</span>;
 	},
-	getExplorerFileIcon: (name: string, _theme: Theme, type?: string) => {
+	getExplorerFileIcon: (
+		name: string,
+		_theme: Theme,
+		type?: string,
+		iconTheme: 'default' | 'rich' = 'default'
+	) => {
 		if (type === 'added') return <span data-testid="added-icon">+</span>;
 		if (type === 'modified') return <span data-testid="modified-icon">~</span>;
 		if (type === 'deleted') return <span data-testid="deleted-icon">-</span>;
 		void name;
-		return <span data-testid="file-icon">📄</span>;
+		return (
+			<span data-testid={iconTheme === 'rich' ? 'rich-file-icon' : 'file-icon'}>
+				{iconTheme === 'rich' ? '🧩' : '📄'}
+			</span>
+		);
 	},
-	getExplorerFolderIcon: (_name: string, _isExpanded: boolean, _theme: Theme) => (
-		<span data-testid="folder-icon">📁</span>
-	),
+	getExplorerFolderIcon: (
+		_name: string,
+		_isExpanded: boolean,
+		_theme: Theme,
+		iconTheme: 'default' | 'rich' = 'default'
+	) => <span data-testid={iconTheme === 'rich' ? 'rich-folder-icon' : 'folder-icon'}>📁</span>,
 }));
 
 // Mock MODAL_PRIORITIES
@@ -304,6 +321,7 @@ describe('FileExplorerPanel', () => {
 			onAutoRefreshChange: vi.fn(),
 			onShowFlash: vi.fn(),
 			showHiddenFiles: false,
+			fileExplorerIconTheme: 'default',
 			setShowHiddenFiles: vi.fn(),
 		};
 	});
@@ -333,6 +351,21 @@ describe('FileExplorerPanel', () => {
 			const { container } = render(<FileExplorerPanel {...defaultProps} />);
 			const header = container.querySelector('.sticky');
 			expect(header).toHaveStyle({ backgroundColor: mockTheme.colors.bgSidebar });
+		});
+	});
+
+	describe('Files Pane icon themes', () => {
+		it('renders default theme icons when fileExplorerIconTheme is default', () => {
+			render(<FileExplorerPanel {...defaultProps} />);
+
+			expect(screen.getAllByTestId('file-icon').length).toBeGreaterThan(0);
+			expect(screen.queryByTestId('rich-file-icon')).not.toBeInTheDocument();
+		});
+
+		it('renders rich theme icons when fileExplorerIconTheme is rich', () => {
+			render(<FileExplorerPanel {...defaultProps} fileExplorerIconTheme="rich" />);
+
+			expect(screen.getAllByTestId('rich-file-icon').length).toBeGreaterThan(0);
 		});
 	});
 

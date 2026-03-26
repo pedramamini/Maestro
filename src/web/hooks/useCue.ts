@@ -68,7 +68,7 @@ const MAX_ACTIVITY_ENTRIES = 100;
  */
 export function useCue(
 	sendRequest: UseWebSocketReturn['sendRequest'],
-	send: UseWebSocketReturn['send'],
+	_send: UseWebSocketReturn['send'],
 	isConnected: boolean,
 ): UseCueReturn {
 	const [subscriptions, setSubscriptions] = useState<CueSubscriptionInfo[]>([]);

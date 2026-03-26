@@ -1,3 +1,5 @@
+import * as crypto from 'crypto';
+
 /**
  * Core type definitions for the Maestro Cue event-driven automation system.
  *
@@ -159,6 +161,21 @@ export interface CueGraphSession {
 	sessionName: string;
 	toolType: string;
 	subscriptions: CueSubscription[];
+}
+
+/** Create a CueEvent with auto-generated id and timestamp */
+export function createCueEvent(
+	type: CueEventType,
+	triggerName: string,
+	payload: Record<string, unknown> = {}
+): CueEvent {
+	return {
+		id: crypto.randomUUID(),
+		type,
+		timestamp: new Date().toISOString(),
+		triggerName,
+		payload,
+	};
 }
 
 /** Default filename for Cue configuration */

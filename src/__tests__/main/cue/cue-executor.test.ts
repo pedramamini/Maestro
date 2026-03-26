@@ -107,6 +107,7 @@ vi.mock('../../../main/parsers', () => ({
 
 // Mock child_process.spawn
 class MockChildProcess extends EventEmitter {
+	pid = 12345;
 	stdin = {
 		write: vi.fn(),
 		end: vi.fn(),
@@ -151,6 +152,7 @@ import {
 	executeCuePrompt,
 	stopCueRun,
 	getActiveProcesses,
+	getCueProcessList,
 	recordCueHistoryEntry,
 	type CueExecutionConfig,
 } from '../../../main/cue/cue-executor';
@@ -1302,6 +1304,51 @@ describe('cue-executor', () => {
 			const result = await resultPromise;
 
 			expect(result.stdout).toBe(rawOutput);
+		});
+	});
+
+	describe('getCueProcessList', () => {
+		it('should return empty array when no active processes', () => {
+			expect(getCueProcessList()).toEqual([]);
+		});
+
+		it('should return process info during active run', async () => {
+			const config = createExecutionConfig({ runId: 'list-test-run', toolType: 'claude-code' });
+
+			const resultPromise = executeCuePrompt(config);
+			await vi.advanceTimersByTimeAsync(0);
+
+			const list = getCueProcessList();
+			expect(list).toHaveLength(1);
+			expect(list[0].runId).toBe('list-test-run');
+			expect(list[0].pid).toBe(12345);
+			expect(list[0].toolType).toBe('claude-code');
+			expect(list[0].cwd).toBe('/projects/test');
+			expect(list[0].command).toBe('claude');
+			expect(Array.isArray(list[0].args)).toBe(true);
+			expect(typeof list[0].startTime).toBe('number');
+
+			mockChild.emit('close', 0);
+			await resultPromise;
+		});
+
+		it('should exclude completed processes', async () => {
+			const config = createExecutionConfig({ runId: 'completed-run' });
+
+			const resultPromise = executeCuePrompt(config);
+			await vi.advanceTimersByTimeAsync(0);
+
+			// Process is active — should appear in list
+			const activeEntry = getActiveProcesses().get('completed-run');
+			expect(activeEntry).toBeDefined();
+			expect(getCueProcessList().some((p) => p.runId === 'completed-run')).toBe(true);
+
+			mockChild.emit('close', 0);
+			await resultPromise;
+
+			// Process completed — should be removed
+			expect(getActiveProcesses().has('completed-run')).toBe(false);
+			expect(getCueProcessList().some((p) => p.runId === 'completed-run')).toBe(false);
 		});
 	});
 });

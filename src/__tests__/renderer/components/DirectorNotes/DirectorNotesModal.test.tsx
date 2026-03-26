@@ -51,11 +51,22 @@ vi.mock('../../../../renderer/components/DirectorNotes/UnifiedHistoryTab', () =>
 }));
 
 vi.mock('../../../../renderer/components/DirectorNotes/AIOverviewTab', () => ({
-	AIOverviewTab: ({ theme, onSynopsisReady }: { theme: Theme; onSynopsisReady?: () => void }) => (
+	AIOverviewTab: ({
+		theme,
+		onSynopsisReady,
+		onProgressChange,
+	}: {
+		theme: Theme;
+		onSynopsisReady?: () => void;
+		onProgressChange?: (percent: number) => void;
+	}) => (
 		<div data-testid="ai-overview-tab">
 			AI Overview Content
 			<button data-testid="trigger-synopsis-ready" onClick={() => onSynopsisReady?.()}>
 				Trigger Ready
+			</button>
+			<button data-testid="trigger-progress" onClick={() => onProgressChange?.(42)}>
+				Trigger Progress
 			</button>
 		</div>
 	),
@@ -517,6 +528,22 @@ describe('DirectorNotesModal', () => {
 				fireEvent.click(screen.getByTestId('trigger-synopsis-ready'));
 			});
 
+			expect(screen.queryByText('(generating...)')).not.toBeInTheDocument();
+		});
+
+		it('shows progress percentage in tab indicator when progress updates', async () => {
+			renderModal();
+
+			await waitFor(() => {
+				expect(screen.getByText('(generating...)')).toBeInTheDocument();
+			});
+
+			// Trigger progress update
+			await act(async () => {
+				fireEvent.click(screen.getByTestId('trigger-progress'));
+			});
+
+			expect(screen.getByText('(42%)')).toBeInTheDocument();
 			expect(screen.queryByText('(generating...)')).not.toBeInTheDocument();
 		});
 

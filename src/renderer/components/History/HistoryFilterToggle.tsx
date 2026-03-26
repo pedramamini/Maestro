@@ -1,6 +1,6 @@
 import { memo } from 'react';
-import { Bot, User, Zap } from 'lucide-react';
 import type { Theme, HistoryEntryType } from '../../types';
+import { getPillColor, getEntryIcon } from './historyConstants';
 
 export interface HistoryFilterToggleProps {
 	activeFilters: Set<HistoryEntryType>;
@@ -9,50 +9,6 @@ export interface HistoryFilterToggleProps {
 	/** Which filter types to display. Defaults to all types when omitted. */
 	visibleTypes?: HistoryEntryType[];
 }
-
-// Get pill color based on type
-const getPillColor = (type: HistoryEntryType, theme: Theme) => {
-	switch (type) {
-		case 'AUTO':
-			return {
-				bg: theme.colors.warning + '20',
-				text: theme.colors.warning,
-				border: theme.colors.warning + '40',
-			};
-		case 'USER':
-			return {
-				bg: theme.colors.accent + '20',
-				text: theme.colors.accent,
-				border: theme.colors.accent + '40',
-			};
-		case 'CUE':
-			return {
-				bg: '#06b6d420',
-				text: '#06b6d4',
-				border: '#06b6d440',
-			};
-		default:
-			return {
-				bg: theme.colors.bgActivity,
-				text: theme.colors.textDim,
-				border: theme.colors.border,
-			};
-	}
-};
-
-// Get icon for entry type
-const getEntryIcon = (type: HistoryEntryType) => {
-	switch (type) {
-		case 'AUTO':
-			return Bot;
-		case 'USER':
-			return User;
-		case 'CUE':
-			return Zap;
-		default:
-			return Bot;
-	}
-};
 
 const ALL_TYPES: HistoryEntryType[] = ['AUTO', 'USER', 'CUE'];
 

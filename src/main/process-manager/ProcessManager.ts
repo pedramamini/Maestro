@@ -1,6 +1,7 @@
 // src/main/process-manager/ProcessManager.ts
 
 import { EventEmitter } from 'events';
+import { execFile } from 'child_process';
 import type {
 	ProcessConfig,
 	ManagedProcess,
@@ -15,7 +16,11 @@ import { DataBufferManager } from './handlers/DataBufferManager';
 import { LocalCommandRunner } from './runners/LocalCommandRunner';
 import { SshCommandRunner } from './runners/SshCommandRunner';
 import { logger } from '../utils/logger';
+import { isWindows } from '../../shared/platformDetection';
 import type { SshRemoteConfig } from '../../shared/types';
+
+/** Time (ms) to wait for a PTY process to exit after SIGTERM before sending SIGKILL. */
+const PTY_KILL_ESCALATION_MS = 2000;
 
 /**
  * ProcessManager orchestrates spawning and managing processes for sessions.
@@ -44,9 +49,24 @@ export class ProcessManager extends EventEmitter {
 	}
 
 	/**
-	 * Spawn a new process for a session
+	 * Spawn a new process for a session.
+	 *
+	 * If a process already exists for the given sessionId, it is killed first
+	 * to prevent orphaned PTY/child processes that are no longer tracked.
 	 */
 	spawn(config: ProcessConfig): SpawnResult {
+		// Kill any existing process for this sessionId to prevent orphans.
+		// This guards against double-spawn race conditions where a second spawn
+		// overwrites the map entry and the first process becomes untracked.
+		const existing = this.processes.get(config.sessionId);
+		if (existing) {
+			logger.warn('[ProcessManager] Killing existing process before re-spawn', 'ProcessManager', {
+				sessionId: config.sessionId,
+				existingPid: existing.pid,
+			});
+			this.kill(config.sessionId);
+		}
+
 		const usePty = this.shouldUsePty(config);
 
 		if (usePty) {
@@ -116,8 +136,12 @@ export class ProcessManager extends EventEmitter {
 
 	/**
 	 * Send interrupt signal (SIGINT/Ctrl+C) to a process.
-	 * For child processes, escalates to SIGTERM if the process doesn't exit
+	 * For child processes, escalates to kill() if the process doesn't exit
 	 * within a short timeout (Claude Code may not immediately exit on SIGINT).
+	 *
+	 * On Windows, POSIX signals are not supported for shell-spawned processes,
+	 * so we write Ctrl+C (\x03) to stdin instead. If that doesn't work, the
+	 * escalation timer falls through to kill() which uses taskkill /t /f.
 	 */
 	interrupt(sessionId: string): boolean {
 		const process = this.processes.get(sessionId);
@@ -129,15 +153,38 @@ export class ProcessManager extends EventEmitter {
 				return true;
 			} else if (process.childProcess) {
 				const child = process.childProcess;
-				child.kill('SIGINT');
 
-				// Escalate to SIGTERM if the process doesn't exit promptly.
+				if (isWindows()) {
+					// On Windows, child.kill('SIGINT') is unreliable for shell-spawned
+					// processes. Write Ctrl+C to stdin as a gentle interrupt instead.
+					if (child.stdin && !child.stdin.destroyed && !child.stdin.writableEnded) {
+						child.stdin.write('\x03');
+						logger.debug(
+							'[ProcessManager] Wrote Ctrl+C to stdin for Windows interrupt',
+							'ProcessManager',
+							{ sessionId }
+						);
+					} else {
+						logger.warn(
+							'[ProcessManager] stdin unavailable for Windows interrupt, will escalate to kill',
+							'ProcessManager',
+							{ sessionId }
+						);
+					}
+				} else {
+					child.kill('SIGINT');
+				}
+
+				// Escalate to forceful kill if the process doesn't exit promptly.
 				// Some agents (e.g., Claude Code --print) may not exit on SIGINT alone.
+				// On Windows, we don't call child.kill('SIGINT') because it's unreliable
+				// for shell-spawned processes. The .killed flag remains false, which
+				// correctly allows the escalation timer to fire.
 				const escalationTimer = setTimeout(() => {
 					const stillRunning = this.processes.get(sessionId);
 					if (stillRunning?.childProcess && !stillRunning.childProcess.killed) {
 						logger.warn(
-							'[ProcessManager] Process did not exit after SIGINT, escalating to SIGTERM',
+							'[ProcessManager] Process did not exit after interrupt, escalating to kill',
 							'ProcessManager',
 							{ sessionId, pid: stillRunning.pid }
 						);
@@ -163,22 +210,70 @@ export class ProcessManager extends EventEmitter {
 	}
 
 	/**
-	 * Kill a specific process
+	 * Kill a specific process.
+	 *
+	 * PTY processes receive SIGTERM first; if the process hasn't exited after
+	 * PTY_KILL_ESCALATION_MS, it is sent SIGKILL. The process is removed from
+	 * the tracking map immediately so that a replacement can be spawned, but the
+	 * escalation timer keeps a reference to ensure the OS-level process dies.
 	 */
 	kill(sessionId: string): boolean {
-		const process = this.processes.get(sessionId);
-		if (!process) return false;
+		const proc = this.processes.get(sessionId);
+		if (!proc) return false;
 
 		try {
-			if (process.dataBufferTimeout) {
-				clearTimeout(process.dataBufferTimeout);
+			if (proc.dataBufferTimeout) {
+				clearTimeout(proc.dataBufferTimeout);
 			}
 			this.bufferManager.flushDataBuffer(sessionId);
 
-			if (process.isTerminal && process.ptyProcess) {
-				process.ptyProcess.kill();
-			} else if (process.childProcess) {
-				process.childProcess.kill('SIGTERM');
+			if (proc.isTerminal && proc.ptyProcess) {
+				const ptyProc = proc.ptyProcess;
+				const pid = proc.pid;
+
+				// Use SIGTERM (not the default SIGHUP which shells may survive on macOS)
+				try {
+					ptyProc.kill('SIGTERM');
+				} catch {
+					// Process may already be dead
+				}
+
+				// Escalate to SIGKILL if the process doesn't exit promptly.
+				// The ptyProcess reference is captured by the closure so the
+				// process can be forcefully terminated even after map removal.
+				const escalationTimer = setTimeout(() => {
+					try {
+						// node-pty's kill() is the only portable way to signal the PTY child.
+						// If the process already exited, this is a harmless no-op.
+						ptyProc.kill('SIGKILL');
+						logger.warn(
+							'[ProcessManager] PTY did not exit after SIGTERM, escalated to SIGKILL',
+							'ProcessManager',
+							{ sessionId, pid }
+						);
+					} catch {
+						// Process already exited — expected after normal SIGTERM
+					}
+				}, PTY_KILL_ESCALATION_MS);
+
+				// Cancel escalation if the PTY exits on its own
+				ptyProc.onExit(() => {
+					clearTimeout(escalationTimer);
+				});
+			} else if (proc.childProcess) {
+				const pid = proc.childProcess.pid;
+				if (isWindows() && pid) {
+					this.killWindowsProcessTree(pid, sessionId);
+				} else if (isWindows()) {
+					logger.warn(
+						'[ProcessManager] pid unavailable for Windows taskkill, falling back to SIGTERM',
+						'ProcessManager',
+						{ sessionId }
+					);
+					proc.childProcess.kill('SIGTERM');
+				} else {
+					proc.childProcess.kill('SIGTERM');
+				}
 			}
 			this.processes.delete(sessionId);
 			return true;
@@ -192,10 +287,35 @@ export class ProcessManager extends EventEmitter {
 	}
 
 	/**
-	 * Kill all managed processes
+	 * Kill a process and its entire child tree on Windows using taskkill.
+	 * This is necessary because POSIX signals (SIGINT/SIGTERM) don't reliably
+	 * terminate shell-spawned processes on Windows.
+	 */
+	private killWindowsProcessTree(pid: number, sessionId: string): void {
+		logger.info(
+			'[ProcessManager] Using taskkill to terminate process tree on Windows',
+			'ProcessManager',
+			{ sessionId, pid }
+		);
+		execFile('taskkill', ['/pid', String(pid), '/t', '/f'], (error) => {
+			if (error) {
+				// taskkill returns non-zero if the process is already dead, which is fine
+				logger.debug(
+					'[ProcessManager] taskkill exited with error (process may already be terminated)',
+					'ProcessManager',
+					{ sessionId, pid, error: String(error) }
+				);
+			}
+		});
+	}
+
+	/**
+	 * Kill all managed processes.
+	 * Snapshots the session IDs first because kill() deletes from the map.
 	 */
 	killAll(): void {
-		for (const [sessionId] of this.processes) {
+		const sessionIds = [...this.processes.keys()];
+		for (const sessionId of sessionIds) {
 			this.kill(sessionId);
 		}
 	}

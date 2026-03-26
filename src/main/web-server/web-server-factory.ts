@@ -11,13 +11,12 @@ import { getHistoryManager } from '../history-manager';
 import { logger } from '../utils/logger';
 import { isWebContentsAvailable } from '../utils/safe-send';
 import type { ProcessManager } from '../process-manager';
-import type { StoredSession } from '../stores/types';
+import type { StoredSession, SettingsStoreInterface as SettingsStore } from '../stores/types';
 import type { Group } from '../../shared/types';
 
-/** Store interface for settings */
-interface SettingsStore {
-	get<T>(key: string, defaultValue?: T): T;
-}
+/** UUID v4 format regex for validating stored security tokens.
+ *  Enforces version nibble (4) and variant bits ([89ab]). */
+const UUID_V4_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 /** Store interface for sessions */
 interface SessionsStore {
@@ -59,7 +58,36 @@ export function createWebServerFactory(deps: WebServerFactoryDependencies) {
 		const useCustomPort = settingsStore.get('webInterfaceUseCustomPort', false);
 		const customPort = settingsStore.get('webInterfaceCustomPort', 8080);
 		const port = useCustomPort ? customPort : 0;
-		const server = new WebServer(port); // Custom or random port with auto-generated security token
+
+		// Determine security token: persistent or ephemeral
+		let securityToken: string | undefined;
+		const persistentWebLink = settingsStore.get('persistentWebLink', false);
+		if (persistentWebLink) {
+			const storedToken = settingsStore.get<string | null>('webAuthToken', null);
+			// Validate stored token is a proper UUID before trusting it
+			if (storedToken && UUID_V4_REGEX.test(storedToken)) {
+				securityToken = storedToken;
+			} else {
+				if (storedToken) {
+					logger.warn(
+						'Stored webAuthToken is not a valid UUID, generating new token',
+						'WebServerFactory'
+					);
+				}
+				securityToken = randomUUID();
+				try {
+					settingsStore.set('webAuthToken', securityToken);
+				} catch {
+					// Persist failure is non-fatal — server starts with an ephemeral token
+					logger.warn(
+						'Failed to persist new webAuthToken, URL will not survive restart',
+						'WebServerFactory'
+					);
+				}
+			}
+		}
+
+		const server = new WebServer(port, securityToken);
 
 		// Set up callback for web server to fetch sessions list
 		server.setGetSessionsCallback(() => {
@@ -641,13 +669,21 @@ export function createWebServerFactory(deps: WebServerFactoryDependencies) {
 					resolve('');
 					return;
 				}
-				mainWindow.webContents.send('remote:getAutoRunDocContent', sessionId, filename, responseChannel);
+				mainWindow.webContents.send(
+					'remote:getAutoRunDocContent',
+					sessionId,
+					filename,
+					responseChannel
+				);
 
 				const timeoutId = setTimeout(() => {
 					if (resolved) return;
 					resolved = true;
 					ipcMain.removeListener(responseChannel, handleResponse);
-					logger.warn(`getAutoRunDocContent callback timed out for session ${sessionId}`, 'WebServer');
+					logger.warn(
+						`getAutoRunDocContent callback timed out for session ${sessionId}`,
+						'WebServer'
+					);
 					resolve('');
 				}, 10000);
 			});
@@ -655,42 +691,50 @@ export function createWebServerFactory(deps: WebServerFactoryDependencies) {
 
 		// Set up callback for web server to save Auto Run document content
 		// Uses IPC request-response pattern with timeout
-		server.setSaveAutoRunDocCallback(async (sessionId: string, filename: string, content: string) => {
-			const mainWindow = getMainWindow();
-			if (!mainWindow) {
-				logger.warn('mainWindow is null for saveAutoRunDoc', 'WebServer');
-				return false;
-			}
-
-			return new Promise((resolve) => {
-				const responseChannel = `remote:saveAutoRunDoc:response:${randomUUID()}`;
-				let resolved = false;
-
-				const handleResponse = (_event: Electron.IpcMainEvent, result: any) => {
-					if (resolved) return;
-					resolved = true;
-					clearTimeout(timeoutId);
-					resolve(result ?? false);
-				};
-
-				ipcMain.once(responseChannel, handleResponse);
-				if (!isWebContentsAvailable(mainWindow)) {
-					logger.warn('webContents is not available for saveAutoRunDoc', 'WebServer');
-					ipcMain.removeListener(responseChannel, handleResponse);
-					resolve(false);
-					return;
+		server.setSaveAutoRunDocCallback(
+			async (sessionId: string, filename: string, content: string) => {
+				const mainWindow = getMainWindow();
+				if (!mainWindow) {
+					logger.warn('mainWindow is null for saveAutoRunDoc', 'WebServer');
+					return false;
 				}
-				mainWindow.webContents.send('remote:saveAutoRunDoc', sessionId, filename, content, responseChannel);
 
-				const timeoutId = setTimeout(() => {
-					if (resolved) return;
-					resolved = true;
-					ipcMain.removeListener(responseChannel, handleResponse);
-					logger.warn(`saveAutoRunDoc callback timed out for session ${sessionId}`, 'WebServer');
-					resolve(false);
-				}, 10000);
-			});
-		});
+				return new Promise((resolve) => {
+					const responseChannel = `remote:saveAutoRunDoc:response:${randomUUID()}`;
+					let resolved = false;
+
+					const handleResponse = (_event: Electron.IpcMainEvent, result: any) => {
+						if (resolved) return;
+						resolved = true;
+						clearTimeout(timeoutId);
+						resolve(result ?? false);
+					};
+
+					ipcMain.once(responseChannel, handleResponse);
+					if (!isWebContentsAvailable(mainWindow)) {
+						logger.warn('webContents is not available for saveAutoRunDoc', 'WebServer');
+						ipcMain.removeListener(responseChannel, handleResponse);
+						resolve(false);
+						return;
+					}
+					mainWindow.webContents.send(
+						'remote:saveAutoRunDoc',
+						sessionId,
+						filename,
+						content,
+						responseChannel
+					);
+
+					const timeoutId = setTimeout(() => {
+						if (resolved) return;
+						resolved = true;
+						ipcMain.removeListener(responseChannel, handleResponse);
+						logger.warn(`saveAutoRunDoc callback timed out for session ${sessionId}`, 'WebServer');
+						resolve(false);
+					}, 10000);
+				});
+			}
+		);
 
 		// Set up callback for web server to read settings
 		// Reads directly from settingsStore — maps store keys to WebSettings shape
@@ -785,42 +829,51 @@ export function createWebServerFactory(deps: WebServerFactoryDependencies) {
 
 		// Set up callback for web server to create a session
 		// Uses IPC request-response pattern — renderer creates the session and responds with sessionId
-		server.setCreateSessionCallback(async (name: string, toolType: string, cwd: string, groupId?: string) => {
-			const mainWindow = getMainWindow();
-			if (!mainWindow) {
-				logger.warn('mainWindow is null for createSession', 'WebServer');
-				return null;
-			}
-
-			return new Promise((resolve) => {
-				const responseChannel = `remote:createSession:response:${randomUUID()}`;
-				let resolved = false;
-
-				const handleResponse = (_event: Electron.IpcMainEvent, result: any) => {
-					if (resolved) return;
-					resolved = true;
-					clearTimeout(timeoutId);
-					resolve(result || null);
-				};
-
-				ipcMain.once(responseChannel, handleResponse);
-				if (!isWebContentsAvailable(mainWindow)) {
-					logger.warn('webContents is not available for createSession', 'WebServer');
-					ipcMain.removeListener(responseChannel, handleResponse);
-					resolve(null);
-					return;
+		server.setCreateSessionCallback(
+			async (name: string, toolType: string, cwd: string, groupId?: string) => {
+				const mainWindow = getMainWindow();
+				if (!mainWindow) {
+					logger.warn('mainWindow is null for createSession', 'WebServer');
+					return null;
 				}
-				mainWindow.webContents.send('remote:createSession', name, toolType, cwd, groupId, responseChannel);
 
-				const timeoutId = setTimeout(() => {
-					if (resolved) return;
-					resolved = true;
-					ipcMain.removeListener(responseChannel, handleResponse);
-					logger.warn(`createSession callback timed out`, 'WebServer');
-					resolve(null);
-				}, 10000);
-			});
-		});
+				return new Promise((resolve) => {
+					const responseChannel = `remote:createSession:response:${randomUUID()}`;
+					let resolved = false;
+
+					const handleResponse = (_event: Electron.IpcMainEvent, result: any) => {
+						if (resolved) return;
+						resolved = true;
+						clearTimeout(timeoutId);
+						resolve(result || null);
+					};
+
+					ipcMain.once(responseChannel, handleResponse);
+					if (!isWebContentsAvailable(mainWindow)) {
+						logger.warn('webContents is not available for createSession', 'WebServer');
+						ipcMain.removeListener(responseChannel, handleResponse);
+						resolve(null);
+						return;
+					}
+					mainWindow.webContents.send(
+						'remote:createSession',
+						name,
+						toolType,
+						cwd,
+						groupId,
+						responseChannel
+					);
+
+					const timeoutId = setTimeout(() => {
+						if (resolved) return;
+						resolved = true;
+						ipcMain.removeListener(responseChannel, handleResponse);
+						logger.warn(`createSession callback timed out`, 'WebServer');
+						resolve(null);
+					}, 10000);
+				});
+			}
+		);
 
 		// Set up callback for web server to delete a session
 		// Fire-and-forget pattern
@@ -1000,13 +1053,21 @@ export function createWebServerFactory(deps: WebServerFactoryDependencies) {
 					resolve(false);
 					return;
 				}
-				mainWindow.webContents.send('remote:moveSessionToGroup', sessionId, groupId, responseChannel);
+				mainWindow.webContents.send(
+					'remote:moveSessionToGroup',
+					sessionId,
+					groupId,
+					responseChannel
+				);
 
 				const timeoutId = setTimeout(() => {
 					if (resolved) return;
 					resolved = true;
 					ipcMain.removeListener(responseChannel, handleResponse);
-					logger.warn(`moveSessionToGroup callback timed out for session ${sessionId}`, 'WebServer');
+					logger.warn(
+						`moveSessionToGroup callback timed out for session ${sessionId}`,
+						'WebServer'
+					);
 					resolve(false);
 				}, 5000);
 			});
@@ -1173,7 +1234,12 @@ export function createWebServerFactory(deps: WebServerFactoryDependencies) {
 					resolve(null);
 					return;
 				}
-				mainWindow.webContents.send('remote:startGroupChat', topic, participantIds, responseChannel);
+				mainWindow.webContents.send(
+					'remote:startGroupChat',
+					topic,
+					participantIds,
+					responseChannel
+				);
 
 				const timeoutId = setTimeout(() => {
 					if (resolved) return;
@@ -1287,7 +1353,12 @@ export function createWebServerFactory(deps: WebServerFactoryDependencies) {
 					resolve(false);
 					return;
 				}
-				mainWindow.webContents.send('remote:sendGroupChatMessage', chatId, message, responseChannel);
+				mainWindow.webContents.send(
+					'remote:sendGroupChatMessage',
+					chatId,
+					message,
+					responseChannel
+				);
 
 				const timeoutId = setTimeout(() => {
 					if (resolved) return;
@@ -1327,13 +1398,21 @@ export function createWebServerFactory(deps: WebServerFactoryDependencies) {
 					resolve(false);
 					return;
 				}
-				mainWindow.webContents.send('remote:mergeContext', sourceSessionId, targetSessionId, responseChannel);
+				mainWindow.webContents.send(
+					'remote:mergeContext',
+					sourceSessionId,
+					targetSessionId,
+					responseChannel
+				);
 
 				const timeoutId = setTimeout(() => {
 					if (resolved) return;
 					resolved = true;
 					ipcMain.removeListener(responseChannel, handleResponse);
-					logger.warn(`mergeContext callback timed out for sessions ${sourceSessionId} → ${targetSessionId}`, 'WebServer');
+					logger.warn(
+						`mergeContext callback timed out for sessions ${sourceSessionId} → ${targetSessionId}`,
+						'WebServer'
+					);
 					resolve(false);
 				}, 30000);
 			});
@@ -1365,13 +1444,21 @@ export function createWebServerFactory(deps: WebServerFactoryDependencies) {
 					resolve(false);
 					return;
 				}
-				mainWindow.webContents.send('remote:transferContext', sourceSessionId, targetSessionId, responseChannel);
+				mainWindow.webContents.send(
+					'remote:transferContext',
+					sourceSessionId,
+					targetSessionId,
+					responseChannel
+				);
 
 				const timeoutId = setTimeout(() => {
 					if (resolved) return;
 					resolved = true;
 					ipcMain.removeListener(responseChannel, handleResponse);
-					logger.warn(`transferContext callback timed out for sessions ${sourceSessionId} → ${targetSessionId}`, 'WebServer');
+					logger.warn(
+						`transferContext callback timed out for sessions ${sourceSessionId} → ${targetSessionId}`,
+						'WebServer'
+					);
 					resolve(false);
 				}, 30000);
 			});
@@ -1481,13 +1568,21 @@ export function createWebServerFactory(deps: WebServerFactoryDependencies) {
 					resolve(false);
 					return;
 				}
-				mainWindow.webContents.send('remote:toggleCueSubscription', subscriptionId, enabled, responseChannel);
+				mainWindow.webContents.send(
+					'remote:toggleCueSubscription',
+					subscriptionId,
+					enabled,
+					responseChannel
+				);
 
 				const timeoutId = setTimeout(() => {
 					if (resolved) return;
 					resolved = true;
 					ipcMain.removeListener(responseChannel, handleResponse);
-					logger.warn(`toggleCueSubscription callback timed out for ${subscriptionId}`, 'WebServer');
+					logger.warn(
+						`toggleCueSubscription callback timed out for ${subscriptionId}`,
+						'WebServer'
+					);
 					resolve(false);
 				}, 10000);
 			});
@@ -1519,7 +1614,12 @@ export function createWebServerFactory(deps: WebServerFactoryDependencies) {
 					resolve([]);
 					return;
 				}
-				mainWindow.webContents.send('remote:getCueActivity', sessionId, limit ?? 50, responseChannel);
+				mainWindow.webContents.send(
+					'remote:getCueActivity',
+					sessionId,
+					limit ?? 50,
+					responseChannel
+				);
 
 				const timeoutId = setTimeout(() => {
 					if (resolved) return;
@@ -1533,82 +1633,108 @@ export function createWebServerFactory(deps: WebServerFactoryDependencies) {
 
 		// ============ Usage Dashboard & Achievements Callbacks ============
 
-	// Get usage dashboard data — aggregates from session usage stats via IPC
-	server.setGetUsageDashboardCallback(async (timeRange: 'day' | 'week' | 'month' | 'all') => {
-		const mainWindow = getMainWindow();
-		if (!mainWindow) {
-			logger.warn('mainWindow is null for getUsageDashboard', 'WebServer');
-			return { totalTokensIn: 0, totalTokensOut: 0, totalCost: 0, sessionBreakdown: [], dailyUsage: [] };
-		}
-
-		return new Promise((resolve) => {
-			const responseChannel = `remote:getUsageDashboard:response:${randomUUID()}`;
-			let resolved = false;
-
-			const handleResponse = (_event: Electron.IpcMainEvent, result: any) => {
-				if (resolved) return;
-				resolved = true;
-				clearTimeout(timeoutId);
-				resolve(result ?? { totalTokensIn: 0, totalTokensOut: 0, totalCost: 0, sessionBreakdown: [], dailyUsage: [] });
-			};
-
-			ipcMain.once(responseChannel, handleResponse);
-			if (!isWebContentsAvailable(mainWindow)) {
-				logger.warn('webContents is not available for getUsageDashboard', 'WebServer');
-				ipcMain.removeListener(responseChannel, handleResponse);
-				resolve({ totalTokensIn: 0, totalTokensOut: 0, totalCost: 0, sessionBreakdown: [], dailyUsage: [] });
-				return;
+		// Get usage dashboard data — aggregates from session usage stats via IPC
+		server.setGetUsageDashboardCallback(async (timeRange: 'day' | 'week' | 'month' | 'all') => {
+			const mainWindow = getMainWindow();
+			if (!mainWindow) {
+				logger.warn('mainWindow is null for getUsageDashboard', 'WebServer');
+				return {
+					totalTokensIn: 0,
+					totalTokensOut: 0,
+					totalCost: 0,
+					sessionBreakdown: [],
+					dailyUsage: [],
+				};
 			}
-			mainWindow.webContents.send('remote:getUsageDashboard', timeRange, responseChannel);
 
-			const timeoutId = setTimeout(() => {
-				if (resolved) return;
-				resolved = true;
-				ipcMain.removeListener(responseChannel, handleResponse);
-				logger.warn('getUsageDashboard callback timed out', 'WebServer');
-				resolve({ totalTokensIn: 0, totalTokensOut: 0, totalCost: 0, sessionBreakdown: [], dailyUsage: [] });
-			}, 15000);
+			return new Promise((resolve) => {
+				const responseChannel = `remote:getUsageDashboard:response:${randomUUID()}`;
+				let resolved = false;
+
+				const handleResponse = (_event: Electron.IpcMainEvent, result: any) => {
+					if (resolved) return;
+					resolved = true;
+					clearTimeout(timeoutId);
+					resolve(
+						result ?? {
+							totalTokensIn: 0,
+							totalTokensOut: 0,
+							totalCost: 0,
+							sessionBreakdown: [],
+							dailyUsage: [],
+						}
+					);
+				};
+
+				ipcMain.once(responseChannel, handleResponse);
+				if (!isWebContentsAvailable(mainWindow)) {
+					logger.warn('webContents is not available for getUsageDashboard', 'WebServer');
+					ipcMain.removeListener(responseChannel, handleResponse);
+					resolve({
+						totalTokensIn: 0,
+						totalTokensOut: 0,
+						totalCost: 0,
+						sessionBreakdown: [],
+						dailyUsage: [],
+					});
+					return;
+				}
+				mainWindow.webContents.send('remote:getUsageDashboard', timeRange, responseChannel);
+
+				const timeoutId = setTimeout(() => {
+					if (resolved) return;
+					resolved = true;
+					ipcMain.removeListener(responseChannel, handleResponse);
+					logger.warn('getUsageDashboard callback timed out', 'WebServer');
+					resolve({
+						totalTokensIn: 0,
+						totalTokensOut: 0,
+						totalCost: 0,
+						sessionBreakdown: [],
+						dailyUsage: [],
+					});
+				}, 15000);
+			});
 		});
-	});
 
-	// Get achievements data — aggregates from settings store via IPC
-	server.setGetAchievementsCallback(async () => {
-		const mainWindow = getMainWindow();
-		if (!mainWindow) {
-			logger.warn('mainWindow is null for getAchievements', 'WebServer');
-			return [];
-		}
-
-		return new Promise((resolve) => {
-			const responseChannel = `remote:getAchievements:response:${randomUUID()}`;
-			let resolved = false;
-
-			const handleResponse = (_event: Electron.IpcMainEvent, result: any) => {
-				if (resolved) return;
-				resolved = true;
-				clearTimeout(timeoutId);
-				resolve(result ?? []);
-			};
-
-			ipcMain.once(responseChannel, handleResponse);
-			if (!isWebContentsAvailable(mainWindow)) {
-				logger.warn('webContents is not available for getAchievements', 'WebServer');
-				ipcMain.removeListener(responseChannel, handleResponse);
-				resolve([]);
-				return;
+		// Get achievements data — aggregates from settings store via IPC
+		server.setGetAchievementsCallback(async () => {
+			const mainWindow = getMainWindow();
+			if (!mainWindow) {
+				logger.warn('mainWindow is null for getAchievements', 'WebServer');
+				return [];
 			}
-			mainWindow.webContents.send('remote:getAchievements', responseChannel);
 
-			const timeoutId = setTimeout(() => {
-				if (resolved) return;
-				resolved = true;
-				ipcMain.removeListener(responseChannel, handleResponse);
-				logger.warn('getAchievements callback timed out', 'WebServer');
-				resolve([]);
-			}, 10000);
+			return new Promise((resolve) => {
+				const responseChannel = `remote:getAchievements:response:${randomUUID()}`;
+				let resolved = false;
+
+				const handleResponse = (_event: Electron.IpcMainEvent, result: any) => {
+					if (resolved) return;
+					resolved = true;
+					clearTimeout(timeoutId);
+					resolve(result ?? []);
+				};
+
+				ipcMain.once(responseChannel, handleResponse);
+				if (!isWebContentsAvailable(mainWindow)) {
+					logger.warn('webContents is not available for getAchievements', 'WebServer');
+					ipcMain.removeListener(responseChannel, handleResponse);
+					resolve([]);
+					return;
+				}
+				mainWindow.webContents.send('remote:getAchievements', responseChannel);
+
+				const timeoutId = setTimeout(() => {
+					if (resolved) return;
+					resolved = true;
+					ipcMain.removeListener(responseChannel, handleResponse);
+					logger.warn('getAchievements callback timed out', 'WebServer');
+					resolve([]);
+				}, 10000);
+			});
 		});
-	});
 
-	return server;
+		return server;
 	};
 }

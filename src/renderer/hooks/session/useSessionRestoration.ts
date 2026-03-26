@@ -77,6 +77,38 @@ export function useSessionRestoration(): SessionRestorationReturn {
 		});
 	}, []) as React.MutableRefObject<boolean>;
 
+	// --- validateAgentInBackground ---
+	// Checks agent availability without blocking session restoration.
+	// If the agent is unavailable, marks the session with error state.
+	// Called after splash hides — never blocks startup.
+	const validateAgentInBackground = useCallback(
+		async (sessionId: string, toolType: string, sshRemoteId: string | undefined) => {
+			try {
+				const agent = await window.maestro.agents.get(toolType, sshRemoteId);
+				if (!agent) {
+					console.error(`[validateAgentInBackground] Agent not found for toolType: ${toolType}`);
+					setSessions((prev) =>
+						prev.map((s) =>
+							s.id === sessionId
+								? {
+										...s,
+										aiPid: -1,
+										state: 'error' as SessionState,
+									}
+								: s
+						)
+					);
+				}
+			} catch (err) {
+				// IPC failures are treated as transient (e.g. main process still
+				// starting). We don't mark the session as 'error' here because the
+				// agent may become available shortly after splash completes.
+				console.warn(`[validateAgentInBackground] Agent validation failed for ${toolType}:`, err);
+			}
+		},
+		[]
+	);
+
 	// --- fetchGitInfoInBackground ---
 	const fetchGitInfoInBackground = useCallback(
 		async (sessionId: string, cwd: string, sshRemoteId: string | undefined) => {
@@ -227,24 +259,10 @@ export function useSessionRestoration(): SessionRestorationReturn {
 				}
 			}
 
-			// Get agent definitions for both processes
-			const agent = await window.maestro.agents.get(aiAgentType);
-			if (!agent) {
-				console.error(`Agent not found for toolType: ${correctedSession.toolType}`);
-				return {
-					...correctedSession,
-					aiPid: -1,
-					terminalPid: 0,
-					state: 'error' as SessionState,
-					isLive: false,
-					liveUrl: undefined,
-				};
-			}
-
-			// Deferred spawn: AI processes are NOT started during session restore.
-			// - Batch mode agents spawn per message in useInputProcessing
-			// - Terminal uses runCommand (fresh shells per command)
-			// aiPid stays at 0 until the user sends their first message.
+			// Agent detection is deferred to background (see loadSessionsAndGroups)
+			// to avoid blocking splash screen on slow SSH or binary lookups.
+			// AI processes are NOT started during restore anyway - aiPid stays
+			// at 0 until the user sends their first message.
 
 			// Get SSH remote ID for remote git operations
 			const sshRemoteId =
@@ -256,21 +274,46 @@ export function useSessionRestoration(): SessionRestorationReturn {
 
 			const isRemoteSession = !!sshRemoteId;
 
-			// For local sessions, check git status synchronously (fast, sub-100ms)
-			// For remote sessions, use persisted value or default, then update in background
+			// For local sessions, fetch git info with a timeout to prevent
+			// slow/unreachable filesystems from blocking the splash screen.
+			// For remote sessions, use persisted values and update in background.
 			let isGitRepo = correctedSession.isGitRepo ?? false;
 			let gitBranches = correctedSession.gitBranches;
 			let gitTags = correctedSession.gitTags;
 			let gitRefsCacheTime = correctedSession.gitRefsCacheTime;
 
 			if (!isRemoteSession) {
-				isGitRepo = await gitService.isRepo(correctedSession.cwd, undefined);
-				if (isGitRepo) {
-					[gitBranches, gitTags] = await Promise.all([
-						gitService.getBranches(correctedSession.cwd, undefined),
-						gitService.getTags(correctedSession.cwd, undefined),
+				const GIT_TIMEOUT_MS = 5000;
+				// NOTE: On timeout, the inner git operations continue running in the
+				// background until the OS/filesystem eventually resolves/rejects them.
+				// This is a known trade-off of Promise.race — Promises are not cancellable.
+				try {
+					const gitResult = await Promise.race([
+						(async () => {
+							const repoCheck = await gitService.isRepo(correctedSession.cwd, undefined);
+							if (!repoCheck) return { isGitRepo: false } as const;
+							const [branches, tags] = await Promise.all([
+								gitService.getBranches(correctedSession.cwd, undefined),
+								gitService.getTags(correctedSession.cwd, undefined),
+							]);
+							return { isGitRepo: true, branches, tags } as const;
+						})(),
+						new Promise<null>((resolve) => setTimeout(() => resolve(null), GIT_TIMEOUT_MS)),
 					]);
-					gitRefsCacheTime = Date.now();
+					if (gitResult) {
+						isGitRepo = gitResult.isGitRepo;
+						if (gitResult.isGitRepo) {
+							gitBranches = gitResult.branches;
+							gitTags = gitResult.tags;
+							gitRefsCacheTime = Date.now();
+						}
+					} else {
+						console.warn(
+							`[restoreSession] Git info timed out after ${GIT_TIMEOUT_MS}ms for ${correctedSession.cwd}, using persisted values`
+						);
+					}
+				} catch (err) {
+					console.warn('[restoreSession] Git info failed, using persisted values:', err);
 				}
 			}
 
@@ -396,13 +439,20 @@ export function useSessionRestoration(): SessionRestorationReturn {
 						setActiveSessionId(restoredSessions[0].id);
 					}
 
-					// For remote (SSH) sessions, fetch git info in background
+					// Background tasks: agent validation + SSH git info.
+					// These run after splash hides so they never block startup.
 					for (const session of restoredSessions) {
 						const sshRemoteId =
 							session.sshRemoteId ||
 							(session.sessionSshRemoteConfig?.enabled
 								? session.sessionSshRemoteConfig.remoteId
-								: undefined);
+								: undefined) ||
+							undefined;
+
+						// Validate agent availability in background (SSH-aware)
+						validateAgentInBackground(session.id, session.toolType, sshRemoteId);
+
+						// For remote sessions, also fetch git info in background
 						if (sshRemoteId) {
 							fetchGitInfoInBackground(session.id, session.cwd, sshRemoteId);
 						}

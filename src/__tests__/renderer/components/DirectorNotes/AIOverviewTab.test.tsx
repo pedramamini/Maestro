@@ -79,6 +79,7 @@ beforeEach(() => {
 	(window as any).maestro = {
 		directorNotes: {
 			generateSynopsis: mockGenerateSynopsis,
+			onSynopsisProgress: () => () => {},
 		},
 	};
 
@@ -101,7 +102,7 @@ describe('AIOverviewTab', () => {
 
 		// Should show generating state - text appears in both progress bar and spinner
 		await waitFor(() => {
-			const elements = screen.getAllByText(/Generating synopsis/);
+			const elements = screen.getAllByText(/Starting/);
 			expect(elements.length).toBeGreaterThan(0);
 		});
 	});

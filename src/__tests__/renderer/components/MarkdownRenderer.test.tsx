@@ -1,6 +1,6 @@
 import React from 'react';
 import { describe, it, expect, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 import { MarkdownRenderer } from '../../../renderer/components/MarkdownRenderer';
 
 // Mock react-syntax-highlighter
@@ -19,6 +19,19 @@ vi.mock('lucide-react', () => ({
 	Clipboard: () => <span data-testid="clipboard-icon">Clipboard</span>,
 	Loader2: () => <span data-testid="loader-icon">Loader</span>,
 	ImageOff: () => <span data-testid="image-off-icon">ImageOff</span>,
+	Copy: () => <span data-testid="copy-icon">Copy</span>,
+	ExternalLink: () => <span data-testid="external-link-icon">ExternalLink</span>,
+	FileText: () => <span data-testid="file-text-icon">FileText</span>,
+	Target: () => <span data-testid="target-icon">Target</span>,
+}));
+
+// Mock fileExplorerStore for FileContextMenu's Document Graph action
+vi.mock('../../../renderer/stores/fileExplorerStore', () => ({
+	useFileExplorerStore: {
+		getState: () => ({
+			focusFileInGraph: vi.fn(),
+		}),
+	},
 }));
 
 const mockTheme = {
@@ -129,6 +142,95 @@ describe('MarkdownRenderer', () => {
 				<MarkdownRenderer {...defaultProps} content={maliciousContent} allowRawHtml={true} />
 			);
 			expect(container.innerHTML).not.toContain('javascript:');
+		});
+	});
+
+	describe('file context menu', () => {
+		// maestro-file:// protocol is stripped by ReactMarkdown — use raw HTML
+		// with data-maestro-file attribute (the same fallback used in production)
+		it('renders file context menu on right-click of a file link', () => {
+			const { container } = render(
+				<MarkdownRenderer
+					{...defaultProps}
+					content='<a href="#" data-maestro-file="report.csv">report.csv</a>'
+					allowRawHtml={true}
+					projectRoot="/Users/test/project"
+					onFileClick={vi.fn()}
+				/>
+			);
+			const link = container.querySelector('a[data-maestro-file]');
+			expect(link).not.toBeNull();
+
+			fireEvent.contextMenu(link!, { clientX: 150, clientY: 250 });
+
+			expect(screen.getByText('Preview')).toBeInTheDocument();
+			expect(screen.getByText('Copy Path')).toBeInTheDocument();
+			expect(screen.getByText('Open in Default App')).toBeInTheDocument();
+			// Should NOT show link menu items
+			expect(screen.queryByText('Copy Link')).toBeNull();
+			expect(screen.queryByText('Open in Browser')).toBeNull();
+		});
+
+		it('shows Document Graph option for markdown file references', () => {
+			const { container } = render(
+				<MarkdownRenderer
+					{...defaultProps}
+					content='<a href="#" data-maestro-file="README.md">README.md</a>'
+					allowRawHtml={true}
+					projectRoot="/Users/test/project"
+				/>
+			);
+			const link = container.querySelector('a[data-maestro-file]');
+			expect(link).not.toBeNull();
+			fireEvent.contextMenu(link!, { clientX: 150, clientY: 250 });
+
+			expect(screen.getByText('Document Graph')).toBeInTheDocument();
+		});
+
+		it('does not show Document Graph for non-markdown files', () => {
+			const { container } = render(
+				<MarkdownRenderer
+					{...defaultProps}
+					content='<a href="#" data-maestro-file="data.csv">data.csv</a>'
+					allowRawHtml={true}
+					projectRoot="/Users/test/project"
+				/>
+			);
+			const link = container.querySelector('a[data-maestro-file]');
+			expect(link).not.toBeNull();
+			fireEvent.contextMenu(link!, { clientX: 150, clientY: 250 });
+
+			expect(screen.queryByText('Document Graph')).toBeNull();
+			expect(screen.getByText('Copy Path')).toBeInTheDocument();
+		});
+	});
+
+	describe('link context menu', () => {
+		it('renders a context menu with Copy Link and Open in Browser on right-click', () => {
+			const { container } = render(
+				<MarkdownRenderer
+					{...defaultProps}
+					content="Visit [Example](https://example.com) for details"
+				/>
+			);
+			const link = container.querySelector('a[href="https://example.com"]');
+			expect(link).not.toBeNull();
+
+			fireEvent.contextMenu(link!, { clientX: 100, clientY: 200 });
+
+			expect(screen.getByText('Copy Link')).toBeInTheDocument();
+			expect(screen.getByText('Open in Browser')).toBeInTheDocument();
+		});
+
+		it('does not show context menu for links without href', () => {
+			const { container } = render(
+				<MarkdownRenderer {...defaultProps} content="Just **bold** text, no links" />
+			);
+
+			// Right-click on the container itself — no link, no menu
+			fireEvent.contextMenu(container.firstElementChild!, { clientX: 100, clientY: 200 });
+
+			expect(screen.queryByText('Copy Link')).toBeNull();
 		});
 	});
 });
