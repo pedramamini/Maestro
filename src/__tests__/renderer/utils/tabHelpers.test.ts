@@ -47,6 +47,7 @@ import {
 	navigateToLastUnifiedTab,
 	navigateToNextUnifiedTab,
 	navigateToPrevUnifiedTab,
+	navigateToClosestTerminalTab,
 	createMergedSession,
 	hasActiveWizard,
 	extractQuickTabName,
@@ -101,6 +102,8 @@ function createMockSession(overrides: Partial<Session> = {}): Session {
 		activeFileTabId: null,
 		unifiedTabOrder: [],
 		unifiedClosedTabHistory: [],
+		terminalTabs: [],
+		activeTerminalTabId: null,
 		...overrides,
 	};
 }
@@ -470,6 +473,28 @@ describe('tabHelpers', () => {
 			expect(result!.session.closedTabHistory).toHaveLength(1); // Still only the old one
 			expect(result!.session.closedTabHistory[0].tab.id).toBe('old-tab');
 		});
+
+		it('uses repaired order to find neighbor when unifiedTabOrder has stale refs', () => {
+			const tab1 = createMockTab({ id: 'tab-1' });
+			const tab2 = createMockTab({ id: 'tab-2' });
+			const session = createMockSession({
+				aiTabs: [tab1, tab2],
+				activeTabId: 'tab-2',
+				activeFileTabId: null,
+				unifiedTabOrder: [
+					{ type: 'ai', id: 'tab-1' },
+					{ type: 'ai', id: 'deleted-tab' }, // stale ref
+					{ type: 'ai', id: 'tab-2' },
+				],
+			});
+
+			// Close the active tab (tab-2). Without repaired order, the stale ref
+			// at index 1 would be the fallback neighbor and cause a bad lookup.
+			const result = closeTab(session, 'tab-2');
+			expect(result).not.toBeNull();
+			// Should fall back to tab-1 (the live tab to the left), not the stale ref
+			expect(result!.session.activeTabId).toBe('tab-1');
+		});
 	});
 
 	describe('reopenClosedTab', () => {
@@ -656,6 +681,20 @@ describe('tabHelpers', () => {
 			expect(result!.session).not.toBe(session);
 			expect(result!.session.activeFileTabId).toBeNull();
 			expect(result!.session.activeTabId).toBe('tab-1');
+		});
+
+		it('switches inputMode to ai when selecting an AI tab from terminal mode', () => {
+			const tab = createMockTab({ id: 'tab-1' });
+			const session = createMockSession({
+				aiTabs: [tab],
+				activeTabId: 'tab-1',
+				inputMode: 'terminal',
+			});
+
+			const result = setActiveTab(session, 'tab-1');
+
+			expect(result!.session).not.toBe(session);
+			expect(result!.session.inputMode).toBe('ai');
 		});
 	});
 
@@ -1321,12 +1360,12 @@ describe('tabHelpers', () => {
 		});
 
 		it('returns null if AI tab reference does not exist in aiTabs', () => {
-			const tab = createMockTab({ id: 'tab-1' });
 			const session = createMockSession({
-				aiTabs: [tab],
+				aiTabs: [],
 				unifiedTabOrder: [{ type: 'ai', id: 'non-existent' }],
 			});
 
+			// After pruning, the dead ref is removed and the order is empty
 			expect(navigateToUnifiedTabByIndex(session, 0)).toBeNull();
 		});
 
@@ -1377,6 +1416,52 @@ describe('tabHelpers', () => {
 			const result3 = navigateToUnifiedTabByIndex(session, 3);
 			expect(result3!.type).toBe('file');
 			expect(result3!.id).toBe('file-2');
+		});
+
+		it('resets inputMode to ai when navigating from terminal tab to AI tab', () => {
+			const aiTab = createMockTab({ id: 'ai-1' });
+			const terminalTab = { id: 'term-1', shellType: 'zsh', state: 'idle' as const };
+			const session = createMockSession({
+				aiTabs: [aiTab],
+				terminalTabs: [terminalTab] as any,
+				activeTabId: 'ai-1',
+				activeFileTabId: null,
+				inputMode: 'terminal',
+				activeTerminalTabId: 'term-1',
+				unifiedTabOrder: [
+					{ type: 'terminal', id: 'term-1' },
+					{ type: 'ai', id: 'ai-1' },
+				],
+			});
+
+			const result = navigateToUnifiedTabByIndex(session, 1);
+
+			expect(result!.type).toBe('ai');
+			expect(result!.session.inputMode).toBe('ai');
+			expect(result!.session.activeTerminalTabId).toBeNull();
+		});
+
+		it('resets inputMode to ai when navigating from terminal tab to file tab', () => {
+			const fileTab = createMockFileTab({ id: 'file-1' });
+			const terminalTab = { id: 'term-1', shellType: 'zsh', state: 'idle' as const };
+			const session = createMockSession({
+				aiTabs: [],
+				filePreviewTabs: [fileTab],
+				terminalTabs: [terminalTab] as any,
+				activeFileTabId: null,
+				inputMode: 'terminal',
+				activeTerminalTabId: 'term-1',
+				unifiedTabOrder: [
+					{ type: 'terminal', id: 'term-1' },
+					{ type: 'file', id: 'file-1' },
+				],
+			});
+
+			const result = navigateToUnifiedTabByIndex(session, 1);
+
+			expect(result!.type).toBe('file');
+			expect(result!.session.inputMode).toBe('ai');
+			expect(result!.session.activeTerminalTabId).toBeNull();
 		});
 	});
 
@@ -1490,7 +1575,7 @@ describe('tabHelpers', () => {
 			expect(session.aiTabs).toHaveLength(1);
 			expect(session.activeTabId).toBe(tabId);
 			expect(tabId).toBe('mock-generated-id'); // Uses mocked generateId
-			expect(session.autoRunFolderPath).toBe('/path/to/project/Auto Run Docs');
+			expect(session.autoRunFolderPath).toBe('/path/to/project/.maestro/playbooks');
 		});
 
 		it('creates a session with merged logs in the tab', () => {
@@ -1661,7 +1746,7 @@ describe('tabHelpers', () => {
 			expect(session.closedTabHistory).toEqual([]);
 			expect(session.shellCwd).toBe('/project');
 			expect(session.fileTreeAutoRefreshInterval).toBe(180);
-			expect(session.autoRunFolderPath).toBe('/project/Auto Run Docs');
+			expect(session.autoRunFolderPath).toBe('/project/.maestro/playbooks');
 		});
 
 		it('creates shell log with merged context message', () => {
@@ -2823,6 +2908,39 @@ describe('tabHelpers', () => {
 			expect(result).toHaveLength(1);
 			expect(result[0]).toEqual({ type: 'ai', id: 'tab-1' });
 		});
+
+		it('prunes stale entries whose tabs no longer exist', () => {
+			const tab1 = createMockTab({ id: 'tab-1' });
+			const session = createMockSession({
+				aiTabs: [tab1],
+				unifiedTabOrder: [
+					{ type: 'ai', id: 'tab-1' },
+					{ type: 'ai', id: 'deleted-tab' },
+				],
+			});
+
+			const result = getRepairedUnifiedTabOrder(session);
+			expect(result).toHaveLength(1);
+			expect(result[0]).toEqual({ type: 'ai', id: 'tab-1' });
+		});
+
+		it('removes duplicate live refs so navigation indices match buildUnifiedTabs', () => {
+			const tab1 = createMockTab({ id: 'tab-1' });
+			const tab2 = createMockTab({ id: 'tab-2' });
+			const session = createMockSession({
+				aiTabs: [tab1, tab2],
+				unifiedTabOrder: [
+					{ type: 'ai', id: 'tab-1' },
+					{ type: 'ai', id: 'tab-1' }, // duplicate
+					{ type: 'ai', id: 'tab-2' },
+				],
+			});
+
+			const result = getRepairedUnifiedTabOrder(session);
+			expect(result).toHaveLength(2);
+			expect(result[0]).toEqual({ type: 'ai', id: 'tab-1' });
+			expect(result[1]).toEqual({ type: 'ai', id: 'tab-2' });
+		});
 	});
 
 	describe('navigation with orphaned tabs', () => {
@@ -2937,6 +3055,135 @@ describe('tabHelpers', () => {
 				type: 'ai',
 				id: 'existing-1',
 			});
+		});
+	});
+
+	describe('navigateToClosestTerminalTab', () => {
+		it('returns null when no terminal tabs exist', () => {
+			const session = createMockSession({
+				aiTabs: [createMockTab({ id: 'ai-1' })],
+				activeTabId: 'ai-1',
+				unifiedTabOrder: [{ type: 'ai', id: 'ai-1' }],
+			});
+
+			expect(navigateToClosestTerminalTab(session)).toBeNull();
+		});
+
+		it('navigates to the only terminal tab', () => {
+			const session = createMockSession({
+				aiTabs: [createMockTab({ id: 'ai-1' })],
+				activeTabId: 'ai-1',
+				terminalTabs: [
+					{
+						id: 'term-1',
+						name: null,
+						shellType: 'zsh',
+						pid: 0,
+						cwd: '/test',
+						createdAt: Date.now(),
+						state: 'idle',
+					},
+				],
+				unifiedTabOrder: [
+					{ type: 'ai', id: 'ai-1' },
+					{ type: 'terminal', id: 'term-1' },
+				],
+			});
+
+			const result = navigateToClosestTerminalTab(session);
+			expect(result).not.toBeNull();
+			expect(result!.type).toBe('terminal');
+			expect(result!.id).toBe('term-1');
+			expect(result!.session.inputMode).toBe('terminal');
+		});
+
+		it('navigates to the closest terminal tab when multiple exist', () => {
+			const session = createMockSession({
+				aiTabs: [
+					createMockTab({ id: 'ai-1' }),
+					createMockTab({ id: 'ai-2' }),
+					createMockTab({ id: 'ai-3' }),
+				],
+				activeTabId: 'ai-2',
+				terminalTabs: [
+					{
+						id: 'term-1',
+						name: null,
+						shellType: 'zsh',
+						pid: 0,
+						cwd: '/test',
+						createdAt: Date.now(),
+						state: 'idle',
+					},
+					{
+						id: 'term-2',
+						name: null,
+						shellType: 'zsh',
+						pid: 0,
+						cwd: '/test',
+						createdAt: Date.now(),
+						state: 'idle',
+					},
+				],
+				unifiedTabOrder: [
+					{ type: 'terminal', id: 'term-1' },
+					{ type: 'ai', id: 'ai-1' },
+					{ type: 'ai', id: 'ai-2' },
+					{ type: 'ai', id: 'ai-3' },
+					{ type: 'terminal', id: 'term-2' },
+				],
+			});
+
+			const result = navigateToClosestTerminalTab(session);
+			expect(result).not.toBeNull();
+			expect(result!.type).toBe('terminal');
+			// ai-2 is at index 2, term-1 is at index 0 (dist=2), term-2 is at index 4 (dist=2)
+			// Equal distance — first found wins (term-1)
+			expect(result!.id).toBe('term-1');
+		});
+
+		it('stays on current terminal tab if already on one', () => {
+			const session = createMockSession({
+				aiTabs: [createMockTab({ id: 'ai-1' })],
+				activeTabId: 'ai-1',
+				inputMode: 'terminal',
+				activeTerminalTabId: 'term-1',
+				terminalTabs: [
+					{
+						id: 'term-1',
+						name: null,
+						shellType: 'zsh',
+						pid: 0,
+						cwd: '/test',
+						createdAt: Date.now(),
+						state: 'idle',
+					},
+					{
+						id: 'term-2',
+						name: null,
+						shellType: 'zsh',
+						pid: 0,
+						cwd: '/test',
+						createdAt: Date.now(),
+						state: 'idle',
+					},
+				],
+				unifiedTabOrder: [
+					{ type: 'ai', id: 'ai-1' },
+					{ type: 'terminal', id: 'term-1' },
+					{ type: 'terminal', id: 'term-2' },
+				],
+			});
+
+			const result = navigateToClosestTerminalTab(session);
+			expect(result).not.toBeNull();
+			expect(result!.type).toBe('terminal');
+			expect(result!.id).toBe('term-1');
+		});
+
+		it('returns null for empty session', () => {
+			const session = createMockSession({ unifiedTabOrder: [] });
+			expect(navigateToClosestTerminalTab(session)).toBeNull();
 		});
 	});
 });

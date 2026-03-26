@@ -63,7 +63,7 @@ export interface EditAgentModalData {
 
 /** Quick action modal data */
 export interface QuickActionModalData {
-	initialMode: 'main' | 'move-to-group';
+	initialMode: 'main' | 'move-to-group' | 'agents';
 }
 
 /** Confirmation modal data */
@@ -113,6 +113,12 @@ export interface AgentErrorModalData {
 /** Delete agent modal data */
 export interface DeleteAgentModalData {
 	session: Session;
+}
+
+/** Cue YAML editor data */
+export interface CueYamlEditorData {
+	sessionId: string;
+	projectRoot: string;
 }
 
 /** Worktree modal data (create/delete/PR) */
@@ -221,7 +227,10 @@ export type ModalId =
 	// Platform Warnings
 	| 'windowsWarning'
 	// Director's Notes
-	| 'directorNotes';
+	| 'directorNotes'
+	// Maestro Cue
+	| 'cueModal'
+	| 'cueYamlEditor';
 
 /**
  * Type mapping from ModalId to its data type.
@@ -252,6 +261,7 @@ export interface ModalDataMap {
 	firstRunCelebration: FirstRunCelebrationData;
 	keyboardMastery: KeyboardMasteryData;
 	lightbox: LightboxData;
+	cueYamlEditor: CueYamlEditorData;
 }
 
 // Helper type to get data type for a modal ID
@@ -325,6 +335,14 @@ export const useModalStore = create<ModalStore>()((set, get) => ({
 			if (current?.open && current.data === data) return state;
 			const newModals = new Map(state.modals);
 			newModals.set(id, { open: true, data });
+			// DEBUG: Trace rename modal open/close
+			if (id === 'renameTab') {
+				console.log('[DEBUG renameTab] openModal called', {
+					data,
+					wasOpen: current?.open,
+					hadData: !!current?.data,
+				});
+			}
 			return { modals: newModals };
 		});
 	},
@@ -336,6 +354,10 @@ export const useModalStore = create<ModalStore>()((set, get) => ({
 			if (!current?.open) return state;
 			const newModals = new Map(state.modals);
 			newModals.set(id, { open: false, data: undefined });
+			// DEBUG: Trace rename modal close
+			if (id === 'renameTab') {
+				console.log('[DEBUG renameTab] closeModal called', new Error().stack);
+			}
 			return { modals: newModals };
 		});
 	},
@@ -481,9 +503,9 @@ export function getModalActions() {
 		},
 
 		// Quick Actions Modal
-		setQuickActionOpen: (open: boolean) =>
-			open ? openModal('quickAction', { initialMode: 'main' }) : closeModal('quickAction'),
-		setQuickActionInitialMode: (mode: 'main' | 'move-to-group') =>
+		setQuickActionOpen: (open: boolean, mode?: 'main' | 'move-to-group' | 'agents') =>
+			open ? openModal('quickAction', { initialMode: mode ?? 'main' }) : closeModal('quickAction'),
+		setQuickActionInitialMode: (mode: 'main' | 'move-to-group' | 'agents') =>
 			updateModalData('quickAction', { initialMode: mode }),
 
 		// Lightbox Modal
@@ -766,6 +788,14 @@ export function getModalActions() {
 		setDirectorNotesOpen: (open: boolean) =>
 			open ? openModal('directorNotes') : closeModal('directorNotes'),
 
+		// Maestro Cue Modal
+		setCueModalOpen: (open: boolean) => (open ? openModal('cueModal') : closeModal('cueModal')),
+
+		// Maestro Cue YAML Editor (standalone, bypasses CueModal dashboard)
+		openCueYamlEditor: (sessionId: string, projectRoot: string) =>
+			openModal('cueYamlEditor', { sessionId, projectRoot }),
+		closeCueYamlEditor: () => closeModal('cueYamlEditor'),
+
 		// Lightbox refs replacement - use updateModalData instead
 		setLightboxIsGroupChat: (isGroupChat: boolean) => updateModalData('lightbox', { isGroupChat }),
 		setLightboxAllowDelete: (allowDelete: boolean) => updateModalData('lightbox', { allowDelete }),
@@ -856,6 +886,9 @@ export function useModalActions() {
 	const symphonyModalOpen = useModalStore(selectModalOpen('symphony'));
 	const windowsWarningModalOpen = useModalStore(selectModalOpen('windowsWarning'));
 	const directorNotesOpen = useModalStore(selectModalOpen('directorNotes'));
+	const cueModalOpen = useModalStore(selectModalOpen('cueModal'));
+	const cueYamlEditorOpen = useModalStore(selectModalOpen('cueYamlEditor'));
+	const cueYamlEditorData = useModalStore(selectModalData('cueYamlEditor'));
 
 	// Get stable actions
 	const actions = getModalActions();
@@ -1024,6 +1057,14 @@ export function useModalActions() {
 
 		// Director's Notes Modal
 		directorNotesOpen,
+
+		// Maestro Cue Modal
+		cueModalOpen,
+
+		// Maestro Cue YAML Editor (standalone)
+		cueYamlEditorOpen,
+		cueYamlEditorSessionId: cueYamlEditorData?.sessionId ?? null,
+		cueYamlEditorProjectRoot: cueYamlEditorData?.projectRoot ?? null,
 
 		// Lightbox ref replacements (now stored as data)
 		lightboxIsGroupChat: lightboxData?.isGroupChat ?? false,

@@ -2,16 +2,30 @@
  * EncoreTab - Encore Features settings tab for SettingsModal
  *
  * Contains: Feature flags for optional/experimental Maestro capabilities,
- * Director's Notes configuration (provider selection, agent config, lookback period).
+ * Director's Notes configuration (provider selection, agent config, lookback period),
+ * Usage & Stats configuration (stats collection, time ranges, WakaTime integration).
  */
 
-import { Clapperboard, ChevronDown, Settings, Check } from 'lucide-react';
+import { useState } from 'react';
+import {
+	Clapperboard,
+	ChevronDown,
+	Settings,
+	Check,
+	Database,
+	Music,
+	Lock,
+	Plus,
+	X,
+	Zap,
+} from 'lucide-react';
 import { useSettings } from '../../../hooks';
 import { useAgentConfiguration } from '../../../hooks/agent/useAgentConfiguration';
 import type { Theme, AgentConfig, ToolType } from '../../../types';
 import { AgentConfigPanel } from '../../shared/AgentConfigPanel';
 import { AGENT_TILES } from '../../Wizard/screens/AgentSelectionScreen';
 import { isBetaAgent } from '../../../../shared/agentMetadata';
+import { SYMPHONY_REGISTRY_URL } from '../../../../shared/symphony-constants';
 
 export interface EncoreTabProps {
 	theme: Theme;
@@ -19,8 +33,72 @@ export interface EncoreTabProps {
 }
 
 export function EncoreTab({ theme, isOpen }: EncoreTabProps) {
-	const { encoreFeatures, setEncoreFeatures, directorNotesSettings, setDirectorNotesSettings } =
-		useSettings();
+	const {
+		encoreFeatures,
+		setEncoreFeatures,
+		directorNotesSettings,
+		setDirectorNotesSettings,
+		symphonyRegistryUrls,
+		setSymphonyRegistryUrls,
+		statsCollectionEnabled,
+		setStatsCollectionEnabled,
+		defaultStatsTimeRange,
+		setDefaultStatsTimeRange,
+	} = useSettings();
+
+	// Symphony registry URL management
+	const [newRegistryUrl, setNewRegistryUrl] = useState('');
+	const [registryUrlError, setRegistryUrlError] = useState<string | null>(null);
+
+	const canonicalizeUrl = (raw: string): string => {
+		const u = new URL(raw.trim());
+		u.hash = '';
+		return u.href;
+	};
+
+	const handleAddRegistryUrl = () => {
+		const trimmed = newRegistryUrl.trim();
+		if (!trimmed) {
+			setRegistryUrlError('URL cannot be empty');
+			return;
+		}
+		let canonical: string;
+		try {
+			const parsed = new URL(trimmed);
+			if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') {
+				setRegistryUrlError('URL must use HTTP or HTTPS');
+				return;
+			}
+			canonical = canonicalizeUrl(trimmed);
+		} catch {
+			setRegistryUrlError('Invalid URL format');
+			return;
+		}
+		try {
+			if (canonical === canonicalizeUrl(SYMPHONY_REGISTRY_URL)) {
+				setRegistryUrlError('This is the default registry URL');
+				return;
+			}
+		} catch {
+			/* default URL should always parse */
+		}
+		const existing = new Set(
+			symphonyRegistryUrls.map((u) => {
+				try {
+					return canonicalizeUrl(u);
+				} catch {
+					return u.trim();
+				}
+			})
+		);
+		if (existing.has(canonical)) {
+			setRegistryUrlError('URL already added');
+			return;
+		}
+		setSymphonyRegistryUrls([...symphonyRegistryUrls, canonical]);
+		setNewRegistryUrl('');
+		setRegistryUrlError(null);
+	};
 
 	// Centralized agent configuration via shared hook
 	const ac = useAgentConfiguration({
@@ -76,6 +154,355 @@ export function EncoreTab({ theme, isOpen }: EncoreTabProps) {
 					Contributors building new features should consider gating them here to keep the core
 					experience focused.
 				</p>
+			</div>
+
+			{/* Usage & Stats Feature Section */}
+			<div
+				className="rounded-lg border"
+				style={{
+					borderColor: encoreFeatures.usageStats ? theme.colors.accent : theme.colors.border,
+					backgroundColor: encoreFeatures.usageStats ? `${theme.colors.accent}08` : 'transparent',
+				}}
+			>
+				<button
+					className="w-full flex items-center justify-between p-4 text-left"
+					onClick={() =>
+						setEncoreFeatures({
+							...encoreFeatures,
+							usageStats: !encoreFeatures.usageStats,
+						})
+					}
+				>
+					<div className="flex items-center gap-3">
+						<Database
+							className="w-5 h-5"
+							style={{
+								color: encoreFeatures.usageStats ? theme.colors.accent : theme.colors.textDim,
+							}}
+						/>
+						<div>
+							<div className="text-sm font-bold" style={{ color: theme.colors.textMain }}>
+								Usage & Stats
+							</div>
+							<div className="text-xs mt-0.5" style={{ color: theme.colors.textDim }}>
+								Track queries, Auto Run sessions, and view the Usage Dashboard
+							</div>
+						</div>
+					</div>
+					<div
+						className={`relative w-10 h-5 rounded-full transition-colors ${encoreFeatures.usageStats ? '' : 'opacity-50'}`}
+						style={{
+							backgroundColor: encoreFeatures.usageStats
+								? theme.colors.accent
+								: theme.colors.border,
+						}}
+					>
+						<div
+							className="absolute top-0.5 w-4 h-4 rounded-full bg-white transition-transform"
+							style={{
+								transform: encoreFeatures.usageStats ? 'translateX(22px)' : 'translateX(2px)',
+							}}
+						/>
+					</div>
+				</button>
+
+				{encoreFeatures.usageStats && (
+					<div
+						className="px-4 pb-4 space-y-3 border-t"
+						style={{ borderColor: theme.colors.border }}
+					>
+						<div className="flex items-center justify-between pt-3">
+							<p className="text-sm" style={{ color: theme.colors.textMain }}>
+								Enable stats collection
+							</p>
+							<button
+								onClick={() => setStatsCollectionEnabled(!statsCollectionEnabled)}
+								className={`relative w-10 h-5 rounded-full transition-colors ${statsCollectionEnabled ? '' : 'opacity-50'}`}
+								style={{
+									backgroundColor: statsCollectionEnabled
+										? theme.colors.accent
+										: theme.colors.border,
+								}}
+								aria-label="Toggle stats collection"
+							>
+								<div
+									className="absolute top-0.5 w-4 h-4 rounded-full bg-white transition-transform"
+									style={{
+										transform: statsCollectionEnabled ? 'translateX(22px)' : 'translateX(2px)',
+									}}
+								/>
+							</button>
+						</div>
+						<p className="text-xs" style={{ color: theme.colors.textDim }}>
+							Track queries and Auto Run sessions for the dashboard.
+						</p>
+
+						<div className="flex items-center justify-between pt-1">
+							<p className="text-sm" style={{ color: theme.colors.textMain }}>
+								Default lookback window
+							</p>
+							<div className="relative">
+								<select
+									value={defaultStatsTimeRange}
+									onChange={(e) =>
+										setDefaultStatsTimeRange(
+											e.target.value as 'day' | 'week' | 'month' | 'quarter' | 'year' | 'all'
+										)
+									}
+									className="appearance-none text-sm px-3 py-1.5 pr-8 rounded-lg border cursor-pointer"
+									style={{
+										backgroundColor: theme.colors.bgMain,
+										borderColor: theme.colors.border,
+										color: theme.colors.textMain,
+									}}
+									aria-label="Select default lookback window"
+								>
+									<option value="day">Today</option>
+									<option value="week">This Week</option>
+									<option value="month">This Month</option>
+									<option value="quarter">This Quarter</option>
+									<option value="year">This Year</option>
+									<option value="all">All Time</option>
+								</select>
+								<ChevronDown
+									className="absolute right-2 top-1/2 -translate-y-1/2 w-4 h-4 pointer-events-none"
+									style={{ color: theme.colors.textDim }}
+								/>
+							</div>
+						</div>
+					</div>
+				)}
+			</div>
+
+			{/* Maestro Symphony Feature Section */}
+			<div
+				className="rounded-lg border"
+				style={{
+					borderColor: encoreFeatures.symphony ? theme.colors.accent : theme.colors.border,
+					backgroundColor: encoreFeatures.symphony ? `${theme.colors.accent}08` : 'transparent',
+				}}
+			>
+				<button
+					className="w-full flex items-center justify-between p-4 text-left"
+					onClick={() =>
+						setEncoreFeatures({
+							...encoreFeatures,
+							symphony: !encoreFeatures.symphony,
+						})
+					}
+				>
+					<div className="flex items-center gap-3">
+						<Music
+							className="w-5 h-5"
+							style={{
+								color: encoreFeatures.symphony ? theme.colors.accent : theme.colors.textDim,
+							}}
+						/>
+						<div>
+							<div className="text-sm font-bold" style={{ color: theme.colors.textMain }}>
+								Maestro Symphony
+							</div>
+							<div className="text-xs mt-0.5" style={{ color: theme.colors.textDim }}>
+								Contribute to open source projects through curated repositories
+							</div>
+						</div>
+					</div>
+					<div
+						className={`relative w-10 h-5 rounded-full transition-colors ${encoreFeatures.symphony ? '' : 'opacity-50'}`}
+						style={{
+							backgroundColor: encoreFeatures.symphony ? theme.colors.accent : theme.colors.border,
+						}}
+					>
+						<div
+							className="absolute top-0.5 w-4 h-4 rounded-full bg-white transition-transform"
+							style={{
+								transform: encoreFeatures.symphony ? 'translateX(22px)' : 'translateX(2px)',
+							}}
+						/>
+					</div>
+				</button>
+
+				{encoreFeatures.symphony && (
+					<div
+						className="px-4 pb-4 space-y-3 border-t"
+						style={{ borderColor: theme.colors.border }}
+					>
+						<div className="pt-3">
+							<label
+								className="block text-xs font-bold opacity-70 uppercase mb-2"
+								style={{ color: theme.colors.textMain }}
+							>
+								Registry Sources
+							</label>
+							<p className="text-xs mb-3" style={{ color: theme.colors.textDim }}>
+								Repositories are loaded from all configured registry URLs. The default registry
+								cannot be removed.
+							</p>
+
+							{/* Default URL (immutable) */}
+							<div
+								className="flex items-center gap-2 px-2 py-1.5 rounded text-xs font-mono mb-2"
+								style={{
+									backgroundColor: theme.colors.bgActivity,
+									border: `1px solid ${theme.colors.border}`,
+								}}
+							>
+								<Lock className="w-3 h-3 flex-shrink-0" style={{ color: theme.colors.textDim }} />
+								<span className="truncate flex-1" style={{ color: theme.colors.textMain }}>
+									{SYMPHONY_REGISTRY_URL}
+								</span>
+								<span
+									className="text-[10px] px-1.5 py-0.5 rounded flex-shrink-0"
+									style={{
+										color: theme.colors.textDim,
+										backgroundColor: theme.colors.border,
+									}}
+								>
+									default
+								</span>
+							</div>
+
+							{/* Custom URLs list */}
+							{symphonyRegistryUrls.map((url) => (
+								<div
+									key={url}
+									className="flex items-center gap-2 px-2 py-1.5 rounded text-xs font-mono mb-1"
+									style={{
+										backgroundColor: theme.colors.bgActivity,
+										border: `1px solid ${theme.colors.border}`,
+									}}
+								>
+									<span className="truncate flex-1" style={{ color: theme.colors.textMain }}>
+										{url}
+									</span>
+									<button
+										type="button"
+										onClick={() =>
+											setSymphonyRegistryUrls(symphonyRegistryUrls.filter((u) => u !== url))
+										}
+										className="p-0.5 rounded hover:bg-white/10 transition-colors flex-shrink-0"
+										style={{ color: theme.colors.error }}
+										title="Remove registry URL"
+									>
+										<X className="w-3 h-3" />
+									</button>
+								</div>
+							))}
+
+							{/* Add new URL input */}
+							<div className="flex items-center gap-2 mt-3">
+								<div className="flex-1 relative">
+									<input
+										type="text"
+										value={newRegistryUrl}
+										onChange={(e) => {
+											setNewRegistryUrl(e.target.value);
+											setRegistryUrlError(null);
+										}}
+										onKeyDown={(e) => {
+											if (e.key === 'Enter') {
+												e.preventDefault();
+												handleAddRegistryUrl();
+											}
+										}}
+										placeholder="https://example.com/registry.json"
+										className="w-full px-3 py-2 rounded text-sm font-mono outline-none"
+										style={{
+											backgroundColor: theme.colors.bgActivity,
+											borderColor: registryUrlError ? theme.colors.error : theme.colors.border,
+											border: '1px solid',
+											color: theme.colors.textMain,
+										}}
+									/>
+									{registryUrlError && (
+										<p
+											className="absolute -bottom-4 left-0 text-[10px]"
+											style={{ color: theme.colors.error }}
+										>
+											{registryUrlError}
+										</p>
+									)}
+								</div>
+								<button
+									type="button"
+									onClick={handleAddRegistryUrl}
+									disabled={!newRegistryUrl.trim()}
+									className="flex items-center gap-1.5 px-3 py-2 rounded text-sm font-medium transition-colors disabled:opacity-50"
+									style={{
+										backgroundColor: theme.colors.accent,
+										color: theme.colors.bgMain,
+									}}
+								>
+									<Plus className="w-4 h-4" /> Add
+								</button>
+							</div>
+						</div>
+					</div>
+				)}
+			</div>
+
+			{/* Maestro Cue Feature Section */}
+			<div
+				className="rounded-lg border"
+				style={{
+					borderColor: encoreFeatures.maestroCue ? theme.colors.accent : theme.colors.border,
+					backgroundColor: encoreFeatures.maestroCue ? `${theme.colors.accent}08` : 'transparent',
+				}}
+			>
+				<button
+					className="w-full flex items-center justify-between p-4 text-left"
+					onClick={() =>
+						setEncoreFeatures({
+							...encoreFeatures,
+							maestroCue: !encoreFeatures.maestroCue,
+						})
+					}
+				>
+					<div className="flex items-center gap-3">
+						<Zap
+							className="w-5 h-5"
+							style={{
+								color: encoreFeatures.maestroCue ? theme.colors.accent : theme.colors.textDim,
+							}}
+						/>
+						<div>
+							<div
+								className="text-sm font-bold flex items-center gap-2"
+								style={{ color: theme.colors.textMain }}
+							>
+								Maestro Cue
+								<span
+									className="px-1.5 py-0.5 rounded text-[9px] font-bold uppercase"
+									style={{
+										backgroundColor: theme.colors.warning + '30',
+										color: theme.colors.warning,
+									}}
+								>
+									Beta
+								</span>
+							</div>
+							<div className="text-xs mt-0.5" style={{ color: theme.colors.textDim }}>
+								Event-driven automation — trigger agent prompts on timers, file changes, and agent
+								completions
+							</div>
+						</div>
+					</div>
+					<div
+						className={`relative w-10 h-5 rounded-full transition-colors ${encoreFeatures.maestroCue ? '' : 'opacity-50'}`}
+						style={{
+							backgroundColor: encoreFeatures.maestroCue
+								? theme.colors.accent
+								: theme.colors.border,
+						}}
+					>
+						<div
+							className="absolute top-0.5 w-4 h-4 rounded-full bg-white transition-transform"
+							style={{
+								transform: encoreFeatures.maestroCue ? 'translateX(22px)' : 'translateX(2px)',
+							}}
+						/>
+					</div>
+				</button>
 			</div>
 
 			{/* Director's Notes Feature Section */}

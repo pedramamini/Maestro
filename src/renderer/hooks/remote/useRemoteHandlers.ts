@@ -36,6 +36,8 @@ export interface UseRemoteHandlersDeps {
 	speckitCommandsRef: React.MutableRefObject<CustomAICommand[]>;
 	/** OpenSpec commands ref */
 	openspecCommandsRef: React.MutableRefObject<CustomAICommand[]>;
+	/** BMAD commands ref */
+	bmadCommandsRef?: React.MutableRefObject<CustomAICommand[]>;
 	/** Toggle global live mode (web interface) */
 	toggleGlobalLive: () => Promise<void>;
 	/** Whether live/remote mode is active */
@@ -71,6 +73,7 @@ export function useRemoteHandlers(deps: UseRemoteHandlersDeps): UseRemoteHandler
 		customAICommandsRef,
 		speckitCommandsRef,
 		openspecCommandsRef,
+		bmadCommandsRef,
 		toggleGlobalLive,
 		isLiveMode,
 		sshRemoteConfigs,
@@ -154,15 +157,18 @@ export function useRemoteHandlers(deps: UseRemoteHandlersDeps): UseRemoteHandler
 							...s,
 							state: 'busy' as SessionState,
 							busySource: 'terminal',
-							shellLogs: [
-								...s.shellLogs,
-								{
-									id: generateId(),
-									timestamp: Date.now(),
-									source: 'user',
-									text: command,
-								},
-							],
+							// TODO: Remove shellLogs once terminal tabs migration is complete
+							...(!s.terminalTabs?.length && {
+								shellLogs: [
+									...s.shellLogs,
+									{
+										id: generateId(),
+										timestamp: Date.now(),
+										source: 'user',
+										text: command,
+									},
+								],
+							}),
 						};
 					})
 				);
@@ -199,15 +205,18 @@ export function useRemoteHandlers(deps: UseRemoteHandlersDeps): UseRemoteHandler
 								state: 'idle' as SessionState,
 								busySource: undefined,
 								thinkingStartTime: undefined,
-								shellLogs: [
-									...s.shellLogs,
-									{
-										id: generateId(),
-										timestamp: Date.now(),
-										source: 'system',
-										text: `Error: Failed to run command - ${errorMessage}`,
-									},
-								],
+								// TODO: Remove shellLogs once terminal tabs migration is complete
+								...(!s.terminalTabs?.length && {
+									shellLogs: [
+										...s.shellLogs,
+										{
+											id: generateId(),
+											timestamp: Date.now(),
+											source: 'system',
+											text: `Error: Failed to run command - ${errorMessage}`,
+										},
+									],
+								}),
 							};
 						})
 					);
@@ -245,9 +254,15 @@ export function useRemoteHandlers(deps: UseRemoteHandlersDeps): UseRemoteHandler
 				const matchingOpenspecCommand = openspecCommandsRef.current.find(
 					(cmd) => cmd.command === commandText
 				);
+				const matchingBmadCommand = bmadCommandsRef?.current.find(
+					(cmd) => cmd.command === commandText
+				);
 
 				const matchingCommand =
-					matchingCustomCommand || matchingSpeckitCommand || matchingOpenspecCommand;
+					matchingCustomCommand ||
+					matchingSpeckitCommand ||
+					matchingOpenspecCommand ||
+					matchingBmadCommand;
 
 				if (matchingCommand) {
 					console.log(
@@ -257,7 +272,9 @@ export function useRemoteHandlers(deps: UseRemoteHandlersDeps): UseRemoteHandler
 							? '(spec-kit)'
 							: matchingOpenspecCommand
 								? '(openspec)'
-								: '(custom)'
+								: matchingBmadCommand
+									? '(bmad)'
+									: '(custom)'
 					);
 
 					// Get git branch for template substitution
@@ -285,6 +302,8 @@ export function useRemoteHandlers(deps: UseRemoteHandlersDeps): UseRemoteHandler
 					promptToSend = substituteTemplateVariables(matchingCommand.prompt, {
 						session,
 						gitBranch,
+						groupId: session.groupId,
+						activeTabId: session.activeTabId,
 						conductorProfile,
 					});
 					commandMetadata = {

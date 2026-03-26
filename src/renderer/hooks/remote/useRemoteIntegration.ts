@@ -435,6 +435,67 @@ export function useRemoteIntegration(deps: UseRemoteIntegrationDeps): UseRemoteI
 		};
 	}, [sessionsRef, activeSessionIdRef, setSessions, setActiveSessionId, defaultSaveToHistory]);
 
+	// Handle remote open file tab from web/CLI interface
+	// Dispatches a CustomEvent for App.tsx to handle (avoids hook ordering issues)
+	useEffect(() => {
+		const unsubscribe = window.maestro.process.onRemoteOpenFileTab(
+			(sessionId: string, filePath: string) => {
+				window.dispatchEvent(
+					new CustomEvent('maestro:openFileTab', {
+						detail: { sessionId, filePath },
+					})
+				);
+			}
+		);
+		return () => {
+			unsubscribe();
+		};
+	}, []);
+
+	// Handle remote refresh file tree from web/CLI interface
+	useEffect(() => {
+		const unsubscribe = window.maestro.process.onRemoteRefreshFileTree((sessionId: string) => {
+			window.dispatchEvent(
+				new CustomEvent('maestro:refreshFileTree', {
+					detail: { sessionId },
+				})
+			);
+		});
+		return () => {
+			unsubscribe();
+		};
+	}, []);
+
+	// Handle remote refresh auto-run docs from web/CLI interface
+	useEffect(() => {
+		const unsubscribe = window.maestro.process.onRemoteRefreshAutoRunDocs((sessionId: string) => {
+			window.dispatchEvent(
+				new CustomEvent('maestro:refreshAutoRunDocs', {
+					detail: { sessionId },
+				})
+			);
+		});
+		return () => {
+			unsubscribe();
+		};
+	}, []);
+
+	// Handle remote configure auto-run from CLI/web interface
+	useEffect(() => {
+		const unsubscribe = window.maestro.process.onRemoteConfigureAutoRun(
+			(sessionId: string, config: any, responseChannel: string) => {
+				window.dispatchEvent(
+					new CustomEvent('maestro:configureAutoRun', {
+						detail: { sessionId, config, responseChannel },
+					})
+				);
+			}
+		);
+		return () => {
+			unsubscribe();
+		};
+	}, []);
+
 	// Broadcast tab changes to web clients when tabs, activeTabId, or tab properties change
 	// PERFORMANCE FIX: This effect was previously missing its dependency array, causing it to
 	// run on EVERY render (including every keystroke). Now it only runs when isLiveMode changes,

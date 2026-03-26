@@ -1146,6 +1146,8 @@ describe('WizardContext', () => {
 					generatedDocuments: [],
 					editedPhase1Content: null,
 					wantsTour: true,
+					runAllDocuments: false,
+					sessionSshRemoteConfig: undefined,
 				});
 			});
 

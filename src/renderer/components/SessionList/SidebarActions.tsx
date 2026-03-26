@@ -8,10 +8,12 @@ interface SidebarActionsProps {
 	leftSidebarOpen: boolean;
 	hasNoSessions: boolean;
 	shortcuts: Record<string, Shortcut>;
+	showUnreadAgentsOnly: boolean;
 	addNewSession: () => void;
 	openWizard?: () => void;
 	openFeedback?: () => void;
 	setLeftSidebarOpen: (open: boolean) => void;
+	toggleShowUnreadAgentsOnly: () => void;
 }
 
 export const SidebarActions = memo(function SidebarActions({
@@ -19,10 +21,12 @@ export const SidebarActions = memo(function SidebarActions({
 	leftSidebarOpen,
 	hasNoSessions,
 	shortcuts,
+	showUnreadAgentsOnly,
 	addNewSession,
 	openWizard,
 	openFeedback,
 	setLeftSidebarOpen,
+	toggleShowUnreadAgentsOnly,
 }: SidebarActionsProps) {
 	return (
 		<div
@@ -86,6 +90,31 @@ export const SidebarActions = memo(function SidebarActions({
 						<div aria-hidden="true" />
 					)}
 				</div>
+			)}
+
+			{/* Unread agents filter toggle */}
+			{leftSidebarOpen && (
+				<button
+					type="button"
+					onClick={toggleShowUnreadAgentsOnly}
+					className="relative flex items-center justify-center p-2 rounded transition-colors w-8 h-8 shrink-0 hover:bg-white/5"
+					style={{
+						color: showUnreadAgentsOnly ? theme.colors.accent : undefined,
+						opacity: showUnreadAgentsOnly ? 1 : 0.5,
+					}}
+					title={
+						showUnreadAgentsOnly
+							? `Showing unread agents only (${formatShortcutKeys(shortcuts.filterUnreadAgents.keys)})`
+							: `Filter unread agents (${formatShortcutKeys(shortcuts.filterUnreadAgents.keys)})`
+					}
+				>
+					<Bot className="w-4 h-4" />
+					{/* Notification dot - always visible to match tab filter icon pattern */}
+					<div
+						className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full"
+						style={{ backgroundColor: theme.colors.accent }}
+					/>
+				</button>
 			)}
 		</div>
 	);

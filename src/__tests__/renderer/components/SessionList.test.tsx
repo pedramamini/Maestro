@@ -70,6 +70,9 @@ vi.mock('lucide-react', () => ({
 	Command: () => <span data-testid="icon-command" />,
 	MessageSquare: () => <span data-testid="icon-message-square" />,
 	MessageSquarePlus: () => <span data-testid="icon-message-square-plus" />,
+	Zap: ({ title, style }: { title?: string; style?: Record<string, string> }) => (
+		<span data-testid="icon-zap" title={title} style={style} />
+	),
 }));
 
 // Mock gitService
@@ -154,6 +157,7 @@ const defaultShortcuts: Record<string, any> = {
 	processMonitor: { keys: ['meta', 'shift', 'p'], description: 'Process monitor' },
 	usageDashboard: { keys: ['alt', 'meta', 'u'], description: 'Usage dashboard' },
 	toggleSidebar: { keys: ['meta', 'b'], description: 'Toggle sidebar' },
+	filterUnreadAgents: { keys: ['meta', 'shift', 'u'], description: 'Filter unread agents' },
 };
 
 // Create mock session
@@ -175,6 +179,8 @@ const createMockSession = (overrides: Partial<Session> = {}): Session => ({
 	messageQueue: [],
 	contextUsage: 30,
 	activeTimeMs: 60000,
+	terminalTabs: [],
+	activeTerminalTabId: null,
 	...overrides,
 });
 
@@ -3158,6 +3164,99 @@ describe('SessionList', () => {
 
 			// Menu should close
 			expect(screen.queryByText('Rename')).not.toBeInTheDocument();
+		});
+	});
+
+	// ============================================================================
+	// Cue Status Indicator Tests
+	// ============================================================================
+
+	describe('Cue Status Indicator', () => {
+		it('shows Zap icon for sessions with active Cue subscriptions when Encore Feature enabled', async () => {
+			const session = createMockSession({ id: 's1', name: 'Cue Session' });
+			useSessionStore.setState({ sessions: [session] });
+			useUIStore.setState({ leftSidebarOpen: true });
+			useSettingsStore.setState({
+				shortcuts: defaultShortcuts,
+				encoreFeatures: { directorNotes: false, maestroCue: true },
+			});
+
+			// Mock Cue status to return session with subscriptions
+			(window.maestro as Record<string, unknown>).cue = {
+				getStatus: vi.fn().mockResolvedValue([
+					{
+						sessionId: 's1',
+						sessionName: 'Cue Session',
+						subscriptionCount: 3,
+						enabled: true,
+						activeRuns: 0,
+					},
+				]),
+				getActiveRuns: vi.fn().mockResolvedValue([]),
+				getActivityLog: vi.fn().mockResolvedValue([]),
+				onActivityUpdate: vi.fn().mockReturnValue(() => {}),
+			};
+
+			const props = createDefaultProps({ sortedSessions: [session] });
+			render(<SessionList {...props} />);
+
+			// Wait for async status fetch to complete
+			await waitFor(() => {
+				expect(screen.getByTestId('icon-zap')).toBeInTheDocument();
+			});
+
+			const zapIcon = screen.getByTestId('icon-zap');
+			expect(zapIcon.closest('span[title]')).toHaveAttribute(
+				'title',
+				'Maestro Cue active (3 subscriptions)'
+			);
+		});
+
+		it('does not show Zap icon when Encore Feature is disabled', async () => {
+			const session = createMockSession({ id: 's1', name: 'No Cue Session' });
+			useSessionStore.setState({ sessions: [session] });
+			useUIStore.setState({ leftSidebarOpen: true });
+			useSettingsStore.setState({
+				shortcuts: defaultShortcuts,
+				encoreFeatures: { directorNotes: false, maestroCue: false },
+			});
+
+			const props = createDefaultProps({ sortedSessions: [session] });
+			render(<SessionList {...props} />);
+
+			// Give async effects time to settle
+			await act(async () => {
+				await new Promise((r) => setTimeout(r, 50));
+			});
+
+			expect(screen.queryByTestId('icon-zap')).not.toBeInTheDocument();
+		});
+
+		it('does not show Zap icon for sessions without Cue subscriptions', async () => {
+			const session = createMockSession({ id: 's1', name: 'No Sub Session' });
+			useSessionStore.setState({ sessions: [session] });
+			useUIStore.setState({ leftSidebarOpen: true });
+			useSettingsStore.setState({
+				shortcuts: defaultShortcuts,
+				encoreFeatures: { directorNotes: false, maestroCue: true },
+			});
+
+			// Mock Cue status with no sessions having subscriptions
+			(window.maestro as Record<string, unknown>).cue = {
+				getStatus: vi.fn().mockResolvedValue([]),
+				getActiveRuns: vi.fn().mockResolvedValue([]),
+				getActivityLog: vi.fn().mockResolvedValue([]),
+				onActivityUpdate: vi.fn().mockReturnValue(() => {}),
+			};
+
+			const props = createDefaultProps({ sortedSessions: [session] });
+			render(<SessionList {...props} />);
+
+			await act(async () => {
+				await new Promise((r) => setTimeout(r, 50));
+			});
+
+			expect(screen.queryByTestId('icon-zap')).not.toBeInTheDocument();
 		});
 	});
 });

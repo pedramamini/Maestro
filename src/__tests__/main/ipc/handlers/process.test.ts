@@ -200,6 +200,7 @@ describe('process IPC handlers', () => {
 		resize: ReturnType<typeof vi.fn>;
 		getAll: ReturnType<typeof vi.fn>;
 		runCommand: ReturnType<typeof vi.fn>;
+		spawnTerminalTab: ReturnType<typeof vi.fn>;
 	};
 	let mockAgentDetector: {
 		getAgent: ReturnType<typeof vi.fn>;
@@ -227,6 +228,7 @@ describe('process IPC handlers', () => {
 			resize: vi.fn(),
 			getAll: vi.fn(),
 			runCommand: vi.fn(),
+			spawnTerminalTab: vi.fn(),
 		};
 
 		// Create mock agent detector
@@ -287,6 +289,7 @@ describe('process IPC handlers', () => {
 				'process:kill',
 				'process:resize',
 				'process:getActiveProcesses',
+				'process:spawnTerminalTab',
 				'process:runCommand',
 			];
 
@@ -973,6 +976,180 @@ describe('process IPC handlers', () => {
 					args: [],
 				})
 			).rejects.toThrow('Agent detector');
+		});
+	});
+
+	describe('process:spawnTerminalTab', () => {
+		const mockSshRemoteForTerminal = {
+			id: 'remote-1',
+			name: 'Dev Server',
+			host: 'dev.example.com',
+			port: 22,
+			username: 'devuser',
+			privateKeyPath: '~/.ssh/id_ed25519',
+			enabled: true,
+		};
+
+		it('should spawn local terminal when no SSH config is provided', async () => {
+			mockProcessManager.spawnTerminalTab.mockReturnValue({ pid: 5000, success: true });
+
+			const handler = handlers.get('process:spawnTerminalTab');
+			const result = await handler!({} as any, {
+				sessionId: 'session-1-terminal-tab-1',
+				cwd: '/local/project',
+			});
+
+			expect(mockProcessManager.spawnTerminalTab).toHaveBeenCalledWith(
+				expect.objectContaining({
+					sessionId: 'session-1-terminal-tab-1',
+					cwd: '/local/project',
+				})
+			);
+			expect(mockProcessManager.spawn).not.toHaveBeenCalled();
+			expect(result).toEqual({ pid: 5000, success: true });
+		});
+
+		it('should spawn SSH session when sessionSshRemoteConfig is enabled', async () => {
+			mockSettingsStore.get.mockImplementation((key: string, defaultValue: unknown) => {
+				if (key === 'sshRemotes') return [mockSshRemoteForTerminal];
+				return defaultValue;
+			});
+			mockProcessManager.spawn.mockReturnValue({ pid: 5001, success: true });
+
+			const handler = handlers.get('process:spawnTerminalTab');
+			const result = await handler!({} as any, {
+				sessionId: 'session-1-terminal-tab-1',
+				cwd: '/local/project',
+				sessionSshRemoteConfig: {
+					enabled: true,
+					remoteId: 'remote-1',
+				},
+			});
+
+			expect(mockProcessManager.spawn).toHaveBeenCalledWith(
+				expect.objectContaining({
+					command: 'ssh',
+					args: expect.arrayContaining(['devuser@dev.example.com']),
+					toolType: 'terminal',
+				})
+			);
+			expect(mockProcessManager.spawnTerminalTab).not.toHaveBeenCalled();
+			expect(result).toEqual({ pid: 5001, success: true });
+		});
+
+		it('should add -t flag and remote cd command when workingDirOverride is set', async () => {
+			mockSettingsStore.get.mockImplementation((key: string, defaultValue: unknown) => {
+				if (key === 'sshRemotes') return [mockSshRemoteForTerminal];
+				return defaultValue;
+			});
+			mockProcessManager.spawn.mockReturnValue({ pid: 5002, success: true });
+
+			const handler = handlers.get('process:spawnTerminalTab');
+			await handler!({} as any, {
+				sessionId: 'session-1-terminal-tab-1',
+				cwd: '/local/project',
+				sessionSshRemoteConfig: {
+					enabled: true,
+					remoteId: 'remote-1',
+					workingDirOverride: '/remote/project',
+				},
+			});
+
+			const spawnCall = mockProcessManager.spawn.mock.calls[0][0];
+			expect(spawnCall.command).toBe('ssh');
+			// -t must appear before the host in the args
+			const tIndex = spawnCall.args.indexOf('-t');
+			const hostIndex = spawnCall.args.indexOf('devuser@dev.example.com');
+			expect(tIndex).toBeGreaterThanOrEqual(0);
+			expect(tIndex).toBeLessThan(hostIndex);
+			// Remote command to cd and exec shell must be the last arg
+			const lastArg = spawnCall.args[spawnCall.args.length - 1];
+			expect(lastArg).toContain('/remote/project');
+			expect(lastArg).toContain('exec $SHELL');
+		});
+
+		it('should include port flag for non-default SSH port', async () => {
+			const remoteWithPort = { ...mockSshRemoteForTerminal, port: 2222 };
+			mockSettingsStore.get.mockImplementation((key: string, defaultValue: unknown) => {
+				if (key === 'sshRemotes') return [remoteWithPort];
+				return defaultValue;
+			});
+			mockProcessManager.spawn.mockReturnValue({ pid: 5003, success: true });
+
+			const handler = handlers.get('process:spawnTerminalTab');
+			await handler!({} as any, {
+				sessionId: 'session-1-terminal-tab-1',
+				cwd: '/local/project',
+				sessionSshRemoteConfig: { enabled: true, remoteId: 'remote-1' },
+			});
+
+			const spawnCall = mockProcessManager.spawn.mock.calls[0][0];
+			const portIndex = spawnCall.args.indexOf('-p');
+			expect(portIndex).toBeGreaterThanOrEqual(0);
+			expect(spawnCall.args[portIndex + 1]).toBe('2222');
+		});
+
+		it('should include identity file flag when privateKeyPath is set', async () => {
+			mockSettingsStore.get.mockImplementation((key: string, defaultValue: unknown) => {
+				if (key === 'sshRemotes') return [mockSshRemoteForTerminal];
+				return defaultValue;
+			});
+			mockProcessManager.spawn.mockReturnValue({ pid: 5004, success: true });
+
+			const handler = handlers.get('process:spawnTerminalTab');
+			await handler!({} as any, {
+				sessionId: 'session-1-terminal-tab-1',
+				cwd: '/local/project',
+				sessionSshRemoteConfig: { enabled: true, remoteId: 'remote-1' },
+			});
+
+			const spawnCall = mockProcessManager.spawn.mock.calls[0][0];
+			const keyIndex = spawnCall.args.indexOf('-i');
+			expect(keyIndex).toBeGreaterThanOrEqual(0);
+			expect(spawnCall.args[keyIndex + 1]).toBe('~/.ssh/id_ed25519');
+		});
+
+		it('should return failure when SSH is enabled but remote config not found', async () => {
+			mockSettingsStore.get.mockImplementation((key: string, defaultValue: unknown) => {
+				if (key === 'sshRemotes') return []; // No remotes configured
+				return defaultValue;
+			});
+
+			const handler = handlers.get('process:spawnTerminalTab');
+			const result = await handler!({} as any, {
+				sessionId: 'session-1-terminal-tab-1',
+				cwd: '/local/project',
+				sessionSshRemoteConfig: {
+					enabled: true,
+					remoteId: 'nonexistent-remote',
+				},
+			});
+
+			// Must NOT silently fall through to local spawn
+			expect(mockProcessManager.spawnTerminalTab).not.toHaveBeenCalled();
+			expect(mockProcessManager.spawn).not.toHaveBeenCalled();
+			expect(result).toEqual({ success: false, pid: 0 });
+		});
+
+		it('should spawn local terminal when SSH config is present but disabled', async () => {
+			mockSettingsStore.get.mockImplementation((key: string, defaultValue: unknown) => {
+				if (key === 'sshRemotes') return [mockSshRemoteForTerminal];
+				return defaultValue;
+			});
+			mockProcessManager.spawnTerminalTab.mockReturnValue({ pid: 5005, success: true });
+
+			const handler = handlers.get('process:spawnTerminalTab');
+			await handler!({} as any, {
+				sessionId: 'session-1-terminal-tab-1',
+				cwd: '/local/project',
+				sessionSshRemoteConfig: {
+					enabled: false, // Explicitly disabled
+					remoteId: 'remote-1',
+				},
+			});
+
+			expect(mockProcessManager.spawnTerminalTab).toHaveBeenCalled();
+			expect(mockProcessManager.spawn).not.toHaveBeenCalled();
 		});
 	});
 
@@ -1698,6 +1875,241 @@ describe('process IPC handlers', () => {
 			// Should fall back to config.command when agent.binaryName is unavailable
 			// The stdin script should contain the command
 			expect(spawnCall.sshStdinScript).toContain('custom-agent');
+		});
+	});
+
+	describe('appendSystemPrompt delivery', () => {
+		const mockSshRemote = {
+			id: 'remote-1',
+			name: 'Dev Server',
+			host: 'dev.example.com',
+			port: 22,
+			username: 'devuser',
+			privateKeyPath: '~/.ssh/id_ed25519',
+			enabled: true,
+			remoteEnv: {},
+		};
+
+		it('should deliver system prompt via CLI for supported agents (local)', async () => {
+			const mockAgent = {
+				id: 'claude-code',
+				name: 'Claude Code',
+				requiresPty: true,
+				path: '/usr/local/bin/claude',
+				capabilities: {
+					supportsAppendSystemPrompt: true,
+					supportsStreamJsonInput: true,
+				},
+			};
+
+			mockAgentDetector.getAgent.mockResolvedValue(mockAgent);
+			mockProcessManager.spawn.mockReturnValue({ pid: 12345, success: true });
+
+			const handler = handlers.get('process:spawn');
+			await handler!({} as any, {
+				sessionId: 'session-1',
+				toolType: 'claude-code',
+				cwd: '/home/user/project',
+				command: 'claude',
+				args: ['--print'],
+				prompt: 'Hello world',
+				appendSystemPrompt: 'You are Maestro system prompt content',
+			});
+
+			const spawnCall = mockProcessManager.spawn.mock.calls[0][0];
+			if (process.platform === 'win32') {
+				// Windows: uses --append-system-prompt-file with temp file
+				const idx = spawnCall.args.indexOf('--append-system-prompt-file');
+				expect(idx).toBeGreaterThan(-1);
+				expect(spawnCall.args[idx + 1]).toContain('maestro-sysprompt-session-1');
+			} else {
+				// Non-Windows: passes inline
+				const idx = spawnCall.args.indexOf('--append-system-prompt');
+				expect(idx).toBeGreaterThan(-1);
+				expect(spawnCall.args[idx + 1]).toBe('You are Maestro system prompt content');
+			}
+			// User prompt should remain clean (not embedded)
+			expect(spawnCall.prompt).toBe('Hello world');
+			expect(spawnCall.prompt).not.toContain('Maestro system prompt');
+		});
+
+		it('should embed system prompt in user message for unsupported agents (local)', async () => {
+			const mockAgent = {
+				id: 'codex',
+				name: 'Codex',
+				requiresPty: false,
+				path: '/usr/local/bin/codex',
+				capabilities: {
+					supportsAppendSystemPrompt: false,
+				},
+			};
+
+			mockAgentDetector.getAgent.mockResolvedValue(mockAgent);
+			mockProcessManager.spawn.mockReturnValue({ pid: 12345, success: true });
+
+			const handler = handlers.get('process:spawn');
+			await handler!({} as any, {
+				sessionId: 'session-1',
+				toolType: 'codex',
+				cwd: '/home/user/project',
+				command: 'codex',
+				args: [],
+				prompt: 'Fix the bug',
+				appendSystemPrompt: 'You are Maestro system prompt content',
+			});
+
+			const spawnCall = mockProcessManager.spawn.mock.calls[0][0];
+			// --append-system-prompt should NOT be in args
+			expect(spawnCall.args).not.toContain('--append-system-prompt');
+			// System prompt should be embedded in the user prompt
+			expect(spawnCall.prompt).toContain('You are Maestro system prompt content');
+			expect(spawnCall.prompt).toContain('Fix the bug');
+			expect(spawnCall.prompt).toContain('# User Request');
+		});
+
+		it('should use system prompt as sole content when no user prompt for unsupported agents', async () => {
+			const mockAgent = {
+				id: 'codex',
+				name: 'Codex',
+				requiresPty: false,
+				capabilities: {
+					supportsAppendSystemPrompt: false,
+				},
+			};
+
+			mockAgentDetector.getAgent.mockResolvedValue(mockAgent);
+			mockProcessManager.spawn.mockReturnValue({ pid: 12345, success: true });
+
+			const handler = handlers.get('process:spawn');
+			await handler!({} as any, {
+				sessionId: 'session-1',
+				toolType: 'codex',
+				cwd: '/home/user/project',
+				command: 'codex',
+				args: [],
+				prompt: '', // Empty prompt
+				appendSystemPrompt: 'You are Maestro system prompt content',
+			});
+
+			const spawnCall = mockProcessManager.spawn.mock.calls[0][0];
+			// System prompt should become the sole prompt
+			expect(spawnCall.prompt).toBe('You are Maestro system prompt content');
+		});
+
+		it('should include --append-system-prompt in SSH remote args via finalArgs', async () => {
+			const mockAgent = {
+				id: 'claude-code',
+				name: 'Claude Code',
+				requiresPty: true,
+				binaryName: 'claude',
+				capabilities: {
+					supportsAppendSystemPrompt: true,
+					supportsStreamJsonInput: true,
+				},
+			};
+
+			mockAgentDetector.getAgent.mockResolvedValue(mockAgent);
+			mockSettingsStore.get.mockImplementation((key, defaultValue) => {
+				if (key === 'sshRemotes') return [mockSshRemote];
+				return defaultValue;
+			});
+			mockProcessManager.spawn.mockReturnValue({ pid: 12345, success: true });
+
+			const handler = handlers.get('process:spawn');
+			await handler!({} as any, {
+				sessionId: 'session-1',
+				toolType: 'claude-code',
+				cwd: '/home/devuser/project',
+				command: 'claude',
+				args: ['--print'],
+				prompt: 'Hello via SSH',
+				appendSystemPrompt: 'Maestro SSH system prompt',
+				sessionSshRemoteConfig: {
+					enabled: true,
+					remoteId: 'remote-1',
+				},
+			});
+
+			const spawnCall = mockProcessManager.spawn.mock.calls[0][0];
+			// Should use SSH
+			expect(spawnCall.command).toBe('ssh');
+			// The stdin script should contain --append-system-prompt in the exec command
+			expect(spawnCall.sshStdinScript).toContain('--append-system-prompt');
+			expect(spawnCall.sshStdinScript).toContain('Maestro SSH system prompt');
+			// The user prompt should be passed via stdin passthrough (after the script)
+			expect(spawnCall.sshStdinScript).toContain('Hello via SSH');
+		});
+
+		it('should embed system prompt in SSH stdin for unsupported agents', async () => {
+			const mockAgent = {
+				id: 'opencode',
+				name: 'OpenCode',
+				requiresPty: false,
+				binaryName: 'opencode',
+				capabilities: {
+					supportsAppendSystemPrompt: false,
+				},
+			};
+
+			mockAgentDetector.getAgent.mockResolvedValue(mockAgent);
+			mockSettingsStore.get.mockImplementation((key, defaultValue) => {
+				if (key === 'sshRemotes') return [mockSshRemote];
+				return defaultValue;
+			});
+			mockProcessManager.spawn.mockReturnValue({ pid: 12345, success: true });
+
+			const handler = handlers.get('process:spawn');
+			await handler!({} as any, {
+				sessionId: 'session-1',
+				toolType: 'opencode',
+				cwd: '/home/devuser/project',
+				command: 'opencode',
+				args: [],
+				prompt: 'Fix the bug remotely',
+				appendSystemPrompt: 'Maestro SSH system prompt',
+				sessionSshRemoteConfig: {
+					enabled: true,
+					remoteId: 'remote-1',
+				},
+			});
+
+			const spawnCall = mockProcessManager.spawn.mock.calls[0][0];
+			expect(spawnCall.command).toBe('ssh');
+			// --append-system-prompt should NOT be in the SSH script args
+			expect(spawnCall.sshStdinScript).not.toContain('--append-system-prompt');
+			// System prompt should be embedded in the stdin input (as part of effectivePrompt)
+			expect(spawnCall.sshStdinScript).toContain('Maestro SSH system prompt');
+			expect(spawnCall.sshStdinScript).toContain('Fix the bug remotely');
+			expect(spawnCall.sshStdinScript).toContain('# User Request');
+		});
+
+		it('should not add --append-system-prompt when appendSystemPrompt is not provided', async () => {
+			const mockAgent = {
+				id: 'claude-code',
+				name: 'Claude Code',
+				requiresPty: true,
+				capabilities: {
+					supportsAppendSystemPrompt: true,
+				},
+			};
+
+			mockAgentDetector.getAgent.mockResolvedValue(mockAgent);
+			mockProcessManager.spawn.mockReturnValue({ pid: 12345, success: true });
+
+			const handler = handlers.get('process:spawn');
+			await handler!({} as any, {
+				sessionId: 'session-1',
+				toolType: 'claude-code',
+				cwd: '/home/user/project',
+				command: 'claude',
+				args: ['--print'],
+				prompt: 'Hello world',
+				// No appendSystemPrompt
+			});
+
+			const spawnCall = mockProcessManager.spawn.mock.calls[0][0];
+			expect(spawnCall.args).not.toContain('--append-system-prompt');
+			expect(spawnCall.prompt).toBe('Hello world');
 		});
 	});
 });

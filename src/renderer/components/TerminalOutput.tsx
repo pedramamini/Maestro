@@ -10,6 +10,7 @@ import {
 	RotateCcw,
 	AlertCircle,
 	Save,
+	Share2,
 } from 'lucide-react';
 import type { Session, Theme, LogEntry, FocusArea, AgentError } from '../types';
 import type { FileNode } from '../types/fileTree';
@@ -36,9 +37,6 @@ import { safeClipboardWrite } from '../utils/clipboard';
 // Tool display helpers (pure functions, hoisted out of render path)
 // ============================================================================
 
-/** Type-safe string extraction — returns null for non-strings */
-const safeStr = (v: unknown): string | null => (typeof v === 'string' ? v : null);
-
 /** Handle command values that may be strings or string arrays (Codex uses arrays) */
 const safeCommand = (v: unknown): string | null => {
 	if (typeof v === 'string') return v;
@@ -46,13 +44,6 @@ const safeCommand = (v: unknown): string | null => {
 		return v.join(' ');
 	}
 	return null;
-};
-
-/** Truncate a value to max length with ellipsis, returns null for non-strings */
-const truncateStr = (v: unknown, max: number): string | null => {
-	const s = safeStr(v);
-	if (!s) return null;
-	return s.length > max ? s.substring(0, max) + '\u2026' : s;
 };
 
 /** Summarize TodoWrite todos array — shows in-progress task and progress count */
@@ -64,6 +55,48 @@ const summarizeTodos = (v: unknown): string | null => {
 	const label = inProgress?.activeForm || inProgress?.content || todos[0]?.content;
 	if (!label) return `${todos.length} tasks`;
 	return `${label} (${completed}/${todos.length})`;
+};
+
+/** Max length for tool detail summary */
+const TOOL_DETAIL_MAX = 120;
+
+/**
+ * Summarize tool input generically — no per-tool extractors needed.
+ * Walks all values in the input object and picks the most informative string-like
+ * value to display. Special-cases arrays (todos, commands) and falls back to
+ * joining short key=value pairs.
+ */
+const summarizeToolInput = (input: Record<string, unknown>): string | null => {
+	// Special case: TodoWrite todos array
+	const todosResult = summarizeTodos(input.todos);
+	if (todosResult) return todosResult;
+
+	// Collect displayable string values (skip huge blobs)
+	const parts: string[] = [];
+	for (const [key, val] of Object.entries(input)) {
+		if (val === undefined || val === null || val === '') continue;
+		// Command arrays (Codex)
+		const cmd = safeCommand(val);
+		if (cmd) {
+			parts.push(cmd.length > TOOL_DETAIL_MAX ? cmd.substring(0, TOOL_DETAIL_MAX) + '\u2026' : cmd);
+			continue;
+		}
+		// Arrays: show count
+		if (Array.isArray(val)) {
+			parts.push(`${key}: [${val.length}]`);
+			continue;
+		}
+		// Objects: skip (too noisy)
+		if (typeof val === 'object') continue;
+		// Booleans/numbers: show as key=value
+		if (typeof val === 'boolean' || typeof val === 'number') {
+			parts.push(`${key}=${val}`);
+			continue;
+		}
+	}
+	if (parts.length === 0) return null;
+	const joined = parts.join('  ');
+	return joined.length > TOOL_DETAIL_MAX ? joined.substring(0, TOOL_DETAIL_MAX) + '\u2026' : joined;
 };
 
 // ============================================================================
@@ -125,6 +158,9 @@ interface LogItemProps {
 	onShowErrorDetails?: (error: AgentError) => void;
 	// Save to file callback (AI mode only, non-user messages)
 	onSaveToFile?: (text: string) => void;
+	// Publish to GitHub Gist (AI mode only, non-user messages, requires gh CLI)
+	ghCliAvailable?: boolean;
+	onPublishGist?: (text: string) => void;
 	// Message alignment
 	userMessageAlignment: 'left' | 'right';
 }
@@ -165,6 +201,8 @@ const LogItemComponent = memo(
 		onFileClick,
 		onShowErrorDetails,
 		onSaveToFile,
+		ghCliAvailable,
+		onPublishGist,
 		userMessageAlignment,
 	}: LogItemProps) => {
 		// Ref for the log item container - used for scroll-into-view on expand
@@ -544,23 +582,7 @@ const LogItemComponent = memo(
 							const toolInput = log.metadata?.toolState?.input as
 								| Record<string, unknown>
 								| undefined;
-							const toolDetail = toolInput
-								? safeCommand(toolInput.command) ||
-									safeStr(toolInput.pattern) ||
-									safeStr(toolInput.file_path) ||
-									safeStr(toolInput.filePath) || // OpenCode read tool
-									safeStr(toolInput.query) ||
-									safeStr(toolInput.description) || // Task tool
-									safeStr(toolInput.prompt) || // Task tool fallback
-									safeStr(toolInput.task_id) || // TaskOutput tool
-									summarizeTodos(toolInput.todos) || // TodoWrite tool
-									// Codex-specific tool arg patterns
-									safeStr(toolInput.path) || // Codex file operations
-									safeStr(toolInput.cmd) || // Codex shell commands
-									safeStr(toolInput.code) || // Codex code execution
-									truncateStr(toolInput.content, 100) || // Codex write operations (truncated)
-									null
-								: null;
+							const toolDetail = toolInput ? summarizeToolInput(toolInput) : null;
 
 							return (
 								<div
@@ -865,6 +887,17 @@ const LogItemComponent = memo(
 								<Save className="w-3.5 h-3.5" />
 							</button>
 						)}
+						{/* Publish to GitHub Gist - only for AI responses when gh CLI available */}
+						{log.source !== 'user' && isAIMode && ghCliAvailable && onPublishGist && (
+							<button
+								onClick={() => onPublishGist(log.text)}
+								className="p-1.5 rounded opacity-0 group-hover:opacity-50 hover:!opacity-100"
+								style={{ color: theme.colors.textDim }}
+								title="Publish as GitHub Gist"
+							>
+								<Share2 className="w-3.5 h-3.5" />
+							</button>
+						)}
 						{/* Delete button for user messages (both AI and terminal modes) */}
 						{log.source === 'user' &&
 							onDeleteLog &&
@@ -950,52 +983,13 @@ const LogItemComponent = memo(
 			prevProps.maxOutputLines === nextProps.maxOutputLines &&
 			prevProps.markdownEditMode === nextProps.markdownEditMode &&
 			prevProps.fontFamily === nextProps.fontFamily &&
-			prevProps.userMessageAlignment === nextProps.userMessageAlignment
+			prevProps.userMessageAlignment === nextProps.userMessageAlignment &&
+			prevProps.ghCliAvailable === nextProps.ghCliAvailable
 		);
 	}
 );
 
 LogItemComponent.displayName = 'LogItemComponent';
-
-// ============================================================================
-// ElapsedTimeDisplay - Separate component for elapsed time
-// ============================================================================
-
-// Separate component for elapsed time to prevent re-renders of the entire list
-const ElapsedTimeDisplay = memo(
-	({ thinkingStartTime, textColor }: { thinkingStartTime: number; textColor: string }) => {
-		const [elapsedSeconds, setElapsedSeconds] = useState(() =>
-			Math.floor((Date.now() - thinkingStartTime) / 1000)
-		);
-
-		useEffect(() => {
-			// Update every second
-			const interval = setInterval(() => {
-				setElapsedSeconds(Math.floor((Date.now() - thinkingStartTime) / 1000));
-			}, 1000);
-
-			return () => clearInterval(interval);
-		}, [thinkingStartTime]);
-
-		// Format elapsed time as mm:ss or hh:mm:ss
-		const formatElapsedTime = (seconds: number): string => {
-			const hours = Math.floor(seconds / 3600);
-			const minutes = Math.floor((seconds % 3600) / 60);
-			const secs = seconds % 60;
-
-			if (hours > 0) {
-				return `${hours}:${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
-			}
-			return `${minutes}:${secs.toString().padStart(2, '0')}`;
-		};
-
-		return (
-			<span className="text-sm font-mono" style={{ color: textColor }}>
-				{formatElapsedTime(elapsedSeconds)}
-			</span>
-		);
-	}
-);
 
 interface TerminalOutputProps {
 	session: Session;
@@ -1032,6 +1026,8 @@ interface TerminalOutputProps {
 	onFileSaved?: () => void; // Callback when markdown content is saved to file (e.g., to refresh file list)
 	autoScrollAiMode?: boolean; // Whether to auto-scroll in AI mode (like terminal mode)
 	userMessageAlignment?: 'left' | 'right'; // User message bubble alignment (default: right)
+	ghCliAvailable?: boolean; // Whether gh CLI is available for gist publishing
+	onPublishMessageGist?: (text: string) => void; // Callback to publish a single message as a gist
 	onOpenInTab?: (file: {
 		path: string;
 		name: string;
@@ -1077,6 +1073,8 @@ export const TerminalOutput = memo(
 			autoScrollAiMode,
 			userMessageAlignment = 'right',
 			onOpenInTab,
+			ghCliAvailable,
+			onPublishMessageGist,
 		} = props;
 
 		// Use the forwarded ref if provided, otherwise create a local one
@@ -1148,7 +1146,7 @@ export const TerminalOutput = memo(
 		const hasRestoredScrollRef = useRef(false);
 
 		// Get active tab ID for resetting state on tab switch
-		const activeTabId = session.inputMode === 'ai' ? session.activeTabId : null;
+		const activeTabId = session.activeTabId;
 
 		// Copy text to clipboard with notification
 		const copyToClipboard = useCallback(async (text: string) => {
@@ -1283,44 +1281,45 @@ export const TerminalOutput = memo(
 
 		// Create ANSI converter with theme-aware colors
 		const ansiConverter = useMemo(() => {
+			const c = theme.colors;
 			return new Convert({
-				fg: theme.colors.textMain,
-				bg: theme.colors.bgMain,
+				fg: c.textMain,
+				bg: c.bgMain,
 				newline: false,
 				escapeXML: true,
 				stream: false,
 				colors: {
-					0: theme.colors.textMain, // black -> textMain
-					1: theme.colors.error, // red -> error
-					2: theme.colors.success, // green -> success
-					3: theme.colors.warning, // yellow -> warning
-					4: theme.colors.accent, // blue -> accent
-					5: theme.colors.accentDim, // magenta -> accentDim
-					6: theme.colors.accent, // cyan -> accent
-					7: theme.colors.textDim, // white -> textDim
+					0: c.ansiBlack ?? c.textMain,
+					1: c.ansiRed ?? c.error,
+					2: c.ansiGreen ?? c.success,
+					3: c.ansiYellow ?? c.warning,
+					4: c.ansiBlue ?? c.accent,
+					5: c.ansiMagenta ?? c.accentDim,
+					6: c.ansiCyan ?? c.accent,
+					7: c.ansiWhite ?? c.textDim,
+					8: c.ansiBrightBlack ?? c.textDim,
+					9: c.ansiBrightRed ?? c.error,
+					10: c.ansiBrightGreen ?? c.success,
+					11: c.ansiBrightYellow ?? c.warning,
+					12: c.ansiBrightBlue ?? c.accent,
+					13: c.ansiBrightMagenta ?? c.accentText,
+					14: c.ansiBrightCyan ?? c.accentText,
+					15: c.ansiBrightWhite ?? c.textMain,
 				},
 			});
 		}, [theme]);
 
 		// PERF: Memoize active tab lookup to avoid O(n) .find() on every render
-		const activeTab = useMemo(
-			() => (session.inputMode === 'ai' ? getActiveTab(session) : undefined),
-			[session.inputMode, session.aiTabs, session.activeTabId]
-		);
+		const activeTab = useMemo(() => getActiveTab(session), [session.aiTabs, session.activeTabId]);
 
 		// PERF: Memoize activeLogs to provide stable reference for collapsedLogs dependency
-		const activeLogs = useMemo(
-			(): LogEntry[] => (session.inputMode === 'ai' ? (activeTab?.logs ?? []) : session.shellLogs),
-			[session.inputMode, activeTab?.logs, session.shellLogs]
-		);
+		// TerminalOutput only handles AI mode; terminal mode renders via TerminalView
+		const activeLogs = useMemo((): LogEntry[] => activeTab?.logs ?? [], [activeTab?.logs]);
 
 		// In AI mode, collapse consecutive non-user entries into single response blocks
 		// This provides a cleaner view where each user message gets one response
 		// Tool and thinking entries are kept separate (not collapsed)
 		const collapsedLogs = useMemo(() => {
-			// Only collapse in AI mode
-			if (session.inputMode !== 'ai') return activeLogs;
-
 			const result: LogEntry[] = [];
 			let currentResponseGroup: LogEntry[] = [];
 
@@ -1357,7 +1356,7 @@ export const TerminalOutput = memo(
 			flushResponseGroup();
 
 			return result;
-		}, [activeLogs, session.inputMode]);
+		}, [activeLogs]);
 
 		// PERF: Debounce search query to avoid filtering on every keystroke
 		const debouncedSearchQuery = useDebouncedValue(outputSearchQuery, 150);
@@ -1502,9 +1501,7 @@ export const TerminalOutput = memo(
 			if (!container) return;
 
 			const shouldAutoScroll = () =>
-				session.inputMode === 'terminal' ||
-				(session.inputMode === 'ai' && autoScrollAiMode && !autoScrollPaused) ||
-				(session.inputMode === 'ai' && isAtBottomRef.current);
+				(autoScrollAiMode && !autoScrollPaused) || isAtBottomRef.current;
 
 			const scrollToBottom = () => {
 				if (!scrollContainerRef.current) return;
@@ -1548,7 +1545,7 @@ export const TerminalOutput = memo(
 			});
 
 			return () => observer.disconnect();
-		}, [session.inputMode, autoScrollAiMode, autoScrollPaused]);
+		}, [autoScrollAiMode, autoScrollPaused]);
 
 		// Restore scroll position when component mounts or initialScrollTop changes
 		// Uses requestAnimationFrame to ensure DOM is ready
@@ -1595,9 +1592,9 @@ export const TerminalOutput = memo(
 			[filteredLogs]
 		);
 
-		// Computed values for rendering
-		const isTerminal = session.inputMode === 'terminal';
-		const isAIMode = session.inputMode === 'ai';
+		// TerminalOutput only handles AI mode; terminal mode renders via TerminalView
+		const isTerminal = false;
+		const isAIMode = true;
 
 		// Memoized prose styles - applied once at container level instead of per-log-item
 		// IMPORTANT: Scoped to .terminal-output to avoid CSS conflicts with other prose containers (e.g., AutoRun panel)
@@ -1614,8 +1611,7 @@ export const TerminalOutput = memo(
 				aria-label="Terminal output"
 				className="terminal-output flex-1 flex flex-col overflow-hidden transition-colors outline-none relative"
 				style={{
-					backgroundColor:
-						session.inputMode === 'ai' ? theme.colors.bgMain : theme.colors.bgActivity,
+					backgroundColor: theme.colors.bgMain,
 				}}
 				onKeyDown={(e) => {
 					// Cmd+F to open search
@@ -1752,56 +1748,25 @@ export const TerminalOutput = memo(
 							onFileClick={onFileClick}
 							onShowErrorDetails={onShowErrorDetails}
 							onSaveToFile={handleSaveToFile}
+							ghCliAvailable={ghCliAvailable}
+							onPublishGist={onPublishMessageGist}
 							userMessageAlignment={userMessageAlignment}
 						/>
 					))}
 
-					{/* Terminal busy indicator - only show for terminal commands (AI thinking moved to ThinkingStatusPill) */}
-					{session.state === 'busy' &&
-						session.inputMode === 'terminal' &&
-						session.busySource === 'terminal' && (
-							<div
-								className="flex flex-col items-center justify-center gap-2 py-6 mx-6 my-4 rounded-xl border"
-								style={{
-									backgroundColor: theme.colors.bgActivity,
-									borderColor: theme.colors.border,
-								}}
-							>
-								<div className="flex items-center gap-3">
-									<div
-										className="w-2 h-2 rounded-full animate-pulse"
-										style={{ backgroundColor: theme.colors.warning }}
-									/>
-									<span className="text-sm" style={{ color: theme.colors.textMain }}>
-										{session.statusMessage || 'Executing command...'}
-									</span>
-									{session.thinkingStartTime && (
-										<ElapsedTimeDisplay
-											thinkingStartTime={session.thinkingStartTime}
-											textColor={theme.colors.textDim}
-										/>
-									)}
-								</div>
-							</div>
-						)}
-
-					{/* Queued items section - only show in AI mode, filtered to active tab */}
-					{session.inputMode === 'ai' &&
-						session.executionQueue &&
-						session.executionQueue.length > 0 && (
-							<QueuedItemsList
-								executionQueue={session.executionQueue}
-								theme={theme}
-								onRemoveQueuedItem={onRemoveQueuedItem}
-								activeTabId={activeTabId || undefined}
-							/>
-						)}
+					{/* Queued items section - filtered to active tab */}
+					{session.executionQueue && session.executionQueue.length > 0 && (
+						<QueuedItemsList
+							executionQueue={session.executionQueue}
+							theme={theme}
+							onRemoveQueuedItem={onRemoveQueuedItem}
+							activeTabId={activeTabId || undefined}
+						/>
+					)}
 
 					{/* End ref for scrolling - always rendered so Cmd+Shift+J works even when busy */}
 					<div ref={logsEndRef} />
 				</div>
-
-				{/* Auto-scroll toggle removed — was too noisy */}
 
 				{/* Copied to Clipboard Notification */}
 				{showCopiedNotification && (

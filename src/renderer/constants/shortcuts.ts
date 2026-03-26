@@ -21,6 +21,7 @@ export const DEFAULT_SHORTCUTS: Record<string, Shortcut> = {
 	moveToGroup: { id: 'moveToGroup', label: 'Move Session to Group', keys: ['Meta', 'Shift', 'm'] },
 	toggleMode: { id: 'toggleMode', label: 'Switch AI/Shell Mode', keys: ['Meta', 'j'] },
 	quickAction: { id: 'quickAction', label: 'Quick Actions', keys: ['Meta', 'k'] },
+	agentSwitcher: { id: 'agentSwitcher', label: 'Switch Agent', keys: ['Meta', 'o'] },
 	help: { id: 'help', label: 'Show Shortcuts', keys: ['Meta', '/'] },
 	settings: { id: 'settings', label: 'Open Settings', keys: ['Meta', ','] },
 	agentSettings: { id: 'agentSettings', label: 'Open Agent Settings', keys: ['Alt', 'Meta', ','] },
@@ -54,7 +55,7 @@ export const DEFAULT_SHORTCUTS: Record<string, Shortcut> = {
 		keys: ['Alt', 'Meta', 'p'],
 	},
 	usageDashboard: { id: 'usageDashboard', label: 'Usage Dashboard', keys: ['Alt', 'Meta', 'u'] },
-	jumpToBottom: { id: 'jumpToBottom', label: 'Jump to Bottom', keys: ['Meta', 'Shift', 'j'] },
+	jumpToBottom: { id: 'jumpToBottom', label: 'Jump to Bottom', keys: ['Alt', 'j'] },
 	prevTab: { id: 'prevTab', label: 'Previous Tab', keys: ['Meta', 'Shift', '['] },
 	nextTab: { id: 'nextTab', label: 'Next Tab', keys: ['Meta', 'Shift', ']'] },
 	openImageCarousel: { id: 'openImageCarousel', label: 'Open Image Carousel', keys: ['Meta', 'y'] },
@@ -77,6 +78,21 @@ export const DEFAULT_SHORTCUTS: Record<string, Shortcut> = {
 		id: 'directorNotes',
 		label: "Director's Notes",
 		keys: ['Meta', 'Shift', 'o'],
+	},
+	openCue: {
+		id: 'openCue',
+		label: 'Maestro Cue',
+		keys: ['Alt', 'q'],
+	},
+	filterUnreadAgents: {
+		id: 'filterUnreadAgents',
+		label: 'Filter Unread Agents',
+		keys: ['Meta', 'Shift', 'u'],
+	},
+	jumpToTerminal: {
+		id: 'jumpToTerminal',
+		label: 'Jump to Nearest Terminal',
+		keys: ['Alt', 'Meta', 'j'],
 	},
 	fontSizeReset: {
 		id: 'fontSizeReset',
@@ -136,6 +152,20 @@ export const FIXED_SHORTCUTS: Record<string, Shortcut> = {
 	},
 };
 
+// Terminal tab shortcuts
+export const TERMINAL_SHORTCUTS: Record<string, Shortcut> = {
+	newTerminalTab: {
+		id: 'newTerminalTab',
+		label: 'New Terminal Tab',
+		keys: ['Control', 'Shift', '`'],
+	},
+	clearTerminal: {
+		id: 'clearTerminal',
+		label: 'Clear Terminal',
+		keys: ['Meta', 'k'],
+	},
+};
+
 // Tab navigation shortcuts (AI mode only)
 export const TAB_SHORTCUTS: Record<string, Shortcut> = {
 	tabSwitcher: { id: 'tabSwitcher', label: 'Tab Switcher', keys: ['Alt', 'Meta', 't'] },
@@ -178,7 +208,7 @@ export const TAB_SHORTCUTS: Record<string, Shortcut> = {
 	toggleTabUnread: {
 		id: 'toggleTabUnread',
 		label: 'Toggle Tab Unread',
-		keys: ['Meta', 'Shift', 'u'],
+		keys: ['Alt', 'Shift', 'u'],
 	},
 	goToTab1: { id: 'goToTab1', label: 'Go to Tab 1', keys: ['Meta', '1'] },
 	goToTab2: { id: 'goToTab2', label: 'Go to Tab 2', keys: ['Meta', '2'] },

@@ -89,9 +89,11 @@ const HORIZONTAL_SPACING = 340;
 const VERTICAL_GAP = 30;
 
 // Radial specific constants
-const RADIAL_BASE_RADIUS = 280;
-const RADIAL_RING_SPACING = 240;
-const RADIAL_EXTERNAL_OFFSET = 180;
+const RADIAL_BASE_RADIUS = 400;
+const RADIAL_RING_SPACING = 340;
+const RADIAL_EXTERNAL_OFFSET = 260;
+/** Minimum arc-length (px) between node centers on a ring to avoid overlap */
+const RADIAL_MIN_ARC_LENGTH = NODE_WIDTH + 60;
 
 // Force specific constants
 const FORCE_LINK_DISTANCE = 300;
@@ -604,7 +606,10 @@ export const calculateRadialLayout: LayoutFunction = (
 		// Sort alphabetically for deterministic positioning
 		nodesAtDepth.sort((a, b) => a.label.localeCompare(b.label));
 
-		const radius = RADIAL_BASE_RADIUS + (depth - 1) * RADIAL_RING_SPACING;
+		// Ensure the ring is large enough so nodes don't overlap
+		const baseRadius = RADIAL_BASE_RADIUS + (depth - 1) * RADIAL_RING_SPACING;
+		const minRadiusForCount = (nodesAtDepth.length * RADIAL_MIN_ARC_LENGTH) / (2 * Math.PI);
+		const radius = Math.max(baseRadius, minRadiusForCount);
 		maxRadius = Math.max(maxRadius, radius);
 
 		// If only one node, place it directly above center

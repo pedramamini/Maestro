@@ -144,10 +144,13 @@ interface ParsedDocument {
 	phase: number;
 }
 
+import { PLAYBOOKS_DIR } from '../../../../shared/maestro-paths';
+
 /**
- * Default Auto Run folder name
+ * Default Auto Run folder name.
+ * @deprecated Import PLAYBOOKS_DIR from shared/maestro-paths instead.
  */
-export const AUTO_RUN_FOLDER_NAME = 'Auto Run Docs';
+export const AUTO_RUN_FOLDER_NAME = PLAYBOOKS_DIR;
 
 /**
  * Sanitize a filename to prevent path traversal attacks.
@@ -877,7 +880,9 @@ class PhaseGenerator {
 					if (fileWatcherCleanup) {
 						fileWatcherCleanup();
 					}
-					window.maestro.process.kill(sessionId).catch(() => {});
+					window.maestro.process
+						.kill(sessionId)
+						.catch((err) => console.warn('[PhaseGenerator] Failed to kill session:', err));
 					resolve({
 						success: false,
 						error: 'Generation timed out after 20 minutes of inactivity. Please try again.',
@@ -1236,7 +1241,9 @@ class PhaseGenerator {
 		}
 		// Stop watching the Auto Run folder
 		if (this.currentWatchPath) {
-			window.maestro.autorun.unwatchFolder(this.currentWatchPath).catch(() => {});
+			window.maestro.autorun
+				.unwatchFolder(this.currentWatchPath)
+				.catch((err) => console.warn('[PhaseGenerator] Failed to unwatch folder:', err));
 			this.currentWatchPath = undefined;
 		}
 	}

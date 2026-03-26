@@ -47,6 +47,10 @@ const DocumentGraphView = lazy(() =>
 const DirectorNotesModal = lazy(() =>
 	import('./components/DirectorNotes').then((m) => ({ default: m.DirectorNotesModal }))
 );
+const CueModal = lazy(() => import('./components/CueModal').then((m) => ({ default: m.CueModal })));
+const CueYamlEditor = lazy(() =>
+	import('./components/CueYamlEditor').then((m) => ({ default: m.CueYamlEditor }))
+);
 
 import { captureException } from './utils/sentry';
 
@@ -99,6 +103,7 @@ import {
 	useAutoRunHandlers,
 	// Tab handlers
 	useTabHandlers,
+	useTerminalTabHandlers,
 	// Group chat handlers
 	useGroupChatHandlers,
 	// Modal handlers
@@ -143,6 +148,7 @@ import {
 import { useMainPanelProps, useSessionListProps, useRightPanelProps } from './hooks/props';
 import { useAgentListeners } from './hooks/agent/useAgentListeners';
 import { useSymphonyContribution } from './hooks/symphony/useSymphonyContribution';
+import { useCueAutoDiscovery } from './hooks/useCueAutoDiscovery';
 
 // Import contexts
 import { useLayerStack } from './contexts/LayerStackContext';
@@ -181,6 +187,7 @@ import {
 	navigateToLastUnifiedTab,
 	navigateToNextUnifiedTab,
 	navigateToPrevUnifiedTab,
+	navigateToClosestTerminalTab,
 	hasActiveWizard,
 } from './utils/tabHelpers';
 // validateNewSession moved to useSymphonyContribution, useSessionCrud hooks
@@ -336,6 +343,14 @@ function MaestroConsoleInner() {
 		// Director's Notes Modal
 		directorNotesOpen,
 		setDirectorNotesOpen,
+		// Maestro Cue Modal
+		cueModalOpen,
+		setCueModalOpen,
+		// Maestro Cue YAML Editor (standalone)
+		cueYamlEditorOpen,
+		cueYamlEditorSessionId,
+		cueYamlEditorProjectRoot,
+		closeCueYamlEditor,
 	} = useModalActions();
 
 	// --- MOBILE LANDSCAPE MODE (reading-only view) ---
@@ -406,8 +421,6 @@ function MaestroConsoleInner() {
 		setChatRawTextMode,
 		showHiddenFiles: _showHiddenFiles,
 		setShowHiddenFiles: _setShowHiddenFiles,
-		terminalWidth: _terminalWidth,
-		setTerminalWidth: _setTerminalWidth,
 		logLevel,
 		logViewerSelectedLevels,
 		setLogViewerSelectedLevels,
@@ -454,6 +467,15 @@ function MaestroConsoleInner() {
 		setSuppressWindowsWarning,
 		encoreFeatures,
 	} = settings;
+
+	// Reset modal-open flags when their Encore Feature toggle is disabled
+	useEffect(() => {
+		if (!encoreFeatures.symphony) setSymphonyModalOpen(false);
+	}, [encoreFeatures.symphony, setSymphonyModalOpen]);
+
+	useEffect(() => {
+		if (!encoreFeatures.usageStats) setUsageDashboardOpen(false);
+	}, [encoreFeatures.usageStats, setUsageDashboardOpen]);
 
 	// --- KEYBOARD SHORTCUT HELPERS ---
 	const { isShortcut, isTabShortcut } = useKeyboardShortcutHelpers({
@@ -598,8 +620,14 @@ function MaestroConsoleInner() {
 	} = useGroupChatStore.getState();
 
 	// --- APP INITIALIZATION (extracted hook, Phase 2G) ---
-	const { ghCliAvailable, sshRemoteConfigs, speckitCommands, openspecCommands, saveFileGistUrl } =
-		useAppInitialization();
+	const {
+		ghCliAvailable,
+		sshRemoteConfigs,
+		speckitCommands,
+		openspecCommands,
+		bmadCommands,
+		saveFileGistUrl,
+	} = useAppInitialization();
 
 	// Wrapper for setActiveSessionId that also dismisses active group chat
 	const setActiveSessionId = useCallback(
@@ -702,7 +730,7 @@ function MaestroConsoleInner() {
 	);
 
 	// Startup effects (splash, GitHub CLI, Windows warning, gist URLs, beta updates,
-	// update check, leaderboard sync, SpecKit/OpenSpec loading, SSH configs, stats DB check,
+	// update check, leaderboard sync, SpecKit/OpenSpec/BMAD loading, SSH configs, stats DB check,
 	// notification settings sync, playground debug) — provided by useAppInitialization hook
 
 	// Expose debug helpers to window for console access
@@ -733,10 +761,12 @@ function MaestroConsoleInner() {
 	const customAICommandsRef = useRef(customAICommands);
 	const speckitCommandsRef = useRef(speckitCommands);
 	const openspecCommandsRef = useRef(openspecCommands);
+	const bmadCommandsRef = useRef(bmadCommands);
 	const fileTabAutoRefreshEnabledRef = useRef(fileTabAutoRefreshEnabled);
 	customAICommandsRef.current = customAICommands;
 	speckitCommandsRef.current = speckitCommands;
 	openspecCommandsRef.current = openspecCommands;
+	bmadCommandsRef.current = bmadCommands;
 	fileTabAutoRefreshEnabledRef.current = fileTabAutoRefreshEnabled;
 
 	// Note: spawnBackgroundSynopsisRef and spawnAgentWithPromptRef are now provided by useAgentExecution hook
@@ -785,6 +815,9 @@ function MaestroConsoleInner() {
 	// --- SESSION RESTORATION (extracted hook, Phase 2E) ---
 	const { initialLoadComplete } = useSessionRestoration();
 
+	// --- CUE AUTO-DISCOVERY (gated by Encore Feature) ---
+	useCueAutoDiscovery(sessions, encoreFeatures);
+
 	// --- TAB HANDLERS (extracted hook) ---
 	const {
 		activeTab,
@@ -831,6 +864,24 @@ function MaestroConsoleInner() {
 		handleAtBottomChange,
 		handleDeleteLog,
 	} = useTabHandlers();
+
+	// --- TERMINAL TAB HANDLERS ---
+	const { handleOpenTerminalTab, handleSelectTerminalTab, handleCloseTerminalTab } =
+		useTerminalTabHandlers();
+
+	// Opens the rename modal for a terminal tab (1-arg wrapper for useMainPanelProps)
+	const handleRequestTerminalTabRename = useCallback(
+		(tabId: string) => {
+			const session = selectActiveSession(useSessionStore.getState());
+			if (!session) return;
+			const tab = session.terminalTabs?.find((t) => t.id === tabId);
+			if (!tab) return;
+			setRenameTabId(tabId);
+			setRenameTabInitialName(tab.name ?? '');
+			setRenameTabModalOpen(true);
+		},
+		[setRenameTabId, setRenameTabInitialName, setRenameTabModalOpen]
+	);
 
 	// --- GROUP CHAT HANDLERS (extracted from App.tsx Phase 2B) ---
 	const {
@@ -911,6 +962,7 @@ function MaestroConsoleInner() {
 		handleOpenMarketplace,
 		handleEditAgent,
 		handleOpenCreatePRSession,
+		handleConfigureCue,
 		handleStartTour,
 		handleSetLightboxImage,
 		handleCloseLightbox,
@@ -1005,6 +1057,16 @@ function MaestroConsoleInner() {
 		[activeSession?.inputMode, activeSession?.shellCwd, activeSession?.cwd]
 	);
 
+	// Auto-focus the AI input box when switching from terminal to AI mode
+	const prevInputModeRef = useRef(activeSession?.inputMode);
+	useEffect(() => {
+		const currentMode = activeSession?.inputMode;
+		if (prevInputModeRef.current === 'terminal' && currentMode === 'ai') {
+			setTimeout(() => inputRef.current?.focus(), 0);
+		}
+		prevInputModeRef.current = currentMode;
+	}, [activeSession?.inputMode]);
+
 	// PERF: Memoize sessions for NewInstanceModal validation (only recompute when modal is open)
 	// This prevents re-renders of the modal's validation logic on every session state change
 	const sessionsForValidation = useMemo(
@@ -1086,51 +1148,58 @@ function MaestroConsoleInner() {
 		handleSummarizeAndContinue,
 	} = useSummarizeAndContinue(activeSession ?? null);
 
-	// Combine custom AI commands with spec-kit and openspec commands for input processing (slash command execution)
-	// This ensures speckit and openspec commands are processed the same way as custom commands
+	// Combine custom AI commands with bundled methodology commands for input processing.
 	const allCustomCommands = useMemo((): CustomAICommand[] => {
-		// Convert speckit commands to CustomAICommand format
 		const speckitAsCustom: CustomAICommand[] = speckitCommands.map((cmd) => ({
 			id: `speckit-${cmd.id}`,
 			command: cmd.command,
 			description: cmd.description,
 			prompt: cmd.prompt,
-			isBuiltIn: true, // Speckit commands are built-in (bundled)
+			isBuiltIn: true,
 		}));
-		// Convert openspec commands to CustomAICommand format
 		const openspecAsCustom: CustomAICommand[] = openspecCommands.map((cmd) => ({
 			id: `openspec-${cmd.id}`,
 			command: cmd.command,
 			description: cmd.description,
 			prompt: cmd.prompt,
-			isBuiltIn: true, // OpenSpec commands are built-in (bundled)
+			isBuiltIn: true,
 		}));
-		return [...customAICommands, ...speckitAsCustom, ...openspecAsCustom];
-	}, [customAICommands, speckitCommands, openspecCommands]);
+		const bmadAsCustom: CustomAICommand[] = bmadCommands.map((cmd) => ({
+			id: `bmad-${cmd.id}`,
+			command: cmd.command,
+			description: cmd.description,
+			prompt: cmd.prompt,
+			isBuiltIn: true,
+		}));
+		return [...customAICommands, ...speckitAsCustom, ...openspecAsCustom, ...bmadAsCustom];
+	}, [customAICommands, speckitCommands, openspecCommands, bmadCommands]);
 
-	// Combine built-in slash commands with custom AI commands, spec-kit commands, openspec commands, AND agent-specific commands for autocomplete
+	// Combine built-in slash commands with custom AI commands, bundled methodology
+	// commands, and agent-specific commands for autocomplete.
 	const allSlashCommands = useMemo(() => {
 		const customCommandsAsSlash = customAICommands.map((cmd) => ({
 			command: cmd.command,
 			description: cmd.description,
-			aiOnly: true, // Custom AI commands are only available in AI mode
-			prompt: cmd.prompt, // Include prompt for execution
+			aiOnly: true,
+			prompt: cmd.prompt,
 		}));
-		// Spec Kit commands (bundled from github/spec-kit)
 		const speckitCommandsAsSlash = speckitCommands.map((cmd) => ({
 			command: cmd.command,
 			description: cmd.description,
-			aiOnly: true, // Spec-kit commands are only available in AI mode
-			prompt: cmd.prompt, // Include prompt for execution
-			isSpeckit: true, // Mark as spec-kit command for special handling
+			aiOnly: true,
+			prompt: cmd.prompt,
 		}));
-		// OpenSpec commands (bundled from Fission-AI/OpenSpec)
 		const openspecCommandsAsSlash = openspecCommands.map((cmd) => ({
 			command: cmd.command,
 			description: cmd.description,
-			aiOnly: true, // OpenSpec commands are only available in AI mode
-			prompt: cmd.prompt, // Include prompt for execution
-			isOpenspec: true, // Mark as openspec command for special handling
+			aiOnly: true,
+			prompt: cmd.prompt,
+		}));
+		const bmadCommandsAsSlash = bmadCommands.map((cmd) => ({
+			command: cmd.command,
+			description: cmd.description,
+			aiOnly: true,
+			prompt: cmd.prompt,
 		}));
 		// Only include agent-specific commands if the agent supports slash commands
 		// This allows built-in and custom commands to be shown for all agents (Codex, OpenCode, etc.)
@@ -1151,12 +1220,14 @@ function MaestroConsoleInner() {
 			...customCommandsAsSlash,
 			...speckitCommandsAsSlash,
 			...openspecCommandsAsSlash,
+			...bmadCommandsAsSlash,
 			...agentCommands,
 		];
 	}, [
 		customAICommands,
 		speckitCommands,
 		openspecCommands,
+		bmadCommands,
 		activeSession?.agentCommands,
 		activeSession?.toolType,
 		hasActiveSessionCapability,
@@ -1546,6 +1617,35 @@ function MaestroConsoleInner() {
 		[setActiveSessionId]
 	);
 
+	// Deep link navigation handler — processes maestro:// URLs from OS notifications,
+	// external apps, and CLI commands
+	useEffect(() => {
+		const unsubscribe = window.maestro.app.onDeepLink((deepLink) => {
+			if (deepLink.action === 'focus') {
+				// Window already brought to foreground by main process
+				return;
+			}
+			if (deepLink.action === 'session' && deepLink.sessionId) {
+				const targetExists = sessionsRef.current.some((s) => s.id === deepLink.sessionId);
+				if (!targetExists) return;
+				handleToastSessionClick(deepLink.sessionId, deepLink.tabId);
+				return;
+			}
+			if (deepLink.action === 'group' && deepLink.groupId) {
+				// Find first session in group and navigate to it
+				const groupSession = sessionsRef.current.find((s) => s.groupId === deepLink.groupId);
+				if (groupSession) {
+					handleToastSessionClick(groupSession.id);
+				}
+				// Expand the group if it's collapsed
+				setGroups((prev) =>
+					prev.map((g) => (g.id === deepLink.groupId ? { ...g, collapsed: false } : g))
+				);
+			}
+		});
+		return unsubscribe;
+	}, [handleToastSessionClick, setGroups]);
+
 	// --- SESSION SORTING ---
 	// Extracted hook for sorted and visible session lists (ignores leading emojis for alphabetization)
 	const { sortedSessions, visibleSessions } = useSortedSessions({
@@ -1641,6 +1741,7 @@ function MaestroConsoleInner() {
 		customAICommandsRef,
 		speckitCommandsRef,
 		openspecCommandsRef,
+		bmadCommandsRef,
 		toggleGlobalLive,
 		isLiveMode,
 		sshRemoteConfigs,
@@ -1665,6 +1766,7 @@ function MaestroConsoleInner() {
 		customAICommandsRef,
 		speckitCommandsRef,
 		openspecCommandsRef,
+		bmadCommandsRef,
 	});
 	// Bridge: keep the original processQueuedItemRef in sync
 	processQueuedItemRef.current = processQueuedItem;
@@ -1704,6 +1806,194 @@ function MaestroConsoleInner() {
 		handleFileClick,
 		handleOpenFileTab,
 	});
+
+	// --- REMOTE EVENT LISTENERS (from useRemoteIntegration CustomEvents) ---
+
+	// Handle remote open file tab events from CLI/web interface
+	useEffect(() => {
+		const handler = async (e: Event) => {
+			const { sessionId, filePath } = (e as CustomEvent).detail;
+			const session = sessionsRef.current.find((s) => s.id === sessionId);
+			if (!session) {
+				console.error('[Remote] Session not found for openFileTab:', sessionId);
+				return;
+			}
+			const sshRemoteId =
+				session.sshRemoteId || session.sessionSshRemoteConfig?.remoteId || undefined;
+			// Switch to the target session
+			setActiveSessionId(sessionId);
+			try {
+				const [content, stat] = await Promise.all([
+					window.maestro.fs.readFile(filePath, sshRemoteId),
+					window.maestro.fs.stat(filePath, sshRemoteId).catch(() => null),
+				]);
+				if (content !== null) {
+					const filename = filePath.split(/[\\/]/).pop() || filePath;
+					const lastModified = stat?.modifiedAt ? new Date(stat.modifiedAt).getTime() : undefined;
+					handleOpenFileTab(
+						{
+							path: filePath,
+							name: filename,
+							content,
+							lastModified,
+							sshRemoteId,
+						},
+						{ targetSessionId: sessionId }
+					);
+				}
+			} catch (error) {
+				console.error('[Remote] Failed to open file tab:', error);
+			}
+		};
+		window.addEventListener('maestro:openFileTab', handler);
+		return () => window.removeEventListener('maestro:openFileTab', handler);
+	}, [handleOpenFileTab, setActiveSessionId, sessionsRef]);
+
+	// Handle remote refresh file tree events from CLI/web interface
+	useEffect(() => {
+		const handler = (e: Event) => {
+			const { sessionId } = (e as CustomEvent).detail;
+			refreshFileTree(sessionId);
+		};
+		window.addEventListener('maestro:refreshFileTree', handler);
+		return () => window.removeEventListener('maestro:refreshFileTree', handler);
+	}, [refreshFileTree]);
+
+	// Handle remote refresh auto-run docs events from CLI/web interface
+	useEffect(() => {
+		const handler = (e: Event) => {
+			const { sessionId } = (e as CustomEvent).detail;
+			const currentActiveId = useSessionStore.getState().activeSessionId;
+			if (sessionId === currentActiveId) {
+				// Already the active session - refresh immediately
+				handleAutoRunRefresh();
+			} else {
+				// Switch to the target session - the autoRunFolderPath useEffect
+				// will trigger handleAutoRunRefresh for the newly active session
+				setActiveSessionId(sessionId);
+			}
+		};
+		window.addEventListener('maestro:refreshAutoRunDocs', handler);
+		return () => window.removeEventListener('maestro:refreshAutoRunDocs', handler);
+	}, [handleAutoRunRefresh, setActiveSessionId]);
+
+	// Handle remote configure auto-run events from CLI/web interface
+	useEffect(() => {
+		const handler = async (e: Event) => {
+			const { sessionId, config, responseChannel } = (e as CustomEvent).detail;
+
+			try {
+				// Find the target session
+				const session = sessionsRef.current.find((s) => s.id === sessionId);
+				if (!session) {
+					window.maestro.process.sendRemoteConfigureAutoRunResponse(responseChannel, {
+						success: false,
+						error: `Session ${sessionId} not found`,
+					});
+					return;
+				}
+
+				// Case 1: Save as playbook
+				if (config.saveAsPlaybook) {
+					const result = await window.maestro.playbooks.create(sessionId, {
+						name: config.saveAsPlaybook,
+						documents: config.documents || [],
+						loopEnabled: config.loopEnabled || false,
+						maxLoops: config.maxLoops,
+						prompt: config.prompt || '',
+					});
+					window.maestro.process.sendRemoteConfigureAutoRunResponse(responseChannel, {
+						success: result.success,
+						playbookId: result.playbook?.id,
+						error: result.error,
+					});
+					return;
+				}
+
+				// Case 2: Launch auto-run immediately
+				if (config.launch) {
+					const folderPath = session.autoRunFolderPath;
+					if (!folderPath) {
+						window.maestro.process.sendRemoteConfigureAutoRunResponse(responseChannel, {
+							success: false,
+							error: 'No Auto Run folder configured for this session',
+						});
+						return;
+					}
+
+					const documents = (config.documents || []).map(
+						(doc: { filename: string; resetOnCompletion?: boolean }) => {
+							// Compute path relative to the session's autoRunFolderPath.
+							// CLI sends full absolute paths (e.g., "/path/to/Auto Run Docs/subdir/temp.md")
+							// but the batch processor expects the path relative to folderPath without .md
+							// (e.g., "subdir/temp").
+							let name = doc.filename.replace(/\.md$/i, '');
+							// Normalize separators to forward slash for comparison
+							const normalized = name.replace(/\\/g, '/');
+							const normalizedFolder = (folderPath || '').replace(/\\/g, '/');
+							// Case-insensitive prefix check for cross-platform compatibility (Windows drive letters)
+							const normalizedLower = normalized.toLowerCase();
+							const folderLower = normalizedFolder.toLowerCase();
+							if (normalizedFolder && normalizedLower.startsWith(folderLower + '/')) {
+								name = normalized.substring(normalizedFolder.length + 1);
+							} else {
+								// Fallback for paths not under folderPath: use basename only
+								const lastSlash = Math.max(name.lastIndexOf('/'), name.lastIndexOf('\\'));
+								if (lastSlash >= 0) name = name.substring(lastSlash + 1);
+							}
+							return {
+								id: generateId(),
+								filename: name,
+								resetOnCompletion: doc.resetOnCompletion || false,
+								isDuplicate: false,
+							};
+						}
+					);
+
+					if (documents.length === 0) {
+						window.maestro.process.sendRemoteConfigureAutoRunResponse(responseChannel, {
+							success: false,
+							error: 'No documents provided for auto-run',
+						});
+						return;
+					}
+
+					const batchConfig = {
+						documents,
+						prompt: config.prompt || '',
+						loopEnabled: config.loopEnabled || false,
+						maxLoops: config.maxLoops,
+					};
+
+					// Send success response immediately — startBatchRun is long-running
+					// and would exceed the IPC/CLI timeout if awaited.
+					window.maestro.process.sendRemoteConfigureAutoRunResponse(responseChannel, {
+						success: true,
+					});
+					startBatchRun(sessionId, batchConfig, folderPath).catch((err) => {
+						console.error('[Remote] Failed to start auto-run:', err);
+					});
+					return;
+				}
+
+				// Case 3: Just configure (no launch, no save)
+				// Without --launch or --save-as, there is no persistent state to update.
+				// Return an error guiding the user to use one of those flags.
+				window.maestro.process.sendRemoteConfigureAutoRunResponse(responseChannel, {
+					success: false,
+					error: 'Use --launch to start auto-run immediately, or --save-as to save as a playbook',
+				});
+			} catch (error) {
+				console.error('[Remote] Failed to configure auto-run:', error);
+				window.maestro.process.sendRemoteConfigureAutoRunResponse(responseChannel, {
+					success: false,
+					error: String(error),
+				});
+			}
+		};
+		window.addEventListener('maestro:configureAutoRun', handler);
+		return () => window.removeEventListener('maestro:configureAutoRun', handler);
+	}, [sessionsRef, startBatchRun]);
 
 	// --- GROUP MANAGEMENT ---
 	// Extracted hook for group CRUD operations (toggle, rename, create, drag-drop)
@@ -1763,6 +2053,7 @@ function MaestroConsoleInner() {
 				message: prDetails.title,
 				actionUrl: prDetails.url,
 				actionLabel: prDetails.url,
+				sessionId: session?.id,
 			});
 			// Add history entry with PR details
 			if (session) {
@@ -1810,10 +2101,19 @@ function MaestroConsoleInner() {
 	const handleUtilityTabSelect = useCallback(
 		(tabId: string) => {
 			if (!activeSession) return;
-			// Clear activeFileTabId when selecting an AI tab
+			// Clear activeFileTabId and activeTerminalTabId when selecting an AI tab.
+			// Also reset inputMode to 'ai' in case we're coming from terminal mode.
 			setSessions((prev) =>
 				prev.map((s) =>
-					s.id === activeSession.id ? { ...s, activeTabId: tabId, activeFileTabId: null } : s
+					s.id === activeSession.id
+						? {
+								...s,
+								activeTabId: tabId,
+								activeFileTabId: null,
+								activeTerminalTabId: null,
+								inputMode: 'ai',
+							}
+						: s
 				)
 			);
 		},
@@ -1822,9 +2122,14 @@ function MaestroConsoleInner() {
 	const handleUtilityFileTabSelect = useCallback(
 		(tabId: string) => {
 			if (!activeSession) return;
-			// Set activeFileTabId, keep activeTabId as-is (for when returning to AI tabs)
+			// Set activeFileTabId, keep activeTabId as-is (for when returning to AI tabs).
+			// Also reset inputMode to 'ai' and clear activeTerminalTabId in case we're coming from terminal mode.
 			setSessions((prev) =>
-				prev.map((s) => (s.id === activeSession.id ? { ...s, activeFileTabId: tabId } : s))
+				prev.map((s) =>
+					s.id === activeSession.id
+						? { ...s, activeFileTabId: tabId, activeTerminalTabId: null, inputMode: 'ai' }
+						: s
+				)
 			);
 		},
 		[activeSession]
@@ -1980,6 +2285,7 @@ function MaestroConsoleInner() {
 		navigateToLastUnifiedTab,
 		navigateToNextUnifiedTab,
 		navigateToPrevUnifiedTab,
+		navigateToClosestTerminalTab,
 		setFileTreeFilterOpen,
 		isShortcut,
 		isTabShortcut,
@@ -2001,6 +2307,7 @@ function MaestroConsoleInner() {
 		setMarketplaceModalOpen,
 		setSymphonyModalOpen,
 		setDirectorNotesOpen,
+		setCueModalOpen,
 		encoreFeatures,
 		setShowNewGroupChatModal,
 		deleteGroupChatWithConfirmation,
@@ -2048,12 +2355,21 @@ function MaestroConsoleInner() {
 		// Close current tab (Cmd+W) - works with both file and AI tabs
 		handleCloseCurrentTab,
 
+		// Terminal tab handlers for keyboard shortcuts (Phase 9)
+		handleOpenTerminalTab,
+		handleSelectTerminalTab,
+		handleCloseTerminalTab,
+		mainPanelRef,
+
 		// Session bookmark toggle
 		toggleBookmark,
 
 		// Auto-scroll AI mode toggle
 		autoScrollAiMode,
 		setAutoScrollAiMode,
+
+		// Unread agents filter toggle
+		toggleShowUnreadAgentsOnly: useUIStore.getState().toggleShowUnreadAgentsOnly,
 	};
 
 	// NOTE: File explorer effects (flat file list, pending jump path, scroll, keyboard nav) are
@@ -2222,6 +2538,12 @@ function MaestroConsoleInner() {
 		activeFileTab,
 		handleFileTabSelect: handleSelectFileTab,
 		handleFileTabClose: handleCloseFileTab,
+
+		// Terminal tab callbacks (Phase 8)
+		handleOpenTerminalTab,
+		handleTerminalTabSelect: handleSelectTerminalTab,
+		handleTerminalTabClose: handleCloseTerminalTab,
+		handleTerminalTabRename: handleRequestTerminalTabRename,
 		handleFileTabEditModeChange,
 		handleFileTabEditContentChange,
 		handleFileTabScrollPositionChange,
@@ -2325,6 +2647,7 @@ function MaestroConsoleInner() {
 		handleOpenWorktreeConfigSession,
 		handleDeleteWorktreeSession,
 		handleToggleWorktreeExpanded,
+		handleConfigureCue,
 		openWizardModal,
 		handleOpenFeedbackModal,
 		handleStartTour,
@@ -2598,7 +2921,7 @@ function MaestroConsoleInner() {
 					setFeedbackModalOpen={setFeedbackModalOpen}
 					setLogViewerOpen={setLogViewerOpen}
 					setProcessMonitorOpen={setProcessMonitorOpen}
-					setUsageDashboardOpen={setUsageDashboardOpen}
+					setUsageDashboardOpen={encoreFeatures.usageStats ? setUsageDashboardOpen : undefined}
 					setActiveRightTab={setActiveRightTab}
 					setAgentSessionsOpen={setAgentSessionsOpen}
 					setActiveAgentSessionId={setActiveAgentSessionId}
@@ -2633,6 +2956,7 @@ function MaestroConsoleInner() {
 					hasActiveSessionCapability={hasActiveSessionCapability}
 					onOpenMergeSession={handleQuickActionsOpenMergeSession}
 					onOpenSendToAgent={handleQuickActionsOpenSendToAgent}
+					onQuickCreateWorktree={handleQuickCreateWorktree}
 					onOpenCreatePR={handleQuickActionsOpenCreatePR}
 					onSummarizeAndContinue={handleQuickActionsSummarizeAndContinue}
 					canSummarizeActiveTab={
@@ -2673,15 +2997,18 @@ function MaestroConsoleInner() {
 					getDocumentTaskCount={getDocumentTaskCount}
 					onAutoRunRefresh={handleAutoRunRefresh}
 					onOpenMarketplace={handleOpenMarketplace}
-					onOpenSymphony={() => setSymphonyModalOpen(true)}
+					onOpenSymphony={encoreFeatures.symphony ? () => setSymphonyModalOpen(true) : undefined}
 					onOpenDirectorNotes={
 						encoreFeatures.directorNotes ? () => setDirectorNotesOpen(true) : undefined
 					}
+					onOpenMaestroCue={encoreFeatures.maestroCue ? () => setCueModalOpen(true) : undefined}
+					onConfigureCue={encoreFeatures.maestroCue ? handleConfigureCue : undefined}
 					autoScrollAiMode={autoScrollAiMode}
 					setAutoScrollAiMode={setAutoScrollAiMode}
 					onCloseTabSwitcher={handleCloseTabSwitcher}
 					onTabSelect={handleUtilityTabSelect}
 					onFileTabSelect={handleUtilityFileTabSelect}
+					onTerminalTabSelect={handleSelectTerminalTab}
 					onNamedSessionSelect={handleNamedSessionSelect}
 					filteredFileTree={filteredFileTree}
 					fileExplorerExpanded={activeSession?.fileExplorerExpanded}
@@ -2837,7 +3164,7 @@ function MaestroConsoleInner() {
 				)}
 
 				{/* --- SYMPHONY MODAL (lazy-loaded) --- */}
-				{symphonyModalOpen && (
+				{encoreFeatures.symphony && symphonyModalOpen && (
 					<Suspense fallback={null}>
 						<SymphonyModal
 							theme={theme}
@@ -2867,6 +3194,34 @@ function MaestroConsoleInner() {
 						/>
 					</Suspense>
 				)}
+
+				{/* --- MAESTRO CUE MODAL (lazy-loaded, Encore Feature) --- */}
+				{encoreFeatures.maestroCue && cueModalOpen && (
+					<Suspense fallback={null}>
+						<CueModal
+							theme={theme}
+							onClose={() => setCueModalOpen(false)}
+							cueShortcutKeys={shortcuts.maestroCue?.keys}
+						/>
+					</Suspense>
+				)}
+
+				{/* --- MAESTRO CUE YAML EDITOR (standalone, lazy-loaded) --- */}
+				{encoreFeatures.maestroCue &&
+					cueYamlEditorOpen &&
+					cueYamlEditorSessionId &&
+					cueYamlEditorProjectRoot && (
+						<Suspense fallback={null}>
+							<CueYamlEditor
+								key={cueYamlEditorSessionId}
+								isOpen={true}
+								onClose={closeCueYamlEditor}
+								projectRoot={cueYamlEditorProjectRoot}
+								sessionId={cueYamlEditorSessionId}
+								theme={theme}
+							/>
+						</Suspense>
+					)}
 
 				{/* --- GIST PUBLISH MODAL --- */}
 				{/* Supports both file preview tabs and tab context gist publishing */}
@@ -3120,6 +3475,13 @@ function MaestroConsoleInner() {
 									}}
 									participantColors={groupChatParticipantColors}
 									messagesRef={groupChatMessagesRef}
+									ghCliAvailable={ghCliAvailable}
+									onPublishMessageGist={(text: string) => {
+										if (!text.trim()) return;
+										const filename = `group_chat_response_${Date.now()}.md`;
+										useTabStore.getState().setTabGistContent({ filename, content: text });
+										setGistPublishModalOpen(true);
+									}}
 								/>
 							</div>
 							<GroupChatRightPanel

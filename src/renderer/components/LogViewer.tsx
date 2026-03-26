@@ -9,16 +9,19 @@ import {
 	ChevronsDownUp,
 	ChevronsUpDown,
 	Pencil,
+	Copy,
+	Check,
 } from 'lucide-react';
 import type { Theme } from '../types';
 import { formatShortcutKeys } from '../utils/shortcutFormatter';
 import { useLayerStack } from '../contexts/LayerStackContext';
 import { MODAL_PRIORITIES } from '../constants/modalPriorities';
+import { safeClipboardWrite } from '../utils/clipboard';
 import { ConfirmModal } from './ConfirmModal';
 
 interface SystemLogEntry {
 	timestamp: number;
-	level: 'debug' | 'info' | 'warn' | 'error' | 'toast' | 'autorun';
+	level: 'debug' | 'info' | 'warn' | 'error' | 'toast' | 'autorun' | 'cue';
 	message: string;
 	context?: string;
 	data?: unknown;
@@ -49,6 +52,7 @@ const LOG_LEVEL_COLORS: Record<string, { fg: string; bg: string }> = {
 	error: { fg: '#ef4444', bg: 'rgba(239, 68, 68, 0.15)' }, // Red
 	toast: { fg: '#a855f7', bg: 'rgba(168, 85, 247, 0.15)' }, // Purple
 	autorun: { fg: '#f97316', bg: 'rgba(249, 115, 22, 0.15)' }, // Orange
+	cue: { fg: '#06b6d4', bg: 'rgba(6, 182, 212, 0.15)' }, // Teal
 };
 
 export function LogViewer({
@@ -66,7 +70,7 @@ export function LogViewer({
 
 	// Determine which log levels are enabled based on current log level setting
 	// Levels with priority >= current level are enabled
-	const enabledLevels = new Set<'debug' | 'info' | 'warn' | 'error' | 'toast' | 'autorun'>(
+	const enabledLevels = new Set<'debug' | 'info' | 'warn' | 'error' | 'toast' | 'autorun' | 'cue'>(
 		(['debug', 'info', 'warn', 'error'] as const).filter(
 			(level) => LOG_LEVEL_PRIORITY[level] >= LOG_LEVEL_PRIORITY[logLevel]
 		)
@@ -75,27 +79,29 @@ export function LogViewer({
 	enabledLevels.add('toast');
 	// Auto Run is always enabled (workflow tracking cannot be turned off)
 	enabledLevels.add('autorun');
+	// Cue is always enabled (event-driven automation tracking)
+	enabledLevels.add('cue');
 
 	// Initialize selectedLevels from saved settings if available
 	const [selectedLevels, setSelectedLevelsState] = useState<
-		Set<'debug' | 'info' | 'warn' | 'error' | 'toast' | 'autorun'>
+		Set<'debug' | 'info' | 'warn' | 'error' | 'toast' | 'autorun' | 'cue'>
 	>(() => {
 		if (savedSelectedLevels && savedSelectedLevels.length > 0) {
 			return new Set(
-				savedSelectedLevels as ('debug' | 'info' | 'warn' | 'error' | 'toast' | 'autorun')[]
+				savedSelectedLevels as ('debug' | 'info' | 'warn' | 'error' | 'toast' | 'autorun' | 'cue')[]
 			);
 		}
-		return new Set(['debug', 'info', 'warn', 'error', 'toast', 'autorun']);
+		return new Set(['debug', 'info', 'warn', 'error', 'toast', 'autorun', 'cue']);
 	});
 
 	// Wrapper to persist changes when selectedLevels changes
 	const setSelectedLevels = useCallback(
 		(
 			updater:
-				| Set<'debug' | 'info' | 'warn' | 'error' | 'toast' | 'autorun'>
+				| Set<'debug' | 'info' | 'warn' | 'error' | 'toast' | 'autorun' | 'cue'>
 				| ((
-						prev: Set<'debug' | 'info' | 'warn' | 'error' | 'toast' | 'autorun'>
-				  ) => Set<'debug' | 'info' | 'warn' | 'error' | 'toast' | 'autorun'>)
+						prev: Set<'debug' | 'info' | 'warn' | 'error' | 'toast' | 'autorun' | 'cue'>
+				  ) => Set<'debug' | 'info' | 'warn' | 'error' | 'toast' | 'autorun' | 'cue'>)
 		) => {
 			setSelectedLevelsState((prev) => {
 				const newSet = typeof updater === 'function' ? updater(prev) : updater;
@@ -109,6 +115,7 @@ export function LogViewer({
 		[onSelectedLevelsChange]
 	);
 	const [expandedData, setExpandedData] = useState<Set<number>>(new Set());
+	const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
 	const [showClearConfirm, setShowClearConfirm] = useState(false);
 	const searchInputRef = useRef<HTMLInputElement>(null);
 	const containerRef = useRef<HTMLDivElement>(null);
@@ -309,6 +316,18 @@ export function LogViewer({
 		URL.revokeObjectURL(url);
 	};
 
+	const handleCopyEntry = useCallback(async (log: SystemLogEntry, index: number) => {
+		const timestamp = new Date(log.timestamp).toISOString();
+		const contextStr = log.context ? `[${log.context}]` : '';
+		const dataStr = log.data ? `\n${JSON.stringify(log.data, null, 2)}` : '';
+		const text = `[${timestamp}] [${log.level.toUpperCase()}] ${contextStr} ${log.message}${dataStr}`;
+		const ok = await safeClipboardWrite(text);
+		if (ok) {
+			setCopiedIndex(index);
+			setTimeout(() => setCopiedIndex(null), 2000);
+		}
+	}, []);
+
 	const handleKeyDown = (e: React.KeyboardEvent) => {
 		// Open search with Cmd+F
 		if (
@@ -484,7 +503,7 @@ export function LogViewer({
 					ALL
 				</button>
 				{/* Individual level toggle buttons */}
-				{(['debug', 'info', 'warn', 'error', 'toast', 'autorun'] as const).map((level) => {
+				{(['debug', 'info', 'warn', 'error', 'toast', 'autorun', 'cue'] as const).map((level) => {
 					const isSelected = selectedLevels.has(level);
 					const isEnabled = enabledLevels.has(level);
 					return (
@@ -604,7 +623,7 @@ export function LogViewer({
 								borderColor: theme.colors.border,
 							}}
 						>
-							<div className="flex items-start gap-3">
+							<div className="flex items-start gap-3 group">
 								{/* Level Pill */}
 								<div
 									className="px-2 py-0.5 rounded text-xs font-bold uppercase flex-shrink-0"
@@ -616,6 +635,22 @@ export function LogViewer({
 									{log.level}
 								</div>
 
+								{/* Copy Button */}
+								<button
+									onClick={() => handleCopyEntry(log, index)}
+									className="p-1 rounded hover:bg-opacity-10 transition-all flex-shrink-0 opacity-0 group-hover:opacity-100"
+									style={{
+										color: copiedIndex === index ? theme.colors.accent : theme.colors.textDim,
+									}}
+									title={copiedIndex === index ? 'Copied!' : 'Copy log entry'}
+								>
+									{copiedIndex === index ? (
+										<Check className="w-3.5 h-3.5" />
+									) : (
+										<Copy className="w-3.5 h-3.5" />
+									)}
+								</button>
+
 								{/* Content */}
 								<div className="flex-1 min-w-0">
 									<div className="flex items-start gap-2 mb-1">
@@ -626,14 +661,20 @@ export function LogViewer({
 											{new Date(log.timestamp).toLocaleTimeString()}
 										</span>
 										{/* Context pill - show for non-toast/autorun entries */}
-										{log.level !== 'toast' && log.level !== 'autorun' && log.context && (
-											<span
-												className="text-xs px-1.5 py-0.5 rounded font-mono"
-												style={{ backgroundColor: theme.colors.bgMain, color: theme.colors.accent }}
-											>
-												{log.context}
-											</span>
-										)}
+										{log.level !== 'toast' &&
+											log.level !== 'autorun' &&
+											log.level !== 'cue' &&
+											log.context && (
+												<span
+													className="text-xs px-1.5 py-0.5 rounded font-mono"
+													style={{
+														backgroundColor: theme.colors.bgMain,
+														color: theme.colors.accent,
+													}}
+												>
+													{log.context}
+												</span>
+											)}
 										{/* Agent name pill for toast entries (from data.project) */}
 										{(() => {
 											if (log.level !== 'toast') return null;
@@ -655,6 +696,16 @@ export function LogViewer({
 											<span
 												className="text-xs px-1.5 py-0.5 rounded flex items-center gap-1"
 												style={{ backgroundColor: 'rgba(34, 197, 94, 0.2)', color: '#22c55e' }}
+											>
+												<Pencil className="w-3 h-3" />
+												{log.context}
+											</span>
+										)}
+										{/* Agent name pill for cue entries (from context) */}
+										{log.level === 'cue' && log.context && (
+											<span
+												className="text-xs px-1.5 py-0.5 rounded flex items-center gap-1"
+												style={{ backgroundColor: 'rgba(6, 182, 212, 0.2)', color: '#06b6d4' }}
 											>
 												<Pencil className="w-3 h-3" />
 												{log.context}

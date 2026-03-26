@@ -1,10 +1,12 @@
 import { ipcMain } from 'electron';
 import Store from 'electron-store';
 import * as fs from 'fs';
+import * as path from 'path';
+import * as os from 'os';
 import { AgentDetector, AGENT_DEFINITIONS, getAgentCapabilities } from '../../agents';
 import { execFileNoThrow } from '../../utils/execFile';
 import { logger } from '../../utils/logger';
-import { getWhichCommand } from '../../../shared/platformDetection';
+import { getWhichCommand, isWindows } from '../../../shared/platformDetection';
 import {
 	withIpcErrorLogging,
 	requireDependency,
@@ -26,6 +28,154 @@ const handlerOpts = (
 	context,
 	operation,
 });
+
+/**
+ * Discover OpenCode slash commands by reading from disk.
+ *
+ * OpenCode commands come from these sources (checked in priority order):
+ * 1. Project-local custom commands: .opencode/commands/*.md
+ * 2. User-global custom commands: ~/.opencode/commands/*.md
+ * 3. XDG custom commands: $XDG_CONFIG_HOME/opencode/commands/*.md
+ * 4. Config-based commands from opencode.json "command" property, resolved
+ *    platform-aware: OPENCODE_CONFIG env var (if set), then project-local,
+ *    then platform-specific locations (POSIX: ~/.opencode/, ~/.config/opencode/;
+ *    Windows: %LOCALAPPDATA%/opencode/)
+ *
+ * Built-in commands (init, review, undo, redo, share, help, models) are excluded
+ * because they only work in OpenCode's interactive TUI mode — they have no prompt
+ * .md file and cannot be executed via batch mode (`opencode run`).
+ *
+ * Unlike Claude Code (which emits commands via init event), OpenCode commands
+ * are statically defined on disk and can be discovered without spawning the agent.
+ */
+interface DiscoveredCommand {
+	name: string;
+	prompt?: string; // .md file content for custom commands; absent for built-ins
+}
+
+async function discoverOpenCodeSlashCommands(cwd: string): Promise<DiscoveredCommand[]> {
+	const commands = new Map<string, DiscoveredCommand>();
+	const globalConfigBase = process.env.XDG_CONFIG_HOME || path.join(os.homedir(), '.config');
+
+	// Strip YAML frontmatter (---\n...\n---) from command file content,
+	// returning only the body text that serves as the prompt.
+	const stripFrontmatter = (content: string): string => {
+		const trimmed = content.trimStart();
+		if (!trimmed.startsWith('---')) return content;
+		const endIndex = trimmed.indexOf('\n---', 3);
+		if (endIndex === -1) return content;
+		return trimmed.slice(endIndex + 4).trim();
+	};
+
+	// Helper: read .md files from a commands directory (name + content)
+	const addCommandsFromDir = async (dir: string) => {
+		let files: string[];
+		try {
+			files = await fs.promises.readdir(dir);
+		} catch (error: any) {
+			if (error?.code === 'ENOENT') {
+				logger.debug(`OpenCode commands directory not found: ${dir}`, LOG_CONTEXT);
+				return;
+			}
+			throw error;
+		}
+		for (const file of files) {
+			if (!file.endsWith('.md')) continue;
+			const name = file.replace(/\.md$/, '');
+			if (commands.has(name)) continue; // project-local wins over global
+			try {
+				const raw = await fs.promises.readFile(path.join(dir, file), 'utf-8');
+				const prompt = stripFrontmatter(raw);
+				commands.set(name, { name, prompt: prompt || undefined });
+			} catch (error: any) {
+				if (error?.code !== 'ENOENT') throw error;
+			}
+		}
+	};
+
+	// Helper: read command names from an opencode.json config file
+	const addCommandsFromConfig = async (configPath: string) => {
+		let content: string;
+		try {
+			content = await fs.promises.readFile(configPath, 'utf-8');
+		} catch (error: any) {
+			if (error?.code === 'ENOENT') {
+				logger.debug(`OpenCode config not found: ${configPath}`, LOG_CONTEXT);
+				return;
+			}
+			throw error;
+		}
+		let config: any;
+		try {
+			config = JSON.parse(content);
+		} catch {
+			logger.warn(`OpenCode config has invalid JSON, skipping: ${configPath}`, LOG_CONTEXT);
+			return;
+		}
+		if (config.command && typeof config.command === 'object' && !Array.isArray(config.command)) {
+			for (const [name, value] of Object.entries(config.command)) {
+				if (commands.has(name)) continue;
+				const prompt =
+					typeof value === 'string'
+						? value
+						: typeof (value as any)?.prompt === 'string'
+							? (value as any).prompt
+							: undefined;
+				commands.set(name, { name, prompt });
+			}
+		}
+	};
+
+	// OpenCode home directory (e.g., ~/.opencode/) — used for global commands and config
+	const home = os.homedir();
+	const opencodeHome = path.join(home, '.opencode');
+
+	// Project-local directories take priority (read first), then global locations.
+	// Global command directory is platform-specific to avoid ENOENT noise on Windows.
+	await addCommandsFromDir(path.join(cwd, '.opencode', 'commands'));
+	await addCommandsFromDir(path.join(opencodeHome, 'commands'));
+
+	if (isWindows()) {
+		const localAppData = process.env.LOCALAPPDATA || path.join(home, 'AppData', 'Local');
+		await addCommandsFromDir(path.join(localAppData, 'opencode', 'commands'));
+	} else {
+		await addCommandsFromDir(path.join(globalConfigBase, 'opencode', 'commands'));
+	}
+
+	// Build platform-aware config file paths in precedence order.
+	// Honor OPENCODE_CONFIG env var first (explicit user override), then probe
+	// platform-specific locations matching OpenCode's own resolution logic.
+	const configPaths: string[] = [];
+
+	if (process.env.OPENCODE_CONFIG) {
+		configPaths.push(process.env.OPENCODE_CONFIG);
+	}
+
+	if (isWindows()) {
+		const localAppData = process.env.LOCALAPPDATA || path.join(home, 'AppData', 'Local');
+		configPaths.push(
+			path.join(cwd, 'opencode.json'),
+			path.join(localAppData, 'opencode', 'opencode.json'),
+			path.join(home, '.opencode.json'),
+			path.join(opencodeHome, 'opencode.json')
+		);
+	} else {
+		configPaths.push(
+			path.join(cwd, 'opencode.json'),
+			path.join(opencodeHome, 'opencode.json'),
+			path.join(home, '.opencode.json'),
+			path.join(globalConfigBase, 'opencode', 'opencode.json')
+		);
+	}
+
+	for (const configPath of configPaths) {
+		await addCommandsFromConfig(configPath);
+	}
+
+	const commandList = Array.from(commands.values());
+	logger.info(`Discovered ${commandList.length} OpenCode slash commands`, LOG_CONTEXT);
+	return commandList;
+}
 
 /**
  * Interface for agent configuration store data
@@ -850,7 +1000,11 @@ export function registerAgentsHandlers(deps: AgentsHandlerDependencies): void {
 					return null;
 				}
 
-				// Only Claude Code supports slash command discovery via init message
+				// Agent-specific discovery paths
+				if (agentId === 'opencode') {
+					return discoverOpenCodeSlashCommands(cwd);
+				}
+
 				if (agentId !== 'claude-code') {
 					logger.debug(`Agent ${agentId} does not support slash command discovery`, LOG_CONTEXT);
 					return null;
@@ -910,7 +1064,7 @@ export function registerAgentsHandlers(deps: AgentsHandlerDependencies): void {
 									`Discovered ${msg.slash_commands.length} slash commands for ${agentId}`,
 									LOG_CONTEXT
 								);
-								return msg.slash_commands as string[];
+								return (msg.slash_commands as string[]).map((name: string) => ({ name }));
 							}
 						} catch {
 							// Not valid JSON, skip

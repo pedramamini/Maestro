@@ -8,6 +8,13 @@ import crypto from 'crypto';
 import { ProcessManager } from './process-manager';
 import { WebServer } from './web-server';
 import { AgentDetector } from './agents';
+import { CueEngine } from './cue/cue-engine';
+import {
+	executeCuePrompt,
+	recordCueHistoryEntry,
+	stopCueRun,
+	getCueProcessList,
+} from './cue/cue-executor';
 import { logger } from './utils/logger';
 import { tunnelManager } from './tunnel-manager';
 import { powerManager } from './power-manager';
@@ -39,6 +46,7 @@ import {
 	registerDebugHandlers,
 	registerSpeckitHandlers,
 	registerOpenSpecHandlers,
+	registerBmadHandlers,
 	registerContextHandlers,
 	registerMarketplaceHandlers,
 	registerStatsHandlers,
@@ -47,12 +55,14 @@ import {
 	registerFilesystemHandlers,
 	registerAttachmentsHandlers,
 	registerWebHandlers,
+	ensureCliServer,
 	registerLeaderboardHandlers,
 	registerNotificationsHandlers,
 	registerSymphonyHandlers,
 	registerTabNamingHandlers,
 	registerAgentErrorHandlers,
 	registerDirectorNotesHandlers,
+	registerCueHandlers,
 	registerWakatimeHandlers,
 	registerFeedbackHandlers,
 	setupLoggerEventForwarding,
@@ -93,6 +103,7 @@ import {
 } from './constants';
 // initAutoUpdater is now used by window-manager.ts (Phase 4 refactoring)
 import { checkWslEnvironment } from './utils/wslDetector';
+import { setupDeepLinkHandling, flushPendingDeepLink } from './deep-links';
 // Extracted modules (Phase 1 refactoring)
 import { parseParticipantSessionId } from './group-chat/session-parser';
 import { extractTextFromStreamJson } from './group-chat/output-parser';
@@ -115,6 +126,7 @@ import {
 import { setupProcessListeners as setupProcessListenersModule } from './process-listeners';
 import { setupWakaTimeListener } from './process-listeners/wakatime-listener';
 import { WakaTimeManager } from './wakatime-manager';
+import type { TemplateContext } from '../shared/templateVariables';
 
 // ============================================================================
 // Data Directory Configuration (MUST happen before any Store initialization)
@@ -240,6 +252,15 @@ const windowStateStore = getWindowStateStore();
 const claudeSessionOriginsStore = getClaudeSessionOriginsStore();
 const agentSessionOriginsStore = getAgentSessionOriginsStore();
 
+function getAgentConfigForAgent(agentId: string): Record<string, any> {
+	const allConfigs = agentConfigsStore.get('configs', {});
+	return allConfigs[agentId] || {};
+}
+
+function getCustomEnvVarsForAgent(agentId: string): Record<string, string> | undefined {
+	return getAgentConfigForAgent(agentId).customEnvVars as Record<string, string> | undefined;
+}
+
 // Note: History storage is now handled by HistoryManager which uses per-session files
 // in the history/ directory. The legacy maestro-history.json file is migrated automatically.
 // See src/main/history-manager.ts for details.
@@ -248,6 +269,7 @@ let mainWindow: BrowserWindow | null = null;
 let processManager: ProcessManager | null = null;
 let webServer: WebServer | null = null;
 let agentDetector: AgentDetector | null = null;
+let cueEngine: CueEngine | null = null;
 
 // Create safeSend with dependency injection (Phase 2 refactoring)
 const safeSend = createSafeSend(() => mainWindow);
@@ -292,10 +314,25 @@ function createWindow() {
 	mainWindow.on('closed', () => {
 		mainWindow = null;
 	});
+
+	// Kill all managed processes before the renderer reloads after a crash.
+	// Without this, the new renderer restores sessions with pid:0 and spawns fresh
+	// PTYs, but only the *active* tab's old PTY gets killed (via spawn-before-kill).
+	// Non-active tabs' orphaned PTYs survive indefinitely, leaking PTY file descriptors.
+	mainWindow.webContents.on('render-process-gone', () => {
+		processManager?.killAll();
+	});
 }
 
 // Set up global error handlers for uncaught exceptions (Phase 4 refactoring)
 setupGlobalErrorHandlers();
+
+// Set up deep link protocol handling (must be before app.whenReady for requestSingleInstanceLock)
+const gotSingleInstanceLock = setupDeepLinkHandling(() => mainWindow);
+if (!gotSingleInstanceLock) {
+	app.quit();
+	process.exit(0);
+}
 
 app.whenReady().then(async () => {
 	// Load logger settings first
@@ -331,6 +368,118 @@ app.whenReady().then(async () => {
 		agentDetector.setCustomPaths(customPaths);
 		logger.info(`Loaded custom agent paths: ${JSON.stringify(customPaths)}`, 'Startup');
 	}
+
+	// Initialize Cue Engine for event-driven automation
+	cueEngine = new CueEngine({
+		getSessions: () => {
+			const stored = sessionsStore.get('sessions', []);
+			return stored.map((s: any) => ({
+				id: s.id,
+				name: s.name,
+				toolType: s.toolType,
+				cwd: s.cwd || s.projectRoot || s.fullPath || os.homedir(),
+				projectRoot: s.projectRoot || s.cwd || s.fullPath || os.homedir(),
+			}));
+		},
+		onCueRun: async ({ runId, sessionId, prompt, subscriptionName, event, timeoutMs }) => {
+			const storedSessions = sessionsStore.get('sessions', []) as Array<Record<string, any>>;
+			const storedSession = storedSessions.find((s) => s.id === sessionId);
+			if (!storedSession) {
+				throw new Error(`Cue target session not found: ${sessionId}`);
+			}
+
+			const projectRoot =
+				storedSession.projectRoot || storedSession.cwd || storedSession.fullPath || os.homedir();
+			const templateContext: TemplateContext = {
+				session: {
+					id: storedSession.id,
+					name: storedSession.name,
+					toolType: storedSession.toolType,
+					cwd: projectRoot,
+					projectRoot,
+					fullPath: storedSession.fullPath,
+					autoRunFolderPath: storedSession.autoRunFolderPath,
+				},
+				conductorProfile: (store.get('conductorProfile', '') as string) || undefined,
+			};
+
+			const agentConfigValues = getAgentConfigForAgent(storedSession.toolType);
+
+			// Resolve the agent's binary path using the agent detector.
+			// Without this, Cue falls back to the bare command name (e.g., 'claude')
+			// which fails with ENOENT when spawn() can't find it on PATH.
+			let resolvedAgentPath = agentConfigValues.customPath as string | undefined;
+			if (!resolvedAgentPath && agentDetector) {
+				const detectedAgent = await agentDetector.getAgent(storedSession.toolType);
+				if (detectedAgent?.available && detectedAgent.path) {
+					resolvedAgentPath = detectedAgent.path;
+				}
+			}
+
+			const result = await executeCuePrompt({
+				runId,
+				session: {
+					id: storedSession.id,
+					name: storedSession.name,
+					toolType: storedSession.toolType,
+					cwd: projectRoot,
+					projectRoot,
+					autoRunFolderPath: storedSession.autoRunFolderPath,
+				},
+				subscription: {
+					name: subscriptionName,
+					event: event.type,
+					enabled: true,
+					prompt,
+				},
+				event,
+				promptPath: prompt,
+				toolType: storedSession.toolType,
+				projectRoot,
+				templateContext,
+				timeoutMs,
+				sshRemoteConfig: storedSession.sessionSshRemoteConfig,
+				customPath: resolvedAgentPath,
+				customArgs: storedSession.customArgs,
+				customEnvVars: storedSession.customEnvVars,
+				customModel: storedSession.customModel,
+				onLog: (level, message) => {
+					if (level === 'error') {
+						logger.error(message, 'Cue');
+					} else if (level === 'warn') {
+						logger.warn(message, 'Cue');
+					} else if (level === 'debug') {
+						logger.debug(message, 'Cue');
+					} else {
+						logger.cue(message, 'Cue');
+					}
+				},
+				sshStore: createSshRemoteStoreAdapter(store),
+				agentConfigValues,
+			});
+
+			const historyEntry = recordCueHistoryEntry(result, {
+				id: storedSession.id,
+				name: storedSession.name,
+				toolType: storedSession.toolType,
+				cwd: projectRoot,
+				projectRoot,
+				autoRunFolderPath: storedSession.autoRunFolderPath,
+			});
+			historyManager.addEntry(storedSession.id, projectRoot, historyEntry);
+			return result;
+		},
+		onStopCueRun: (runId) => stopCueRun(runId),
+		onLog: (_level, message, data) => {
+			logger.cue(message, 'Cue', data);
+			// Push activity updates to renderer
+			if (mainWindow && isWebContentsAvailable(mainWindow) && data) {
+				mainWindow.webContents.send('cue:activityUpdate', data);
+			}
+		},
+		onPreventSleep: (reason) => powerManager.addBlockReason(reason),
+		onAllowSleep: (reason) => powerManager.removeBlockReason(reason),
+	});
 
 	logger.info('Core services initialized', 'Startup');
 
@@ -377,17 +526,31 @@ app.whenReady().then(async () => {
 	logger.debug('Setting up process event listeners', 'Startup');
 	setupProcessListeners();
 
+	// Start Cue engine if the Encore Feature flag is enabled
+	const encoreFeatures = store.get('encoreFeatures', {}) as Record<string, boolean>;
+	if (encoreFeatures.maestroCue && cueEngine) {
+		logger.info('Maestro Cue Encore Feature enabled — starting Cue engine', 'Startup');
+		cueEngine.start();
+	}
+
 	// Set custom application menu to prevent macOS from injecting native
 	// "Show Previous Tab" (Cmd+Shift+{) and "Show Next Tab" (Cmd+Shift+})
 	// menu items into the default Window menu. Without this, those keyboard
 	// events are intercepted at the NSMenu level and never reach the renderer.
+	//
+	// IMPORTANT: Do NOT include { role: 'close' } in the Window submenu.
+	// The 'close' role registers Cmd+W as a native accelerator, which intercepts
+	// the keystroke at the NSMenu level before it reaches the renderer. This
+	// breaks Cmd+W tab-close shortcuts in both AI and terminal modes. Window
+	// closing is handled by the app lifecycle (Cmd+Q quits, red traffic light
+	// hides) so the native Close menu item is unnecessary.
 	if (isMacOS()) {
 		const template: Electron.MenuItemConstructorOptions[] = [
 			{ role: 'appMenu' },
 			{ role: 'editMenu' },
 			{
 				label: 'Window',
-				submenu: [{ role: 'minimize' }, { role: 'zoom' }, { role: 'close' }],
+				submenu: [{ role: 'minimize' }, { role: 'zoom' }],
 			},
 		];
 		Menu.setApplicationMenu(Menu.buildFromTemplate(template));
@@ -400,14 +563,24 @@ app.whenReady().then(async () => {
 	logger.info('Creating main window', 'Startup');
 	createWindow();
 
+	// Flush any deep link URL that arrived before the window was ready (cold start)
+	flushPendingDeepLink(() => mainWindow);
+
 	// Note: History file watching is handled by HistoryManager.startWatching() above
 	// which uses the new per-session file format in the history/ directory
 
 	// Start CLI activity watcher (Phase 4 refactoring)
 	cliWatcher.start();
 
-	// Note: Web server is not auto-started - it starts when user enables web interface
-	// via live:startServer IPC call from the renderer
+	// Auto-start CLI server for CLI IPC (writes discovery file for CLI to connect)
+	await ensureCliServer({
+		getWebServer: () => webServer,
+		setWebServer: (server) => {
+			webServer = server;
+		},
+		createWebServer,
+		settingsStore: store,
+	});
 
 	app.on('activate', () => {
 		if (BrowserWindow.getAllWindows().length === 0) {
@@ -428,6 +601,11 @@ app.whenReady().then(async () => {
 app.on('window-all-closed', () => {
 	if (!isMacOS()) {
 		app.quit();
+	} else {
+		// On macOS the app stays alive after all windows close (dock click reopens).
+		// Kill all managed PTY/child processes now so they don't leak — session
+		// restoration will re-spawn fresh PTYs when the window is reopened.
+		processManager?.killAll();
 	}
 });
 
@@ -441,7 +619,13 @@ const quitHandler = createQuitHandler({
 	getActiveGroomingSessionCount,
 	cleanupAllGroomingSessions,
 	closeStatsDB,
-	stopCliWatcher: () => cliWatcher.stop(),
+	stopCliWatcher: () => {
+		cliWatcher.stop();
+		// Stop Cue engine on app quit
+		if (cueEngine?.isEnabled()) {
+			cueEngine.stop();
+		}
+	},
 });
 quitHandler.setup();
 
@@ -482,13 +666,18 @@ function setupIpcHandlers() {
 
 	// History operations - extracted to src/main/ipc/handlers/history.ts
 	// Uses HistoryManager singleton for per-session storage
-	registerHistoryHandlers();
+	registerHistoryHandlers({ safeSend });
 
 	// Director's Notes - unified history + synopsis generation
 	registerDirectorNotesHandlers({
 		getProcessManager: () => processManager,
 		getAgentDetector: () => agentDetector,
 		agentConfigsStore,
+	});
+
+	// Cue - event-driven automation engine
+	registerCueHandlers({
+		getCueEngine: () => cueEngine,
 	});
 
 	// Agent management operations - extracted to src/main/ipc/handlers/agents.ts
@@ -506,6 +695,24 @@ function setupIpcHandlers() {
 		settingsStore: store,
 		getMainWindow: () => mainWindow,
 		sessionsStore,
+		getCueProcesses: () => {
+			// Always query the executor's active process map — processes may still be
+			// running even if the engine has been disabled (in-flight runs complete
+			// independently of engine state).
+			const processList = getCueProcessList();
+			if (processList.length === 0) return [];
+			const activeRuns = cueEngine?.getActiveRuns() ?? [];
+			// Merge PID/command data from executor with metadata from run manager
+			return processList.map((proc) => {
+				const run = activeRuns.find((r) => r.runId === proc.runId);
+				return {
+					...proc,
+					sessionName: run?.sessionName ?? '',
+					subscriptionName: run?.subscriptionName ?? '',
+					eventType: run?.event.type ?? '',
+				};
+			});
+		},
 	});
 
 	// Persistence operations - extracted to src/main/ipc/handlers/persistence.ts
@@ -542,17 +749,6 @@ function setupIpcHandlers() {
 	initializeSessionStorages({ claudeSessionOriginsStore });
 	registerAgentSessionsHandlers({ getMainWindow: () => mainWindow, agentSessionOriginsStore });
 
-	// Helper to get agent config values (custom args/env vars, model, etc.)
-	const getAgentConfigForAgent = (agentId: string): Record<string, any> => {
-		const allConfigs = agentConfigsStore.get('configs', {});
-		return allConfigs[agentId] || {};
-	};
-
-	// Helper to get custom env vars for an agent
-	const getCustomEnvVarsForAgent = (agentId: string): Record<string, string> | undefined => {
-		return getAgentConfigForAgent(agentId).customEnvVars as Record<string, string> | undefined;
-	};
-
 	// Register Group Chat handlers
 	registerGroupChatHandlers({
 		getMainWindow: () => mainWindow,
@@ -579,6 +775,9 @@ function setupIpcHandlers() {
 
 	// Register OpenSpec handlers (no dependencies needed)
 	registerOpenSpecHandlers();
+
+	// Register BMAD handlers (no dependencies needed)
+	registerBmadHandlers();
 
 	// Register Context Merge handlers for session context transfer and grooming
 	registerContextHandlers({
@@ -663,7 +862,7 @@ function setupIpcHandlers() {
 	registerAgentErrorHandlers();
 
 	// Register notification handlers (extracted to handlers/notifications.ts)
-	registerNotificationsHandlers();
+	registerNotificationsHandlers({ getMainWindow: () => mainWindow });
 
 	// Register attachments handlers (extracted to handlers/attachments.ts)
 	registerAttachmentsHandlers({ app });
@@ -679,6 +878,7 @@ function setupIpcHandlers() {
 		app,
 		getMainWindow: () => mainWindow,
 		sessionsStore,
+		settingsStore: store,
 	});
 
 	// Register tab naming handlers for automatic tab naming
@@ -749,6 +949,11 @@ function setupProcessListeners() {
 				REGEX_SYNOPSIS_SESSION,
 			},
 			logger,
+			getCueEngine: () => cueEngine,
+			isCueEnabled: () => {
+				const ef = store.get('encoreFeatures', {}) as Record<string, boolean>;
+				return !!ef.maestroCue;
+			},
 		});
 
 		// WakaTime heartbeat listener (query-complete → heartbeat, exit → cleanup)

@@ -26,6 +26,7 @@ import { AutoRunExpandedModal } from './AutoRunExpandedModal';
 import { formatShortcutKeys } from '../utils/shortcutFormatter';
 import { ConfirmModal } from './ConfirmModal';
 import { useResizablePanel } from '../hooks';
+import { useAutoRunAutoFollow } from '../hooks/batch/useAutoRunAutoFollow';
 import { useUIStore } from '../stores/uiStore';
 import { useSettingsStore } from '../stores/settingsStore';
 import { useFileExplorerStore } from '../stores/fileExplorerStore';
@@ -238,6 +239,18 @@ export const RightPanel = memo(
 			}
 		}, [autoRunContent, autoRunContentVersion, session?.id, session?.autoRunSelectedFile]);
 
+		// Auto-follow: automatically select the active document during batch runs
+		const { autoFollowEnabled, setAutoFollowEnabled } = useAutoRunAutoFollow({
+			currentSessionBatchState,
+			onAutoRunSelectDocument,
+			selectedFile: session?.autoRunSelectedFile ?? null,
+			setActiveRightTab,
+			rightPanelOpen,
+			setRightPanelOpen,
+			onAutoRunModeChange,
+			currentMode: session?.autoRunMode,
+		});
+
 		// Expanded modal state for Auto Run
 		const [autoRunExpanded, setAutoRunExpanded] = useState(false);
 		const handleExpandAutoRun = useCallback(() => setAutoRunExpanded(true), []);
@@ -378,13 +391,14 @@ export const RightPanel = memo(
 			onOpenMarketplace,
 			onLaunchWizard,
 			onShowFlash,
+			autoFollowEnabled,
 		};
 
 		return (
 			<div
 				ref={panelRef}
 				tabIndex={0}
-				className={`border-l flex flex-col ${rightPanelTransitionClass} outline-none relative ${rightPanelOpen ? '' : 'w-0 overflow-hidden opacity-0'} ${activeFocus === 'right' ? 'ring-1 ring-inset z-10' : ''}`}
+				className={`border-l flex flex-col ${rightPanelTransitionClass} outline-none relative ${rightPanelOpen ? '' : 'w-0 overflow-hidden opacity-0'} ${activeFocus === 'right' ? 'ring-1 ring-inset' : ''}`}
 				style={
 					{
 						width: rightPanelOpen ? `${rightPanelWidth}px` : '0',
@@ -395,6 +409,14 @@ export const RightPanel = memo(
 				}
 				onClick={() => setActiveFocus('right')}
 				onFocus={() => setActiveFocus('right')}
+				onBlur={(e) => {
+					// Clear focus ring when focus moves entirely outside this panel
+					if (!e.currentTarget.contains(e.relatedTarget as Node)) {
+						if (useUIStore.getState().activeFocus === 'right') {
+							setActiveFocus('main');
+						}
+					}
+				}}
 			>
 				{/* Resize Handle */}
 				{rightPanelOpen && (
@@ -755,8 +777,8 @@ export const RightPanel = memo(
 										{currentSessionBatchState.maxLoops ?? '∞'}
 									</span>
 								)}
-								{/* View history link - only shown on auto-run tab */}
-								{activeRightTab === 'autorun' && (
+								{/* View history link - shown on all tabs except history */}
+								{activeRightTab !== 'history' && (
 									<button
 										className="text-[10px] whitespace-nowrap bg-transparent border-none p-0 cursor-pointer"
 										style={{
@@ -769,6 +791,20 @@ export const RightPanel = memo(
 									</button>
 								)}
 							</div>
+						</div>
+						<div className="mt-2 flex items-center gap-2">
+							<label className="flex items-center gap-1.5 cursor-pointer">
+								<input
+									type="checkbox"
+									checked={autoFollowEnabled}
+									onChange={(e) => setAutoFollowEnabled(e.target.checked)}
+									className="w-3 h-3 rounded cursor-pointer accent-current"
+									style={{ accentColor: theme.colors.accent }}
+								/>
+								<span className="text-[10px]" style={{ color: theme.colors.textDim }}>
+									Follow active task
+								</span>
+							</label>
 						</div>
 					</div>
 				)}

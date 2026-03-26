@@ -9,6 +9,7 @@
 		"href": "https://runmaestro.ai"
 	},
 	"favicon": "/assets/icon.ico",
+	"js": "/assets/theme-hint.js",
 	"colors": {
 		"primary": "#BD93F9",
 		"light": "#F8F8F2",
@@ -52,8 +53,6 @@
 							"history",
 							"context-management",
 							"document-graph",
-							"usage-dashboard",
-							"symphony",
 							"git-worktrees",
 							"group-chat",
 							"remote-control",
@@ -68,13 +67,24 @@
 							"autorun-playbooks",
 							"playbook-exchange",
 							"speckit-commands",
-							"openspec-commands"
+							"openspec-commands",
+							"bmad-commands"
 						]
 					},
 					{
 						"group": "Encore Features",
 						"icon": "flask",
-						"pages": ["encore-features", "director-notes"]
+						"pages": [
+							"encore-features",
+							"director-notes",
+							"usage-dashboard",
+							"symphony",
+							"maestro-cue",
+							"maestro-cue-configuration",
+							"maestro-cue-events",
+							"maestro-cue-advanced",
+							"maestro-cue-examples"
+						]
 					},
 					{
 						"group": "Providers & CLI",
@@ -82,7 +92,7 @@
 					},
 					{
 						"group": "Integrations",
-						"pages": ["mcp-server"],
+						"pages": ["mcp-server", "deep-links"],
 						"icon": "plug"
 					},
 					{

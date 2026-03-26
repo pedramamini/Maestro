@@ -46,6 +46,7 @@ export function DirectorNotesModal({
 	const [activeTab, setActiveTab] = useState<TabId>('history');
 	const [overviewReady, setOverviewReady] = useState(cached);
 	const [overviewGenerating, setOverviewGenerating] = useState(false);
+	const [overviewProgress, setOverviewProgress] = useState(0);
 
 	// Layer stack registration for Escape handling
 	const { registerLayer, unregisterLayer } = useLayerStack();
@@ -113,6 +114,12 @@ export function DirectorNotesModal({
 	const handleSynopsisReady = useCallback(() => {
 		setOverviewGenerating(false);
 		setOverviewReady(true);
+		setOverviewProgress(0);
+	}, []);
+
+	// Handle progress updates from AIOverviewTab
+	const handleProgressChange = useCallback((percent: number) => {
+		setOverviewProgress(percent);
 	}, []);
 
 	// Start generating indicator when modal opens (skip if cached)
@@ -180,8 +187,12 @@ export function DirectorNotesModal({
 				aria-modal="true"
 				aria-labelledby="director-notes-title"
 				tabIndex={-1}
-				className="w-[1200px] max-w-[95vw] h-[85vh] rounded-xl shadow-2xl border overflow-hidden flex flex-col outline-none"
+				className="rounded-xl shadow-2xl border overflow-hidden flex flex-col outline-none"
 				style={{
+					width: '80vw',
+					maxWidth: 1400,
+					height: '85vh',
+					maxHeight: 900,
 					backgroundColor: theme.colors.bgActivity,
 					borderColor: theme.colors.border,
 				}}
@@ -238,7 +249,11 @@ export function DirectorNotesModal({
 									<Icon className="w-4 h-4" />
 								)}
 								{tab.label}
-								{showGenerating && <span className="text-[10px] font-normal">(generating...)</span>}
+								{showGenerating && (
+									<span className="text-[10px] font-normal">
+										({overviewProgress > 0 ? `${overviewProgress}%` : 'generating...'})
+									</span>
+								)}
 							</button>
 						);
 					})}
@@ -273,7 +288,11 @@ export function DirectorNotesModal({
 							tabIndex={0}
 							className={`h-full outline-none ${activeTab === 'ai-overview' ? '' : 'hidden'}`}
 						>
-							<AIOverviewTab theme={theme} onSynopsisReady={handleSynopsisReady} />
+							<AIOverviewTab
+								theme={theme}
+								onSynopsisReady={handleSynopsisReady}
+								onProgressChange={handleProgressChange}
+							/>
 						</div>
 					</Suspense>
 				</div>

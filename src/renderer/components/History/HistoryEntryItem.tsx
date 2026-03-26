@@ -1,45 +1,9 @@
 import { memo } from 'react';
-import { Bot, User, ExternalLink, Check, X, Clock, Award } from 'lucide-react';
-import type { Theme, HistoryEntry, HistoryEntryType } from '../../types';
+import { ExternalLink, Check, X, Clock, Award } from 'lucide-react';
+import type { Theme, HistoryEntry } from '../../types';
 import { formatElapsedTime } from '../../utils/formatters';
 import { stripMarkdown } from '../../utils/textProcessing';
-import { DoubleCheck } from './historyConstants';
-
-// Get pill color based on entry type
-const getPillColor = (type: HistoryEntryType, theme: Theme) => {
-	switch (type) {
-		case 'AUTO':
-			return {
-				bg: theme.colors.warning + '20',
-				text: theme.colors.warning,
-				border: theme.colors.warning + '40',
-			};
-		case 'USER':
-			return {
-				bg: theme.colors.accent + '20',
-				text: theme.colors.accent,
-				border: theme.colors.accent + '40',
-			};
-		default:
-			return {
-				bg: theme.colors.bgActivity,
-				text: theme.colors.textDim,
-				border: theme.colors.border,
-			};
-	}
-};
-
-// Get icon for entry type
-const getEntryIcon = (type: HistoryEntryType) => {
-	switch (type) {
-		case 'AUTO':
-			return Bot;
-		case 'USER':
-			return User;
-		default:
-			return Bot;
-	}
-};
+import { DoubleCheck, getPillColor, getEntryIcon } from './historyConstants';
 
 // Format timestamp
 const formatTime = (timestamp: number) => {
@@ -134,8 +98,8 @@ export const HistoryEntryItem = memo(function HistoryEntryItem({
 						</button>
 					)}
 
-					{/* Success/Failure Indicator for AUTO entries */}
-					{entry.type === 'AUTO' && entry.success !== undefined && (
+					{/* Success/Failure Indicator for AUTO and CUE entries */}
+					{(entry.type === 'AUTO' || entry.type === 'CUE') && entry.success !== undefined && (
 						<span
 							className="flex items-center justify-center w-5 h-5 rounded-full flex-shrink-0"
 							style={{
@@ -204,6 +168,13 @@ export const HistoryEntryItem = memo(function HistoryEntryItem({
 			>
 				{entry.summary ? stripMarkdown(entry.summary) : 'No summary available'}
 			</p>
+
+			{/* CUE metadata subtitle */}
+			{entry.type === 'CUE' && entry.cueEventType && (
+				<p className="text-[10px] mt-1" style={{ color: theme.colors.textDim }}>
+					Triggered by: {entry.cueEventType}
+				</p>
+			)}
 
 			{/* Footer Row - Time, Cost, and Achievement Action */}
 			{(entry.elapsedTimeMs !== undefined ||

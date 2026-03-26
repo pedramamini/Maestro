@@ -48,6 +48,7 @@ vi.mock('../../../renderer/stores/settingsStore', () => ({
 
 const mockSessionState: Record<string, unknown> = {
 	sessionsLoaded: false,
+	initialFileTreeReady: false,
 };
 
 vi.mock('../../../renderer/stores/sessionStore', () => ({
@@ -165,6 +166,7 @@ beforeAll(() => {
 		},
 	};
 	(window as any).__hideSplash = vi.fn();
+	(window as any).__updateSplash = vi.fn();
 });
 
 // ============================================================================
@@ -192,6 +194,7 @@ function resetStores() {
 	};
 
 	mockSessionState.sessionsLoaded = false;
+	mockSessionState.initialFileTreeReady = false;
 	mockTabStoreState.fileGistUrls = {};
 }
 
@@ -244,18 +247,63 @@ describe('useAppInitialization', () => {
 			expect((window as any).__hideSplash).not.toHaveBeenCalled();
 		});
 
-		it('should not call __hideSplash when sessions are not loaded', () => {
+		it('should call __updateSplash with progress when only sessions loaded', () => {
+			mockSettingsState.settingsLoaded = false;
+			mockSessionState.sessionsLoaded = true;
+			renderHook(() => useAppInitialization());
+
+			expect((window as any).__updateSplash).toHaveBeenCalledWith(60, 'Warming up the ensemble...');
+			expect((window as any).__hideSplash).not.toHaveBeenCalled();
+		});
+
+		it('should call __updateSplash with progress when only settings loaded', () => {
 			mockSettingsState.settingsLoaded = true;
 			mockSessionState.sessionsLoaded = false;
 			renderHook(() => useAppInitialization());
 
+			expect((window as any).__updateSplash).toHaveBeenCalledWith(60, 'Warming up the ensemble...');
 			expect((window as any).__hideSplash).not.toHaveBeenCalled();
 		});
 
-		it('should call __hideSplash when both settings and sessions are loaded', () => {
+		it('should show file tree loading progress when sessions loaded but file tree not ready', () => {
 			mockSettingsState.settingsLoaded = true;
 			mockSessionState.sessionsLoaded = true;
+			mockSessionState.initialFileTreeReady = false;
 			renderHook(() => useAppInitialization());
+
+			expect((window as any).__updateSplash).toHaveBeenCalledWith(80, 'Indexing the score...');
+			expect((window as any).__hideSplash).not.toHaveBeenCalled();
+		});
+
+		it('should call __hideSplash after rAF + delay when all three gates pass', async () => {
+			vi.useFakeTimers();
+			mockSettingsState.settingsLoaded = true;
+			mockSessionState.sessionsLoaded = true;
+			mockSessionState.initialFileTreeReady = true;
+			renderHook(() => useAppInitialization());
+
+			// Should update to 90% first
+			expect((window as any).__updateSplash).toHaveBeenCalledWith(90, 'The concertmaster rises...');
+
+			// __hideSplash not called yet (waiting for rAF + timeout)
+			expect((window as any).__hideSplash).not.toHaveBeenCalled();
+
+			// Advance time to flush double rAF (fake timers mock requestAnimationFrame)
+			// Each rAF fires at ~16ms intervals, so 50ms covers the double rAF
+			await act(async () => {
+				await vi.advanceTimersByTimeAsync(50);
+			});
+
+			// Should update to 95%
+			expect((window as any).__updateSplash).toHaveBeenCalledWith(
+				95,
+				'Maestro takes the podium...'
+			);
+
+			// Advance past the 150ms delay
+			await act(async () => {
+				await vi.advanceTimersByTimeAsync(200);
+			});
 
 			expect((window as any).__hideSplash).toHaveBeenCalledTimes(1);
 		});

@@ -828,6 +828,24 @@ export const FilePreview = React.memo(
 			return extractHeadings(file.content);
 		}, [isMarkdown, file?.content]);
 
+		// Compute dynamic ToC overlay width based on longest heading text
+		const tocWidth = useMemo(() => {
+			if (tocEntries.length === 0) return 200;
+			const MIN_WIDTH = 200;
+			const MAX_WIDTH = 500;
+			const CHAR_WIDTH = 7.5; // approximate px per character at ~0.8rem
+			const BASE_PADDING = 24; // px padding inside buttons
+			const HEADER_EXTRA = 100; // "CONTENTS" header + headings count badge
+
+			let maxNeeded = HEADER_EXTRA;
+			for (const entry of tocEntries) {
+				const indent = (entry.level - 1) * 12 + 8;
+				const textWidth = entry.text.length * CHAR_WIDTH;
+				maxNeeded = Math.max(maxNeeded, indent + textWidth + BASE_PADDING);
+			}
+			return Math.min(Math.max(Math.ceil(maxNeeded), MIN_WIDTH), MAX_WIDTH);
+		}, [tocEntries]);
+
 		const scrollMarkdownToBoundary = useCallback((direction: 'top' | 'bottom') => {
 			// Use contentRef which is the actual scrollable container
 			const container = contentRef.current;
@@ -1030,6 +1048,15 @@ export const FilePreview = React.memo(
 			setIsSaving(true);
 			try {
 				await onSave(file.path, editContent);
+				// Update lastModifiedRef so the file-change poller doesn't flag our own save
+				try {
+					const stat = await window.maestro?.fs?.stat(file.path, sshRemoteId);
+					if (stat?.modifiedAt) {
+						lastModifiedRef.current = new Date(stat.modifiedAt).getTime();
+					}
+				} catch {
+					// Non-critical — worst case the banner appears briefly
+				}
 				setCopyNotificationMessage('File Saved');
 				setShowCopyNotification(true);
 				setTimeout(() => setShowCopyNotification(false), 2000);
@@ -1041,7 +1068,7 @@ export const FilePreview = React.memo(
 			} finally {
 				setIsSaving(false);
 			}
-		}, [file, onSave, hasChanges, isSaving, editContent]);
+		}, [file, onSave, hasChanges, isSaving, editContent, sshRemoteId]);
 
 		// Track scroll position to show/hide stats bar and report changes
 		useEffect(() => {
@@ -2414,8 +2441,7 @@ export const FilePreview = React.memo(
 										backgroundColor: theme.colors.bgSidebar,
 										border: `1px solid ${theme.colors.border}`,
 										maxHeight: 'calc(70vh - 80px)',
-										minWidth: '200px',
-										maxWidth: '350px',
+										width: `${tocWidth}px`,
 									}}
 									onWheel={(e) => e.stopPropagation()}
 								>
@@ -2484,7 +2510,7 @@ export const FilePreview = React.memo(
 														// ToC stays open so user can click multiple items
 														// Dismiss with click outside or Escape key
 													}}
-													className="w-full px-2 py-1.5 text-left text-sm rounded hover:bg-white/10 transition-colors truncate flex items-center gap-1"
+													className="w-full px-2 py-1.5 text-left text-sm rounded hover:bg-white/10 transition-colors flex items-center gap-1"
 													style={{
 														color: headingColor,
 														paddingLeft: `${(entry.level - 1) * 12 + 8}px`,
@@ -2498,7 +2524,7 @@ export const FilePreview = React.memo(
 													}}
 													title={entry.text}
 												>
-													<span className="truncate">{entry.text}</span>
+													<span>{entry.text}</span>
 												</button>
 											);
 										})}

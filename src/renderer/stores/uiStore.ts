@@ -28,6 +28,7 @@ export interface UIStoreState {
 
 	// Session list filter
 	showUnreadOnly: boolean;
+	showUnreadAgentsOnly: boolean;
 	preFilterActiveTabId: string | null;
 	preTerminalFileTabId: string | null;
 
@@ -57,6 +58,9 @@ export interface UIStoreState {
 	// Editing (inline renaming in sidebar)
 	editingGroupId: string | null;
 	editingSessionId: string | null;
+
+	// Auto-follow active task during batch runs
+	autoFollowEnabled: boolean;
 }
 
 export interface UIStoreActions {
@@ -79,6 +83,8 @@ export interface UIStoreActions {
 	// Session list filter
 	setShowUnreadOnly: (show: boolean | ((prev: boolean) => boolean)) => void;
 	toggleShowUnreadOnly: () => void;
+	setShowUnreadAgentsOnly: (show: boolean | ((prev: boolean) => boolean)) => void;
+	toggleShowUnreadAgentsOnly: () => void;
 	setPreFilterActiveTabId: (id: string | null) => void;
 	setPreTerminalFileTabId: (id: string | null) => void;
 
@@ -110,6 +116,9 @@ export interface UIStoreActions {
 	// Editing
 	setEditingGroupId: (id: string | null | ((prev: string | null) => string | null)) => void;
 	setEditingSessionId: (id: string | null | ((prev: string | null) => string | null)) => void;
+
+	// Auto-follow
+	setAutoFollowEnabled: (enabled: boolean | ((prev: boolean) => boolean)) => void;
 }
 
 export type UIStore = UIStoreState & UIStoreActions;
@@ -130,6 +139,7 @@ export const useUIStore = create<UIStore>()((set) => ({
 	bookmarksCollapsed: false,
 	groupChatsExpanded: true,
 	showUnreadOnly: false,
+	showUnreadAgentsOnly: false,
 	preFilterActiveTabId: null,
 	preTerminalFileTabId: null,
 	selectedSidebarIndex: 0,
@@ -143,6 +153,7 @@ export const useUIStore = create<UIStore>()((set) => ({
 	draggingSessionId: null,
 	editingGroupId: null,
 	editingSessionId: null,
+	autoFollowEnabled: false,
 
 	// --- Actions ---
 	setLeftSidebarOpen: (v) => set((s) => ({ leftSidebarOpen: resolve(v, s.leftSidebarOpen) })),
@@ -162,6 +173,9 @@ export const useUIStore = create<UIStore>()((set) => ({
 
 	setShowUnreadOnly: (v) => set((s) => ({ showUnreadOnly: resolve(v, s.showUnreadOnly) })),
 	toggleShowUnreadOnly: () => set((s) => ({ showUnreadOnly: !s.showUnreadOnly })),
+	setShowUnreadAgentsOnly: (v) =>
+		set((s) => ({ showUnreadAgentsOnly: resolve(v, s.showUnreadAgentsOnly) })),
+	toggleShowUnreadAgentsOnly: () => set((s) => ({ showUnreadAgentsOnly: !s.showUnreadAgentsOnly })),
 	setPreFilterActiveTabId: (id) => set({ preFilterActiveTabId: id }),
 	setPreTerminalFileTabId: (id) => set({ preTerminalFileTabId: id }),
 
@@ -187,4 +201,6 @@ export const useUIStore = create<UIStore>()((set) => ({
 
 	setEditingGroupId: (v) => set((s) => ({ editingGroupId: resolve(v, s.editingGroupId) })),
 	setEditingSessionId: (v) => set((s) => ({ editingSessionId: resolve(v, s.editingSessionId) })),
+
+	setAutoFollowEnabled: (v) => set((s) => ({ autoFollowEnabled: resolve(v, s.autoFollowEnabled) })),
 }));

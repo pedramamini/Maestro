@@ -101,10 +101,6 @@ export interface UseSettingsReturn {
 	fileExplorerIconTheme: FileExplorerIconTheme;
 	setFileExplorerIconTheme: (value: FileExplorerIconTheme) => void;
 
-	// Terminal settings
-	terminalWidth: number;
-	setTerminalWidth: (value: number) => void;
-
 	// Logging settings
 	logLevel: string;
 	setLogLevel: (value: string) => void;
@@ -245,8 +241,8 @@ export interface UseSettingsReturn {
 	// Stats settings
 	statsCollectionEnabled: boolean;
 	setStatsCollectionEnabled: (value: boolean) => void;
-	defaultStatsTimeRange: 'day' | 'week' | 'month' | 'year' | 'all';
-	setDefaultStatsTimeRange: (value: 'day' | 'week' | 'month' | 'year' | 'all') => void;
+	defaultStatsTimeRange: 'day' | 'week' | 'month' | 'quarter' | 'year' | 'all';
+	setDefaultStatsTimeRange: (value: 'day' | 'week' | 'month' | 'quarter' | 'year' | 'all') => void;
 
 	// Power management settings
 	preventSleepEnabled: boolean;
@@ -294,6 +290,10 @@ export interface UseSettingsReturn {
 	encoreFeatures: EncoreFeatureFlags;
 	setEncoreFeatures: (value: EncoreFeatureFlags) => void;
 
+	// Symphony registry URLs (additional user-configured registries)
+	symphonyRegistryUrls: string[];
+	setSymphonyRegistryUrls: (value: string[]) => void;
+
 	// Director's Notes settings
 	directorNotesSettings: DirectorNotesSettings;
 	setDirectorNotesSettings: (value: DirectorNotesSettings) => void;
@@ -319,6 +319,7 @@ export function useSettings(): UseSettingsReturn {
 
 	// Load settings on mount
 	useEffect(() => {
+		window.__updateSplash?.(45, 'Reading the score...');
 		loadAllSettings();
 	}, []);
 

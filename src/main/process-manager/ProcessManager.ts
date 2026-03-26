@@ -19,6 +19,9 @@ import { logger } from '../utils/logger';
 import { isWindows } from '../../shared/platformDetection';
 import type { SshRemoteConfig } from '../../shared/types';
 
+/** Time (ms) to wait for a PTY process to exit after SIGTERM before sending SIGKILL. */
+const PTY_KILL_ESCALATION_MS = 2000;
+
 /**
  * ProcessManager orchestrates spawning and managing processes for sessions.
  *
@@ -46,9 +49,24 @@ export class ProcessManager extends EventEmitter {
 	}
 
 	/**
-	 * Spawn a new process for a session
+	 * Spawn a new process for a session.
+	 *
+	 * If a process already exists for the given sessionId, it is killed first
+	 * to prevent orphaned PTY/child processes that are no longer tracked.
 	 */
 	spawn(config: ProcessConfig): SpawnResult {
+		// Kill any existing process for this sessionId to prevent orphans.
+		// This guards against double-spawn race conditions where a second spawn
+		// overwrites the map entry and the first process becomes untracked.
+		const existing = this.processes.get(config.sessionId);
+		if (existing) {
+			logger.warn('[ProcessManager] Killing existing process before re-spawn', 'ProcessManager', {
+				sessionId: config.sessionId,
+				existingPid: existing.pid,
+			});
+			this.kill(config.sessionId);
+		}
+
 		const usePty = this.shouldUsePty(config);
 
 		if (usePty) {
@@ -192,22 +210,58 @@ export class ProcessManager extends EventEmitter {
 	}
 
 	/**
-	 * Kill a specific process
+	 * Kill a specific process.
+	 *
+	 * PTY processes receive SIGTERM first; if the process hasn't exited after
+	 * PTY_KILL_ESCALATION_MS, it is sent SIGKILL. The process is removed from
+	 * the tracking map immediately so that a replacement can be spawned, but the
+	 * escalation timer keeps a reference to ensure the OS-level process dies.
 	 */
 	kill(sessionId: string): boolean {
-		const process = this.processes.get(sessionId);
-		if (!process) return false;
+		const proc = this.processes.get(sessionId);
+		if (!proc) return false;
 
 		try {
-			if (process.dataBufferTimeout) {
-				clearTimeout(process.dataBufferTimeout);
+			if (proc.dataBufferTimeout) {
+				clearTimeout(proc.dataBufferTimeout);
 			}
 			this.bufferManager.flushDataBuffer(sessionId);
 
-			if (process.isTerminal && process.ptyProcess) {
-				process.ptyProcess.kill();
-			} else if (process.childProcess) {
-				const pid = process.childProcess.pid;
+			if (proc.isTerminal && proc.ptyProcess) {
+				const ptyProc = proc.ptyProcess;
+				const pid = proc.pid;
+
+				// Use SIGTERM (not the default SIGHUP which shells may survive on macOS)
+				try {
+					ptyProc.kill('SIGTERM');
+				} catch {
+					// Process may already be dead
+				}
+
+				// Escalate to SIGKILL if the process doesn't exit promptly.
+				// The ptyProcess reference is captured by the closure so the
+				// process can be forcefully terminated even after map removal.
+				const escalationTimer = setTimeout(() => {
+					try {
+						// node-pty's kill() is the only portable way to signal the PTY child.
+						// If the process already exited, this is a harmless no-op.
+						ptyProc.kill('SIGKILL');
+						logger.warn(
+							'[ProcessManager] PTY did not exit after SIGTERM, escalated to SIGKILL',
+							'ProcessManager',
+							{ sessionId, pid }
+						);
+					} catch {
+						// Process already exited — expected after normal SIGTERM
+					}
+				}, PTY_KILL_ESCALATION_MS);
+
+				// Cancel escalation if the PTY exits on its own
+				ptyProc.onExit(() => {
+					clearTimeout(escalationTimer);
+				});
+			} else if (proc.childProcess) {
+				const pid = proc.childProcess.pid;
 				if (isWindows() && pid) {
 					this.killWindowsProcessTree(pid, sessionId);
 				} else if (isWindows()) {
@@ -216,9 +270,9 @@ export class ProcessManager extends EventEmitter {
 						'ProcessManager',
 						{ sessionId }
 					);
-					process.childProcess.kill('SIGTERM');
+					proc.childProcess.kill('SIGTERM');
 				} else {
-					process.childProcess.kill('SIGTERM');
+					proc.childProcess.kill('SIGTERM');
 				}
 			}
 			this.processes.delete(sessionId);
@@ -256,10 +310,12 @@ export class ProcessManager extends EventEmitter {
 	}
 
 	/**
-	 * Kill all managed processes
+	 * Kill all managed processes.
+	 * Snapshots the session IDs first because kill() deletes from the map.
 	 */
 	killAll(): void {
-		for (const [sessionId] of this.processes) {
+		const sessionIds = [...this.processes.keys()];
+		for (const sessionId of sessionIds) {
 			this.kill(sessionId);
 		}
 	}
@@ -293,6 +349,42 @@ export class ProcessManager extends EventEmitter {
 		const parser = this.getParser(sessionId);
 		if (!parser) return null;
 		return parser.parseJsonLine(line);
+	}
+
+	/**
+	 * Convenience wrapper for spawning a terminal tab PTY.
+	 * Uses the terminal tab session ID format {sessionId}-terminal-{tabId},
+	 * which causes PtySpawner to forward raw PTY data without filtering.
+	 */
+	spawnTerminalTab(config: {
+		sessionId: string;
+		cwd: string;
+		shell?: string;
+		shellArgs?: string;
+		shellEnvVars?: Record<string, string>;
+		cols?: number;
+		rows?: number;
+	}): SpawnResult {
+		const shell = config.shell || (process.platform === 'win32' ? 'powershell.exe' : 'zsh');
+		logger.info('[ProcessManager] Spawning terminal tab PTY', 'ProcessManager', {
+			sessionId: config.sessionId,
+			cwd: config.cwd,
+			shell,
+			cols: config.cols || 80,
+			rows: config.rows || 24,
+		});
+		return this.spawn({
+			sessionId: config.sessionId,
+			toolType: 'terminal',
+			cwd: config.cwd,
+			command: shell,
+			args: [],
+			shell,
+			shellArgs: config.shellArgs,
+			shellEnvVars: config.shellEnvVars,
+			cols: config.cols || 80,
+			rows: config.rows || 24,
+		});
 	}
 
 	/**

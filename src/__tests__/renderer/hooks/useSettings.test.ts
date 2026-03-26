@@ -163,13 +163,6 @@ describe('useSettings', () => {
 			expect(result.current.fileExplorerIconTheme).toBe('default');
 		});
 
-		it('should have correct default values for terminal settings', async () => {
-			const { result } = renderHook(() => useSettings());
-			await waitForSettingsLoaded(result);
-
-			expect(result.current.terminalWidth).toBe(100);
-		});
-
 		it('should have correct default values for logging settings', async () => {
 			const { result } = renderHook(() => useSettings());
 			await waitForSettingsLoaded(result);
@@ -658,20 +651,6 @@ describe('useSettings', () => {
 
 			expect(result.current.markdownEditMode).toBe(true);
 			expect(window.maestro.settings.set).toHaveBeenCalledWith('markdownEditMode', true);
-		});
-	});
-
-	describe('setter functions - terminal settings', () => {
-		it('should update terminalWidth and persist to settings', async () => {
-			const { result } = renderHook(() => useSettings());
-			await waitForSettingsLoaded(result);
-
-			act(() => {
-				result.current.setTerminalWidth(120);
-			});
-
-			expect(result.current.terminalWidth).toBe(120);
-			expect(window.maestro.settings.set).toHaveBeenCalledWith('terminalWidth', 120);
 		});
 	});
 

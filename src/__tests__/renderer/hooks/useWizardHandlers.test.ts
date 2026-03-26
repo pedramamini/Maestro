@@ -67,7 +67,7 @@ vi.mock('../../../shared/formatters', () => ({
 }));
 
 vi.mock('../../../renderer/components/Wizard', () => ({
-	AUTO_RUN_FOLDER_NAME: 'Auto Run Docs',
+	AUTO_RUN_FOLDER_NAME: '.maestro/playbooks',
 }));
 
 vi.mock('../../../renderer/components/BatchRunnerModal', () => ({
@@ -325,7 +325,10 @@ describe('useWizardHandlers', () => {
 			(window as any).maestro.claude.getCommands.mockResolvedValue([
 				{ command: '/custom-cmd', description: 'Custom command' },
 			]);
-			(window as any).maestro.agents.discoverSlashCommands.mockResolvedValue(['init', 'review']);
+			(window as any).maestro.agents.discoverSlashCommands.mockResolvedValue([
+				{ name: 'init' },
+				{ name: 'review' },
+			]);
 
 			const deps = createMockDeps();
 			renderHook(() => useWizardHandlers(deps));
@@ -1812,7 +1815,7 @@ describe('useWizardHandlers', () => {
 			expect(newSession.name).toBe('My Project');
 			expect(newSession.toolType).toBe('claude-code');
 			expect(newSession.cwd).toBe('/projects/my-app');
-			expect(newSession.autoRunFolderPath).toBe('/projects/my-app/Auto Run Docs');
+			expect(newSession.autoRunFolderPath).toBe('/projects/my-app/.maestro/playbooks');
 			expect(newSession.autoRunSelectedFile).toBe('phase-1');
 
 			// Should have been set as active
@@ -1884,8 +1887,78 @@ describe('useWizardHandlers', () => {
 				expect.objectContaining({
 					documents: expect.arrayContaining([expect.objectContaining({ filename: 'phase-1' })]),
 				}),
-				expect.stringContaining('Auto Run Docs')
+				expect.stringContaining('.maestro/playbooks')
 			);
+		});
+
+		it('auto-starts batch run with all documents when runAllDocuments is true', async () => {
+			useSessionStore.setState({ sessions: [], activeSessionId: null });
+
+			const deps = createMockDeps({
+				wizardContext: {
+					state: {
+						currentStep: 'review' as any,
+						isOpen: true,
+						selectedAgent: 'claude-code',
+						availableAgents: [],
+						agentName: 'Test',
+						directoryPath: '/projects/test',
+						isGitRepo: false,
+						detectedAgentPath: null,
+						directoryError: null,
+						hasExistingAutoRunDocs: false,
+						existingDocsCount: 0,
+						existingDocsChoice: null,
+						conversationHistory: [],
+						confidenceLevel: 90,
+						isReadyToProceed: true,
+						isConversationLoading: false,
+						conversationError: null,
+						generatedDocuments: [
+							{ filename: 'phase-1.md', content: '# Phase 1', taskCount: 3 },
+							{ filename: 'phase-2.md', content: '# Phase 2', taskCount: 5 },
+							{ filename: 'phase-3.md', content: '# Phase 3', taskCount: 2 },
+						],
+						currentDocumentIndex: 0,
+						isGeneratingDocuments: false,
+						generationError: null,
+						editedPhase1Content: null,
+						runAllDocuments: true,
+						wantsTour: false,
+						isComplete: false,
+						createdSessionId: null,
+					} as any,
+					completeWizard: vi.fn(),
+					clearResumeState: vi.fn(),
+				},
+			});
+
+			const { result } = renderHook(() => useWizardHandlers(deps));
+
+			await act(async () => {
+				await result.current.handleWizardLaunchSession(false);
+			});
+
+			// Wait for the setTimeout batch run
+			await act(async () => {
+				await new Promise((r) => setTimeout(r, 600));
+			});
+
+			expect(deps.startBatchRun).toHaveBeenCalledWith(
+				expect.any(String),
+				expect.objectContaining({
+					documents: expect.arrayContaining([
+						expect.objectContaining({ filename: 'phase-1' }),
+						expect.objectContaining({ filename: 'phase-2' }),
+						expect.objectContaining({ filename: 'phase-3' }),
+					]),
+				}),
+				expect.stringContaining('.maestro/playbooks')
+			);
+
+			// Should have exactly 3 documents in the batch
+			const batchConfig = deps.startBatchRun.mock.calls[0][1];
+			expect(batchConfig.documents).toHaveLength(3);
 		});
 
 		it('starts tour when wantsTour is true', async () => {

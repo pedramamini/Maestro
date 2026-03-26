@@ -14,6 +14,8 @@ import { ipcMain, Notification, BrowserWindow } from 'electron';
 import { spawn, type ChildProcess } from 'child_process';
 import { logger } from '../../utils/logger';
 import { isWebContentsAvailable } from '../../utils/safe-send';
+import { parseDeepLink, dispatchDeepLink } from '../../deep-links';
+import { buildSessionDeepLink } from '../../../shared/deep-link-urls';
 
 // ==========================================================================
 // Constants
@@ -87,6 +89,13 @@ interface ActiveNotificationProcess {
 
 /** Track active notification command processes by ID for stopping */
 const activeNotificationProcesses = new Map<number, ActiveNotificationProcess>();
+
+/**
+ * Keep OS Notification objects alive until clicked or closed.
+ * Without this, GC can collect the notification before the user
+ * interacts with it, silently dropping the click handler.
+ */
+const activeNotifications = new Set<Notification>();
 
 /** Counter for generating unique notification process IDs */
 let notificationProcessIdCounter = 0;
@@ -330,13 +339,26 @@ async function processNextNotification(): Promise<void> {
 // ==========================================================================
 
 /**
+ * Dependencies for notification handlers
+ */
+export interface NotificationsHandlerDependencies {
+	getMainWindow: () => BrowserWindow | null;
+}
+
+/**
  * Register all notification-related IPC handlers
  */
-export function registerNotificationsHandlers(): void {
-	// Show OS notification
+export function registerNotificationsHandlers(deps?: NotificationsHandlerDependencies): void {
+	// Show OS notification (with optional click-to-navigate support)
 	ipcMain.handle(
 		'notification:show',
-		async (_event, title: string, body: string): Promise<NotificationShowResponse> => {
+		async (
+			_event,
+			title: string,
+			body: string,
+			sessionId?: string,
+			tabId?: string
+		): Promise<NotificationShowResponse> => {
 			try {
 				if (Notification.isSupported()) {
 					const notification = new Notification({
@@ -344,8 +366,29 @@ export function registerNotificationsHandlers(): void {
 						body,
 						silent: true, // Don't play system sound - we have our own audio feedback option
 					});
+
+					// Prevent GC from collecting the notification before user interaction
+					activeNotifications.add(notification);
+					const releaseNotification = () => {
+						activeNotifications.delete(notification);
+					};
+					notification.on('close', releaseNotification);
+
+					// Wire click handler for navigation if session context is provided
+					if (sessionId && deps?.getMainWindow) {
+						const deepLinkUrl = buildSessionDeepLink(sessionId, tabId);
+
+						notification.on('click', () => {
+							const parsed = parseDeepLink(deepLinkUrl);
+							if (parsed) {
+								dispatchDeepLink(parsed, deps.getMainWindow);
+							}
+							releaseNotification();
+						});
+					}
+
 					notification.show();
-					logger.debug('Showed OS notification', 'Notification', { title, body });
+					logger.debug('Showed OS notification', 'Notification', { title, body, sessionId, tabId });
 					return { success: true };
 				} else {
 					logger.warn('OS notifications not supported on this platform', 'Notification');
@@ -460,6 +503,7 @@ export function clearNotificationQueue(): void {
 export function resetNotificationState(): void {
 	notificationQueue.length = 0;
 	activeNotificationProcesses.clear();
+	activeNotifications.clear();
 	notificationProcessIdCounter = 0;
 	lastNotificationEndTime = 0;
 	isNotificationProcessing = false;

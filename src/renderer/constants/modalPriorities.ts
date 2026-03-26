@@ -206,8 +206,20 @@ export const MODAL_PRIORITIES = {
 	/** System log viewer overlay */
 	LOG_VIEWER: 500,
 
+	/** Maestro Cue help modal (above Cue modal) */
+	CUE_HELP: 465,
+
+	/** Maestro Cue pattern preview modal (above YAML editor) */
+	CUE_PATTERN_PREVIEW: 464,
+
+	/** Maestro Cue YAML editor modal (above Cue modal, below help) */
+	CUE_YAML_EDITOR: 463,
+
+	/** Maestro Cue dashboard modal */
+	CUE_MODAL: 460,
+
 	/** SSH Remote configuration modal (above settings) */
-	SSH_REMOTE: 460,
+	SSH_REMOTE: 458,
 
 	/** Settings modal */
 	SETTINGS: 450,

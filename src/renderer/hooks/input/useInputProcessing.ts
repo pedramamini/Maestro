@@ -223,7 +223,19 @@ export function useInputProcessing(deps: UseInputProcessingDeps): UseInputProces
 					const commandArgs =
 						firstSpaceIndex === -1 ? '' : commandText.substring(firstSpaceIndex + 1).trim();
 
-					const matchingCustomCommand = customAICommands.find((cmd) => cmd.command === baseCommand);
+					// Check custom AI commands first, then agent-discovered commands with prompts
+					const matchingAgentCommand = activeSession.agentCommands?.find(
+						(cmd) => cmd.command === baseCommand && cmd.prompt
+					);
+					const matchingCustomCommand =
+						customAICommands.find((cmd) => cmd.command === baseCommand) ||
+						(matchingAgentCommand
+							? {
+									command: matchingAgentCommand.command,
+									description: matchingAgentCommand.description,
+									prompt: matchingAgentCommand.prompt!,
+								}
+							: undefined);
 					if (matchingCustomCommand) {
 						// Execute the custom AI command by sending its prompt
 						setInputValue('');
@@ -245,6 +257,8 @@ export function useInputProcessing(deps: UseInputProcessingDeps): UseInputProces
 							substituteTemplateVariables(matchingCustomCommand.prompt, {
 								session: activeSession,
 								gitBranch,
+								groupId: activeSession.groupId,
+								activeTabId: activeSession.activeTabId,
 								conductorProfile,
 							});
 
@@ -598,11 +612,12 @@ export function useInputProcessing(deps: UseInputProcessingDeps): UseInputProces
 						newHistory.push(effectiveInputValue.trim());
 					}
 
-					// For terminal mode, add to shellLogs
+					// For terminal mode (legacy), add to shellLogs
 					if (currentMode !== 'ai') {
 						return {
 							...s,
-							shellLogs: [...s.shellLogs, newEntry],
+							// TODO: Remove shellLogs once terminal tabs migration is complete
+							...(!s.terminalTabs?.length && { shellLogs: [...s.shellLogs, newEntry] }),
 							state: 'busy',
 							busySource: currentMode,
 							shellCwd: newShellCwd,
@@ -924,9 +939,10 @@ export function useInputProcessing(deps: UseInputProcessingDeps): UseInputProces
 							});
 						}
 
-						// For NEW sessions (no agentSessionId), prepend Maestro system prompt
+						// For NEW sessions (no agentSessionId), prepare Maestro system prompt separately
 						// This introduces Maestro and sets directory restrictions for the agent
 						const isNewSession = !tabAgentSessionId;
+						let appendSystemPrompt: string | undefined;
 						if (isNewSession && maestroSystemPrompt) {
 							// Get git branch for template substitution
 							let gitBranch: string | undefined;
@@ -963,21 +979,21 @@ export function useInputProcessing(deps: UseInputProcessingDeps): UseInputProces
 								parentSessionId: freshSession.parentSessionId,
 								historyFilePath,
 							});
-							const substitutedSystemPrompt = substituteTemplateVariables(maestroSystemPrompt, {
+							appendSystemPrompt = substituteTemplateVariables(maestroSystemPrompt, {
 								session: freshSession,
 								gitBranch,
+								groupId: freshSession.groupId,
+								activeTabId: freshSession.activeTabId,
 								historyFilePath,
 								conductorProfile,
 							});
-
-							// Prepend system prompt to user's message
-							effectivePrompt = `${substitutedSystemPrompt}\n\n---\n\n# User Request\n\n${effectivePrompt}`;
 						}
 
 						const { sendPromptViaStdin, sendPromptViaStdinRaw } = getStdinFlags({
 							isSshSession:
 								!!freshSession.sshRemoteId || !!freshSession.sessionSshRemoteConfig?.enabled,
 							supportsStreamJsonInput: agent.capabilities?.supportsStreamJsonInput ?? false,
+							hasImages: hasImages ?? false,
 						});
 
 						// Spawn agent with generic config - the main process will use agent-specific
@@ -990,6 +1006,7 @@ export function useInputProcessing(deps: UseInputProcessingDeps): UseInputProces
 							args: spawnArgs,
 							prompt: effectivePrompt,
 							images: hasImages ? capturedImages : undefined,
+							appendSystemPrompt,
 							// Generic spawn options - main process builds agent-specific args
 							agentSessionId: tabAgentSessionId ?? undefined,
 							readOnlyMode: isReadOnly,
@@ -1002,8 +1019,8 @@ export function useInputProcessing(deps: UseInputProcessingDeps): UseInputProces
 							// Per-session SSH remote config (takes precedence over agent-level SSH config)
 							sessionSshRemoteConfig: freshSession.sessionSshRemoteConfig,
 							// Windows stdin handling - send prompt via stdin to avoid shell escaping issues
-							// For stream-json agents (Claude Code, Codex): use JSON format via stdin
-							// For other agents (OpenCode, etc.): use raw text via stdin
+							// For stream-json agents with images: use JSON format via stdin
+							// For text-only or non-stream-json agents: use raw text via stdin
 							sendPromptViaStdin,
 							sendPromptViaStdinRaw,
 						});
@@ -1091,15 +1108,18 @@ export function useInputProcessing(deps: UseInputProcessingDeps): UseInputProces
 									state: 'idle',
 									busySource: undefined,
 									thinkingStartTime: undefined,
-									shellLogs: [
-										...s.shellLogs,
-										{
-											id: generateId(),
-											timestamp: Date.now(),
-											source: 'system',
-											text: `Error: Failed to run command - ${(error as Error).message}`,
-										},
-									],
+									// TODO: Remove shellLogs once terminal tabs migration is complete
+									...(!s.terminalTabs?.length && {
+										shellLogs: [
+											...s.shellLogs,
+											{
+												id: generateId(),
+												timestamp: Date.now(),
+												source: 'system',
+												text: `Error: Failed to run command - ${(error as Error).message}`,
+											},
+										],
+									}),
 								};
 							})
 						);

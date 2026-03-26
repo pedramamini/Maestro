@@ -180,7 +180,7 @@ export function useWizardHandlers(deps: UseWizardHandlersDeps): UseWizardHandler
 			.getState()
 			.sessions.find((s) => s.id === activeSession?.id);
 		if (!currentSession) return;
-		if (currentSession.toolType !== 'claude-code') return;
+		if (currentSession.toolType !== 'claude-code' && currentSession.toolType !== 'opencode') return;
 		if (currentSession.agentCommands && currentSession.agentCommands.length > 0) return;
 
 		const sessionId = currentSession.id;
@@ -188,8 +188,8 @@ export function useWizardHandlers(deps: UseWizardHandlersDeps): UseWizardHandler
 		let cancelled = false;
 
 		const mergeCommands = (
-			existing: { command: string; description: string }[],
-			newCmds: { command: string; description: string }[]
+			existing: { command: string; description: string; prompt?: string }[],
+			newCmds: { command: string; description: string; prompt?: string }[]
 		) => {
 			const merged = [...existing];
 			for (const cmd of newCmds) {
@@ -233,16 +233,17 @@ export function useWizardHandlers(deps: UseWizardHandlersDeps): UseWizardHandler
 
 		const discoverAgentCommands = async () => {
 			try {
-				const agentSlashCommands = await (window as any).maestro.agents.discoverSlashCommands(
+				const agentSlashCommands = await window.maestro.agents.discoverSlashCommands(
 					currentSession.toolType,
 					currentSession.cwd,
 					currentSession.customPath
 				);
 				if (cancelled) return;
 
-				const agentCommandObjects = ((agentSlashCommands || []) as string[]).map((cmd) => ({
-					command: cmd.startsWith('/') ? cmd : `/${cmd}`,
-					description: getSlashCommandDescription(cmd),
+				const agentCommandObjects = (agentSlashCommands ?? []).map((cmd) => ({
+					command: cmd.name.startsWith('/') ? cmd.name : `/${cmd.name}`,
+					description: getSlashCommandDescription(cmd.name, currentSession.toolType),
+					prompt: cmd.prompt,
 				}));
 
 				if (agentCommandObjects.length > 0) {
@@ -264,7 +265,9 @@ export function useWizardHandlers(deps: UseWizardHandlersDeps): UseWizardHandler
 			}
 		};
 
-		fetchCustomCommands();
+		if (currentSession.toolType === 'claude-code') {
+			fetchCustomCommands();
+		}
 		discoverAgentCommands();
 
 		return () => {
@@ -1057,6 +1060,7 @@ export function useWizardHandlers(deps: UseWizardHandlersDeps): UseWizardHandler
 				customArgs,
 				customEnvVars,
 				sessionSshRemoteConfig,
+				runAllDocuments,
 			} = wizardState;
 
 			if (!selectedAgent || !directoryPath) {
@@ -1167,6 +1171,8 @@ export function useWizardHandlers(deps: UseWizardHandlersDeps): UseWizardHandler
 				closedTabHistory: [],
 				filePreviewTabs: [],
 				activeFileTabId: null,
+				terminalTabs: [],
+				activeTerminalTabId: null,
 				unifiedTabOrder: [{ type: 'ai' as const, id: initialTabId }],
 				unifiedClosedTabHistory: [],
 				autoRunFolderPath,
@@ -1201,25 +1207,24 @@ export function useWizardHandlers(deps: UseWizardHandlersDeps): UseWizardHandler
 			setActiveFocus('main');
 			setTimeout(() => inputRef.current?.focus(), 100);
 
-			const firstDocWithTasks = generatedDocuments.find((doc) => doc.taskCount > 0);
-			if (firstDocWithTasks && autoRunFolderPath) {
+			const docsWithTasks = generatedDocuments.filter((doc) => doc.taskCount > 0);
+			if (docsWithTasks.length > 0 && autoRunFolderPath) {
+				const docsToRun = runAllDocuments ? docsWithTasks : [docsWithTasks[0]];
 				const batchConfig: BatchRunConfig = {
-					documents: [
-						{
-							id: generateId(),
-							filename: firstDocWithTasks.filename.replace(/\.md$/, ''),
-							resetOnCompletion: false,
-							isDuplicate: false,
-						},
-					],
+					documents: docsToRun.map((doc) => ({
+						id: generateId(),
+						filename: doc.filename.replace(/\.md$/, ''),
+						resetOnCompletion: false,
+						isDuplicate: false,
+					})),
 					prompt: DEFAULT_BATCH_PROMPT,
 					loopEnabled: false,
 				};
 
 				setTimeout(() => {
 					console.log(
-						'[Wizard] Auto-starting batch run with first document:',
-						firstDocWithTasks.filename
+						`[Wizard] Auto-starting batch run with ${docsToRun.length} document(s):`,
+						docsToRun.map((d) => d.filename).join(', ')
 					);
 					startBatchRun(newId, batchConfig, autoRunFolderPath);
 				}, 500);

@@ -34,7 +34,7 @@ import { createSshRemoteApi } from './sshRemote';
 import { createLoggerApi } from './logger';
 import { createClaudeApi, createAgentSessionsApi } from './sessions';
 import { createTempfileApi, createHistoryApi, createCliApi } from './files';
-import { createSpeckitApi, createOpenspecApi } from './commands';
+import { createSpeckitApi, createOpenspecApi, createBmadApi } from './commands';
 import { createAutorunApi, createPlaybooksApi, createMarketplaceApi } from './autorun';
 import { createDebugApi, createDocumentGraphApi } from './debug';
 import { createGroupChatApi } from './groupChat';
@@ -50,6 +50,7 @@ import { createAgentsApi } from './agents';
 import { createSymphonyApi } from './symphony';
 import { createTabNamingApi } from './tabNaming';
 import { createDirectorNotesApi } from './directorNotes';
+import { createCueApi } from './cue';
 import { createWakatimeApi } from './wakatime';
 
 // Expose protected methods that allow the renderer process to use
@@ -146,6 +147,9 @@ contextBridge.exposeInMainWorld('maestro', {
 	// OpenSpec API
 	openspec: createOpenspecApi(),
 
+	// BMAD API
+	bmad: createBmadApi(),
+
 	// Notification API
 	notification: createNotificationApi(),
 
@@ -191,6 +195,9 @@ contextBridge.exposeInMainWorld('maestro', {
 	// Director's Notes API (unified history + synopsis)
 	directorNotes: createDirectorNotesApi(),
 
+	// Cue API (event-driven automation)
+	cue: createCueApi(),
+
 	// WakaTime API (CLI check, API key validation)
 	wakatime: createWakatimeApi(),
 });
@@ -233,6 +240,7 @@ export {
 	// Commands
 	createSpeckitApi,
 	createOpenspecApi,
+	createBmadApi,
 	// Auto Run
 	createAutorunApi,
 	createPlaybooksApi,
@@ -266,6 +274,8 @@ export {
 	createTabNamingApi,
 	// Director's Notes
 	createDirectorNotesApi,
+	// Cue
+	createCueApi,
 	// WakaTime
 	createWakatimeApi,
 };
@@ -307,6 +317,7 @@ export type {
 	ShellInfo,
 	UpdateStatus,
 } from './system';
+export type { ParsedDeepLink } from '../../shared/types';
 export type {
 	// From sshRemote
 	SshRemoteApi,
@@ -478,6 +489,15 @@ export type {
 	SynopsisResult,
 	SynopsisStats,
 } from './directorNotes';
+export type {
+	// From cue
+	CueApi,
+	CueRunResult,
+	CueSessionStatus,
+	CueEvent,
+	CueEventType,
+	CueRunStatus,
+} from './cue';
 export type {
 	// From wakatime
 	WakatimeApi,

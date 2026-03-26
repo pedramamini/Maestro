@@ -104,6 +104,18 @@ export interface GroomingSshRemoteConfig {
 }
 
 /**
+ * Progress update emitted during grooming operations
+ */
+export interface GroomProgressUpdate {
+	/** Number of data chunks received so far */
+	chunkCount: number;
+	/** Total bytes of response collected so far */
+	bytesReceived: number;
+	/** Elapsed time in ms since grooming started */
+	elapsedMs: number;
+}
+
+/**
  * Options for grooming context
  */
 export interface GroomContextOptions {
@@ -129,6 +141,8 @@ export interface GroomContextOptions {
 	sessionCustomEnvVars?: Record<string, string>;
 	/** Agent-level config values (from agent config store) for override resolution */
 	agentConfigValues?: Record<string, any>;
+	/** Optional callback for progress updates during grooming */
+	onProgress?: (update: GroomProgressUpdate) => void;
 }
 
 /**
@@ -171,6 +185,7 @@ export async function groomContext(
 		sessionCustomArgs,
 		sessionCustomEnvVars,
 		agentConfigValues,
+		onProgress,
 	} = options;
 
 	const groomerSessionId = `groomer-${uuidv4()}`;
@@ -294,6 +309,15 @@ export async function groomContext(
 					groomerSessionId,
 					chunkCount,
 					totalLength: responseBuffer.length,
+				});
+			}
+
+			// Emit progress update if callback provided
+			if (onProgress) {
+				onProgress({
+					chunkCount,
+					bytesReceived: responseBuffer.length,
+					elapsedMs: Date.now() - startTime,
 				});
 			}
 		};

@@ -14,6 +14,7 @@ import { fuzzyMatch } from '../../utils/search';
 import { gitService } from '../../services/git';
 import { logger } from '../../utils/logger';
 import { useFileExplorerStore } from '../../stores/fileExplorerStore';
+import { useSessionStore } from '../../stores/sessionStore';
 
 /**
  * Retry delay for file tree errors (20 seconds).
@@ -149,6 +150,27 @@ export function useFileTreeManagement(
 
 	const fileTreeFilter = useFileExplorerStore((s) => s.fileTreeFilter);
 
+	// Signal splash screen that the initial file tree load is done (success or error).
+	// Only fires once — subsequent loads (refresh, session switch) don't re-signal.
+	const initialFileTreeSignaled = useRef(false);
+	const signalInitialFileTreeReady = useCallback(() => {
+		if (!initialFileTreeSignaled.current) {
+			initialFileTreeSignaled.current = true;
+			useSessionStore.getState().setInitialFileTreeReady(true);
+		}
+	}, []);
+
+	// Safety timeout: dismiss splash screen even if file tree load is still pending.
+	// Prevents SSH-configured sessions with unreachable hosts from blocking app startup
+	// indefinitely (SSH connect timeout + retries can take 30-60s).
+	// The file tree load continues in the background — the user just isn't blocked.
+	useEffect(() => {
+		const timer = setTimeout(() => {
+			signalInitialFileTreeReady();
+		}, 5000);
+		return () => clearTimeout(timer);
+	}, [signalInitialFileTreeReady]);
+
 	// Per-session sequence counters to discard stale file tree loads.
 	// Keyed by sessionId so loads for different sessions don't cancel each other.
 	// When a newer load starts for the same session, any in-flight load with an
@@ -208,7 +230,12 @@ export function useFileTreeManagement(
 				// Fetch stats independently — a directorySize failure should not
 				// prevent the file tree from refreshing (same as initial load).
 				const statsPromise = window.maestro.fs
-					.directorySize(treeRoot, sshContext?.sshRemoteId)
+					.directorySize(
+						treeRoot,
+						sshContext?.sshRemoteId,
+						localOptions?.ignorePatterns,
+						localOptions?.honorGitignore
+					)
 					.catch((err) => {
 						logger.warn('directorySize failed during refresh (non-fatal)', 'FileTreeManagement', {
 							error: err?.message || 'Unknown error',
@@ -285,7 +312,12 @@ export function useFileTreeManagement(
 				// Fetch stats independently — directorySize failure should not
 				// prevent the file tree or git state from refreshing.
 				const statsPromise = window.maestro.fs
-					.directorySize(treeRoot, sshContext?.sshRemoteId)
+					.directorySize(
+						treeRoot,
+						sshContext?.sshRemoteId,
+						localOptions?.ignorePatterns,
+						localOptions?.honorGitignore
+					)
 					.catch((err) => {
 						logger.warn(
 							'directorySize failed during git refresh (non-fatal)',
@@ -455,7 +487,12 @@ export function useFileTreeManagement(
 			// Fetch stats independently — a directorySize failure (e.g., `du` timeout
 			// on large repos over SSH) should not prevent the file tree from loading.
 			const statsPromise = window.maestro.fs
-				.directorySize(treeRoot, sshContext?.sshRemoteId)
+				.directorySize(
+					treeRoot,
+					sshContext?.sshRemoteId,
+					localOptions?.ignorePatterns,
+					localOptions?.honorGitignore
+				)
 				.catch((err) => {
 					logger.warn('directorySize failed (non-fatal)', 'FileTreeManagement', {
 						error: err?.message || 'Unknown error',
@@ -513,6 +550,8 @@ export function useFileTreeManagement(
 								: s
 						)
 					);
+
+					signalInitialFileTreeReady();
 				})
 				.catch((error) => {
 					// Ignore errors from stale loads — a newer load is in progress
@@ -546,6 +585,8 @@ export function useFileTreeManagement(
 								: s
 						)
 					);
+
+					signalInitialFileTreeReady();
 				});
 		}
 	}, [activeSessionId, sessions, setSessions, sshContextOptions, localOptions, nextSeq, isStale]);
@@ -595,13 +636,17 @@ export function useFileTreeManagement(
 		// Capture stable session ID for async callback (same stale closure fix as initial load)
 		const sessionId = session.id;
 
-		// No ignore patterns needed for stats-only fetch
 		const sshContext = getSshContext(session);
 		const treeRoot = session.projectRoot || session.cwd;
 
 		// Fetch stats only (don't re-fetch tree)
 		window.maestro.fs
-			.directorySize(treeRoot, sshContext?.sshRemoteId)
+			.directorySize(
+				treeRoot,
+				sshContext?.sshRemoteId,
+				localOptions?.ignorePatterns,
+				localOptions?.honorGitignore
+			)
 			.then((stats) => {
 				setSessions((prev) =>
 					prev.map((s) =>

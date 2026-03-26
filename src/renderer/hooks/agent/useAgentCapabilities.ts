@@ -80,6 +80,9 @@ export interface AgentCapabilities {
 
 	/** Agent uses a combined input+output context window (vs separate limits) */
 	usesCombinedContextWindow: boolean;
+
+	/** Agent supports --append-system-prompt for separate system prompt delivery */
+	supportsAppendSystemPrompt: boolean;
 }
 
 /**
@@ -110,6 +113,7 @@ export const DEFAULT_CAPABILITIES: AgentCapabilities = {
 	supportsGroupChatModeration: false,
 	usesJsonLineOutput: false,
 	usesCombinedContextWindow: false,
+	supportsAppendSystemPrompt: false,
 };
 
 /**

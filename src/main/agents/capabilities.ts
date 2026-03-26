@@ -82,6 +82,9 @@ export interface AgentCapabilities {
 	/** Agent uses a combined input+output context window (vs separate limits) */
 	usesCombinedContextWindow: boolean;
 
+	/** Agent supports --append-system-prompt for separate system prompt delivery */
+	supportsAppendSystemPrompt: boolean;
+
 	/** How images should be handled on resume when -i flag is not available.
 	 * 'prompt-embed': Save images to temp files and embed file paths in the prompt text.
 	 * undefined: Use default image handling (or no special resume handling needed). */
@@ -116,6 +119,7 @@ export const DEFAULT_CAPABILITIES: AgentCapabilities = {
 	supportsGroupChatModeration: false,
 	usesJsonLineOutput: false,
 	usesCombinedContextWindow: false,
+	supportsAppendSystemPrompt: false,
 };
 
 /**
@@ -158,6 +162,7 @@ export const AGENT_CAPABILITIES: Record<string, AgentCapabilities> = {
 		supportsGroupChatModeration: true, // Can serve as group chat moderator
 		usesJsonLineOutput: false, // Uses stream-json, not JSONL
 		usesCombinedContextWindow: false, // Claude has separate input/output limits
+		supportsAppendSystemPrompt: true, // --append-system-prompt flag
 	},
 
 	/**
@@ -188,6 +193,7 @@ export const AGENT_CAPABILITIES: Record<string, AgentCapabilities> = {
 		supportsGroupChatModeration: false,
 		usesJsonLineOutput: false,
 		usesCombinedContextWindow: false,
+		supportsAppendSystemPrompt: false,
 	},
 
 	/**
@@ -195,7 +201,7 @@ export const AGENT_CAPABILITIES: Record<string, AgentCapabilities> = {
 	 * https://github.com/openai/codex
 	 *
 	 * Verified capabilities based on CLI testing (v0.73.0+) and documentation review.
-	 * See Auto Run Docs/Codex-Support.md for investigation details.
+	 * See .maestro/playbooks/Codex-Support.md for investigation details.
 	 */
 	codex: {
 		supportsResume: true, // exec resume <id> (v0.30.0+) - Verified
@@ -221,6 +227,7 @@ export const AGENT_CAPABILITIES: Record<string, AgentCapabilities> = {
 		supportsGroupChatModeration: true, // Can serve as group chat moderator
 		usesJsonLineOutput: true, // Uses JSONL output format
 		usesCombinedContextWindow: true, // OpenAI models use combined context window
+		supportsAppendSystemPrompt: false,
 		imageResumeMode: 'prompt-embed', // codex exec resume doesn't support -i; embed file paths in prompt text
 	},
 
@@ -254,6 +261,7 @@ export const AGENT_CAPABILITIES: Record<string, AgentCapabilities> = {
 		supportsGroupChatModeration: false, // PLACEHOLDER
 		usesJsonLineOutput: false, // PLACEHOLDER
 		usesCombinedContextWindow: false, // PLACEHOLDER
+		supportsAppendSystemPrompt: false,
 	},
 
 	/**
@@ -286,6 +294,7 @@ export const AGENT_CAPABILITIES: Record<string, AgentCapabilities> = {
 		supportsGroupChatModeration: false, // PLACEHOLDER
 		usesJsonLineOutput: false, // PLACEHOLDER
 		usesCombinedContextWindow: false, // PLACEHOLDER
+		supportsAppendSystemPrompt: false,
 	},
 
 	/**
@@ -293,7 +302,7 @@ export const AGENT_CAPABILITIES: Record<string, AgentCapabilities> = {
 	 * https://github.com/opencode-ai/opencode
 	 *
 	 * Verified capabilities based on CLI testing and documentation review.
-	 * See Auto Run Docs/OpenCode-Support.md for investigation details.
+	 * See .maestro/playbooks/OpenCode-Support.md for investigation details.
 	 */
 	opencode: {
 		supportsResume: true, // --session flag (sessionID in output) - Verified
@@ -302,7 +311,7 @@ export const AGENT_CAPABILITIES: Record<string, AgentCapabilities> = {
 		supportsSessionId: true, // sessionID in JSON output (camelCase) - Verified
 		supportsImageInput: true, // -f, --file flag documented - Documented
 		supportsImageInputOnResume: true, // -f flag works with --session flag - Documented
-		supportsSlashCommands: false, // Not investigated
+		supportsSlashCommands: true, // Built-in + custom commands via .opencode/commands/ and opencode.json
 		supportsSessionStorage: true, // ~/.local/share/opencode/storage/ (JSON files) - Verified
 		supportsCostTracking: true, // part.cost in step_finish events - Verified
 		supportsUsageStats: true, // part.tokens in step_finish events - Verified
@@ -319,6 +328,7 @@ export const AGENT_CAPABILITIES: Record<string, AgentCapabilities> = {
 		supportsGroupChatModeration: true, // Can serve as group chat moderator
 		usesJsonLineOutput: true, // Uses JSONL output format
 		usesCombinedContextWindow: false, // Depends on model provider
+		supportsAppendSystemPrompt: false,
 	},
 
 	/**
@@ -351,6 +361,7 @@ export const AGENT_CAPABILITIES: Record<string, AgentCapabilities> = {
 		supportsGroupChatModeration: true, // Can serve as group chat moderator
 		usesJsonLineOutput: true, // Uses JSONL output format
 		usesCombinedContextWindow: false, // Depends on model provider
+		supportsAppendSystemPrompt: false,
 	},
 
 	/**
@@ -384,6 +395,7 @@ export const AGENT_CAPABILITIES: Record<string, AgentCapabilities> = {
 		supportsGroupChatModeration: false, // PLACEHOLDER
 		usesJsonLineOutput: false, // PLACEHOLDER
 		usesCombinedContextWindow: false, // PLACEHOLDER
+		supportsAppendSystemPrompt: false,
 	},
 };
 

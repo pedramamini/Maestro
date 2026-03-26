@@ -25,13 +25,14 @@ import { generateId } from '../../utils/ids';
 import { useSessionStore, selectActiveSession } from '../../stores/sessionStore';
 import { useModalStore } from '../../stores/modalStore';
 import { useSettingsStore } from '../../stores/settingsStore';
+import { useTabStore } from '../../stores/tabStore';
 
 // ============================================================================
 // Types
 // ============================================================================
 
 export interface CloseCurrentTabResult {
-	type: 'file' | 'ai' | 'prevented' | 'none';
+	type: 'file' | 'ai' | 'terminal' | 'prevented' | 'none';
 	tabId?: string;
 	isWizardTab?: boolean;
 	hasDraft?: boolean;
@@ -84,7 +85,10 @@ export interface TabHandlersReturn {
 	handleToggleTabShowThinking: () => void;
 
 	// File Tab handlers
-	handleOpenFileTab: (file: FileTabOpenParams, options?: { openInNewTab?: boolean }) => void;
+	handleOpenFileTab: (
+		file: FileTabOpenParams,
+		options?: { openInNewTab?: boolean; targetSessionId?: string }
+	) => void;
 	handleSelectFileTab: (tabId: string) => Promise<void>;
 	handleCloseFileTab: (tabId: string) => void;
 	handleFileTabEditModeChange: (tabId: string, editMode: boolean) => void;
@@ -154,7 +158,12 @@ export function useTabHandlers(): TabHandlersReturn {
 	const unifiedTabs = useMemo((): UnifiedTab[] => {
 		if (!activeSession) return [];
 		return buildUnifiedTabs(activeSession);
-	}, [activeSession?.aiTabs, activeSession?.filePreviewTabs, activeSession?.unifiedTabOrder]);
+	}, [
+		activeSession?.aiTabs,
+		activeSession?.filePreviewTabs,
+		activeSession?.terminalTabs,
+		activeSession?.unifiedTabOrder,
+	]);
 
 	// Get the active file preview tab (if a file tab is active)
 	const activeFileTab = useMemo((): FilePreviewTab | null => {
@@ -183,11 +192,14 @@ export function useTabHandlers(): TabHandlersReturn {
 			options?: {
 				/** If true, create new tab adjacent to current file tab. If false, replace current file tab content. Default: true (create new tab) */
 				openInNewTab?: boolean;
+				/** Override which session the tab is created in (defaults to current active session) */
+				targetSessionId?: string;
 			}
 		) => {
 			const openInNewTab = options?.openInNewTab ?? true;
 			const { setSessions } = useSessionStore.getState();
-			const activeSessionId = useSessionStore.getState().activeSessionId;
+			const activeSessionId =
+				options?.targetSessionId || useSessionStore.getState().activeSessionId;
 
 			setSessions((prev: Session[]) =>
 				prev.map((s) => {
@@ -211,6 +223,8 @@ export function useTabHandlers(): TabHandlersReturn {
 							...s,
 							filePreviewTabs: updatedTabs,
 							activeFileTabId: existingTab.id,
+							activeTerminalTabId: null,
+							inputMode: 'ai' as const,
 							activeTabId: s.activeTabId,
 							unifiedTabOrder: ensureInUnifiedTabOrder(s.unifiedTabOrder, 'file', existingTab.id),
 						};
@@ -343,6 +357,8 @@ export function useTabHandlers(): TabHandlersReturn {
 						filePreviewTabs: [...s.filePreviewTabs, newFileTab],
 						unifiedTabOrder: updatedUnifiedTabOrder,
 						activeFileTabId: newTabId,
+						activeTerminalTabId: null,
+						inputMode: 'ai' as const,
 					};
 				})
 			);
@@ -559,11 +575,12 @@ export function useTabHandlers(): TabHandlersReturn {
 		const fileTab = currentSession.filePreviewTabs.find((tab) => tab.id === tabId);
 		if (!fileTab) return;
 
-		// Set the tab as active immediately
+		// Set the tab as active immediately, and reset inputMode/activeTerminalTabId in case
+		// we're switching away from terminal mode (clicking a file tab while terminal is active).
 		setSessions((prev: Session[]) =>
 			prev.map((s) => {
 				if (s.id !== activeSessionId) return s;
-				return { ...s, activeFileTabId: tabId };
+				return { ...s, activeFileTabId: tabId, activeTerminalTabId: null, inputMode: 'ai' };
 			})
 		);
 
@@ -602,6 +619,12 @@ export function useTabHandlers(): TabHandlersReturn {
 		setSessions((prev: Session[]) =>
 			prev.map((s) => {
 				if (s.id !== activeSessionId) return s;
+				console.debug('[useTabHandlers] handleUnifiedTabReorder', {
+					fromIndex,
+					toIndex,
+					orderLength: s.unifiedTabOrder.length,
+					order: s.unifiedTabOrder.map((r) => `${r.type}:${r.id.slice(0, 8)}`),
+				});
 				if (
 					fromIndex < 0 ||
 					fromIndex >= s.unifiedTabOrder.length ||
@@ -609,11 +632,18 @@ export function useTabHandlers(): TabHandlersReturn {
 					toIndex >= s.unifiedTabOrder.length ||
 					fromIndex === toIndex
 				) {
+					console.debug(
+						'[useTabHandlers] handleUnifiedTabReorder: bounds check failed, returning unchanged'
+					);
 					return s;
 				}
 				const newOrder = [...s.unifiedTabOrder];
 				const [movedRef] = newOrder.splice(fromIndex, 1);
 				newOrder.splice(toIndex, 0, movedRef);
+				console.debug('[useTabHandlers] handleUnifiedTabReorder: reordered', {
+					movedRef,
+					newOrder: newOrder.map((r) => `${r.type}:${r.id.slice(0, 8)}`),
+				});
 				return { ...s, unifiedTabOrder: newOrder };
 			})
 		);
@@ -931,7 +961,22 @@ export function useTabHandlers(): TabHandlersReturn {
 		const session = sessions.find((s) => s.id === activeSessionId);
 		if (!session) return { type: 'none' };
 
-		// Check if a file tab is active first
+		// Terminal tab is active — close it (unless it's the only tab of any type)
+		if (session.inputMode === 'terminal' && session.activeTerminalTabId) {
+			const tabId = session.activeTerminalTabId;
+			// Allow closing terminal tabs as long as there are other tabs to fall back to.
+			// closeTerminalTabHelper handles selecting the adjacent tab (which may be AI or file).
+			const totalTabs =
+				(session.aiTabs?.length || 0) +
+				(session.filePreviewTabs?.length || 0) +
+				(session.terminalTabs?.length || 0);
+			if (totalTabs <= 1) {
+				return { type: 'prevented' };
+			}
+			return { type: 'terminal', tabId };
+		}
+
+		// Check if a file tab is active
 		if (session.activeFileTabId) {
 			const tabId = session.activeFileTabId;
 			setSessions((prev: Session[]) =>
@@ -1065,10 +1110,18 @@ export function useTabHandlers(): TabHandlersReturn {
 	// ========================================================================
 
 	const handleRequestTabRename = useCallback((tabId: string) => {
+		console.log('[DEBUG renameTab] handleRequestTabRename called', { tabId });
 		const { sessions, activeSessionId, setSessions } = useSessionStore.getState();
 		const session = sessions.find((s) => s.id === activeSessionId);
-		if (!session) return;
+		if (!session) {
+			console.log('[DEBUG renameTab] no session found');
+			return;
+		}
 		const tab = session.aiTabs?.find((t) => t.id === tabId);
+		console.log('[DEBUG renameTab] tab found:', !!tab, {
+			aiTabCount: session.aiTabs?.length,
+			tabId,
+		});
 		if (tab) {
 			if (tab.isGeneratingName) {
 				setSessions((prev: Session[]) =>
@@ -1516,5 +1569,61 @@ export function useTabHandlers(): TabHandlersReturn {
 		handleScrollPositionChange,
 		handleAtBottomChange,
 		handleDeleteLog,
+	};
+}
+
+// ============================================================================
+// Terminal Tab Handlers
+// ============================================================================
+
+export interface TerminalTabHandlersReturn {
+	handleOpenTerminalTab: (options?: { shell?: string; cwd?: string; name?: string | null }) => void;
+	handleCloseTerminalTab: (tabId: string) => void;
+	handleSelectTerminalTab: (tabId: string) => void;
+	handleRenameTerminalTab: (tabId: string, name: string) => void;
+}
+
+/**
+ * Thin wrapper hook exposing terminal tab operations via the tabStore.
+ * Components call this hook to manipulate terminal tabs without directly
+ * importing the store.
+ */
+export function useTerminalTabHandlers(): TerminalTabHandlersReturn {
+	const { createTerminalTab, closeTerminalTab, selectTerminalTab, renameTerminalTab } =
+		useTabStore();
+
+	const handleOpenTerminalTab = useCallback(
+		(options?: { shell?: string; cwd?: string; name?: string | null }) => {
+			createTerminalTab(options);
+		},
+		[createTerminalTab]
+	);
+
+	const handleCloseTerminalTab = useCallback(
+		(tabId: string) => {
+			closeTerminalTab(tabId);
+		},
+		[closeTerminalTab]
+	);
+
+	const handleSelectTerminalTab = useCallback(
+		(tabId: string) => {
+			selectTerminalTab(tabId);
+		},
+		[selectTerminalTab]
+	);
+
+	const handleRenameTerminalTab = useCallback(
+		(tabId: string, name: string) => {
+			renameTerminalTab(tabId, name);
+		},
+		[renameTerminalTab]
+	);
+
+	return {
+		handleOpenTerminalTab,
+		handleCloseTerminalTab,
+		handleSelectTerminalTab,
+		handleRenameTerminalTab,
 	};
 }

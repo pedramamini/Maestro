@@ -13,6 +13,7 @@ import {
 	Target,
 	Copy,
 	ExternalLink,
+	FolderOpen,
 	Server,
 	GitBranch,
 	Clock,
@@ -37,7 +38,7 @@ import { useLayerStack } from '../contexts/LayerStackContext';
 import { MODAL_PRIORITIES } from '../constants/modalPriorities';
 import { useClickOutside } from '../hooks/ui/useClickOutside';
 import { useContextMenuPosition } from '../hooks/ui/useContextMenuPosition';
-import { getRevealLabel } from '../utils/platformUtils';
+import { getRevealLabel, getOpenInLabel } from '../utils/platformUtils';
 import { safeClipboardWrite } from '../utils/clipboard';
 import type { FileExplorerIconTheme } from '../utils/fileExplorerIcons/shared';
 import { Modal, ModalFooter } from './ui/Modal';
@@ -1132,6 +1133,19 @@ function FileExplorerPanelInner(props: FileExplorerPanelProps) {
 					</span>
 				</div>
 				<div className="flex items-center gap-1 flex-shrink-0">
+					{/* Open working directory in system file manager */}
+					{!session.sshRemote && (
+						<button
+							onClick={() =>
+								window.maestro?.shell?.openPath(session.fullPath || session.projectRoot)
+							}
+							className="p-1 rounded hover:bg-white/10 transition-colors"
+							title={getOpenInLabel(window.maestro?.platform || 'darwin')}
+							style={{ color: theme.colors.textDim }}
+						>
+							<FolderOpen className="w-3.5 h-3.5" />
+						</button>
+					)}
 					{/* Last Document Graph indicator */}
 					{lastGraphFocusFile && onOpenLastDocumentGraph && (
 						<button

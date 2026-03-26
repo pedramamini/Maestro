@@ -33,6 +33,7 @@ export interface SessionStoreState {
 	// Initialization
 	sessionsLoaded: boolean;
 	initialLoadComplete: boolean;
+	initialFileTreeReady: boolean;
 
 	// Worktree tracking (prevents re-discovery of manually removed worktrees)
 	removedWorktreePaths: Set<string>;
@@ -99,6 +100,7 @@ export interface SessionStoreActions {
 
 	setSessionsLoaded: (loaded: boolean | ((prev: boolean) => boolean)) => void;
 	setInitialLoadComplete: (complete: boolean | ((prev: boolean) => boolean)) => void;
+	setInitialFileTreeReady: (ready: boolean | ((prev: boolean) => boolean)) => void;
 
 	// === Bookmarks ===
 
@@ -155,6 +157,7 @@ export const useSessionStore = create<SessionStore>()((set) => ({
 	activeSessionId: '',
 	sessionsLoaded: false,
 	initialLoadComplete: false,
+	initialFileTreeReady: false,
 	removedWorktreePaths: new Set(),
 	cyclePosition: -1,
 
@@ -240,6 +243,8 @@ export const useSessionStore = create<SessionStore>()((set) => ({
 	setSessionsLoaded: (v) => set((s) => ({ sessionsLoaded: resolve(v, s.sessionsLoaded) })),
 	setInitialLoadComplete: (v) =>
 		set((s) => ({ initialLoadComplete: resolve(v, s.initialLoadComplete) })),
+	setInitialFileTreeReady: (v) =>
+		set((s) => ({ initialFileTreeReady: resolve(v, s.initialFileTreeReady) })),
 
 	// Bookmarks
 	toggleBookmark: (sessionId) =>
@@ -434,6 +439,7 @@ export function getSessionActions() {
 		toggleGroupCollapsed: state.toggleGroupCollapsed,
 		setSessionsLoaded: state.setSessionsLoaded,
 		setInitialLoadComplete: state.setInitialLoadComplete,
+		setInitialFileTreeReady: state.setInitialFileTreeReady,
 		toggleBookmark: state.toggleBookmark,
 		addRemovedWorktreePath: state.addRemovedWorktreePath,
 		setRemovedWorktreePaths: state.setRemovedWorktreePaths,

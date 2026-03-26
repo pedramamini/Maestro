@@ -509,4 +509,49 @@ describe('groomContext', () => {
 		expect(config.cwd).toBe('/project');
 		expect(config.prompt).toBe('summarize this');
 	});
+
+	it('calls onProgress callback with chunk data on each data event', async () => {
+		const detector = createMockAgentDetector(agent);
+		const onProgress = vi.fn();
+
+		// Override spawn to emit multiple data chunks before exiting
+		mockPM.spawn = vi.fn((config: Record<string, unknown>) => {
+			(mockPM as any)._lastSpawnConfig = config;
+			const sessionId = config.sessionId as string;
+			setTimeout(() => {
+				mockPM._emitData(sessionId, 'chunk1');
+				mockPM._emitData(sessionId, 'chunk2');
+				mockPM._emitData(sessionId, 'chunk3');
+				mockPM._emitExit(sessionId, 0);
+			}, 10);
+			return { pid: 12345, success: true };
+		});
+
+		await groomContext(
+			{
+				projectRoot: '/project',
+				agentType: 'claude-code',
+				prompt: 'summarize',
+				onProgress,
+			},
+			mockPM,
+			detector
+		);
+
+		expect(onProgress).toHaveBeenCalledTimes(3);
+		// First call: 1 chunk, 6 bytes ("chunk1")
+		expect(onProgress.mock.calls[0][0]).toMatchObject({
+			chunkCount: 1,
+			bytesReceived: 6,
+		});
+		// Third call: 3 chunks, 18 bytes total
+		expect(onProgress.mock.calls[2][0]).toMatchObject({
+			chunkCount: 3,
+			bytesReceived: 18,
+		});
+		// All calls should have elapsedMs >= 0
+		for (const call of onProgress.mock.calls) {
+			expect(call[0].elapsedMs).toBeGreaterThanOrEqual(0);
+		}
+	});
 });

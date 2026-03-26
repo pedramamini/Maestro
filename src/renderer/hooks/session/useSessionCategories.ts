@@ -22,7 +22,9 @@ export interface SessionCategories {
 
 export function useSessionCategories(
 	sessionFilter: string,
-	sortedSessions: Session[]
+	sortedSessions: Session[],
+	showUnreadAgentsOnly = false,
+	activeSessionId?: string | null
 ): SessionCategories {
 	const sessions = useSessionStore((s) => s.sessions);
 	const groups = useSessionStore((s) => s.groups);
@@ -67,13 +69,29 @@ export function useSessionCategories(
 
 	// Consolidated session categorization and sorting - computed in a single pass
 	const sessionCategories = useMemo(() => {
-		// Step 1: Filter sessions based on search query
+		// Step 1: Filter sessions based on search query and unread filter
 		const query = sessionFilter?.toLowerCase() ?? '';
 		const filtered: Session[] = [];
 
 		for (const s of sessions) {
 			// Exclude worktree children from main list (they appear under parent)
 			if (s.parentSessionId) continue;
+
+			// Apply unread agents filter (also keep busy/working agents visible)
+			// Always keep the active session (or its parent) visible so user doesn't lose their place
+			const isActiveOrParentOfActive =
+				s.id === activeSessionId ||
+				worktreeChildrenByParentId.get(s.id)?.some((child) => child.id === activeSessionId);
+			if (showUnreadAgentsOnly && !isActiveOrParentOfActive) {
+				const hasUnread = s.aiTabs?.some((tab) => tab.hasUnread);
+				const isBusy = s.state === 'busy';
+				// Also check if any worktree children have unread or are busy
+				const children = worktreeChildrenByParentId.get(s.id);
+				const hasUnreadChildren = children?.some(
+					(child) => child.aiTabs?.some((tab) => tab.hasUnread) || child.state === 'busy'
+				);
+				if (!hasUnread && !isBusy && !hasUnreadChildren) continue;
+			}
 
 			if (!query) {
 				filtered.push(s);
@@ -150,7 +168,7 @@ export function useSessionCategories(
 			sortedUngroupedParent,
 			sortedGrouped,
 		};
-	}, [sessionFilter, sessions, worktreeChildrenByParentId]);
+	}, [sessionFilter, showUnreadAgentsOnly, activeSessionId, sessions, worktreeChildrenByParentId]);
 
 	const sortedGroups = useMemo(
 		() => [...groups].sort((a, b) => compareSessionNames(a.name, b.name)),

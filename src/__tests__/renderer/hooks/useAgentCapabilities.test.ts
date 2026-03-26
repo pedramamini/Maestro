@@ -34,6 +34,7 @@ const baseCapabilities = {
 	supportsGroupChatModeration: false,
 	usesJsonLineOutput: false,
 	usesCombinedContextWindow: false,
+	supportsAppendSystemPrompt: false,
 };
 
 describe('useAgentCapabilities', () => {

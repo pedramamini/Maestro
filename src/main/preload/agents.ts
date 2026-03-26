@@ -72,10 +72,12 @@ export function createAgentsApi() {
 			ipcRenderer.invoke('agents:refresh', agentId, sshRemoteId),
 
 		/**
-		 * Get a specific agent's configuration
+		 * Get a specific agent's configuration.
+		 * When sshRemoteId is provided, detects the agent on the remote host
+		 * instead of locally (with a 10s timeout).
 		 */
-		get: (agentId: string): Promise<AgentConfig | null> =>
-			ipcRenderer.invoke('agents:get', agentId),
+		get: (agentId: string, sshRemoteId?: string): Promise<AgentConfig | null> =>
+			ipcRenderer.invoke('agents:get', agentId, sshRemoteId),
 
 		/**
 		 * Get an agent's capabilities
@@ -171,14 +173,14 @@ export function createAgentsApi() {
 			ipcRenderer.invoke('agents:getModels', agentId, forceRefresh, sshRemoteId),
 
 		/**
-		 * Discover available slash commands for an agent by spawning it briefly
-		 * Returns array of command names (e.g., ['compact', 'help', 'my-custom-command'])
+		 * Discover available slash commands for an agent.
+		 * Returns objects with name and optional prompt for all agents.
 		 */
 		discoverSlashCommands: (
 			agentId: string,
 			cwd: string,
 			customPath?: string
-		): Promise<string[] | null> =>
+		): Promise<{ name: string; prompt?: string }[] | null> =>
 			ipcRenderer.invoke('agents:discoverSlashCommands', agentId, cwd, customPath),
 	};
 }

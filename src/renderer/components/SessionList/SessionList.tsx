@@ -13,6 +13,7 @@ import {
 	Bookmark,
 	Trophy,
 	Trash2,
+	Bot,
 } from 'lucide-react';
 import type { Session, Group, Theme } from '../../types';
 import { getBadgeForTime } from '../../constants/conductorBadges';
@@ -91,6 +92,9 @@ interface SessionListProps {
 	// Tour props
 	startTour?: () => void;
 
+	// Maestro Cue
+	onConfigureCue?: (session: Session) => void;
+
 	// Group Chat handlers
 	onOpenGroupChat?: (id: string) => void;
 	onNewGroupChat?: () => void;
@@ -126,7 +130,50 @@ function SessionListInner(props: SessionListProps) {
 	const contextWarningRedThreshold = useSettingsStore(
 		(s) => s.contextManagementSettings.contextWarningRedThreshold
 	);
+	const maestroCueEnabled = useSettingsStore((s) => s.encoreFeatures.maestroCue);
 	const activeBatchSessionIds = useBatchStore(useShallow(selectActiveBatchSessionIds));
+
+	// Cue session status map: sessionId → { count, active } (only active when Encore Feature enabled)
+	const [cueSessionMap, setCueSessionMap] = useState<
+		Map<string, { count: number; active: boolean }>
+	>(new Map());
+	useEffect(() => {
+		if (!maestroCueEnabled) {
+			setCueSessionMap(new Map());
+			return;
+		}
+
+		let mounted = true;
+
+		const fetchCueStatus = async () => {
+			try {
+				const statuses = await window.maestro.cue.getStatus();
+				if (!mounted) return;
+				const map = new Map<string, { count: number; active: boolean }>();
+				for (const s of statuses) {
+					if (s.subscriptionCount > 0) {
+						map.set(s.sessionId, {
+							count: s.subscriptionCount,
+							active: s.activeRuns > 0,
+						});
+					}
+				}
+				setCueSessionMap(map);
+			} catch {
+				// Cue engine may not be initialized yet
+			}
+		};
+
+		fetchCueStatus();
+		const unsubscribe = window.maestro.cue.onActivityUpdate(() => {
+			fetchCueStatus();
+		});
+
+		return () => {
+			mounted = false;
+			unsubscribe();
+		};
+	}, [maestroCueEnabled]);
 	const groupChats = useGroupChatStore((s) => s.groupChats);
 	const activeGroupChatId = useGroupChatStore((s) => s.activeGroupChatId);
 	const groupChatState = useGroupChatStore((s) => s.groupChatState);
@@ -194,6 +241,7 @@ function SessionListInner(props: SessionListProps) {
 		onQuickCreateWorktree,
 		onOpenWorktreeConfig,
 		onDeleteWorktree,
+		onConfigureCue,
 		showSessionJumpNumbers = false,
 		visibleSessions = [],
 		openWizard,
@@ -226,6 +274,8 @@ function SessionListInner(props: SessionListProps) {
 		});
 	const sessionFilterOpen = useUIStore((s) => s.sessionFilterOpen);
 	const setSessionFilterOpen = useUIStore((s) => s.setSessionFilterOpen);
+	const showUnreadAgentsOnly = useUIStore((s) => s.showUnreadAgentsOnly);
+	const toggleShowUnreadAgentsOnly = useUIStore((s) => s.toggleShowUnreadAgentsOnly);
 	const [menuOpen, setMenuOpen] = useState(false);
 
 	// Live overlay state (extracted hook)
@@ -380,7 +430,7 @@ function SessionListInner(props: SessionListProps) {
 		sortedUngroupedParentSessions,
 		sortedFilteredSessions,
 		sortedGroups,
-	} = useSessionCategories(sessionFilter, sortedSessions);
+	} = useSessionCategories(sessionFilter, sortedSessions, showUnreadAgentsOnly, activeSessionId);
 
 	// PERF: Cached callback maps to prevent SessionItem re-renders
 	// These Maps store stable function references keyed by session/editing ID
@@ -436,9 +486,19 @@ function SessionListInner(props: SessionListProps) {
 			onDrop?: () => void;
 		}
 	) => {
-		const worktreeChildren = getWorktreeChildren(session.id);
+		const allWorktreeChildren = getWorktreeChildren(session.id);
+		// When filtering unread, only show worktree children that are unread or busy
+		const worktreeChildren = showUnreadAgentsOnly
+			? allWorktreeChildren.filter(
+					(child) =>
+						child.id === activeSessionId ||
+						child.aiTabs?.some((tab) => tab.hasUnread) ||
+						child.state === 'busy'
+				)
+			: allWorktreeChildren;
 		const hasWorktrees = worktreeChildren.length > 0;
-		const worktreesExpanded = session.worktreesExpanded ?? true;
+		// Force expand worktrees when filtering by unread
+		const worktreesExpanded = showUnreadAgentsOnly ? true : (session.worktreesExpanded ?? true);
 		const globalIdx = sortedSessionIndexById.get(session.id) ?? -1;
 		const isKeyboardSelected = activeFocus === 'sidebar' && globalIdx === selectedSidebarIndex;
 
@@ -466,6 +526,8 @@ function SessionListInner(props: SessionListProps) {
 					gitFileCount={getFileCount(session.id)}
 					isInBatch={activeBatchSessionIds.includes(session.id)}
 					jumpNumber={getSessionJumpNumber(session.id)}
+					cueSubscriptionCount={cueSessionMap.get(session.id)?.count}
+					cueActiveRun={cueSessionMap.get(session.id)?.active}
 					onSelect={selectHandlers.get(session.id)!}
 					onDragStart={dragStartHandlers.get(session.id)!}
 					onDragOver={handleDragOver}
@@ -510,7 +572,10 @@ function SessionListInner(props: SessionListProps) {
 					>
 						{/* Worktree children list */}
 						<div>
-							{(sortedWorktreeChildrenByParentId.get(session.id) || []).map((child) => {
+							{(showUnreadAgentsOnly
+								? worktreeChildren
+								: sortedWorktreeChildrenByParentId.get(session.id) || []
+							).map((child) => {
 								const childGlobalIdx = sortedSessionIndexById.get(child.id) ?? -1;
 								const isChildKeyboardSelected =
 									activeFocus === 'sidebar' && childGlobalIdx === selectedSidebarIndex;
@@ -528,6 +593,8 @@ function SessionListInner(props: SessionListProps) {
 										gitFileCount={getFileCount(child.id)}
 										isInBatch={activeBatchSessionIds.includes(child.id)}
 										jumpNumber={getSessionJumpNumber(child.id)}
+										cueSubscriptionCount={cueSessionMap.get(child.id)?.count}
+										cueActiveRun={cueSessionMap.get(child.id)?.active}
 										onSelect={selectHandlers.get(child.id)!}
 										onDragStart={dragStartHandlers.get(child.id)!}
 										onContextMenu={contextMenuHandlers.get(child.id)!}
@@ -812,8 +879,19 @@ function SessionListInner(props: SessionListProps) {
 						</div>
 					)}
 
-					{/* BOOKMARKS SECTION - only show if there are bookmarked sessions */}
-					{bookmarkedSessions.length > 0 && (
+					{/* Empty state for unread agents filter */}
+					{showUnreadAgentsOnly && sortedFilteredSessions.length === 0 && (
+						<div
+							className="flex-1 flex flex-col items-center justify-center gap-3 px-4"
+							style={{ color: theme.colors.textDim }}
+						>
+							<Bot className="w-8 h-8 opacity-30" />
+							<span className="text-xs italic">No unread or working agents</span>
+						</div>
+					)}
+
+					{/* BOOKMARKS SECTION - hidden when filtering by unread agents */}
+					{bookmarkedSessions.length > 0 && !showUnreadAgentsOnly && (
 						<div className="mb-1">
 							<button
 								type="button"
@@ -877,6 +955,8 @@ function SessionListInner(props: SessionListProps) {
 					{/* GROUPS */}
 					{sortedGroups.map((group) => {
 						const groupSessions = sortedGroupSessionsById.get(group.id) || [];
+						// Hide empty groups when filtering by unread agents
+						if (showUnreadAgentsOnly && groupSessions.length === 0) return null;
 						const groupCollapsedPills = groupSessions.filter((session) => !session.parentSessionId);
 						return (
 							<div key={group.id} className="mb-1">
@@ -899,7 +979,7 @@ function SessionListInner(props: SessionListProps) {
 										className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider flex-1"
 										style={{ color: theme.colors.textDim }}
 									>
-										{group.collapsed ? (
+										{group.collapsed && !showUnreadAgentsOnly ? (
 											<ChevronRight className="w-3 h-3" />
 										) : (
 											<ChevronDown className="w-3 h-3" />
@@ -965,7 +1045,7 @@ function SessionListInner(props: SessionListProps) {
 									)}
 								</div>
 
-								{!group.collapsed ? (
+								{!group.collapsed || showUnreadAgentsOnly ? (
 									<div
 										className="flex flex-col border-l ml-4"
 										style={{ borderColor: theme.colors.border }}
@@ -1014,21 +1094,23 @@ function SessionListInner(props: SessionListProps) {
 									renderSessionWithWorktrees(session, 'flat', { keyPrefix: 'flat' })
 								)}
 							</div>
-							<div className="mt-4 px-3">
-								<button
-									onClick={createNewGroup}
-									className="w-full px-2 py-1.5 rounded-full text-[10px] font-medium hover:opacity-80 transition-opacity flex items-center justify-center gap-1"
-									style={{
-										backgroundColor: theme.colors.accent + '20',
-										color: theme.colors.accent,
-										border: `1px solid ${theme.colors.accent}40`,
-									}}
-									title="Create new group"
-								>
-									<Plus className="w-3 h-3" />
-									<span>New Group</span>
-								</button>
-							</div>
+							{!showUnreadAgentsOnly && (
+								<div className="mt-4 px-3">
+									<button
+										onClick={createNewGroup}
+										className="w-full px-2 py-1.5 rounded-full text-[10px] font-medium hover:opacity-80 transition-opacity flex items-center justify-center gap-1"
+										style={{
+											backgroundColor: theme.colors.accent + '20',
+											color: theme.colors.accent,
+											border: `1px solid ${theme.colors.accent}40`,
+										}}
+										title="Create new group"
+									>
+										<Plus className="w-3 h-3" />
+										<span>New Group</span>
+									</button>
+								</div>
+							)}
 						</>
 					) : groups.length > 0 && ungroupedSessions.length > 0 ? (
 						/* UNGROUPED FOLDER - Groups exist and there are ungrouped agents */
@@ -1051,22 +1133,24 @@ function SessionListInner(props: SessionListProps) {
 									<Folder className="w-3.5 h-3.5" />
 									<span>Ungrouped Agents</span>
 								</div>
-								<button
-									onClick={(e) => {
-										e.stopPropagation();
-										createNewGroup();
-									}}
-									className="px-2 py-0.5 rounded-full text-[10px] font-medium hover:opacity-80 transition-opacity flex items-center gap-1"
-									style={{
-										backgroundColor: theme.colors.accent + '20',
-										color: theme.colors.accent,
-										border: `1px solid ${theme.colors.accent}40`,
-									}}
-									title="Create new group"
-								>
-									<Plus className="w-3 h-3" />
-									<span>New Group</span>
-								</button>
+								{!showUnreadAgentsOnly && (
+									<button
+										onClick={(e) => {
+											e.stopPropagation();
+											createNewGroup();
+										}}
+										className="px-2 py-0.5 rounded-full text-[10px] font-medium hover:opacity-80 transition-opacity flex items-center gap-1"
+										style={{
+											backgroundColor: theme.colors.accent + '20',
+											color: theme.colors.accent,
+											border: `1px solid ${theme.colors.accent}40`,
+										}}
+										title="Create new group"
+									>
+										<Plus className="w-3 h-3" />
+										<span>New Group</span>
+									</button>
+								)}
 							</div>
 
 							{!ungroupedCollapsed ? (
@@ -1102,7 +1186,7 @@ function SessionListInner(props: SessionListProps) {
 								</div>
 							)}
 						</div>
-					) : groups.length > 0 ? (
+					) : groups.length > 0 && !showUnreadAgentsOnly ? (
 						/* NO UNGROUPED AGENTS - Show drop zone for ungrouping + New Group button */
 						<div className="mt-4 px-3" onDragOver={handleDragOver} onDrop={handleDropOnUngrouped}>
 							{/* Drop zone indicator when dragging */}
@@ -1185,10 +1269,12 @@ function SessionListInner(props: SessionListProps) {
 				leftSidebarOpen={leftSidebarOpen}
 				hasNoSessions={sessions.length === 0}
 				shortcuts={shortcuts}
+				showUnreadAgentsOnly={showUnreadAgentsOnly}
 				addNewSession={addNewSession}
 				openWizard={openWizard}
 				openFeedback={props.openFeedback}
 				setLeftSidebarOpen={setLeftSidebarOpen}
+				toggleShowUnreadAgentsOnly={toggleShowUnreadAgentsOnly}
 			/>
 
 			{/* Session Context Menu */}
@@ -1207,8 +1293,8 @@ function SessionListInner(props: SessionListProps) {
 					}}
 					onEdit={() => onEditAgent(contextMenuSession)}
 					onDuplicate={() => {
-						setDuplicatingSessionId(contextMenuSession.id);
 						onNewAgentSession();
+						setDuplicatingSessionId(contextMenuSession.id);
 						setContextMenu(null);
 					}}
 					onToggleBookmark={() => toggleBookmark(contextMenuSession.id)}
@@ -1239,6 +1325,11 @@ function SessionListInner(props: SessionListProps) {
 						onCreateGroupAndMove
 							? () => onCreateGroupAndMove(contextMenuSession.id)
 							: createNewGroup
+					}
+					onConfigureCue={
+						onConfigureCue && maestroCueEnabled
+							? () => onConfigureCue(contextMenuSession)
+							: undefined
 					}
 				/>
 			)}

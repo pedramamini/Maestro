@@ -5,10 +5,9 @@ import {
 	getAllFolderPaths,
 	flattenTree,
 	compareFileTrees,
-	matchGlobPattern,
-	shouldIgnore,
 	FileTreeNode,
 } from '../../../renderer/utils/fileExplorer';
+import { matchGlobPattern, shouldIgnore } from '../../../shared/globUtils';
 
 describe('fileExplorer utils', () => {
 	// ============================================================================
@@ -271,6 +270,26 @@ describe('fileExplorer utils', () => {
 			expect(result[0].name).toBe('main.py');
 		});
 
+		it('always shows .maestro folder even when it matches ignore patterns', async () => {
+			vi.mocked(window.maestro.fs.readDir)
+				.mockResolvedValueOnce([
+					{ name: '.maestro', isFile: false, isDirectory: true },
+					{ name: 'node_modules', isFile: false, isDirectory: true },
+					{ name: 'src', isFile: false, isDirectory: true },
+				])
+				.mockResolvedValue([]); // Empty for folder recursion
+
+			// Use ignore patterns that would match .maestro (e.g., dotfile glob)
+			const result = await loadFileTree('/project', 10, 0, undefined, undefined, {
+				ignorePatterns: ['node_modules', '.*'],
+			});
+
+			// .maestro should be present, node_modules should be filtered
+			expect(result.find((n) => n.name === '.maestro')).toBeDefined();
+			expect(result.find((n) => n.name === 'node_modules')).toBeUndefined();
+			expect(result.find((n) => n.name === 'src')).toBeDefined();
+		});
+
 		it('sorts folders before files', async () => {
 			vi.mocked(window.maestro.fs.readDir)
 				.mockResolvedValueOnce([
@@ -454,6 +473,26 @@ describe('fileExplorer utils', () => {
 			// .git should NOT be ignored — SSH uses its own ignorePatterns, not localOptions
 			expect(result).toHaveLength(2);
 			expect(result.find((n) => n.name === '.git')).toBeDefined();
+			expect(result.find((n) => n.name === 'src')).toBeDefined();
+		});
+
+		it('always shows .maestro even when it matches ignore patterns', async () => {
+			vi.mocked(window.maestro.fs.readDir).mockResolvedValueOnce([
+				{ name: '.maestro', isFile: false, isDirectory: true },
+				{ name: '.env', isFile: true, isDirectory: false },
+				{ name: 'src', isFile: false, isDirectory: true },
+			]);
+			vi.mocked(window.maestro.fs.readDir).mockResolvedValue([]);
+
+			// Use ignore patterns that would match dotfiles
+			const result = await loadFileTree('/project', 10, 0, undefined, undefined, {
+				ignorePatterns: ['.*'],
+			});
+
+			// .maestro should survive despite matching .*
+			expect(result.find((n) => n.name === '.maestro')).toBeDefined();
+			// .env should be filtered out (matches .* and is not in ALWAYS_VISIBLE)
+			expect(result.find((n) => n.name === '.env')).toBeUndefined();
 			expect(result.find((n) => n.name === 'src')).toBeDefined();
 		});
 

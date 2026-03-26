@@ -118,6 +118,9 @@ export const DEFAULT_ONBOARDING_STATS: OnboardingStats = {
 
 export const DEFAULT_ENCORE_FEATURES: EncoreFeatureFlags = {
 	directorNotes: false,
+	usageStats: true,
+	symphony: true,
+	maestroCue: false,
 };
 
 export const DEFAULT_DIRECTOR_NOTES_SETTINGS: DirectorNotesSettings = {
@@ -235,7 +238,7 @@ export interface SettingsStoreState {
 	documentGraphPreviewCharLimit: number;
 	documentGraphLayoutType: DocumentGraphLayoutType;
 	statsCollectionEnabled: boolean;
-	defaultStatsTimeRange: 'day' | 'week' | 'month' | 'year' | 'all';
+	defaultStatsTimeRange: 'day' | 'week' | 'month' | 'quarter' | 'year' | 'all';
 	preventSleepEnabled: boolean;
 	disableGpuAcceleration: boolean;
 	disableConfetti: boolean;
@@ -249,6 +252,7 @@ export interface SettingsStoreState {
 	autoScrollAiMode: boolean;
 	userMessageAlignment: 'left' | 'right';
 	encoreFeatures: EncoreFeatureFlags;
+	symphonyRegistryUrls: string[];
 	directorNotesSettings: DirectorNotesSettings;
 	wakatimeApiKey: string;
 	wakatimeEnabled: boolean;
@@ -309,7 +313,7 @@ export interface SettingsStoreActions {
 	setDocumentGraphPreviewCharLimit: (value: number) => void;
 	setDocumentGraphLayoutType: (value: DocumentGraphLayoutType) => void;
 	setStatsCollectionEnabled: (value: boolean) => void;
-	setDefaultStatsTimeRange: (value: 'day' | 'week' | 'month' | 'year' | 'all') => void;
+	setDefaultStatsTimeRange: (value: 'day' | 'week' | 'month' | 'quarter' | 'year' | 'all') => void;
 	setDisableGpuAcceleration: (value: boolean) => void;
 	setDisableConfetti: (value: boolean) => void;
 	setLocalIgnorePatterns: (value: string[]) => void;
@@ -322,6 +326,7 @@ export interface SettingsStoreActions {
 	setAutoScrollAiMode: (value: boolean) => void;
 	setUserMessageAlignment: (value: 'left' | 'right') => void;
 	setEncoreFeatures: (value: EncoreFeatureFlags) => void;
+	setSymphonyRegistryUrls: (value: string[]) => void;
 	setDirectorNotesSettings: (value: DirectorNotesSettings) => void;
 	setWakatimeApiKey: (value: string) => void;
 	setWakatimeEnabled: (value: boolean) => void;
@@ -475,6 +480,7 @@ export const useSettingsStore = create<SettingsStore>()((set, get) => {
 		autoScrollAiMode: false,
 		userMessageAlignment: 'right',
 		encoreFeatures: DEFAULT_ENCORE_FEATURES,
+		symphonyRegistryUrls: [],
 		directorNotesSettings: DEFAULT_DIRECTOR_NOTES_SETTINGS,
 		wakatimeApiKey: '',
 		wakatimeEnabled: false,
@@ -866,6 +872,11 @@ export const useSettingsStore = create<SettingsStore>()((set, get) => {
 		setEncoreFeatures: (value) => {
 			set({ encoreFeatures: value });
 			window.maestro.settings.set('encoreFeatures', value);
+		},
+
+		setSymphonyRegistryUrls: (value) => {
+			set({ symphonyRegistryUrls: value });
+			window.maestro.settings.set('symphonyRegistryUrls', value);
 		},
 
 		setDirectorNotesSettings: (value) => {
@@ -1725,12 +1736,13 @@ export async function loadAllSettings(): Promise<void> {
 			patch.statsCollectionEnabled = allSettings['statsCollectionEnabled'] as boolean;
 
 		if (allSettings['defaultStatsTimeRange'] !== undefined) {
-			const validTimeRanges = ['day', 'week', 'month', 'year', 'all'];
+			const validTimeRanges = ['day', 'week', 'month', 'quarter', 'year', 'all'];
 			if (validTimeRanges.includes(allSettings['defaultStatsTimeRange'] as string)) {
 				patch.defaultStatsTimeRange = allSettings['defaultStatsTimeRange'] as
 					| 'day'
 					| 'week'
 					| 'month'
+					| 'quarter'
 					| 'year'
 					| 'all';
 			}
@@ -1788,6 +1800,13 @@ export async function loadAllSettings(): Promise<void> {
 				...DEFAULT_ENCORE_FEATURES,
 				...(allSettings['encoreFeatures'] as Partial<EncoreFeatureFlags>),
 			};
+		}
+
+		// Symphony registry URLs (additional user-configured registries)
+		if (Array.isArray(allSettings['symphonyRegistryUrls'])) {
+			patch.symphonyRegistryUrls = (allSettings['symphonyRegistryUrls'] as unknown[])
+				.filter((v): v is string => typeof v === 'string' && v.trim().length > 0)
+				.map((v) => v.trim());
 		}
 
 		// Director's Notes settings (merge with defaults to preserve new fields)
@@ -1923,6 +1942,7 @@ export function getSettingsActions() {
 		setSuppressWindowsWarning: state.setSuppressWindowsWarning,
 		setAutoScrollAiMode: state.setAutoScrollAiMode,
 		setEncoreFeatures: state.setEncoreFeatures,
+		setSymphonyRegistryUrls: state.setSymphonyRegistryUrls,
 		setDirectorNotesSettings: state.setDirectorNotesSettings,
 		setWakatimeApiKey: state.setWakatimeApiKey,
 		setWakatimeEnabled: state.setWakatimeEnabled,

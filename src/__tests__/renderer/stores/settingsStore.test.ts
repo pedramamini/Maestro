@@ -357,12 +357,6 @@ describe('settingsStore', () => {
 		});
 
 		describe('Terminal', () => {
-			it('setTerminalWidth updates state and persists', () => {
-				useSettingsStore.getState().setTerminalWidth(120);
-				expect(useSettingsStore.getState().terminalWidth).toBe(120);
-				expect(window.maestro.settings.set).toHaveBeenCalledWith('terminalWidth', 120);
-			});
-
 			it('setMaxOutputLines updates state and persists', () => {
 				useSettingsStore.getState().setMaxOutputLines(50);
 				expect(useSettingsStore.getState().maxOutputLines).toBe(50);
@@ -1597,6 +1591,16 @@ describe('settingsStore', () => {
 
 			// Invalid value rejected, keeps default
 			expect(useSettingsStore.getState().defaultStatsTimeRange).toBe('week');
+		});
+
+		it('accepts quarter as valid defaultStatsTimeRange', async () => {
+			vi.mocked(window.maestro.settings.getAll).mockResolvedValue({
+				defaultStatsTimeRange: 'quarter',
+			});
+
+			await loadAllSettings();
+
+			expect(useSettingsStore.getState().defaultStatsTimeRange).toBe('quarter');
 		});
 
 		it('validates documentGraphPreviewCharLimit on load (rejects out-of-range)', async () => {

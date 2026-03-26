@@ -16,6 +16,8 @@ import {
 } from '../types';
 import { generateId } from './ids';
 import { getAutoRunFolderPath } from './existingDocsDetector';
+import { createTerminalTab } from './terminalTabHelpers';
+import { useSettingsStore } from '../stores/settingsStore';
 
 /**
  * Build the unified tab list from a session's tab data.
@@ -26,10 +28,11 @@ import { getAutoRunFolderPath } from './existingDocsDetector';
  */
 export function buildUnifiedTabs(session: Session): UnifiedTab[] {
 	if (!session) return [];
-	const { aiTabs, filePreviewTabs, unifiedTabOrder } = session;
+	const { aiTabs, filePreviewTabs, terminalTabs, unifiedTabOrder } = session;
 
 	const aiTabMap = new Map((aiTabs || []).map((tab) => [tab.id, tab]));
 	const fileTabMap = new Map((filePreviewTabs || []).map((tab) => [tab.id, tab]));
+	const terminalTabMap = new Map((terminalTabs || []).map((tab) => [tab.id, tab]));
 
 	const result: UnifiedTab[] = [];
 
@@ -41,11 +44,17 @@ export function buildUnifiedTabs(session: Session): UnifiedTab[] {
 				result.push({ type: 'ai', id: ref.id, data: tab });
 				aiTabMap.delete(ref.id);
 			}
-		} else {
+		} else if (ref.type === 'file') {
 			const tab = fileTabMap.get(ref.id);
 			if (tab) {
 				result.push({ type: 'file', id: ref.id, data: tab });
 				fileTabMap.delete(ref.id);
+			}
+		} else {
+			const tab = terminalTabMap.get(ref.id);
+			if (tab) {
+				result.push({ type: 'terminal', id: ref.id, data: tab });
+				terminalTabMap.delete(ref.id);
 			}
 		}
 	}
@@ -57,6 +66,9 @@ export function buildUnifiedTabs(session: Session): UnifiedTab[] {
 	for (const [id, tab] of fileTabMap) {
 		result.push({ type: 'file', id, data: tab });
 	}
+	for (const [id, tab] of terminalTabMap) {
+		result.push({ type: 'terminal', id, data: tab });
+	}
 
 	return result;
 }
@@ -67,7 +79,7 @@ export function buildUnifiedTabs(session: Session): UnifiedTab[] {
  */
 export function ensureInUnifiedTabOrder(
 	unifiedTabOrder: UnifiedTabRef[],
-	type: 'ai' | 'file',
+	type: 'ai' | 'file' | 'terminal',
 	id: string
 ): UnifiedTabRef[] {
 	const exists = unifiedTabOrder.some((ref) => ref.type === type && ref.id === id);
@@ -87,16 +99,37 @@ export function getRepairedUnifiedTabOrder(session: Session): UnifiedTabRef[] {
 	const order = session.unifiedTabOrder || [];
 	const aiTabs = session.aiTabs || [];
 	const fileTabs = session.filePreviewTabs || [];
+	const terminalTabs = session.terminalTabs || [];
 
-	// Build sets of IDs already in the order
+	// Build sets of IDs that actually exist (for pruning stale entries)
+	const liveAiIds = new Set(aiTabs.map((t) => t.id));
+	const liveFileIds = new Set(fileTabs.map((t) => t.id));
+	const liveTerminalIds = new Set(terminalTabs.map((t) => t.id));
+
+	// Prune stale entries and duplicates — refs whose tabs no longer exist, and
+	// later duplicate refs for the same type+id (buildUnifiedTabs also skips both).
+	// Without this, navigation indices diverge from the rendered tab bar.
+	const seen = new Set<string>();
+	const prunedOrder = order.filter((ref) => {
+		const key = `${ref.type}:${ref.id}`;
+		if (seen.has(key)) return false;
+		seen.add(key);
+		if (ref.type === 'ai') return liveAiIds.has(ref.id);
+		if (ref.type === 'file') return liveFileIds.has(ref.id);
+		return liveTerminalIds.has(ref.id);
+	});
+
+	// Track which live IDs are already in the pruned order
 	const aiIdsInOrder = new Set<string>();
 	const fileIdsInOrder = new Set<string>();
-	for (const ref of order) {
+	const terminalIdsInOrder = new Set<string>();
+	for (const ref of prunedOrder) {
 		if (ref.type === 'ai') aiIdsInOrder.add(ref.id);
-		else fileIdsInOrder.add(ref.id);
+		else if (ref.type === 'file') fileIdsInOrder.add(ref.id);
+		else terminalIdsInOrder.add(ref.id);
 	}
 
-	// Collect orphaned tabs
+	// Collect orphaned tabs (exist in data but missing from order)
 	const orphanedRefs: UnifiedTabRef[] = [];
 	for (const tab of aiTabs) {
 		if (!aiIdsInOrder.has(tab.id)) {
@@ -108,10 +141,16 @@ export function getRepairedUnifiedTabOrder(session: Session): UnifiedTabRef[] {
 			orphanedRefs.push({ type: 'file', id: tab.id });
 		}
 	}
+	for (const tab of terminalTabs) {
+		if (!terminalIdsInOrder.has(tab.id)) {
+			orphanedRefs.push({ type: 'terminal', id: tab.id });
+		}
+	}
 
-	// Return original if no orphans (avoids allocation)
-	if (orphanedRefs.length === 0) return order;
-	return [...order, ...orphanedRefs];
+	// Return original if nothing changed (avoids allocation)
+	if (prunedOrder.length === order.length && orphanedRefs.length === 0) return order;
+	if (orphanedRefs.length === 0) return prunedOrder;
+	return [...prunedOrder, ...orphanedRefs];
 }
 
 /**
@@ -230,7 +269,7 @@ export function getNavigableTabs(session: Session, showUnreadOnly = false): AITa
 	}
 
 	if (showUnreadOnly) {
-		return session.aiTabs.filter((tab) => tab.hasUnread || hasDraft(tab));
+		return session.aiTabs.filter((tab) => tab.hasUnread || tab.state === 'busy' || hasDraft(tab));
 	}
 
 	return session.aiTabs;
@@ -421,6 +460,8 @@ export function closeTab(
 
 	// If we just closed the last tab, create a fresh new tab to replace it
 	let newActiveTabId = session.activeTabId;
+	// Fallback unified tab ref when the closed tab was active — may be terminal or file
+	let fallbackRef: UnifiedTabRef | null = null;
 	if (updatedTabs.length === 0) {
 		const freshTab: AITab = {
 			id: generateId(),
@@ -458,10 +499,26 @@ export function closeTab(
 				newActiveTabId = updatedTabs[newIndex].id;
 			}
 		} else {
-			// Normal mode: select the tab to the left (previous tab)
-			// If closing the first tab (index 0), select the new first tab
-			const newIndex = Math.max(0, tabIndex - 1);
-			newActiveTabId = updatedTabs[newIndex].id;
+			// Normal mode: use repaired unifiedTabOrder to find the correct left neighbor.
+			// This respects the visual tab order which includes terminal and file tabs —
+			// without this, closing an AI tab that sits to the right of a terminal tab
+			// would fall back to a random AI tab instead of the adjacent terminal tab.
+			// We use getRepairedUnifiedTabOrder to skip stale/duplicate refs (same as rendering).
+			const unifiedOrder = getRepairedUnifiedTabOrder(session);
+			const closedUnifiedIndex = unifiedOrder.findIndex(
+				(ref) => ref.type === 'ai' && ref.id === tabId
+			);
+			const remainingUnified = unifiedOrder.filter(
+				(ref) => !(ref.type === 'ai' && ref.id === tabId)
+			);
+			if (closedUnifiedIndex !== -1 && remainingUnified.length > 0) {
+				const fallbackIndex = Math.max(0, closedUnifiedIndex - 1);
+				fallbackRef = remainingUnified[Math.min(fallbackIndex, remainingUnified.length - 1)];
+			} else {
+				// unifiedTabOrder out of sync — fall back to aiTabs position
+				const newIndex = Math.max(0, tabIndex - 1);
+				newActiveTabId = updatedTabs[newIndex].id;
+			}
 		}
 	}
 
@@ -484,14 +541,49 @@ export function closeTab(
 		finalUnifiedTabOrder = [...updatedUnifiedTabOrder, freshTabRef];
 	}
 
-	// Create updated session
-	const updatedSession: Session = {
-		...session,
-		aiTabs: updatedTabs,
-		activeTabId: newActiveTabId,
-		closedTabHistory: updatedHistory,
-		unifiedTabOrder: finalUnifiedTabOrder,
-	};
+	// Create updated session.
+	// When the fallback is a non-AI tab (terminal or file), we must update the corresponding
+	// active ID and inputMode so the UI switches to the correct view.
+	const updatedSession: Session =
+		fallbackRef?.type === 'terminal'
+			? {
+					...session,
+					aiTabs: updatedTabs,
+					// Keep activeTabId as-is; the terminal tab is now active
+					activeTerminalTabId: fallbackRef.id,
+					activeFileTabId: null,
+					inputMode: 'terminal',
+					closedTabHistory: updatedHistory,
+					unifiedTabOrder: finalUnifiedTabOrder,
+				}
+			: fallbackRef?.type === 'file'
+				? {
+						...session,
+						aiTabs: updatedTabs,
+						activeFileTabId: fallbackRef.id,
+						activeTerminalTabId: null,
+						inputMode: 'ai',
+						closedTabHistory: updatedHistory,
+						unifiedTabOrder: finalUnifiedTabOrder,
+					}
+				: fallbackRef?.type === 'ai'
+					? {
+							...session,
+							aiTabs: updatedTabs,
+							activeTabId: fallbackRef.id,
+							activeFileTabId: null,
+							activeTerminalTabId: null,
+							inputMode: 'ai',
+							closedTabHistory: updatedHistory,
+							unifiedTabOrder: finalUnifiedTabOrder,
+						}
+					: {
+							...session,
+							aiTabs: updatedTabs,
+							activeTabId: newActiveTabId,
+							closedTabHistory: updatedHistory,
+							unifiedTabOrder: finalUnifiedTabOrder,
+						};
 
 	return {
 		closedTab,
@@ -629,24 +721,25 @@ export function closeFileTab(session: Session, tabId: string): CloseFileTabResul
 		return null;
 	}
 
-	// Find the position in unifiedTabOrder
-	const unifiedIndex = session.unifiedTabOrder.findIndex(
-		(ref) => ref.type === 'file' && ref.id === tabId
-	);
+	// Use repaired order to skip stale/duplicate refs (same as rendering)
+	const repairedOrder = getRepairedUnifiedTabOrder(session);
+
+	// Find the position in the repaired unifiedTabOrder
+	const unifiedIndex = repairedOrder.findIndex((ref) => ref.type === 'file' && ref.id === tabId);
 
 	// Create closed tab entry
 	const closedTabEntry: ClosedTabEntry = {
 		type: 'file',
 		tab: { ...tabToClose },
-		unifiedIndex: unifiedIndex !== -1 ? unifiedIndex : session.unifiedTabOrder.length,
+		unifiedIndex: unifiedIndex !== -1 ? unifiedIndex : repairedOrder.length,
 		closedAt: Date.now(),
 	};
 
 	// Remove from filePreviewTabs
 	const updatedFilePreviewTabs = session.filePreviewTabs.filter((tab) => tab.id !== tabId);
 
-	// Remove from unifiedTabOrder
-	const updatedUnifiedTabOrder = session.unifiedTabOrder.filter(
+	// Remove from unifiedTabOrder (filter from repaired order to persist the fix)
+	const updatedUnifiedTabOrder = repairedOrder.filter(
 		(ref) => !(ref.type === 'file' && ref.id === tabId)
 	);
 
@@ -742,7 +835,7 @@ export function addAiTabToUnifiedHistory(
  * Result of reopening a tab from unified closed tab history.
  */
 export interface ReopenUnifiedClosedTabResult {
-	tabType: 'ai' | 'file'; // Type of tab that was reopened
+	tabType: 'ai' | 'file' | 'terminal'; // Type of tab that was reopened
 	tabId: string; // ID of the restored or existing tab
 	session: Session; // Updated session with tab restored/selected
 	wasDuplicate: boolean; // True if we switched to an existing tab instead of restoring
@@ -863,7 +956,7 @@ export function reopenUnifiedClosedTab(session: Session): ReopenUnifiedClosedTab
 			},
 			wasDuplicate: false,
 		};
-	} else {
+	} else if (closedEntry.type === 'file') {
 		// Restoring a file tab
 		const tabToRestore = closedEntry.tab;
 
@@ -924,6 +1017,37 @@ export function reopenUnifiedClosedTab(session: Session): ReopenUnifiedClosedTab
 			},
 			wasDuplicate: false,
 		};
+	} else {
+		// Terminal tab restore — create a fresh terminal tab (old PTY is gone, can't restore)
+		const closedTerminalTab = closedEntry.tab;
+		const freshTab = createTerminalTab(
+			closedTerminalTab.shellType,
+			closedTerminalTab.cwd,
+			closedTerminalTab.name
+		);
+
+		// Insert into unifiedTabOrder at the original position
+		const targetUnifiedIndex = Math.min(closedEntry.unifiedIndex, session.unifiedTabOrder.length);
+		const newTabRef: UnifiedTabRef = { type: 'terminal', id: freshTab.id };
+		const updatedUnifiedTabOrder = [
+			...session.unifiedTabOrder.slice(0, targetUnifiedIndex),
+			newTabRef,
+			...session.unifiedTabOrder.slice(targetUnifiedIndex),
+		];
+
+		return {
+			tabType: 'terminal',
+			tabId: freshTab.id,
+			session: {
+				...session,
+				terminalTabs: [...(session.terminalTabs || []), freshTab],
+				activeTerminalTabId: freshTab.id,
+				unifiedTabOrder: updatedUnifiedTabOrder,
+				unifiedClosedTabHistory: remainingHistory,
+				inputMode: 'terminal',
+			},
+			wasDuplicate: false,
+		};
 	}
 }
 
@@ -961,22 +1085,28 @@ export function setActiveTab(session: Session, tabId: string): SetActiveTabResul
 		return null;
 	}
 
-	// If already active and no file tab is selected, return current state (no mutation needed)
-	if (session.activeTabId === tabId && session.activeFileTabId === null) {
+	// If already active, no file tab is selected, and already in AI mode, return current state
+	if (
+		session.activeTabId === tabId &&
+		session.activeFileTabId === null &&
+		session.inputMode === 'ai'
+	) {
 		return {
 			tab: targetTab,
 			session,
 		};
 	}
 
-	// When selecting an AI tab, deselect any active file preview tab
-	// This ensures only one tab type (AI or file) is active at a time
+	// When selecting an AI tab, deselect any active file preview tab and switch to AI mode.
+	// This ensures only one tab type (AI or file) is active at a time, and switching
+	// from terminal mode back to AI mode works by clicking any AI tab.
 	return {
 		tab: targetTab,
 		session: {
 			...session,
 			activeTabId: tabId,
 			activeFileTabId: null,
+			inputMode: 'ai' as const,
 		},
 	};
 }
@@ -1241,7 +1371,7 @@ export function navigateToLastTab(
  * Result of navigating to a unified tab (can be AI or file tab).
  */
 export interface NavigateToUnifiedTabResult {
-	type: 'ai' | 'file';
+	type: 'ai' | 'file' | 'terminal';
 	id: string;
 	session: Session;
 }
@@ -1295,8 +1425,12 @@ export function navigateToUnifiedTabByIndex(
 		const aiTab = session.aiTabs.find((tab) => tab.id === targetTabRef.id);
 		if (!aiTab) return null;
 
-		// If already active, return current state (with repair if needed)
-		if (session.activeTabId === targetTabRef.id && session.activeFileTabId === null) {
+		// If already active and in AI mode, return current state (with repair if needed)
+		if (
+			session.activeTabId === targetTabRef.id &&
+			session.activeFileTabId === null &&
+			session.inputMode === 'ai'
+		) {
 			return {
 				type: 'ai',
 				id: targetTabRef.id,
@@ -1304,7 +1438,10 @@ export function navigateToUnifiedTabByIndex(
 			};
 		}
 
-		// Set the AI tab as active and clear file tab selection
+		// Set the AI tab as active, clear terminal/file selection, and ensure inputMode is 'ai'.
+		// inputMode must be explicitly set because navigating from a terminal tab leaves inputMode
+		// as 'terminal' in the spread — without this, MainPanel would continue rendering the
+		// terminal view even though an AI tab is now active.
 		return {
 			type: 'ai',
 			id: targetTabRef.id,
@@ -1312,15 +1449,17 @@ export function navigateToUnifiedTabByIndex(
 				...repairedSession,
 				activeTabId: targetTabRef.id,
 				activeFileTabId: null,
+				activeTerminalTabId: null,
+				inputMode: 'ai',
 			},
 		};
-	} else {
+	} else if (targetTabRef.type === 'file') {
 		// Navigate to file tab - verify it exists
 		const fileTab = session.filePreviewTabs.find((tab) => tab.id === targetTabRef.id);
 		if (!fileTab) return null;
 
-		// If already active, return current state (with repair if needed)
-		if (session.activeFileTabId === targetTabRef.id) {
+		// If already active and in AI mode, return current state (with repair if needed)
+		if (session.activeFileTabId === targetTabRef.id && session.inputMode === 'ai') {
 			return {
 				type: 'file',
 				id: targetTabRef.id,
@@ -1328,13 +1467,41 @@ export function navigateToUnifiedTabByIndex(
 			};
 		}
 
-		// Set the file tab as active (preserve activeTabId for switching back)
+		// Set the file tab as active and ensure inputMode is 'ai' (file preview is shown in
+		// non-terminal mode; without this, navigating from a terminal tab would leave the
+		// terminal visible instead of showing the file preview).
 		return {
 			type: 'file',
 			id: targetTabRef.id,
 			session: {
 				...repairedSession,
 				activeFileTabId: targetTabRef.id,
+				activeTerminalTabId: null,
+				inputMode: 'ai',
+			},
+		};
+	} else {
+		// Terminal tab — verify it exists and activate it
+		const terminalTab = (session.terminalTabs || []).find((tab) => tab.id === targetTabRef.id);
+		if (!terminalTab) return null;
+
+		// If already active, return current state (with repair if needed)
+		if (session.activeTerminalTabId === targetTabRef.id) {
+			return {
+				type: 'terminal',
+				id: targetTabRef.id,
+				session: repairedSession,
+			};
+		}
+
+		return {
+			type: 'terminal',
+			id: targetTabRef.id,
+			session: {
+				...repairedSession,
+				activeTerminalTabId: targetTabRef.id,
+				activeFileTabId: null,
+				inputMode: 'terminal',
 			},
 		};
 	}
@@ -1373,6 +1540,13 @@ function getCurrentUnifiedTabIndex(session: Session, effectiveOrder?: UnifiedTab
 	const order = effectiveOrder || getRepairedUnifiedTabOrder(session);
 	if (order.length === 0) {
 		return -1;
+	}
+
+	// If a terminal tab is active, find it in the unified order
+	if (session.activeTerminalTabId) {
+		return order.findIndex(
+			(ref) => ref.type === 'terminal' && ref.id === session.activeTerminalTabId
+		);
 	}
 
 	// If a file tab is active, find it in the unified order
@@ -1430,16 +1604,16 @@ export function navigateToNextUnifiedTab(
 			const nextIndex = (currentIndex + offset) % length;
 			const tabRef = effectiveOrder[nextIndex];
 
-			// File tabs are always navigable (if they still exist)
-			if (tabRef.type === 'file') {
+			// File and terminal tabs are always navigable (if they still exist)
+			if (tabRef.type === 'file' || tabRef.type === 'terminal') {
 				const result = navigateToUnifiedTabByIndex(session, nextIndex);
 				if (result) return result;
-				continue; // Orphaned file tab, skip
+				continue; // Orphaned tab, skip
 			}
 
 			// For AI tabs, check if it's unread or has a draft
 			const aiTab = session.aiTabs.find((t) => t.id === tabRef.id);
-			if (aiTab && (aiTab.hasUnread || hasDraft(aiTab))) {
+			if (aiTab && (aiTab.hasUnread || aiTab.state === 'busy' || hasDraft(aiTab))) {
 				return navigateToUnifiedTabByIndex(session, nextIndex);
 			}
 		}
@@ -1502,16 +1676,16 @@ export function navigateToPrevUnifiedTab(
 			const prevIndex = (currentIndex - offset + length) % length;
 			const tabRef = effectiveOrder[prevIndex];
 
-			// File tabs are always navigable (if they still exist)
-			if (tabRef.type === 'file') {
+			// File and terminal tabs are always navigable (if they still exist)
+			if (tabRef.type === 'file' || tabRef.type === 'terminal') {
 				const result = navigateToUnifiedTabByIndex(session, prevIndex);
 				if (result) return result;
-				continue; // Orphaned file tab, skip
+				continue; // Orphaned tab, skip
 			}
 
-			// For AI tabs, check if it's unread or has a draft
+			// For AI tabs, check if it's unread, busy, or has a draft
 			const aiTab = session.aiTabs.find((t) => t.id === tabRef.id);
-			if (aiTab && (aiTab.hasUnread || hasDraft(aiTab))) {
+			if (aiTab && (aiTab.hasUnread || aiTab.state === 'busy' || hasDraft(aiTab))) {
 				return navigateToUnifiedTabByIndex(session, prevIndex);
 			}
 		}
@@ -1526,6 +1700,51 @@ export function navigateToPrevUnifiedTab(
 		if (result) return result;
 	}
 	return null;
+}
+
+/**
+ * Navigate to the closest terminal tab in the unified tab order.
+ * Searches outward from the current position, alternating right then left.
+ * If no current tab is found, returns the first terminal tab.
+ *
+ * @param session - The Maestro session
+ * @returns Object with the tab type, id, and updated session, or null if no terminal tabs exist
+ */
+export function navigateToClosestTerminalTab(session: Session): NavigateToUnifiedTabResult | null {
+	const effectiveOrder = getRepairedUnifiedTabOrder(session);
+	if (!session || effectiveOrder.length === 0) return null;
+
+	// Find all terminal tab indices
+	const terminalIndices: number[] = [];
+	for (let i = 0; i < effectiveOrder.length; i++) {
+		if (effectiveOrder[i].type === 'terminal') {
+			terminalIndices.push(i);
+		}
+	}
+	if (terminalIndices.length === 0) return null;
+
+	// If already on a terminal tab, stay on it
+	const currentIndex = getCurrentUnifiedTabIndex(session, effectiveOrder);
+	if (currentIndex >= 0 && effectiveOrder[currentIndex]?.type === 'terminal') {
+		return navigateToUnifiedTabByIndex(session, currentIndex);
+	}
+
+	// Find closest terminal tab by distance from current position
+	if (currentIndex >= 0) {
+		let closest = terminalIndices[0];
+		let minDist = Math.abs(currentIndex - closest);
+		for (let i = 1; i < terminalIndices.length; i++) {
+			const dist = Math.abs(currentIndex - terminalIndices[i]);
+			if (dist < minDist) {
+				minDist = dist;
+				closest = terminalIndices[i];
+			}
+		}
+		return navigateToUnifiedTabByIndex(session, closest);
+	}
+
+	// Fallback: navigate to first terminal tab
+	return navigateToUnifiedTabByIndex(session, terminalIndices[0]);
 }
 
 /**
@@ -1669,6 +1888,11 @@ export function createMergedSession(
 
 	// Create the merged session with standard structure
 	// Matches the pattern from App.tsx createNewSession
+	const initialMergeTerminalTab = createTerminalTab(
+		useSettingsStore.getState().defaultShell || 'zsh',
+		projectRoot,
+		null
+	);
 	const session: Session = {
 		id: sessionId,
 		name,
@@ -1710,7 +1934,12 @@ export function createMergedSession(
 		closedTabHistory: [],
 		filePreviewTabs: [],
 		activeFileTabId: null,
-		unifiedTabOrder: [{ type: 'ai' as const, id: tabId }],
+		terminalTabs: [initialMergeTerminalTab],
+		activeTerminalTabId: null,
+		unifiedTabOrder: [
+			{ type: 'ai' as const, id: tabId },
+			{ type: 'terminal' as const, id: initialMergeTerminalTab.id },
+		],
 		unifiedClosedTabHistory: [],
 		// Default Auto Run folder path (user can change later)
 		autoRunFolderPath: getAutoRunFolderPath(projectRoot),

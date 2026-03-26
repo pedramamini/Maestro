@@ -25,6 +25,10 @@ import { useModalStore } from '../../stores/modalStore';
 import { useUIStore } from '../../stores/uiStore';
 import { notifyToast } from '../../stores/notificationStore';
 import { getActiveTab } from '../../utils/tabHelpers';
+import {
+	renameTerminalTab as renameTerminalTabHelper,
+	getTerminalSessionId,
+} from '../../utils/terminalTabHelpers';
 import type { NavHistoryEntry } from './useNavigationHistory';
 import { captureException } from '../../utils/sentry';
 
@@ -192,6 +196,19 @@ export function useSessionLifecycle(deps: SessionLifecycleDeps): SessionLifecycl
 	const handleRenameTab = useCallback(
 		(newName: string) => {
 			if (!activeSession || !renameTabId) return;
+
+			// If this is a terminal tab, delegate to terminal tab rename helper
+			if (activeSession.terminalTabs?.some((t) => t.id === renameTabId)) {
+				useSessionStore
+					.getState()
+					.setSessions((prev) =>
+						prev.map((s) =>
+							s.id === activeSession.id ? renameTerminalTabHelper(s, renameTabId, newName) : s
+						)
+					);
+				return;
+			}
+
 			useSessionStore.getState().setSessions((prev) =>
 				prev.map((s) => {
 					if (s.id !== activeSession.id) return s;
@@ -283,7 +300,7 @@ export function useSessionLifecycle(deps: SessionLifecycleDeps): SessionLifecycl
 			// Record session closure for Usage Dashboard (before cleanup)
 			window.maestro.stats.recordSessionClosed(id, Date.now());
 
-			// Kill both processes for this session
+			// Kill all processes for this session (AI + legacy terminal + terminal tabs)
 			try {
 				await window.maestro.process.kill(`${id}-ai`);
 			} catch (error) {
@@ -298,6 +315,17 @@ export function useSessionLifecycle(deps: SessionLifecycleDeps): SessionLifecycl
 				captureException(error, {
 					extra: { sessionId: id, operation: 'kill-terminal' },
 				});
+			}
+
+			// Kill terminal tab PTYs — each tab has its own PTY with ID {sessionId}-terminal-{tabId}
+			for (const tab of session.terminalTabs || []) {
+				try {
+					await window.maestro.process.kill(getTerminalSessionId(id, tab.id));
+				} catch (error) {
+					captureException(error, {
+						extra: { sessionId: id, tabId: tab.id, operation: 'kill-terminal-tab' },
+					});
+				}
 			}
 
 			// Delete associated playbooks

@@ -184,6 +184,7 @@ export async function addParticipant(
 	let spawnEnvVars = configResolution.effectiveCustomEnvVars ?? effectiveEnvVars;
 	let spawnShell: string | undefined;
 	let spawnRunInShell = false;
+	let spawnSshStdinScript: string | undefined;
 
 	// Apply SSH wrapping if SSH is configured and store is available
 	if (sshStore && sessionOverrides?.sshRemoteConfig) {
@@ -207,6 +208,7 @@ export async function addParticipant(
 		spawnCwd = sshWrapped.cwd;
 		spawnPrompt = sshWrapped.prompt;
 		spawnEnvVars = sshWrapped.customEnvVars;
+		spawnSshStdinScript = sshWrapped.sshStdinScript;
 		if (sshWrapped.sshRemoteUsed) {
 			console.log(`[GroupChat:Debug] SSH remote used: ${sshWrapped.sshRemoteUsed.name}`);
 		}
@@ -238,6 +240,7 @@ export async function addParticipant(
 		runInShell: spawnRunInShell,
 		sendPromptViaStdin: winConfig.sendPromptViaStdin,
 		sendPromptViaStdinRaw: winConfig.sendPromptViaStdinRaw,
+		sshStdinScript: spawnSshStdinScript,
 	});
 
 	console.log(`[GroupChat:Debug] Spawn result: ${JSON.stringify(result)}`);

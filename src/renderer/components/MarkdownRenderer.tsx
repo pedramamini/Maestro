@@ -1,4 +1,4 @@
-import React, { memo, useMemo, useState, useEffect } from 'react';
+import React, { memo, useMemo, useState, useCallback, useEffect } from 'react';
 import ReactMarkdown from 'react-markdown';
 import rehypeRaw from 'rehype-raw';
 import DOMPurify from 'dompurify';
@@ -11,6 +11,8 @@ import { remarkFileLinks, buildFileTreeIndices } from '../utils/remarkFileLinks'
 import remarkFrontmatter from 'remark-frontmatter';
 import { remarkFrontmatterTable } from '../utils/remarkFrontmatterTable';
 import { REMARK_GFM_PLUGINS } from '../utils/markdownConfig';
+import { LinkContextMenu, type LinkContextMenuState } from './LinkContextMenu';
+import { FileContextMenu, type FileContextMenuState } from './FileContextMenu';
 
 // ============================================================================
 // LocalImage - Loads local images via IPC
@@ -288,6 +290,12 @@ export const MarkdownRenderer = memo(
 			return content;
 		}, [content, allowRawHtml]);
 
+		// Right-click context menus for links and file references
+		const [linkMenu, setLinkMenu] = useState<LinkContextMenuState | null>(null);
+		const dismissLinkMenu = useCallback(() => setLinkMenu(null), []);
+		const [fileMenu, setFileMenu] = useState<FileContextMenuState | null>(null);
+		const dismissFileMenu = useCallback(() => setFileMenu(null), []);
+
 		return (
 			<div
 				className={`prose prose-sm max-w-none text-sm ${className}`}
@@ -336,6 +344,24 @@ export const MarkdownRenderer = memo(
 													// Silently ignore unparseable URLs
 												}
 											}
+										}
+									}}
+									onContextMenu={(e) => {
+										if (isMaestroFile && filePath) {
+											e.preventDefault();
+											e.stopPropagation();
+											// Resolve to absolute path for file operations
+											const absPath = filePath.startsWith('/')
+												? filePath
+												: projectRoot
+													? `${projectRoot}/${filePath}`
+													: filePath;
+											const fileName = filePath.split('/').pop() || filePath;
+											setFileMenu({ x: e.clientX, y: e.clientY, filePath: absPath, fileName });
+										} else if (href) {
+											e.preventDefault();
+											e.stopPropagation();
+											setLinkMenu({ x: e.clientX, y: e.clientY, url: href });
 										}
 									}}
 									style={{
@@ -446,6 +472,17 @@ export const MarkdownRenderer = memo(
 				>
 					{sanitizedContent}
 				</ReactMarkdown>
+				{linkMenu && <LinkContextMenu menu={linkMenu} theme={theme} onDismiss={dismissLinkMenu} />}
+				{fileMenu && (
+					<FileContextMenu
+						menu={fileMenu}
+						theme={theme}
+						onDismiss={dismissFileMenu}
+						onPreview={onFileClick}
+						projectRoot={projectRoot}
+						sshRemote={!!sshRemoteId}
+					/>
+				)}
 			</div>
 		);
 	}

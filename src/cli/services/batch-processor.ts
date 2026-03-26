@@ -397,6 +397,7 @@ export async function* runPlaybook(
 					},
 					gitBranch,
 					groupName,
+					groupId: session.groupId,
 					autoRunFolder: folderPath,
 					loopNumber: loopIteration + 1, // 1-indexed
 					documentName: docEntry.filename,
@@ -439,7 +440,9 @@ export async function* runPlaybook(
 				}
 
 				// Spawn agent with combined prompt + document
-				const result = await spawnAgent(session.toolType, session.cwd, finalPrompt);
+				const result = await spawnAgent(session.toolType, session.cwd, finalPrompt, undefined, {
+					customModel: session.customModel,
+				});
 
 				const elapsedMs = Date.now() - taskStartTime;
 
@@ -476,7 +479,8 @@ export async function* runPlaybook(
 						session.toolType,
 						session.cwd,
 						BATCH_SYNOPSIS_PROMPT,
-						result.agentSessionId
+						result.agentSessionId,
+						{ customModel: session.customModel }
 					);
 
 					if (synopsisResult.success && synopsisResult.response) {

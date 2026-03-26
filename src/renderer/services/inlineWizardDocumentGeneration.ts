@@ -16,10 +16,13 @@ import { logger } from '../utils/logger';
 import { wizardDocumentGenerationPrompt, wizardInlineIterateGenerationPrompt } from '../../prompts';
 import { substituteTemplateVariables, type TemplateContext } from '../utils/templateVariables';
 
+import { PLAYBOOKS_DIR } from '../../shared/maestro-paths';
+
 /**
  * Auto Run folder name constant.
+ * @deprecated Import PLAYBOOKS_DIR from shared/maestro-paths instead.
  */
-export const AUTO_RUN_FOLDER_NAME = 'Auto Run Docs';
+export const AUTO_RUN_FOLDER_NAME = PLAYBOOKS_DIR;
 
 /**
  * Generation timeout in milliseconds (20 minutes).
@@ -802,7 +805,11 @@ export async function generateInlineDocuments(
 					timeoutId = setTimeout(() => {
 						console.error('[InlineWizardDocGen] TIMEOUT fired! Session:', sessionId);
 						cleanupAll();
-						window.maestro.process.kill(sessionId).catch(() => {});
+						window.maestro.process
+							.kill(sessionId)
+							.catch((err) =>
+								console.warn('[InlineWizardDocGen] Failed to kill session on timeout:', err)
+							);
 						resolve({
 							success: false,
 							rawOutput: outputBuffer,
@@ -815,7 +822,11 @@ export async function generateInlineDocuments(
 				let timeoutId = setTimeout(() => {
 					console.error('[InlineWizardDocGen] TIMEOUT fired! Session:', sessionId);
 					cleanupAll();
-					window.maestro.process.kill(sessionId).catch(() => {});
+					window.maestro.process
+						.kill(sessionId)
+						.catch((err) =>
+							console.warn('[InlineWizardDocGen] Failed to kill session on timeout:', err)
+						);
 					resolve({
 						success: false,
 						rawOutput: outputBuffer,
@@ -837,7 +848,9 @@ export async function generateInlineDocuments(
 						fileWatcherCleanup = undefined;
 					}
 					// Stop watching the subfolder
-					window.maestro.autorun.unwatchFolder(subfolderPath).catch(() => {});
+					window.maestro.autorun
+						.unwatchFolder(subfolderPath)
+						.catch((err) => console.warn('[InlineWizardDocGen] Failed to unwatch folder:', err));
 				}
 
 				// Set up file watcher for real-time document streaming

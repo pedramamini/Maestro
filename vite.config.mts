@@ -61,6 +61,8 @@ export default defineConfig(({ mode }) => ({
 	build: {
 		outDir: path.join(__dirname, 'dist/renderer'),
 		emptyOutDir: true,
+		// Disable modulepreload polyfill — Electron loads from local filesystem
+		modulePreload: false,
 		rollupOptions: {
 			output: {
 				// Manual chunking for better caching and code splitting
@@ -111,9 +113,12 @@ export default defineConfig(({ mode }) => ({
 					if (id.includes('node_modules/recharts') || id.includes('node_modules/d3-')) {
 						return 'vendor-charts';
 					}
-					if (id.includes('node_modules/reactflow') || id.includes('node_modules/@reactflow')) {
-						return 'vendor-flow';
-					}
+					// NOTE: reactflow / @reactflow intentionally omitted from manualChunks.
+					// They are only used by lazy-loaded components (CueModal, DocumentGraphView).
+					// Forcing them into a dedicated chunk causes Rollup to place shared CJS
+					// interop helpers there, which then forces the main entry to eagerly import
+					// the chunk — crashing at startup with "Cannot read properties of undefined
+					// (reading 'useState')" because React hooks run before React is initialised.
 
 					// Diff viewer
 					if (id.includes('node_modules/react-diff-view') || id.includes('node_modules/diff')) {

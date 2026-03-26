@@ -145,6 +145,8 @@ function createSession(overrides: Partial<Session> = {}): Session {
 		unifiedTabOrder: [{ type: 'ai' as const, id: tab.id }],
 		unifiedClosedTabHistory: [],
 		autoRunFolderPath: '/test/project/.maestro-autorun',
+		terminalTabs: [],
+		activeTerminalTabId: null,
 		...overrides,
 	} as Session;
 }
@@ -202,6 +204,7 @@ describe('processQueuedItem — delegation to agentStore', () => {
 			customAICommands: [],
 			speckitCommands: [],
 			openspecCommands: [],
+			bmadCommands: [],
 		});
 	});
 
@@ -683,6 +686,7 @@ describe('startup recovery — happy path', () => {
 			customAICommands: [],
 			speckitCommands: [],
 			openspecCommands: [],
+			bmadCommands: [],
 		});
 	});
 

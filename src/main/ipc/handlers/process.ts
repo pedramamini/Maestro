@@ -1,11 +1,13 @@
 import { ipcMain, BrowserWindow } from 'electron';
 import Store from 'electron-store';
 import * as os from 'os';
+import * as fs from 'fs';
+import * as path from 'path';
 import { ProcessManager } from '../../process-manager';
 import { AgentDetector } from '../../agents';
 import { logger } from '../../utils/logger';
 import { isWindows } from '../../../shared/platformDetection';
-import { addBreadcrumb } from '../../utils/sentry';
+import { addBreadcrumb, captureException } from '../../utils/sentry';
 import { isWebContentsAvailable } from '../../utils/safe-send';
 import {
 	buildAgentArgs,
@@ -51,6 +53,20 @@ interface AgentConfigsData {
 /**
  * Dependencies required for process handler registration
  */
+/** Cue process info returned by the getCueProcesses callback */
+export interface CueProcessEntry {
+	runId: string;
+	pid: number;
+	command: string;
+	args: string[];
+	cwd: string;
+	toolType: string;
+	startTime: number;
+	sessionName: string;
+	subscriptionName: string;
+	eventType: string;
+}
+
 export interface ProcessHandlerDependencies {
 	getProcessManager: () => ProcessManager | null;
 	getAgentDetector: () => AgentDetector | null;
@@ -58,6 +74,8 @@ export interface ProcessHandlerDependencies {
 	settingsStore: Store<MaestroSettings>;
 	getMainWindow: () => BrowserWindow | null;
 	sessionsStore: Store<{ sessions: any[] }>;
+	/** Optional callback to get active Cue run processes for Process Monitor */
+	getCueProcesses?: () => CueProcessEntry[];
 }
 
 /**
@@ -111,6 +129,8 @@ export function registerProcessHandlers(deps: ProcessHandlerDependencies): void 
 					remoteId: string | null;
 					workingDirOverride?: string;
 				};
+				// System prompt delivery (separate from user message for token efficiency)
+				appendSystemPrompt?: string; // System prompt to pass via --append-system-prompt or embed in prompt
 				// Stats tracking options
 				querySource?: 'user' | 'auto'; // Whether this query is user-initiated or from Auto Run
 				tabId?: string; // Tab ID for multi-tab tracking
@@ -208,6 +228,84 @@ export function registerProcessHandlers(deps: ProcessHandlerDependencies): void 
 					);
 				}
 
+				// ========================================================================
+				// System prompt delivery: use --append-system-prompt for supported agents,
+				// otherwise embed in the user prompt as fallback.
+				// On Windows local execution, use --append-system-prompt-file with a temp
+				// file to avoid exceeding the ~32K CreateProcess command-line length limit.
+				// SSH sessions are exempt (the command runs inside a stdin script, not the
+				// OS command line) and always use inline --append-system-prompt.
+				// ========================================================================
+				let effectivePrompt = config.prompt;
+				let systemPromptTempFile: string | undefined;
+				const isSshSession = config.sessionSshRemoteConfig?.enabled;
+				if (config.appendSystemPrompt) {
+					if (agent?.capabilities?.supportsAppendSystemPrompt) {
+						if (isWindows() && !isSshSession) {
+							// Windows local: write to temp file to avoid CLI length limits
+							const tmpDir = os.tmpdir();
+							systemPromptTempFile = path.join(
+								tmpDir,
+								`maestro-sysprompt-${config.sessionId}-${Date.now()}.txt`
+							);
+							fs.writeFileSync(systemPromptTempFile, config.appendSystemPrompt, 'utf-8');
+							// Schedule cleanup early so the file is removed even if spawn fails.
+							// 30s gives the agent plenty of time to read it after spawning.
+							const tempFileToClean = systemPromptTempFile;
+							setTimeout(() => {
+								try {
+									fs.unlinkSync(tempFileToClean);
+								} catch (cleanupErr: unknown) {
+									if ((cleanupErr as NodeJS.ErrnoException).code !== 'ENOENT') {
+										captureException(
+											cleanupErr instanceof Error ? cleanupErr : new Error(String(cleanupErr)),
+											{
+												context: 'systemPromptTempFile cleanup (safety)',
+												file: tempFileToClean,
+											}
+										);
+									}
+								}
+							}, 30_000);
+							finalArgs = [...finalArgs, '--append-system-prompt-file', systemPromptTempFile];
+							logger.debug(
+								'Using --append-system-prompt-file for system prompt delivery (Windows)',
+								LOG_CONTEXT,
+								{
+									agentId: agent?.id,
+									systemPromptLength: config.appendSystemPrompt.length,
+									tempFile: systemPromptTempFile,
+								}
+							);
+						} else {
+							// Non-Windows or SSH: pass inline (no command-line length concern)
+							finalArgs = [...finalArgs, '--append-system-prompt', config.appendSystemPrompt];
+							logger.debug('Using --append-system-prompt for system prompt delivery', LOG_CONTEXT, {
+								agentId: agent?.id,
+								systemPromptLength: config.appendSystemPrompt.length,
+							});
+						}
+					} else if (effectivePrompt) {
+						// Fallback: embed system prompt in user message
+						effectivePrompt = `${config.appendSystemPrompt}\n\n---\n\n# User Request\n\n${effectivePrompt}`;
+						logger.debug('Embedding system prompt in user message (fallback)', LOG_CONTEXT, {
+							agentId: agent?.id,
+							systemPromptLength: config.appendSystemPrompt.length,
+						});
+					} else {
+						// No user message to embed into - send system prompt as sole content
+						effectivePrompt = config.appendSystemPrompt;
+						logger.warn(
+							'appendSystemPrompt provided without a user prompt; using as sole prompt',
+							LOG_CONTEXT,
+							{
+								agentId: agent?.id,
+								systemPromptLength: config.appendSystemPrompt.length,
+							}
+						);
+					}
+				}
+
 				// If no shell is specified and this is a terminal session, use the default shell from settings
 				// For terminal sessions, we also load custom shell path, args, and env vars
 				let shellToUse =
@@ -263,13 +361,24 @@ export function registerProcessHandlers(deps: ProcessHandlerDependencies): void 
 							? finalArgs[sessionArgIndex + 1]
 							: config.agentSessionId;
 
+				// Redact system prompt content from logged args (can be large and sensitive)
+				const appendPromptIdx = finalArgs.indexOf('--append-system-prompt');
+				const argsToLog =
+					appendPromptIdx !== -1
+						? [
+								...finalArgs.slice(0, appendPromptIdx + 1),
+								`<${finalArgs[appendPromptIdx + 1]?.length ?? 0} chars>`,
+								...finalArgs.slice(appendPromptIdx + 2),
+							]
+						: finalArgs;
+
 				logger.info(`Spawning process: ${config.command}`, LOG_CONTEXT, {
 					sessionId: config.sessionId,
 					toolType: config.toolType,
 					cwd: config.cwd,
 					command: config.command,
-					fullCommand: `${config.command} ${finalArgs.join(' ')}`,
-					args: finalArgs,
+					fullCommand: `${config.command} ${argsToLog.join(' ')}`,
+					args: argsToLog,
 					requiresPty: agent?.requiresPty || false,
 					shell: shellToUse,
 					...(agentSessionId && { agentSessionId }),
@@ -279,6 +388,15 @@ export function registerProcessHandlers(deps: ProcessHandlerDependencies): void 
 					...(config.prompt && {
 						prompt:
 							config.prompt.length > 500 ? config.prompt.substring(0, 500) + '...' : config.prompt,
+					}),
+					...(config.appendSystemPrompt && {
+						systemPromptDelivery: agent?.capabilities?.supportsAppendSystemPrompt
+							? systemPromptTempFile
+								? 'file'
+								: 'cli-arg'
+							: 'embedded',
+						...(systemPromptTempFile && { systemPromptFile: systemPromptTempFile }),
+						effectivePromptLength: effectivePrompt?.length ?? 0,
 					}),
 				});
 
@@ -411,11 +529,11 @@ export function registerProcessHandlers(deps: ProcessHandlerDependencies): void 
 						//   (e.g., -i /tmp/image.png for Codex, -f /tmp/image.png for OpenCode).
 						const hasImages = config.images && config.images.length > 0;
 						let sshArgs = finalArgs;
-						let stdinInput: string | undefined = config.prompt;
+						let stdinInput: string | undefined = effectivePrompt;
 
-						if (hasImages && config.prompt && agent?.capabilities?.supportsStreamJsonInput) {
+						if (hasImages && effectivePrompt && agent?.capabilities?.supportsStreamJsonInput) {
 							// Stream-json agent (Claude Code): embed images in the stdin message
-							stdinInput = buildStreamJsonMessage(config.prompt, config.images!) + '\n';
+							stdinInput = buildStreamJsonMessage(effectivePrompt, config.images!) + '\n';
 							if (!sshArgs.includes('--input-format')) {
 								sshArgs = [...sshArgs, '--input-format', 'stream-json'];
 							}
@@ -506,8 +624,8 @@ export function registerProcessHandlers(deps: ProcessHandlerDependencies): void 
 					// When using SSH, disable PTY (SSH provides its own terminal handling)
 					requiresPty: sshRemoteUsed ? false : agent?.requiresPty,
 					// For SSH, prompt is included in the stdin script, not passed separately
-					// For local execution, pass prompt as normal
-					prompt: sshRemoteUsed ? undefined : config.prompt,
+					// For local execution, pass prompt (with system prompt embedded for non-append-system-prompt agents)
+					prompt: sshRemoteUsed ? undefined : effectivePrompt,
 					shell: shellToUse,
 					runInShell: useShell,
 					shellArgs: shellArgsStr, // Shell-specific CLI args (for terminal sessions)
@@ -535,6 +653,9 @@ export function registerProcessHandlers(deps: ProcessHandlerDependencies): void 
 						sshRemoteName: sshRemoteUsed.name,
 					}),
 				});
+
+				// Temp file cleanup is scheduled at creation time (30s safety net)
+				// so it's cleaned up even if spawn fails above.
 
 				// Add power block reason for AI sessions (not terminals)
 				// This prevents system sleep while AI is processing
@@ -618,14 +739,14 @@ export function registerProcessHandlers(deps: ProcessHandlerDependencies): void 
 		)
 	);
 
-	// Get all active processes managed by the ProcessManager
+	// Get all active processes managed by the ProcessManager (and Cue runs if available)
 	ipcMain.handle(
 		'process:getActiveProcesses',
 		withIpcErrorLogging(handlerOpts('getActiveProcesses'), async () => {
 			const processManager = requireProcessManager(getProcessManager);
 			const processes = processManager.getAll();
 			// Return serializable process info (exclude non-serializable PTY/child process objects)
-			return processes.map((p) => ({
+			const result: Array<Record<string, unknown>> = processes.map((p) => ({
 				sessionId: p.sessionId,
 				toolType: p.toolType,
 				pid: p.pid,
@@ -636,11 +757,146 @@ export function registerProcessHandlers(deps: ProcessHandlerDependencies): void 
 				command: p.command,
 				args: p.args,
 			}));
+
+			// Append active Cue run processes if available
+			const cueProcesses = deps.getCueProcesses?.() ?? [];
+			for (const cue of cueProcesses) {
+				result.push({
+					sessionId: `cue-run-${cue.runId}`,
+					toolType: cue.toolType,
+					pid: cue.pid,
+					cwd: cue.cwd,
+					isTerminal: false,
+					isBatchMode: false,
+					startTime: cue.startTime,
+					command: cue.command,
+					args: cue.args,
+					isCueRun: true,
+					cueRunId: cue.runId,
+					cueSessionName: cue.sessionName,
+					cueSubscriptionName: cue.subscriptionName,
+					cueEventType: cue.eventType,
+				});
+			}
+
+			return result;
 		})
+	);
+
+	// Spawn a terminal tab PTY process.
+	// Uses session ID format {sessionId}-terminal-{tabId} so PtySpawner forwards raw output.
+	// SSH remote support: if the session has SSH config enabled, the shell command is
+	// wrapped with ssh to execute on the remote host.
+	ipcMain.handle(
+		'process:spawnTerminalTab',
+		withIpcErrorLogging(
+			handlerOpts('spawnTerminalTab'),
+			async (config: {
+				sessionId: string;
+				cwd: string;
+				shell?: string;
+				shellArgs?: string;
+				shellEnvVars?: Record<string, string>;
+				cols?: number;
+				rows?: number;
+				// Per-session SSH remote config
+				sessionSshRemoteConfig?: {
+					enabled: boolean;
+					remoteId: string | null;
+					workingDirOverride?: string;
+				};
+			}) => {
+				const processManager = requireProcessManager(getProcessManager);
+
+				// Resolve shell: prefer config.shell, then settings default
+				const globalShellEnvVars = settingsStore.get('shellEnvVars', {}) as Record<string, string>;
+				let shellToUse = config.shell || settingsStore.get('defaultShell', 'zsh');
+				const customShellPath = settingsStore.get('customShellPath', '');
+				if (customShellPath && (customShellPath as string).trim()) {
+					shellToUse = (customShellPath as string).trim();
+				}
+
+				// Merge global env vars with any per-invocation env vars (per-invocation takes precedence)
+				const mergedEnvVars = { ...globalShellEnvVars, ...(config.shellEnvVars || {}) };
+
+				logger.info(`Spawning terminal tab: ${config.sessionId}`, LOG_CONTEXT, {
+					sessionId: config.sessionId,
+					cwd: config.cwd,
+					shell: shellToUse,
+					cols: config.cols,
+					rows: config.rows,
+					hasSshConfig: !!config.sessionSshRemoteConfig?.enabled,
+				});
+
+				// SSH remote support for terminal tabs
+				if (config.sessionSshRemoteConfig?.enabled) {
+					const sshStoreAdapter = createSshRemoteStoreAdapter(settingsStore);
+					const sshResult = getSshRemoteConfig(sshStoreAdapter, {
+						sessionSshConfig: config.sessionSshRemoteConfig,
+					});
+					if (sshResult.config) {
+						logger.info(`Terminal tab will connect via SSH`, LOG_CONTEXT, {
+							sessionId: config.sessionId,
+							remoteName: sshResult.config.name,
+							remoteHost: sshResult.config.host,
+							hasWorkingDirOverride: !!config.sessionSshRemoteConfig.workingDirOverride,
+						});
+						// For SSH terminal tabs we spawn ssh interactively so xterm.js can interact
+						const sshArgs = [
+							sshResult.config.username
+								? `${sshResult.config.username}@${sshResult.config.host}`
+								: sshResult.config.host,
+						];
+						if (sshResult.config.port && sshResult.config.port !== 22) {
+							sshArgs.unshift('-p', String(sshResult.config.port));
+						}
+						if (sshResult.config.privateKeyPath) {
+							sshArgs.unshift('-i', sshResult.config.privateKeyPath);
+						}
+						// If workingDirOverride is set, cd to that directory after connecting.
+						// -t forces PTY allocation (required when passing a remote command).
+						const workingDirOverride = config.sessionSshRemoteConfig.workingDirOverride;
+						if (workingDirOverride) {
+							sshArgs.unshift('-t');
+							sshArgs.push(`cd ${JSON.stringify(workingDirOverride)} && exec $SHELL`);
+						}
+						return processManager.spawn({
+							sessionId: config.sessionId,
+							toolType: 'terminal',
+							cwd: os.homedir(),
+							command: 'ssh',
+							args: sshArgs,
+							shellEnvVars: mergedEnvVars,
+							cols: config.cols || 80,
+							rows: config.rows || 24,
+						});
+					}
+					// SSH is enabled but the remote config was not found (deleted or disabled).
+					// Fail explicitly rather than silently falling through to a local terminal,
+					// which would give the user a local shell they didn't ask for.
+					logger.error(`Terminal tab SSH config not found or disabled`, LOG_CONTEXT, {
+						sessionId: config.sessionId,
+						remoteId: config.sessionSshRemoteConfig.remoteId,
+					});
+					return { success: false, pid: 0 };
+				}
+
+				return processManager.spawnTerminalTab({
+					sessionId: config.sessionId,
+					cwd: config.cwd,
+					shell: shellToUse,
+					shellArgs: config.shellArgs || settingsStore.get('shellArgs', ''),
+					shellEnvVars: mergedEnvVars,
+					cols: config.cols || 80,
+					rows: config.rows || 24,
+				});
+			}
+		)
 	);
 
 	// Run a single command and capture only stdout/stderr (no PTY echo/prompts)
 	// Supports SSH remote execution when sessionSshRemoteConfig is provided
+	// TODO: Remove this handler once all callers migrate to process:spawnTerminalTab for persistent PTY sessions
 	ipcMain.handle(
 		'process:runCommand',
 		withIpcErrorLogging(
@@ -657,6 +913,9 @@ export function registerProcessHandlers(deps: ProcessHandlerDependencies): void 
 					workingDirOverride?: string;
 				};
 			}) => {
+				logger.warn(
+					'process:runCommand is deprecated — use process:spawnTerminalTab for persistent PTY sessions'
+				);
 				const processManager = requireProcessManager(getProcessManager);
 
 				// Get the shell from settings if not provided

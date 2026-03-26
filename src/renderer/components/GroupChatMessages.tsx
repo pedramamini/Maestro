@@ -14,7 +14,7 @@ import {
 	forwardRef,
 	useImperativeHandle,
 } from 'react';
-import { Eye, FileText, Copy, ChevronDown, ChevronUp } from 'lucide-react';
+import { Eye, FileText, Copy, ChevronDown, ChevronUp, Share2 } from 'lucide-react';
 import type { GroupChatMessage, GroupChatParticipant, GroupChatState, Theme } from '../types';
 import { MarkdownRenderer } from './MarkdownRenderer';
 import { stripMarkdown } from '../utils/textProcessing';
@@ -33,6 +33,12 @@ interface GroupChatMessagesProps {
 	maxOutputLines?: number;
 	/** Pre-computed participant colors (if provided, overrides internal color generation) */
 	participantColors?: Record<string, string>;
+	/** Lightbox handler for viewing images full-size */
+	onOpenLightbox?: (image: string, contextImages?: string[], source?: 'staged' | 'history') => void;
+	/** Whether gh CLI is available for gist publishing */
+	ghCliAvailable?: boolean;
+	/** Callback to publish a message as a GitHub Gist */
+	onPublishGist?: (text: string) => void;
 }
 
 /** Handle exposed via ref for scrolling to messages */
@@ -51,6 +57,9 @@ export const GroupChatMessages = forwardRef<GroupChatMessagesHandle, GroupChatMe
 			onToggleMarkdownEditMode,
 			maxOutputLines = 30,
 			participantColors: externalColors,
+			onOpenLightbox,
+			ghCliAvailable,
+			onPublishGist,
 		},
 		ref
 	) {
@@ -273,6 +282,34 @@ export const GroupChatMessages = forwardRef<GroupChatMessagesHandle, GroupChatMe
 										</div>
 									)}
 
+									{/* Attached images */}
+									{msg.images && msg.images.length > 0 && (
+										<div
+											className="flex gap-2 mb-2 overflow-x-auto scrollbar-thin"
+											style={{ overscrollBehavior: 'contain' }}
+										>
+											{msg.images.map((img, imgIdx) => (
+												<button
+													key={`${msgKey}-img-${imgIdx}`}
+													type="button"
+													className="shrink-0 p-0 bg-transparent outline-none focus:ring-2 focus:ring-accent rounded"
+													onClick={() => onOpenLightbox?.(img, msg.images, 'history')}
+												>
+													<img
+														src={img}
+														alt={`Attached image ${imgIdx + 1}`}
+														className="h-20 rounded border cursor-zoom-in block"
+														style={{
+															objectFit: 'contain',
+															maxWidth: '200px',
+															borderColor: theme.colors.border,
+														}}
+													/>
+												</button>
+											))}
+										</div>
+									)}
+
 									{/* Message content */}
 									{shouldCollapse && !isExpanded ? (
 										// Collapsed view
@@ -399,6 +436,17 @@ export const GroupChatMessages = forwardRef<GroupChatMessagesHandle, GroupChatMe
 											>
 												<Copy className="w-3.5 h-3.5" />
 											</button>
+											{/* Publish to GitHub Gist */}
+											{ghCliAvailable && onPublishGist && (
+												<button
+													onClick={() => onPublishGist(msg.content)}
+													className="p-1.5 rounded opacity-0 group-hover:opacity-50 hover:!opacity-100"
+													style={{ color: theme.colors.textDim }}
+													title="Publish as GitHub Gist"
+												>
+													<Share2 className="w-3.5 h-3.5" />
+												</button>
+											)}
 										</div>
 									)}
 								</div>

@@ -42,7 +42,7 @@ vi.mock('../../../renderer/utils/sessionValidation', () => ({
 }));
 
 vi.mock('../../../renderer/components/Wizard', () => ({
-	AUTO_RUN_FOLDER_NAME: 'Auto Run Docs',
+	AUTO_RUN_FOLDER_NAME: '.maestro/playbooks',
 }));
 
 // ============================================================================
@@ -141,7 +141,7 @@ function createSession(overrides: Partial<Session> = {}): Session {
 		activeFileTabId: null,
 		unifiedTabOrder: [{ type: 'ai' as const, id: 'tab-1' }],
 		unifiedClosedTabHistory: [],
-		autoRunFolderPath: '/test/project/Auto Run Docs',
+		autoRunFolderPath: '/test/project/.maestro/playbooks',
 		...overrides,
 	} as Session;
 }
@@ -447,7 +447,7 @@ describe('useSessionCrud', () => {
 			});
 
 			expect(useSessionStore.getState().sessions[0].autoRunFolderPath).toBe(
-				'/test/project/Auto Run Docs'
+				'/test/project/.maestro/playbooks'
 			);
 		});
 
@@ -482,7 +482,7 @@ describe('useSessionCrud', () => {
 			expect(useUIStore.getState().activeFocus).toBe('main');
 		});
 
-		it('creates unified tab order with initial tab', async () => {
+		it('creates unified tab order with only the initial AI tab (no default terminal tab)', async () => {
 			const deps = createDeps();
 			const { result } = renderHook(() => useSessionCrud(deps));
 
@@ -495,9 +495,14 @@ describe('useSessionCrud', () => {
 			});
 
 			const session = useSessionStore.getState().sessions[0];
+			// New sessions start with only an AI tab — terminal tabs are created on demand
 			expect(session.unifiedTabOrder).toHaveLength(1);
-			expect(session.unifiedTabOrder[0].type).toBe('ai');
-			expect(session.unifiedTabOrder[0].id).toBe(session.activeTabId);
+			const aiRef = session.unifiedTabOrder.find((r) => r.type === 'ai');
+			const termRef = session.unifiedTabOrder.find((r) => r.type === 'terminal');
+			expect(aiRef).toBeDefined();
+			expect(aiRef!.id).toBe(session.activeTabId);
+			expect(termRef).toBeUndefined();
+			expect(session.terminalTabs).toHaveLength(0);
 		});
 	});
 

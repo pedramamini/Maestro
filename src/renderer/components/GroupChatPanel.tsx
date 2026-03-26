@@ -70,6 +70,10 @@ interface GroupChatPanelProps {
 	participantColors?: Record<string, string>;
 	/** Ref to expose scrollToMessage on the messages component */
 	messagesRef?: React.RefObject<GroupChatMessagesHandle>;
+	/** Whether gh CLI is available for gist publishing */
+	ghCliAvailable?: boolean;
+	/** Callback to publish a message as a GitHub Gist */
+	onPublishMessageGist?: (text: string) => void;
 }
 
 export function GroupChatPanel({
@@ -108,6 +112,8 @@ export function GroupChatPanel({
 	showFlashNotification,
 	participantColors,
 	messagesRef,
+	ghCliAvailable,
+	onPublishMessageGist,
 }: GroupChatPanelProps): JSX.Element {
 	return (
 		<div className="flex flex-col h-full" style={{ backgroundColor: theme.colors.bgMain }}>
@@ -134,6 +140,9 @@ export function GroupChatPanel({
 				onToggleMarkdownEditMode={onToggleMarkdownEditMode}
 				maxOutputLines={maxOutputLines}
 				participantColors={participantColors}
+				onOpenLightbox={onOpenLightbox}
+				ghCliAvailable={ghCliAvailable}
+				onPublishGist={onPublishMessageGist}
 			/>
 
 			<GroupChatInput

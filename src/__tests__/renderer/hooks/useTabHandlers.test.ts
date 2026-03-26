@@ -91,6 +91,8 @@ function createMockSession(overrides: Partial<Session> = {}): Session {
 		activeFileTabId: null,
 		unifiedTabOrder: [],
 		unifiedClosedTabHistory: [],
+		terminalTabs: [],
+		activeTerminalTabId: null,
 		...overrides,
 	} as Session;
 }
@@ -346,6 +348,67 @@ describe('useTabHandlers', () => {
 			expect(session.filePreviewTabs).toHaveLength(1);
 			expect(session.filePreviewTabs[0].path).toBe('/test/new.ts');
 			expect(session.activeFileTabId).toBe(session.filePreviewTabs[0].id);
+		});
+
+		it('handleOpenFileTab switches from terminal mode when creating new tab', () => {
+			const aiTab = createMockAITab({ id: 'ai-1' });
+			// Start in terminal mode
+			useSessionStore.getState().setSessions((prev: Session[]) =>
+				prev.map((s) => ({
+					...s,
+					inputMode: 'terminal' as const,
+					activeTerminalTabId: 'term-1',
+				}))
+			);
+			setupSessionWithTabs([aiTab]);
+			useSessionStore.getState().setSessions((prev: Session[]) =>
+				prev.map((s) => ({
+					...s,
+					inputMode: 'terminal' as const,
+					activeTerminalTabId: 'term-1',
+				}))
+			);
+
+			const { result } = renderHook(() => useTabHandlers());
+			act(() => {
+				result.current.handleOpenFileTab({
+					path: '/test/new.ts',
+					name: 'new.ts',
+					content: 'new content',
+				});
+			});
+
+			const session = getSession();
+			expect(session.inputMode).toBe('ai');
+			expect(session.activeTerminalTabId).toBeNull();
+			expect(session.activeFileTabId).toBe(session.filePreviewTabs[0].id);
+		});
+
+		it('handleOpenFileTab switches from terminal mode when selecting existing tab', () => {
+			const aiTab = createMockAITab({ id: 'ai-1' });
+			const fileTab = createMockFileTab({ id: 'file-1', path: '/test/existing.ts' });
+			setupSessionWithTabs([aiTab], [fileTab]);
+			useSessionStore.getState().setSessions((prev: Session[]) =>
+				prev.map((s) => ({
+					...s,
+					inputMode: 'terminal' as const,
+					activeTerminalTabId: 'term-1',
+				}))
+			);
+
+			const { result } = renderHook(() => useTabHandlers());
+			act(() => {
+				result.current.handleOpenFileTab({
+					path: '/test/existing.ts',
+					name: 'existing.ts',
+					content: 'updated content',
+				});
+			});
+
+			const session = getSession();
+			expect(session.inputMode).toBe('ai');
+			expect(session.activeTerminalTabId).toBeNull();
+			expect(session.activeFileTabId).toBe('file-1');
 		});
 
 		it('handleOpenFileTab selects existing tab if path matches', () => {

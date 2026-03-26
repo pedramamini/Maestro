@@ -36,6 +36,11 @@ export interface ProcessConfig {
 	readOnlyMode?: boolean; // For read-only/plan mode (uses agent's readOnlyArgs)
 	modelId?: string; // For model selection (uses agent's modelArgs builder)
 	yoloMode?: boolean; // For YOLO/full-access mode (uses agent's yoloModeArgs)
+	// System prompt delivery (separate from user message for token efficiency)
+	appendSystemPrompt?: string; // System prompt to pass via --append-system-prompt or embed in prompt
+	// Stdin-based prompt delivery (Windows workaround for CLI length limits)
+	sendPromptViaStdin?: boolean; // If true, send prompt via stdin as JSON (for stream-json compatible agents)
+	sendPromptViaStdinRaw?: boolean; // If true, send prompt via stdin as raw text (for agents without stream-json)
 	// Stats tracking options
 	querySource?: 'user' | 'auto'; // Whether this query is user-initiated or from Auto Run
 	tabId?: string; // Tab ID for multi-tab tracking
@@ -78,6 +83,16 @@ export interface ActiveProcess {
 	startTime: number;
 	command?: string;
 	args?: string[];
+	/** True if this is a Cue automation run process */
+	isCueRun?: boolean;
+	/** The Cue run ID (for stopping via cue:stopRun) */
+	cueRunId?: string;
+	/** Target session name for this Cue run */
+	cueSessionName?: string;
+	/** Subscription name that triggered this Cue run */
+	cueSubscriptionName?: string;
+	/** Event type that triggered this Cue run */
+	cueEventType?: string;
 }
 
 /**
@@ -139,6 +154,25 @@ export function createProcessApi() {
 		 */
 		spawn: (config: ProcessConfig): Promise<ProcessSpawnResponse> =>
 			ipcRenderer.invoke('process:spawn', config),
+
+		/**
+		 * Spawn a terminal tab PTY (convenience wrapper for xterm.js terminal tabs)
+		 */
+		spawnTerminalTab: (config: {
+			sessionId: string;
+			cwd: string;
+			shell?: string;
+			shellArgs?: string;
+			shellEnvVars?: Record<string, string>;
+			cols?: number;
+			rows?: number;
+			sessionSshRemoteConfig?: {
+				enabled: boolean;
+				remoteId: string | null;
+				workingDirOverride?: string;
+			};
+		}): Promise<{ pid: number; success: boolean }> =>
+			ipcRenderer.invoke('process:spawnTerminalTab', config),
 
 		/**
 		 * Write data to a process stdin
@@ -414,6 +448,72 @@ export function createProcessApi() {
 			const handler = (_: unknown, sessionId: string) => callback(sessionId);
 			ipcRenderer.on('remote:toggleBookmark', handler);
 			return () => ipcRenderer.removeListener('remote:toggleBookmark', handler);
+		},
+
+		/**
+		 * Subscribe to remote open file tab from web interface
+		 */
+		onRemoteOpenFileTab: (
+			callback: (sessionId: string, filePath: string) => void
+		): (() => void) => {
+			const handler = (_: unknown, sessionId: string, filePath: string) =>
+				callback(sessionId, filePath);
+			ipcRenderer.on('remote:openFileTab', handler);
+			return () => ipcRenderer.removeListener('remote:openFileTab', handler);
+		},
+
+		/**
+		 * Subscribe to remote refresh file tree from web interface
+		 */
+		onRemoteRefreshFileTree: (callback: (sessionId: string) => void): (() => void) => {
+			const handler = (_: unknown, sessionId: string) => callback(sessionId);
+			ipcRenderer.on('remote:refreshFileTree', handler);
+			return () => ipcRenderer.removeListener('remote:refreshFileTree', handler);
+		},
+
+		/**
+		 * Subscribe to remote refresh auto-run docs from web interface
+		 */
+		onRemoteRefreshAutoRunDocs: (callback: (sessionId: string) => void): (() => void) => {
+			const handler = (_: unknown, sessionId: string) => callback(sessionId);
+			ipcRenderer.on('remote:refreshAutoRunDocs', handler);
+			return () => ipcRenderer.removeListener('remote:refreshAutoRunDocs', handler);
+		},
+
+		/**
+		 * Subscribe to remote configure auto-run from CLI/web interface
+		 */
+		onRemoteConfigureAutoRun: (
+			callback: (sessionId: string, config: any, responseChannel: string) => void
+		): (() => void) => {
+			const handler = (_: unknown, sessionId: string, config: any, responseChannel: string) => {
+				try {
+					// callback may return a promise even though typed as void
+					Promise.resolve(callback(sessionId, config, responseChannel)).catch((error) => {
+						ipcRenderer.send(responseChannel, {
+							success: false,
+							error: error instanceof Error ? error.message : String(error),
+						});
+					});
+				} catch (error) {
+					ipcRenderer.send(responseChannel, {
+						success: false,
+						error: error instanceof Error ? error.message : String(error),
+					});
+				}
+			};
+			ipcRenderer.on('remote:configureAutoRun', handler);
+			return () => ipcRenderer.removeListener('remote:configureAutoRun', handler);
+		},
+
+		/**
+		 * Send response for remote configure auto-run
+		 */
+		sendRemoteConfigureAutoRunResponse: (
+			responseChannel: string,
+			result: { success: boolean; playbookId?: string; error?: string }
+		): void => {
+			ipcRenderer.send(responseChannel, result);
 		},
 
 		/**
