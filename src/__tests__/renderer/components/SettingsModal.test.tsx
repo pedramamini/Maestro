@@ -2182,7 +2182,7 @@ describe('SettingsModal', () => {
 
 			expect(screen.getByText('Usage & Stats')).toBeInTheDocument();
 			// Settings should be visible when enabled (default on)
-			expect(screen.getByText('Enable stats collection')).toBeInTheDocument();
+			expect(screen.getByText('Default lookback window')).toBeInTheDocument();
 		});
 
 		it('should call setEncoreFeatures when Usage & Stats toggle is clicked off', async () => {
