@@ -200,8 +200,8 @@ describe('PtySpawner', () => {
 
 	describe('Windows shell resolution', () => {
 		it('resolves shell ID to executable via resolveShellPath', () => {
-			vi.mocked(isWindows).mockReturnValue(true);
-			vi.mocked(resolveShellPath).mockReturnValue('powershell.exe');
+			vi.mocked(isWindows).mockReturnValueOnce(true);
+			vi.mocked(resolveShellPath).mockReturnValueOnce('powershell.exe');
 
 			const { spawner } = createTestContext();
 			spawner.spawn(createBaseConfig({ shell: 'powershell' }));
@@ -212,9 +212,6 @@ describe('PtySpawner', () => {
 				[],
 				expect.objectContaining({ name: 'xterm-256color' })
 			);
-
-			vi.mocked(isWindows).mockReturnValue(false);
-			vi.mocked(resolveShellPath).mockImplementation((shell: string) => shell);
 		});
 	});
 
