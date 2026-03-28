@@ -181,6 +181,18 @@ export function createProcessApi() {
 			ipcRenderer.invoke('process:write', sessionId, data),
 
 		/**
+		 * Write a mid-turn interjection to a running agent process.
+		 * Formats the message as stream-json in the main process and writes to stdin.
+		 */
+		writeInterjection: (
+			sessionId: string,
+			text: string,
+			interjectionId?: string,
+			images?: string[]
+		): Promise<boolean> =>
+			ipcRenderer.invoke('process:writeInterjection', sessionId, text, interjectionId, images),
+
+		/**
 		 * Send interrupt signal (Ctrl+C) to a process
 		 */
 		interrupt: (sessionId: string): Promise<boolean> =>
@@ -203,6 +215,12 @@ export function createProcessApi() {
 		 */
 		runCommand: (config: RunCommandConfig): Promise<{ exitCode: number }> =>
 			ipcRenderer.invoke('process:runCommand', config),
+
+		/**
+		 * Check if a running process has already emitted its result
+		 */
+		hasResultEmitted: (sessionId: string): Promise<boolean> =>
+			ipcRenderer.invoke('process:hasResultEmitted', sessionId),
 
 		/**
 		 * Get all active processes from ProcessManager
@@ -262,6 +280,18 @@ export function createProcessApi() {
 				callback(sessionId, content);
 			ipcRenderer.on('process:thinking-chunk', handler);
 			return () => ipcRenderer.removeListener('process:thinking-chunk', handler);
+		},
+
+		/**
+		 * Subscribe to interjection acknowledgment (CLI consumed a mid-turn message)
+		 */
+		onInterjectionAck: (
+			callback: (sessionId: string, interjectionId: string) => void
+		): (() => void) => {
+			const handler = (_: unknown, sessionId: string, interjectionId: string) =>
+				callback(sessionId, interjectionId);
+			ipcRenderer.on('process:interjection-ack', handler);
+			return () => ipcRenderer.removeListener('process:interjection-ack', handler);
 		},
 
 		/**

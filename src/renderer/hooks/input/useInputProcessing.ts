@@ -15,11 +15,46 @@ import { filterYoloArgs } from '../../utils/agentArgs';
 import { hasCapabilityCached } from '../agent/useAgentCapabilities';
 import { gitService } from '../../services/git';
 import { imageOnlyDefaultPrompt, maestroSystemPrompt } from '../../../prompts';
+import { buildContinuationPrompt, buildResumePrompt } from '../../utils/continuationPrompt';
 
 /**
  * Default prompt used when user sends only an image without text.
  */
 export const DEFAULT_IMAGE_ONLY_PROMPT = imageOnlyDefaultPrompt;
+
+/**
+ * Max characters of partial output to include in a continuation prompt.
+ * Prevents enormous prompts when an agent has streamed a lot of output.
+ * 50k chars is roughly 12-15k tokens, leaving plenty of room in context.
+ */
+const MAX_CONTINUATION_OUTPUT_CHARS = 50_000;
+
+/**
+ * Extract the AI/stdout output from the current turn only.
+ * Finds the last non-interjection user message and captures everything after it.
+ * Used by the interrupt-and-continue fallback to build a continuation prompt.
+ * Capped at MAX_CONTINUATION_OUTPUT_CHARS to prevent oversized prompts.
+ */
+function captureCurrentTurnOutput(logs: LogEntry[]): string {
+	let lastUserMsgIndex = -1;
+	for (let i = logs.length - 1; i >= 0; i--) {
+		if (logs[i].source === 'user' && !logs[i].interjection) {
+			lastUserMsgIndex = i;
+			break;
+		}
+	}
+	const output = logs
+		.slice(lastUserMsgIndex + 1)
+		.filter((log) => log.source === 'ai' || log.source === 'stdout')
+		.map((log) => log.text)
+		.join('');
+
+	if (output.length > MAX_CONTINUATION_OUTPUT_CHARS) {
+		// Keep the tail (most recent output is most relevant for continuation)
+		return output.slice(-MAX_CONTINUATION_OUTPUT_CHARS);
+	}
+	return output;
+}
 
 /**
  * Dependencies for the useInputProcessing hook.
@@ -380,6 +415,263 @@ export function useInputProcessing(deps: UseInputProcessingDeps): UseInputProces
 					console.error('[processInput] Wizard message failed:', error);
 				});
 				return;
+			}
+
+			// Mid-turn interjection: if agent is busy and supports mid-turn input,
+			// send directly to the running process via stdin (bypass queue)
+			if (currentMode === 'ai' && activeSession.state === 'busy') {
+				const activeTab = getActiveTab(activeSession);
+				if (!activeTab) return;
+				const processSessionId = `${activeSession.id}-ai-${activeTab.id}`;
+				const agentSupportsMidTurn = hasCapabilityCached(
+					activeSession.toolType,
+					'supportsMidTurnInput'
+				);
+
+				// Race condition guard: if agent already finished, queue as next message instead
+				const resultEmitted = await window.maestro.process.hasResultEmitted(processSessionId);
+				if (resultEmitted) {
+					// Agent already done — no return here, intentionally falls through
+					// to the normal queue logic below this outer if block
+					console.log('[processInput] Agent already finished, queueing instead of interjecting');
+				} else if (agentSupportsMidTurn && activeTab?.state === 'busy') {
+					// Capture staged images before clearing
+					const imagesToSend = stagedImages.length > 0 ? [...stagedImages] : undefined;
+
+					// For image-only interjections (images but no text), use the default prompt
+					const interjectionText =
+						!effectiveInputValue.trim() && imagesToSend
+							? DEFAULT_IMAGE_ONLY_PROMPT
+							: effectiveInputValue;
+
+					// Add interjection to executionQueue only. It shows in the queue UI
+					// while pending. On successful write, it moves to tab.logs as
+					// delivered. On failure, it moves to tab.logs as failed.
+					const interjectionEntryId = generateId();
+					const queuedInterjection: QueuedItem = {
+						id: interjectionEntryId,
+						timestamp: Date.now(),
+						tabId: activeTab.id,
+						type: 'message',
+						text: interjectionText,
+						displayText: interjectionText,
+						images: [...stagedImages],
+						tabName: activeTab.name || 'New',
+						interjectionLogId: interjectionEntryId,
+						pendingInterjection: true, // Already sent to stdin — don't spawn on exit
+					};
+
+					// Flush any pending batched updates so queue appears in order
+					if (flushBatchedUpdates) flushBatchedUpdates();
+
+					setSessions((prev) =>
+						prev.map((s) => {
+							if (s.id !== activeSessionId) return s;
+							return {
+								...s,
+								executionQueue: [...s.executionQueue, queuedInterjection],
+							};
+						})
+					);
+
+					// Move interjection from queue to chat history as failed delivery
+					const markInterjectionFailed = () => {
+						setSessions((prev) =>
+							prev.map((s) => {
+								if (s.id !== activeSessionId) return s;
+								return {
+									...s,
+									executionQueue: s.executionQueue.filter((q) => q.id !== interjectionEntryId),
+									aiTabs: s.aiTabs.map((tab) => {
+										if (tab.id !== activeTab.id) return tab;
+										return {
+											...tab,
+											logs: [
+												...tab.logs,
+												{
+													id: interjectionEntryId,
+													timestamp: Date.now(),
+													source: 'user' as const,
+													text: interjectionText,
+													images: [...stagedImages],
+													interjection: true,
+													delivered: false,
+													deliveryFailed: true,
+												},
+											],
+										};
+									}),
+								};
+							})
+						);
+					};
+
+					// Send interjection via IPC (formats stream-json in main process).
+					// On successful write, move from queue to logs immediately.
+					// We don't wait for interjection-ack here because the renderer
+					// optimistically marks delivery on successful write. The main
+					// process StdoutHandler tracks the two-result cycle (pre-interjection
+					// result, then interjection response result) and emits an ack when
+					// the first result arrives. The ack promotes the queue entry to logs
+					// in useAgentListeners, but the renderer doesn't gate on it.
+					window.maestro.process
+						.writeInterjection(
+							processSessionId,
+							interjectionText,
+							interjectionEntryId,
+							imagesToSend
+						)
+						.then((success) => {
+							if (success) {
+								// Write confirmed — move from queue to chat history
+								setSessions((prev) =>
+									prev.map((s) => {
+										if (s.id !== activeSessionId) return s;
+										return {
+											...s,
+											executionQueue: s.executionQueue.filter((q) => q.id !== interjectionEntryId),
+											aiTabs: s.aiTabs.map((tab) => {
+												if (tab.id !== activeTab.id) return tab;
+												return {
+													...tab,
+													logs: [
+														...tab.logs,
+														{
+															id: interjectionEntryId,
+															timestamp: Date.now(),
+															source: 'user' as const,
+															text: interjectionText,
+															images: [...stagedImages],
+															interjection: true,
+															delivered: true,
+															deliveryFailed: false,
+														},
+													],
+												};
+											}),
+										};
+									})
+								);
+							} else {
+								console.warn('[processInput] Interjection write failed');
+								markInterjectionFailed();
+							}
+						})
+						.catch((error) => {
+							console.error('[processInput] Interjection failed:', error);
+							markInterjectionFailed();
+						});
+
+					// Clear input
+					setInputValue('');
+					setStagedImages([]);
+					syncAiInputToSession('');
+					if (inputRef.current) inputRef.current.style.height = 'auto';
+					return;
+				} else if (activeTab?.state === 'busy') {
+					// Interrupt-and-continue: agent doesn't support mid-turn stdin,
+					// so interrupt the current turn and respawn with combined context.
+					//
+					// Two sub-paths:
+					// A) Native resume — agent supports resume and has a session ID.
+					//    Just interrupt and re-spawn with the user's message + session ID.
+					//    The agent loads full conversation history from its own session files.
+					// B) Continuation prompt fallback — agent has no resume support.
+					//    Capture partial stdout, build hand-crafted continuation prompt.
+
+					const agentSupportsResume = hasCapabilityCached(activeSession.toolType, 'supportsResume');
+					const agentSessionId = activeTab.agentSessionId;
+					const useNativeResume = agentSupportsResume && !!agentSessionId;
+
+					// Build the prompt:
+					// - Native resume: agent loads full history from session files,
+					//   but needs instruction to continue the interrupted task
+					// - Fallback: no session files, must include partial output inline
+					// Always capture partial output so we have a fallback if resume fails
+					const partialOutput = captureCurrentTurnOutput(activeTab.logs);
+					const continuationFallback = buildContinuationPrompt(partialOutput, effectiveInputValue);
+					const promptForQueue = useNativeResume
+						? buildResumePrompt(effectiveInputValue)
+						: continuationFallback;
+
+					// Add the user's interjection log entry
+					// delivered: false so UI shows "queued" until the agent actually spawns
+					const interjectionEntryId = generateId();
+					const interjectionEntry: LogEntry = {
+						id: interjectionEntryId,
+						timestamp: Date.now(),
+						source: 'user',
+						text: effectiveInputValue,
+						images: [...stagedImages],
+						interjection: true,
+						delivered: false,
+						deliveryFailed: false,
+					};
+
+					if (flushBatchedUpdates) flushBatchedUpdates();
+
+					setSessions((prev) =>
+						prev.map((s) => {
+							if (s.id !== activeSessionId) return s;
+							return {
+								...s,
+								aiTabs: s.aiTabs.map((tab) => {
+									if (tab.id !== activeTab.id) return tab;
+									return {
+										...tab,
+										logs: [...tab.logs, interjectionEntry],
+									};
+								}),
+							};
+						})
+					);
+
+					// Interrupt the running process
+					window.maestro.process.interrupt(processSessionId).catch((error) => {
+						console.error('[processInput] Interrupt failed:', error);
+					});
+
+					// Queue the continuation at the FRONT of the queue.
+					// It must run before any older queued work for this session so the
+					// interrupted turn resumes immediately after exit.
+					const continuationItem: QueuedItem = {
+						id: generateId(),
+						timestamp: Date.now(),
+						tabId: activeTab.id,
+						type: 'message',
+						text: promptForQueue,
+						// Show user's raw message in queue UI, not the continuation prompt wrapper
+						displayText: effectiveInputValue,
+						images: [...stagedImages],
+						tabName: activeTab.name || 'New',
+						readOnlyMode: activeTab.readOnlyMode === true,
+						interjectionLogId: interjectionEntryId,
+						// If resume spawn fails, retry with continuation prompt (includes partial output)
+						fallbackText: useNativeResume ? continuationFallback : undefined,
+					};
+
+					setSessions((prev) =>
+						prev.map((s) => {
+							if (s.id !== activeSessionId) return s;
+							// Replace any existing continuation for this tab to avoid
+							// stacking stale fallbacks on rapid double-interrupt
+							const filtered = s.executionQueue.filter(
+								(q) => !(q.tabId === activeTab.id && q.interjectionLogId)
+							);
+							return {
+								...s,
+								executionQueue: [continuationItem, ...filtered],
+							};
+						})
+					);
+
+					// Clear input
+					setInputValue('');
+					setStagedImages([]);
+					syncAiInputToSession('');
+					if (inputRef.current) inputRef.current.style.height = 'auto';
+					return;
+				}
 			}
 
 			// Queue messages when AI is busy (only in AI mode)

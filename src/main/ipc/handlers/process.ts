@@ -4,7 +4,7 @@ import * as os from 'os';
 import * as fs from 'fs';
 import * as path from 'path';
 import { ProcessManager } from '../../process-manager';
-import { AgentDetector } from '../../agents';
+import { AgentDetector, hasCapability } from '../../agents';
 import { logger } from '../../utils/logger';
 import { isWindows } from '../../../shared/platformDetection';
 import { addBreadcrumb, captureException } from '../../utils/sentry';
@@ -643,6 +643,8 @@ export function registerProcessHandlers(deps: ProcessHandlerDependencies): void 
 					sshRemoteHost: sshRemoteUsed?.host,
 					// SSH stdin script - the entire command is sent via stdin to /bin/bash on remote
 					sshStdinScript,
+					// Keep stdin open for agents that support mid-turn input
+					keepStdinOpen: hasCapability(config.toolType, 'supportsMidTurnInput'),
 				});
 
 				logger.info(`Process spawned successfully`, LOG_CONTEXT, {
@@ -703,6 +705,54 @@ export function registerProcessHandlers(deps: ProcessHandlerDependencies): void 
 			});
 			return processManager.write(sessionId, data);
 		})
+	);
+
+	// Write a mid-turn interjection to a running agent process
+	ipcMain.handle(
+		'process:writeInterjection',
+		withIpcErrorLogging(
+			handlerOpts('writeInterjection'),
+			async (sessionId: string, text: string, interjectionId?: string, images?: string[]) => {
+				const processManager = requireProcessManager(getProcessManager);
+
+				// Validate non-empty text to avoid sending empty stream-json messages
+				if (!text || !text.trim()) {
+					logger.warn(`Ignoring empty interjection for process: ${sessionId}`, LOG_CONTEXT, {
+						sessionId,
+						interjectionId,
+					});
+					return false;
+				}
+
+				logger.info(`Writing interjection to process: ${sessionId}`, LOG_CONTEXT, {
+					sessionId,
+					textLength: text.length,
+					interjectionId,
+					imageCount: images?.length || 0,
+				});
+				const streamJsonMessage = buildStreamJsonMessage(text, images || []);
+				logger.debug('Built interjection stream-json message', LOG_CONTEXT, {
+					sessionId,
+					messageLength: streamJsonMessage.length,
+				});
+				const success = processManager.write(sessionId, streamJsonMessage + '\n');
+
+				// Track the pending interjection so StdoutHandler can acknowledge
+				// it when the CLI emits a result for the current turn
+				if (success && interjectionId) {
+					const managedProcess = processManager.get(sessionId);
+					if (managedProcess) {
+						// Immutable append — internal process state queue
+						managedProcess.pendingInterjectionIds = [
+							...(managedProcess.pendingInterjectionIds || []),
+							interjectionId,
+						];
+					}
+				}
+
+				return success;
+			}
+		)
 	);
 
 	// Send SIGINT to a process
@@ -892,6 +942,17 @@ export function registerProcessHandlers(deps: ProcessHandlerDependencies): void 
 				});
 			}
 		)
+	);
+
+	// Check if a process has emitted its result (for race condition guard)
+	ipcMain.handle(
+		'process:hasResultEmitted',
+		withIpcErrorLogging(handlerOpts('hasResultEmitted'), async (sessionId: string) => {
+			const processManager = requireProcessManager(getProcessManager);
+			const managedProcess = processManager.get(sessionId);
+			// Missing process means it already exited and was cleaned up - treat as finished
+			return !managedProcess || managedProcess.resultEmitted === true;
+		})
 	);
 
 	// Run a single command and capture only stdout/stderr (no PTY echo/prompts)

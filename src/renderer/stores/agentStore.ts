@@ -275,14 +275,18 @@ export const useAgentStore = create<AgentStore>()((set, get) => ({
 		}
 
 		const targetSessionId = `${sessionId}-ai-${targetTab.id}`;
+		// Use resolved tab ID for delivery tracking (item.tabId may be missing if fallback was used)
+		const deliveryTabId = item.tabId || targetTab.id;
 
 		try {
 			// Get agent configuration for this session's tool type
 			const agent = await window.maestro.agents.get(session.toolType);
 			if (!agent) throw new Error(`Agent not found for toolType: ${session.toolType}`);
 
-			// Get the TARGET TAB's agentSessionId for session continuity
-			const tabAgentSessionId = targetTab.agentSessionId;
+			// Get the TARGET TAB's agentSessionId for session continuity.
+			// skipResume: when a resume attempt failed and we're retrying with
+			// a continuation prompt, don't pass the session ID (avoids re-triggering resume args).
+			const tabAgentSessionId = item.skipResume ? undefined : targetTab.agentSessionId;
 			const isReadOnly = item.readOnlyMode || targetTab.readOnlyMode;
 
 			// Filter out YOLO/skip-permissions flags when read-only mode is active
@@ -296,6 +300,13 @@ export const useAgentStore = create<AgentStore>()((set, get) => ({
 			const hasImages = item.images && item.images.length > 0;
 			const hasText = item.text && item.text.trim();
 			const isImageOnlyMessage = item.type === 'message' && hasImages && !hasText;
+
+			// Compute stdin transport flags for Windows (applies to both messages and commands)
+			const { sendPromptViaStdin, sendPromptViaStdinRaw } = getStdinFlags({
+				isSshSession: !!session.sshRemoteId || !!session.sessionSshRemoteConfig?.enabled,
+				supportsStreamJsonInput: agent.capabilities?.supportsStreamJsonInput ?? false,
+				hasImages: !!hasImages,
+			});
 
 			if (item.type === 'message' && (hasText || isImageOnlyMessage)) {
 				// Process a message - spawn agent with the message text
@@ -363,6 +374,30 @@ export const useAgentStore = create<AgentStore>()((set, get) => ({
 					sendPromptViaStdin,
 					sendPromptViaStdinRaw,
 				});
+
+				// Mark the associated interjection log entry as delivered
+				// (interrupt-and-resume path: entry shows "queued" until agent spawns)
+				if (item.interjectionLogId) {
+					useSessionStore.getState().setSessions((prev) =>
+						prev.map((s) => {
+							if (s.id !== sessionId) return s;
+							return {
+								...s,
+								aiTabs: s.aiTabs.map((tab) => {
+									if (tab.id !== deliveryTabId) return tab;
+									return {
+										...tab,
+										logs: tab.logs.map((log) =>
+											log.id === item.interjectionLogId
+												? { ...log, delivered: true, deliveryFailed: false }
+												: log
+										),
+									};
+								}),
+							};
+						})
+					);
+				}
 			} else if (item.type === 'command' && item.command) {
 				// Process a slash command - find matching command
 				// Check user-defined commands first, then agent-discovered commands with prompts
@@ -466,6 +501,30 @@ export const useAgentStore = create<AgentStore>()((set, get) => ({
 						sendPromptViaStdin: cmdSendViaStdin,
 						sendPromptViaStdinRaw: cmdSendViaStdinRaw,
 					});
+
+					// Mark the associated interjection log entry as delivered
+					// (mirrors the message branch above)
+					if (item.interjectionLogId) {
+						useSessionStore.getState().setSessions((prev) =>
+							prev.map((s) => {
+								if (s.id !== sessionId) return s;
+								return {
+									...s,
+									aiTabs: s.aiTabs.map((tab) => {
+										if (tab.id !== deliveryTabId) return tab;
+										return {
+											...tab,
+											logs: tab.logs.map((log) =>
+												log.id === item.interjectionLogId
+													? { ...log, delivered: true, deliveryFailed: false }
+													: log
+											),
+										};
+									}),
+								};
+							})
+						);
+					}
 				} else {
 					// Unknown command - add error log and reset to idle
 					useSessionStore.getState().addLogToTab(sessionId, {
@@ -496,7 +555,48 @@ export const useAgentStore = create<AgentStore>()((set, get) => ({
 				}
 			}
 		} catch (error: any) {
+			// If this was a resume attempt and we have a fallback prompt, retry without
+			// session resume (falls back to continuation prompt with partial output)
+			if (item.fallbackText) {
+				console.warn(
+					'[processQueuedItem] Resume spawn failed, retrying with continuation fallback:',
+					error.message
+				);
+				const fallbackItem: QueuedItem = {
+					...item,
+					text: item.fallbackText,
+					fallbackText: undefined, // Don't retry again
+					skipResume: true, // Don't re-trigger resume args
+				};
+				await get().processQueuedItem(sessionId, fallbackItem, deps);
+				return;
+			}
+
 			console.error('[processQueuedItem] Failed to process queued item:', error);
+
+			// Mark associated interjection as failed if spawn errored
+			if (item.interjectionLogId) {
+				useSessionStore.getState().setSessions((prev) =>
+					prev.map((s) => {
+						if (s.id !== sessionId) return s;
+						return {
+							...s,
+							aiTabs: s.aiTabs.map((tab) => {
+								if (tab.id !== deliveryTabId) return tab;
+								return {
+									...tab,
+									logs: tab.logs.map((log) =>
+										log.id === item.interjectionLogId
+											? { ...log, delivered: false, deliveryFailed: true }
+											: log
+									),
+								};
+							}),
+						};
+					})
+				);
+			}
+
 			const errorLogEntry: LogEntry = {
 				id: generateId(),
 				timestamp: Date.now(),
