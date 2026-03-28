@@ -35,7 +35,6 @@ import { maestroSystemPrompt } from '../../prompts';
 import { substituteTemplateVariables } from '../utils/templateVariables';
 import { gitService } from '../services/git';
 import { filterYoloArgs } from '../utils/agentArgs';
-import { getStdinFlags } from '../utils/spawnHelpers';
 
 // ============================================================================
 // Store Types
@@ -306,6 +305,7 @@ export const useAgentStore = create<AgentStore>()((set, get) => ({
 			const { sendPromptViaStdin, sendPromptViaStdinRaw } = getStdinFlags({
 				isSshSession: !!session.sshRemoteId || !!session.sessionSshRemoteConfig?.enabled,
 				supportsStreamJsonInput: agent.capabilities?.supportsStreamJsonInput ?? false,
+				hasImages: !!hasImages,
 			});
 
 			if (item.type === 'message' && (hasText || isImageOnlyMessage)) {
