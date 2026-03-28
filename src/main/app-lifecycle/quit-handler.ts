@@ -10,6 +10,14 @@ import type { WebServer } from '../web-server';
 import { tunnelManager as tunnelManagerInstance } from '../tunnel-manager';
 import type { HistoryManager } from '../history-manager';
 import { isWebContentsAvailable } from '../utils/safe-send';
+import { powerManager as powerManagerInstance } from '../power-manager';
+
+/**
+ * Safety timeout for quit confirmation from the renderer.
+ * If the renderer doesn't respond within this time (e.g., window already closing,
+ * renderer crashed), force-quit to prevent the app from lingering in the background.
+ */
+const QUIT_CONFIRMATION_TIMEOUT_MS = 5000;
 
 /** Dependencies for quit handler */
 export interface QuitHandlerDependencies {
@@ -31,6 +39,10 @@ export interface QuitHandlerDependencies {
 	closeStatsDB: () => void;
 	/** Function to stop CLI watcher (optional, may not be started yet) */
 	stopCliWatcher?: () => void;
+	/** Power manager instance for clearing sleep prevention on shutdown */
+	powerManager: typeof powerManagerInstance;
+	/** Function to stop group chat moderator cleanup interval */
+	stopSessionCleanup?: () => void;
 }
 
 /** Quit handler state */
@@ -39,6 +51,8 @@ interface QuitHandlerState {
 	quitConfirmed: boolean;
 	/** Whether we're currently waiting for quit confirmation from renderer */
 	isRequestingConfirmation: boolean;
+	/** Safety timeout for quit confirmation — forces quit if renderer never responds */
+	confirmationTimeout: ReturnType<typeof setTimeout> | null;
 }
 
 /** Quit handler instance */
@@ -75,11 +89,14 @@ export function createQuitHandler(deps: QuitHandlerDependencies): QuitHandler {
 		cleanupAllGroomingSessions,
 		closeStatsDB,
 		stopCliWatcher,
+		powerManager,
+		stopSessionCleanup,
 	} = deps;
 
 	const state: QuitHandlerState = {
 		quitConfirmed: false,
 		isRequestingConfirmation: false,
+		confirmationTimeout: null,
 	};
 
 	return {
@@ -87,6 +104,7 @@ export function createQuitHandler(deps: QuitHandlerDependencies): QuitHandler {
 			// Handle quit confirmation from renderer
 			ipcMain.on('app:quitConfirmed', () => {
 				logger.info('Quit confirmed by renderer', 'Window');
+				clearConfirmationTimeout();
 				state.isRequestingConfirmation = false;
 				state.quitConfirmed = true;
 				app.quit();
@@ -95,6 +113,7 @@ export function createQuitHandler(deps: QuitHandlerDependencies): QuitHandler {
 			// Handle quit cancellation (user declined)
 			ipcMain.on('app:quitCancelled', () => {
 				logger.info('Quit cancelled by renderer', 'Window');
+				clearConfirmationTimeout();
 				state.isRequestingConfirmation = false;
 				// Nothing to do - app stays running
 			});
@@ -120,6 +139,23 @@ export function createQuitHandler(deps: QuitHandlerDependencies): QuitHandler {
 					// Ask renderer to check for busy agents
 					if (isWebContentsAvailable(mainWindow)) {
 						state.isRequestingConfirmation = true;
+
+						// Arm safety timeout BEFORE send() so it's always active even if
+						// send() throws (e.g., renderer disposed between the availability
+						// check and the actual IPC call). Prevents the app from lingering
+						// in the background with no window (issue #623).
+						state.confirmationTimeout = setTimeout(() => {
+							if (state.isRequestingConfirmation) {
+								logger.warn(
+									'Quit confirmation timed out — renderer did not respond, forcing quit',
+									'Window'
+								);
+								state.isRequestingConfirmation = false;
+								state.quitConfirmed = true;
+								app.quit();
+							}
+						}, QUIT_CONFIRMATION_TIMEOUT_MS);
+
 						logger.info('Requesting quit confirmation from renderer', 'Window');
 						mainWindow.webContents.send('app:requestQuitConfirmation');
 					} else {
@@ -138,9 +174,18 @@ export function createQuitHandler(deps: QuitHandlerDependencies): QuitHandler {
 		isQuitConfirmed: () => state.quitConfirmed,
 
 		confirmQuit: () => {
+			clearConfirmationTimeout();
 			state.quitConfirmed = true;
 		},
 	};
+
+	/** Clears the quit confirmation safety timeout if active. */
+	function clearConfirmationTimeout(): void {
+		if (state.confirmationTimeout) {
+			clearTimeout(state.confirmationTimeout);
+			state.confirmationTimeout = null;
+		}
+	}
 
 	/**
 	 * Performs cleanup operations before app quits.
@@ -156,6 +201,14 @@ export function createQuitHandler(deps: QuitHandlerDependencies): QuitHandler {
 		if (stopCliWatcher) {
 			stopCliWatcher();
 		}
+
+		// Stop group chat moderator cleanup interval
+		if (stopSessionCleanup) {
+			stopSessionCleanup();
+		}
+
+		// Clear power save blocker to release OS-level sleep prevention state
+		powerManager.clearAllReasons();
 
 		// Clean up active grooming sessions (context merge/transfer operations)
 		const processManager = getProcessManager();

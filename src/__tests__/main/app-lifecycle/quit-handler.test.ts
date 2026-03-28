@@ -58,6 +58,13 @@ vi.mock('../../../main/tunnel-manager', () => ({
 	},
 }));
 
+// Mock power-manager for the typeof import
+vi.mock('../../../main/power-manager', () => ({
+	powerManager: {
+		clearAllReasons: vi.fn(),
+	},
+}));
+
 describe('app-lifecycle/quit-handler', () => {
 	let mockMainWindow: {
 		isDestroyed: ReturnType<typeof vi.fn>;
@@ -76,6 +83,10 @@ describe('app-lifecycle/quit-handler', () => {
 		stop: ReturnType<typeof vi.fn>;
 	};
 
+	let mockPowerManager: {
+		clearAllReasons: ReturnType<typeof vi.fn>;
+	};
+
 	let deps: {
 		getMainWindow: ReturnType<typeof vi.fn>;
 		getProcessManager: ReturnType<typeof vi.fn>;
@@ -86,6 +97,8 @@ describe('app-lifecycle/quit-handler', () => {
 		cleanupAllGroomingSessions: ReturnType<typeof vi.fn>;
 		closeStatsDB: ReturnType<typeof vi.fn>;
 		stopCliWatcher: ReturnType<typeof vi.fn>;
+		powerManager: typeof mockPowerManager;
+		stopSessionCleanup: ReturnType<typeof vi.fn>;
 	};
 
 	beforeEach(() => {
@@ -109,6 +122,9 @@ describe('app-lifecycle/quit-handler', () => {
 		mockTunnelManager = {
 			stop: vi.fn().mockResolvedValue(undefined),
 		};
+		mockPowerManager = {
+			clearAllReasons: vi.fn(),
+		};
 
 		deps = {
 			getMainWindow: vi.fn().mockReturnValue(mockMainWindow),
@@ -120,6 +136,8 @@ describe('app-lifecycle/quit-handler', () => {
 			cleanupAllGroomingSessions: vi.fn().mockResolvedValue(undefined),
 			closeStatsDB: vi.fn(),
 			stopCliWatcher: vi.fn(),
+			powerManager: mockPowerManager,
+			stopSessionCleanup: vi.fn(),
 		};
 	});
 
@@ -280,6 +298,8 @@ describe('app-lifecycle/quit-handler', () => {
 			// Should perform cleanup
 			expect(mockHistoryManager.stopWatching).toHaveBeenCalled();
 			expect(deps.stopCliWatcher).toHaveBeenCalled();
+			expect(deps.stopSessionCleanup).toHaveBeenCalled();
+			expect(mockPowerManager.clearAllReasons).toHaveBeenCalled();
 			expect(mockProcessManager.killAll).toHaveBeenCalled();
 			expect(mockTunnelManager.stop).toHaveBeenCalled();
 			expect(mockWebServer.stop).toHaveBeenCalled();
