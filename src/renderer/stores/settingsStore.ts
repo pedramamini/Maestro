@@ -15,6 +15,7 @@
  */
 
 import { create } from 'zustand';
+import { isWindowsPlatform } from '../utils/platformUtils';
 import type {
 	LLMProvider,
 	ThemeId,
@@ -412,7 +413,7 @@ export const useSettingsStore = create<SettingsStore>()((set, get) => {
 		llmProvider: 'openrouter',
 		modelSlug: 'anthropic/claude-3.5-sonnet',
 		apiKey: '',
-		defaultShell: 'zsh',
+		defaultShell: isWindowsPlatform() ? 'powershell' : 'zsh',
 		customShellPath: '',
 		shellArgs: '',
 		shellEnvVars: {},

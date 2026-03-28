@@ -310,7 +310,9 @@ export function registerProcessHandlers(deps: ProcessHandlerDependencies): void 
 				// For terminal sessions, we also load custom shell path, args, and env vars
 				let shellToUse =
 					config.shell ||
-					(config.toolType === 'terminal' ? settingsStore.get('defaultShell', 'zsh') : undefined);
+					(config.toolType === 'terminal'
+						? settingsStore.get('defaultShell', isWindows() ? 'powershell' : 'zsh')
+						: undefined);
 				let shellArgsStr: string | undefined;
 
 				// Load global shell environment variables for ALL process types (terminals and agents)
@@ -810,7 +812,8 @@ export function registerProcessHandlers(deps: ProcessHandlerDependencies): void 
 
 				// Resolve shell: prefer config.shell, then settings default
 				const globalShellEnvVars = settingsStore.get('shellEnvVars', {}) as Record<string, string>;
-				let shellToUse = config.shell || settingsStore.get('defaultShell', 'zsh');
+				let shellToUse =
+					config.shell || settingsStore.get('defaultShell', isWindows() ? 'powershell' : 'zsh');
 				const customShellPath = settingsStore.get('customShellPath', '');
 				if (customShellPath && (customShellPath as string).trim()) {
 					shellToUse = (customShellPath as string).trim();
@@ -920,7 +923,8 @@ export function registerProcessHandlers(deps: ProcessHandlerDependencies): void 
 
 				// Get the shell from settings if not provided
 				// Custom shell path takes precedence over the selected shell ID
-				let shell = config.shell || settingsStore.get('defaultShell', 'zsh');
+				let shell =
+					config.shell || settingsStore.get('defaultShell', isWindows() ? 'powershell' : 'zsh');
 				const customShellPath = settingsStore.get('customShellPath', '');
 				if (customShellPath && customShellPath.trim()) {
 					shell = customShellPath.trim();

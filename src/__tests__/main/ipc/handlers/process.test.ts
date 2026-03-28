@@ -860,7 +860,7 @@ describe('process IPC handlers', () => {
 				'session-1',
 				'ls -la',
 				'/test/dir',
-				'zsh', // default shell
+				process.platform === 'win32' ? 'powershell' : 'zsh', // default shell
 				{}, // shell env vars
 				null // sshRemoteConfig (not set in this test)
 			);
