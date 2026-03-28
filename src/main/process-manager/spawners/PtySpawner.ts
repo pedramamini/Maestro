@@ -5,6 +5,7 @@ import { logger } from '../../utils/logger';
 import type { ProcessConfig, ManagedProcess, SpawnResult } from '../types';
 import type { DataBufferManager } from '../handlers/DataBufferManager';
 import { buildPtyTerminalEnv, buildChildProcessEnv } from '../utils/envBuilder';
+import { resolveShellPath } from '../utils/pathResolver';
 import { isWindows } from '../../../shared/platformDetection';
 
 /**
@@ -47,7 +48,8 @@ export class PtySpawner {
 					ptyArgs = args;
 				} else {
 					// Full shell emulation: launch the shell with login+interactive flags
-					ptyCommand = shell;
+					// Resolve shell ID to executable name (e.g. 'powershell' -> 'powershell.exe' on Windows)
+					ptyCommand = resolveShellPath(shell);
 					ptyArgs = isWindows() ? [] : ['-l', '-i'];
 
 					// Append custom shell arguments from user configuration

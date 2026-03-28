@@ -52,10 +52,16 @@ vi.mock('../../../../shared/platformDetection', () => ({
 	isWindows: vi.fn(() => false),
 }));
 
+vi.mock('../../../../main/process-manager/utils/pathResolver', () => ({
+	resolveShellPath: vi.fn((shell: string) => shell),
+}));
+
 // ── Imports (after mocks) ──────────────────────────────────────────────────
 
 import { PtySpawner } from '../../../../main/process-manager/spawners/PtySpawner';
 import type { ManagedProcess, ProcessConfig } from '../../../../main/process-manager/types';
+import { resolveShellPath } from '../../../../main/process-manager/utils/pathResolver';
+import { isWindows } from '../../../../shared/platformDetection';
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
@@ -189,6 +195,26 @@ describe('PtySpawner', () => {
 
 			expect(result.success).toBe(true);
 			expect(result.pid).toBe(99999);
+		});
+	});
+
+	describe('Windows shell resolution', () => {
+		it('resolves shell ID to executable via resolveShellPath', () => {
+			vi.mocked(isWindows).mockReturnValue(true);
+			vi.mocked(resolveShellPath).mockReturnValue('powershell.exe');
+
+			const { spawner } = createTestContext();
+			spawner.spawn(createBaseConfig({ shell: 'powershell' }));
+
+			expect(resolveShellPath).toHaveBeenCalledWith('powershell');
+			expect(mockPtySpawn).toHaveBeenCalledWith(
+				'powershell.exe',
+				[],
+				expect.objectContaining({ name: 'xterm-256color' })
+			);
+
+			vi.mocked(isWindows).mockReturnValue(false);
+			vi.mocked(resolveShellPath).mockImplementation((shell: string) => shell);
 		});
 	});
 
