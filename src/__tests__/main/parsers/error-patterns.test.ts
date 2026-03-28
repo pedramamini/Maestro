@@ -927,6 +927,23 @@ describe('error-patterns', () => {
 				expect(result).not.toBeNull();
 				expect(result?.type).toBe('agent_crashed');
 			});
+
+			it('should match "bash: agent: command not found" (cursor binary)', () => {
+				const result = matchSshErrorPattern('bash: agent: command not found');
+				expect(result).not.toBeNull();
+				expect(result?.type).toBe('agent_crashed');
+			});
+
+			it('should match "zsh: command not found: agent" (cursor binary)', () => {
+				const result = matchSshErrorPattern('zsh: command not found: agent');
+				expect(result).not.toBeNull();
+				expect(result?.type).toBe('agent_crashed');
+			});
+
+			it('should NOT match "ssh-agent: command not found" (anti-collision)', () => {
+				const result = matchSshErrorPattern('bash: ssh-agent: command not found');
+				expect(result).toBeNull();
+			});
 		});
 
 		describe('non-matching lines', () => {

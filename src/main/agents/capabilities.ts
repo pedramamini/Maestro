@@ -262,6 +262,7 @@ export const AGENT_CAPABILITIES: Record<string, AgentCapabilities> = {
 		supportsGroupChatModeration: true, // Can serve as group chat moderator
 		usesJsonLineOutput: false, // Uses stream-json (similar to Claude Code)
 		usesCombinedContextWindow: false, // Varies by model, not documented
+		supportsAppendSystemPrompt: false, // Cursor CLI does not support --append-system-prompt
 	},
 
 	/**
