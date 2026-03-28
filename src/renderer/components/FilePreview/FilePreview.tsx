@@ -209,6 +209,27 @@ export const FilePreview = React.memo(
 		// Any non-binary, non-image file can be edited as text
 		const isEditableText = !isImage && !isBinary;
 
+		// Check if file is large (for performance optimizations)
+		const isLargeFile = useMemo(() => {
+			if (!file?.content) return false;
+			return file.content.length > LARGE_FILE_TOKEN_SKIP_THRESHOLD;
+		}, [file?.content]);
+
+		// For very large files, truncate content for syntax highlighting to prevent freezes
+		const displayContent = useMemo(() => {
+			if (!file?.content) return '';
+			if (
+				!showFullContent &&
+				!isMarkdown &&
+				!isImage &&
+				!isBinary &&
+				file.content.length > LARGE_FILE_PREVIEW_LIMIT
+			) {
+				return file.content.substring(0, LARGE_FILE_PREVIEW_LIMIT);
+			}
+			return file.content;
+		}, [file?.content, isMarkdown, isImage, isBinary, showFullContent]);
+
 		// Search state and effects (code highlighting, markdown CSS Highlight API, edit textarea)
 		const {
 			searchQuery,
@@ -234,31 +255,10 @@ export const FilePreview = React.memo(
 			editContent,
 			fileContent: file?.content,
 			accentColor: theme.colors.accent,
+			displayedContentLength: displayContent.length,
 			initialSearchQuery,
 			onSearchQueryChange,
 		});
-
-		// Check if file is large (for performance optimizations)
-		// Use content length as primary check since fileStats may not be loaded yet
-		const isLargeFile = useMemo(() => {
-			if (!file?.content) return false;
-			return file.content.length > LARGE_FILE_TOKEN_SKIP_THRESHOLD;
-		}, [file?.content]);
-
-		// For very large files, truncate content for syntax highlighting to prevent freezes
-		const displayContent = useMemo(() => {
-			if (!file?.content) return '';
-			if (
-				!showFullContent &&
-				!isMarkdown &&
-				!isImage &&
-				!isBinary &&
-				file.content.length > LARGE_FILE_PREVIEW_LIMIT
-			) {
-				return file.content.substring(0, LARGE_FILE_PREVIEW_LIMIT);
-			}
-			return file.content;
-		}, [file?.content, isMarkdown, isImage, isBinary, showFullContent]);
 
 		// Track if content is truncated for display
 		const isContentTruncated = file?.content && displayContent.length < file.content.length;

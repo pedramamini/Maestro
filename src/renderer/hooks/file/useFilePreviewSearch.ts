@@ -16,6 +16,8 @@ export interface UseFilePreviewSearchParams {
 	editContent: string;
 	fileContent: string | undefined;
 	accentColor: string;
+	/** Length of actually displayed content (may differ from fileContent when truncated) */
+	displayedContentLength?: number;
 	initialSearchQuery?: string;
 	onSearchQueryChange?: (query: string) => void;
 }
@@ -47,6 +49,7 @@ export function useFilePreviewSearch({
 	editContent,
 	fileContent,
 	accentColor,
+	displayedContentLength,
 	initialSearchQuery,
 	onSearchQueryChange,
 }: UseFilePreviewSearchParams): UseFilePreviewSearchReturn {
@@ -167,7 +170,7 @@ export function useFilePreviewSearch({
 			});
 			matchElementsRef.current = [];
 		};
-	}, [searchQuery, fileContent, isMarkdown, isImage, isCsv, accentColor]);
+	}, [searchQuery, fileContent, displayedContentLength, isMarkdown, isImage, isCsv, accentColor]);
 
 	// Search matches in markdown preview mode - use CSS Custom Highlight API
 	useEffect(() => {
@@ -312,8 +315,8 @@ export function useFilePreviewSearch({
 			return;
 		}
 
-		// Clamp current match index
-		const validIndex = Math.min(currentMatchIndex, matches.length - 1);
+		// Initialize from -1 when new matches appear, or clamp if index exceeds count
+		const validIndex = currentMatchIndex < 0 ? 0 : Math.min(currentMatchIndex, matches.length - 1);
 		if (validIndex !== currentMatchIndex) {
 			setCurrentMatchIndex(validIndex);
 			return;
@@ -376,8 +379,9 @@ export function useFilePreviewSearch({
 	const goToPrevMatch = useCallback(() => {
 		if (totalMatches === 0) return;
 
-		// Move to previous match (wrap around)
-		const prevIndex = (currentMatchIndex - 1 + totalMatches) % totalMatches;
+		// Move to previous match (wrap around); treat -1 as "before first" → go to last
+		const base = currentMatchIndex < 0 ? totalMatches : currentMatchIndex;
+		const prevIndex = (base - 1 + totalMatches) % totalMatches;
 		setCurrentMatchIndex(prevIndex);
 
 		// For code files, handle DOM-based highlighting

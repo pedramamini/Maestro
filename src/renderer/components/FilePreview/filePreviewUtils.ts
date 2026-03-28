@@ -33,37 +33,40 @@ export const LARGE_FILE_PREVIEW_LIMIT = 100 * 1024; // 100KB
 // ─── Language Detection ───────────────────────────────────────────────────────
 
 /** Map filename extension to syntax highlighting language code */
+/** Extension → syntax highlighting language (module-scope for reuse) */
+const LANGUAGE_MAP: Record<string, string> = {
+	ts: 'typescript',
+	tsx: 'tsx',
+	js: 'javascript',
+	jsx: 'jsx',
+	json: 'json',
+	md: 'markdown',
+	py: 'python',
+	rb: 'ruby',
+	go: 'go',
+	rs: 'rust',
+	java: 'java',
+	c: 'c',
+	cpp: 'cpp',
+	cs: 'csharp',
+	php: 'php',
+	html: 'html',
+	css: 'css',
+	scss: 'scss',
+	sql: 'sql',
+	sh: 'bash',
+	yaml: 'yaml',
+	yml: 'yaml',
+	toml: 'toml',
+	xml: 'xml',
+	csv: 'csv',
+	tsv: 'csv',
+};
+
+/** Map filename extension to syntax highlighting language code */
 export const getLanguageFromFilename = (filename: string): string => {
 	const ext = filename.split('.').pop()?.toLowerCase();
-	const languageMap: Record<string, string> = {
-		ts: 'typescript',
-		tsx: 'tsx',
-		js: 'javascript',
-		jsx: 'jsx',
-		json: 'json',
-		md: 'markdown',
-		py: 'python',
-		rb: 'ruby',
-		go: 'go',
-		rs: 'rust',
-		java: 'java',
-		c: 'c',
-		cpp: 'cpp',
-		cs: 'csharp',
-		php: 'php',
-		html: 'html',
-		css: 'css',
-		scss: 'scss',
-		sql: 'sql',
-		sh: 'bash',
-		yaml: 'yaml',
-		yml: 'yaml',
-		toml: 'toml',
-		xml: 'xml',
-		csv: 'csv',
-		tsv: 'csv',
-	};
-	return languageMap[ext || ''] || 'text';
+	return LANGUAGE_MAP[ext || ''] || 'text';
 };
 
 // ─── Binary Detection ─────────────────────────────────────────────────────────
@@ -144,7 +147,7 @@ export const isBinaryExtension = (filename: string): boolean => {
 
 /** Format file size in human-readable format */
 export const formatFileSize = (bytes: number): string => {
-	if (bytes === 0) return '0 B';
+	if (bytes <= 0) return '0 B';
 	const k = 1024;
 	const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
 	const i = Math.floor(Math.log(bytes) / Math.log(k));
