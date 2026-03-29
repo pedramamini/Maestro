@@ -18,6 +18,7 @@ import { generateId } from './ids';
 import { getAutoRunFolderPath } from './existingDocsDetector';
 import { createTerminalTab } from './terminalTabHelpers';
 import { useSettingsStore } from '../stores/settingsStore';
+import { isWindowsPlatform } from './platformUtils';
 
 /**
  * Build the unified tab list from a session's tab data.
@@ -1889,7 +1890,7 @@ export function createMergedSession(
 	// Create the merged session with standard structure
 	// Matches the pattern from App.tsx createNewSession
 	const initialMergeTerminalTab = createTerminalTab(
-		useSettingsStore.getState().defaultShell || 'zsh',
+		useSettingsStore.getState().defaultShell || (isWindowsPlatform() ? 'powershell' : 'zsh'),
 		projectRoot,
 		null
 	);
