@@ -94,28 +94,31 @@ export function SlashCommandAutocomplete({
 	const containerRef = useRef<HTMLDivElement>(null);
 
 	// Filter commands based on input and mode (fuzzy matching)
+	const shouldFuzzyFilter = inputValue && inputValue.startsWith('/');
 	const filteredCommands = useMemo(() => {
 		const query = (inputValue || '').toLowerCase().replace(/^\//, '');
 		return commands
 			.filter((cmd) => {
 				if (cmd.terminalOnly && inputMode !== 'terminal') return false;
 				if (cmd.aiOnly && inputMode === 'terminal') return false;
-				if (!inputValue || !inputValue.startsWith('/') || !query) return true;
-				return fuzzyMatchWithScore(cmd.command.slice(1), query).matches;
+				return true;
 			})
-			.sort((a, b) => {
-				if (!query) return 0;
-				return (
-					fuzzyMatchWithScore(b.command.slice(1), query).score -
-					fuzzyMatchWithScore(a.command.slice(1), query).score
-				);
-			});
-	}, [commands, inputMode, inputValue]);
+			.map((cmd) => {
+				const { matches, score } =
+					shouldFuzzyFilter && query
+						? fuzzyMatchWithScore(cmd.command.slice(1), query, '.')
+						: { matches: true, score: 0 };
+				return { cmd, matches, score };
+			})
+			.filter(({ matches }) => matches)
+			.sort((a, b) => b.score - a.score)
+			.map(({ cmd }) => cmd);
+	}, [commands, inputMode, inputValue, shouldFuzzyFilter]);
 
 	// Clamp selectedIndex to valid range when filtered list changes
 	useEffect(() => {
 		if (filteredCommands.length > 0 && selectedIndex >= filteredCommands.length) {
-			onSelectedIndexChange?.(0);
+			onSelectedIndexChange?.(filteredCommands.length - 1);
 		}
 	}, [filteredCommands.length, selectedIndex, onSelectedIndexChange]);
 
@@ -303,7 +306,9 @@ export function SlashCommandAutocomplete({
 								const query = (inputValue || '').toLowerCase().replace(/^\//, '');
 								if (!query) return cmd.command;
 								const indices = new Set(
-									fuzzyMatchWithIndices(cmd.command.slice(1).toLowerCase(), query).map((i) => i + 1)
+									fuzzyMatchWithIndices(cmd.command.slice(1).toLowerCase(), query, '.').map(
+										(i) => i + 1
+									)
 								);
 								if (indices.size === 0) return cmd.command;
 								return Array.from(cmd.command).map((ch, i) =>

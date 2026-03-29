@@ -324,16 +324,17 @@ export const InputArea = React.memo(function InputArea(props: InputAreaProps) {
 			.filter((cmd) => {
 				if (cmd.terminalOnly && !isTerminalMode) return false;
 				if (cmd.aiOnly && isTerminalMode) return false;
-				if (!query) return true;
-				return fuzzyMatchWithScore(cmd.command.slice(1), query).matches;
+				return true;
 			})
-			.sort((a, b) => {
-				if (!query) return 0;
-				return (
-					fuzzyMatchWithScore(b.command.slice(1), query).score -
-					fuzzyMatchWithScore(a.command.slice(1), query).score
-				);
-			});
+			.map((cmd) => {
+				const { matches, score } = query
+					? fuzzyMatchWithScore(cmd.command.slice(1), query, '.')
+					: { matches: true, score: 0 };
+				return { cmd, matches, score };
+			})
+			.filter(({ matches }) => matches)
+			.sort((a, b) => b.score - a.score)
+			.map(({ cmd }) => cmd);
 	}, [slashCommands, isTerminalMode, inputValueLower]);
 
 	// Ensure selectedSlashCommandIndex is valid for the filtered list
@@ -541,7 +542,7 @@ export const InputArea = React.memo(function InputArea(props: InputAreaProps) {
 										if (!query) return cmd.command;
 										// Match indices on the part after "/", then offset by 1 for the "/"
 										const indices = new Set(
-											fuzzyMatchWithIndices(cmd.command.slice(1).toLowerCase(), query).map(
+											fuzzyMatchWithIndices(cmd.command.slice(1).toLowerCase(), query, '.').map(
 												(i) => i + 1
 											)
 										);

@@ -211,16 +211,17 @@ export function useInputKeyDown(deps: InputKeyDownDeps): InputKeyDownReturn {
 					.filter((cmd) => {
 						if ('terminalOnly' in cmd && cmd.terminalOnly && !isTerminalMode) return false;
 						if ('aiOnly' in cmd && cmd.aiOnly && isTerminalMode) return false;
-						if (!query) return true;
-						return fuzzyMatchWithScore(cmd.command.slice(1), query).matches;
+						return true;
 					})
-					.sort((a, b) => {
-						if (!query) return 0;
-						return (
-							fuzzyMatchWithScore(b.command.slice(1), query).score -
-							fuzzyMatchWithScore(a.command.slice(1), query).score
-						);
-					});
+					.map((cmd) => {
+						const { matches, score } = query
+							? fuzzyMatchWithScore(cmd.command.slice(1), query, '.')
+							: { matches: true, score: 0 };
+						return { cmd, matches, score };
+					})
+					.filter(({ matches }) => matches)
+					.sort((a, b) => b.score - a.score)
+					.map(({ cmd }) => cmd);
 
 				if (e.key === 'ArrowDown') {
 					e.preventDefault();
@@ -230,8 +231,9 @@ export function useInputKeyDown(deps: InputKeyDownDeps): InputKeyDownReturn {
 					setSelectedSlashCommandIndex((prev) => Math.max(prev - 1, 0));
 				} else if (e.key === 'Tab' || e.key === 'Enter') {
 					e.preventDefault();
-					if (filteredCommands[selectedSlashCommandIndex]) {
-						setInputValue(filteredCommands[selectedSlashCommandIndex].command);
+					const clampedIndex = Math.min(selectedSlashCommandIndex, filteredCommands.length - 1);
+					if (clampedIndex >= 0 && filteredCommands[clampedIndex]) {
+						setInputValue(filteredCommands[clampedIndex].command);
 						setSlashCommandOpen(false);
 						inputRef.current?.focus();
 					}
