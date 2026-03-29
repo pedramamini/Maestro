@@ -207,9 +207,6 @@ export function createQuitHandler(deps: QuitHandlerDependencies): QuitHandler {
 			stopSessionCleanup();
 		}
 
-		// Clear power save blocker to release OS-level sleep prevention state
-		powerManager.clearAllReasons();
-
 		// Clean up active grooming sessions (context merge/transfer operations)
 		const processManager = getProcessManager();
 		const groomingSessionCount = getActiveGroomingSessionCount();
@@ -224,6 +221,10 @@ export function createQuitHandler(deps: QuitHandlerDependencies): QuitHandler {
 		// Clean up all running processes
 		logger.info('Killing all running processes', 'Shutdown');
 		processManager?.killAll();
+
+		// Clear power save blocker AFTER killAll() to prevent late process output
+		// from re-arming the blocker via addBlockReason()
+		powerManager.clearAllReasons();
 
 		// Stop tunnel and web server (fire and forget)
 		logger.info('Stopping tunnel', 'Shutdown');
