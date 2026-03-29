@@ -362,6 +362,8 @@ export function buildExpandedPath(customPaths?: string[]): string {
 			path.join(process.env.ChocolateyInstall || 'C:\\ProgramData\\chocolatey', 'bin'),
 			// Go binaries
 			path.join(home, 'go', 'bin'),
+			// GitHub CLI (official MSI installer)
+			path.join(programFiles, 'GitHub CLI'),
 			// Windows system paths
 			path.join(systemRoot, 'System32'),
 			path.join(systemRoot),
@@ -381,6 +383,7 @@ export function buildExpandedPath(customPaths?: string[]): string {
 			`${home}/bin`, // User bin directory
 			`${home}/.claude/local`, // Claude local install location
 			`${home}/.opencode/bin`, // OpenCode installer default location
+			'/home/linuxbrew/.linuxbrew/bin', // Linuxbrew
 			'/usr/bin',
 			'/bin',
 			'/usr/sbin',

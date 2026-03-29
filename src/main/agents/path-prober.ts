@@ -446,7 +446,7 @@ function getUnixKnownPaths(binaryName: string): string[] {
 			...homebrew('gh'),
 			// User local bin (manual install, pipx, etc.)
 			...localBin('gh'),
-			// Conda / Mamba
+			// User bin directory
 			path.join(home, 'bin', 'gh'),
 			// Linuxbrew
 			'/home/linuxbrew/.linuxbrew/bin/gh',
