@@ -527,19 +527,19 @@ export function FeedbackChatView({ theme, onCancel, onWidthChange }: FeedbackCha
 	if (step === 'provider-select') {
 		return (
 			<div className="flex flex-col gap-5 p-6">
-				<div className="flex justify-center">
+				<div className="flex items-center gap-4">
 					<div
-						className="w-12 h-12 rounded-xl flex items-center justify-center"
+						className="w-20 h-20 rounded-xl flex items-center justify-center shrink-0"
 						style={{ backgroundColor: `${theme.colors.accent}20` }}
 					>
-						<MessageSquareHeart className="w-6 h-6" style={{ color: theme.colors.accent }} />
+						<MessageSquareHeart className="w-10 h-10" style={{ color: theme.colors.accent }} />
 					</div>
+					<p className="text-sm" style={{ color: theme.colors.textDim }}>
+						Thank you for taking the time to give us feedback! Whether you're reporting an issue or
+						recommending a feature, you'll work with an AI agent that will understand what you need
+						and create a GitHub issue for us to act on.
+					</p>
 				</div>
-				<p className="text-sm" style={{ color: theme.colors.textDim }}>
-					Thank you for taking the time to give us feedback! Whether you're reporting an issue or
-					recommending a feature, you'll work with an AI agent that will understand what you need
-					and create a GitHub issue for us to act on.
-				</p>
 
 				<div className="flex flex-col gap-2">
 					<label className="text-xs font-bold" style={{ color: theme.colors.textMain }}>
@@ -568,6 +568,12 @@ export function FeedbackChatView({ theme, onCancel, onWidthChange }: FeedbackCha
 						</p>
 					)}
 				</div>
+
+				{submitError && (
+					<p className="text-xs" style={{ color: theme.colors.warning }}>
+						{submitError}
+					</p>
+				)}
 
 				<div className="flex justify-end gap-2">
 					<button
