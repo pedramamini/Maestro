@@ -1638,6 +1638,40 @@ describe('TerminalOutput', () => {
 			expect(screen.getByText('npm run test')).toBeInTheDocument();
 		});
 
+		it('renders Bash tool with description and full multi-line command', () => {
+			const logs: LogEntry[] = [
+				createLogEntry({
+					text: 'Bash',
+					source: 'tool',
+					metadata: {
+						toolState: {
+							status: 'running',
+							input: {
+								command:
+									'echo "=== All comparison samples ==="\nls -lh ~/Downloads/output/compare_* 2>/dev/null\necho "=== Done ==="',
+								description: 'List comparison samples',
+							},
+						},
+					},
+				}),
+			];
+
+			const session = createDefaultSession({
+				tabs: [{ id: 'tab-1', agentSessionId: 'claude-123', logs, isUnread: false }],
+				activeTabId: 'tab-1',
+			});
+
+			const props = createDefaultProps({ session });
+			render(<TerminalOutput {...props} />);
+
+			// Description shown separately
+			expect(screen.getByText('List comparison samples')).toBeInTheDocument();
+			// Full command shown without truncation — use regex since getByText struggles with newlines
+			expect(screen.getByText(/All comparison samples/)).toBeInTheDocument();
+			expect(screen.getByText(/compare_\* 2>\/dev\/null/)).toBeInTheDocument();
+			expect(screen.getByText(/Done ===/)).toBeInTheDocument();
+		});
+
 		it('renders tool with boolean input as key=value', () => {
 			const logs: LogEntry[] = [
 				createLogEntry({

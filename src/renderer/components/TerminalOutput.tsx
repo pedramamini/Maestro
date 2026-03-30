@@ -57,28 +57,41 @@ const summarizeTodos = (v: unknown): string | null => {
 	return `${label} (${completed}/${todos.length})`;
 };
 
-/** Max length for tool detail summary */
-const TOOL_DETAIL_MAX = 120;
+/** Structured result from summarizeToolInput for richer rendering */
+interface ToolSummary {
+	/** Human-readable description (e.g. Bash description field) */
+	description?: string;
+	/** Primary content — command text or generic summary */
+	detail: string;
+}
 
 /**
  * Summarize tool input generically — no per-tool extractors needed.
- * Walks all values in the input object and picks the most informative string-like
- * value to display. Special-cases arrays (todos, commands) and falls back to
- * joining short key=value pairs.
+ * Returns structured data so the renderer can display description and command
+ * with proper visual hierarchy.
+ *
+ * Tool logs are only emitted when thinking is enabled, so we show the full
+ * command text without truncation to give complete visibility into agent actions.
  */
-const summarizeToolInput = (input: Record<string, unknown>): string | null => {
+const summarizeToolInput = (input: Record<string, unknown>): ToolSummary | null => {
 	// Special case: TodoWrite todos array
 	const todosResult = summarizeTodos(input.todos);
-	if (todosResult) return todosResult;
+	if (todosResult) return { detail: todosResult };
 
-	// Collect displayable string values (skip huge blobs)
+	// Extract description field separately for structured display
+	const description =
+		typeof input.description === 'string' && input.description ? input.description : undefined;
+
+	// Collect displayable values (skip huge blobs)
 	const parts: string[] = [];
 	for (const [key, val] of Object.entries(input)) {
 		if (val === undefined || val === null || val === '') continue;
+		// Skip description — rendered separately
+		if (key === 'description') continue;
 		// Command arrays (Codex)
 		const cmd = safeCommand(val);
 		if (cmd) {
-			parts.push(cmd.length > TOOL_DETAIL_MAX ? cmd.substring(0, TOOL_DETAIL_MAX) + '\u2026' : cmd);
+			parts.push(cmd);
 			continue;
 		}
 		// Arrays: show count
@@ -94,9 +107,9 @@ const summarizeToolInput = (input: Record<string, unknown>): string | null => {
 			continue;
 		}
 	}
-	if (parts.length === 0) return null;
-	const joined = parts.join('  ');
-	return joined.length > TOOL_DETAIL_MAX ? joined.substring(0, TOOL_DETAIL_MAX) + '\u2026' : joined;
+	const detail = parts.length > 0 ? parts.join('  ') : undefined;
+	if (!detail && !description) return null;
+	return { description, detail: detail ?? '' };
 };
 
 // ============================================================================
@@ -582,7 +595,7 @@ const LogItemComponent = memo(
 							const toolInput = log.metadata?.toolState?.input as
 								| Record<string, unknown>
 								| undefined;
-							const toolDetail = toolInput ? summarizeToolInput(toolInput) : null;
+							const toolSummary = toolInput ? summarizeToolInput(toolInput) : null;
 
 							return (
 								<div
@@ -615,15 +628,26 @@ const LogItemComponent = memo(
 												✓
 											</span>
 										)}
-										{toolDetail && (
+										{toolSummary?.description && (
 											<span
-												className="opacity-70 break-words whitespace-pre-wrap"
+												className="opacity-50 break-words"
 												style={{ color: theme.colors.textMain }}
 											>
-												{toolDetail}
+												{toolSummary.description}
 											</span>
 										)}
 									</div>
+									{toolSummary?.detail && (
+										<div
+											className="mt-1 ml-1 pl-2 opacity-70 break-words whitespace-pre-wrap border-l"
+											style={{
+												color: theme.colors.textMain,
+												borderColor: `${theme.colors.accent}40`,
+											}}
+										>
+											{toolSummary.detail}
+										</div>
+									)}
 								</div>
 							);
 						})()}
