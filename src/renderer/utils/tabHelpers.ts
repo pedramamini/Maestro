@@ -1086,10 +1086,11 @@ export function setActiveTab(session: Session, tabId: string): SetActiveTabResul
 		return null;
 	}
 
-	// If already active, no file tab is selected, and already in AI mode, return current state
+	// If already active, no file/terminal tab is selected, and already in AI mode, return current state
 	if (
 		session.activeTabId === tabId &&
 		session.activeFileTabId === null &&
+		session.activeTerminalTabId === null &&
 		session.inputMode === 'ai'
 	) {
 		return {
@@ -1098,15 +1099,18 @@ export function setActiveTab(session: Session, tabId: string): SetActiveTabResul
 		};
 	}
 
-	// When selecting an AI tab, deselect any active file preview tab and switch to AI mode.
-	// This ensures only one tab type (AI or file) is active at a time, and switching
-	// from terminal mode back to AI mode works by clicking any AI tab.
+	// When selecting an AI tab, deselect any active file/terminal tab and switch to AI mode.
+	// This ensures only one tab type (AI, file, or terminal) is active at a time, and
+	// switching from terminal mode back to AI mode works by clicking any AI tab.
+	// Clearing activeTerminalTabId is critical — getCurrentUnifiedTabIndex checks it first,
+	// so a stale value causes next/prev tab navigation to start from the wrong position.
 	return {
 		tab: targetTab,
 		session: {
 			...session,
 			activeTabId: tabId,
 			activeFileTabId: null,
+			activeTerminalTabId: null,
 			inputMode: 'ai' as const,
 		},
 	};

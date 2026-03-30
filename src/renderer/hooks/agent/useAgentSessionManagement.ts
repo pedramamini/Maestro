@@ -179,7 +179,13 @@ export function useAgentSessionManagement(
 				setSessions((prev) =>
 					prev.map((s) =>
 						s.id === activeSession.id
-							? { ...s, activeTabId: existingTab.id, activeFileTabId: null, inputMode: 'ai' }
+							? {
+									...s,
+									activeTabId: existingTab.id,
+									activeFileTabId: null,
+									activeTerminalTabId: null,
+									inputMode: 'ai',
+								}
 							: s
 					)
 				);

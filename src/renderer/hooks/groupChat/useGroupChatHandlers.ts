@@ -397,7 +397,17 @@ export function useGroupChatHandlers(): GroupChatHandlersReturn {
 			const tab = session.aiTabs?.find((t) => t.agentSessionId === moderatorSessionId);
 			if (tab) {
 				setSessions((prev) =>
-					prev.map((s) => (s.id === session.id ? { ...s, activeTabId: tab.id } : s))
+					prev.map((s) =>
+						s.id === session.id
+							? {
+									...s,
+									activeTabId: tab.id,
+									activeFileTabId: null,
+									activeTerminalTabId: null,
+									inputMode: 'ai' as const,
+								}
+							: s
+					)
 				);
 			}
 		}

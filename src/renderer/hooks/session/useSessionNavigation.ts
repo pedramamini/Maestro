@@ -85,7 +85,13 @@ export function useSessionNavigation(
 				setSessions((prev) =>
 					prev.map((s) => {
 						if (s.id === entry.sessionId && s.aiTabs?.some((t) => t.id === targetTabId)) {
-							return { ...s, activeTabId: targetTabId };
+							return {
+								...s,
+								activeTabId: targetTabId,
+								activeFileTabId: null,
+								activeTerminalTabId: null,
+								inputMode: 'ai' as const,
+							};
 						}
 						return s;
 					})

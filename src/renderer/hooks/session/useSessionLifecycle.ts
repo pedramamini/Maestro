@@ -460,7 +460,13 @@ export function useSessionLifecycle(deps: SessionLifecycleDeps): SessionLifecycl
 					useSessionStore.getState().setSessions((prev) =>
 						prev.map((s) => {
 							if (s.id !== session.id) return s;
-							return { ...s, activeTabId: preFilterActiveTabId };
+							return {
+								...s,
+								activeTabId: preFilterActiveTabId,
+								activeFileTabId: null,
+								activeTerminalTabId: null,
+								inputMode: 'ai' as const,
+							};
 						})
 					);
 				}

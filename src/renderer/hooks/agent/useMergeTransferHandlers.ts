@@ -175,7 +175,13 @@ export function useMergeTransferHandlers(
 					setSessions((prev) =>
 						prev.map((s) => {
 							if (s.id !== result.targetSessionId) return s;
-							return { ...s, activeTabId: targetTabId };
+							return {
+								...s,
+								activeTabId: targetTabId,
+								activeFileTabId: null,
+								activeTerminalTabId: null,
+								inputMode: 'ai' as const,
+							};
 						})
 					);
 				}
@@ -405,6 +411,9 @@ You are taking over this conversation. Based on the context above, provide a bri
 							thinkingStartTime: Date.now(),
 							aiTabs: [...s.aiTabs, newTab],
 							activeTabId: newTabId,
+							activeFileTabId: null,
+							activeTerminalTabId: null,
+							inputMode: 'ai' as const,
 							unifiedTabOrder: [
 								...(s.unifiedTabOrder || []),
 								{ type: 'ai' as const, id: newTabId },
@@ -552,7 +561,17 @@ You are taking over this conversation. Based on the context above, provide a bri
 			const currentSession = sessionsRef.current.find((s) => s.id === activeSessionIdRef.current);
 			if (currentSession) {
 				setSessions((prev) =>
-					prev.map((s) => (s.id === currentSession.id ? { ...s, activeTabId: tabId } : s))
+					prev.map((s) =>
+						s.id === currentSession.id
+							? {
+									...s,
+									activeTabId: tabId,
+									activeFileTabId: null,
+									activeTerminalTabId: null,
+									inputMode: 'ai' as const,
+								}
+							: s
+					)
 				);
 			}
 			getModalActions().setMergeSessionModalOpen(true);
@@ -565,7 +584,17 @@ You are taking over this conversation. Based on the context above, provide a bri
 			const currentSession = sessionsRef.current.find((s) => s.id === activeSessionIdRef.current);
 			if (currentSession) {
 				setSessions((prev) =>
-					prev.map((s) => (s.id === currentSession.id ? { ...s, activeTabId: tabId } : s))
+					prev.map((s) =>
+						s.id === currentSession.id
+							? {
+									...s,
+									activeTabId: tabId,
+									activeFileTabId: null,
+									activeTerminalTabId: null,
+									inputMode: 'ai' as const,
+								}
+							: s
+					)
 				);
 			}
 			getModalActions().setSendToAgentModalOpen(true);
