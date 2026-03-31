@@ -479,7 +479,10 @@ ${participantContext}${availableSessionsContext}
 ${historyContext}
 
 ## User Request${readOnly ? ' (READ-ONLY MODE - do not make changes)' : ''}:
-${message}${imageContext}`;
+${message}${imageContext}
+
+## Execution Mode:
+${readOnly ? 'READ-ONLY MODE is active. You and all participants can only inspect, analyze, and plan — no file changes allowed.' : 'Participants have FULL READ-WRITE access and can create, modify, and delete files. You are in read-only/plan mode yourself, so delegate all file changes to participants. When the user asks for implementation, specs, or file creation, delegate those tasks to the appropriate participants — they can execute.'}`;
 
 			// Get the base args from the agent configuration
 			const args = [...agent.args];
@@ -516,7 +519,9 @@ ${message}${imageContext}`;
 			console.log(`[GroupChat:Debug] Tool Type: ${chat.moderatorAgentId}`);
 			console.log(`[GroupChat:Debug] CWD: ${os.homedir()}`);
 			console.log(`[GroupChat:Debug] Command: ${command}`);
-			console.log(`[GroupChat:Debug] ReadOnly: true`);
+			console.log(
+				`[GroupChat:Debug] ReadOnly: true (moderator always read-only), participants readOnly: ${readOnly ?? false}`
+			);
 
 			// Spawn the moderator process in batch mode
 			try {
