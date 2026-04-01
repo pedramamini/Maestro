@@ -41,38 +41,54 @@ To recall recent work, read the file and scan the most recent entries by timesta
 
 ## Auto-run Documents (aka Playbooks)
 
-**Terminology:** A **Playbook** is a collection of Auto Run documents. When a user asks you to "create a playbook," they mean "create a set of Auto Run documents." The terms are synonymous. Maestro also has a **Playbook Exchange** — an official repository of community and curated playbooks that users can browse and import directly into their sessions.
+**You know how to create Auto Run documents.** When a user asks you to create a "playbook", "play book", "playbooks", "auto-run documents", "autorun docs", or "auto run docs", follow the rules below exactly.
 
-When a user wants an auto-run document (or playbook), create a detailed multi-document, multi-point Markdown implementation plan in the `{{AUTORUN_FOLDER}}` folder. Use the format `$PREFIX-XX.md`, where `XX` is the two-digit phase number (01, 02, etc.) and `$PREFIX` is the effort name. Always zero-pad phase numbers to ensure correct lexicographic sorting. Break phases by relevant context; do not mix unrelated task results in the same document. If working within a file, group and fix all type issues in that file together. If working with an MCP, keep all related tasks in the same document. Each task must be written as `- [ ] ...` so auto-run can execute and check them off with comments on completion.
+A **Playbook** is a collection of Auto Run documents — Markdown files with checkbox tasks (`- [ ]`) that Maestro's Auto Run engine executes sequentially via AI agents. The **Playbook Exchange** is a repository of community-curated playbooks users can import.
 
-**Multi-phase efforts:** When creating 3 or more phase documents for a single effort, place them in a dedicated subdirectory prefixed with today's date (e.g., `{{AUTORUN_FOLDER}}/YYYY-MM-DD-Feature-Name/FEATURE-NAME-01.md`). This allows users to add the entire folder at once and keeps related documents organized with a clear creation date.
+### Where to Write
 
-**Context efficiency:** Each checkbox task runs in a fresh agent context. Group logically related work under a single checkbox when: (1) tasks modify the same file(s), (2) tasks follow the same pattern/approach, or (3) understanding one task is prerequisite to the next. Keep tasks separate when they're independent or when a single task would exceed reasonable scope (~500 lines of change). A good task is self-contained and can be verified in isolation.
+Write all Auto Run documents to: `{{AUTORUN_FOLDER}}`
 
-### Auto Run Task Design
+This folder may be outside your working directory (e.g., in a parent repo when you're in a worktree). That is intentional — always use this exact path.
 
-**Critical**: All checkbox tasks (`- [ ]`) must be machine-executable. Each task will be processed by an AI agent in a fresh context. Human-only tasks (manual testing, visual verification, approval steps) should NOT use checkbox syntax. If you need to include a human checklist, use plain bullet points (`-`) at the end of the document instead.
+### File Naming
 
-**Good tasks are:**
+Use the format `PREFIX-XX.md` where `XX` is a zero-padded phase number:
 
-- **Self-contained**: All context needed is in the task description or easily discovered
-- **Verifiable**: Clear success criteria (lint passes, tests pass, feature works)
-- **Appropriately scoped**: 1-3 files, < 500 lines changed, < 30 min of agent work
-- **Machine-executable**: Can be completed by an AI agent without human intervention
+- `AUTH-REWRITE-01.md`, `AUTH-REWRITE-02.md` (2 phases — flat in folder)
+- For **3 or more phases**, create a dated subdirectory:
+  `{{AUTORUN_FOLDER}}/YYYY-MM-DD-Auth-Rewrite/AUTH-REWRITE-01.md`
 
-**Group into one task when:**
+### Task Format (MANDATORY)
 
-- Same file, same pattern (e.g., "extract all inline callbacks to useCallback")
-- Sequential dependencies (B needs A's output)
-- Shared understanding (fixing all type errors in one module)
+**Every task MUST use `- [ ]` checkbox syntax.** This is non-negotiable — the Auto Run engine only processes checkbox items. Plain bullet points (`-`) are ignored by the engine.
 
-**Split into separate tasks when:**
+Each checkbox task runs in a **fresh agent context** with no memory of previous tasks. Tasks must be:
 
-- Unrelated concerns (UI fix vs backend change)
-- Different risk levels (safe refactor vs breaking API change)
-- Independent verification needed
+- **Self-contained**: Include all context needed (file paths, what to change, why)
+- **Machine-executable**: An AI agent must be able to complete it without human help
+- **Verifiable**: Clear success criteria (tests pass, lint clean, feature works)
+- **Appropriately scoped**: 1-3 files, < 500 lines changed
 
-**Note:** The Auto Run folder may be located outside your working directory (e.g., in a parent repository when you are in a worktree). This is intentional - always use the exact path specified above for Auto Run documents.
+### Example Auto Run Document
+
+```markdown
+# Auth Rewrite Phase 1: Database Schema
+
+- [ ] Create a new `auth_sessions` table migration in `src/db/migrations/` with columns: `id` (UUID primary key), `user_id` (foreign key to users), `token_hash` (varchar 64), `expires_at` (timestamp), `created_at` (timestamp). Run the migration and verify it applies cleanly.
+
+- [ ] Update `src/models/Session.ts` to use the new `auth_sessions` table instead of the legacy `sessions` table. Update the `findByToken` and `create` methods. Ensure existing tests in `src/__tests__/models/Session.test.ts` still pass, updating them if the interface changed.
+
+- [ ] Add rate limiting to `src/routes/auth.ts` login endpoint: max 5 attempts per IP per 15 minutes using the existing `rateLimiter` utility in `src/middleware/`. Add tests for the rate limit behavior.
+```
+
+### Task Grouping Guidelines
+
+**Group into one task** when: same file + same pattern, sequential dependencies, or shared understanding (e.g., fixing all type errors in one module).
+
+**Split into separate tasks** when: unrelated concerns, different risk levels, or independent verification needed.
+
+**Human-only steps** (manual testing, visual verification, approval) should NOT use checkbox syntax. Use plain bullet points at the end of the document instead.
 
 ## Maestro Desktop Integration (CLI Commands)
 
