@@ -178,9 +178,10 @@ export function TriggerConfig({ node, theme, onUpdateNode }: TriggerConfigProps)
 							style={themedInputStyle}
 						/>
 					</label>
-					<div style={themedLabelStyle}>
+					<label htmlFor="cue-change-type-select" style={themedLabelStyle}>
 						Change type
 						<CueSelect
+							id="cue-change-type-select"
 							value={(localConfig.filter?.changeType as string) ?? 'any'}
 							options={[
 								{ value: 'any', label: 'Any' },
@@ -191,7 +192,7 @@ export function TriggerConfig({ node, theme, onUpdateNode }: TriggerConfigProps)
 							onChange={(v) => updateFilter('changeType', v)}
 							theme={theme}
 						/>
-					</div>
+					</label>
 				</div>
 			);
 		case 'agent.completed':

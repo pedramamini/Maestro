@@ -3,6 +3,7 @@
  *
  * Renders a button that opens a positioned dropdown menu matching Maestro's
  * standard context menu aesthetic (bgSidebar, border, hover bgActivity).
+ * Supports full keyboard navigation (Arrow keys, Home/End, Enter/Space, Escape).
  */
 
 import { useState, useRef, useCallback, useEffect } from 'react';
@@ -23,6 +24,10 @@ interface ThemedSelectProps {
 	style?: React.CSSProperties;
 	/** Optional CSS class for the trigger button */
 	className?: string;
+	/** Accessible label for the trigger button */
+	'aria-label'?: string;
+	/** id forwarded to the trigger button (enables <label htmlFor>) */
+	id?: string;
 }
 
 export function ThemedSelect({
@@ -32,24 +37,26 @@ export function ThemedSelect({
 	theme,
 	style,
 	className,
+	'aria-label': ariaLabel,
+	id,
 }: ThemedSelectProps) {
 	const [open, setOpen] = useState(false);
+	const [activeIndex, setActiveIndex] = useState(-1);
 	const containerRef = useRef<HTMLDivElement>(null);
+	const menuRef = useRef<HTMLDivElement>(null);
 	const [dropUp, setDropUp] = useState(false);
 
 	useClickOutside(containerRef, () => setOpen(false));
 
+	// Reset active index to selected option when opening
 	useEffect(() => {
-		if (!open) return;
-		const handleKey = (e: KeyboardEvent) => {
-			if (e.key === 'Escape') {
-				e.stopPropagation();
-				setOpen(false);
-			}
-		};
-		document.addEventListener('keydown', handleKey, true);
-		return () => document.removeEventListener('keydown', handleKey, true);
-	}, [open]);
+		if (open) {
+			const idx = options.findIndex((o) => o.value === value);
+			setActiveIndex(idx >= 0 ? idx : 0);
+			// Focus the menu so keyboard events work
+			requestAnimationFrame(() => menuRef.current?.focus());
+		}
+	}, [open, options, value]);
 
 	const handleOpen = useCallback(() => {
 		if (!containerRef.current) {
@@ -70,12 +77,50 @@ export function ThemedSelect({
 		[onChange]
 	);
 
+	const handleMenuKeyDown = useCallback(
+		(e: React.KeyboardEvent) => {
+			switch (e.key) {
+				case 'ArrowDown':
+					e.preventDefault();
+					setActiveIndex((prev) => (prev < options.length - 1 ? prev + 1 : 0));
+					break;
+				case 'ArrowUp':
+					e.preventDefault();
+					setActiveIndex((prev) => (prev > 0 ? prev - 1 : options.length - 1));
+					break;
+				case 'Home':
+					e.preventDefault();
+					setActiveIndex(0);
+					break;
+				case 'End':
+					e.preventDefault();
+					setActiveIndex(options.length - 1);
+					break;
+				case 'Enter':
+				case ' ':
+					e.preventDefault();
+					if (activeIndex >= 0 && activeIndex < options.length) {
+						handleSelect(options[activeIndex].value);
+					}
+					break;
+				case 'Escape':
+					setOpen(false);
+					break;
+			}
+		},
+		[options, activeIndex, handleSelect]
+	);
+
 	const selectedLabel = options.find((o) => o.value === value)?.label ?? value;
 
 	return (
 		<div ref={containerRef} style={{ position: 'relative', ...style }}>
 			<button
 				type="button"
+				id={id}
+				aria-label={ariaLabel}
+				aria-expanded={open}
+				aria-haspopup="listbox"
 				onClick={handleOpen}
 				className={className}
 				style={{
@@ -111,6 +156,10 @@ export function ThemedSelect({
 
 			{open && (
 				<div
+					ref={menuRef}
+					role="listbox"
+					tabIndex={-1}
+					onKeyDown={handleMenuKeyDown}
 					style={{
 						position: 'absolute',
 						left: 0,
@@ -124,19 +173,17 @@ export function ThemedSelect({
 						overflow: 'hidden',
 						maxHeight: 200,
 						overflowY: 'auto',
+						outline: 'none',
 					}}
 				>
-					{options.map((opt) => (
+					{options.map((opt, i) => (
 						<button
 							key={opt.value}
 							type="button"
+							role="option"
+							aria-selected={opt.value === value}
 							onClick={() => handleSelect(opt.value)}
-							onMouseEnter={(e) => {
-								e.currentTarget.style.backgroundColor = theme.colors.bgActivity;
-							}}
-							onMouseLeave={(e) => {
-								e.currentTarget.style.backgroundColor = 'transparent';
-							}}
+							onMouseEnter={() => setActiveIndex(i)}
 							style={{
 								display: 'block',
 								width: '100%',
@@ -144,7 +191,7 @@ export function ThemedSelect({
 								fontSize: 12,
 								color: opt.value === value ? theme.colors.textMain : theme.colors.textDim,
 								fontWeight: opt.value === value ? 500 : 400,
-								backgroundColor: 'transparent',
+								backgroundColor: i === activeIndex ? theme.colors.bgActivity : 'transparent',
 								border: 'none',
 								cursor: 'pointer',
 								textAlign: 'left',

@@ -32,6 +32,7 @@ import { ActiveRunsList } from './ActiveRunsList';
 import { ActivityLog } from './ActivityLog';
 import { buildSubscriptionPipelineMap } from './cueModalUtils';
 import { notifyToast } from '../../stores/notificationStore';
+import { captureException } from '../../utils/sentry';
 
 type CueModalTab = 'dashboard' | 'pipeline';
 
@@ -208,8 +209,19 @@ export function CueModal({ theme, onClose, cueShortcutKeys }: CueModalProps) {
 			getModalActions().showConfirmation(
 				`Remove Cue configuration for "${session.sessionName}"?\n\nThis will delete the cue.yaml file from this project. This cannot be undone.`,
 				async () => {
-					await window.maestro.cue.deleteYaml(session.projectRoot);
-					await refresh();
+					try {
+						await window.maestro.cue.deleteYaml(session.projectRoot);
+						await refresh();
+					} catch (err) {
+						captureException(err, {
+							extra: { context: 'handleRemoveCue', projectRoot: session.projectRoot },
+						});
+						notifyToast({
+							title: 'Failed to remove Cue configuration',
+							message: 'Could not delete cue.yaml. Check file permissions.',
+							type: 'error',
+						});
+					}
 				}
 			);
 		},

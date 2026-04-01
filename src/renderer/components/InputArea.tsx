@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, startTransition } from 'react';
+import React, { useEffect, useMemo, useRef, startTransition } from 'react';
 import {
 	Terminal,
 	Cpu,
@@ -361,6 +361,9 @@ export const InputArea = React.memo(function InputArea(props: InputAreaProps) {
 			.slice(0, 10);
 	}, [currentCommandHistory, commandHistoryFilterLower]);
 
+	// Track previous inputValue to detect programmatic bulk inserts vs normal typing.
+	const prevInputValueRef = useRef(inputValue);
+
 	// Auto-resize textarea to match content height.
 	// Fires on tab switch AND inputValue changes (handles external updates like session restore,
 	// paste-from-history, programmatic sets). The onChange handler also resizes via rAF for
@@ -370,10 +373,19 @@ export const InputArea = React.memo(function InputArea(props: InputAreaProps) {
 		if (inputRef.current) {
 			inputRef.current.style.height = 'auto';
 			inputRef.current.style.height = `${Math.min(inputRef.current.scrollHeight, 112)}px`;
-			// Scroll to bottom so the end of programmatically-inserted text is visible
-			// (e.g. Wispr Flow voice-to-text paste-inserts, session restore, paste-from-history)
-			inputRef.current.scrollTop = inputRef.current.scrollHeight;
+
+			// Scroll to end when a programmatic insert occurred (e.g. Wispr Flow voice-to-text,
+			// session restore, paste-from-history) — detected by caret being at the end of the
+			// previous value or a bulk length increase. Skip when user is editing mid-text so
+			// the viewport doesn't jump.
+			const el = inputRef.current;
+			const caretWasAtEnd = el.selectionEnd >= prevInputValueRef.current.length;
+			const bulkInsert = inputValue.length - prevInputValueRef.current.length > 1;
+			if (caretWasAtEnd || bulkInsert) {
+				el.scrollTop = el.scrollHeight;
+			}
 		}
+		prevInputValueRef.current = inputValue;
 	}, [session.activeTabId, inputValue, inputRef]);
 
 	// Show summarization progress overlay when active for this tab
