@@ -58,7 +58,7 @@ vi.mock('react-syntax-highlighter/dist/esm/styles/prism', () => ({
 	vs: {},
 }));
 
-vi.mock('../../../renderer/components/AutoRunnerHelpModal', () => ({
+vi.mock('../../../renderer/components/AutoRun/AutoRunnerHelpModal', () => ({
 	AutoRunnerHelpModal: ({ onClose }: { onClose: () => void }) => (
 		<div data-testid="help-modal">
 			<button onClick={onClose}>Close</button>
@@ -72,7 +72,7 @@ vi.mock('../../../renderer/components/MermaidRenderer', () => ({
 	),
 }));
 
-vi.mock('../../../renderer/components/AutoRunDocumentSelector', () => ({
+vi.mock('../../../renderer/components/AutoRun/AutoRunDocumentSelector', () => ({
 	AutoRunDocumentSelector: ({
 		theme,
 		documents,
@@ -759,7 +759,10 @@ describe('AutoRun', () => {
 				'new content',
 				undefined // sshRemoteId (undefined for local sessions)
 			);
-			expect(onOpenBatchRunner).toHaveBeenCalled();
+			// onOpenBatchRunner is called after await onSave() resolves
+			await waitFor(() => {
+				expect(onOpenBatchRunner).toHaveBeenCalled();
+			});
 		});
 
 		it('disables Run button when agent is busy', () => {
@@ -1079,11 +1082,14 @@ describe('AutoRun', () => {
 			const textarea = screen.getByRole('textbox');
 			fireEvent.keyDown(textarea, { key: 'e', metaKey: true });
 
-			expect(onStateChange).toHaveBeenCalledWith(
-				expect.objectContaining({
-					mode: 'preview',
-				})
-			);
+			// onStateChange fires inside requestAnimationFrame after scroll sync
+			await waitFor(() => {
+				expect(onStateChange).toHaveBeenCalledWith(
+					expect.objectContaining({
+						mode: 'preview',
+					})
+				);
+			});
 		});
 	});
 
