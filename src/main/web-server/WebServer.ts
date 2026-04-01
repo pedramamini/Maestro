@@ -625,6 +625,17 @@ export class WebServer {
 				logger.info(`Client connected: ${client.id} (total: ${this.webClients.size})`, LOG_CONTEXT);
 			},
 			onClientDisconnect: (clientId) => {
+				const client = this.webClients.get(clientId);
+				if (client?.subscribedSessionId) {
+					// Kill any terminal PTY spawned for this web client's session
+					const killed = this.killTerminalForWebCallback?.(client.subscribedSessionId);
+					if (killed) {
+						logger.info(
+							`Killed terminal PTY for disconnected client ${clientId} (session: ${client.subscribedSessionId})`,
+							LOG_CONTEXT
+						);
+					}
+				}
 				this.webClients.delete(clientId);
 				logger.info(
 					`Client disconnected: ${clientId} (total: ${this.webClients.size})`,

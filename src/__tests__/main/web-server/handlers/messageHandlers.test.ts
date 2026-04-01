@@ -89,6 +89,39 @@ function createMockCallbacks(): MessageHandlerCallbacks {
 		]),
 		getLiveSessionInfo: vi.fn().mockReturnValue(undefined),
 		isSessionLive: vi.fn().mockReturnValue(false),
+		getAutoRunDocs: vi.fn().mockResolvedValue([]),
+		getAutoRunDocContent: vi.fn().mockResolvedValue(''),
+		saveAutoRunDoc: vi.fn().mockResolvedValue(true),
+		stopAutoRun: vi.fn().mockResolvedValue(true),
+		getSettings: vi.fn().mockReturnValue({}),
+		setSetting: vi.fn().mockResolvedValue(true),
+		getGroups: vi.fn().mockReturnValue([]),
+		createGroup: vi.fn().mockResolvedValue({ id: 'group-1' }),
+		renameGroup: vi.fn().mockResolvedValue(true),
+		deleteGroup: vi.fn().mockResolvedValue(true),
+		moveSessionToGroup: vi.fn().mockResolvedValue(true),
+		createSession: vi.fn().mockResolvedValue({ sessionId: 'new-session-1' }),
+		deleteSession: vi.fn().mockResolvedValue(true),
+		renameSession: vi.fn().mockResolvedValue(true),
+		getGitStatus: vi.fn().mockResolvedValue({ files: [], branch: 'main' }),
+		getGitDiff: vi.fn().mockResolvedValue({ diff: '' }),
+		getGroupChats: vi.fn().mockResolvedValue([]),
+		startGroupChat: vi.fn().mockResolvedValue({ chatId: 'chat-1' }),
+		getGroupChatState: vi.fn().mockResolvedValue(null),
+		stopGroupChat: vi.fn().mockResolvedValue(true),
+		sendGroupChatMessage: vi.fn().mockResolvedValue(true),
+		mergeContext: vi.fn().mockResolvedValue(true),
+		transferContext: vi.fn().mockResolvedValue(true),
+		summarizeContext: vi.fn().mockResolvedValue(true),
+		getCueSubscriptions: vi.fn().mockResolvedValue([]),
+		toggleCueSubscription: vi.fn().mockResolvedValue(true),
+		getCueActivity: vi.fn().mockResolvedValue([]),
+		getUsageDashboard: vi.fn().mockResolvedValue({}),
+		getAchievements: vi.fn().mockResolvedValue([]),
+		writeToTerminal: vi.fn().mockReturnValue(true),
+		resizeTerminal: vi.fn().mockReturnValue(true),
+		spawnTerminalForWeb: vi.fn().mockResolvedValue({ success: true, pid: 123 }),
+		killTerminalForWeb: vi.fn().mockReturnValue(true),
 	};
 }
 
@@ -963,6 +996,121 @@ describe('WebSocketMessageHandler', () => {
 			const response = JSON.parse((client.socket.send as any).mock.calls[0][0]);
 			expect(response.type).toBe('error');
 			expect(response.message).toContain('not configured');
+		});
+	});
+
+	describe('File Tree Path Traversal Protection', () => {
+		it('should reject get_file_tree when session has no cwd', () => {
+			callbacks.getSessionDetail = vi.fn().mockReturnValue(null);
+			handler.setCallbacks(callbacks);
+
+			handler.handleMessage(client, {
+				type: 'get_file_tree',
+				sessionId: 'session-1',
+				path: '/etc/passwd',
+			});
+
+			const response = JSON.parse((client.socket.send as any).mock.calls[0][0]);
+			expect(response.type).toBe('error');
+			expect(response.message).toContain('Cannot resolve session working directory');
+		});
+
+		it('should reject get_file_tree when sessionId is empty', () => {
+			callbacks.getSessionDetail = vi.fn().mockReturnValue(null);
+			handler.setCallbacks(callbacks);
+
+			handler.handleMessage(client, {
+				type: 'get_file_tree',
+				sessionId: '',
+				path: '/',
+			});
+
+			const response = JSON.parse((client.socket.send as any).mock.calls[0][0]);
+			expect(response.type).toBe('error');
+			expect(response.message).toContain('Cannot resolve session working directory');
+		});
+
+		it('should reject get_file_tree for path outside session cwd', () => {
+			callbacks.getSessionDetail = vi.fn().mockReturnValue({
+				state: 'idle',
+				inputMode: 'ai',
+				cwd: '/home/user/project',
+			});
+			handler.setCallbacks(callbacks);
+
+			handler.handleMessage(client, {
+				type: 'get_file_tree',
+				sessionId: 'session-1',
+				path: '/etc',
+			});
+
+			const response = JSON.parse((client.socket.send as any).mock.calls[0][0]);
+			expect(response.type).toBe('error');
+			expect(response.message).toContain('outside the session working directory');
+		});
+	});
+
+	describe('Terminal Session Ownership', () => {
+		it('should reject terminal_write when client is not subscribed to session', () => {
+			client.subscribedSessionId = 'other-session';
+
+			handler.handleMessage(client, {
+				type: 'terminal_write',
+				sessionId: 'session-1',
+				data: 'ls\r',
+			});
+
+			const response = JSON.parse((client.socket.send as any).mock.calls[0][0]);
+			expect(response.type).toBe('terminal_write_result');
+			expect(response.success).toBe(false);
+			expect(response.error).toContain('Not subscribed');
+		});
+
+		it('should reject terminal_resize when client is not subscribed to session', () => {
+			client.subscribedSessionId = 'other-session';
+
+			handler.handleMessage(client, {
+				type: 'terminal_resize',
+				sessionId: 'session-1',
+				cols: 80,
+				rows: 24,
+			});
+
+			const response = JSON.parse((client.socket.send as any).mock.calls[0][0]);
+			expect(response.type).toBe('terminal_resize_result');
+			expect(response.success).toBe(false);
+			expect(response.error).toContain('Not subscribed');
+		});
+
+		it('should allow terminal_write when client is subscribed to the session', () => {
+			client.subscribedSessionId = 'session-1';
+
+			handler.handleMessage(client, {
+				type: 'terminal_write',
+				sessionId: 'session-1',
+				data: 'ls\r',
+			});
+
+			expect(callbacks.writeToTerminal).toHaveBeenCalledWith('session-1', 'ls\r');
+			const response = JSON.parse((client.socket.send as any).mock.calls[0][0]);
+			expect(response.type).toBe('terminal_write_result');
+			expect(response.success).toBe(true);
+		});
+
+		it('should allow terminal_resize when client is subscribed to the session', () => {
+			client.subscribedSessionId = 'session-1';
+
+			handler.handleMessage(client, {
+				type: 'terminal_resize',
+				sessionId: 'session-1',
+				cols: 120,
+				rows: 40,
+			});
+
+			expect(callbacks.resizeTerminal).toHaveBeenCalledWith('session-1', 120, 40);
+			const response = JSON.parse((client.socket.send as any).mock.calls[0][0]);
+			expect(response.type).toBe('terminal_resize_result');
+			expect(response.success).toBe(true);
 		});
 	});
 });
