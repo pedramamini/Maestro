@@ -370,6 +370,9 @@ export const InputArea = React.memo(function InputArea(props: InputAreaProps) {
 		if (inputRef.current) {
 			inputRef.current.style.height = 'auto';
 			inputRef.current.style.height = `${Math.min(inputRef.current.scrollHeight, 112)}px`;
+			// Scroll to bottom so the end of programmatically-inserted text is visible
+			// (e.g. Wispr Flow voice-to-text paste-inserts, session restore, paste-from-history)
+			inputRef.current.scrollTop = inputRef.current.scrollHeight;
 		}
 	}, [session.activeTabId, inputValue, inputRef]);
 
