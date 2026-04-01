@@ -29,13 +29,14 @@ Consolidated tracking of all duplicate/dead code in the Maestro codebase. Grep-v
 - **REMOVE:** 53 specific exports: `selectAvailableAgents`, `selectAgentsDetected`, `getAgentState`, `getAgentActions` (agentStore); `selectStoppingBatchSessionIds`, `selectBatchRunState`, `getBatchActions` (batchStore); `getFileExplorerState`, `getFileExplorerActions` (fileExplorerStore); `getGroupChatState`, `getGroupChatActions` (groupChatStore); `selectModalOpen`, `selectModal` (modalStore); `selectToasts`, `selectToastCount`, `selectConfig`, `resetToastIdCounter`, `getNotificationState`, `getNotificationActions` (notificationStore); `selectIsAnyOperationInProgress`, `getOperationState`, `getOperationActions` (operationStore); `selectBookmarkedSessions`, `selectSessionsByGroup`, `selectUngroupedSessions`, `selectGroupById`, `selectSessionCount`, `selectIsReady`, `selectIsAnySessionBusy`, `getSessionState`, `getSessionActions` (sessionStore); 11 exports from settingsStore; 11 exports from tabStore
 - **Estimated savings:** ~200 lines across 9 files
 
-### 3. Dead Shared Utility Exports (44 exports across 18 files)
+### 3. Dead Shared Utility Exports (43 exports across 18 files)
 
 - **Evidence:** SCAN-DEADCODE.md, "Dead Shared Utils"
-- **Count:** 44 exported types/functions/constants with zero external imports
+- **Count:** 43 exported types/functions/constants with zero external imports
 - **KEEP:** Files that still have used exports
-- **REMOVE:** 44 exports including `AGENT_DISPLAY_NAMES`, `BETA_AGENTS` (agentMetadata); all of `cli-activity.ts` exports; `CliServerInfo`; `DebateConfig`, `PipelineNodePosition`, `PipelineNodeType`, `PipelineViewport` (cue-pipeline-types); `buildFocusDeepLink`; 6 gitUtils exports; `ORPHANED_SESSION_ID`, `DEFAULT_PAGINATION`; `shouldLogLevel`; 6 maestro-paths exports; `PlaybookSource`; `parseVersion`; `PerformanceLogger`, `createNoOpMetrics`; 3 symphony-constants exports; `SymphonyLabel`, `SymphonyErrorType`; `ParsedSynopsis`, `isNothingToReport`; `TemplateSessionInfo`; `WalkTreeOptions`, `walkTree`, `PartitionedPaths`; `SshRemoteStatus`
-- **Estimated savings:** ~300 lines across 18 files
+- **NOTE (re-vetted 2026-03-28):** `ORPHANED_SESSION_ID` removed from this list - it IS used in `main/ipc/handlers/history.ts:18`
+- **REMOVE:** 43 exports including `AGENT_DISPLAY_NAMES`, `BETA_AGENTS` (agentMetadata); all of `cli-activity.ts` exports; `CliServerInfo`; `DebateConfig`, `PipelineNodePosition`, `PipelineNodeType`, `PipelineViewport` (cue-pipeline-types); `buildFocusDeepLink`; 6 gitUtils exports; `DEFAULT_PAGINATION`; `shouldLogLevel`; 6 maestro-paths exports; `PlaybookSource`; `parseVersion`; `PerformanceLogger`, `createNoOpMetrics`; 3 symphony-constants exports; `SymphonyLabel`, `SymphonyErrorType`; `ParsedSynopsis`, `isNothingToReport`; `TemplateSessionInfo`; `WalkTreeOptions`, `walkTree`, `PartitionedPaths`; `SshRemoteStatus`
+- **Estimated savings:** ~290 lines across 18 files
 
 ### 4. Dead Main Process Exports (75 exports across 35 files)
 
@@ -48,7 +49,7 @@ Consolidated tracking of all duplicate/dead code in the Maestro codebase. Grep-v
 ### 5. Duplicate Interface with Self-Conflict (AgentCapabilities has 2 defs in same file)
 
 - **Evidence:** SCAN-TYPES.md, "AgentCapabilities (6 definitions)"
-- **Count:** `renderer/global.d.ts` defines `AgentCapabilities` twice (lines 59 and 101)
+- **Count:** `renderer/global.d.ts` defines `AgentCapabilities` twice (lines 61 and 104)
 - **KEEP:** One definition in `renderer/global.d.ts`, canonical in `shared/types.ts` or `main/agents/capabilities.ts`
 - **REMOVE:** The duplicate definition within the same file, plus 4 other redundant definitions
 - **Estimated savings:** ~50 lines, eliminates potential type-shadowing bug
@@ -105,13 +106,14 @@ Consolidated tracking of all duplicate/dead code in the Maestro codebase. Grep-v
 - **CONSOLIDATE:** Extend `setup.ts` to cover all namespaces, remove 64 local setups
 - **Estimated savings:** ~1,000 lines (avg ~15 lines per file)
 
-### 12. Formatter Duplication - formatDuration (21 redundant definitions)
+### 12. Formatter Duplication - formatDuration (22 redundant definitions)
 
 - **Evidence:** SCAN-FORMATTERS.md, "formatDuration / formatElapsed / formatTime definitions"
-- **Count:** 21 local `formatDuration` definitions; 11 identical copies in UsageDashboard alone
+- **Count:** 22 local `formatDuration` definitions; 9 identical copies in UsageDashboard alone
+- **NOTE (re-vetted 2026-03-28):** Count increased from 21 to 22 since original scan. New `formatDuration` added in `CueModal/cueModalUtils.ts:25` (Cue feature on rc).
 - **KEEP:** `src/shared/formatters.ts:144` (`formatElapsedTime`) and `src/shared/performance-metrics.ts:336` (`formatDuration`)
-- **REMOVE:** 21 local re-definitions including all 11 UsageDashboard copies, `AboutModal.tsx`, `FirstRunCelebration.tsx`, `SymphonyModal.tsx`, `Toast.tsx`, `AIOverviewTab.tsx`, `useContributorStats.ts`, `groupChatExport.ts`, `tabExport.ts`, `cli/output/formatter.ts` (2)
-- **Estimated savings:** ~200 lines
+- **REMOVE:** 22 local re-definitions including all 9 UsageDashboard copies, `AboutModal.tsx`, `FirstRunCelebration.tsx`, `SymphonyModal.tsx`, `Toast.tsx`, `AIOverviewTab.tsx`, `useContributorStats.ts`, `groupChatExport.ts`, `tabExport.ts`, `cli/output/formatter.ts` (2), `CueModal/cueModalUtils.ts`
+- **Estimated savings:** ~210 lines
 
 ### 13. SpecKit/OpenSpec Parallel Implementation (~2,431 lines, ~1,100 removable)
 
@@ -121,13 +123,14 @@ Consolidated tracking of all duplicate/dead code in the Maestro codebase. Grep-v
 - **CONSOLIDATE:** `speckit-manager.ts` (530) / `openspec-manager.ts` (471); `SpecKitCommandsPanel.tsx` (424) / `OpenSpecCommandsPanel.tsx` (426); `ipc/handlers/speckit.ts` (100) / `ipc/handlers/openspec.ts` (100); `services/speckit.ts` (56) / `services/openspec.ts` (56); `prompts/speckit/index.ts` (157) / `prompts/openspec/index.ts` (111). Also deduplicate `EditingCommand` interface (3 definitions)
 - **Estimated savings:** ~1,100 lines
 
-### 14. Duplicate Type/Interface Definitions (28 interfaces, 101 redundant definitions)
+### 14. Duplicate Type/Interface Definitions (28 interfaces, 98 redundant definitions)
 
 - **Evidence:** SCAN-TYPES.md, all sections
-- **Count:** 11 interfaces with 4+ definitions (50 total defs), 17 interfaces with 3 definitions (51 total defs). Top offenders: `AgentCapabilities` (6 defs), `UsageStats` (6 defs), `SessionInfo` (6 defs), `AgentConfig` (5 defs), `AgentConfigsData` (5 defs)
+- **Count:** 11 interfaces with 4+ definitions (47 total defs), 17 interfaces with 3 definitions (51 total defs). Top offenders: `AgentCapabilities` (6 defs), `UsageStats` (6 defs), `SessionInfo` (4 defs, was 6 - 3 Cue pipeline dups resolved on rc), `AgentConfig` (5 defs), `AgentConfigsData` (5 defs)
+- **NOTE (re-vetted 2026-03-28):** SessionInfo reduced from 6 to 4 definitions. 3 Cue pipeline duplicates were removed on rc.
 - **KEEP:** Canonical definitions in `shared/types.ts`, `shared/stats-types.ts`, or domain-specific files
 - **CONSOLIDATE:** Root cause is preload boundary re-declaration pattern. Types defined in `shared/`, re-declared in `main/preload/`, re-declared in `renderer/types/index.ts` and `renderer/global.d.ts`, then again locally. Fix the preload type-sharing mechanism
-- **Estimated savings:** ~400 lines
+- **Estimated savings:** ~370 lines
 
 ---
 
@@ -347,19 +350,21 @@ Consolidated tracking of all duplicate/dead code in the Maestro codebase. Grep-v
 
 ## Summary
 
-| Priority | Items | Estimated Lines Saved | Key Themes |
-|----------|-------|-----------------------|------------|
-| P0 | 5 | ~1,050 | Dead code removal (179 exports, 7 components, 1 type bug) |
-| P1 | 9 | ~4,560 | State management patterns, test mocks, formatters, SpecKit/OpenSpec, types |
-| P2 | 13 | ~1,360 | UI components, logging, selectors, hooks, error handling |
-| P3 | 13 | ~621 | Constants, minor formatters, CSS patterns, file size |
-| **Total** | **40** | **~7,591** | |
+_Re-vetted against origin/rc on 2026-03-28. All 40 findings verified. 1 false positive removed (ORPHANED_SESSION_ID), 1 new duplication found (CueModal formatDuration). Net counts adjusted._
+
+| Priority  | Items  | Estimated Lines Saved | Key Themes                                                                 |
+| --------- | ------ | --------------------- | -------------------------------------------------------------------------- |
+| P0        | 5      | ~1,040                | Dead code removal (178 exports, 7 components, 1 type bug)                  |
+| P1        | 9      | ~4,570                | State management patterns, test mocks, formatters, SpecKit/OpenSpec, types |
+| P2        | 13     | ~1,360                | UI components, logging, selectors, hooks, error handling                   |
+| P3        | 13     | ~621                  | Constants, minor formatters, CSS patterns, file size                       |
+| **Total** | **40** | **~7,591**            |                                                                            |
 
 ---
 
 ## Recommended Execution Order
 
-1. **Delete dead code (P0 #1-4)** - Zero-risk removal of 179 unused exports and 7 unused components. Verify with `tsc` after each batch.
+1. **Delete dead code (P0 #1-4)** - Zero-risk removal of 178 unused exports and 7 unused components. Verify with `tsc` after each batch.
 
 2. **Fix AgentCapabilities double-definition bug (P0 #5)** - Eliminate the duplicate interface in `renderer/global.d.ts` that may cause type shadowing.
 

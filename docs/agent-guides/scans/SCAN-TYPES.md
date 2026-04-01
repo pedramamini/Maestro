@@ -1,6 +1,7 @@
 # SCAN-TYPES.md - Type and Constant Duplicates
 
 Generated via `grep -rn` on `src/`. All matches are file:line verified. Tests excluded.
+Re-vetted 2026-03-28 against origin/rc. Minor line number shifts noted inline.
 
 ---
 
@@ -11,8 +12,8 @@ Generated via `grep -rn` on `src/`. All matches are file:line verified. Tests ex
 ```
 src/main/agents/capabilities.ts:15                  export interface AgentCapabilities
 src/main/preload/agents.ts:17                       export interface AgentCapabilities
-src/renderer/global.d.ts:59                         interface AgentCapabilities (first)
-src/renderer/global.d.ts:101                        interface AgentCapabilities (second!)
+src/renderer/global.d.ts:61                         interface AgentCapabilities (first)
+src/renderer/global.d.ts:104                        interface AgentCapabilities (second!)
 src/renderer/hooks/agent/useAgentCapabilities.ts:14 export interface AgentCapabilities
 src/renderer/types/index.ts:747                     export interface AgentCapabilities
 ```
@@ -21,30 +22,31 @@ src/renderer/types/index.ts:747                     export interface AgentCapabi
 
 ```
 src/main/parsers/usage-aggregator.ts:33      export interface UsageStats
-src/main/preload/process.ts:88               export interface UsageStats
+src/main/preload/process.ts:101              export interface UsageStats
 src/main/process-manager/types.ts:91         export interface UsageStats
-src/renderer/global.d.ts:142                 interface UsageStats
+src/renderer/global.d.ts:144                 interface UsageStats
 src/shared/types.ts:43                       export interface UsageStats
 src/web/hooks/useWebSocket.ts:29             export interface UsageStats
 ```
 
-### SessionInfo (6 definitions)
+### SessionInfo (4 definitions, was 6 - partially resolved)
 
 ```
 src/main/debug-package/collectors/sessions.ts:13    export interface SessionInfo
 src/main/group-chat/group-chat-router.ts:60          export interface SessionInfo
-src/renderer/components/CuePipelineEditor/PipelineCanvas.tsx:56  interface SessionInfo
-src/renderer/hooks/cue/usePipelineLayout.ts:19       export interface SessionInfo
-src/renderer/hooks/cue/usePipelineState.ts:30         export interface SessionInfo
 src/shared/types.ts:31                               export interface SessionInfo
 ```
+
+~~src/renderer/components/CuePipelineEditor/PipelineCanvas.tsx:56~~ **RESOLVED on rc**
+~~src/renderer/hooks/cue/usePipelineLayout.ts:19~~ **RESOLVED on rc**
+~~src/renderer/hooks/cue/usePipelineState.ts:30~~ **RESOLVED on rc**
 
 ### AgentConfig (5 definitions)
 
 ```
 src/main/agents/definitions.ts:72            export interface AgentConfig
 src/main/preload/agents.ts:39                export interface AgentConfig
-src/renderer/global.d.ts:87                  interface AgentConfig
+src/renderer/global.d.ts:88                  interface AgentConfig
 src/renderer/types/index.ts:774              export interface AgentConfig
 src/shared/types.ts:143                      export interface AgentConfig
 ```
@@ -238,28 +240,28 @@ src/renderer/hooks/agent/useAgentCapabilities.ts:89      export const DEFAULT_CA
 
 Across all `.tsx` files in `src/`:
 
-| Rank | className | Count |
-|------|-----------|-------|
-| 1 | `"w-4 h-4"` | 354 |
-| 2 | `"w-3 h-3"` | 313 |
-| 3 | `"w-3.5 h-3.5"` | 219 |
-| 4 | `"text-xs"` | 211 |
-| 5 | `"w-5 h-5"` | 176 |
-| 6 | `"flex items-center gap-2"` | 154 |
-| 7 | `"text-sm"` | 120 |
-| 8 | `"text-sm font-medium"` | 84 |
-| 9 | `"flex items-center gap-3"` | 63 |
-| 10 | `"flex-1"` | 59 |
-| 11 | `"font-bold"` | 50 |
-| 12 | `"relative"` | 47 |
-| 13 | `"font-medium"` | 45 |
-| 14 | `"flex items-center gap-2 mb-3"` | 43 |
-| 15 | `"flex-1 min-w-0"` | 40 |
-| 16 | `"p-4 rounded-lg"` | 39 |
-| 17 | `"p-1 rounded hover:bg-white/10 transition-colors"` | 39 |
-| 18 | `"space-y-2"` | 35 |
-| 19 | `"flex items-center gap-1"` | 35 |
-| 20 | `"w-4 h-4 animate-spin"` | 32 |
+| Rank | className                                           | Count |
+| ---- | --------------------------------------------------- | ----- |
+| 1    | `"w-4 h-4"`                                         | 354   |
+| 2    | `"w-3 h-3"`                                         | 313   |
+| 3    | `"w-3.5 h-3.5"`                                     | 219   |
+| 4    | `"text-xs"`                                         | 211   |
+| 5    | `"w-5 h-5"`                                         | 176   |
+| 6    | `"flex items-center gap-2"`                         | 154   |
+| 7    | `"text-sm"`                                         | 120   |
+| 8    | `"text-sm font-medium"`                             | 84    |
+| 9    | `"flex items-center gap-3"`                         | 63    |
+| 10   | `"flex-1"`                                          | 59    |
+| 11   | `"font-bold"`                                       | 50    |
+| 12   | `"relative"`                                        | 47    |
+| 13   | `"font-medium"`                                     | 45    |
+| 14   | `"flex items-center gap-2 mb-3"`                    | 43    |
+| 15   | `"flex-1 min-w-0"`                                  | 40    |
+| 16   | `"p-4 rounded-lg"`                                  | 39    |
+| 17   | `"p-1 rounded hover:bg-white/10 transition-colors"` | 39    |
+| 18   | `"space-y-2"`                                       | 35    |
+| 19   | `"flex items-center gap-1"`                         | 35    |
+| 20   | `"w-4 h-4 animate-spin"`                            | 32    |
 
 Note: These are exact `className="..."` matches only (not template literal classNames). The icon sizes (`w-4 h-4`, `w-3 h-3`, etc.) and layout patterns (`flex items-center gap-2`) dominate. While CSS className repetition is normal in Tailwind, the compound patterns like `"p-1 rounded hover:bg-white/10 transition-colors"` (39x) and `"flex items-center gap-2 mb-3"` (43x) suggest opportunities for shared component extraction.
 
@@ -267,11 +269,11 @@ Note: These are exact `className="..."` matches only (not template literal class
 
 ## Summary
 
-| Category | Total Duplicates | Top Offenders |
-|----------|-----------------|---------------|
+| Category                | Total Duplicates                    | Top Offenders                                          |
+| ----------------------- | ----------------------------------- | ------------------------------------------------------ |
 | Interfaces with 4+ defs | 11 interfaces, 50 total definitions | AgentCapabilities (6), UsageStats (6), SessionInfo (6) |
-| Interfaces with 3 defs | 17 interfaces, 51 total definitions | Cue types (3x3), preload mirrors |
-| Duplicate constants | 5 definitions | AUTO_RUN_FOLDER_NAME (3), DEFAULT_CAPABILITIES (2) |
-| Repeated CSS patterns | 1,704 class repetitions (top 20) | Icon sizes: 1,062 occurrences |
+| Interfaces with 3 defs  | 17 interfaces, 51 total definitions | Cue types (3x3), preload mirrors                       |
+| Duplicate constants     | 5 definitions                       | AUTO_RUN_FOLDER_NAME (3), DEFAULT_CAPABILITIES (2)     |
+| Repeated CSS patterns   | 1,704 class repetitions (top 20)    | Icon sizes: 1,062 occurrences                          |
 
 **Root cause pattern:** Types are defined at the canonical source (e.g., `shared/types.ts`), then re-declared in preload files (`main/preload/*.ts`), then re-declared again in renderer type files (`renderer/types/index.ts`, `renderer/global.d.ts`), and sometimes a fourth time in component-local interfaces. The preload boundary is the primary driver of this duplication.

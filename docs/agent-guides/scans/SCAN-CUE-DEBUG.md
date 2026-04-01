@@ -1,7 +1,9 @@
 # Dedup Scan: Cue + Debug Package
 
-Scan date: 2026-03-21
+Scan date: 2026-03-21 (re-vetted 2026-03-28)
 Source: `src/main/cue/` (rc branch, commit 4563239d), `src/main/debug-package/` (main branch)
+
+**Re-vet note (2026-03-28):** Cue module grew from 4 files to 15 files on rc. Original 4 files (cue-types, cue-db, cue-engine, cue-executor) still exist with same functions and line numbers. New files: cue-activity-log.ts, cue-fan-in-tracker.ts, cue-file-watcher.ts, cue-filter.ts, cue-github-poller.ts, cue-heartbeat.ts, cue-reconciler.ts, cue-run-manager.ts, cue-subscription-setup.ts, cue-task-scanner.ts, cue-yaml-loader.ts. These new files have not been scanned for duplication yet.
 
 ---
 
@@ -141,6 +143,7 @@ The task scanner has its own recursive `walkDir(dir, root)` function that skips 
 **Similar to:** `src/main/stats/stats-db.ts`
 
 Both files follow the same pattern:
+
 - Module-level `let db: Database.Database | null = null`
 - `init*Db()` / `close*Db()` lifecycle functions
 - `getDb()` internal accessor with "not initialized" guard
@@ -278,14 +281,15 @@ The local version is simpler (no SSH, synchronous), which is appropriate for the
 **Identical to:** `collectors/logs.ts:32` (`sanitizeEntry`)
 
 Both functions do the exact same thing:
+
 ```typescript
 function sanitizeErrorEntry(entry: LogEntry): SanitizedLogEntry {
-    return {
-        timestamp: entry.timestamp,
-        level: entry.level,
-        message: sanitizeLogMessage(entry.message),
-        context: entry.context,
-    };
+	return {
+		timestamp: entry.timestamp,
+		level: entry.level,
+		message: sanitizeLogMessage(entry.message),
+		context: entry.context,
+	};
 }
 ```
 
@@ -312,6 +316,7 @@ try {
 This pattern repeats for: system, settings, agents, external-tools, windows-diagnostics, groups, sessions, processes, logs, errors, web-server, storage, group-chats, batch-state.
 
 **Severity:** MEDIUM - Could be reduced to a loop over a collector registry:
+
 ```typescript
 const collectors = [
     { id: 'system-info', fn: () => collectSystemInfo(), alwaysInclude: true },
@@ -353,22 +358,22 @@ No duplication. Both collectors correctly import from the shared utility.
 
 ### Cue - Action Items
 
-| # | Severity | Finding | Recommendation |
-|---|---|---|---|
-| 1 | LOW | `execFileAsync` in cue-github-poller | Consider extending shared `execFileNoThrow` to accept env option |
-| 2 | LOW | `walkDir` in cue-task-scanner | Keep as-is; skip list is domain-specific |
-| 3 | MEDIUM | DB lifecycle boilerplate duplicates stats-db | Extract shared `createSqliteDb(path, schemas, options)` helper |
+| #   | Severity | Finding                                      | Recommendation                                                   |
+| --- | -------- | -------------------------------------------- | ---------------------------------------------------------------- |
+| 1   | LOW      | `execFileAsync` in cue-github-poller         | Consider extending shared `execFileNoThrow` to accept env option |
+| 2   | LOW      | `walkDir` in cue-task-scanner                | Keep as-is; skip list is domain-specific                         |
+| 3   | MEDIUM   | DB lifecycle boilerplate duplicates stats-db | Extract shared `createSqliteDb(path, schemas, options)` helper   |
 
 ### Debug Package - Action Items
 
-| # | Severity | Finding | Recommendation |
-|---|---|---|---|
-| 1 | HIGH | `sanitizeErrorEntry` identical to `sanitizeEntry` | Export `sanitizeEntry` from logs.ts, import in errors.ts |
-| 2 | MEDIUM | 12 identical try/catch blocks in index.ts | Refactor to collector registry loop pattern |
-| 3 | LOW | `getDirectorySize` is local-only | Keep as-is; simpler sync version appropriate for context |
+| #   | Severity | Finding                                           | Recommendation                                           |
+| --- | -------- | ------------------------------------------------- | -------------------------------------------------------- |
+| 1   | HIGH     | `sanitizeErrorEntry` identical to `sanitizeEntry` | Export `sanitizeEntry` from logs.ts, import in errors.ts |
+| 2   | MEDIUM   | 12 identical try/catch blocks in index.ts         | Refactor to collector registry loop pattern              |
+| 3   | LOW      | `getDirectorySize` is local-only                  | Keep as-is; simpler sync version appropriate for context |
 
 ### Cross-Module
 
-| # | Severity | Finding | Recommendation |
-|---|---|---|---|
-| 1 | MEDIUM | Both cue-db and stats-db duplicate SQLite lifecycle boilerplate | Shared base DB module could eliminate ~30 lines per consumer |
+| #   | Severity | Finding                                                         | Recommendation                                               |
+| --- | -------- | --------------------------------------------------------------- | ------------------------------------------------------------ |
+| 1   | MEDIUM   | Both cue-db and stats-db duplicate SQLite lifecycle boilerplate | Shared base DB module could eliminate ~30 lines per consumer |

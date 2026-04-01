@@ -1,10 +1,11 @@
 # SCAN-FORMATTERS.md - Formatter Duplicates
 
 Generated via `grep -rn` on `src/`. All matches are file:line verified. Tests excluded.
+Re-vetted 2026-03-28 against origin/rc.
 
 ---
 
-## formatDuration / formatElapsed / formatTime definitions (46 total)
+## formatDuration / formatElapsed / formatTime definitions (47 total)
 
 ### Shared/canonical definitions
 
@@ -19,17 +20,18 @@ src/shared/performance-metrics.ts:336      export function formatDuration(durati
 ```
 src/cli/output/formatter.ts:478                             function formatDuration(ms: number): string
 src/cli/output/formatter.ts:618                             function formatDurationSeconds(seconds: number): string
-src/renderer/components/AboutModal.tsx:92                    const formatDuration = (ms: number): string =>
+src/renderer/components/AboutModal.tsx:93                    const formatDuration = (ms: number): string =>
+src/renderer/components/CueModal/cueModalUtils.ts:25         export function formatDuration(ms: number): string  [NEW on rc]
 src/renderer/components/FirstRunCelebration.tsx:64           function formatDuration(ms: number): string
-src/renderer/components/SymphonyModal.tsx:124                function formatDurationMs(ms: number): string
+src/renderer/components/SymphonyModal.tsx:128                function formatDurationMs(ms: number): string
 src/renderer/components/Toast.tsx:11                         function formatDuration(ms: number): string
-src/renderer/components/DirectorNotes/AIOverviewTab.tsx:56   const formatDurationMs = (ms: number): string =>
+src/renderer/components/DirectorNotes/AIOverviewTab.tsx:62   const formatDurationMs = (ms: number): string =>
 src/renderer/hooks/symphony/useContributorStats.ts:147       function formatDuration(ms: number): string
 src/renderer/utils/groupChatExport.ts:41                     function formatDuration(messages): string
 src/renderer/utils/tabExport.ts:42                           function formatDuration(logs): string
 ```
 
-### UsageDashboard - 10 identical formatDuration definitions
+### UsageDashboard - 11 identical formatDuration definitions
 
 ```
 src/renderer/components/UsageDashboard/ActivityHeatmap.tsx:206
@@ -61,14 +63,14 @@ src/renderer/components/TerminalOutput.tsx:981               const formatElapsed
 
 ```
 src/renderer/components/GroupChatHistoryPanel.tsx:572         const formatTime = (timestamp: number) =>
-src/renderer/components/GroupChatMessages.tsx:159             const formatTimestamp = (timestamp: string | number) =>
-src/renderer/components/History/HistoryEntryItem.tsx:45       const formatTime = (timestamp: number) =>
+src/renderer/components/GroupChatMessages.tsx:168             const formatTimestamp = (timestamp: string | number) =>
+src/renderer/components/History/HistoryEntryItem.tsx:9        const formatTime = (timestamp: number) =>
 src/renderer/components/HistoryDetailModal.tsx:158            const formatTime = (timestamp: number) =>
-src/renderer/components/InlineWizard/WizardMessageBubble.tsx:59   function formatTimestamp(timestamp: number): string
+src/renderer/components/InlineWizard/WizardMessageBubble.tsx:62   function formatTimestamp(timestamp: number): string
 src/renderer/components/ParticipantCard.tsx:27                function formatTime(timestamp: number): string
 src/renderer/components/ThinkingStatusPill.tsx:43             const formatTime = (seconds: number): string =>
 src/renderer/components/UsageDashboard/LongestAutoRunsTable.tsx:115   function formatTime(timestamp: number): string
-src/renderer/components/Wizard/screens/ConversationScreen.tsx:52      function formatTimestamp(timestamp: number): string
+src/renderer/components/Wizard/screens/ConversationScreen.tsx:55      function formatTimestamp(timestamp: number): string
 src/renderer/constants/conductorBadges.ts:287                export function formatTimeRemaining(...)
 src/renderer/utils/groupChatExport.ts:33                     function formatTimestamp(timestamp: string | number): string
 src/renderer/utils/tabExport.ts:34                           function formatTimestamp(timestamp: number): string
@@ -158,15 +160,15 @@ src/web/hooks/useOfflineQueue.ts:107                            function generat
 
 ## Summary
 
-| Formatter | Canonical Location | Duplicates | Worst Offender |
-|-----------|--------------------|------------|----------------|
-| `formatDuration(ms)` | `shared/formatters.ts` | 21 | UsageDashboard (11 identical copies) |
-| `formatElapsedTime(ms)` | `shared/formatters.ts:144` | 5 | Progress modals (3 identical copies) |
-| `formatTime(timestamp)` | none | 15 | No canonical, 15 local definitions |
-| `formatNumber(num)` | `shared/formatters.ts:41` | 5 | UsageDashboard (5 copies) |
-| `formatFileSize(bytes)` | `shared/formatters.ts:27` (as formatSize) | 2 | FilePreview, documentStats |
-| `estimateTokens` | `shared/formatters.ts:176` | 4 | Merge/SendTo modal pairs (identical) |
-| `stripAnsi` | `main/utils/stripAnsi.ts` | 1 | `shared/stringUtils.ts` (duplicate) |
-| `generateId` | `shared/uuid.ts` + `renderer/utils/ids.ts` | 4 | web hooks, layer stack |
+| Formatter               | Canonical Location                         | Duplicates | Worst Offender                                   |
+| ----------------------- | ------------------------------------------ | ---------- | ------------------------------------------------ |
+| `formatDuration(ms)`    | `shared/formatters.ts`                     | 22         | UsageDashboard (11 copies), CueModal (new on rc) |
+| `formatElapsedTime(ms)` | `shared/formatters.ts:144`                 | 5          | Progress modals (3 identical copies)             |
+| `formatTime(timestamp)` | none                                       | 15         | No canonical, 15 local definitions               |
+| `formatNumber(num)`     | `shared/formatters.ts:41`                  | 5          | UsageDashboard (5 copies)                        |
+| `formatFileSize(bytes)` | `shared/formatters.ts:27` (as formatSize)  | 2          | FilePreview, documentStats                       |
+| `estimateTokens`        | `shared/formatters.ts:176`                 | 4          | Merge/SendTo modal pairs (identical)             |
+| `stripAnsi`             | `main/utils/stripAnsi.ts`                  | 1          | `shared/stringUtils.ts` (duplicate)              |
+| `generateId`            | `shared/uuid.ts` + `renderer/utils/ids.ts` | 4          | web hooks, layer stack                           |
 
-**Total: 46 time formatters, 10 number/size formatters, 7 token estimators, 2 stripAnsi, 7 ID generators = 72 formatter definitions that should consolidate to ~8.**
+**Total: 47 time formatters, 10 number/size formatters, 7 token estimators, 2 stripAnsi, 7 ID generators = 73 formatter definitions that should consolidate to ~8.**
