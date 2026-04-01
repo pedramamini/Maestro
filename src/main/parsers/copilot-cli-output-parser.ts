@@ -373,7 +373,13 @@ export class CopilotCliOutputParser implements AgentOutputParser {
 		let errorText: string | null = null;
 		let parsedJson: unknown = null;
 
-		if (obj.type?.includes('error') || obj.error) {
+		// Handle session.error events (Copilot CLI format: data.message, data.errorType)
+		if (obj.type === 'session.error' && obj.data) {
+			parsedJson = parsed;
+			errorText = (obj.data.message as string) || null;
+		}
+		// Handle generic error events
+		else if (obj.type?.includes('error') || obj.error) {
 			parsedJson = parsed;
 			errorText = extractErrorText(obj.error);
 			if (errorText === 'Unknown error') errorText = null;
@@ -431,7 +437,7 @@ export class CopilotCliOutputParser implements AgentOutputParser {
 				recoverable: match.recoverable,
 				agentId: this.agentId,
 				timestamp: Date.now(),
-				raw: { exitCode, stderr, stdout },
+				raw: { exitCode },
 			};
 		}
 
@@ -442,7 +448,7 @@ export class CopilotCliOutputParser implements AgentOutputParser {
 			recoverable: true,
 			agentId: this.agentId,
 			timestamp: Date.now(),
-			raw: { exitCode, stderr, stdout },
+			raw: { exitCode },
 		};
 	}
 }
