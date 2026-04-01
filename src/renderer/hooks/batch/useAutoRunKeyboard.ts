@@ -51,8 +51,11 @@ export function useAutoRunKeyboard(params: UseAutoRunKeyboardParams) {
 			return;
 		}
 
+		// Normalize key for consistent matching (Shift+z produces 'Z', we want 'z')
+		const key = e.key.length === 1 ? e.key.toLowerCase() : e.key;
+
 		// Insert actual tab character instead of moving focus
-		if (e.key === 'Tab') {
+		if (key === 'Tab') {
 			e.preventDefault();
 			const textarea = e.currentTarget;
 			const start = textarea.selectionStart;
@@ -74,7 +77,7 @@ export function useAutoRunKeyboard(params: UseAutoRunKeyboardParams) {
 		}
 
 		// Cmd+Z to undo, Cmd+Shift+Z to redo
-		if ((e.metaKey || e.ctrlKey) && e.key === 'z') {
+		if ((e.metaKey || e.ctrlKey) && key === 'z') {
 			e.preventDefault();
 			e.stopPropagation();
 			if (e.shiftKey) {
@@ -86,7 +89,7 @@ export function useAutoRunKeyboard(params: UseAutoRunKeyboardParams) {
 		}
 
 		// Cmd+S to save
-		if ((e.metaKey || e.ctrlKey) && e.key === 's') {
+		if ((e.metaKey || e.ctrlKey) && key === 's') {
 			e.preventDefault();
 			e.stopPropagation();
 			if (isDirty) {
@@ -98,7 +101,7 @@ export function useAutoRunKeyboard(params: UseAutoRunKeyboardParams) {
 		// Command-E to toggle between edit and preview (without Shift)
 		// Cmd+Shift+E is allowed to propagate to global handler for "Toggle Auto Run Expanded"
 		// Skip if edit mode is locked (during Auto Run) - matches button disabled state
-		if ((e.metaKey || e.ctrlKey) && e.key === 'e' && !e.shiftKey) {
+		if ((e.metaKey || e.ctrlKey) && key === 'e' && !e.shiftKey) {
 			e.preventDefault();
 			e.stopPropagation();
 			if (!isLocked) {
@@ -109,7 +112,7 @@ export function useAutoRunKeyboard(params: UseAutoRunKeyboardParams) {
 
 		// Command-F to open search in edit mode (without Shift)
 		// Cmd+Shift+F is allowed to propagate to the global handler for "Go to Files"
-		if ((e.metaKey || e.ctrlKey) && e.key === 'f' && !e.shiftKey) {
+		if ((e.metaKey || e.ctrlKey) && key === 'f' && !e.shiftKey) {
 			e.preventDefault();
 			e.stopPropagation();
 			openSearch();
@@ -117,7 +120,7 @@ export function useAutoRunKeyboard(params: UseAutoRunKeyboardParams) {
 		}
 
 		// Command-L to insert a markdown checkbox
-		if ((e.metaKey || e.ctrlKey) && e.key === 'l') {
+		if ((e.metaKey || e.ctrlKey) && key === 'l') {
 			e.preventDefault();
 			e.stopPropagation();
 			const textarea = e.currentTarget;
@@ -157,7 +160,7 @@ export function useAutoRunKeyboard(params: UseAutoRunKeyboardParams) {
 			return;
 		}
 
-		if (e.key === 'Enter' && !e.shiftKey) {
+		if (key === 'Enter' && !e.shiftKey) {
 			const textarea = e.currentTarget;
 			const cursorPos = textarea.selectionStart;
 			const textBeforeCursor = localContent.substring(0, cursorPos);

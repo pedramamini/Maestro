@@ -12,12 +12,24 @@
  * - switchMode does not call setMode when mode is the same
  */
 
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
 import {
 	useAutoRunScrollSync,
 	type UseAutoRunScrollSyncParams,
 } from '../../../renderer/hooks/batch/useAutoRunScrollSync';
+
+// Mock requestAnimationFrame to execute callbacks synchronously
+const originalRAF = globalThis.requestAnimationFrame;
+beforeEach(() => {
+	globalThis.requestAnimationFrame = (cb: FrameRequestCallback) => {
+		cb(0);
+		return 0;
+	};
+});
+afterEach(() => {
+	globalThis.requestAnimationFrame = originalRAF;
+});
 
 // ============================================================================
 // Test Helpers

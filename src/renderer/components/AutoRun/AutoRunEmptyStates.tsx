@@ -119,8 +119,10 @@ export const EmptyFolderState = memo(function EmptyFolderState({
 			</p>
 			<div className="flex gap-3">
 				<button
-					onClick={onRefresh}
-					className="flex items-center gap-2 px-4 py-2 rounded text-sm transition-colors hover:opacity-90"
+					onClick={isRefreshingEmpty ? undefined : onRefresh}
+					disabled={isRefreshingEmpty}
+					aria-busy={isRefreshingEmpty}
+					className={`flex items-center gap-2 px-4 py-2 rounded text-sm transition-colors ${isRefreshingEmpty ? 'opacity-50 cursor-not-allowed' : 'hover:opacity-90'}`}
 					style={{
 						backgroundColor: 'transparent',
 						color: theme.colors.textMain,

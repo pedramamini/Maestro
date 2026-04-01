@@ -4,7 +4,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import React from 'react';
 import {
 	AutoRunToolbar,
@@ -201,7 +201,7 @@ describe('AutoRunToolbar', () => {
 			expect(runBtn.hasAttribute('disabled')).toBe(false);
 		});
 
-		it('saves before running if dirty', () => {
+		it('saves before running if dirty and opens runner only after save resolves', async () => {
 			const onSave = vi.fn().mockResolvedValue(undefined);
 			const onOpenBatchRunner = vi.fn();
 			render(
@@ -209,18 +209,40 @@ describe('AutoRunToolbar', () => {
 			);
 			fireEvent.click(screen.getByText('Run'));
 			expect(onSave).toHaveBeenCalledTimes(1);
-			expect(onOpenBatchRunner).toHaveBeenCalledTimes(1);
+			// onOpenBatchRunner called after save resolves
+			await waitFor(() => {
+				expect(onOpenBatchRunner).toHaveBeenCalledTimes(1);
+			});
+			// Verify save was called before batch runner
+			expect(onSave.mock.invocationCallOrder[0]).toBeLessThan(
+				onOpenBatchRunner.mock.invocationCallOrder[0]
+			);
 		});
 
-		it('does not save before running if not dirty', () => {
+		it('does not open runner if save fails', async () => {
+			const onSave = vi.fn().mockRejectedValue(new Error('Save failed'));
+			const onOpenBatchRunner = vi.fn();
+			render(
+				<AutoRunToolbar {...createDefaultProps({ isDirty: true, onSave, onOpenBatchRunner })} />
+			);
+			fireEvent.click(screen.getByText('Run'));
+			await waitFor(() => {
+				expect(onSave).toHaveBeenCalledTimes(1);
+			});
+			expect(onOpenBatchRunner).not.toHaveBeenCalled();
+		});
+
+		it('does not save before running if not dirty', async () => {
 			const onSave = vi.fn().mockResolvedValue(undefined);
 			const onOpenBatchRunner = vi.fn();
 			render(
 				<AutoRunToolbar {...createDefaultProps({ isDirty: false, onSave, onOpenBatchRunner })} />
 			);
 			fireEvent.click(screen.getByText('Run'));
+			await waitFor(() => {
+				expect(onOpenBatchRunner).toHaveBeenCalledTimes(1);
+			});
 			expect(onSave).not.toHaveBeenCalled();
-			expect(onOpenBatchRunner).toHaveBeenCalledTimes(1);
 		});
 
 		it('calls onOpenBatchRunner when clicked', () => {

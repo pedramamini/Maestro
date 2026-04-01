@@ -50,6 +50,7 @@ export function useAutoRunSearch({
 		setCurrentMatchIndex(0);
 		setTotalMatches(0);
 		matchElementsRef.current = [];
+		userNavigatedToMatchRef.current = false;
 		// Refocus appropriate element
 		if (mode === 'edit' && textareaRef.current) {
 			textareaRef.current.focus();

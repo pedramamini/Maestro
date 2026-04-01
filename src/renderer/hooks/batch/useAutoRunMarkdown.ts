@@ -76,6 +76,7 @@ export function useAutoRunMarkdown({
 	}, [savedContent]);
 
 	// 3. Token counting based on saved content only (not live during editing)
+	// Uses a stale flag to discard results from previous effect runs
 	const [tokenCount, setTokenCount] = useState<number | null>(null);
 	useEffect(() => {
 		if (!savedContent) {
@@ -83,15 +84,23 @@ export function useAutoRunMarkdown({
 			return;
 		}
 
+		let isActive = true;
+
 		getEncoder()
 			.then((encoder) => {
+				if (!isActive) return;
 				const tokens = encoder.encode(savedContent);
 				setTokenCount(tokens.length);
 			})
 			.catch((err) => {
+				if (!isActive) return;
 				console.error('Failed to count tokens:', err);
 				setTokenCount(null);
 			});
+
+		return () => {
+			isActive = false;
+		};
 	}, [savedContent]);
 
 	// 4. Convert documentTree to FileNode format for remarkFileLinks

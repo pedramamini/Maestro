@@ -133,10 +133,14 @@ export const AutoRunToolbar = memo(function AutoRunToolbar({
 				</button>
 			) : (
 				<button
-					onClick={() => {
+					onClick={async () => {
 						// Save before opening batch runner if dirty
 						if (isDirty) {
-							onSave();
+							try {
+								await onSave();
+							} catch {
+								return; // Don't open runner if save failed
+							}
 						}
 						onOpenBatchRunner?.();
 					}}

@@ -1,6 +1,16 @@
 import { useState, useRef, useEffect, useMemo, memo } from 'react';
 import { Loader2, Image, X, Search } from 'lucide-react';
 import { imageCache } from '../../hooks';
+import type { Theme } from '../../types';
+
+// Safe wrapper around safeDecodeURIComponent that falls back to original string on malformed URIs
+function safeDecodeURIComponent(str: string): string {
+	try {
+		return safeDecodeURIComponent(str);
+	} catch {
+		return str;
+	}
+}
 
 // Helper to compute initial image state synchronously from cache
 // This prevents flickering when ReactMarkdown rebuilds the component tree
@@ -9,7 +19,7 @@ export function getInitialImageState(src: string | undefined, folderPath: string
 		return { dataUrl: null, loading: false, filename: null };
 	}
 
-	const decodedSrc = decodeURIComponent(src);
+	const decodedSrc = safeDecodeURIComponent(src);
 
 	// Check cache for relative paths
 	if (decodedSrc.startsWith('images/') && folderPath) {
@@ -63,7 +73,7 @@ export const AttachmentImage = memo(function AttachmentImage({
 	alt?: string;
 	folderPath: string | null;
 	sshRemoteId?: string;
-	theme: any;
+	theme: Theme;
 	onImageClick?: (filename: string) => void;
 }) {
 	// Compute initial state synchronously from cache to prevent flicker
@@ -73,6 +83,18 @@ export const AttachmentImage = memo(function AttachmentImage({
 	const [error, setError] = useState<string | null>(null);
 	const [loading, setLoading] = useState(initialState.loading);
 	const [filename, setFilename] = useState<string | null>(initialState.filename);
+
+	// Sync local state when src/folderPath props change (initialState recalculates via useMemo)
+	const prevInitialStateRef = useRef(initialState);
+	useEffect(() => {
+		if (prevInitialStateRef.current !== initialState) {
+			setDataUrl(initialState.dataUrl);
+			setLoading(initialState.loading);
+			setFilename(initialState.filename);
+			setError(null);
+			prevInitialStateRef.current = initialState;
+		}
+	}, [initialState]);
 
 	// Use ref for onImageClick to avoid re-running effect when callback changes
 	const onImageClickRef = useRef(onImageClick);
@@ -93,7 +115,7 @@ export const AttachmentImage = memo(function AttachmentImage({
 		}
 
 		// Decode URL-encoded paths (e.g., "images/Image%20Test.png" -> "images/Image Test.png")
-		const decodedSrc = decodeURIComponent(src);
+		const decodedSrc = safeDecodeURIComponent(src);
 
 		// Check if this is a relative path (e.g., images/{docName}-{timestamp}.{ext})
 		if (decodedSrc.startsWith('images/') && folderPath) {
@@ -223,7 +245,7 @@ export const AttachmentImage = memo(function AttachmentImage({
 
 	// For lightbox, pass the decoded path (which matches attachmentsList)
 	// rather than the URL-encoded src from markdown
-	const decodedSrcForClick = src ? decodeURIComponent(src) : '';
+	const decodedSrcForClick = src ? safeDecodeURIComponent(src) : '';
 	return (
 		<span
 			className="inline-block align-middle mx-1 my-1 cursor-pointer group relative"
@@ -262,7 +284,7 @@ export function ImagePreview({
 }: {
 	src: string;
 	filename: string;
-	theme: any;
+	theme: Theme;
 	onRemove: () => void;
 	onImageClick: (filename: string) => void;
 }) {

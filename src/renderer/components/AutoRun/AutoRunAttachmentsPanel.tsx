@@ -31,6 +31,8 @@ export const AutoRunAttachmentsPanel = memo(function AutoRunAttachmentsPanel({
 		>
 			<button
 				onClick={onToggleExpanded}
+				aria-expanded={attachmentsExpanded}
+				aria-controls={attachmentsExpanded ? 'autorun-attachments-panel' : undefined}
 				className="w-full flex items-center gap-1 text-[10px] uppercase font-semibold hover:opacity-80 transition-opacity"
 				style={{ color: theme.colors.textDim }}
 			>
@@ -42,7 +44,7 @@ export const AutoRunAttachmentsPanel = memo(function AutoRunAttachmentsPanel({
 				Attached Images ({attachmentsList.length})
 			</button>
 			{attachmentsExpanded && (
-				<div className="flex flex-wrap gap-1 mt-2">
+				<div id="autorun-attachments-panel" className="flex flex-wrap gap-1 mt-2">
 					{attachmentsList.map((filename) => (
 						<ImagePreview
 							key={filename}

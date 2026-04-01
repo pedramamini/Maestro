@@ -21,6 +21,7 @@ export const AutoRunErrorBanner = memo(function AutoRunErrorBanner({
 }: AutoRunErrorBannerProps) {
 	return (
 		<div
+			role="alert"
 			className="mx-2 mb-2 p-3 rounded-lg border"
 			style={{
 				backgroundColor: `${theme.colors.error}15`,

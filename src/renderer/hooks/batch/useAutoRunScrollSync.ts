@@ -62,7 +62,8 @@ export function useAutoRunScrollSync({
 
 			setMode(newMode);
 
-			// Apply scroll percentage to the new mode after it renders
+			// Apply scroll percentage to the new mode after it renders,
+			// then notify parent with synchronized scroll values
 			requestAnimationFrame(() => {
 				if (newMode === 'preview' && previewRef.current) {
 					const { scrollHeight, clientHeight } = previewRef.current;
@@ -77,16 +78,16 @@ export function useAutoRunScrollSync({
 					textareaRef.current.scrollTop = newScrollTop;
 					editScrollPosRef.current = newScrollTop;
 				}
-			});
 
-			if (onStateChange) {
-				onStateChange({
-					mode: newMode,
-					cursorPosition: textareaRef.current?.selectionStart || 0,
-					editScrollPos: textareaRef.current?.scrollTop || 0,
-					previewScrollPos: previewRef.current?.scrollTop || 0,
-				});
-			}
+				if (onStateChange) {
+					onStateChange({
+						mode: newMode,
+						cursorPosition: textareaRef.current?.selectionStart || 0,
+						editScrollPos: textareaRef.current?.scrollTop || 0,
+						previewScrollPos: previewRef.current?.scrollTop || 0,
+					});
+				}
+			});
 		},
 		[mode, onStateChange]
 	);
@@ -130,10 +131,15 @@ export function useAutoRunScrollSync({
 	}, []);
 
 	// Restore cursor and scroll positions when component mounts
+	// Each restore is independently guarded by its own condition
 	useEffect(() => {
-		if (textareaRef.current && initialCursorPosition > 0) {
-			textareaRef.current.setSelectionRange(initialCursorPosition, initialCursorPosition);
-			textareaRef.current.scrollTop = initialEditScrollPos;
+		if (textareaRef.current) {
+			if (initialCursorPosition > 0) {
+				textareaRef.current.setSelectionRange(initialCursorPosition, initialCursorPosition);
+			}
+			if (initialEditScrollPos > 0) {
+				textareaRef.current.scrollTop = initialEditScrollPos;
+			}
 		}
 		if (previewRef.current && initialPreviewScrollPos > 0) {
 			previewRef.current.scrollTop = initialPreviewScrollPos;
