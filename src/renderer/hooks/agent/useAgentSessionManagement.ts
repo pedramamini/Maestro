@@ -213,15 +213,20 @@ export function useAgentSessionManagement(
 						{ offset: 0, limit: 100 }
 					);
 
-					// Convert to log entries
-					messages = result.messages.map(
-						(msg: { type: string; content: string; timestamp: string; uuid: string }) => ({
+					// Convert to log entries, skipping tool call messages
+					// Tool entries are only shown in live sessions when showThinking is on;
+					// restored tabs start with thinking off, matching Claude Code behavior
+					messages = result.messages
+						.filter(
+							(msg: { toolUse?: unknown }) =>
+								!(msg.toolUse && Array.isArray(msg.toolUse) && msg.toolUse.length > 0)
+						)
+						.map((msg: { type: string; content: string; timestamp: string; uuid: string }) => ({
 							id: msg.uuid || generateId(),
 							timestamp: new Date(msg.timestamp).getTime(),
 							source: msg.type === 'user' ? ('user' as const) : ('stdout' as const),
 							text: msg.content || '',
-						})
-					);
+						}));
 				}
 
 				// Look up starred status, session name, and context usage from stores if not provided

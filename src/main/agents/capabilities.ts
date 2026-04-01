@@ -200,7 +200,7 @@ export const AGENT_CAPABILITIES: Record<string, AgentCapabilities> = {
 	 * Codex - OpenAI's Codex CLI
 	 * https://github.com/openai/codex
 	 *
-	 * Verified capabilities based on CLI testing (v0.73.0+) and documentation review.
+	 * Verified capabilities based on CLI testing (v0.111.0+) and documentation review.
 	 * See .maestro/playbooks/Codex-Support.md for investigation details.
 	 */
 	codex: {

@@ -106,6 +106,21 @@ interface CodexMessageContent {
 }
 
 /**
+ * Tool use entry shape used when building SessionMessage.toolUse arrays.
+ * Provides type safety for the tool call / tool output merge logic.
+ */
+interface CodexToolUseEntry {
+	tool?: string;
+	name?: string;
+	args?: unknown;
+	state: {
+		status: string;
+		input?: unknown;
+		output?: string;
+	};
+}
+
+/**
  * Extract the session ID (UUID) from a Codex session filename
  * Format: rollout-TIMESTAMP-UUID.jsonl
  */
@@ -1011,23 +1026,29 @@ export class CodexSessionStorage extends BaseSessionStorage {
 						}
 					}
 
-					// Handle response_item function_call (current Codex format)
-					if (entry.type === 'response_item' && entry.payload?.type === 'function_call') {
-						let argsStr = '';
+					// Handle response_item function_call / custom_tool_call (current Codex format)
+					if (
+						entry.type === 'response_item' &&
+						(entry.payload?.type === 'function_call' || entry.payload?.type === 'custom_tool_call')
+					) {
+						let parsedInput: unknown;
 						try {
-							const args = JSON.parse(entry.payload.arguments || '{}');
-							argsStr = JSON.stringify(args, null, 2);
+							parsedInput = JSON.parse(entry.payload.arguments || '{}');
 						} catch {
-							argsStr = entry.payload.arguments || '';
+							parsedInput = entry.payload.arguments || {};
 						}
-						const toolInfo = {
+						const toolInfo: CodexToolUseEntry = {
 							tool: entry.payload.name,
 							args: entry.payload.arguments,
+							state: {
+								status: 'running',
+								input: parsedInput,
+							},
 						};
 						messages.push({
 							type: 'assistant',
 							role: 'assistant',
-							content: `Tool: ${entry.payload.name}\n${argsStr}`,
+							content: `Tool: ${entry.payload.name}`,
 							timestamp: entry.timestamp || '',
 							uuid: entry.payload.call_id || `codex-msg-${messageIndex}`,
 							toolUse: [toolInfo],
@@ -1035,16 +1056,49 @@ export class CodexSessionStorage extends BaseSessionStorage {
 						messageIndex++;
 					}
 
-					// Handle response_item function_call_output (current Codex format)
-					if (entry.type === 'response_item' && entry.payload?.type === 'function_call_output') {
-						messages.push({
-							type: 'assistant',
-							role: 'assistant',
-							content: entry.payload.output || '[Tool result]',
-							timestamp: entry.timestamp || '',
-							uuid: entry.payload.call_id || `codex-msg-${messageIndex}`,
-						});
-						messageIndex++;
+					// Handle response_item function_call_output / custom_tool_call_output (current Codex format)
+					// Merge output into the preceding tool call message instead of creating a new message
+					if (
+						entry.type === 'response_item' &&
+						(entry.payload?.type === 'function_call_output' ||
+							entry.payload?.type === 'custom_tool_call_output')
+					) {
+						const callId = entry.payload.call_id;
+						const outputText = entry.payload.output || '';
+						// Find the matching tool call message by call_id and merge the output
+						const matchingIdx = callId
+							? messages.findIndex((m) => m.uuid === callId && m.toolUse)
+							: -1;
+						if (matchingIdx >= 0) {
+							const matchingMsg = messages[matchingIdx];
+							const toolEntries = matchingMsg.toolUse as CodexToolUseEntry[] | undefined;
+							const firstEntry = toolEntries?.[0];
+							if (firstEntry?.state) {
+								// Replace the message immutably with updated tool state
+								const updatedEntry: CodexToolUseEntry = {
+									...firstEntry,
+									state: {
+										...firstEntry.state,
+										status: 'completed',
+										output: outputText,
+									},
+								};
+								messages[matchingIdx] = {
+									...matchingMsg,
+									toolUse: [updatedEntry, ...(toolEntries?.slice(1) || [])],
+								};
+							}
+						} else {
+							// No matching tool call found - create a standalone message
+							messages.push({
+								type: 'assistant',
+								role: 'assistant',
+								content: outputText || '[Tool result]',
+								timestamp: entry.timestamp || '',
+								uuid: callId || `codex-msg-${messageIndex}`,
+							});
+							messageIndex++;
+						}
 					}
 
 					// Handle item.completed agent_message events (legacy format)
@@ -1277,6 +1331,14 @@ export class CodexSessionStorage extends BaseSessionStorage {
 					type?: string;
 					role?: string;
 					content?: CodexMessageContent[];
+					payload?: {
+						id?: string;
+						type?: string;
+						role?: string;
+						content?: CodexMessageContent[];
+						call_id?: string;
+						name?: string;
+					};
 					item?: {
 						id?: string;
 						type?: string;
@@ -1287,8 +1349,50 @@ export class CodexSessionStorage extends BaseSessionStorage {
 				remove?: boolean;
 			}
 
+			/**
+			 * Check if an entry is a user message in either format:
+			 * - Legacy: { type: 'message', role: 'user' }
+			 * - v0.111.0: { type: 'response_item', payload: { type: 'message', role: 'user' } }
+			 */
+			function isUserMessage(entry: ParsedLine['entry']): boolean {
+				if (!entry) return false;
+				if (entry.type === 'message' && entry.role === 'user') return true;
+				if (
+					entry.type === 'response_item' &&
+					entry.payload?.type === 'message' &&
+					entry.payload?.role === 'user'
+				) {
+					return true;
+				}
+				return false;
+			}
+
+			/**
+			 * Extract text content from a user message entry (either format)
+			 */
+			function getUserMessageContent(entry: ParsedLine['entry']): string {
+				if (!entry) return '';
+				if (entry.type === 'message' && entry.role === 'user' && entry.content) {
+					return extractTextFromContent(entry.content);
+				}
+				if (
+					entry.type === 'response_item' &&
+					entry.payload?.type === 'message' &&
+					entry.payload?.role === 'user' &&
+					entry.payload?.content
+				) {
+					return extractTextFromContent(entry.payload.content);
+				}
+				return '';
+			}
+
 			const parsedLines: ParsedLine[] = [];
 			let userMessageIndex = -1;
+
+			// Build a message-index counter that mirrors readSessionMessages logic.
+			// readSessionMessages increments messageIndex only for actual displayable messages,
+			// so we must do the same here to match UUIDs like "codex-msg-N".
+			let messageIndex = 0;
 
 			// Parse all lines and find the target user message
 			for (let i = 0; i < lines.length; i++) {
@@ -1296,11 +1400,82 @@ export class CodexSessionStorage extends BaseSessionStorage {
 					const entry = JSON.parse(lines[i]);
 					parsedLines.push({ line: lines[i], entry });
 
-					// Match by UUID (format: codex-msg-N)
-					if (entry.type === 'message' && entry.role === 'user') {
-						const msgIndex = parsedLines.length - 1;
-						if (userMessageUuid === `codex-msg-${msgIndex}`) {
-							userMessageIndex = msgIndex;
+					// Match user messages in both legacy and v0.111.0 formats
+					if (isUserMessage(entry)) {
+						// Check payload.id first (v0.111.0 format uses real IDs)
+						if (
+							entry.type === 'response_item' &&
+							entry.payload?.id &&
+							userMessageUuid === entry.payload.id
+						) {
+							userMessageIndex = parsedLines.length - 1;
+						}
+						const text = getUserMessageContent(entry);
+						if (text) {
+							// Fallback: match by sequential message UUID (codex-msg-N)
+							if (
+								userMessageIndex !== parsedLines.length - 1 &&
+								userMessageUuid === `codex-msg-${messageIndex}`
+							) {
+								userMessageIndex = parsedLines.length - 1;
+							}
+							messageIndex++;
+						}
+					}
+					// Match by payload.id for non-user v0.111.0 entries (e.g. tool calls referenced by id)
+					else if (
+						entry.type === 'response_item' &&
+						entry.payload?.id &&
+						userMessageUuid === entry.payload.id
+					) {
+						userMessageIndex = parsedLines.length - 1;
+					}
+
+					// Count assistant messages to keep messageIndex in sync with readSessionMessages
+					if (entry.type === 'message' && entry.role === 'assistant') {
+						const text = extractTextFromContent(entry.content);
+						if (text) messageIndex++;
+					} else if (
+						entry.type === 'response_item' &&
+						entry.payload?.type === 'message' &&
+						entry.payload?.role === 'assistant'
+					) {
+						const text = extractTextFromContent(entry.payload?.content);
+						if (text) messageIndex++;
+					} else if (entry.type === 'item.completed' && entry.item?.type === 'agent_message') {
+						messageIndex++;
+					} else if (entry.type === 'item.completed' && entry.item?.type === 'tool_call') {
+						messageIndex++;
+					} else if (entry.type === 'item.completed' && entry.item?.type === 'tool_result') {
+						messageIndex++;
+					} else if (
+						entry.type === 'response_item' &&
+						(entry.payload?.type === 'function_call' || entry.payload?.type === 'custom_tool_call')
+					) {
+						messageIndex++;
+					}
+					// function_call_output / custom_tool_call_output normally merges into a preceding tool call
+					// in readSessionMessages. But when no matching call_id is found, readSessionMessages creates
+					// a standalone assistant message and increments messageIndex. Mirror that here.
+					if (
+						entry.type === 'response_item' &&
+						(entry.payload?.type === 'function_call_output' ||
+							entry.payload?.type === 'custom_tool_call_output')
+					) {
+						const callId = entry.payload.call_id;
+						// Check if any prior parsed line has a matching call_id
+						const hasMatchingCall = callId
+							? parsedLines.some(
+									(p) =>
+										p.entry &&
+										p.entry.type === 'response_item' &&
+										(p.entry.payload?.type === 'function_call' ||
+											p.entry.payload?.type === 'custom_tool_call') &&
+										p.entry.payload?.call_id === callId
+								)
+							: false;
+						if (!hasMatchingCall) {
+							messageIndex++;
 						}
 					}
 				} catch {
@@ -1314,8 +1489,8 @@ export class CodexSessionStorage extends BaseSessionStorage {
 
 				for (let i = parsedLines.length - 1; i >= 0; i--) {
 					const entry = parsedLines[i].entry;
-					if (entry?.type === 'message' && entry?.role === 'user' && entry.content) {
-						const textContent = extractTextFromContent(entry.content);
+					if (isUserMessage(entry)) {
+						const textContent = getUserMessageContent(entry);
 						if (textContent.trim().toLowerCase() === normalizedFallback) {
 							userMessageIndex = i;
 							logger.info('Found Codex message by content match', LOG_CONTEXT, {
@@ -1340,17 +1515,18 @@ export class CodexSessionStorage extends BaseSessionStorage {
 			// Find the end of the response (next user message) and collect tool_call IDs being deleted
 			let endIndex = parsedLines.length;
 			const deletedToolCallIds = new Set<string>();
+			const deletedCallIds = new Set<string>();
 
 			for (let i = userMessageIndex + 1; i < parsedLines.length; i++) {
 				const entry = parsedLines[i].entry;
 
-				// Stop at the next user message
-				if (entry?.type === 'message' && entry?.role === 'user') {
+				// Stop at the next user message (either format)
+				if (isUserMessage(entry)) {
 					endIndex = i;
 					break;
 				}
 
-				// Collect tool_call IDs from item.completed events being deleted
+				// Collect tool_call IDs from item.completed events being deleted (legacy)
 				if (
 					entry?.type === 'item.completed' &&
 					entry?.item?.type === 'tool_call' &&
@@ -1358,17 +1534,27 @@ export class CodexSessionStorage extends BaseSessionStorage {
 				) {
 					deletedToolCallIds.add(entry.item.id);
 				}
+
+				// Collect call_ids from response_item function_call events being deleted (v0.111.0)
+				if (
+					entry?.type === 'response_item' &&
+					(entry?.payload?.type === 'function_call' ||
+						entry?.payload?.type === 'custom_tool_call') &&
+					entry?.payload?.call_id
+				) {
+					deletedCallIds.add(entry.payload.call_id);
+				}
 			}
 
 			// Remove the message pair
 			let linesToKeep = [...parsedLines.slice(0, userMessageIndex), ...parsedLines.slice(endIndex)];
 
-			// If we deleted any tool_call blocks, clean up orphaned tool_result blocks
-			if (deletedToolCallIds.size > 0) {
+			// If we deleted any tool_call blocks, clean up orphaned tool_result/output blocks
+			if (deletedToolCallIds.size > 0 || deletedCallIds.size > 0) {
 				linesToKeep = linesToKeep.filter((item) => {
 					const entry = item.entry;
 
-					// Remove tool_result events that reference deleted tool_call IDs
+					// Remove tool_result events that reference deleted tool_call IDs (legacy)
 					if (entry?.type === 'item.completed' && entry?.item?.type === 'tool_result') {
 						// tool_result items reference tool_call via tool_call_id or the item.id pattern
 						const toolCallId = entry.item.tool_call_id || entry.item.id;
@@ -1377,12 +1563,24 @@ export class CodexSessionStorage extends BaseSessionStorage {
 						}
 					}
 
+					// Remove function_call_output events that reference deleted call_ids (v0.111.0)
+					if (
+						entry?.type === 'response_item' &&
+						(entry?.payload?.type === 'function_call_output' ||
+							entry?.payload?.type === 'custom_tool_call_output') &&
+						entry?.payload?.call_id &&
+						deletedCallIds.has(entry.payload.call_id)
+					) {
+						return false;
+					}
+
 					return true;
 				});
 
-				logger.info('Cleaned up orphaned tool_result blocks in Codex session', LOG_CONTEXT, {
+				const allDeletedIds = [...Array.from(deletedToolCallIds), ...Array.from(deletedCallIds)];
+				logger.info('Cleaned up orphaned tool output blocks in Codex session', LOG_CONTEXT, {
 					sessionId,
-					deletedToolCallIds: Array.from(deletedToolCallIds),
+					deletedToolCallIds: allDeletedIds,
 				});
 			}
 
