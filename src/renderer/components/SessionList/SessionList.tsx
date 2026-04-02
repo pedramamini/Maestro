@@ -856,7 +856,7 @@ function SessionListInner(props: SessionListProps) {
 			{/* SIDEBAR CONTENT: EXPANDED */}
 			{leftSidebarOpen ? (
 				<div
-					className="flex-1 overflow-y-auto py-2 select-none scrollbar-thin flex flex-col"
+					className="flex-1 min-h-0 overflow-y-auto py-2 select-none scrollbar-thin flex flex-col"
 					data-tour="session-list"
 				>
 					{/* Session Filter */}
