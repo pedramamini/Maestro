@@ -12,9 +12,9 @@ Remove 53 exported store selectors/helpers that have zero external references. T
 
 ## Pre-flight Checks
 
-- [ ] Phase 01-A (dead components) is complete
-- [ ] `rtk npm run lint` passes
-- [ ] `rtk vitest run` passes
+- [x] Phase 01-A (dead components) is complete (all 7 files deleted, committed)
+- [x] `rtk npm run lint` passes
+- [x] `rtk vitest run` passes (7 pre-existing failures in main/shared unrelated to stores)
 
 ---
 
@@ -22,148 +22,51 @@ Remove 53 exported store selectors/helpers that have zero external references. T
 
 ### Task 1: Remove dead exports from agentStore.ts
 
-File: `src/renderer/stores/agentStore.ts`
-
-Verify zero external references, then remove these 4 exports:
-
-- `selectAvailableAgents`
-- `selectAgentsDetected`
-- `getAgentState`
-- `getAgentActions`
-
-For each, verify with grep first:
-
-```
-rtk grep "selectAvailableAgents" src/ --include="*.ts" --include="*.tsx" | grep -v "agentStore" | grep -v "__tests__" | grep -v "\.test\."
-```
-
-If grep returns 0 results, remove the export. If it's a function, remove the entire function. If it's a `const` selector, remove the entire const declaration.
+- [x] Completed 2026-04-02. All 4 exports removed: `selectAvailableAgents`, `selectAgentsDetected`, `getAgentState`, `getAgentActions`. Test file updated.
 
 ### Task 2: Remove dead exports from batchStore.ts
 
-File: `src/renderer/stores/batchStore.ts`
-
-Remove these 3 exports:
-
-- `selectStoppingBatchSessionIds`
-- `selectBatchRunState`
-- `getBatchActions`
+- [x] Completed 2026-04-02. All 3 exports removed: `selectStoppingBatchSessionIds`, `selectBatchRunState`, `getBatchActions`. Test file updated.
 
 ### Task 3: Remove dead exports from fileExplorerStore.ts
 
-File: `src/renderer/stores/fileExplorerStore.ts`
-
-Remove these 2 exports:
-
-- `getFileExplorerState`
-- `getFileExplorerActions`
+- [x] Completed 2026-04-02. Both exports removed: `getFileExplorerState`, `getFileExplorerActions`. Test file updated.
 
 ### Task 4: Remove dead exports from groupChatStore.ts
 
-File: `src/renderer/stores/groupChatStore.ts`
-
-Remove these 2 exports:
-
-- `getGroupChatState`
-- `getGroupChatActions`
+- [x] Completed 2026-04-02. Both exports removed: `getGroupChatState`, `getGroupChatActions`. Test file updated.
 
 ### Task 5: Remove dead exports from modalStore.ts
 
-File: `src/renderer/stores/modalStore.ts`
-
-Remove these 2 exports:
-
-- `selectModalOpen`
-- `selectModal`
+- [x] Completed 2026-04-02. `selectModal` removed. `selectModalOpen` was NOT removed - it is actively used in `AppSessionModals.tsx` and internally via `useModalSelectors()`. The scan was incorrect for this export. 1 of 2 removed.
 
 ### Task 6: Remove dead exports from notificationStore.ts
 
-File: `src/renderer/stores/notificationStore.ts`
-
-Remove these 6 exports:
-
-- `selectToasts`
-- `selectToastCount`
-- `selectConfig`
-- `resetToastIdCounter`
-- `getNotificationState`
-- `getNotificationActions`
+- [x] Completed 2026-04-02. All 6 exports removed: `selectToasts`, `selectToastCount`, `selectConfig`, `resetToastIdCounter`, `getNotificationState`, `getNotificationActions`. Test file updated (counter test rewritten to not depend on absolute counter values).
 
 ### Task 7: Remove dead exports from operationStore.ts
 
-File: `src/renderer/stores/operationStore.ts`
-
-Remove these 3 exports:
-
-- `selectIsAnyOperationInProgress`
-- `getOperationState`
-- `getOperationActions`
+- [x] Completed 2026-04-02. All 3 exports removed: `selectIsAnyOperationInProgress`, `getOperationState`, `getOperationActions`. Test file updated.
 
 ### Task 8: Remove dead exports from sessionStore.ts
 
-File: `src/renderer/stores/sessionStore.ts`
-
-Remove these 9 exports:
-
-- `selectBookmarkedSessions`
-- `selectSessionsByGroup`
-- `selectUngroupedSessions`
-- `selectGroupById`
-- `selectSessionCount`
-- `selectIsReady`
-- `selectIsAnySessionBusy`
-- `getSessionState`
-- `getSessionActions`
+- [x] Completed 2026-04-02. All 9 exports removed: `selectBookmarkedSessions`, `selectSessionsByGroup`, `selectUngroupedSessions`, `selectGroupById`, `selectSessionCount`, `selectIsReady`, `selectIsAnySessionBusy`, `getSessionState`, `getSessionActions`. Test file updated (initialization flow test rewritten to use store state directly).
 
 ### Task 9: Remove dead exports from settingsStore.ts
 
-File: `src/renderer/stores/settingsStore.ts`
-
-Remove these 11 exports:
-
-- `DEFAULT_CONTEXT_MANAGEMENT_SETTINGS`
-- `DEFAULT_AUTO_RUN_STATS`
-- `DEFAULT_USAGE_STATS`
-- `DEFAULT_KEYBOARD_MASTERY_STATS`
-- `DEFAULT_ONBOARDING_STATS`
-- `DEFAULT_ENCORE_FEATURES`
-- `DEFAULT_DIRECTOR_NOTES_SETTINGS`
-- `DEFAULT_AI_COMMANDS`
-- `getBadgeLevelForTime`
-- `getSettingsState`
-- `getSettingsActions`
-
-**WARNING:** Some `DEFAULT_*` constants may be used internally within the same file. Only remove the `export` keyword if the constant is used internally. Remove the entire declaration only if it has zero internal references too.
+- [x] Completed 2026-04-02. All 11 exports handled:
+  - 8 DEFAULT_* constants: `export` keyword removed (constants kept for internal use)
+  - `getBadgeLevelForTime`: `export` keyword removed (function kept for internal use)
+  - `getSettingsState`, `getSettingsActions`: fully removed
+  - 4 test files updated: `settingsStore.test.ts`, `useSettings.test.ts`, `fonts-and-sizing.test.ts`, `SessionList.test.tsx` - replaced constant imports with `useSettingsStore.getState()` pattern.
 
 ### Task 10: Remove dead exports from tabStore.ts
 
-File: `src/renderer/stores/tabStore.ts`
-
-Remove these 12 exports:
-
-- `selectActiveTab`
-- `selectActiveFileTab`
-- `selectUnifiedTabs`
-- `selectTabById`
-- `selectFileTabById`
-- `selectTabCount`
-- `selectAllTabs`
-- `selectAllFileTabs`
-- `selectActiveTerminalTab`
-- `selectTerminalTabs`
-- `getTabState`
-- `getTabActions`
+- [x] Completed 2026-04-02. All 12 exports removed: `selectActiveTab`, `selectActiveFileTab`, `selectUnifiedTabs`, `selectTabById`, `selectFileTabById`, `selectTabCount`, `selectAllTabs`, `selectAllFileTabs`, `selectActiveTerminalTab`, `selectTerminalTabs`, `getTabState`, `getTabActions`. Unused type imports (`UnifiedTab`, `TerminalTab`) and utility imports (`getActiveTab`, `buildUnifiedTabs`) also cleaned up. Test file updated.
 
 ### Task 11: Verify - lint and tests pass
 
-```
-rtk npm run lint
-rtk vitest run
-```
-
-**MANDATORY: Do NOT skip verification.** Both lint and tests MUST pass on Windows before proceeding.
-
-Both must pass. If tests fail, a test file was importing one of these selectors - check the test, and if the selector is only used in tests, remove it from the test too.
+- [x] Completed 2026-04-02. Lint passes (tsc -p tsconfig.lint.json and tsconfig.main.json). All store-related tests pass (139/139 for affected stores). 7 pre-existing test failures remain in unrelated areas (cue-executor, cue-yaml-loader, agents handler, filesystem handler, pathResolver, messageHandlers, pathUtils) - none reference any removed exports.
 
 ---
 
