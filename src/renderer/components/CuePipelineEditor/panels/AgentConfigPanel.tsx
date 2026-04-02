@@ -125,7 +125,7 @@ export function AgentConfigPanel({
 				display: 'flex',
 				flexDirection: 'column',
 				gap: 8,
-				flex: expanded ? 1 : undefined,
+				flex: 1,
 				minHeight: 0,
 				overflowY: 'auto',
 			}}
@@ -134,10 +134,9 @@ export function AgentConfigPanel({
 				style={{
 					display: 'flex',
 					gap: 12,
-					flex: expanded ? 1 : undefined,
+					flex: 1,
 					minHeight: 0,
-					// In collapsed view with fan-in, constrain prompts so fan-in card is visible
-					...(hasFanIn && !expanded ? { maxHeight: 120, flexShrink: 1 } : {}),
+					overflow: 'auto',
 				}}
 			>
 				{/* Input Prompt(s) */}
