@@ -385,7 +385,7 @@ _Last validated: 2026-04-01 against origin/rc. All 40 findings re-verified. Chan
 
 ## Recommended Execution Order
 
-1. **Delete dead code (P0 #1-4)** - Zero-risk removal of 178 unused exports and 7 unused components. Verify with `tsc` after each batch.
+1. **Delete dead code (P0 #1-4)** - Zero-risk removal of 178 unused exports and 7 unused components. Verify with `rtk tsc` after each batch.
 
 2. **Fix AgentCapabilities double-definition bug (P0 #5)** - Eliminate the duplicate interface in `renderer/global.d.ts` that may cause type shadowing.
 

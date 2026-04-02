@@ -255,7 +255,7 @@ Returns: `{ success, draftPrUrl, draftPrNumber, autoRunPath, isFork, forkSlug }`
 
 `finalizeContribution(localPath, prNumber, issueNumber, issueTitle, upstreamSlug?)`:
 
-- Commits all changes (`git add -A`)
+- Commits all changes (`rtk git add -A`)
 - Pushes to origin (fork or upstream)
 - Converts draft PR to ready-for-review via `gh pr ready`
 - Updates PR body with completion summary
