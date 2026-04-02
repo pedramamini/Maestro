@@ -131,6 +131,37 @@ describe('phaseGenerator - Windows stdin transport flags', () => {
 		expect(spawnCall.sendPromptViaStdinRaw).toBe(false);
 	}, 30000);
 
+	it('should NOT pass stdin flags when SSH is enabled with null remoteId', async () => {
+		const mockAgent = {
+			id: 'claude-code',
+			available: true,
+			command: 'claude',
+			path: '/usr/bin/claude',
+			args: [],
+			capabilities: { supportsStreamJsonInput: true },
+		};
+		mockMaestro.agents.get.mockResolvedValue(mockAgent);
+		setupSpawnMock();
+
+		await phaseGenerator.generateDocuments({
+			agentType: 'claude-code',
+			directoryPath: '/remote/project',
+			projectName: 'Test Project',
+			conversationHistory: [],
+			sshRemoteConfig: {
+				enabled: true,
+				remoteId: null as any,
+			},
+		});
+
+		expect(mockMaestro.process.spawn).toHaveBeenCalled();
+		const spawnCall = mockMaestro.process.spawn.mock.calls[0][0];
+
+		// SSH with enabled=true but remoteId=null must still be treated as SSH
+		expect(spawnCall.sendPromptViaStdin).toBe(false);
+		expect(spawnCall.sendPromptViaStdinRaw).toBe(false);
+	}, 30000);
+
 	it('should NOT pass stdin flags on non-Windows platforms', async () => {
 		mockMaestro.platform = 'darwin';
 

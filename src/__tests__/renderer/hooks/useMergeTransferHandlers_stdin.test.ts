@@ -224,11 +224,13 @@ describe('useMergeTransferHandlers - context transfer stdin flags (integration)'
 				groomContext: false,
 			} as any);
 			expect(sendResult.success).toBe(true);
-			// Allow the fire-and-forget async IIFE spawn to execute
-			await new Promise((resolve) => setTimeout(resolve, 100));
 		});
 
-		expect((window as any).maestro.process.spawn).toHaveBeenCalled();
+		// Wait for the fire-and-forget async IIFE spawn to execute
+		await vi.waitFor(() => {
+			expect((window as any).maestro.process.spawn).toHaveBeenCalled();
+		});
+
 		const spawnCall = (window as any).maestro.process.spawn.mock.calls[0][0];
 
 		// On Windows without SSH, text-only prompts use raw stdin
@@ -263,12 +265,13 @@ describe('useMergeTransferHandlers - context transfer stdin flags (integration)'
 			const sendResult = await result.current.handleSendToAgent('target-session', {
 				groomContext: false,
 			} as any);
-			if (sendResult.success) {
-				await new Promise((resolve) => setTimeout(resolve, 50));
-			}
+			expect(sendResult.success).toBe(true);
 		});
 
-		expect((window as any).maestro.process.spawn).toHaveBeenCalled();
+		await vi.waitFor(() => {
+			expect((window as any).maestro.process.spawn).toHaveBeenCalled();
+		});
+
 		const spawnCall = (window as any).maestro.process.spawn.mock.calls[0][0];
 
 		// SSH sessions must NOT use stdin flags
@@ -286,12 +289,13 @@ describe('useMergeTransferHandlers - context transfer stdin flags (integration)'
 			const sendResult = await result.current.handleSendToAgent('target-session', {
 				groomContext: false,
 			} as any);
-			if (sendResult.success) {
-				await new Promise((resolve) => setTimeout(resolve, 50));
-			}
+			expect(sendResult.success).toBe(true);
 		});
 
-		expect((window as any).maestro.process.spawn).toHaveBeenCalled();
+		await vi.waitFor(() => {
+			expect((window as any).maestro.process.spawn).toHaveBeenCalled();
+		});
+
 		const spawnCall = (window as any).maestro.process.spawn.mock.calls[0][0];
 
 		expect(spawnCall.sendPromptViaStdin).toBe(false);
@@ -314,12 +318,13 @@ describe('useMergeTransferHandlers - context transfer stdin flags (integration)'
 			const sendResult = await result.current.handleSendToAgent('target-session', {
 				groomContext: false,
 			} as any);
-			if (sendResult.success) {
-				await new Promise((resolve) => setTimeout(resolve, 50));
-			}
+			expect(sendResult.success).toBe(true);
 		});
 
-		expect((window as any).maestro.process.spawn).toHaveBeenCalled();
+		await vi.waitFor(() => {
+			expect((window as any).maestro.process.spawn).toHaveBeenCalled();
+		});
+
 		const spawnCall = (window as any).maestro.process.spawn.mock.calls[0][0];
 
 		// Agents without stream-json always use raw stdin on Windows
@@ -345,12 +350,13 @@ describe('useMergeTransferHandlers - context transfer stdin flags (integration)'
 			const sendResult = await result.current.handleSendToAgent('target-session', {
 				groomContext: false,
 			} as any);
-			if (sendResult.success) {
-				await new Promise((resolve) => setTimeout(resolve, 50));
-			}
+			expect(sendResult.success).toBe(true);
 		});
 
-		expect((window as any).maestro.process.spawn).toHaveBeenCalled();
+		await vi.waitFor(() => {
+			expect((window as any).maestro.process.spawn).toHaveBeenCalled();
+		});
+
 		const spawnCall = (window as any).maestro.process.spawn.mock.calls[0][0];
 
 		// sendPromptViaStdin requires hasImages=true, which context transfer never sets

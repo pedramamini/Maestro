@@ -300,10 +300,11 @@ CONTENT:
 			sessionCustomModel: 'test-model',
 		});
 
-		// Give it a moment to start spawning
-		await new Promise((resolve) => setTimeout(resolve, 10));
+		// Wait for spawn to be called rather than relying on a fixed timeout
+		await vi.waitFor(() => {
+			expect(mockMaestro.process.spawn).toHaveBeenCalled();
+		});
 
-		expect(mockMaestro.process.spawn).toHaveBeenCalled();
 		const spawnCall = mockMaestro.process.spawn.mock.calls[0][0];
 
 		// Stdin flags should be present

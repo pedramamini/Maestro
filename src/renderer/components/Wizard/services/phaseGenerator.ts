@@ -1125,9 +1125,7 @@ class PhaseGenerator {
 			// This is critical for packaged Electron apps where PATH may not include agent locations
 			const commandToUse = agent.path || agent.command;
 
-			const isSshSession = Boolean(
-				config.sshRemoteConfig?.enabled && config.sshRemoteConfig?.remoteId
-			);
+			const isSshSession = Boolean(config.sshRemoteConfig?.enabled);
 			const { sendPromptViaStdin: sendViaStdin, sendPromptViaStdinRaw: sendViaStdinRaw } =
 				getStdinFlags({
 					isSshSession,
