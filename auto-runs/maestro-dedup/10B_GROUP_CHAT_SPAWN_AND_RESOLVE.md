@@ -19,135 +19,71 @@
 
 ---
 
-## Part 1: Group Chat Spawn Helper
+## Tasks
 
-### Task 1: Read the 5 spawn sites
+### Part 1: Group Chat Spawn Helper
 
-Read each spawn call site to understand the common pattern:
+### 1. Read the 5 spawn sites and document variations
 
-1. `main/group-chat/group-chat-agent.ts:226`
-2. `main/group-chat/group-chat-router.ts:583`
-3. `main/group-chat/group-chat-router.ts:976`
-4. `main/group-chat/group-chat-router.ts:1352`
-5. `main/group-chat/group-chat-router.ts:1553`
+- [ ] Read `main/group-chat/group-chat-agent.ts:226`
+- [ ] Read `main/group-chat/group-chat-router.ts:583`
+- [ ] Read `main/group-chat/group-chat-router.ts:976`
+- [ ] Read `main/group-chat/group-chat-router.ts:1352`
+- [ ] Read `main/group-chat/group-chat-router.ts:1553`
+- [ ] Document what parameters vary between sites (agent type, session config, working dir)
+- [ ] Document what is identical across all sites (SSH wrapping, Windows config, process manager call)
 
-Document:
+### 2. Design and create the helper
 
-- What parameters vary between sites (agent type, session config, working dir)
-- What's identical (SSH wrapping, Windows config, process manager call)
+- [ ] Create `src/main/group-chat/spawnGroupChatAgent.ts`
+- [ ] Define `GroupChatSpawnConfig` interface with: `agentType`, `sessionId`, `workingDir`, `systemPrompt`, `sshRemoteConfig`, `customPath`, `customArgs`, `customEnvVars`
+- [ ] Implement `spawnGroupChatAgent(config, processManager, settingsStore)` function
+- [ ] Include SSH wrapping logic (via `wrapSpawnWithSsh` when `sshRemoteConfig?.enabled`)
+- [ ] Include Windows-specific shell adjustments (check `process.platform === 'win32'`)
+- [ ] Export the function
 
-### Task 2: Design the helper
+### 3. Write tests for spawnGroupChatAgent
 
-Create `src/main/group-chat/spawnGroupChatAgent.ts`:
+- [ ] Create `src/__tests__/main/group-chat/spawnGroupChatAgent.test.ts`
+- [ ] Test spawns with basic config (no SSH, no Windows)
+- [ ] Test wraps with SSH when `sshRemoteConfig.enabled` is true
+- [ ] Test applies Windows adjustments on win32 platform
+- [ ] Test passes through custom path, args, and env vars
+- [ ] Test uses correct agent binary name
+- [ ] Run tests: `rtk vitest run src/__tests__/main/group-chat/spawnGroupChatAgent.test.ts`
 
-```typescript
-import { wrapSpawnWithSsh } from '../utils/ssh-spawn-wrapper';
-import { createSshRemoteStoreAdapter } from '../utils/ssh-remote-resolver';
+### 4. Replace the 5 spawn sites
 
-interface GroupChatSpawnConfig {
-	agentType: string;
-	sessionId: string;
-	workingDir: string;
-	systemPrompt?: string;
-	sshRemoteConfig?: SshRemoteConfig;
-	customPath?: string;
-	customArgs?: string[];
-	customEnvVars?: Record<string, string>;
-}
+- [ ] Replace inline spawn logic at `group-chat-agent.ts:226` with `spawnGroupChatAgent()` call
+- [ ] Replace inline spawn logic at `group-chat-router.ts:583` with `spawnGroupChatAgent()` call
+- [ ] Replace inline spawn logic at `group-chat-router.ts:976` with `spawnGroupChatAgent()` call
+- [ ] Replace inline spawn logic at `group-chat-router.ts:1352` with `spawnGroupChatAgent()` call
+- [ ] Replace inline spawn logic at `group-chat-router.ts:1553` with `spawnGroupChatAgent()` call
+- [ ] Run targeted tests after each replacement: `rtk vitest run <relevant-test>`
 
-export async function spawnGroupChatAgent(
-	config: GroupChatSpawnConfig,
-	processManager: ProcessManager,
-	settingsStore: SettingsStore
-): Promise<SpawnResult> {
-	let spawnConfig = buildBaseSpawnConfig(config);
+### 5. Verify spawn consolidation
 
-	// SSH wrapping
-	if (config.sshRemoteConfig?.enabled) {
-		const sshStore = createSshRemoteStoreAdapter(settingsStore);
-		spawnConfig = await wrapSpawnWithSsh(spawnConfig, config.sshRemoteConfig, sshStore);
-	}
+- [ ] Run lint: `rtk npm run lint`
+- [ ] Run tests: `rtk vitest run`
 
-	// Windows-specific adjustments
-	if (process.platform === 'win32') {
-		// ... Windows shell wrapping
-	}
+### Part 2: Store resolve() Utility
 
-	return processManager.spawn(spawnConfig);
-}
-```
+### 6. Check if resolve() is still duplicated
 
-### Task 3: Write tests
+- [ ] Run: `rtk grep "function resolve|const resolve" src/renderer/stores/ --glob "*.ts"`
+- [ ] Per re-validation, only `batchStore.ts:86` is confirmed. If only 1 copy exists, skip extraction.
 
-Create `src/__tests__/main/group-chat/spawnGroupChatAgent.test.ts`:
+### 7. Extract if multiple copies exist
 
-- Spawns with basic config
-- Wraps with SSH when sshRemoteConfig is enabled
-- Applies Windows adjustments on win32
-- Passes through custom path, args, and env vars
-- Uses correct agent binary name
+- [ ] If 2+ copies found: create `src/renderer/stores/utils.ts` with a `createDeferredPromise<T>()` function
+- [ ] Replace all copies with imports from `src/renderer/stores/utils.ts`
+- [ ] If only 1 copy: skip this task and document that no extraction was needed
 
-### Task 4: Replace the 5 spawn sites
+### 8. Verify full build
 
-For each site:
-
-1. Replace the inline spawn logic with a call to `spawnGroupChatAgent()`
-2. Pass the site-specific config
-3. Verify the behavior is identical
-
-### Task 5: Verify
-
-```
-rtk npm run lint
-rtk vitest run
-```
-
----
-
-## Part 2: Store resolve() Utility
-
-### Task 6: Check if resolve() is still duplicated
-
-```
-rtk grep -rn "function resolve\|const resolve" src/renderer/stores/ --include="*.ts"
-```
-
-Per 2026-04-01 re-validation, only `batchStore.ts:86` is confirmed. If only 1 copy exists, this may not be worth extracting. However, if the pattern is useful, create a shared utility.
-
-### Task 7: Extract if multiple copies exist
-
-If there are 2+ copies, create `src/renderer/stores/utils.ts`:
-
-```typescript
-/**
- * Create a promise that can be resolved externally.
- * Used for async store operations that complete via callback.
- */
-export function createDeferredPromise<T>(): {
-	promise: Promise<T>;
-	resolve: (value: T) => void;
-	reject: (reason?: unknown) => void;
-} {
-	let resolve!: (value: T) => void;
-	let reject!: (reason?: unknown) => void;
-	const promise = new Promise<T>((res, rej) => {
-		resolve = res;
-		reject = rej;
-	});
-	return { promise, resolve, reject };
-}
-```
-
-If only 1 copy, skip this task.
-
-### Task 8: Final verification
-
-```
-rtk npm run lint
-rtk vitest run
-```
-
-**MANDATORY: Do NOT skip verification.** Both lint and tests MUST pass on Windows before proceeding.
+- [ ] Run lint: `rtk npm run lint`
+- [ ] Run tests: `rtk vitest run`
+- [ ] Verify types: `rtk tsc -p tsconfig.main.json --noEmit && rtk tsc -p tsconfig.lint.json --noEmit`
 
 ---
 
@@ -159,9 +95,9 @@ After completing changes, run targeted tests for the files you modified:
 rtk vitest run <path-to-relevant-test-files>
 ```
 
-**Rule: Zero new test failures from your changes.** Pre-existing failures on the baseline are acceptable. If a test you didn't touch starts failing, investigate whether your refactoring broke it. If your change removed code that a test depended on, update that test.
+**Rule: Zero new test failures from your changes.** Pre-existing failures on the baseline are acceptable.
 
-Do NOT run the full test suite (it takes too long). Only run tests relevant to the files you changed. Use `rtk grep` to find related test files:
+Find related test files:
 
 ```bash
 rtk grep "import.*from.*<module-you-changed>" --glob "*.test.*"

@@ -24,8 +24,8 @@ Current oversized files status:
 
 - `App.tsx` - 4,034 lines (REGRESSION, addressed in Phase 13-A)
 - `symphony.ts` handler - 3,318 lines
-- `TabBar.tsx` - FULLY RESOLVED (2,839 -> 542)
-- `FilePreview.tsx` - PARTIALLY RESOLVED (2,662 -> 1,320)
+- `TabBar.tsx` - FULLY RESOLVED (2,839 to 542)
+- `FilePreview.tsx` - PARTIALLY RESOLVED (2,662 to 1,320)
 - `SymphonyModal.tsx` - large (check current size)
 - `useTabHandlers.ts` - large (should be smaller after Phase 07)
 - `useInputProcessing.ts` - large (should be smaller after Phase 07)
@@ -34,83 +34,60 @@ Current oversized files status:
 
 ## Tasks
 
-### Task 1: Re-measure after prior phases
+### 1. Re-measure after prior phases
 
-Many earlier phases (formatters, state patterns, mocks) will have already reduced some files. Re-measure:
+- [ ] Run: `find src/ -name "*.ts" -o -name "*.tsx" | xargs wc -l | sort -rn | head -30`
+- [ ] Only target files still over 1,500 lines
+- [ ] Document updated line counts for decision-making
 
-```
-find src/ -name "*.ts" -o -name "*.tsx" | xargs wc -l | sort -rn | head -30
-```
+### 2. Decompose symphony.ts handler (3,318 lines)
 
-Only target files still over 1,500 lines.
+- [ ] Read `src/main/ipc/handlers/symphony.ts` to identify logical sections
+- [ ] Create directory: `src/main/ipc/handlers/symphony/`
+- [ ] Extract and create `index.ts` - handler registration (entry point)
+- [ ] Extract and create `create.ts` - create group chat handlers
+- [ ] Extract and create `manage.ts` - manage/update group chat handlers
+- [ ] Extract and create `participants.ts` - participant management handlers
+- [ ] Extract and create `messages.ts` - message handling
+- [ ] Extract and create `export.ts` - export/history handlers
+- [ ] Update imports in any files that referenced the old single-file path
+- [ ] Run lint and tests: `rtk npm run lint && rtk vitest run`
 
-### Task 2: Decompose symphony.ts handler (3,318 lines)
+### 3. Decompose SymphonyModal.tsx
 
-`src/main/ipc/handlers/symphony.ts` - the Symphony (group chat orchestration) handler.
+- [ ] Read the file to identify extractable sub-panels and state logic
+- [ ] Extract `SymphonyParticipantList.tsx` component
+- [ ] Extract `SymphonyMessageView.tsx` component
+- [ ] Extract `SymphonyConfigPanel.tsx` component
+- [ ] Extract `useSymphonyModal.ts` state management hook
+- [ ] Keep the modal shell as the coordinator that imports and composes these
+- [ ] Run lint and tests: `rtk npm run lint && rtk vitest run`
 
-Strategy:
+### 4. Finish FilePreview.tsx decomposition (1,320 lines)
 
-1. Read the file to identify logical sections
-2. Extract each IPC handler into its own function or sub-module
-3. Keep the main file as a registration point
+- [ ] Read the file to identify remaining extractable sections
+- [ ] Extract language-specific renderers into separate components
+- [ ] Extract toolbar logic into a component or hook
+- [ ] Extract preview mode switching logic
+- [ ] Run lint and tests: `rtk npm run lint && rtk vitest run`
 
-Create `src/main/ipc/handlers/symphony/`:
+### 5. Address useTabHandlers.ts and useInputProcessing.ts
 
-- `index.ts` - handler registration
-- `create.ts` - create group chat handlers
-- `manage.ts` - manage/update group chat handlers
-- `participants.ts` - participant management handlers
-- `messages.ts` - message handling
-- `export.ts` - export/history handlers
+- [ ] Check current size of both files (should be smaller after Phase 07)
+- [ ] If `useTabHandlers.ts` still exceeds 800 lines: split by tab operation type (create, close, reorder, activate)
+- [ ] If `useInputProcessing.ts` still exceeds 800 lines: split by input type (text, slash commands, file drops)
+- [ ] Run lint and tests after any splits: `rtk npm run lint && rtk vitest run`
 
-### Task 3: Decompose SymphonyModal.tsx
+### 6. Verify full build
 
-Strategy:
+- [ ] Run lint: `rtk npm run lint`
+- [ ] Run tests: `rtk vitest run`
+- [ ] Verify types: `rtk tsc -p tsconfig.main.json --noEmit && rtk tsc -p tsconfig.lint.json --noEmit`
 
-1. Extract sub-panels into separate components
-2. Extract state management into a custom hook
-3. Keep the modal shell as the coordinator
+### 7. Final oversized file count
 
-Potential extractions:
-
-- `SymphonyParticipantList.tsx`
-- `SymphonyMessageView.tsx`
-- `SymphonyConfigPanel.tsx`
-- `useSymphonyModal.ts` (state hook)
-
-### Task 4: Finish FilePreview.tsx decomposition (1,320 lines)
-
-Already partially split. Identify remaining extractable sections:
-
-- Language-specific renderers
-- Toolbar logic
-- Preview mode switching
-
-### Task 5: Address useTabHandlers.ts and useInputProcessing.ts
-
-After Phase 07 (session state helpers), these files should be significantly smaller. Check if they still exceed 800 lines.
-
-If still oversized:
-
-- `useTabHandlers.ts` - split by tab operation type (create, close, reorder, activate)
-- `useInputProcessing.ts` - split by input type (text, slash commands, file drops)
-
-### Task 6: Verify after each decomposition
-
-```
-rtk npm run lint
-rtk vitest run
-```
-
-**MANDATORY: Do NOT skip verification.** Both lint and tests MUST pass on Windows before proceeding.
-
-### Task 7: Final oversized file count
-
-```
-find src/ -name "*.ts" -o -name "*.tsx" | xargs wc -l | awk '$1 > 800' | sort -rn | wc -l
-```
-
-Target: fewer than 40 files over 800 lines (down from 82).
+- [ ] Run: `find src/ -name "*.ts" -o -name "*.tsx" | xargs wc -l | awk '$1 > 800' | sort -rn | wc -l`
+- [ ] Target: fewer than 40 files over 800 lines (down from 82)
 
 ---
 
@@ -122,9 +99,9 @@ After completing changes, run targeted tests for the files you modified:
 rtk vitest run <path-to-relevant-test-files>
 ```
 
-**Rule: Zero new test failures from your changes.** Pre-existing failures on the baseline are acceptable. If a test you didn't touch starts failing, investigate whether your refactoring broke it. If your change removed code that a test depended on, update that test.
+**Rule: Zero new test failures from your changes.** Pre-existing failures on the baseline are acceptable.
 
-Do NOT run the full test suite (it takes too long). Only run tests relevant to the files you changed. Use `rtk grep` to find related test files:
+Find related test files:
 
 ```bash
 rtk grep "import.*from.*<module-you-changed>" --glob "*.test.*"

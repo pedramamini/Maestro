@@ -1,4 +1,4 @@
-# Phase 11-B: Add Sentry to catch Blocks Missing Error Reporting
+# Phase 11-B: Add Sentry to Catch Blocks Missing Error Reporting
 
 ## Objective
 
@@ -25,7 +25,7 @@ From CLAUDE.md:
 - **DO handle expected/recoverable errors explicitly** (network errors, file not found, etc.)
 - **DO use Sentry utilities** for explicit reporting
 
-Sentry utilities:
+Sentry imports:
 
 - Main process: `import { captureException, captureMessage } from '../utils/sentry';`
 - Renderer: `import { captureException } from '../components/ErrorBoundary';` (or similar)
@@ -34,96 +34,54 @@ Sentry utilities:
 
 ## Tasks
 
-### Task 1: Prioritize by risk category
+### 1. Prioritize catch blocks by risk category
 
-Not all 252 catch blocks need Sentry. Prioritize:
+- [ ] Categorize as MUST add Sentry (unexpected failures): main process IPC handlers, data persistence/storage, agent spawn failures, session state corruption
+- [ ] Categorize as SKIP Sentry (expected/recoverable): network timeouts, file not found, parse errors on user input, git operations on non-git directories
+- [ ] Create a list of files grouped by priority
 
-**MUST add Sentry (unexpected failures):**
+### 2. Audit main process files (highest priority)
 
-- Main process IPC handlers (user actions that fail silently)
-- Data persistence/storage operations
-- Agent spawn failures
-- Session state corruption
+- [ ] Run: `rtk grep "catch" src/main/ --glob "*.ts" -A 2` (filter for `console.error` without `captureException`)
+- [ ] For each catch block: read the try block to understand what can fail
+- [ ] If error is unexpected: add `captureException(error, { operation: 'operationName', context })` after the `console.error`
+- [ ] If error is expected: add a comment explaining why Sentry is skipped (e.g., `// Expected: file may not exist yet on first run`)
+- [ ] Run targeted tests: `rtk vitest run` (filter for main process tests)
 
-**SKIP Sentry (expected/recoverable):**
+### 3. Audit CLI files (14 files)
 
-- Network timeouts (expected in SSH/remote scenarios)
-- File not found (user may have deleted it)
-- Parse errors on user input
-- Git operations on non-git directories
+- [ ] Add Sentry only for internal/system errors, NOT for user input validation failures
+- [ ] Run targeted tests after changes
 
-### Task 2: Audit main process files (4 files, highest priority)
+### 4. Audit renderer components (40+ files)
 
-```
-rtk grep -rn "catch" src/main/ --include="*.ts" -A2 | grep "console.error" | grep -v "captureException"
-```
+- [ ] For API call catch blocks: add Sentry for unexpected failures
+- [ ] For DOM operation catch blocks: usually expected, skip Sentry but add comment
+- [ ] For data parsing catch blocks: add Sentry if data comes from our systems, skip if user input
+- [ ] Run targeted tests after each batch
 
-For each catch block:
+### 5. Audit renderer hooks (24 files)
 
-1. Read the try block to understand what can fail
-2. If the error is unexpected, add `captureException`
-3. If the error is expected, add a comment explaining why Sentry is skipped
+- [ ] Focus on hooks that call IPC or external services
+- [ ] Add Sentry for unexpected IPC failures
+- [ ] Run targeted tests after changes
 
-```typescript
-// BEFORE
-catch (error) {
-	console.error('Failed to save session:', error);
-}
+### 6. Audit renderer services/stores/utils (14 files)
 
-// AFTER (unexpected)
-catch (error) {
-	console.error('Failed to save session:', error);
-	captureException(error, { operation: 'saveSession', sessionId });
-}
+- [ ] These handle data flow and are often most critical
+- [ ] Add Sentry for unexpected data pipeline failures
+- [ ] Run targeted tests after changes
 
-// AFTER (expected)
-catch (error) {
-	// Expected: file may not exist yet on first run
-	console.error('Settings file not found:', error);
-}
-```
+### 7. Verify full build
 
-### Task 3: Audit CLI files (14 files)
+- [ ] Run lint: `rtk npm run lint`
+- [ ] Run tests: `rtk vitest run`
+- [ ] Verify types: `rtk tsc -p tsconfig.main.json --noEmit && rtk tsc -p tsconfig.lint.json --noEmit`
 
-CLI errors are user-facing. Add Sentry only for internal errors, not for user input validation failures.
+### 8. Count improvement
 
-### Task 4: Audit renderer components (40+ files)
-
-For UI components, most catch blocks are around:
-
-- API calls (add Sentry for unexpected failures)
-- DOM operations (usually expected, skip Sentry)
-- Data parsing (add Sentry if data comes from our systems)
-
-### Task 5: Audit renderer hooks (24 files)
-
-Similar to components - focus on hooks that call IPC or external services.
-
-### Task 6: Audit renderer services/stores/utils (14 files)
-
-These are often the most critical - they handle data flow.
-
-### Task 7: Verify
-
-```
-rtk npm run lint
-rtk vitest run
-```
-
-**MANDATORY: Do NOT skip verification.** Both lint and tests MUST pass on Windows before proceeding.
-
-### Task 8: Count improvement
-
-```
-# Files with console.error but no Sentry
-rtk grep -rn "console.error" src/ --include="*.ts" --include="*.tsx" -l | while read f; do
-	if ! grep -q "captureException\|captureMessage" "$f"; then
-		echo "$f"
-	fi
-done | wc -l
-```
-
-Target: fewer than 30 remaining (expected-error-only files).
+- [ ] Count files with `console.error` but no Sentry: `rtk grep "console.error" src/ --glob "*.{ts,tsx}"` and cross-check against `rtk grep "captureException|captureMessage" src/ --glob "*.{ts,tsx}"`
+- [ ] Target: fewer than 30 remaining (expected-error-only files)
 
 ---
 
@@ -135,9 +93,9 @@ After completing changes, run targeted tests for the files you modified:
 rtk vitest run <path-to-relevant-test-files>
 ```
 
-**Rule: Zero new test failures from your changes.** Pre-existing failures on the baseline are acceptable. If a test you didn't touch starts failing, investigate whether your refactoring broke it. If your change removed code that a test depended on, update that test.
+**Rule: Zero new test failures from your changes.** Pre-existing failures on the baseline are acceptable.
 
-Do NOT run the full test suite (it takes too long). Only run tests relevant to the files you changed. Use `rtk grep` to find related test files:
+Find related test files:
 
 ```bash
 rtk grep "import.*from.*<module-you-changed>" --glob "*.test.*"

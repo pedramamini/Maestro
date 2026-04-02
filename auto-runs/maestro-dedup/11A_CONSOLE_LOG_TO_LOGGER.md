@@ -31,75 +31,48 @@ Replace 130+ `console.log` calls in the group chat router (and 26 in group-chat-
 
 ## Tasks
 
-### Task 1: Read the logger API
+### 1. Read the logger API
 
-Read `src/main/utils/logger.ts` to understand:
+- [ ] Read `src/main/utils/logger.ts` to understand available log levels
+- [ ] Note how to create a scoped logger (e.g., `createLogger('group-chat-router')`)
+- [ ] Note any structured data parameters (e.g., `logger.info('msg', { key: value })`)
 
-- Available log levels
-- How to create a scoped logger
-- Any structured data parameters
+### 2. Create scoped loggers for group chat files
 
-### Task 2: Create a scoped logger for group chat
+- [ ] Add `import { createLogger } from '../utils/logger';` and `const logger = createLogger('group-chat-router');` at top of `group-chat-router.ts`
+- [ ] Add `const logger = createLogger('group-chat-agent');` at top of `group-chat-agent.ts`
 
-```typescript
-// At top of group-chat-router.ts
-import { createLogger } from '../utils/logger';
-const logger = createLogger('group-chat-router');
-```
+### 3. Migrate group-chat-router.ts (130 calls)
 
-Similarly for `group-chat-agent.ts`.
+- [ ] Work section by section through the file
+- [ ] Replace `console.log('[GroupChat] ...')` with `logger.info('...')` or `logger.debug('...')` based on message importance
+- [ ] For messages with data objects: use `logger.debug('msg', { data })` instead of `console.log('msg:', data)`
+- [ ] Preserve all existing log message content
+- [ ] Run targeted tests after completing: `rtk vitest run` (filter for group-chat-router tests)
 
-### Task 3: Migrate group-chat-router.ts (130 calls)
+### 4. Migrate group-chat-agent.ts (26 calls)
 
-This is the biggest target. Work section by section through the file:
+- [ ] Apply same pattern as Task 3
+- [ ] Run targeted tests: `rtk vitest run` (filter for group-chat-agent tests)
 
-```typescript
-// BEFORE
-console.log(`[GroupChat] Starting session for ${participantName}`);
+### 5. Migrate other high-frequency files
 
-// AFTER
-logger.info(`Starting session for ${participantName}`);
-```
+- [ ] Migrate `useRemoteHandlers.ts` (14 calls) - use `console.debug` or renderer-side logger
+- [ ] Migrate `phaseGenerator.ts` (14 calls)
+- [ ] Migrate `graphDataBuilder.ts` (11 calls)
+- [ ] Migrate `groupChat.ts` IPC handler (11 calls)
+- [ ] Run targeted tests after each file
 
-For debug-level messages:
+### 6. Verify full build
 
-```typescript
-// BEFORE
-console.log(`[GroupChat] Processing message:`, message);
+- [ ] Run lint: `rtk npm run lint`
+- [ ] Run tests: `rtk vitest run`
+- [ ] Verify types: `rtk tsc -p tsconfig.main.json --noEmit && rtk tsc -p tsconfig.lint.json --noEmit`
 
-// AFTER
-logger.debug(`Processing message`, { message });
-```
+### 7. Count remaining raw console.log in group chat
 
-### Task 4: Migrate group-chat-agent.ts (26 calls)
-
-Same pattern as Task 3.
-
-### Task 5: Migrate other high-frequency files
-
-From the scan data:
-
-- `useRemoteHandlers.ts` (14 calls) - renderer, use `console.debug` or renderer-side logger
-- `phaseGenerator.ts` (14 calls)
-- `graphDataBuilder.ts` (11 calls)
-- `groupChat.ts` IPC handler (11 calls)
-
-### Task 6: Verify no regressions
-
-```
-rtk npm run lint
-rtk vitest run
-```
-
-**MANDATORY: Do NOT skip verification.** Both lint and tests MUST pass on Windows before proceeding.
-
-### Task 7: Count remaining raw console.log in group chat
-
-```
-rtk grep -rn "console\.log" src/main/group-chat/ --include="*.ts" | wc -l
-```
-
-Target: 0.
+- [ ] Run: `rtk grep "console\.log" src/main/group-chat/ --glob "*.ts"`
+- [ ] Target: 0 remaining
 
 ---
 
@@ -111,9 +84,9 @@ After completing changes, run targeted tests for the files you modified:
 rtk vitest run <path-to-relevant-test-files>
 ```
 
-**Rule: Zero new test failures from your changes.** Pre-existing failures on the baseline are acceptable. If a test you didn't touch starts failing, investigate whether your refactoring broke it. If your change removed code that a test depended on, update that test.
+**Rule: Zero new test failures from your changes.** Pre-existing failures on the baseline are acceptable.
 
-Do NOT run the full test suite (it takes too long). Only run tests relevant to the files you changed. Use `rtk grep` to find related test files:
+Find related test files:
 
 ```bash
 rtk grep "import.*from.*<module-you-changed>" --glob "*.test.*"

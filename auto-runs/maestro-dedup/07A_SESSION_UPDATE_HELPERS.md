@@ -45,139 +45,68 @@ updateAiTab(sessionId, tabId, (tab) => ({ ...tab, someField: newValue }));
 
 ## Tasks
 
-### Task 1: Design the helper API
+### 1. Design and add helper API to sessionStore
 
-Add to `src/renderer/stores/sessionStore.ts`:
+- [ ] Read `src/renderer/stores/sessionStore.ts` to understand existing store shape
+- [ ] Add `updateAiTab(sessionId, tabId, updater)` function that uses `useSessionStore.setState` with nested `sessions.map` + `aiTabs.map`
+- [ ] Add `updateActiveAiTab(sessionId, updater)` function that maps over `aiTabs` using `s.activeTabId` to find the active tab
+- [ ] Add `updateSession(sessionId, updater)` function that maps over `sessions` by ID
+- [ ] Export all three functions from `src/renderer/stores/sessionStore.ts`
 
-```typescript
-/**
- * Update a specific AI tab within a session.
- */
-export function updateAiTab(
-	sessionId: string,
-	tabId: string,
-	updater: (tab: AITab) => AITab
-): void {
-	useSessionStore.setState((state) => ({
-		sessions: state.sessions.map((s) =>
-			s.id === sessionId
-				? { ...s, aiTabs: s.aiTabs.map((t) => (t.id === tabId ? updater(t) : t)) }
-				: s
-		),
-	}));
-}
+### 2. Write unit tests for the helpers
 
-/**
- * Update the active AI tab of a session.
- */
-export function updateActiveAiTab(sessionId: string, updater: (tab: AITab) => AITab): void {
-	useSessionStore.setState((state) => ({
-		sessions: state.sessions.map((s) =>
-			s.id === sessionId
-				? {
-						...s,
-						aiTabs: s.aiTabs.map((t) => (t.id === s.activeTabId ? updater(t) : t)),
-					}
-				: s
-		),
-	}));
-}
+- [ ] Create `src/__tests__/renderer/stores/sessionStoreHelpers.test.ts`
+- [ ] Test `updateAiTab` modifies the correct tab and leaves others unchanged
+- [ ] Test `updateAiTab` with non-existent session ID is a no-op
+- [ ] Test `updateActiveAiTab` modifies only the active tab
+- [ ] Test `updateSession` modifies the correct session
+- [ ] Test immutability: original state object is not mutated
+- [ ] Run tests: `rtk vitest run src/__tests__/renderer/stores/sessionStoreHelpers.test.ts`
 
-/**
- * Update a session by ID.
- */
-export function updateSession(sessionId: string, updater: (session: Session) => Session): void {
-	useSessionStore.setState((state) => ({
-		sessions: state.sessions.map((s) => (s.id === sessionId ? updater(s) : s)),
-	}));
-}
-```
+### 3. Migrate top offender files (6 files, 49 calls)
 
-### Task 2: Add unit tests for helpers
+- [ ] Migrate `useWizardHandlers.ts` (12 nested aiTabs.map calls)
+- [ ] Migrate `useInputProcessing.ts` (10 calls)
+- [ ] Migrate `useTabHandlers.ts` (8 calls)
+- [ ] Migrate `useAgentListeners.ts` (8 calls)
+- [ ] Migrate `useInterruptHandler.ts` (6 calls)
+- [ ] Migrate `useBatchedSessionUpdates.ts` (5 calls)
+- [ ] For each file: read, replace `setSessions` + `aiTabs.map` with the appropriate helper, verify with `rtk vitest run <relevant-test>`
 
-Create tests in `src/__tests__/renderer/stores/sessionStoreHelpers.test.ts`:
+### 4. Migrate remaining 19 files
 
-- Test `updateAiTab` modifies correct tab
-- Test `updateAiTab` with non-existent session ID (no-op)
-- Test `updateActiveAiTab` modifies active tab only
-- Test `updateSession` modifies correct session
-- Test immutability (original state unchanged)
+- [ ] Find all remaining files: `rtk grep "setSessions.*prev.*map" src/ --glob "*.{ts,tsx}"`
+- [ ] For each file: replace `setSessions(prev => prev.map(` patterns with `updateSession`, `updateAiTab`, or `updateActiveAiTab`
+- [ ] If an updater does something the helpers don't cover (e.g., updates multiple tabs), keep inline or create a new helper
+- [ ] Run targeted tests after each file: `rtk vitest run <relevant-test>`
 
-### Task 3: Migrate top offenders first
+### 5. Eliminate setSessions prop-drilling (14+ sites)
 
-Start with the files that have the most nested `aiTabs.map` calls:
+- [ ] Convert `useTabHandlers.ts` (68 setSessions calls) to use store directly
+- [ ] Convert `useWizardHandlers.ts` (25 calls) to use store directly
+- [ ] Convert `App.tsx` (22 calls) to use store directly
+- [ ] Convert `useInputProcessing.ts` (18 calls) to use store directly
+- [ ] Convert `useFileTreeManagement.ts` (18 calls) to use store directly
+- [ ] Convert `useRemoteIntegration.ts` (17 calls) to use store directly
+- [ ] Convert remaining prop-drilling sites to import helpers from `sessionStore` directly
 
-1. **`useWizardHandlers.ts`** (12 calls) - Highest count
-2. **`useInputProcessing.ts`** (10 calls)
-3. **`useTabHandlers.ts`** (8 calls)
-4. **`useAgentListeners.ts`** (8 calls)
-5. **`useInterruptHandler.ts`** (6 calls)
-6. **`useBatchedSessionUpdates.ts`** (5 calls)
+### 6. Remove setSessions from component prop interfaces
 
-For each file:
+- [ ] Work bottom-up from leaf components: remove `setSessions` from each props interface after migration
+- [ ] Remove the prop from parent JSX where it was being passed
+- [ ] Verify no TypeScript errors: `rtk tsc -p tsconfig.main.json --noEmit`
 
-1. Read the file to understand the specific `setSessions` + `aiTabs.map` patterns
-2. Replace each with the appropriate helper call
-3. Run `rtk vitest run path/to/test` to verify
+### 7. Verify full build
 
-### Task 4: Migrate remaining files (19 more)
+- [ ] Run lint: `rtk npm run lint`
+- [ ] Run tests: `rtk vitest run`
+- [ ] Verify types: `rtk tsc -p tsconfig.main.json --noEmit && rtk tsc -p tsconfig.lint.json --noEmit`
 
-Work through the remaining files from the scan. For each:
+### 8. Verify reduction in duplication
 
-1. Find `setSessions(prev => prev.map(` patterns
-2. Replace with `updateSession`, `updateAiTab`, or `updateActiveAiTab` as appropriate
-3. If the updater does something the helpers don't cover (e.g., updates multiple tabs), keep the inline pattern or create a new helper
-
-### Task 5: Eliminate setSessions prop-drilling
-
-The 14+ files that pass `setSessions` as a prop can be converted to use `useSessionStore()` directly:
-
-```typescript
-// BEFORE (in parent)
-<ChildComponent setSessions={setSessions} />
-
-// BEFORE (in child)
-function ChildComponent({ setSessions }) {
-	setSessions(prev => ...);
-}
-
-// AFTER (in child - no prop needed)
-import { updateAiTab } from '../stores/sessionStore';
-function ChildComponent() {
-	updateAiTab(sessionId, tabId, tab => ({ ...tab, field: value }));
-}
-```
-
-Top prop-drilling sites to fix:
-
-- `useTabHandlers.ts` (68 setSessions calls)
-- `useWizardHandlers.ts` (25)
-- `App.tsx` (22)
-- `useInputProcessing.ts` (18)
-- `useFileTreeManagement.ts` (18)
-- `useRemoteIntegration.ts` (17)
-
-### Task 6: Remove setSessions from component prop interfaces
-
-After migrating each component, remove `setSessions` from its props interface. This is a cascading change - work bottom-up from leaf components.
-
-### Task 7: Verify
-
-```
-rtk npm run lint
-rtk vitest run
-```
-
-**MANDATORY: Do NOT skip verification.** Both lint and tests MUST pass on Windows before proceeding.
-
-### Task 8: Verify reduction
-
-```
-rtk grep "setSessions" src/ --glob="*.{ts,tsx}" | rtk grep -v "__tests__" | rtk grep -v "sessionStore" | wc -l
-rtk grep "aiTabs\.map" src/ --glob="*.{ts,tsx}" | rtk grep -v "__tests__" | rtk grep -v "sessionStore" | wc -l
-```
-
-Both counts should be significantly reduced.
+- [ ] Count remaining setSessions: `rtk grep "setSessions" src/ --glob "*.{ts,tsx}" | wc -l` (exclude `__tests__` and `sessionStore`)
+- [ ] Count remaining aiTabs.map: `rtk grep "aiTabs\.map" src/ --glob "*.{ts,tsx}" | wc -l` (exclude `__tests__` and `sessionStore`)
+- [ ] Both counts should be significantly reduced from baseline
 
 ---
 
@@ -189,9 +118,9 @@ After completing changes, run targeted tests for the files you modified:
 rtk vitest run <path-to-relevant-test-files>
 ```
 
-**Rule: Zero new test failures from your changes.** Pre-existing failures on the baseline are acceptable. If a test you didn't touch starts failing, investigate whether your refactoring broke it. If your change removed code that a test depended on, update that test.
+**Rule: Zero new test failures from your changes.** Pre-existing failures on the baseline are acceptable. If a test you didn't touch starts failing, investigate whether your refactoring broke it.
 
-Do NOT run the full test suite (it takes too long). Only run tests relevant to the files you changed. Use `rtk grep` to find related test files:
+Find related test files:
 
 ```bash
 rtk grep "import.*from.*<module-you-changed>" --glob "*.test.*"

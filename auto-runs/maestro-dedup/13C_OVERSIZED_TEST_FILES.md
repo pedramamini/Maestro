@@ -20,65 +20,57 @@ Address 28 test files exceeding 2,000 lines. Many will shrink naturally after Ph
 
 ## Tasks
 
-### Task 1: Re-measure after mock consolidation
+### 1. Re-measure after mock consolidation
 
-Phase 03 removed ~2,900 lines of mock factories. Re-measure:
+- [ ] Run: `find src/__tests__/ -name "*.test.*" | xargs wc -l | sort -rn | head -30`
+- [ ] Only target files still over 2,000 lines
+- [ ] Document which files still need splitting
 
-```
-find src/__tests__/ -name "*.test.*" | xargs wc -l | sort -rn | head -30
-```
+### 2. Split symphony.test.ts (was 6,203 lines)
 
-Only target files still over 2,000 lines.
+- [ ] Read the test file to identify logical test groups
+- [ ] Extract creation flow tests into `symphony.create.test.ts`
+- [ ] Extract participant management tests into `symphony.participants.test.ts`
+- [ ] Extract message handling tests into `symphony.messages.test.ts`
+- [ ] Extract export/history tests into `symphony.export.test.ts`
+- [ ] Ensure shared setup/mocks are imported from a common file
+- [ ] Run: `rtk vitest run` (filter for symphony test files)
 
-### Task 2: Split symphony.test.ts (was 6,203 lines)
+### 3. Split useBatchProcessor.test.ts (was 5,988 lines)
 
-If still oversized, split by test category:
+- [ ] Read the test file to identify logical test groups
+- [ ] Extract lifecycle tests into `useBatchProcessor.lifecycle.test.ts`
+- [ ] Extract execution tests into `useBatchProcessor.execution.test.ts`
+- [ ] Extract worktree tests into `useBatchProcessor.worktree.test.ts`
+- [ ] Extract error handling tests into `useBatchProcessor.errors.test.ts`
+- [ ] Run: `rtk vitest run` (filter for batch processor test files)
 
-- `symphony.create.test.ts` - creation flow tests
-- `symphony.participants.test.ts` - participant management tests
-- `symphony.messages.test.ts` - message handling tests
-- `symphony.export.test.ts` - export/history tests
+### 4. Split TabBar.test.tsx (was 5,752 lines)
 
-### Task 3: Split useBatchProcessor.test.ts (was 5,988 lines)
+- [ ] Read the test file to identify logical test groups
+- [ ] Extract AI tab tests into `TabBar.aiTabs.test.tsx`
+- [ ] Extract file tab tests into `TabBar.fileTabs.test.tsx`
+- [ ] Extract drag-and-drop tests into `TabBar.dragDrop.test.tsx`
+- [ ] Extract keyboard navigation tests into `TabBar.keyboard.test.tsx`
+- [ ] Run: `rtk vitest run` (filter for TabBar test files)
 
-Split by feature:
+### 5. Create shared test utilities if patterns emerge
 
-- `useBatchProcessor.lifecycle.test.ts`
-- `useBatchProcessor.execution.test.ts`
-- `useBatchProcessor.worktree.test.ts`
-- `useBatchProcessor.errors.test.ts`
+- [ ] During splitting, identify common test setup/render patterns
+- [ ] If common render setup exists: extract to `src/__tests__/helpers/renderWithProviders.ts`
+- [ ] If common assertions exist: extract to `src/__tests__/helpers/testUtils.ts`
+- [ ] Update split test files to import from shared utilities
 
-### Task 4: Split TabBar.test.tsx (was 5,752 lines)
+### 6. Verify all tests pass after splitting
 
-If still oversized after mock consolidation, split by tab type:
+- [ ] Run full test suite: `rtk vitest run`
+- [ ] Run lint: `rtk npm run lint`
+- [ ] Verify types: `rtk tsc -p tsconfig.main.json --noEmit && rtk tsc -p tsconfig.lint.json --noEmit`
 
-- `TabBar.aiTabs.test.tsx`
-- `TabBar.fileTabs.test.tsx`
-- `TabBar.dragDrop.test.tsx`
-- `TabBar.keyboard.test.tsx`
+### 7. Count remaining oversized test files
 
-### Task 5: Create shared test utilities if patterns emerge
-
-During splitting, if common test patterns emerge, extract to:
-
-- `src/__tests__/helpers/renderWithProviders.ts` - common render setup
-- `src/__tests__/helpers/testUtils.ts` - common assertions
-
-### Task 6: Verify all tests pass after splitting
-
-```
-rtk vitest run
-```
-
-**MANDATORY: Do NOT skip verification.** Both lint and tests MUST pass on Windows before proceeding.
-
-### Task 7: Count remaining oversized test files
-
-```
-find src/__tests__/ -name "*.test.*" | xargs wc -l | awk '$1 > 2000' | wc -l
-```
-
-Target: fewer than 10 files over 2,000 lines.
+- [ ] Run: `find src/__tests__/ -name "*.test.*" | xargs wc -l | awk '$1 > 2000' | wc -l`
+- [ ] Target: fewer than 10 files over 2,000 lines
 
 ---
 
@@ -90,9 +82,9 @@ After completing changes, run targeted tests for the files you modified:
 rtk vitest run <path-to-relevant-test-files>
 ```
 
-**Rule: Zero new test failures from your changes.** Pre-existing failures on the baseline are acceptable. If a test you didn't touch starts failing, investigate whether your refactoring broke it. If your change removed code that a test depended on, update that test.
+**Rule: Zero new test failures from your changes.** Pre-existing failures on the baseline are acceptable.
 
-Do NOT run the full test suite (it takes too long). Only run tests relevant to the files you changed. Use `rtk grep` to find related test files:
+Find related test files:
 
 ```bash
 rtk grep "import.*from.*<module-you-changed>" --glob "*.test.*"

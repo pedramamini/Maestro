@@ -30,130 +30,75 @@ Break down `App.tsx` from 4,034 lines into focused modules. This is the single l
 
 ## Tasks
 
-### Task 1: Read App.tsx and categorize sections
+### 1. Read App.tsx and categorize sections
 
-Read the entire file and categorize its contents into logical groups:
+- [ ] Read the entire `src/renderer/App.tsx` file
+- [ ] Map out line ranges for: state declarations (useState, useRef), effect hooks (useEffect blocks), event handlers (keyboard, mouse, window), IPC listeners (window.maestro handlers), modal render logic, layout render (main JSX tree), helper functions, constants
+- [ ] Identify the largest extractable sections by line count
 
-Expected categories:
+### 2. Extract keyboard handler logic
 
-- **State declarations** (useState, useRef, etc.)
-- **Effect hooks** (useEffect blocks)
-- **Event handlers** (keyboard, mouse, window events)
-- **IPC listeners** (window.maestro event handlers)
-- **Modal render logic** (conditional modal rendering)
-- **Layout render** (the main JSX tree)
-- **Helper functions** (inline utilities)
-- **Constants** (inline constants)
+- [ ] Check if `useMainKeyboardHandler` already exists: `rtk grep "useMainKeyboardHandler" src/renderer/ --glob "*.{ts,tsx}"`
+- [ ] If App.tsx still has inline keyboard handling: extract to `src/renderer/hooks/useAppKeyboardHandler.ts`
+- [ ] Import and call the hook from App.tsx
+- [ ] Run lint and tests: `rtk npm run lint && rtk vitest run`
 
-Note the line ranges for each category.
+### 3. Extract IPC listener setup
 
-### Task 2: Extract keyboard handler logic
+- [ ] Create `src/renderer/hooks/useAppIpcListeners.ts`
+- [ ] Move all `window.maestro.on(...)` listener registrations from App.tsx into the hook
+- [ ] Define a `AppIpcDeps` interface for any dependencies the listeners need
+- [ ] Return cleanup function from the useEffect
+- [ ] Import and call from App.tsx
+- [ ] Run lint and tests: `rtk npm run lint && rtk vitest run`
 
-If `useMainKeyboardHandler` already exists, ensure App.tsx delegates to it fully. If App.tsx still has inline keyboard handling, extract it.
+### 4. Extract modal orchestration
 
-Target: `src/renderer/hooks/useAppKeyboardHandler.ts`
+- [ ] Create `src/renderer/components/AppModals.tsx`
+- [ ] Move all conditional modal rendering (`{isOpen && <Modal />}` blocks) from App.tsx into AppModals
+- [ ] Define `AppModalsProps` interface with all modal open states and handlers
+- [ ] Import and render `<AppModals>` from App.tsx
+- [ ] Run lint and tests: `rtk npm run lint && rtk vitest run`
 
-### Task 3: Extract IPC listener setup
+### 5. Extract session management effects
 
-All `window.maestro.on(...)` listeners in App.tsx should move to a dedicated hook:
+- [ ] Create `src/renderer/hooks/useSessionLifecycle.ts`
+- [ ] Move effects that manage session lifecycle (creation, deletion, status updates) from App.tsx
+- [ ] Import and call from App.tsx
+- [ ] Run lint and tests: `rtk npm run lint && rtk vitest run`
 
-Create `src/renderer/hooks/useAppIpcListeners.ts`:
+### 6. Extract auto-run / batch processing coordination
 
-```typescript
-export function useAppIpcListeners(deps: AppIpcDeps) {
-	useEffect(() => {
-		// All IPC listener registrations
-		// Return cleanup function
-	}, [deps]);
-}
-```
+- [ ] Create `src/renderer/hooks/useAutoRunCoordination.ts`
+- [ ] Move auto-run state management and batch processing coordination from App.tsx
+- [ ] Import and call from App.tsx
+- [ ] Run lint and tests: `rtk npm run lint && rtk vitest run`
 
-### Task 4: Extract modal orchestration
+### 7. Extract Encore Feature gating logic
 
-App.tsx likely renders 10+ modals conditionally. Extract the modal state and render logic:
+- [ ] Create `src/renderer/hooks/useEncoreFeatures.ts`
+- [ ] Centralize all Encore Feature conditional logic from App.tsx
+- [ ] Import and call from App.tsx
+- [ ] Run lint and tests: `rtk npm run lint && rtk vitest run`
 
-Create `src/renderer/components/AppModals.tsx`:
+### 8. Verify after each extraction
 
-```typescript
-interface AppModalsProps {
-	// All modal open states and handlers
-}
+- [ ] After each extraction above: `rtk npm run lint`
+- [ ] After each extraction above: `rtk vitest run`
+- [ ] After each extraction: verify App.tsx still composes everything correctly
+- [ ] After each extraction: confirm no behavior changes
 
-export function AppModals(props: AppModalsProps) {
-	return (
-		<>
-			{props.settingsOpen && <SettingsModal ... />}
-			{props.aboutOpen && <AboutModal ... />}
-			// ... all modals
-		</>
-	);
-}
-```
+### 9. Verify App.tsx is a thin coordinator
 
-### Task 5: Extract session management effects
+- [ ] App.tsx should contain: minimal state, extracted hook calls, and a clean JSX return with `<AppLayout>`, `<LeftBar>`, `<MainPanel>`, `<RightBar>`, `<AppModals>`
+- [ ] No inline event handlers longer than 3 lines
+- [ ] No inline effects
 
-Effects that manage session lifecycle (creation, deletion, status updates) can move to:
+### 10. Measure result
 
-Create `src/renderer/hooks/useSessionLifecycle.ts`
-
-### Task 6: Extract auto-run / batch processing coordination
-
-Auto-run state management and batch processing coordination can move to:
-
-Create `src/renderer/hooks/useAutoRunCoordination.ts`
-
-### Task 7: Extract Encore Feature gating logic
-
-All Encore Feature conditional logic can be centralized:
-
-Create `src/renderer/hooks/useEncoreFeatures.ts`
-
-### Task 8: Verify after each extraction
-
-After extracting each module:
-
-1. `rtk npm run lint`
-2. `rtk vitest run`
-3. Verify App.tsx still composes everything correctly
-4. Check no behavior changes
-
-**MANDATORY: Do NOT skip verification.** Both lint and tests MUST pass on Windows before proceeding.
-
-### Task 9: Final App.tsx should be a thin coordinator
-
-Target structure for App.tsx after decomposition:
-
-```typescript
-export function App() {
-	// Minimal state that truly belongs to App
-	const settings = useSettings();
-	const sessions = useSessionStore();
-
-	// Extracted hooks
-	useAppKeyboardHandler(...);
-	useAppIpcListeners(...);
-	useSessionLifecycle(...);
-	useAutoRunCoordination(...);
-	const encoreFeatures = useEncoreFeatures(settings);
-
-	return (
-		<AppLayout>
-			<LeftBar ... />
-			<MainPanel ... />
-			<RightBar ... />
-			<AppModals ... />
-		</AppLayout>
-	);
-}
-```
-
-### Task 10: Measure result
-
-```
-wc -l src/renderer/App.tsx
-```
-
-Target: <1,000 lines.
+- [ ] Run: `wc -l src/renderer/App.tsx`
+- [ ] Target: <1,000 lines
+- [ ] Verify types: `rtk tsc -p tsconfig.main.json --noEmit && rtk tsc -p tsconfig.lint.json --noEmit`
 
 ---
 
@@ -165,9 +110,9 @@ After completing changes, run targeted tests for the files you modified:
 rtk vitest run <path-to-relevant-test-files>
 ```
 
-**Rule: Zero new test failures from your changes.** Pre-existing failures on the baseline are acceptable. If a test you didn't touch starts failing, investigate whether your refactoring broke it. If your change removed code that a test depended on, update that test.
+**Rule: Zero new test failures from your changes.** Pre-existing failures on the baseline are acceptable.
 
-Do NOT run the full test suite (it takes too long). Only run tests relevant to the files you changed. Use `rtk grep` to find related test files:
+Find related test files:
 
 ```bash
 rtk grep "import.*from.*<module-you-changed>" --glob "*.test.*"

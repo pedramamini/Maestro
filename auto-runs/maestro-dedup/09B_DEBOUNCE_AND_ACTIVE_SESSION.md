@@ -18,84 +18,58 @@
 
 ---
 
-## Part 1: Debounce/Throttle Consolidation
+## Tasks
 
-### Task 1: Identify existing shared hooks
+### Part 1: Debounce/Throttle Consolidation
 
-```
-rtk grep -rn "useDebounce\|useThrottle\|useDebouncedPersistence\|useSessionDebounce" src/renderer/hooks/ --include="*.ts" -l
-```
+### 1. Identify existing shared hooks
 
-Read each to understand their API.
+- [ ] Run: `rtk grep "useDebounce|useThrottle|useDebouncedPersistence|useSessionDebounce" src/renderer/hooks/ --glob "*.ts"`
+- [ ] Read each hook to understand its API and parameters
 
-### Task 2: Find inline implementations
+### 2. Find inline debounce/throttle implementations
 
-```
-rtk grep -rn "setTimeout\|debounce\|throttle" src/renderer/ --include="*.ts" --include="*.tsx" | grep -v "__tests__" | grep -v "node_modules" | grep -v "hooks/utils"
-```
+- [ ] Run: `rtk grep "setTimeout|debounce|throttle" src/renderer/ --glob "*.{ts,tsx}"` (exclude `__tests__`, `node_modules`, `hooks/utils`)
+- [ ] Filter for files implementing their own debounce/throttle rather than importing shared hooks
+- [ ] List each file and the pattern it uses
 
-Filter for files that implement their own debounce/throttle rather than using the shared hooks.
+### 3. Migrate to shared hooks (15+ files)
 
-### Task 3: Migrate to shared hooks
+- [ ] For each file: identify the debounce/throttle pattern used
+- [ ] Match to the appropriate shared hook (`useDebounce`, `useThrottle`, `useDebouncedPersistence`, or `useSessionDebounce`)
+- [ ] Replace the inline implementation with the shared hook import
+- [ ] Run file-level tests after each migration: `rtk vitest run <relevant-test>`
 
-For each of the 15+ files:
+### Part 2: activeSession Re-derivation
 
-1. Identify the debounce/throttle pattern
-2. Match to the appropriate shared hook
-3. Replace the inline implementation
-4. Run file-level tests
+### 4. Find all re-derivation patterns
 
----
+- [ ] Run: `rtk grep "sessions\.find.*activeSessionId|sessions\.find.*id === active" src/renderer/ --glob "*.{ts,tsx}"` (exclude `__tests__`, `sessionStore`)
+- [ ] Count total instances across files
 
-## Part 2: activeSession Re-derivation
+### 5. Create or promote a useActiveSession hook
 
-### Task 4: Find all re-derivation patterns
+- [ ] Check if `useActiveSession` already exists: `rtk grep "useActiveSession" src/renderer/ --glob "*.{ts,tsx}"`
+- [ ] If it doesn't exist, create `src/renderer/hooks/useActiveSession.ts` that returns `useSessionStore(state => state.sessions.find(s => s.id === state.activeSessionId))`
+- [ ] If it exists, note its location for imports
 
-```
-rtk grep -rn "sessions\.find.*activeSessionId\|sessions\.find.*id === active" src/renderer/ --include="*.ts" --include="*.tsx" | grep -v "__tests__" | grep -v "sessionStore"
-```
+### 6. Migrate 28 files to useActiveSession
 
-### Task 5: Create or promote a useActiveSession hook
+- [ ] For each file that re-derives `activeSession`: replace the derivation with `useActiveSession()` import
+- [ ] Remove any local variable that was doing the lookup
+- [ ] Handle files that re-derive multiple times internally - replace all occurrences
+- [ ] Run targeted tests after each batch
 
-If one doesn't exist, create `src/renderer/hooks/useActiveSession.ts`:
+### 7. Verify full build
 
-```typescript
-import { useSessionStore } from '../stores/sessionStore';
+- [ ] Run lint: `rtk npm run lint`
+- [ ] Run tests: `rtk vitest run`
+- [ ] Verify types: `rtk tsc -p tsconfig.main.json --noEmit && rtk tsc -p tsconfig.lint.json --noEmit`
 
-/**
- * Returns the currently active session.
- * Use this instead of manually deriving from sessions array.
- */
-export function useActiveSession() {
-	return useSessionStore((state) => state.sessions.find((s) => s.id === state.activeSessionId));
-}
-```
+### 8. Count remaining derivations
 
-### Task 6: Migrate 28 files
-
-For each file that re-derives `activeSession`:
-
-1. Replace the derivation with `useActiveSession()` import
-2. Remove any local variable that was doing the lookup
-
-Handle files that re-derive multiple times internally - replace all occurrences.
-
-### Task 7: Verify
-
-```
-rtk npm run lint
-rtk vitest run
-```
-
-**MANDATORY: Do NOT skip verification.** Both lint and tests MUST pass on Windows before proceeding.
-
-### Task 8: Count remaining derivations
-
-```
-rtk grep -rn "sessions\.find.*activeSessionId" src/renderer/ --include="*.ts" --include="*.tsx" | grep -v "__tests__" | grep -v "sessionStore" | grep -v "useActiveSession" | wc -l
-```
-
-Target: 0.
+- [ ] Run: `rtk grep "sessions\.find.*activeSessionId" src/renderer/ --glob "*.{ts,tsx}"` (exclude `__tests__`, `sessionStore`, `useActiveSession`)
+- [ ] Target: 0 remaining
 
 ---
 
@@ -107,9 +81,9 @@ After completing changes, run targeted tests for the files you modified:
 rtk vitest run <path-to-relevant-test-files>
 ```
 
-**Rule: Zero new test failures from your changes.** Pre-existing failures on the baseline are acceptable. If a test you didn't touch starts failing, investigate whether your refactoring broke it. If your change removed code that a test depended on, update that test.
+**Rule: Zero new test failures from your changes.** Pre-existing failures on the baseline are acceptable.
 
-Do NOT run the full test suite (it takes too long). Only run tests relevant to the files you changed. Use `rtk grep` to find related test files:
+Find related test files:
 
 ```bash
 rtk grep "import.*from.*<module-you-changed>" --glob "*.test.*"

@@ -19,130 +19,63 @@ Replace 100+ instances of the ghost icon button pattern (`p-1 rounded hover:bg-w
 
 ## Tasks
 
-### Task 1: Survey the pattern variations
+### 1. Survey pattern variations
 
-```
-rtk grep "p-1 rounded hover:bg-white/10" src/renderer/ --glob="*.tsx"
-rtk grep "p-1.5 rounded hover:bg-white/10" src/renderer/ --glob="*.tsx"
-rtk grep "opacity-0 group-hover:opacity-100" src/renderer/ --glob="*.tsx" | rtk grep "p-1"
-```
+- [ ] Run: `rtk grep "p-1 rounded hover:bg-white/10" src/renderer/ --glob "*.tsx"`
+- [ ] Run: `rtk grep "p-1.5 rounded hover:bg-white/10" src/renderer/ --glob "*.tsx"`
+- [ ] Run: `rtk grep "opacity-0 group-hover:opacity-100" src/renderer/ --glob "*.tsx"` (filter for p-1 variants)
+- [ ] Categorize variants: Standard (`p-1`), Larger (`p-1.5`), Fade-in (with `opacity-0 group-hover:opacity-100`), With tooltip
 
-Categorize the variants:
+### 2. Create the GhostIconButton component
 
-- **Standard:** `p-1 rounded hover:bg-white/10 transition-colors`
-- **Larger:** `p-1.5 rounded hover:bg-white/10 transition-colors`
-- **Fade-in:** Above + `opacity-0 group-hover:opacity-100`
-- **With tooltip:** Above + wrapped in tooltip
+- [ ] Create `src/renderer/components/ui/GhostIconButton.tsx`
+- [ ] Define props interface: `icon`, `size` (`'sm' | 'md'`), `showOnHover`, `tooltip`, `className`, `children`, plus `ButtonHTMLAttributes`
+- [ ] Implement size mapping: `sm` = `p-1`, `md` = `p-1.5`
+- [ ] Implement `showOnHover` via `opacity-0 group-hover:opacity-100` class
+- [ ] Implement optional tooltip wrapper
+- [ ] Export from the component file
 
-### Task 2: Design the component API
+### 3. Write tests for GhostIconButton
 
-Create `src/renderer/components/ui/GhostIconButton.tsx`:
+- [ ] Create `src/__tests__/renderer/components/ui/GhostIconButton.test.tsx`
+- [ ] Test renders with default props
+- [ ] Test applies `p-1` for size `sm` and `p-1.5` for size `md`
+- [ ] Test applies `opacity-0 group-hover:opacity-100` when `showOnHover` is true
+- [ ] Test passes through button props (`onClick`, `disabled`, `aria-label`)
+- [ ] Test renders tooltip when `tooltip` prop provided
+- [ ] Run tests: `rtk vitest run src/__tests__/renderer/components/ui/GhostIconButton.test.tsx`
 
-```typescript
-import React from 'react';
+### 4. Migrate high-frequency files first
 
-interface GhostIconButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
-	/** Icon component from lucide-react */
-	icon?: React.ReactNode;
-	/** Size variant */
-	size?: 'sm' | 'md';
-	/** Show only on parent hover (requires parent to have 'group' class) */
-	showOnHover?: boolean;
-	/** Optional tooltip text */
-	tooltip?: string;
-	/** Additional className */
-	className?: string;
-	children?: React.ReactNode;
-}
+- [ ] Migrate `TabBar.tsx` - find and replace all ghost icon button patterns
+- [ ] Migrate `SessionList.tsx`
+- [ ] Migrate `RightPanel.tsx`
+- [ ] Migrate `SymphonyModal.tsx`
+- [ ] For each file: run `rtk vitest run <relevant-test>` after migration
 
-export function GhostIconButton({
-	icon,
-	size = 'sm',
-	showOnHover = false,
-	tooltip,
-	className = '',
-	children,
-	...buttonProps
-}: GhostIconButtonProps) {
-	const sizeClass = size === 'sm' ? 'p-1' : 'p-1.5';
-	const hoverClass = showOnHover ? 'opacity-0 group-hover:opacity-100' : '';
+### 5. Migrate remaining 36+ files
 
-	const button = (
-		<button
-			type="button"
-			className={`${sizeClass} rounded hover:bg-white/10 transition-colors ${hoverClass} ${className}`}
-			{...buttonProps}
-		>
-			{icon || children}
-		</button>
-	);
+- [ ] Search for remaining pattern instances: `rtk grep "p-1 rounded hover:bg-white/10" src/renderer/ --glob "*.tsx"`
+- [ ] Replace each instance with `<GhostIconButton>` using appropriate props
+- [ ] Ensure the `icon` prop matches (most pass a lucide-react icon as child)
+- [ ] Run targeted tests after each batch
 
-	if (tooltip) {
-		// Wrap with your tooltip component
-		return <Tooltip content={tooltip}>{button}</Tooltip>;
-	}
+### 6. Handle edge cases
 
-	return button;
-}
-```
+- [ ] Check for buttons with additional active state classes - add `active` prop if needed
+- [ ] Check for buttons with custom hover colors - accept via `className` prop
+- [ ] Verify disabled state looks correct on the component
 
-### Task 3: Write tests
+### 7. Verify full build
 
-Create `src/__tests__/renderer/components/ui/GhostIconButton.test.tsx`:
+- [ ] Run lint: `rtk npm run lint`
+- [ ] Run tests: `rtk vitest run`
+- [ ] Verify types: `rtk tsc -p tsconfig.main.json --noEmit && rtk tsc -p tsconfig.lint.json --noEmit`
 
-- Renders with default props
-- Applies size variants correctly
-- Applies showOnHover class
-- Passes through button props (onClick, disabled, aria-label)
-- Renders tooltip when provided
+### 8. Count remaining raw patterns
 
-### Task 4: Migrate high-frequency files first
-
-Start with files that have the most instances:
-
-1. `TabBar.tsx`
-2. `SessionList.tsx`
-3. `RightPanel.tsx`
-4. `SymphonyModal.tsx`
-
-For each:
-
-1. Find all ghost icon button patterns
-2. Replace with `<GhostIconButton>`
-3. Run `rtk vitest run path/to/test`
-
-### Task 5: Migrate remaining files
-
-Work through the remaining 36+ files. For each:
-
-1. Search for the pattern
-2. Replace with the component
-3. Ensure the `icon` prop matches (most pass a lucide-react icon as a child)
-
-### Task 6: Handle edge cases
-
-Some buttons may have additional classes or behaviors:
-
-- **Active state:** Add an `active` prop if needed
-- **Custom hover color:** Accept `hoverColor` prop
-- **Disabled styling:** Ensure disabled state looks correct
-
-### Task 7: Verify
-
-```
-rtk npm run lint
-rtk vitest run
-```
-
-**MANDATORY: Do NOT skip verification.** Both lint and tests MUST pass on Windows before proceeding.
-
-### Task 8: Count remaining raw patterns
-
-```
-rtk grep "p-1 rounded hover:bg-white/10" src/renderer/ --glob="*.tsx" | rtk grep -v "GhostIconButton" | wc -l
-```
-
-Target: fewer than 5 remaining (edge cases only).
+- [ ] Run: `rtk grep "p-1 rounded hover:bg-white/10" src/renderer/ --glob "*.tsx"` (exclude GhostIconButton)
+- [ ] Target: fewer than 5 remaining (edge cases only)
 
 ---
 
@@ -154,9 +87,9 @@ After completing changes, run targeted tests for the files you modified:
 rtk vitest run <path-to-relevant-test-files>
 ```
 
-**Rule: Zero new test failures from your changes.** Pre-existing failures on the baseline are acceptable. If a test you didn't touch starts failing, investigate whether your refactoring broke it. If your change removed code that a test depended on, update that test.
+**Rule: Zero new test failures from your changes.** Pre-existing failures on the baseline are acceptable.
 
-Do NOT run the full test suite (it takes too long). Only run tests relevant to the files you changed. Use `rtk grep` to find related test files:
+Find related test files:
 
 ```bash
 rtk grep "import.*from.*<module-you-changed>" --glob "*.test.*"

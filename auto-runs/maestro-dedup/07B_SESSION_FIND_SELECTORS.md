@@ -19,87 +19,55 @@ Replace 71 inline `sessions.find(s => s.id === ...)` calls with the existing sto
 
 ## Tasks
 
-### Task 1: Verify store selectors exist
+### 1. Verify store selectors exist
 
-Read `src/renderer/stores/sessionStore.ts` to confirm:
+- [ ] Read `src/renderer/stores/sessionStore.ts` and confirm `getActiveSession` exists (~line 320)
+- [ ] Confirm `getSessionById` exists (~line 331) and takes an ID, returns session or undefined
+- [ ] Note the exact import paths and function signatures
 
-- `getActiveSession` (line ~320) - returns the active session
-- `getSessionById` (line ~331) - takes an ID, returns session or undefined
+### 2. Find all inline sessions.find calls
 
-### Task 2: Find all inline sessions.find calls
+- [ ] Run: `rtk grep "sessions\.find" src/ --glob "*.{ts,tsx}"` (exclude `__tests__` and `sessionStore`)
+- [ ] Count total instances and categorize by pattern (active session lookup vs specific ID lookup)
 
-```
-rtk grep "sessions\.find" src/ --glob="*.{ts,tsx}" | rtk grep -v "__tests__" | rtk grep -v "sessionStore"
-```
+### 3. Migrate activeSession re-derivations (28 files)
 
-### Task 3: Categorize by pattern
+- [ ] For files using hooks: replace `sessions.find(s => s.id === activeSessionId)` with `getActiveSession()` or the equivalent store selector
+- [ ] For files in callbacks/event handlers: replace `useSessionStore.getState().sessions.find(...)` with `getActiveSession()`
+- [ ] Run targeted tests after each batch of files
 
-**Pattern A: Finding by active session ID** (~28 files)
+### 4. Migrate specific-ID lookups (43 calls)
 
-```typescript
-// BEFORE
-const session = sessions.find((s) => s.id === activeSessionId);
-// AFTER
-const session = getActiveSession();
-// Or: useSessionStore(state => state.sessions.find(s => s.id === activeSessionId))
-```
+- [ ] Replace `sessions.find(s => s.id === someId)` with `getSessionById(someId)` in each file
+- [ ] Run targeted tests: `rtk vitest run <relevant-test>`
 
-**Pattern B: Finding by specific ID** (~43 calls)
+### 5. Fix wizard re-lookups (8 wasteful re-finds)
 
-```typescript
-// BEFORE
-const session = sessions.find((s) => s.id === someId);
-// AFTER
-const session = getSessionById(someId);
-```
+- [ ] Identify the 8 instances in wizard code where `activeSession` is re-found despite already being in scope
+- [ ] Remove redundant lookups and use the existing variable
+- [ ] Run wizard tests: `rtk vitest run` (filter for wizard test files)
 
-### Task 4: Migrate activeSession re-derivations (28 files)
+### 6. Fix useTabHandlers.ts (13 identical finds)
 
-These files derive `activeSession` when it's either already available in scope or available via a store selector.
+- [ ] Read `useTabHandlers.ts` to find all 13 `sessions.find` calls
+- [ ] Hoist a single lookup to the top of each function/handler and reuse throughout
+- [ ] Run tab handler tests: `rtk vitest run` (filter for tab handler test files)
 
-For files using hooks:
+### 7. Consolidate getSshRemoteById (6 definitions, 5 redundant)
 
-```typescript
-import { useSessionStore } from '../stores/sessionStore';
-const activeSession = useSessionStore((state) =>
-	state.sessions.find((s) => s.id === state.activeSessionId)
-);
-```
+- [ ] Verify canonical location: `main/stores/getters.ts:115`
+- [ ] Remove local copy in `agentSessions.ts:82` and replace with import
+- [ ] Remove local copy in `agents.ts:202` and replace with import
+- [ ] Remove local copy in `autorun.ts:43` and replace with import
+- [ ] Remove local copy in `git.ts:54` and replace with import
+- [ ] Remove local copy in `marketplace.ts:66` and replace with import
+- [ ] Run targeted tests for each changed file
 
-For files in callbacks/event handlers:
+### 8. Verify full build
 
-```typescript
-import { useSessionStore } from '../stores/sessionStore';
-const activeSession = useSessionStore
-	.getState()
-	.sessions.find((s) => s.id === useSessionStore.getState().activeSessionId);
-```
-
-### Task 5: Fix wizard re-lookups (8 wasteful re-finds)
-
-The wizard code has 8 instances where it re-finds `activeSession` that's already in scope. Remove these redundant lookups and use the variable already available.
-
-### Task 6: Fix useTabHandlers.ts (13 identical finds)
-
-`useTabHandlers.ts` has 13 identical `sessions.find` calls. Many can be replaced with a single lookup at the top of the function/handler, reused throughout.
-
-### Task 7: Consolidate getSshRemoteById (SCAN-STATE.md item #16)
-
-6 definitions of `getSshRemoteById`, 5 redundant:
-
-- Canonical: `main/stores/getters.ts:115`
-- Remove local copies in: `agentSessions.ts:82`, `agents.ts:202`, `autorun.ts:43`, `git.ts:54`, `marketplace.ts:66`
-
-Replace with imports from canonical source.
-
-### Task 8: Verify
-
-```
-rtk npm run lint
-rtk vitest run
-```
-
-**MANDATORY: Do NOT skip verification.** Both lint and tests MUST pass on Windows before proceeding.
+- [ ] Run lint: `rtk npm run lint`
+- [ ] Run tests: `rtk vitest run`
+- [ ] Verify types: `rtk tsc -p tsconfig.main.json --noEmit && rtk tsc -p tsconfig.lint.json --noEmit`
 
 ---
 
@@ -111,9 +79,9 @@ After completing changes, run targeted tests for the files you modified:
 rtk vitest run <path-to-relevant-test-files>
 ```
 
-**Rule: Zero new test failures from your changes.** Pre-existing failures on the baseline are acceptable. If a test you didn't touch starts failing, investigate whether your refactoring broke it. If your change removed code that a test depended on, update that test.
+**Rule: Zero new test failures from your changes.** Pre-existing failures on the baseline are acceptable.
 
-Do NOT run the full test suite (it takes too long). Only run tests relevant to the files you changed. Use `rtk grep` to find related test files:
+Find related test files:
 
 ```bash
 rtk grep "import.*from.*<module-you-changed>" --glob "*.test.*"

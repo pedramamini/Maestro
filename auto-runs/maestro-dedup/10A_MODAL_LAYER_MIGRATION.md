@@ -20,102 +20,65 @@ Migrate 50+ files from manual `registerLayer`/`unregisterLayer` boilerplate to t
 
 ## Tasks
 
-### Task 1: Read the existing useModalLayer hook
+### 1. Read the existing useModalLayer hook
 
-Read `src/renderer/hooks/ui/useModalLayer.ts` to understand its API:
+- [ ] Read `src/renderer/hooks/ui/useModalLayer.ts`
+- [ ] Document what parameters it accepts
+- [ ] Confirm it handles the `isOpen` conditional logic
+- [ ] Confirm it accepts priority from `modalPriorities.ts`
+- [ ] Confirm it handles the `onCloseRef` pattern internally
 
-- What parameters does it accept?
-- Does it handle the `isOpen` conditional logic?
-- Does it accept priority from `modalPriorities.ts`?
-- Does it handle the `onCloseRef` pattern?
+### 2. Verify useModalLayer covers all manual patterns
 
-### Task 2: Verify useModalLayer covers all patterns
+- [ ] Compare the manual boilerplate pattern (`useLayerStack` + `useRef` + `useEffect` with `registerLayer`/`unregisterLayer`) against what `useModalLayer` provides
+- [ ] If the hook is missing any capability (e.g., custom layer type, conditional priority), extend it before migration
+- [ ] Run hook tests after any extension: `rtk vitest run <hook-test-path>`
 
-The manual pattern looks like:
+### 3. Find all files with manual boilerplate
 
-```typescript
-const { registerLayer, unregisterLayer } = useLayerStack();
-const onCloseRef = useRef(onClose);
-onCloseRef.current = onClose;
+- [ ] Run: `rtk grep "registerLayer|unregisterLayer" src/renderer/ --glob "*.{ts,tsx}"` (exclude `__tests__`, `useModalLayer`, `LayerStackContext`)
+- [ ] List all files and count total instances
 
-useEffect(() => {
-	if (isOpen) {
-		const id = registerLayer({
-			type: 'modal',
-			priority: MODAL_PRIORITIES.SOME_MODAL,
-			onEscape: () => onCloseRef.current(),
-		});
-		return () => unregisterLayer(id);
-	}
-}, [isOpen, registerLayer, unregisterLayer]);
-```
+### 4. Migrate simple modals (~30 files)
 
-Ensure `useModalLayer` handles all of this. If not, extend it.
+- [ ] For each file with direct `isOpen` + `onClose` props: replace the manual `useLayerStack` + `useRef` + `useEffect` block with `useModalLayer({ isOpen, priority, onEscape: onClose })`
+- [ ] Remove now-unused imports of `useLayerStack`, `useRef` (if no longer needed), and `useEffect` (if no longer needed)
+- [ ] Run targeted tests after each batch: `rtk vitest run <relevant-test>`
 
-### Task 3: Find all files with manual boilerplate
+### 5. Migrate complex modals (~15 files)
 
-```
-rtk grep -rn "registerLayer\|unregisterLayer" src/renderer/ --include="*.ts" --include="*.tsx" | grep -v "__tests__" | grep -v "useModalLayer" | grep -v "LayerStackContext" -l
-```
+- [ ] For modals with conditional open states or multiple close paths: adapt the `useModalLayer` call to match the existing behavior
+- [ ] Verify each modal's Escape key behavior works correctly after migration
+- [ ] Run targeted tests after each file
 
-### Task 4: Migrate in batches by component directory
+### 6. Migrate non-modal layers (~5 files)
 
-For each file:
+- [ ] For drawers, panels, or other layers with escape handling: use `useModalLayer` with appropriate type/priority
+- [ ] Run targeted tests
 
-```typescript
-// BEFORE (manual)
-const { registerLayer, unregisterLayer } = useLayerStack();
-const onCloseRef = useRef(onClose);
-onCloseRef.current = onClose;
-useEffect(() => {
-	if (isOpen) {
-		const id = registerLayer({ type: 'modal', priority: X, onEscape: () => onCloseRef.current() });
-		return () => unregisterLayer(id);
-	}
-}, [isOpen, registerLayer, unregisterLayer]);
+### 7. Handle DocumentGraphView.tsx (17 registerLayer calls)
 
-// AFTER (hook)
-useModalLayer({
-	isOpen,
-	priority: X,
-	onEscape: onClose,
-});
-```
+- [ ] Read the file to understand its multiple nested modal layers
+- [ ] Migrate each layer to its own `useModalLayer` call with the correct priority
+- [ ] Verify stacked modal Escape behavior works correctly
+- [ ] Run tests: `rtk vitest run` (filter for DocumentGraphView tests)
 
-Process files in batches:
+### 8. Verify Escape key behavior across migrated modals
 
-1. Simple modals (direct `isOpen` + `onClose` props) - ~30 files
-2. Complex modals (conditional open, multiple close paths) - ~15 files
-3. Non-modal layers (drawers, panels with escape handling) - ~5 files
+- [ ] Escape closes the topmost modal
+- [ ] Stacked modals close in correct order (highest priority first)
+- [ ] Escape does NOT close modals that are behind other modals
 
-### Task 5: Handle DocumentGraphView.tsx (17 registerLayer calls)
+### 9. Verify full build
 
-This is the worst offender. It likely has multiple nested modal layers. Migrate carefully - each layer needs its own `useModalLayer` call with the correct priority.
+- [ ] Run lint: `rtk npm run lint`
+- [ ] Run tests: `rtk vitest run`
+- [ ] Verify types: `rtk tsc -p tsconfig.main.json --noEmit && rtk tsc -p tsconfig.lint.json --noEmit`
 
-### Task 6: Verify Escape key behavior
+### 10. Count remaining manual registrations
 
-After migrating each batch, manually verify:
-
-- Escape closes the topmost modal
-- Stacked modals close in correct order
-- Escape does NOT close modals that are behind other modals
-
-### Task 7: Verify
-
-```
-rtk npm run lint
-rtk vitest run
-```
-
-**MANDATORY: Do NOT skip verification.** Both lint and tests MUST pass on Windows before proceeding.
-
-### Task 8: Count remaining manual registrations
-
-```
-rtk grep -rn "registerLayer" src/renderer/ --include="*.ts" --include="*.tsx" | grep -v "__tests__" | grep -v "useModalLayer" | grep -v "LayerStackContext" | wc -l
-```
-
-Target: 0.
+- [ ] Run: `rtk grep "registerLayer" src/renderer/ --glob "*.{ts,tsx}"` (exclude `__tests__`, `useModalLayer`, `LayerStackContext`)
+- [ ] Target: 0 remaining in component files
 
 ---
 
@@ -127,9 +90,9 @@ After completing changes, run targeted tests for the files you modified:
 rtk vitest run <path-to-relevant-test-files>
 ```
 
-**Rule: Zero new test failures from your changes.** Pre-existing failures on the baseline are acceptable. If a test you didn't touch starts failing, investigate whether your refactoring broke it. If your change removed code that a test depended on, update that test.
+**Rule: Zero new test failures from your changes.** Pre-existing failures on the baseline are acceptable.
 
-Do NOT run the full test suite (it takes too long). Only run tests relevant to the files you changed. Use `rtk grep` to find related test files:
+Find related test files:
 
 ```bash
 rtk grep "import.*from.*<module-you-changed>" --glob "*.test.*"

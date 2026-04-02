@@ -19,74 +19,44 @@ Extend the existing `EmptyStateView` component (currently used only in `App.tsx:
 
 ## Tasks
 
-### Task 1: Read the existing EmptyStateView
+### 1. Read the existing EmptyStateView
 
-Read `src/renderer/components/EmptyStateView.tsx` to understand its current API and what it renders.
+- [ ] Read `src/renderer/components/EmptyStateView.tsx` to understand its current API and render output
+- [ ] Note what props it currently accepts and what it renders
 
-Understand its current API and what it renders.
+### 2. Survey existing empty state patterns
 
-### Task 2: Survey existing empty state patterns
+- [ ] Run: `rtk grep "No .* found|No .* available|No .* yet|Nothing to show|Empty|Get started" src/renderer/components/ --glob "*.tsx"`
+- [ ] Categorize patterns: icon+message, icon+message+action button, centered message only, message+subtitle
 
-```
-rtk grep "No .* found|No .* available|No .* yet|Nothing to show|Empty|Get started" src/renderer/components/ --glob="*.tsx"
-```
+### 3. Extend EmptyStateView with flexible props
 
-Common patterns include:
+- [ ] Update `src/renderer/components/EmptyStateView.tsx` to accept: `icon` (ReactNode), `message` (string, required), `description` (string, optional), `action` (`{ label: string; onClick: () => void }`, optional), `className` (string, optional)
+- [ ] Implement conditional rendering for each optional prop
+- [ ] Ensure backward compatibility with existing usage in `App.tsx:3340`
 
-- Icon + message
-- Icon + message + action button
-- Just a centered message
-- Message with subtitle
+### 4. Write tests for all prop combinations
 
-### Task 3: Extend EmptyStateView with flexible props
+- [ ] Update or create tests at `src/__tests__/renderer/components/EmptyStateView.test.tsx`
+- [ ] Test message-only rendering
+- [ ] Test icon + message rendering
+- [ ] Test icon + message + description rendering
+- [ ] Test full props: icon + message + description + action button
+- [ ] Test action button `onClick` fires correctly
+- [ ] Run tests: `rtk vitest run src/__tests__/renderer/components/EmptyStateView.test.tsx`
 
-Update `src/renderer/components/EmptyStateView.tsx`:
+### 5. Migrate empty state locations (26+ sites)
 
-```typescript
-interface EmptyStateViewProps {
-	/** Icon component (from lucide-react) */
-	icon?: React.ReactNode;
-	/** Primary message */
-	message: string;
-	/** Optional secondary description */
-	description?: string;
-	/** Optional action button */
-	action?: {
-		label: string;
-		onClick: () => void;
-	};
-	/** Additional className for the container */
-	className?: string;
-}
-```
+- [ ] Start with the simplest cases (message-only) and replace inline markup with `<EmptyStateView message="..." />`
+- [ ] Migrate icon+message patterns: `<EmptyStateView icon={<SomeIcon />} message="..." />`
+- [ ] Migrate complex patterns with action buttons: `<EmptyStateView icon={...} message="..." action={{ label: "...", onClick: ... }} />`
+- [ ] Run targeted tests after each batch of migrations
 
-### Task 4: Write tests
+### 6. Verify full build
 
-Update tests to cover all prop combinations:
-
-- Message only
-- Icon + message
-- Icon + message + description
-- Full props (icon + message + description + action)
-
-### Task 5: Migrate empty state locations
-
-For each of the 26+ locations:
-
-1. Find the inline empty state markup
-2. Replace with `<EmptyStateView icon={...} message="..." />`
-3. Verify visual appearance matches
-
-Start with the simplest cases (message-only) and work up to complex ones.
-
-### Task 6: Verify
-
-```
-rtk npm run lint
-rtk vitest run
-```
-
-**MANDATORY: Do NOT skip verification.** Both lint and tests MUST pass on Windows before proceeding.
+- [ ] Run lint: `rtk npm run lint`
+- [ ] Run tests: `rtk vitest run`
+- [ ] Verify types: `rtk tsc -p tsconfig.main.json --noEmit && rtk tsc -p tsconfig.lint.json --noEmit`
 
 ---
 
@@ -98,9 +68,9 @@ After completing changes, run targeted tests for the files you modified:
 rtk vitest run <path-to-relevant-test-files>
 ```
 
-**Rule: Zero new test failures from your changes.** Pre-existing failures on the baseline are acceptable. If a test you didn't touch starts failing, investigate whether your refactoring broke it. If your change removed code that a test depended on, update that test.
+**Rule: Zero new test failures from your changes.** Pre-existing failures on the baseline are acceptable.
 
-Do NOT run the full test suite (it takes too long). Only run tests relevant to the files you changed. Use `rtk grep` to find related test files:
+Find related test files:
 
 ```bash
 rtk grep "import.*from.*<module-you-changed>" --glob "*.test.*"

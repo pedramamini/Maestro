@@ -21,162 +21,81 @@ Create two shared hooks to replace repetitive patterns:
 
 ---
 
-## Part 1: useFocusAfterRender
+## Tasks
 
-### Task 1: Survey the setTimeout focus pattern
+### Part 1: useFocusAfterRender
 
-```
-rtk grep -rn "setTimeout.*focus" src/renderer/ --include="*.ts" --include="*.tsx" | grep -v "__tests__"
-```
+### 1. Survey the setTimeout focus pattern
 
-Note the delay values used: 0ms, 50ms, 100ms are common. Determine the most common default.
+- [ ] Run: `rtk grep "setTimeout.*focus" src/renderer/ --glob "*.{ts,tsx}"` (exclude `__tests__`)
+- [ ] Note delay values used (0ms, 50ms, 100ms are common)
+- [ ] Determine the most common default delay
 
-### Task 2: Create useFocusAfterRender hook
+### 2. Create useFocusAfterRender hook
 
-Create `src/renderer/hooks/utils/useFocusAfterRender.ts`:
+- [ ] Create `src/renderer/hooks/utils/useFocusAfterRender.ts`
+- [ ] Implement with params: `ref` (RefObject), `shouldFocus` (boolean, default true), `delay` (number, default 0)
+- [ ] Use `useEffect` with `setTimeout` + `clearTimeout` cleanup
+- [ ] Export the function
 
-```typescript
-import { useEffect, type RefObject } from 'react';
+### 3. Write tests for useFocusAfterRender
 
-/**
- * Focus an element after render with an optional delay.
- * Replaces the common setTimeout(() => ref.current?.focus(), delay) pattern.
- */
-export function useFocusAfterRender(
-	ref: RefObject<HTMLElement | null>,
-	shouldFocus: boolean = true,
-	delay: number = 0
-): void {
-	useEffect(() => {
-		if (!shouldFocus) return;
+- [ ] Create test file for the hook
+- [ ] Test focuses element after render
+- [ ] Test respects delay parameter
+- [ ] Test cleans up timeout on unmount
+- [ ] Test does nothing when `shouldFocus` is false
+- [ ] Run tests: `rtk vitest run <hook-test-path>`
 
-		const timer = setTimeout(() => {
-			ref.current?.focus();
-		}, delay);
+### 4. Migrate setTimeout focus patterns (45 instances across 28 files)
 
-		return () => clearTimeout(timer);
-	}, [ref, shouldFocus, delay]);
-}
-```
+- [ ] For each file: identify whether the `setTimeout(() => ref.current?.focus(), N)` is inside a `useEffect` or an event handler
+- [ ] If inside `useEffect`: replace entirely with `useFocusAfterRender(ref, condition, delay)`
+- [ ] If inside an event handler: keep inline (the hook is for render-time focus only)
+- [ ] Run targeted tests after each batch of files
 
-### Task 3: Write tests for useFocusAfterRender
+### Part 2: useEventListener
 
-Test:
+### 5. Survey addEventListener/removeEventListener pairs
 
-- Focuses element after render
-- Respects delay parameter
-- Cleans up timeout on unmount
-- Does nothing when shouldFocus is false
+- [ ] Run: `rtk grep "addEventListener" src/renderer/ --glob "*.{ts,tsx}"` (exclude `__tests__`, `node_modules`)
+- [ ] Identify top offenders: `activityBus.ts` (10), `MarketplaceModal.tsx` (10), `useMainKeyboardHandler.ts` (8), `SymphonyModal.tsx` (8), `App.tsx` (8)
 
-### Task 4: Migrate setTimeout focus patterns (45 instances)
+### 6. Create useEventListener hook
 
-For each of the 28 files:
+- [ ] Create `src/renderer/hooks/utils/useEventListener.ts`
+- [ ] Implement with params: `eventName`, `handler`, `element` (optional, defaults to window), `options` (optional)
+- [ ] Use `useRef` for handler to avoid re-attaching on handler changes
+- [ ] Handle null/undefined element gracefully
+- [ ] Export the function
 
-1. Find the `setTimeout(() => ref.current?.focus(), N)` pattern
-2. Determine if it's in a `useEffect` (replace entirely) or in an event handler (may need different approach)
-3. If in useEffect, replace with `useFocusAfterRender(ref, condition, delay)`
-4. If in an event handler, keep inline (the hook is for render-time focus)
+### 7. Write tests for useEventListener
 
----
+- [ ] Create test file for the hook
+- [ ] Test attaches listener on mount
+- [ ] Test removes listener on unmount
+- [ ] Test updates handler without re-attaching listener
+- [ ] Test works with custom HTML elements
+- [ ] Test handles null element gracefully
+- [ ] Run tests: `rtk vitest run <hook-test-path>`
 
-## Part 2: useEventListener
+### 8. Migrate event listener pairs (63+ files)
 
-### Task 5: Survey addEventListener/removeEventListener pairs
+- [ ] Start with top offenders: `activityBus.ts`, `MarketplaceModal.tsx`, `useMainKeyboardHandler.ts`, `SymphonyModal.tsx`, `App.tsx`
+- [ ] Replace each `useEffect` containing `addEventListener`/`removeEventListener` pair with `useEventListener(eventName, handler)`
+- [ ] Run targeted tests after each file
 
-```
-rtk grep -rn "addEventListener" src/renderer/ --include="*.ts" --include="*.tsx" | grep -v "__tests__" | grep -v "node_modules" -l
-```
+### 9. Export from hooks barrel
 
-Top offenders: `activityBus.ts` (10), `MarketplaceModal.tsx` (10), `useMainKeyboardHandler.ts` (8), `SymphonyModal.tsx` (8), `App.tsx` (8)
+- [ ] Add exports to `src/renderer/hooks/utils/index.ts` (create if doesn't exist):
+  - `export { useFocusAfterRender } from './useFocusAfterRender';`
+  - `export { useEventListener } from './useEventListener';`
 
-### Task 6: Create useEventListener hook
+### 10. Verify full build
 
-Create `src/renderer/hooks/utils/useEventListener.ts`:
-
-```typescript
-import { useEffect, useRef } from 'react';
-
-/**
- * Attach an event listener with automatic cleanup.
- * Replaces manual addEventListener/removeEventListener pairs.
- */
-export function useEventListener<K extends keyof WindowEventMap>(
-	eventName: K,
-	handler: (event: WindowEventMap[K]) => void,
-	element?: Window | HTMLElement | null,
-	options?: boolean | AddEventListenerOptions
-): void {
-	const savedHandler = useRef(handler);
-
-	useEffect(() => {
-		savedHandler.current = handler;
-	}, [handler]);
-
-	useEffect(() => {
-		const targetElement = element ?? window;
-		if (!targetElement?.addEventListener) return;
-
-		const eventListener = (event: Event) => {
-			savedHandler.current(event as WindowEventMap[K]);
-		};
-
-		targetElement.addEventListener(eventName, eventListener, options);
-		return () => targetElement.removeEventListener(eventName, eventListener, options);
-	}, [eventName, element, options]);
-}
-```
-
-### Task 7: Write tests for useEventListener
-
-Test:
-
-- Attaches listener on mount
-- Removes listener on unmount
-- Updates handler without re-attaching listener
-- Works with custom elements
-- Handles null element gracefully
-
-### Task 8: Migrate event listener pairs (63+ files)
-
-For each file with manual add/remove pairs:
-
-```typescript
-// BEFORE
-useEffect(() => {
-	const handler = (e) => { ... };
-	window.addEventListener('keydown', handler);
-	return () => window.removeEventListener('keydown', handler);
-}, [deps]);
-
-// AFTER
-useEventListener('keydown', (e) => { ... });
-```
-
-Start with top offenders:
-
-1. `activityBus.ts` (10 pairs)
-2. `MarketplaceModal.tsx` (10 pairs)
-3. `useMainKeyboardHandler.ts` (8 pairs)
-4. `SymphonyModal.tsx` (8 pairs)
-5. `App.tsx` (8 pairs)
-
-### Task 9: Export from hooks barrel
-
-Add exports to `src/renderer/hooks/utils/index.ts` (or create if doesn't exist):
-
-```typescript
-export { useFocusAfterRender } from './useFocusAfterRender';
-export { useEventListener } from './useEventListener';
-```
-
-### Task 10: Verify
-
-```
-rtk npm run lint
-rtk vitest run
-```
-
-**MANDATORY: Do NOT skip verification.** Both lint and tests MUST pass on Windows before proceeding.
+- [ ] Run lint: `rtk npm run lint`
+- [ ] Run tests: `rtk vitest run`
+- [ ] Verify types: `rtk tsc -p tsconfig.main.json --noEmit && rtk tsc -p tsconfig.lint.json --noEmit`
 
 ---
 
@@ -188,9 +107,9 @@ After completing changes, run targeted tests for the files you modified:
 rtk vitest run <path-to-relevant-test-files>
 ```
 
-**Rule: Zero new test failures from your changes.** Pre-existing failures on the baseline are acceptable. If a test you didn't touch starts failing, investigate whether your refactoring broke it. If your change removed code that a test depended on, update that test.
+**Rule: Zero new test failures from your changes.** Pre-existing failures on the baseline are acceptable.
 
-Do NOT run the full test suite (it takes too long). Only run tests relevant to the files you changed. Use `rtk grep` to find related test files:
+Find related test files:
 
 ```bash
 rtk grep "import.*from.*<module-you-changed>" --glob "*.test.*"
