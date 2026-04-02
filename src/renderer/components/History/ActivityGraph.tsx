@@ -7,7 +7,7 @@ import { LOOKBACK_OPTIONS, CUE_COLOR } from './historyConstants';
 export interface ActivityGraphProps {
 	entries: HistoryEntry[];
 	theme: Theme;
-	referenceTime?: number; // The "end" of the window (defaults to now)
+	viewportRange?: { start: number; end: number }; // Timestamps of currently visible entries in the list
 	onBarClick?: (bucketStartTime: number, bucketEndTime: number) => void;
 	lookbackHours: number | null; // null = all time
 	onLookbackChange: (hours: number | null) => void;
@@ -16,7 +16,7 @@ export interface ActivityGraphProps {
 export const ActivityGraph: React.FC<ActivityGraphProps> = ({
 	entries,
 	theme,
-	referenceTime,
+	viewportRange,
 	onBarClick,
 	lookbackHours,
 	onLookbackChange,
@@ -31,8 +31,8 @@ export const ActivityGraph: React.FC<ActivityGraphProps> = ({
 		[lookbackHours]
 	);
 
-	// Use referenceTime as the end of our window, or current time if not provided
-	const endTime = referenceTime || Date.now();
+	// Always use current time as the end of the window (graph is static)
+	const endTime = Date.now();
 
 	// Calculate time range based on lookback setting
 	const { startTime, msPerBucket, bucketCount } = useMemo(() => {
@@ -160,21 +160,21 @@ export const ActivityGraph: React.FC<ActivityGraphProps> = ({
 		}
 	}, [contextMenu]);
 
-	// Format the reference time for display (shows what time point we're viewing)
-	const formatReferenceTime = () => {
-		const now = Date.now();
-		const diffMs = now - endTime;
-		const diffMins = Math.floor(diffMs / 60000);
-		const diffHours = Math.floor(diffMins / 60);
-
-		if (diffMins < 1) return 'Now';
-		if (diffMins < 60) return `${diffMins}m ago`;
-		if (diffHours < 24) return `${diffHours}h ago`;
-		return new Date(endTime).toLocaleDateString([], { month: 'short', day: 'numeric' });
-	};
-
-	// Check if we're viewing historical data (not "now")
-	const isHistorical = referenceTime && Date.now() - referenceTime > 60000;
+	// Compute which bucket indices fall within the viewport range
+	const viewportBucketRange = useMemo(() => {
+		if (!viewportRange) return null;
+		const startIdx = Math.max(0, Math.floor((viewportRange.end - startTime) / msPerBucket));
+		const endIdx = Math.min(
+			bucketCount - 1,
+			Math.floor((viewportRange.start - startTime) / msPerBucket)
+		);
+		// Entries are newest-first, so viewportRange.start > viewportRange.end
+		// But timestamps: start is the older entry, end is the newer one
+		// Let's normalize: lower bucket index = older, higher = newer
+		const lo = Math.max(0, Math.min(startIdx, endIdx));
+		const hi = Math.min(bucketCount - 1, Math.max(startIdx, endIdx));
+		return { lo, hi };
+	}, [viewportRange, startTime, msPerBucket, bucketCount]);
 
 	// Generate labels for the x-axis
 	const getAxisLabels = () => {
@@ -223,7 +223,7 @@ export const ActivityGraph: React.FC<ActivityGraphProps> = ({
 			className="flex-1 min-w-0 flex flex-col relative mt-0.5"
 			title={
 				hoveredIndex === null
-					? `${isHistorical ? `Viewing: ${formatReferenceTime()} • ` : ''}${lookbackConfig.label}: ${totalAuto} auto, ${totalUser} user${totalCue > 0 ? `, ${totalCue} cue` : ''} (right-click to change)`
+					? `${lookbackConfig.label}: ${totalAuto} auto, ${totalUser} user${totalCue > 0 ? `, ${totalCue} cue` : ''} (right-click to change)`
 					: undefined
 			}
 			onContextMenu={handleContextMenu}
@@ -286,11 +286,6 @@ export const ActivityGraph: React.FC<ActivityGraphProps> = ({
 				>
 					<div className="font-bold mb-1" style={{ color: theme.colors.textMain }}>
 						{getTimeRangeLabel(hoveredIndex)}
-						{isHistorical && (
-							<span className="ml-2 font-normal" style={{ color: theme.colors.accent }}>
-								{formatReferenceTime()}
-							</span>
-						)}
 					</div>
 					<div className="flex flex-col gap-0.5">
 						<div className="flex items-center justify-between gap-3">
@@ -327,6 +322,9 @@ export const ActivityGraph: React.FC<ActivityGraphProps> = ({
 					const cuePercent = total > 0 ? (bucket.cue / total) * 100 : 0;
 					const userPercent = total > 0 ? (bucket.user / total) * 100 : 0;
 					const isHovered = hoveredIndex === index;
+					const inViewport =
+						!viewportBucketRange ||
+						(index >= viewportBucketRange.lo && index <= viewportBucketRange.hi);
 
 					return (
 						<div
@@ -334,10 +332,10 @@ export const ActivityGraph: React.FC<ActivityGraphProps> = ({
 							className="flex-1 min-w-0 flex flex-col justify-end rounded-t-sm overflow-visible cursor-pointer"
 							style={{
 								height: '100%',
-								opacity: total > 0 ? 1 : 0.15,
+								opacity: total > 0 ? (inViewport ? 1 : 0.3) : 0.15,
 								transform: isHovered ? 'scaleX(1.5)' : 'scaleX(1)',
 								zIndex: isHovered ? 10 : 1,
-								transition: 'transform 0.1s ease-out',
+								transition: 'transform 0.1s ease-out, opacity 0.15s ease-out',
 								cursor: total > 0 ? 'pointer' : 'default',
 							}}
 							onMouseEnter={() => setHoveredIndex(index)}

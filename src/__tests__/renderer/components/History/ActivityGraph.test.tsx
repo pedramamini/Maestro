@@ -483,4 +483,55 @@ describe('ActivityGraph', () => {
 		// height should be 100% since this is the max bucket
 		expect(barInner.style.height).toBe('100%');
 	});
+
+	it('dims bars outside the viewport range', () => {
+		// Create entries spread across a 24h period
+		const entries = [
+			createMockEntry({ type: 'AUTO', timestamp: NOW - 1 * 60 * 60 * 1000 }), // 1h ago
+			createMockEntry({ type: 'AUTO', timestamp: NOW - 12 * 60 * 60 * 1000 }), // 12h ago
+			createMockEntry({ type: 'AUTO', timestamp: NOW - 23 * 60 * 60 * 1000 }), // 23h ago
+		];
+
+		const { container } = render(
+			<ActivityGraph
+				entries={entries}
+				theme={mockTheme}
+				lookbackHours={24}
+				onLookbackChange={vi.fn()}
+				viewportRange={{
+					start: NOW - 2 * 60 * 60 * 1000, // viewing entries from 1-2h ago
+					end: NOW - 1 * 60 * 60 * 1000,
+				}}
+			/>
+		);
+
+		const bars = container.querySelectorAll('.flex-1.min-w-0.flex.flex-col.justify-end');
+		// Bars outside viewport should have lower opacity (0.3)
+		// Bars inside viewport should have full opacity (1)
+		const opacities = Array.from(bars).map((bar) => (bar as HTMLElement).style.opacity);
+		// At least one bar should be dimmed (0.3) and at least one should be full (1)
+		expect(opacities.some((o) => o === '0.3')).toBe(true);
+		expect(opacities.some((o) => o === '1')).toBe(true);
+	});
+
+	it('shows all bars at full opacity when no viewport range', () => {
+		const entries = [
+			createMockEntry({ type: 'AUTO', timestamp: NOW - 1 * 60 * 60 * 1000 }),
+			createMockEntry({ type: 'AUTO', timestamp: NOW - 12 * 60 * 60 * 1000 }),
+		];
+
+		const { container } = render(
+			<ActivityGraph
+				entries={entries}
+				theme={mockTheme}
+				lookbackHours={24}
+				onLookbackChange={vi.fn()}
+			/>
+		);
+
+		const bars = container.querySelectorAll('.flex-1.min-w-0.flex.flex-col.justify-end');
+		const filledBars = Array.from(bars).filter((bar) => (bar as HTMLElement).style.opacity === '1');
+		// All bars with entries should be at full opacity
+		expect(filledBars.length).toBeGreaterThanOrEqual(2);
+	});
 });
