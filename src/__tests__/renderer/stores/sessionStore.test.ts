@@ -4,15 +4,6 @@ import {
 	useSessionStore,
 	selectActiveSession,
 	selectSessionById,
-	selectBookmarkedSessions,
-	selectSessionsByGroup,
-	selectUngroupedSessions,
-	selectGroupById,
-	selectSessionCount,
-	selectIsReady,
-	selectIsAnySessionBusy,
-	getSessionState,
-	getSessionActions,
 } from '../../../renderer/stores/sessionStore';
 import type { Session, Group, FilePreviewTab } from '../../../renderer/types';
 
@@ -511,144 +502,6 @@ describe('sessionStore', () => {
 				expect(session).toBeUndefined();
 			});
 		});
-
-		describe('selectBookmarkedSessions', () => {
-			it('returns only bookmarked sessions', () => {
-				useSessionStore
-					.getState()
-					.setSessions([
-						createMockSession({ id: 'a', bookmarked: true }),
-						createMockSession({ id: 'b', bookmarked: false }),
-						createMockSession({ id: 'c', bookmarked: true }),
-					]);
-
-				const bookmarked = selectBookmarkedSessions(useSessionStore.getState());
-				expect(bookmarked).toHaveLength(2);
-				expect(bookmarked.map((s) => s.id)).toEqual(['a', 'c']);
-			});
-
-			it('returns empty array when none bookmarked', () => {
-				useSessionStore.getState().setSessions([createMockSession({ id: 'a', bookmarked: false })]);
-
-				expect(selectBookmarkedSessions(useSessionStore.getState())).toHaveLength(0);
-			});
-		});
-
-		describe('selectSessionsByGroup', () => {
-			it('returns sessions belonging to a group', () => {
-				useSessionStore
-					.getState()
-					.setSessions([
-						createMockSession({ id: 'a', groupId: 'g1' }),
-						createMockSession({ id: 'b', groupId: 'g2' }),
-						createMockSession({ id: 'c', groupId: 'g1' }),
-					]);
-
-				const group1 = selectSessionsByGroup('g1')(useSessionStore.getState());
-				expect(group1).toHaveLength(2);
-				expect(group1.map((s) => s.id)).toEqual(['a', 'c']);
-			});
-		});
-
-		describe('selectUngroupedSessions', () => {
-			it('returns sessions without a group and not worktree children', () => {
-				useSessionStore.getState().setSessions([
-					createMockSession({ id: 'a' }), // ungrouped
-					createMockSession({ id: 'b', groupId: 'g1' }), // grouped
-					createMockSession({ id: 'c', parentSessionId: 'a' }), // worktree child
-					createMockSession({ id: 'd' }), // ungrouped
-				]);
-
-				const ungrouped = selectUngroupedSessions(useSessionStore.getState());
-				expect(ungrouped).toHaveLength(2);
-				expect(ungrouped.map((s) => s.id)).toEqual(['a', 'd']);
-			});
-		});
-
-		describe('selectGroupById', () => {
-			it('returns the group with the given ID', () => {
-				useSessionStore.getState().setGroups([createMockGroup({ id: 'g1', name: 'Group One' })]);
-
-				const group = selectGroupById('g1')(useSessionStore.getState());
-				expect(group?.name).toBe('Group One');
-			});
-
-			it('returns undefined if not found', () => {
-				const group = selectGroupById('nope')(useSessionStore.getState());
-				expect(group).toBeUndefined();
-			});
-		});
-
-		describe('selectSessionCount', () => {
-			it('returns the number of sessions', () => {
-				expect(selectSessionCount(useSessionStore.getState())).toBe(0);
-
-				useSessionStore
-					.getState()
-					.setSessions([createMockSession({ id: 'a' }), createMockSession({ id: 'b' })]);
-
-				expect(selectSessionCount(useSessionStore.getState())).toBe(2);
-			});
-		});
-
-		describe('selectIsReady', () => {
-			it('returns false when neither flag is set', () => {
-				expect(selectIsReady(useSessionStore.getState())).toBe(false);
-			});
-
-			it('returns false when only sessionsLoaded is true', () => {
-				useSessionStore.getState().setSessionsLoaded(true);
-				expect(selectIsReady(useSessionStore.getState())).toBe(false);
-			});
-
-			it('returns false when only initialLoadComplete is true', () => {
-				useSessionStore.getState().setInitialLoadComplete(true);
-				expect(selectIsReady(useSessionStore.getState())).toBe(false);
-			});
-
-			it('returns true when both flags are set', () => {
-				useSessionStore.getState().setSessionsLoaded(true);
-				useSessionStore.getState().setInitialLoadComplete(true);
-				expect(selectIsReady(useSessionStore.getState())).toBe(true);
-			});
-		});
-
-		describe('selectIsAnySessionBusy', () => {
-			it('returns false when no sessions exist', () => {
-				expect(selectIsAnySessionBusy(useSessionStore.getState())).toBe(false);
-			});
-
-			it('returns false when all sessions are idle', () => {
-				useSessionStore
-					.getState()
-					.setSessions([
-						createMockSession({ id: 'a', state: 'idle' }),
-						createMockSession({ id: 'b', state: 'idle' }),
-					]);
-				expect(selectIsAnySessionBusy(useSessionStore.getState())).toBe(false);
-			});
-
-			it('returns true when at least one session is busy', () => {
-				useSessionStore
-					.getState()
-					.setSessions([
-						createMockSession({ id: 'a', state: 'idle' }),
-						createMockSession({ id: 'b', state: 'busy' }),
-					]);
-				expect(selectIsAnySessionBusy(useSessionStore.getState())).toBe(true);
-			});
-
-			it('returns false for non-busy active states', () => {
-				useSessionStore
-					.getState()
-					.setSessions([
-						createMockSession({ id: 'a', state: 'waiting_input' }),
-						createMockSession({ id: 'b', state: 'connecting' }),
-						createMockSession({ id: 'c', state: 'error' }),
-					]);
-				expect(selectIsAnySessionBusy(useSessionStore.getState())).toBe(false);
-			});
-		});
 	});
 
 	// ========================================================================
@@ -766,99 +619,11 @@ describe('sessionStore', () => {
 	// Non-React Access
 	// ========================================================================
 
-	describe('non-React access', () => {
-		it('getSessionState returns current state', () => {
-			useSessionStore.getState().setSessions([createMockSession({ id: 'a' })]);
-			useSessionStore.getState().setActiveSessionId('a');
-
-			const state = getSessionState();
-			expect(state.sessions).toHaveLength(1);
-			expect(state.activeSessionId).toBe('a');
-		});
-
-		it('getSessionActions returns working action references', () => {
-			const actions = getSessionActions();
-
-			actions.setSessions([createMockSession({ id: 'a' })]);
-			expect(useSessionStore.getState().sessions).toHaveLength(1);
-
-			actions.setActiveSessionId('a');
-			expect(useSessionStore.getState().activeSessionId).toBe('a');
-
-			actions.toggleBookmark('a');
-			expect(useSessionStore.getState().sessions[0].bookmarked).toBe(true);
-		});
-
-		it('replaces ref pattern: getState().sessions instead of sessionsRef.current', () => {
-			// This demonstrates the key Zustand advantage over SessionContext:
-			// No more refs needed for accessing current state in callbacks
-			useSessionStore.getState().setSessions([createMockSession({ id: 'a', name: 'First' })]);
-
-			// In a callback (like an IPC handler), always access current state:
-			const current = useSessionStore.getState().sessions;
-			expect(current[0].name).toBe('First');
-
-			// Mutate
-			useSessionStore.getState().updateSession('a', { name: 'Updated' });
-
-			// Re-read — always gets the latest (no stale closure)
-			const updated = useSessionStore.getState().sessions;
-			expect(updated[0].name).toBe('Updated');
-		});
-	});
-
 	// ========================================================================
 	// Complex Scenarios
 	// ========================================================================
 
 	describe('complex scenarios', () => {
-		it('handles session lifecycle: create → update → bookmark → remove', () => {
-			// Create
-			const session = createMockSession({ id: 'lifecycle', name: 'New Session' });
-			useSessionStore.getState().addSession(session);
-			useSessionStore.getState().setActiveSessionId('lifecycle');
-			expect(selectActiveSession(useSessionStore.getState())?.name).toBe('New Session');
-
-			// Update
-			useSessionStore.getState().updateSession('lifecycle', {
-				name: 'Renamed Session',
-				state: 'busy',
-			});
-			expect(selectActiveSession(useSessionStore.getState())?.name).toBe('Renamed Session');
-
-			// Bookmark
-			useSessionStore.getState().toggleBookmark('lifecycle');
-			expect(selectBookmarkedSessions(useSessionStore.getState())).toHaveLength(1);
-
-			// Remove
-			useSessionStore.getState().removeSession('lifecycle');
-			expect(useSessionStore.getState().sessions).toHaveLength(0);
-			expect(selectBookmarkedSessions(useSessionStore.getState())).toHaveLength(0);
-		});
-
-		it('handles group lifecycle: create → add sessions → collapse → remove', () => {
-			// Create group
-			useSessionStore.getState().addGroup(createMockGroup({ id: 'g1', name: 'Backend' }));
-
-			// Add sessions to group
-			useSessionStore
-				.getState()
-				.addSession(createMockSession({ id: 'a', groupId: 'g1', name: 'API' }));
-			useSessionStore
-				.getState()
-				.addSession(createMockSession({ id: 'b', groupId: 'g1', name: 'DB' }));
-
-			expect(selectSessionsByGroup('g1')(useSessionStore.getState())).toHaveLength(2);
-
-			// Collapse
-			useSessionStore.getState().toggleGroupCollapsed('g1');
-			expect(useSessionStore.getState().groups[0].collapsed).toBe(true);
-
-			// Remove group (sessions keep their groupId — that's handled by business logic)
-			useSessionStore.getState().removeGroup('g1');
-			expect(useSessionStore.getState().groups).toHaveLength(0);
-		});
-
 		it('handles concurrent updates from setSessions updater (batching pattern)', () => {
 			// Simulate the batched updater pattern:
 			// Multiple rapid updates via functional setSessions
@@ -878,7 +643,8 @@ describe('sessionStore', () => {
 
 		it('handles initialization flow: load → set loaded → set complete', () => {
 			// Simulate the startup flow
-			expect(selectIsReady(useSessionStore.getState())).toBe(false);
+			const state0 = useSessionStore.getState();
+			expect(state0.sessionsLoaded && state0.initialLoadComplete).toBe(false);
 
 			// Step 1: Load sessions from disk
 			useSessionStore
@@ -898,7 +664,8 @@ describe('sessionStore', () => {
 			// Step 4: Mark initial load complete
 			useSessionStore.getState().setInitialLoadComplete(true);
 
-			expect(selectIsReady(useSessionStore.getState())).toBe(true);
+			const stateF = useSessionStore.getState();
+			expect(stateF.sessionsLoaded && stateF.initialLoadComplete).toBe(true);
 			expect(selectActiveSession(useSessionStore.getState())?.id).toBe('restored-1');
 		});
 	});
@@ -1643,11 +1410,6 @@ describe('sessionStore', () => {
 
 			expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('[addLogToTab]'));
 			consoleSpy.mockRestore();
-		});
-
-		it('is available via getSessionActions()', () => {
-			const actions = getSessionActions();
-			expect(typeof actions.addLogToTab).toBe('function');
 		});
 	});
 });

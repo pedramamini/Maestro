@@ -53,7 +53,7 @@ const DOCUMENT_GRAPH_LAYOUT_TYPES: DocumentGraphLayoutType[] = ['mindmap', 'radi
 /** Default local ignore patterns for new installations (includes .git, node_modules, __pycache__) */
 export const DEFAULT_LOCAL_IGNORE_PATTERNS = ['.git', 'node_modules', '__pycache__'];
 
-export const DEFAULT_CONTEXT_MANAGEMENT_SETTINGS: ContextManagementSettings = {
+const DEFAULT_CONTEXT_MANAGEMENT_SETTINGS: ContextManagementSettings = {
 	autoGroomContexts: true,
 	maxContextTokens: 100000,
 	showMergePreview: true,
@@ -64,7 +64,7 @@ export const DEFAULT_CONTEXT_MANAGEMENT_SETTINGS: ContextManagementSettings = {
 	contextWarningRedThreshold: 90,
 };
 
-export const DEFAULT_AUTO_RUN_STATS: AutoRunStats = {
+const DEFAULT_AUTO_RUN_STATS: AutoRunStats = {
 	cumulativeTimeMs: 0,
 	longestRunMs: 0,
 	longestRunTimestamp: 0,
@@ -75,7 +75,7 @@ export const DEFAULT_AUTO_RUN_STATS: AutoRunStats = {
 	badgeHistory: [],
 };
 
-export const DEFAULT_USAGE_STATS: MaestroUsageStats = {
+const DEFAULT_USAGE_STATS: MaestroUsageStats = {
 	maxAgents: 0,
 	maxDefinedAgents: 0,
 	maxSimultaneousAutoRuns: 0,
@@ -83,7 +83,7 @@ export const DEFAULT_USAGE_STATS: MaestroUsageStats = {
 	maxQueueDepth: 0,
 };
 
-export const DEFAULT_KEYBOARD_MASTERY_STATS: KeyboardMasteryStats = {
+const DEFAULT_KEYBOARD_MASTERY_STATS: KeyboardMasteryStats = {
 	usedShortcuts: [],
 	currentLevel: 0,
 	lastLevelUpTimestamp: 0,
@@ -95,7 +95,7 @@ const TOTAL_SHORTCUTS_COUNT =
 	Object.keys(TAB_SHORTCUTS).length +
 	Object.keys(FIXED_SHORTCUTS).length;
 
-export const DEFAULT_ONBOARDING_STATS: OnboardingStats = {
+const DEFAULT_ONBOARDING_STATS: OnboardingStats = {
 	wizardStartCount: 0,
 	wizardCompletionCount: 0,
 	wizardAbandonCount: 0,
@@ -117,19 +117,19 @@ export const DEFAULT_ONBOARDING_STATS: OnboardingStats = {
 	averageTasksPerPhase: 0,
 };
 
-export const DEFAULT_ENCORE_FEATURES: EncoreFeatureFlags = {
+const DEFAULT_ENCORE_FEATURES: EncoreFeatureFlags = {
 	directorNotes: false,
 	usageStats: true,
 	symphony: true,
 	maestroCue: false,
 };
 
-export const DEFAULT_DIRECTOR_NOTES_SETTINGS: DirectorNotesSettings = {
+const DEFAULT_DIRECTOR_NOTES_SETTINGS: DirectorNotesSettings = {
 	provider: 'claude-code',
 	defaultLookbackDays: 7,
 };
 
-export const DEFAULT_AI_COMMANDS: CustomAICommand[] = [
+const DEFAULT_AI_COMMANDS: CustomAICommand[] = [
 	{
 		id: 'commit',
 		command: '/commit',
@@ -143,7 +143,7 @@ export const DEFAULT_AI_COMMANDS: CustomAICommand[] = [
 // Helper Functions
 // ============================================================================
 
-export function getBadgeLevelForTime(cumulativeTimeMs: number): number {
+function getBadgeLevelForTime(cumulativeTimeMs: number): number {
 	const MINUTE = 60 * 1000;
 	const HOUR = 60 * MINUTE;
 	const DAY = 24 * HOUR;
@@ -1841,114 +1841,4 @@ export async function loadAllSettings(): Promise<void> {
 		// Mark settings as loaded even if there was an error (use defaults)
 		useSettingsStore.setState({ settingsLoaded: true });
 	}
-}
-
-// ============================================================================
-// Non-React Access
-// ============================================================================
-
-export function getSettingsState(): SettingsStoreState {
-	return useSettingsStore.getState();
-}
-
-export function getSettingsActions() {
-	const state = useSettingsStore.getState();
-	return {
-		setConductorProfile: state.setConductorProfile,
-		setLlmProvider: state.setLlmProvider,
-		setModelSlug: state.setModelSlug,
-		setApiKey: state.setApiKey,
-		setDefaultShell: state.setDefaultShell,
-		setCustomShellPath: state.setCustomShellPath,
-		setShellArgs: state.setShellArgs,
-		setShellEnvVars: state.setShellEnvVars,
-		setGhPath: state.setGhPath,
-		setFontFamily: state.setFontFamily,
-		setFontSize: state.setFontSize,
-		setActiveThemeId: state.setActiveThemeId,
-		setCustomThemeColors: state.setCustomThemeColors,
-		setCustomThemeBaseId: state.setCustomThemeBaseId,
-		setEnterToSendAI: state.setEnterToSendAI,
-		setEnterToSendTerminal: state.setEnterToSendTerminal,
-		setDefaultSaveToHistory: state.setDefaultSaveToHistory,
-		setDefaultShowThinking: state.setDefaultShowThinking,
-		setLeftSidebarWidth: state.setLeftSidebarWidth,
-		setRightPanelWidth: state.setRightPanelWidth,
-		setMarkdownEditMode: state.setMarkdownEditMode,
-		setChatRawTextMode: state.setChatRawTextMode,
-		setShowHiddenFiles: state.setShowHiddenFiles,
-		setFileExplorerIconTheme: state.setFileExplorerIconTheme,
-		setTerminalWidth: state.setTerminalWidth,
-		setLogLevel: state.setLogLevel,
-		setMaxLogBuffer: state.setMaxLogBuffer,
-		setMaxOutputLines: state.setMaxOutputLines,
-		setOsNotificationsEnabled: state.setOsNotificationsEnabled,
-		setAudioFeedbackEnabled: state.setAudioFeedbackEnabled,
-		setAudioFeedbackCommand: state.setAudioFeedbackCommand,
-		setToastDuration: state.setToastDuration,
-		setCheckForUpdatesOnStartup: state.setCheckForUpdatesOnStartup,
-		setEnableBetaUpdates: state.setEnableBetaUpdates,
-		setCrashReportingEnabled: state.setCrashReportingEnabled,
-		setLogViewerSelectedLevels: state.setLogViewerSelectedLevels,
-		setShortcuts: state.setShortcuts,
-		setTabShortcuts: state.setTabShortcuts,
-		setCustomAICommands: state.setCustomAICommands,
-		setTotalActiveTimeMs: state.setTotalActiveTimeMs,
-		addTotalActiveTimeMs: state.addTotalActiveTimeMs,
-		setAutoRunStats: state.setAutoRunStats,
-		recordAutoRunComplete: state.recordAutoRunComplete,
-		updateAutoRunProgress: state.updateAutoRunProgress,
-		acknowledgeBadge: state.acknowledgeBadge,
-		getUnacknowledgedBadgeLevel: state.getUnacknowledgedBadgeLevel,
-		setUsageStats: state.setUsageStats,
-		updateUsageStats: state.updateUsageStats,
-		setUngroupedCollapsed: state.setUngroupedCollapsed,
-		setTourCompleted: state.setTourCompleted,
-		setFirstAutoRunCompleted: state.setFirstAutoRunCompleted,
-		setOnboardingStats: state.setOnboardingStats,
-		recordWizardStart: state.recordWizardStart,
-		recordWizardComplete: state.recordWizardComplete,
-		recordWizardAbandon: state.recordWizardAbandon,
-		recordWizardResume: state.recordWizardResume,
-		recordTourStart: state.recordTourStart,
-		recordTourComplete: state.recordTourComplete,
-		recordTourSkip: state.recordTourSkip,
-		getOnboardingAnalytics: state.getOnboardingAnalytics,
-		setLeaderboardRegistration: state.setLeaderboardRegistration,
-		setPersistentWebLink: state.setPersistentWebLink,
-		setWebInterfaceUseCustomPort: state.setWebInterfaceUseCustomPort,
-		setWebInterfaceCustomPort: state.setWebInterfaceCustomPort,
-		setContextManagementSettings: state.setContextManagementSettings,
-		updateContextManagementSettings: state.updateContextManagementSettings,
-		setKeyboardMasteryStats: state.setKeyboardMasteryStats,
-		recordShortcutUsage: state.recordShortcutUsage,
-		acknowledgeKeyboardMasteryLevel: state.acknowledgeKeyboardMasteryLevel,
-		getUnacknowledgedKeyboardMasteryLevel: state.getUnacknowledgedKeyboardMasteryLevel,
-		setColorBlindMode: state.setColorBlindMode,
-		setDocumentGraphShowExternalLinks: state.setDocumentGraphShowExternalLinks,
-		setDocumentGraphMaxNodes: state.setDocumentGraphMaxNodes,
-		setDocumentGraphPreviewCharLimit: state.setDocumentGraphPreviewCharLimit,
-		setDocumentGraphLayoutType: state.setDocumentGraphLayoutType,
-		setStatsCollectionEnabled: state.setStatsCollectionEnabled,
-		setDefaultStatsTimeRange: state.setDefaultStatsTimeRange,
-		setPreventSleepEnabled: state.setPreventSleepEnabled,
-		setDisableGpuAcceleration: state.setDisableGpuAcceleration,
-		setDisableConfetti: state.setDisableConfetti,
-		setLocalIgnorePatterns: state.setLocalIgnorePatterns,
-		setLocalHonorGitignore: state.setLocalHonorGitignore,
-		setSshRemoteIgnorePatterns: state.setSshRemoteIgnorePatterns,
-		setSshRemoteHonorGitignore: state.setSshRemoteHonorGitignore,
-		setAutomaticTabNamingEnabled: state.setAutomaticTabNamingEnabled,
-		setFileTabAutoRefreshEnabled: state.setFileTabAutoRefreshEnabled,
-		setSuppressWindowsWarning: state.setSuppressWindowsWarning,
-		setAutoScrollAiMode: state.setAutoScrollAiMode,
-		setEncoreFeatures: state.setEncoreFeatures,
-		setSymphonyRegistryUrls: state.setSymphonyRegistryUrls,
-		setDirectorNotesSettings: state.setDirectorNotesSettings,
-		setWakatimeApiKey: state.setWakatimeApiKey,
-		setWakatimeEnabled: state.setWakatimeEnabled,
-		setWakatimeDetailedTracking: state.setWakatimeDetailedTracking,
-		setUseNativeTitleBar: state.setUseNativeTitleBar,
-		setAutoHideMenuBar: state.setAutoHideMenuBar,
-	};
 }

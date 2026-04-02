@@ -18,17 +18,12 @@ import { renderHook, act, waitFor } from '@testing-library/react';
 import { render, screen } from '@testing-library/react';
 import { useSettings } from '../../renderer/hooks';
 import React from 'react';
-import {
-	useSettingsStore,
-	DEFAULT_CONTEXT_MANAGEMENT_SETTINGS,
-	DEFAULT_AUTO_RUN_STATS,
-	DEFAULT_USAGE_STATS,
-	DEFAULT_KEYBOARD_MASTERY_STATS,
-	DEFAULT_ONBOARDING_STATS,
-	DEFAULT_AI_COMMANDS,
-} from '../../renderer/stores/settingsStore';
+import { useSettingsStore } from '../../renderer/stores/settingsStore';
 import { DEFAULT_SHORTCUTS, TAB_SHORTCUTS } from '../../renderer/constants/shortcuts';
 import { DEFAULT_CUSTOM_THEME_COLORS } from '../../renderer/constants/themes';
+
+// Capture initial store defaults before any test mutates state
+const initialState = useSettingsStore.getState();
 
 // Mock the FontConfigurationPanel's common monospace fonts list
 const COMMON_MONOSPACE_FONTS = [
@@ -102,19 +97,19 @@ describe('Cross-platform Fonts and Sizing', () => {
 			logViewerSelectedLevels: ['debug', 'info', 'warn', 'error', 'toast'],
 			shortcuts: DEFAULT_SHORTCUTS,
 			tabShortcuts: TAB_SHORTCUTS,
-			customAICommands: DEFAULT_AI_COMMANDS,
+			customAICommands: initialState.customAICommands,
 			totalActiveTimeMs: 0,
-			autoRunStats: DEFAULT_AUTO_RUN_STATS,
-			usageStats: DEFAULT_USAGE_STATS,
+			autoRunStats: initialState.autoRunStats,
+			usageStats: initialState.usageStats,
 			ungroupedCollapsed: false,
 			tourCompleted: false,
 			firstAutoRunCompleted: false,
-			onboardingStats: DEFAULT_ONBOARDING_STATS,
+			onboardingStats: initialState.onboardingStats,
 			leaderboardRegistration: null,
 			webInterfaceUseCustomPort: false,
 			webInterfaceCustomPort: 8080,
-			contextManagementSettings: DEFAULT_CONTEXT_MANAGEMENT_SETTINGS,
-			keyboardMasteryStats: DEFAULT_KEYBOARD_MASTERY_STATS,
+			contextManagementSettings: initialState.contextManagementSettings,
+			keyboardMasteryStats: initialState.keyboardMasteryStats,
 			colorBlindMode: false,
 			documentGraphShowExternalLinks: false,
 			documentGraphMaxNodes: 50,

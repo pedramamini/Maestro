@@ -8,8 +8,8 @@
  * Side effects (logging, audio TTS, OS notifications, auto-dismiss timers)
  * live in the notifyToast() wrapper function, not in the store itself.
  *
- * Can be used outside React via getNotificationState() / getNotificationActions().
  * notifyToast() is callable from anywhere (React components, services, orchestrators).
+ * Non-React code can access state via useNotificationStore.getState().
  */
 
 import { create } from 'zustand';
@@ -75,22 +75,6 @@ export interface NotificationStoreActions {
 export type NotificationStore = NotificationStoreState & NotificationStoreActions;
 
 // ============================================================================
-// Selectors
-// ============================================================================
-
-export function selectToasts(s: NotificationStoreState): Toast[] {
-	return s.toasts;
-}
-
-export function selectToastCount(s: NotificationStoreState): number {
-	return s.toasts.length;
-}
-
-export function selectConfig(s: NotificationStoreState): NotificationConfig {
-	return s.config;
-}
-
-// ============================================================================
 // Store
 // ============================================================================
 
@@ -145,11 +129,6 @@ let toastIdCounter = 0;
 
 /** Active auto-dismiss timers keyed by toast ID. Cleared on manual removal. */
 const autoDismissTimers = new Map<string, ReturnType<typeof setTimeout>>();
-
-/** Reset the toast ID counter (for tests). */
-export function resetToastIdCounter(): void {
-	toastIdCounter = 0;
-}
 
 /**
  * Fire a toast notification. Handles:
@@ -283,31 +262,4 @@ export function notifyToast(toast: Omit<Toast, 'id' | 'timestamp'>): string {
 	}
 
 	return id;
-}
-
-// ============================================================================
-// Non-React access
-// ============================================================================
-
-/**
- * Get current notification state snapshot.
- * Use outside React (services, orchestrators, IPC handlers).
- */
-export function getNotificationState() {
-	return useNotificationStore.getState();
-}
-
-/**
- * Get stable notification action references outside React.
- */
-export function getNotificationActions() {
-	const state = useNotificationStore.getState();
-	return {
-		addToast: state.addToast,
-		removeToast: state.removeToast,
-		clearToasts: state.clearToasts,
-		setDefaultDuration: state.setDefaultDuration,
-		setAudioFeedback: state.setAudioFeedback,
-		setOsNotifications: state.setOsNotifications,
-	};
 }

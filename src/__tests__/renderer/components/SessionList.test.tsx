@@ -17,7 +17,7 @@ import { SessionList } from '../../../renderer/components/SessionList';
 import type { Session, Group, Theme } from '../../../renderer/types';
 import { useUIStore } from '../../../renderer/stores/uiStore';
 import { useSessionStore } from '../../../renderer/stores/sessionStore';
-import { useSettingsStore, DEFAULT_AUTO_RUN_STATS } from '../../../renderer/stores/settingsStore';
+import { useSettingsStore } from '../../../renderer/stores/settingsStore';
 import { useBatchStore } from '../../../renderer/stores/batchStore';
 import { useModalStore } from '../../../renderer/stores/modalStore';
 import type { BatchRunState } from '../../../renderer/types';
@@ -258,7 +258,7 @@ describe('SessionList', () => {
 			shortcuts: defaultShortcuts,
 			leftSidebarWidth: 300,
 			ungroupedCollapsed: false,
-			autoRunStats: { ...DEFAULT_AUTO_RUN_STATS },
+			autoRunStats: { ...useSettingsStore.getState().autoRunStats },
 		});
 		useBatchStore.setState({ batchRunStates: {} });
 		// Reset tunnel mock
