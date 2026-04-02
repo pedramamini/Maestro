@@ -142,8 +142,34 @@ describe('useFilePreviewHandlers', () => {
 			await result.current.handleFilePreviewSave('/test/project/src/test.ts', 'new content');
 		});
 
-		expect(mockWriteFile).toHaveBeenCalledWith('/test/project/src/test.ts', 'new content');
+		expect(mockWriteFile).toHaveBeenCalledWith(
+			'/test/project/src/test.ts',
+			'new content',
+			undefined
+		);
 		expect(onEditContent).toHaveBeenCalledWith('file-1', undefined, 'new content');
+	});
+
+	it('handleFilePreviewSave passes sshRemoteId for SSH-backed previews', async () => {
+		const { result } = renderHook(() =>
+			useFilePreviewHandlers({
+				activeSession: makeSession({
+					sessionSshRemoteConfig: { enabled: true, remoteId: 'ssh-remote-1' },
+				} as any),
+				activeFileTabId: 'file-1',
+				activeFileTab: makeFileTab(),
+			})
+		);
+
+		await act(async () => {
+			await result.current.handleFilePreviewSave('/test/project/src/test.ts', 'content');
+		});
+
+		expect(mockWriteFile).toHaveBeenCalledWith(
+			'/test/project/src/test.ts',
+			'content',
+			'ssh-remote-1'
+		);
 	});
 
 	it('handleFilePreviewEditContentChange detects changes', () => {

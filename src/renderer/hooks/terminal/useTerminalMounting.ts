@@ -17,7 +17,7 @@ export function useTerminalMounting(activeSession: Session | null) {
 	const terminalViewRefs = useRef<Map<string, TerminalViewHandle>>(new Map());
 
 	// Tracks which sessions have had their TerminalView mounted (by session ID).
-	// Once a session's terminals are mounted we keep them alive (display:none) so that
+	// Once a session's terminals are mounted we keep them hidden (visibility:hidden) so that
 	// switching away and back doesn't destroy the xterm.js buffer contents.
 	const mountedTerminalSessionsRef = useRef<Map<string, Session>>(new Map());
 	const [mountedTerminalSessionIds, setMountedTerminalSessionIds] = useState<string[]>([]);

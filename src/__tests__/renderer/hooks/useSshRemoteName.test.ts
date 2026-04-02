@@ -95,4 +95,45 @@ describe('useSshRemoteName', () => {
 		rerender({ enabled: false, id: 'remote-1' });
 		expect(result.current).toBeNull();
 	});
+
+	it('handles out-of-order responses using sequence guard', async () => {
+		// Create two deferred promises to control resolution order
+		let resolveA: (value: any) => void;
+		let resolveB: (value: any) => void;
+		const promiseA = new Promise((r) => {
+			resolveA = r;
+		});
+		const promiseB = new Promise((r) => {
+			resolveB = r;
+		});
+
+		let callCount = 0;
+		mockGetConfigs.mockImplementation(() => {
+			callCount++;
+			return callCount === 1 ? promiseA : promiseB;
+		});
+
+		const { result, rerender } = renderHook(({ enabled, id }) => useSshRemoteName(enabled, id), {
+			initialProps: {
+				enabled: true as boolean | undefined,
+				id: 'remote-A' as string | null | undefined,
+			},
+		});
+
+		// Switch to remote B before A resolves
+		rerender({ enabled: true, id: 'remote-B' });
+
+		// Resolve B first (the current request)
+		resolveB!({ success: true, configs: [{ id: 'remote-B', name: 'Server B' }] });
+		await waitFor(() => {
+			expect(result.current).toBe('Server B');
+		});
+
+		// Now resolve A (stale) — should NOT overwrite B
+		resolveA!({ success: true, configs: [{ id: 'remote-A', name: 'Server A' }] });
+		// Give a tick for the stale promise to settle
+		await waitFor(() => {
+			expect(result.current).toBe('Server B');
+		});
+	});
 });

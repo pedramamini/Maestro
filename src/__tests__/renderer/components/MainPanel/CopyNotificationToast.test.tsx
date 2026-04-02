@@ -30,7 +30,8 @@ describe('CopyNotificationToast', () => {
 	it('applies theme accent color styling', () => {
 		const { container } = render(<CopyNotificationToast message="Copied" theme={mockTheme} />);
 		const toast = container.firstChild as HTMLElement;
-		expect(toast.style.backgroundColor).toBeTruthy();
-		expect(toast.style.color).toBeTruthy();
+		// jsdom normalizes hex to rgb — verify computed values match our theme
+		expect(toast.style.backgroundColor).toBe('rgb(59, 130, 246)'); // #3b82f6
+		expect(toast.style.color).toBe('rgb(255, 255, 255)'); // #ffffff
 	});
 });

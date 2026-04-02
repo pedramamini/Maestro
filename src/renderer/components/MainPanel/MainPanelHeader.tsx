@@ -44,10 +44,6 @@ export interface MainPanelHeaderProps {
 	currentSessionBatchState: BatchRunState | null | undefined;
 	isWorktreeChild: boolean | undefined;
 	activeFileTabId: string | null | undefined;
-	colorBlindMode: boolean;
-	contextWarningsEnabled: boolean;
-	contextWarningYellowThreshold: number;
-	contextWarningRedThreshold: number;
 	refreshGitStatus: () => Promise<void>;
 	handleViewGitDiff: () => Promise<void>;
 	copyToClipboard: (text: string, message?: string) => Promise<void>;
@@ -75,10 +71,6 @@ export const MainPanelHeader = React.memo(function MainPanelHeader({
 	currentSessionBatchState,
 	isWorktreeChild,
 	activeFileTabId,
-	colorBlindMode: _colorBlindMode,
-	contextWarningsEnabled: _contextWarningsEnabled,
-	contextWarningYellowThreshold: _contextWarningYellowThreshold,
-	contextWarningRedThreshold: _contextWarningRedThreshold,
 	refreshGitStatus,
 	handleViewGitDiff,
 	copyToClipboard,
@@ -126,11 +118,13 @@ export const MainPanelHeader = React.memo(function MainPanelHeader({
 							activeSession.isGitRepo ? gitTooltip.triggerHandlers.onMouseEnter : undefined
 						}
 						onMouseLeave={gitTooltip.triggerHandlers.onMouseLeave}
+						onFocus={activeSession.isGitRepo ? gitTooltip.triggerHandlers.onMouseEnter : undefined}
+						onBlur={gitTooltip.triggerHandlers.onMouseLeave}
 					>
 						{/* SSH Host Pill - show SSH remote name when running remotely (replaces GIT/LOCAL badge) */}
 						{activeSession.sessionSshRemoteConfig?.enabled && sshRemoteName ? (
-							<span
-								className={`flex items-center gap-1 text-xs px-2 py-0.5 rounded-full border border-purple-500/30 text-purple-500 bg-purple-500/10 max-w-[120px] ${
+							<button
+								className={`flex items-center gap-1 text-xs px-2 py-0.5 rounded-full border border-purple-500/30 text-purple-500 bg-purple-500/10 max-w-[120px] outline-none ${
 									activeSession.isGitRepo ? 'cursor-pointer hover:bg-purple-500/20' : ''
 								}`}
 								title={`SSH Remote: ${sshRemoteName}${activeSession.isGitRepo && gitInfo?.branch ? ` (${gitInfo.branch})` : ''}`}
@@ -144,10 +138,10 @@ export const MainPanelHeader = React.memo(function MainPanelHeader({
 							>
 								<Server className="w-3 h-3 shrink-0" />
 								<span className="truncate uppercase">{sshRemoteName}</span>
-							</span>
+							</button>
 						) : (
-							<span
-								className={`flex items-center gap-1.5 text-xs px-2 py-0.5 rounded-full border cursor-pointer ${
+							<button
+								className={`flex items-center gap-1.5 text-xs px-2 py-0.5 rounded-full border cursor-pointer outline-none ${
 									activeSession.isGitRepo
 										? 'border-orange-500/30 text-orange-500 bg-orange-500/10 hover:bg-orange-500/20'
 										: 'border-blue-500/30 text-blue-500 bg-blue-500/10'
@@ -172,7 +166,7 @@ export const MainPanelHeader = React.memo(function MainPanelHeader({
 								) : (
 									'LOCAL'
 								)}
-							</span>
+							</button>
 						)}
 						{activeSession.isGitRepo && gitTooltip.isOpen && gitInfo && (
 							<>

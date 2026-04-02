@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { calculateContextDisplay } from '../../utils/contextUsage';
+import { captureException } from '../../utils/sentry';
 import type { Session } from '../../types';
 
 interface AITab {
@@ -44,7 +45,12 @@ export function useContextWindow(activeSession: Session | null, activeTab: AITab
 				const value = typeof config?.contextWindow === 'number' ? config.contextWindow : 0;
 				if (isActive) setConfiguredContextWindow(value);
 			} catch (error) {
-				console.error('Failed to load agent context window setting', error);
+				captureException(error, {
+					extra: {
+						message: 'Failed to load agent context window setting',
+						toolType: activeSession.toolType,
+					},
+				});
 				if (isActive) setConfiguredContextWindow(0);
 			}
 		};

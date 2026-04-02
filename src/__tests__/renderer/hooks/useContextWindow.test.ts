@@ -128,15 +128,20 @@ describe('useContextWindow', () => {
 	});
 
 	it('cleans up on unmount (isActive flag)', async () => {
-		mockGetConfig.mockImplementation(
-			() => new Promise((resolve) => setTimeout(() => resolve({ contextWindow: 200000 }), 100))
-		);
-		const session = makeSession();
+		vi.useFakeTimers();
+		try {
+			mockGetConfig.mockImplementation(
+				() => new Promise((resolve) => setTimeout(() => resolve({ contextWindow: 200000 }), 100))
+			);
+			const session = makeSession();
 
-		const { unmount } = renderHook(() => useContextWindow(session, null));
-		unmount();
+			const { unmount } = renderHook(() => useContextWindow(session, null));
+			unmount();
 
-		// Should not throw or set state after unmount
-		await new Promise((r) => setTimeout(r, 150));
+			// Advance past the async delay — should not throw or set state after unmount
+			await vi.advanceTimersByTimeAsync(150);
+		} finally {
+			vi.useRealTimers();
+		}
 	});
 });

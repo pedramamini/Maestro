@@ -60,21 +60,43 @@ export function useFilePreviewHandlers({
 		[activeFileTabId, onFileTabEditModeChange]
 	);
 
+	// Memoize sshRemoteId to prevent object recreation — defined early so save handler can use it
+	const filePreviewSshRemoteId = useMemo(
+		() =>
+			activeSession?.sshRemoteId ||
+			(activeSession?.sessionSshRemoteConfig?.enabled
+				? activeSession.sessionSshRemoteConfig.remoteId
+				: undefined) ||
+			undefined,
+		[
+			activeSession?.sshRemoteId,
+			activeSession?.sessionSshRemoteConfig?.enabled,
+			activeSession?.sessionSshRemoteConfig?.remoteId,
+		]
+	);
+
 	const handleFilePreviewSave = useCallback(
 		async (path: string, content: string) => {
-			await window.maestro.fs.writeFile(path, content);
+			await window.maestro.fs.writeFile(path, content, filePreviewSshRemoteId);
 			if (activeFileTabId) {
 				onFileTabEditContentChange?.(activeFileTabId, undefined, content);
 			}
 		},
-		[activeFileTabId, onFileTabEditContentChange]
+		[activeFileTabId, onFileTabEditContentChange, filePreviewSshRemoteId]
 	);
 
 	// Compute cwd for FilePreview - memoized to prevent recalculation on every render
 	const filePreviewCwd = useMemo(() => {
 		if (!activeSession?.fullPath || !activeFileTab?.path) return '';
-		if (!activeFileTab.path.startsWith(activeSession.fullPath)) return '';
-		const relativePath = activeFileTab.path.slice(activeSession.fullPath.length + 1);
+		const fullPathWithSep = activeSession.fullPath.endsWith('/')
+			? activeSession.fullPath
+			: activeSession.fullPath + '/';
+		if (
+			!activeFileTab.path.startsWith(fullPathWithSep) &&
+			activeFileTab.path !== activeSession.fullPath
+		)
+			return '';
+		const relativePath = activeFileTab.path.slice(fullPathWithSep.length);
 		const lastSlash = relativePath.lastIndexOf('/');
 		return lastSlash > 0 ? relativePath.slice(0, lastSlash) : '';
 	}, [activeSession?.fullPath, activeFileTab?.path]);
@@ -112,21 +134,6 @@ export function useFilePreviewHandlers({
 			onReloadFileTab?.(activeFileTabId);
 		}
 	}, [activeFileTabId, onReloadFileTab]);
-
-	// Memoize sshRemoteId to prevent object recreation
-	const filePreviewSshRemoteId = useMemo(
-		() =>
-			activeSession?.sshRemoteId ||
-			(activeSession?.sessionSshRemoteConfig?.enabled
-				? activeSession.sessionSshRemoteConfig.remoteId
-				: undefined) ||
-			undefined,
-		[
-			activeSession?.sshRemoteId,
-			activeSession?.sessionSshRemoteConfig?.enabled,
-			activeSession?.sessionSshRemoteConfig?.remoteId,
-		]
-	);
 
 	return {
 		memoizedFilePreviewFile,
