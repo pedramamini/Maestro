@@ -294,6 +294,12 @@ export interface UseSettingsReturn {
 	encoreFeatures: EncoreFeatureFlags;
 	setEncoreFeatures: (value: EncoreFeatureFlags) => void;
 
+	// Forced Parallel Execution
+	forcedParallelExecution: boolean;
+	setForcedParallelExecution: (value: boolean) => void;
+	forcedParallelAcknowledged: boolean;
+	setForcedParallelAcknowledged: (value: boolean) => void;
+
 	// Director's Notes settings
 	directorNotesSettings: DirectorNotesSettings;
 	setDirectorNotesSettings: (value: DirectorNotesSettings) => void;
