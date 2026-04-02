@@ -96,7 +96,23 @@ describe('show-playbook command', () => {
 			showPlaybook('playbook-123', {});
 
 			expect(findPlaybookById).toHaveBeenCalledWith('playbook-123');
-			expect(formatPlaybookDetail).toHaveBeenCalled();
+			expect(formatPlaybookDetail).toHaveBeenCalledWith(
+				expect.objectContaining({
+					id: 'playbook-123',
+					name: 'Test Playbook',
+					agentId: 'agent-123',
+					agentName: 'Test Agent',
+					taskTimeoutMs: null,
+					maxParallelism: 1,
+					skills: [...DEFAULT_AUTORUN_SKILLS],
+					definitionOfDone: [],
+					verificationSteps: [],
+					promptProfile: 'compact-code',
+					documentContextMode: 'active-task-only',
+					skillPromptMode: 'brief',
+					agentStrategy: 'single',
+				})
+			);
 			expect(consoleSpy).toHaveBeenCalled();
 		});
 

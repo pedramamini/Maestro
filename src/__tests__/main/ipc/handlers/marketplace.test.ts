@@ -799,6 +799,58 @@ describe('marketplace IPC handlers', () => {
 			expect(writtenData.playbooks).toHaveLength(2);
 		});
 
+		it('should normalize existing session playbooks before appending imported playbooks', async () => {
+			const existingPlaybooks = [
+				{
+					id: 'existing-1',
+					name: 'Existing',
+					documents: [{ filename: 'legacy-doc', resetOnCompletion: false }],
+					loopEnabled: false,
+					prompt: 'Legacy prompt',
+				},
+			];
+			const validCache: MarketplaceCache = {
+				fetchedAt: Date.now(),
+				manifest: sampleManifest,
+			};
+
+			vi.mocked(fs.readFile)
+				.mockResolvedValueOnce(JSON.stringify(validCache))
+				.mockRejectedValueOnce({ code: 'ENOENT' })
+				.mockResolvedValueOnce(JSON.stringify({ playbooks: existingPlaybooks }));
+			vi.mocked(fs.mkdir).mockResolvedValue(undefined);
+			vi.mocked(fs.writeFile).mockResolvedValue(undefined);
+
+			mockFetch.mockResolvedValue({
+				ok: true,
+				text: () => Promise.resolve('# Content'),
+			});
+
+			const handler = handlers.get('marketplace:importPlaybook');
+			await handler!({} as any, 'test-playbook-2', 'Normalized', '/autorun', 'session-123');
+
+			const playbooksWriteCall = vi
+				.mocked(fs.writeFile)
+				.mock.calls.find((call) => (call[0] as string).includes('session-123.json'));
+			const writtenData = JSON.parse(playbooksWriteCall![1] as string);
+
+			expect(writtenData.playbooks[0]).toMatchObject({
+				id: 'existing-1',
+				name: 'Existing',
+				maxParallelism: 1,
+				skills: [...DEFAULT_AUTORUN_SKILLS],
+				definitionOfDone: [],
+				verificationSteps: [],
+				promptProfile: 'compact-code',
+				documentContextMode: 'active-task-only',
+				skillPromptMode: 'brief',
+				agentStrategy: 'single',
+				taskGraph: {
+					nodes: [{ id: 'legacy-doc', documentIndex: 0, dependsOn: [] }],
+				},
+			});
+		});
+
 		it('should return error for non-existent playbook', async () => {
 			const validCache: MarketplaceCache = {
 				fetchedAt: Date.now(),

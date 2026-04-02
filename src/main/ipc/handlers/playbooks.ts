@@ -24,6 +24,11 @@ const handlerOpts = (operation: string, logSuccess = true): CreateHandlerOptions
 	logSuccess,
 });
 
+type PlaybookArchiveManifest = PlaybookDraft & {
+	version: number;
+	exportedAt: number;
+};
+
 /**
  * Dependencies required for playbooks handler registration
  */
@@ -70,6 +75,28 @@ async function writePlaybooks(app: App, sessionId: string, playbooks: Playbook[]
 
 	// Write the playbooks file
 	await fs.writeFile(filePath, JSON.stringify({ playbooks }, null, 2), 'utf-8');
+}
+
+function createPlaybookArchiveManifest(playbook: Playbook): PlaybookArchiveManifest {
+	const { id: _id, createdAt: _createdAt, updatedAt: _updatedAt, ...draft } = playbook;
+
+	return {
+		...draft,
+		version: 1,
+		exportedAt: Date.now(),
+	};
+}
+
+function createImportedPlaybook(manifest: PlaybookArchiveManifest): Playbook {
+	const { version: _version, exportedAt: _exportedAt, ...draft } = manifest;
+	const now = Date.now();
+
+	return normalizePersistedPlaybook({
+		id: crypto.randomUUID(),
+		createdAt: now,
+		updatedAt: now,
+		...draft,
+	});
 }
 
 /**
@@ -274,26 +301,11 @@ export function registerPlaybooksHandlers(deps: PlaybooksHandlerDependencies): v
 				archive.pipe(output);
 
 				// Create manifest JSON (playbook settings without the id - will be regenerated on import)
-				const manifest = {
-					version: 1,
-					name: playbook.name,
-					documents: playbook.documents,
-					loopEnabled: playbook.loopEnabled,
-					maxLoops: playbook.maxLoops,
-					taskTimeoutMs: playbook.taskTimeoutMs ?? null,
+				const manifest = createPlaybookArchiveManifest({
+					...playbook,
 					maxParallelism: playbook.maxParallelism ?? 1,
 					taskGraph: playbook.taskGraph ?? buildImplicitTaskGraph(playbook.documents),
-					prompt: playbook.prompt,
-					skills: playbook.skills,
-					definitionOfDone: playbook.definitionOfDone,
-					verificationSteps: playbook.verificationSteps,
-					promptProfile: playbook.promptProfile,
-					documentContextMode: playbook.documentContextMode,
-					skillPromptMode: playbook.skillPromptMode,
-					agentStrategy: playbook.agentStrategy,
-					worktreeSettings: playbook.worktreeSettings,
-					exportedAt: Date.now(),
-				};
+				});
 
 				// Add manifest to archive
 				archive.append(JSON.stringify(manifest, null, 2), { name: 'manifest.json' });
@@ -381,7 +393,9 @@ export function registerPlaybooksHandlers(deps: PlaybooksHandlerDependencies): v
 					throw new Error('Invalid playbook file: missing manifest.json');
 				}
 
-				const manifest = JSON.parse(manifestEntry.getData().toString('utf-8'));
+				const manifest = JSON.parse(
+					manifestEntry.getData().toString('utf-8')
+				) as Partial<PlaybookArchiveManifest>;
 
 				// Validate manifest
 				if (!manifest.name || !Array.isArray(manifest.documents)) {
@@ -424,13 +438,8 @@ export function registerPlaybooksHandlers(deps: PlaybooksHandlerDependencies): v
 
 				// Create new playbook entry
 				const playbooks = await readPlaybooks(app, sessionId);
-				const now = Date.now();
-
-				const newPlaybook = normalizePersistedPlaybook({
-					id: crypto.randomUUID(),
+				const newPlaybook = createImportedPlaybook({
 					name: manifest.name,
-					createdAt: now,
-					updatedAt: now,
 					documents: manifest.documents,
 					loopEnabled: manifest.loopEnabled ?? false,
 					maxLoops: manifest.maxLoops,
@@ -454,6 +463,8 @@ export function registerPlaybooksHandlers(deps: PlaybooksHandlerDependencies): v
 					skillPromptMode: manifest.skillPromptMode,
 					agentStrategy: manifest.agentStrategy ?? 'single',
 					worktreeSettings: manifest.worktreeSettings,
+					version: typeof manifest.version === 'number' ? manifest.version : 1,
+					exportedAt: typeof manifest.exportedAt === 'number' ? manifest.exportedAt : 0,
 				});
 
 				// Add to list and save

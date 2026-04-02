@@ -1,6 +1,8 @@
 // Human-readable output formatter for CLI
 // Provides beautiful, colored terminal output
 
+import type { PlaybookBaselineMetadata, PlaybookTaskGraph } from '../../shared/types';
+
 // ANSI color codes
 const colors = {
 	reset: '\x1b[0m',
@@ -183,7 +185,7 @@ export function formatPlaybooks(
 }
 
 // Playbook detail formatting
-export interface PlaybookDetailDisplay {
+export interface PlaybookDetailDisplay extends PlaybookBaselineMetadata {
 	id: string;
 	name: string;
 	agentId: string;
@@ -191,17 +193,8 @@ export interface PlaybookDetailDisplay {
 	folderPath?: string;
 	loopEnabled?: boolean;
 	maxLoops?: number | null;
-	taskTimeoutMs?: number | null;
-	maxParallelism?: number | null;
-	taskGraph?: import('../../shared/types').PlaybookTaskGraph;
 	prompt: string;
-	skills?: string[];
-	definitionOfDone?: string[];
-	verificationSteps?: string[];
-	promptProfile?: 'full' | 'compact-code' | 'compact-doc';
-	documentContextMode?: 'full' | 'active-task-only';
-	skillPromptMode?: 'full' | 'brief';
-	agentStrategy?: 'single' | 'plan-execute-verify';
+	taskGraph?: PlaybookTaskGraph;
 	documents: {
 		filename: string;
 		resetOnCompletion: boolean;

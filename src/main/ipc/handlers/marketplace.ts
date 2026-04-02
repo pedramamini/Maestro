@@ -26,7 +26,7 @@ import type {
 	MarketplacePlaybook,
 } from '../../../shared/marketplace-types';
 import { MarketplaceFetchError, MarketplaceImportError } from '../../../shared/marketplace-types';
-import { SshRemoteConfig } from '../../../shared/types';
+import type { Playbook, PlaybookDraft, SshRemoteConfig } from '../../../shared/types';
 import { writeFileRemote, mkdirRemote } from '../../utils/remote-fs';
 import type { MaestroSettings } from './persistence';
 
@@ -93,6 +93,10 @@ function getLocalManifestPath(app: App): string {
 	return path.join(app.getPath('userData'), 'local-manifest.json');
 }
 
+function getSessionPlaybooksFilePath(app: App, sessionId: string): string {
+	return path.join(app.getPath('userData'), 'playbooks', `${sessionId}.json`);
+}
+
 /**
  * Check if a path is a local filesystem path (absolute or tilde-prefixed).
  * Returns true for paths like:
@@ -144,6 +148,72 @@ async function readLocalManifest(app: App): Promise<MarketplaceManifest | null> 
 		logger.warn('Failed to read local manifest, ignoring', LOG_CONTEXT, { error });
 		return null;
 	}
+}
+
+async function readSessionPlaybooks(app: App, sessionId: string): Promise<Playbook[]> {
+	const playbooksFilePath = getSessionPlaybooksFilePath(app, sessionId);
+
+	try {
+		const content = await fs.readFile(playbooksFilePath, 'utf-8');
+		const data = JSON.parse(content) as { playbooks?: unknown[] };
+		return Array.isArray(data.playbooks)
+			? data.playbooks.map((playbook) => normalizePersistedPlaybook(playbook as Playbook))
+			: [];
+	} catch {
+		return [];
+	}
+}
+
+async function writeSessionPlaybooks(
+	app: App,
+	sessionId: string,
+	playbooks: Playbook[]
+): Promise<void> {
+	const playbooksFilePath = getSessionPlaybooksFilePath(app, sessionId);
+	await fs.mkdir(path.dirname(playbooksFilePath), { recursive: true });
+	await fs.writeFile(playbooksFilePath, JSON.stringify({ playbooks }, null, 2), 'utf-8');
+}
+
+function createMarketplaceImportedPlaybook(
+	marketplacePlaybook: MarketplacePlaybook,
+	targetFolderName: string
+): Playbook {
+	const now = Date.now();
+	const draft: PlaybookDraft = {
+		name: marketplacePlaybook.title,
+		documents: marketplacePlaybook.documents.map((document) => ({
+			filename: targetFolderName ? `${targetFolderName}/${document.filename}` : document.filename,
+			resetOnCompletion: document.resetOnCompletion,
+		})),
+		loopEnabled: marketplacePlaybook.loopEnabled,
+		maxLoops: marketplacePlaybook.maxLoops ?? null,
+		prompt: marketplacePlaybook.prompt ?? '',
+		taskTimeoutMs: marketplacePlaybook.taskTimeoutMs ?? null,
+		skills: Array.isArray(marketplacePlaybook.skills) ? marketplacePlaybook.skills : [],
+		definitionOfDone: Array.isArray(marketplacePlaybook.definitionOfDone)
+			? marketplacePlaybook.definitionOfDone.filter(
+					(item): item is string => typeof item === 'string' && item.trim() !== ''
+				)
+			: [],
+		verificationSteps: Array.isArray(marketplacePlaybook.verificationSteps)
+			? marketplacePlaybook.verificationSteps.filter(
+					(item): item is string => typeof item === 'string' && item.trim() !== ''
+				)
+			: [],
+		promptProfile: marketplacePlaybook.promptProfile,
+		documentContextMode: marketplacePlaybook.documentContextMode,
+		skillPromptMode: marketplacePlaybook.skillPromptMode,
+		agentStrategy: marketplacePlaybook.agentStrategy,
+		maxParallelism: marketplacePlaybook.maxParallelism,
+		taskGraph: marketplacePlaybook.taskGraph,
+	};
+
+	return normalizePersistedPlaybook({
+		id: crypto.randomUUID(),
+		createdAt: now,
+		updatedAt: now,
+		...draft,
+	});
 }
 
 /**
@@ -944,62 +1014,15 @@ export function registerMarketplaceHandlers(deps: MarketplaceHandlerDependencies
 					}
 				}
 
-				// Create the playbook entry for local storage
-				// Prefix document filenames with the target folder path so they can be found
-				// when the playbook is loaded (allDocuments contains relative paths from root)
-				const now = Date.now();
-				const newPlaybook = normalizePersistedPlaybook({
-					id: crypto.randomUUID(),
-					name: marketplacePlaybook.title,
-					createdAt: now,
-					updatedAt: now,
-					documents: marketplacePlaybook.documents.map((d) => ({
-						// Include target folder in the path (e.g., "development/security-audit/1_ANALYZE")
-						filename: targetFolderName ? `${targetFolderName}/${d.filename}` : d.filename,
-						resetOnCompletion: d.resetOnCompletion,
-					})),
-					loopEnabled: marketplacePlaybook.loopEnabled,
-					maxLoops: marketplacePlaybook.maxLoops,
-					taskTimeoutMs: marketplacePlaybook.taskTimeoutMs ?? null,
-					maxParallelism: marketplacePlaybook.maxParallelism,
-					taskGraph: marketplacePlaybook.taskGraph,
-					// Use empty string if prompt is null - BatchRunnerModal and batch processor
-					// will fall back to DEFAULT_BATCH_PROMPT when prompt is empty
-					prompt: marketplacePlaybook.prompt ?? '',
-					skills: marketplacePlaybook.skills ?? [],
-					definitionOfDone: Array.isArray(marketplacePlaybook.definitionOfDone)
-						? marketplacePlaybook.definitionOfDone.filter(
-								(item) => typeof item === 'string' && item.trim() !== ''
-							)
-						: [],
-					verificationSteps: Array.isArray(marketplacePlaybook.verificationSteps)
-						? marketplacePlaybook.verificationSteps.filter(
-								(item) => typeof item === 'string' && item.trim() !== ''
-							)
-						: [],
-					promptProfile: marketplacePlaybook.promptProfile ?? 'compact-code',
-					documentContextMode: marketplacePlaybook.documentContextMode ?? 'active-task-only',
-					skillPromptMode: marketplacePlaybook.skillPromptMode ?? 'brief',
-					agentStrategy: marketplacePlaybook.agentStrategy ?? 'single',
-				});
+				const newPlaybook = createMarketplaceImportedPlaybook(
+					marketplacePlaybook,
+					targetFolderName
+				);
 
 				// Save the playbook to the session's playbooks storage
-				const playbooksDir = path.join(app.getPath('userData'), 'playbooks');
-				await fs.mkdir(playbooksDir, { recursive: true });
-
-				const playbooksFilePath = path.join(playbooksDir, `${sessionId}.json`);
-				let playbooks: any[] = [];
-
-				try {
-					const content = await fs.readFile(playbooksFilePath, 'utf-8');
-					const data = JSON.parse(content);
-					playbooks = Array.isArray(data.playbooks) ? data.playbooks : [];
-				} catch {
-					// File doesn't exist or is invalid, start fresh
-				}
-
+				const playbooks = await readSessionPlaybooks(app, sessionId);
 				playbooks.push(newPlaybook);
-				await fs.writeFile(playbooksFilePath, JSON.stringify({ playbooks }, null, 2), 'utf-8');
+				await writeSessionPlaybooks(app, sessionId, playbooks);
 
 				logger.info(
 					`Successfully imported playbook "${marketplacePlaybook.title}" with ${importedDocs.length} documents and ${importedAssets.length} assets`,

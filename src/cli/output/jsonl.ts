@@ -1,7 +1,7 @@
 // JSONL output helper for CLI
 // Outputs machine-parseable JSON lines to stdout
 
-import type { UsageStats } from '../../shared/types';
+import type { PlaybookBaselineMetadata, UsageStats } from '../../shared/types';
 
 // Base event interface - all events have a type and timestamp
 export interface JsonlEvent {
@@ -97,7 +97,7 @@ export interface AgentEvent extends JsonlEvent {
 	autoRunFolderPath?: string;
 }
 
-export interface PlaybookEvent extends JsonlEvent {
+export interface PlaybookEvent extends JsonlEvent, PlaybookBaselineMetadata {
 	type: 'playbook';
 	id: string;
 	name: string;
@@ -257,6 +257,6 @@ export function emitPlaybook(playbook: {
 	documents: string[];
 	loopEnabled: boolean;
 	maxLoops?: number | null;
-}): void {
+} & PlaybookBaselineMetadata): void {
 	emitJsonl({ type: 'playbook', ...playbook });
 }
