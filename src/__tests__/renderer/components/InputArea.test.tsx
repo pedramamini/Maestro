@@ -5,6 +5,7 @@ import { InputArea } from '../../../renderer/components/InputArea';
 import { formatShortcutKeys, formatEnterToSend } from '../../../renderer/utils/shortcutFormatter';
 import type { Session, Theme } from '../../../renderer/types';
 import { createMockSession as createBaseSession } from '../../helpers/mockSession';
+import { mockTheme } from '../../helpers/mockTheme';
 
 // Mock scrollIntoView since jsdom doesn't support it
 Element.prototype.scrollIntoView = vi.fn();
@@ -98,28 +99,6 @@ vi.mock('../../../renderer/components/InlineWizard', () => ({
 		</div>
 	)),
 }));
-
-// Default theme for tests
-const mockTheme: Theme = {
-	id: 'dracula',
-	name: 'Dracula',
-	mode: 'dark',
-	colors: {
-		bgMain: '#282a36',
-		bgSidebar: '#21222c',
-		bgActivity: '#343746',
-		textMain: '#f8f8f2',
-		textDim: '#6272a4',
-		accent: '#bd93f9',
-		accentForeground: '#282a36',
-		border: '#44475a',
-		success: '#50fa7b',
-		error: '#ff5555',
-		warning: '#f1fa8c',
-		info: '#8be9fd',
-	},
-};
-
 // Local wrapper: extracts wizardState from overrides and places it on the default tab
 const createMockSession = (overrides: Partial<Session> & { wizardState?: any } = {}): Session => {
 	const { wizardState, ...sessionOverrides } = overrides;

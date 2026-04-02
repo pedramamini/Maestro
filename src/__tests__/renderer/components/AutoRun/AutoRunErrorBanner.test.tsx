@@ -4,27 +4,7 @@ import {
 	AutoRunErrorBanner,
 	AutoRunErrorBannerProps,
 } from '../../../../renderer/components/AutoRun/AutoRunErrorBanner';
-
-const createMockTheme = () => ({
-	id: 'test',
-	name: 'Test',
-	mode: 'dark' as const,
-	colors: {
-		bgMain: '#1a1a1a',
-		bgPanel: '#252525',
-		bgActivity: '#2d2d2d',
-		textMain: '#fff',
-		textDim: '#888',
-		accent: '#0066ff',
-		accentForeground: '#fff',
-		border: '#333',
-		highlight: '#0066ff33',
-		success: '#0a0',
-		warning: '#fa0',
-		error: '#f00',
-	},
-});
-
+import { createMockTheme } from '../../../helpers/mockTheme';
 const defaultProps: AutoRunErrorBannerProps = {
 	theme: createMockTheme() as any,
 	errorMessage: 'Something went wrong',

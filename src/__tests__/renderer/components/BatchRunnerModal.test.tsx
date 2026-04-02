@@ -7,6 +7,7 @@ import {
 	validateAgentPromptHasTaskReference,
 } from '../../../renderer/components/BatchRunnerModal';
 import type { Theme, Playbook } from '../../../renderer/types';
+import { createMockTheme } from '../../helpers/mockTheme';
 
 // Mock LayerStackContext
 const mockRegisterLayer = vi.fn(() => 'layer-123');
@@ -79,31 +80,6 @@ vi.mock('../../../renderer/components/AgentPromptComposerModal', () => ({
 			</div>
 		) : null,
 }));
-
-// Helper to create a mock theme
-function createMockTheme(): Theme {
-	return {
-		id: 'dark',
-		name: 'Dark',
-		mode: 'dark',
-		colors: {
-			bgMain: '#1a1a1a',
-			bgSidebar: '#111111',
-			bgActivity: '#222222',
-			textMain: '#ffffff',
-			textDim: '#888888',
-			accent: '#0066ff',
-			border: '#333333',
-			success: '#00cc00',
-			warning: '#ffcc00',
-			error: '#ff0000',
-			info: '#0099ff',
-			link: '#66aaff',
-			userBubble: '#0044cc',
-		},
-	};
-}
-
 // Helper to create mock playbook
 function createMockPlaybook(overrides: Partial<Playbook> = {}): Playbook {
 	return {

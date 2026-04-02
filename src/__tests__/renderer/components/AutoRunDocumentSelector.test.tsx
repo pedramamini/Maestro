@@ -7,6 +7,7 @@ import {
 	DocTreeNode,
 } from '../../../renderer/components/AutoRun/AutoRunDocumentSelector';
 import type { Theme } from '../../../renderer/types';
+import { mockTheme } from '../../helpers/mockTheme';
 
 // Mock lucide-react icons
 vi.mock('lucide-react', () => ({
@@ -47,28 +48,6 @@ vi.mock('../../../renderer/utils/theme', () => ({
 	getExplorerFileIcon: () => <span data-testid="file-icon">📄</span>,
 	getExplorerFolderIcon: () => <span data-testid="folder-icon">📁</span>,
 }));
-
-// Test theme
-const mockTheme: Theme = {
-	id: 'test-theme',
-	name: 'Test Theme',
-	mode: 'dark',
-	colors: {
-		bgMain: '#1a1a2e',
-		bgSidebar: '#16213e',
-		bgActivity: '#0f3460',
-		border: '#374151',
-		accent: '#6366f1',
-		accentForeground: '#ffffff',
-		textMain: '#e5e7eb',
-		textDim: '#9ca3af',
-		success: '#22c55e',
-		warning: '#eab308',
-		error: '#ef4444',
-		purple: '#8b5cf6',
-	},
-};
-
 const defaultProps = {
 	theme: mockTheme,
 	documents: ['doc1', 'doc2', 'doc3'],

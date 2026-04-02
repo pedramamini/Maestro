@@ -6,6 +6,7 @@ import { formatEnterToSend } from '../../../renderer/utils/shortcutFormatter';
 import { LayerStackProvider } from '../../../renderer/contexts/LayerStackContext';
 import type { Theme, Session, Group } from '../../../renderer/types';
 import { createMockSession } from '../../helpers/mockSession';
+import { mockTheme } from '../../helpers/mockTheme';
 
 // Mock Lucide icons
 vi.mock('lucide-react', () => ({
@@ -40,29 +41,6 @@ vi.mock('lucide-react', () => ({
 		<svg data-testid="pin-icon" className={className} style={style} />
 	),
 }));
-
-// Mock theme
-const mockTheme: Theme = {
-	id: 'test-dark',
-	name: 'Test Dark',
-	mode: 'dark',
-	colors: {
-		bgMain: '#1a1a1a',
-		bgSidebar: '#252525',
-		border: '#333333',
-		textMain: '#ffffff',
-		textDim: '#888888',
-		textFaint: '#555555',
-		accent: '#4a9eff',
-		accentForeground: '#ffffff',
-		buttonBg: '#333333',
-		buttonHover: '#444444',
-		headerBg: '#202020',
-		scrollbarTrack: '#1a1a1a',
-		scrollbarThumb: '#444444',
-	},
-};
-
 const lightTheme: Theme = {
 	id: 'test-light',
 	name: 'Test Light',

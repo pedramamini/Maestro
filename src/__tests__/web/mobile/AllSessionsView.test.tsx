@@ -18,20 +18,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { AllSessionsView, type AllSessionsViewProps } from '../../../web/mobile/AllSessionsView';
 import type { Session } from '../../../web/hooks/useSessions';
 import { createMockSession } from '../../helpers/mockSession';
-
-// Mock theme colors
-const mockThemeColors = {
-	accent: '#8b5cf6',
-	textMain: '#f8f8f2',
-	textDim: '#6272a4',
-	bgMain: '#282a36',
-	bgSidebar: '#21222c',
-	border: '#44475a',
-	success: '#50fa7b',
-	warning: '#ffb86c',
-	error: '#ff5555',
-};
-
+import { mockThemeColors } from '../../helpers/mockTheme';
 // Mock the ThemeProvider
 vi.mock('../../../web/components/ThemeProvider', () => ({
 	useThemeColors: () => mockThemeColors,

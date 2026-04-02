@@ -19,29 +19,7 @@ import {
 	getExplorerFolderIcon,
 } from '../../../renderer/utils/theme';
 import type { Theme, SessionState, FileChangeType } from '../../../renderer/types';
-
-// Mock theme with known colors for testing
-const mockTheme: Theme = {
-	id: 'test-theme',
-	name: 'Test Theme',
-	mode: 'dark',
-	colors: {
-		background: '#1a1a1a',
-		backgroundDim: '#0d0d0d',
-		backgroundBright: '#2a2a2a',
-		textMain: '#ffffff',
-		textDim: '#888888',
-		textMuted: '#666666',
-		textBright: '#ffffff',
-		border: '#333333',
-		borderBright: '#444444',
-		success: '#00ff00',
-		warning: '#ffff00',
-		error: '#ff0000',
-		accent: '#6366f1',
-	},
-};
-
+import { mockTheme } from '../../helpers/mockTheme';
 // Alternative theme for testing that theme colors are used correctly
 const alternativeTheme: Theme = {
 	id: 'alt-theme',

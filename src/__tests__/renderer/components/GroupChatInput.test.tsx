@@ -15,35 +15,11 @@ import { render, screen, fireEvent } from '@testing-library/react';
 import { GroupChatInput } from '../../../renderer/components/GroupChatInput';
 import type { Theme, Session, Group, GroupChatParticipant } from '../../../renderer/types';
 import { createMockSession } from '../../helpers/mockSession';
+import { createMockTheme } from '../../helpers/mockTheme';
 
 // =============================================================================
 // TEST HELPERS
 // =============================================================================
-
-/**
- * Creates a minimal mock theme for testing
- */
-function createMockTheme(): Theme {
-	return {
-		id: 'test-theme',
-		name: 'Test Theme',
-		colors: {
-			bgMain: '#1a1a1a',
-			bgSidebar: '#252525',
-			textMain: '#ffffff',
-			textDim: '#888888',
-			accent: '#6366f1',
-			border: '#333333',
-			success: '#22c55e',
-			error: '#ef4444',
-			warning: '#f59e0b',
-			contextFree: '#22c55e',
-			contextMedium: '#f59e0b',
-			contextHigh: '#ef4444',
-		},
-	};
-}
-
 /**
  * Creates a mock participant for testing
  */

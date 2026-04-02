@@ -4,6 +4,7 @@ import {
 	AutoRunAttachmentsPanel,
 	AutoRunAttachmentsPanelProps,
 } from '../../../../renderer/components/AutoRun/AutoRunAttachmentsPanel';
+import { createMockTheme } from '../../../helpers/mockTheme';
 
 vi.mock('lucide-react', async () => {
 	const actual = await vi.importActual<typeof import('lucide-react')>('lucide-react');
@@ -27,27 +28,6 @@ vi.mock('../../../../renderer/components/AutoRun/AttachmentImage', () => ({
 		</div>
 	),
 }));
-
-const createMockTheme = () => ({
-	id: 'test',
-	name: 'Test',
-	mode: 'dark' as const,
-	colors: {
-		bgMain: '#1a1a1a',
-		bgPanel: '#252525',
-		bgActivity: '#2d2d2d',
-		textMain: '#fff',
-		textDim: '#888',
-		accent: '#0066ff',
-		accentForeground: '#fff',
-		border: '#333',
-		highlight: '#0066ff33',
-		success: '#0a0',
-		warning: '#fa0',
-		error: '#f00',
-	},
-});
-
 const defaultProps: AutoRunAttachmentsPanelProps = {
 	theme: createMockTheme() as any,
 	attachmentsList: ['image1.png', 'image2.jpg'],

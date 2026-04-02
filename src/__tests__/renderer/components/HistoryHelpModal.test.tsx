@@ -4,6 +4,7 @@ import { render, screen, fireEvent, cleanup } from '@testing-library/react';
 import { HistoryHelpModal } from '../../../renderer/components/HistoryHelpModal';
 import type { Theme } from '../../../renderer/types';
 import { useSettingsStore } from '../../../renderer/stores/settingsStore';
+import { mockTheme } from '../../helpers/mockTheme';
 
 // Mock the layer stack context
 const mockRegisterLayer = vi.fn();
@@ -61,26 +62,6 @@ vi.mock('lucide-react', () => ({
 		<svg data-testid="zap-icon" className={className} style={style} />
 	),
 }));
-
-// Create a mock theme
-const mockTheme: Theme = {
-	id: 'test-theme',
-	name: 'Test Theme',
-	mode: 'dark',
-	colors: {
-		bgMain: '#1a1a1a',
-		bgSidebar: '#141414',
-		bgActivity: '#262626',
-		textMain: '#ffffff',
-		textDim: '#a0a0a0',
-		accent: '#6366f1',
-		border: '#333333',
-		error: '#ef4444',
-		success: '#22c55e',
-		warning: '#eab308',
-	},
-};
-
 describe('HistoryHelpModal', () => {
 	const defaultProps = {
 		theme: mockTheme,
@@ -627,11 +608,14 @@ describe('HistoryHelpModal', () => {
 
 			// Find the CheckCircle icon in the Status Indicators section header
 			const checkCircleIcons = screen.getAllByTestId('check-circle-icon');
-			// At least one icon should have success color styling
+			// At least one icon should have success color styling from the theme
 			const hasSuccessColor = checkCircleIcons.some((icon) => {
-				const style = icon.getAttribute('style') || '';
-				// Check for the hex color or RGB equivalent
-				return style.includes('#22c55e') || style.includes('rgb(34, 197, 94)');
+				try {
+					expect(icon).toHaveStyle({ color: mockTheme.colors.success });
+					return true;
+				} catch {
+					return false;
+				}
 			});
 			expect(hasSuccessColor).toBe(true);
 		});
@@ -834,11 +818,8 @@ describe('HistoryHelpModal', () => {
 
 			// Find USER badge container - it has the inline styles
 			const userBadgeSpan = screen.getByText('USER');
-			// The parent span has the inline styles
-			const style = userBadgeSpan.getAttribute('style') || '';
-			// The style uses rgba format derived from the accent color
-			// #6366f1 = rgb(99, 102, 241)
-			expect(style).toContain('rgb(99, 102, 241)');
+			// The parent span has inline styles derived from the accent color
+			expect(userBadgeSpan).toHaveStyle({ color: mockTheme.colors.accent });
 		});
 
 		it('applies correct background and border to AUTO badge', () => {
@@ -848,10 +829,8 @@ describe('HistoryHelpModal', () => {
 			const autoBadges = container.querySelectorAll('.rounded-full.text-\\[10px\\]');
 			const autoBadge = Array.from(autoBadges).find((el) => el.textContent?.includes('AUTO'));
 			expect(autoBadge).toBeTruthy();
-			// The badge should have warning-based colors
-			// #eab308 = rgb(234, 179, 8)
-			const style = autoBadge!.getAttribute('style') || '';
-			expect(style).toContain('rgb(234, 179, 8)');
+			// The badge should have warning-based colors from the theme
+			expect(autoBadge).toHaveStyle({ color: mockTheme.colors.warning });
 		});
 	});
 

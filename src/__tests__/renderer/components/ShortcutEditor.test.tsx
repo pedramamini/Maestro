@@ -19,28 +19,7 @@ vi.mock('../../../renderer/utils/shortcutFormatter', () => ({
 
 // Import after mock to get the mocked version
 import { formatShortcutKeys } from '../../../renderer/utils/shortcutFormatter';
-
-const mockTheme: Theme = {
-	id: 'dracula',
-	name: 'Dracula',
-	mode: 'dark',
-	colors: {
-		bgMain: '#282a36',
-		bgSidebar: '#21222c',
-		bgActivity: '#44475a',
-		border: '#6272a4',
-		textMain: '#f8f8f2',
-		textDim: '#6272a4',
-		accent: '#bd93f9',
-		accentDim: 'rgba(189, 147, 249, 0.3)',
-		accentText: '#bd93f9',
-		accentForeground: '#ffffff',
-		success: '#50fa7b',
-		warning: '#ffb86c',
-		error: '#ff5555',
-	},
-};
-
+import { mockTheme } from '../../helpers/mockTheme';
 const createMockShortcuts = (): Record<string, Shortcut> => ({
 	newSession: {
 		id: 'newSession',

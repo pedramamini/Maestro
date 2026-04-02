@@ -17,6 +17,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import '@testing-library/jest-dom';
 import { UsageDashboardModal } from '../../../../renderer/components/UsageDashboard/UsageDashboardModal';
 import { SummaryCards } from '../../../../renderer/components/UsageDashboard/SummaryCards';
+import { mockTheme } from '../../../helpers/mockTheme';
 
 // Mock lucide-react icons
 vi.mock('lucide-react', () => {
@@ -175,28 +176,6 @@ beforeEach(() => {
 afterEach(() => {
 	vi.clearAllMocks();
 });
-
-// Mock theme
-const mockTheme = {
-	id: 'dark',
-	name: 'Dark',
-	colors: {
-		bgMain: '#1a1a2e',
-		bgActivity: '#16213e',
-		textMain: '#ffffff',
-		textDim: '#a0a0a0',
-		accent: '#6366f1',
-		border: '#2a2a4a',
-		success: '#10b981',
-		warning: '#f59e0b',
-		error: '#ef4444',
-		bgInput: '#1e1e3f',
-		textPlaceholder: '#6b6b8f',
-		bgSecondary: '#121212',
-		textSecondary: '#888888',
-	},
-};
-
 describe('Usage Dashboard State Transition Animations', () => {
 	describe('CSS Animation Keyframes', () => {
 		it('defines dashboard-content-enter keyframe animation', () => {

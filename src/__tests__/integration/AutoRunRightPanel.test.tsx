@@ -16,6 +16,7 @@ import { AutoRun, AutoRunHandle } from '../../renderer/components/AutoRun';
 import type { Session, Theme, Shortcut, BatchRunState, RightPanelTab } from '../../renderer/types';
 import { createMockSession } from '../helpers/mockSession';
 import { LayerStackProvider } from '../../renderer/contexts/LayerStackContext';
+import { createMockTheme } from '../helpers/mockTheme';
 
 // Mock external dependencies
 vi.mock('react-markdown', () => ({
@@ -123,29 +124,6 @@ vi.mock('../../renderer/utils/shortcutFormatter', () => ({
 	formatShortcutKeys: vi.fn((keys) => keys?.join('+') || ''),
 	isMacOS: vi.fn(() => false),
 }));
-
-// Create a mock theme for testing
-const createMockTheme = (): Theme => ({
-	id: 'test-theme',
-	name: 'Test Theme',
-	mode: 'dark',
-	colors: {
-		bgMain: '#1a1a1a',
-		bgPanel: '#252525',
-		bgActivity: '#2d2d2d',
-		bgSidebar: '#1e1e1e',
-		textMain: '#ffffff',
-		textDim: '#888888',
-		accent: '#0066ff',
-		accentForeground: '#ffffff',
-		border: '#333333',
-		highlight: '#0066ff33',
-		success: '#00aa00',
-		warning: '#ffaa00',
-		error: '#ff0000',
-	},
-});
-
 // Setup window.maestro mock
 const setupMaestroMock = () => {
 	const mockMaestro = {

@@ -10,6 +10,17 @@ import { AutoRun, AutoRunHandle } from '../../../renderer/components/AutoRun';
 import { LayerStackProvider } from '../../../renderer/contexts/LayerStackContext';
 import { formatShortcutKeys } from '../../../renderer/utils/shortcutFormatter';
 import type { Theme, BatchRunState, SessionState } from '../../../renderer/types';
+import { createMockTheme } from '../../helpers/mockTheme';
+
+// Convert a hex color like '#f59e0b' to an rgba prefix like 'rgba(245, 158, 11'
+// Used to assert jsdom-converted hex+alpha colors (e.g., '#f59e0b40' becomes 'rgba(245, 158, 11, ...)')
+const hexToRgbaPrefix = (hex: string): string => {
+	const h = hex.replace('#', '');
+	const r = parseInt(h.substring(0, 2), 16);
+	const g = parseInt(h.substring(2, 4), 16);
+	const b = parseInt(h.substring(4, 6), 16);
+	return `rgba(${r}, ${g}, ${b}`;
+};
 
 // Helper to render with LayerStackProvider (required by AutoRunSearchBar)
 const renderWithProvider = (ui: React.ReactElement) => {
@@ -141,28 +152,6 @@ vi.mock('../../../renderer/hooks/input/useTemplateAutocomplete', () => ({
 vi.mock('../../../renderer/components/TemplateAutocompleteDropdown', () => ({
 	TemplateAutocompleteDropdown: React.forwardRef(() => null),
 }));
-
-// Create a mock theme for testing
-const createMockTheme = (): Theme => ({
-	id: 'test-theme',
-	name: 'Test Theme',
-	mode: 'dark',
-	colors: {
-		bgMain: '#1a1a1a',
-		bgPanel: '#252525',
-		bgActivity: '#2d2d2d',
-		textMain: '#ffffff',
-		textDim: '#888888',
-		accent: '#0066ff',
-		accentForeground: '#ffffff',
-		border: '#333333',
-		highlight: '#0066ff33',
-		success: '#00aa00',
-		warning: '#ffaa00',
-		error: '#ff0000',
-	},
-});
-
 // Setup window.maestro mock
 const setupMaestroMock = () => {
 	const mockMaestro = {
@@ -409,6 +398,7 @@ describe('AutoRun', () => {
 		});
 
 		it('highlights content area with warning border and background when there are unsaved changes', async () => {
+			const theme = createMockTheme();
 			const props = createDefaultProps({ content: 'Initial content' });
 			const { container } = renderWithProvider(<AutoRun {...props} />);
 
@@ -427,13 +417,15 @@ describe('AutoRun', () => {
 			fireEvent.change(textarea, { target: { value: 'Modified content' } });
 
 			// Now the content area should have a warning-colored border
-			// Browser converts hex+alpha (#ffaa0040) to rgba format
+			// Browser converts hex+alpha (e.g. #f59e0b40) to rgba format
+			const warningRgba = hexToRgbaPrefix(theme.colors.warning);
 			await waitFor(() => {
-				expect(contentArea.style.border).toContain('rgba(255, 170, 0');
+				expect(contentArea.style.border).toContain(warningRgba);
 			});
 		});
 
 		it('removes highlighting when content is reverted', async () => {
+			const theme = createMockTheme();
 			const props = createDefaultProps({ content: 'Initial content' });
 			const { container } = renderWithProvider(<AutoRun {...props} />);
 
@@ -446,8 +438,9 @@ describe('AutoRun', () => {
 			fireEvent.change(textarea, { target: { value: 'Modified content' } });
 
 			// Should have warning border (rgba format after browser conversion)
+			const warningRgba = hexToRgbaPrefix(theme.colors.warning);
 			await waitFor(() => {
-				expect(contentArea.style.border).toContain('rgba(255, 170, 0');
+				expect(contentArea.style.border).toContain(warningRgba);
 			});
 
 			// Click Revert
@@ -460,6 +453,7 @@ describe('AutoRun', () => {
 		});
 
 		it('removes highlighting when content is saved', async () => {
+			const theme = createMockTheme();
 			const props = createDefaultProps({ content: 'Initial content' });
 			const { container } = renderWithProvider(<AutoRun {...props} />);
 
@@ -472,8 +466,9 @@ describe('AutoRun', () => {
 			fireEvent.change(textarea, { target: { value: 'Modified content' } });
 
 			// Should have warning border (rgba format after browser conversion)
+			const warningRgba = hexToRgbaPrefix(theme.colors.warning);
 			await waitFor(() => {
-				expect(contentArea.style.border).toContain('rgba(255, 170, 0');
+				expect(contentArea.style.border).toContain(warningRgba);
 			});
 
 			// Click Save

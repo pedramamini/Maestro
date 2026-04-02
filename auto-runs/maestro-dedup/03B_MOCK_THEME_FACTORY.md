@@ -13,8 +13,24 @@ Replace 35 `createMockTheme` functions and 119 inline `mockTheme` objects (154 t
 
 ## Pre-flight Checks
 
-- [ ] Phase 03-A (mockSession) is complete
-- [ ] `rtk vitest run` passes
+- [x] Phase 03-A (mockSession) is complete
+- [x] `rtk vitest run` passes
+
+**Completed 2026-04-02:** Consolidated 113 local mockTheme/createMockTheme definitions into a single shared factory at `src/__tests__/helpers/mockTheme.ts`.
+
+Factory approach:
+- Shared `mockTheme` constant provides sensible defaults for all 13 required ThemeColors fields
+- Shared `mockThemeColors` constant exported for direct color reference in assertions
+- `createMockTheme(overrides)` accepts `Partial<Theme>` with deep merge of colors
+- 113 files migrated: removed local definitions, added import from shared factory
+- Tests with hardcoded color assertions updated to reference `mockTheme.colors.xxx` dynamically
+- Special case: ThemePicker.test.tsx uses `createMockTheme({ id, name, mode })` to create full ThemeId records
+- Special case: broadcastService.test.ts uses `createMockTheme({ id: 'monokai', name: 'Monokai' })`
+- 2 pre-existing test failures (SessionList LIVE mode) are NOT caused by this migration
+
+Files created:
+- `src/__tests__/helpers/mockTheme.ts` - shared factory (mockTheme, mockThemeColors, createMockTheme)
+- Updated `src/__tests__/helpers/index.ts` - barrel export
 
 ---
 

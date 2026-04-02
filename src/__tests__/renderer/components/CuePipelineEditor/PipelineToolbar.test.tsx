@@ -5,23 +5,11 @@ import {
 	PipelineToolbar,
 	PipelineToolbarProps,
 } from '../../../../renderer/components/CuePipelineEditor/PipelineToolbar';
+import { mockTheme } from '../../../helpers/mockTheme';
 
 vi.mock('../../../../renderer/components/CuePipelineEditor/PipelineSelector', () => ({
 	PipelineSelector: (props: any) => <div data-testid="pipeline-selector" />,
 }));
-
-const mockTheme = {
-	name: 'test',
-	colors: {
-		bgMain: '#1a1a2e',
-		bgActivity: '#16213e',
-		border: '#333',
-		textMain: '#e4e4e7',
-		textDim: '#a1a1aa',
-		accent: '#06b6d4',
-	},
-} as any;
-
 function buildProps(overrides: Partial<PipelineToolbarProps> = {}): PipelineToolbarProps {
 	return {
 		theme: mockTheme,

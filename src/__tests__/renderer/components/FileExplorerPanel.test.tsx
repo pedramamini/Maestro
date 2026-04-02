@@ -4,6 +4,7 @@ import { render, screen, fireEvent, waitFor, act } from '@testing-library/react'
 import { FileExplorerPanel } from '../../../renderer/components/FileExplorerPanel';
 import type { Session, Theme } from '../../../renderer/types';
 import { createMockSession as _createMockSession } from '../../helpers/mockSession';
+import { mockTheme } from '../../helpers/mockTheme';
 
 // Mock lucide-react
 vi.mock('lucide-react', () => ({
@@ -210,29 +211,6 @@ vi.mock('../../../renderer/hooks/ui/useClickOutside', () => ({
 		}
 	},
 }));
-
-// Create mock theme
-const mockTheme: Theme = {
-	id: 'test-theme',
-	name: 'Test Theme',
-	mode: 'dark',
-	colors: {
-		bgMain: '#1a1a1a',
-		bgSidebar: '#2d2d2d',
-		bgActivity: '#3d3d3d',
-		bgInput: '#404040',
-		textMain: '#ffffff',
-		textDim: '#888888',
-		accent: '#4a9eff',
-		border: '#404040',
-		success: '#4caf50',
-		warning: '#ff9800',
-		error: '#f44336',
-		info: '#2196f3',
-		scrollbarThumb: '#666666',
-	},
-};
-
 // Wrapper: old factory had different cwd/paths, non-zero pids, isGitRepo, and fileTreeAutoRefreshInterval: 0
 const createMockSession = (overrides: Partial<Session> = {}): Session =>
 	_createMockSession({

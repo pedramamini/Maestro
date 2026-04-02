@@ -9,32 +9,10 @@ import React from 'react';
 import { RenameSessionModal } from '../../../renderer/components/RenameSessionModal';
 import { LayerStackProvider } from '../../../renderer/contexts/LayerStackContext';
 import type { Theme, Session } from '../../../renderer/types';
+import { mockTheme, createMockTheme } from '../../helpers/mockTheme';
 
 // Mock the window.maestro API
 vi.mock('../../../renderer/services/process', () => ({}));
-
-// Create a mock theme for testing
-const createMockTheme = (): Theme => ({
-	id: 'test-theme',
-	name: 'Test Theme',
-	mode: 'dark',
-	colors: {
-		bgMain: '#1a1a1a',
-		bgPanel: '#252525',
-		bgSidebar: '#202020',
-		bgActivity: '#2d2d2d',
-		textMain: '#ffffff',
-		textDim: '#888888',
-		accent: '#0066ff',
-		accentForeground: '#ffffff',
-		border: '#333333',
-		highlight: '#0066ff33',
-		success: '#00aa00',
-		warning: '#ffaa00',
-		error: '#ff0000',
-	},
-});
-
 // Create mock sessions
 const createMockSessions = (): Session[] => [
 	{
@@ -84,7 +62,6 @@ const TestWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => (
 );
 
 describe('RenameSessionModal', () => {
-	const mockTheme = createMockTheme();
 	let mockOnClose: ReturnType<typeof vi.fn>;
 	let mockSetValue: ReturnType<typeof vi.fn>;
 	let mockSetSessions: ReturnType<typeof vi.fn>;

@@ -6,6 +6,7 @@ import type { Session, Group, Theme, Shortcut } from '../../../renderer/types';
 import { createMockSession as _createMockSession } from '../../helpers/mockSession';
 import { useUIStore } from '../../../renderer/stores/uiStore';
 import { useFileExplorerStore } from '../../../renderer/stores/fileExplorerStore';
+import { mockTheme } from '../../helpers/mockTheme';
 // Add missing window.maestro.devtools and debug mocks
 beforeAll(() => {
 	(window.maestro as any).devtools = {
@@ -73,29 +74,6 @@ vi.mock('../../../renderer/utils/shortcutFormatter', () => ({
 vi.mock('lucide-react', () => ({
 	Search: () => <svg data-testid="search-icon" />,
 }));
-
-// Create mock theme
-const mockTheme: Theme = {
-	id: 'dark',
-	name: 'Dark',
-	mode: 'dark',
-	colors: {
-		bgMain: '#1a1a2e',
-		bgSidebar: '#16213e',
-		bgActivity: '#0f3460',
-		bgTerminal: '#1a1a2e',
-		textMain: '#eaeaea',
-		textDim: '#888',
-		accent: '#e94560',
-		accentForeground: '#ffffff',
-		error: '#ff6b6b',
-		border: '#333',
-		success: '#4ecdc4',
-		warning: '#ffd93d',
-		terminalCursor: '#e94560',
-	},
-};
-
 // Create mock shortcuts
 const mockShortcuts: Record<string, Shortcut> = {
 	newInstance: { id: 'newInstance', keys: ['Cmd', 'N'], enabled: true },

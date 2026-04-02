@@ -18,6 +18,7 @@ import { AutoRunLightbox } from '../../../renderer/components/AutoRun/AutoRunLig
 import { LayerStackProvider } from '../../../renderer/contexts/LayerStackContext';
 import { formatShortcutKeys } from '../../../renderer/utils/shortcutFormatter';
 import type { Theme } from '../../../renderer/types';
+import { createMockTheme } from '../../helpers/mockTheme';
 
 // Helper to wrap component in LayerStackProvider
 const renderWithProviders = (component: React.ReactElement) => {
@@ -68,29 +69,6 @@ global.ClipboardItem = MockClipboardItem as unknown as typeof ClipboardItem;
 
 // Mock fetch at module level for clipboard tests
 global.fetch = vi.fn();
-
-// Create a mock theme for testing
-const createMockTheme = (): Theme => ({
-	id: 'test-theme',
-	name: 'Test Theme',
-	mode: 'dark',
-	colors: {
-		bgMain: '#1a1a1a',
-		bgSidebar: '#252525',
-		bgPanel: '#2d2d2d',
-		bgActivity: '#333333',
-		textMain: '#ffffff',
-		textDim: '#888888',
-		accent: '#0066ff',
-		accentForeground: '#ffffff',
-		border: '#333333',
-		highlight: '#0066ff33',
-		success: '#00aa00',
-		warning: '#ffaa00',
-		error: '#ff0000',
-	},
-});
-
 // Create a mock attachment previews map
 const createMockPreviews = (filenames: string[]): Map<string, string> => {
 	const map = new Map<string, string>();

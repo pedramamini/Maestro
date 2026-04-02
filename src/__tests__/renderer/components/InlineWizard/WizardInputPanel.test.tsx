@@ -19,6 +19,7 @@ import {
 } from '../../../../renderer/utils/shortcutFormatter';
 import type { Session, Theme } from '../../../../renderer/types';
 import { createMockSession } from '../../../helpers/mockSession';
+import { mockTheme } from '../../../helpers/mockTheme';
 
 // Mock useLayerStack for the WizardExitConfirmDialog
 vi.mock('../../../../renderer/contexts/LayerStackContext', () => ({
@@ -28,34 +29,6 @@ vi.mock('../../../../renderer/contexts/LayerStackContext', () => ({
 		updateLayerHandler: vi.fn(),
 	}),
 }));
-
-// Mock theme for testing
-const mockTheme: Theme = {
-	id: 'test-theme',
-	name: 'Test Theme',
-	mode: 'dark',
-	colors: {
-		background: '#1a1a1a',
-		backgroundDim: '#0d0d0d',
-		backgroundBright: '#2a2a2a',
-		bgActivity: '#333333',
-		bgMain: '#1a1a1a',
-		bgSidebar: '#141414',
-		textMain: '#ffffff',
-		textDim: '#888888',
-		textMuted: '#666666',
-		textBright: '#ffffff',
-		border: '#333333',
-		borderBright: '#444444',
-		success: '#00ff00',
-		warning: '#ffff00',
-		error: '#ff0000',
-		accent: '#007bff',
-		accentForeground: '#ffffff',
-		accentText: '#66b2ff',
-	},
-};
-
 describe('WizardInputPanel', () => {
 	const defaultProps = {
 		session: createMockSession(),

@@ -19,6 +19,7 @@ import {
 } from '../../../renderer/components/AutoRun/AutoRunSearchBar';
 import { LayerStackProvider } from '../../../renderer/contexts/LayerStackContext';
 import type { Theme } from '../../../renderer/types';
+import { createMockTheme, mockTheme } from '../../helpers/mockTheme';
 
 // Helper to render with LayerStackProvider
 const renderWithProvider = (ui: React.ReactElement) => {
@@ -40,29 +41,6 @@ vi.mock('lucide-react', () => ({
 		<svg data-testid="x-icon" className={className} style={style} />
 	),
 }));
-
-// Create a mock theme for testing
-const createMockTheme = (): Theme => ({
-	id: 'test-theme',
-	name: 'Test Theme',
-	mode: 'dark',
-	colors: {
-		bgMain: '#1a1a1a',
-		bgSidebar: '#252525',
-		bgPanel: '#2d2d2d',
-		bgActivity: '#333333',
-		textMain: '#ffffff',
-		textDim: '#888888',
-		accent: '#0066ff',
-		accentForeground: '#ffffff',
-		border: '#333333',
-		highlight: '#0066ff33',
-		success: '#00aa00',
-		warning: '#ffaa00',
-		error: '#ff0000',
-	},
-});
-
 // Default props for AutoRunSearchBar
 const createDefaultProps = (
 	overrides: Partial<AutoRunSearchBarProps> = {}
@@ -124,7 +102,7 @@ describe('AutoRunSearchBar', () => {
 			renderWithProvider(<AutoRunSearchBar {...props} />);
 
 			const container = screen.getByPlaceholderText('Search...').closest('div');
-			expect(container).toHaveStyle({ backgroundColor: '#333333' });
+			expect(container).toHaveStyle({ backgroundColor: mockTheme.colors.bgActivity });
 		});
 
 		it('should apply theme accent color to border', () => {
@@ -132,11 +110,12 @@ describe('AutoRunSearchBar', () => {
 			renderWithProvider(<AutoRunSearchBar {...props} />);
 
 			const container = screen.getByPlaceholderText('Search...').closest('div');
-			// Check that the border style includes the accent color (converted to RGB by browser)
+			// Check that the border style includes the accent color
+			// JSDOM converts hex to rgb in the style attribute string
 			const style = container?.getAttribute('style');
 			expect(style).toContain('border:');
-			// Color is converted from #0066ff to rgb(0, 102, 255)
-			expect(style).toContain('rgb(0, 102, 255)');
+			// mockTheme.colors.accent (#8b5cf6) is converted to rgb(139, 92, 246)
+			expect(style).toContain('rgb(139, 92, 246)');
 		});
 
 		it('should apply theme text color to input', () => {
@@ -144,7 +123,7 @@ describe('AutoRunSearchBar', () => {
 			renderWithProvider(<AutoRunSearchBar {...props} />);
 
 			const input = screen.getByPlaceholderText('Search...');
-			expect(input).toHaveStyle({ color: '#ffffff' });
+			expect(input).toHaveStyle({ color: mockTheme.colors.textMain });
 		});
 
 		it('should apply theme accent color to search icon', () => {
@@ -152,7 +131,7 @@ describe('AutoRunSearchBar', () => {
 			renderWithProvider(<AutoRunSearchBar {...props} />);
 
 			const searchIcon = screen.getByTestId('search-icon');
-			expect(searchIcon).toHaveStyle({ color: '#0066ff' });
+			expect(searchIcon).toHaveStyle({ color: mockTheme.colors.accent });
 		});
 	});
 
@@ -322,7 +301,7 @@ describe('AutoRunSearchBar', () => {
 			renderWithProvider(<AutoRunSearchBar {...props} />);
 
 			const matchCount = screen.getByText('1/5');
-			expect(matchCount).toHaveStyle({ color: '#888888' });
+			expect(matchCount).toHaveStyle({ color: mockTheme.colors.textDim });
 		});
 	});
 
@@ -442,8 +421,8 @@ describe('AutoRunSearchBar', () => {
 			const prevButton = screen.getByTitle('Previous match (Shift+Enter)');
 			const nextButton = screen.getByTitle('Next match (Enter)');
 
-			expect(prevButton).toHaveStyle({ color: '#888888' });
-			expect(nextButton).toHaveStyle({ color: '#888888' });
+			expect(prevButton).toHaveStyle({ color: mockTheme.colors.textDim });
+			expect(nextButton).toHaveStyle({ color: mockTheme.colors.textDim });
 		});
 	});
 
@@ -636,7 +615,7 @@ describe('AutoRunSearchBar', () => {
 			renderWithProvider(<AutoRunSearchBar {...props} />);
 
 			const closeButton = screen.getByTitle('Close search (Esc)');
-			expect(closeButton).toHaveStyle({ color: '#888888' });
+			expect(closeButton).toHaveStyle({ color: mockTheme.colors.textDim });
 		});
 
 		it('should always be visible regardless of search query', () => {

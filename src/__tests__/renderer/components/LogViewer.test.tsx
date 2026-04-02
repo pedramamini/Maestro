@@ -17,28 +17,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { LogViewer } from '../../../renderer/components/LogViewer';
 import { formatShortcutKeys } from '../../../renderer/utils/shortcutFormatter';
 import type { Theme } from '../../../renderer/types';
-
-// Mock theme
-const mockTheme: Theme = {
-	id: 'dracula',
-	name: 'Dracula',
-	mode: 'dark',
-	colors: {
-		bgMain: '#282a36',
-		bgSidebar: '#21222c',
-		bgActivity: '#44475a',
-		textMain: '#f8f8f2',
-		textDim: '#6272a4',
-		accent: '#bd93f9',
-		border: '#44475a',
-		error: '#ff5555',
-		warning: '#ffb86c',
-		success: '#50fa7b',
-		syntaxComment: '#6272a4',
-		syntaxKeyword: '#ff79c6',
-	},
-};
-
+import { mockTheme } from '../../helpers/mockTheme';
 // Mock log entries
 const createMockLog = (
 	overrides: Partial<{

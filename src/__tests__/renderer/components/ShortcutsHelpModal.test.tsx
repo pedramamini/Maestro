@@ -9,29 +9,7 @@ import React from 'react';
 import { ShortcutsHelpModal } from '../../../renderer/components/ShortcutsHelpModal';
 import { LayerStackProvider } from '../../../renderer/contexts/LayerStackContext';
 import type { Theme, Shortcut, KeyboardMasteryStats } from '../../../renderer/types';
-
-// Create a mock theme for testing
-const createMockTheme = (): Theme => ({
-	id: 'test-theme',
-	name: 'Test Theme',
-	mode: 'dark',
-	colors: {
-		bgMain: '#1a1a1a',
-		bgPanel: '#252525',
-		bgSidebar: '#202020',
-		bgActivity: '#2d2d2d',
-		textMain: '#ffffff',
-		textDim: '#888888',
-		accent: '#0066ff',
-		accentForeground: '#ffffff',
-		border: '#333333',
-		highlight: '#0066ff33',
-		success: '#00aa00',
-		warning: '#ffaa00',
-		error: '#ff0000',
-	},
-});
-
+import { mockTheme, createMockTheme } from '../../helpers/mockTheme';
 // Create mock shortcuts for testing
 const createMockShortcuts = (): Record<string, Shortcut> => ({
 	'new-session': {
@@ -74,7 +52,6 @@ const TestWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => (
 );
 
 describe('ShortcutsHelpModal', () => {
-	const mockTheme = createMockTheme();
 	const mockShortcuts = createMockShortcuts();
 	let mockOnClose: ReturnType<typeof vi.fn>;
 

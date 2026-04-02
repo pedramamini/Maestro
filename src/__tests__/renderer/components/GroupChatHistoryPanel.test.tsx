@@ -23,31 +23,11 @@ import type {
 	GroupChatHistoryEntry,
 	GroupChatHistoryEntryType,
 } from '../../../shared/group-chat-types';
+import { mockTheme } from '../../helpers/mockTheme';
 
 // ============================================================================
 // TEST HELPERS
 // ============================================================================
-
-const mockTheme: Theme = {
-	id: 'test-theme',
-	name: 'Test Theme',
-	mode: 'dark',
-	colors: {
-		bgMain: '#1e1e1e',
-		bgSidebar: '#252526',
-		bgActivity: '#333333',
-		textMain: '#ffffff',
-		textDim: '#808080',
-		accent: '#007acc',
-		border: '#404040',
-		success: '#4ec9b0',
-		warning: '#dcdcaa',
-		error: '#f14c4c',
-		buttonBg: '#0e639c',
-		buttonText: '#ffffff',
-	},
-};
-
 const createMockEntry = (
 	overrides: Partial<GroupChatHistoryEntry> = {}
 ): GroupChatHistoryEntry => ({
