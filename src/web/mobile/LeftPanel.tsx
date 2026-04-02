@@ -395,6 +395,7 @@ export function LeftPanel({
 				<div
 					style={{
 						flex: 1,
+						minHeight: 0,
 						overflowY: 'auto',
 						overflowX: 'hidden',
 						padding: '6px',
