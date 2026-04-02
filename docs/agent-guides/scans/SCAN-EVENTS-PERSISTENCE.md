@@ -12,7 +12,7 @@ grep -oh "addEventListener('[a-z]*'" src/renderer/ -r --include="*.ts" --include
 ```
 
 ```
-     38 addEventListener('keydown')
+     43 addEventListener('keydown')
       8 addEventListener('mousedown')
       7 addEventListener('visibilitychange')
       6 addEventListener('click')
@@ -29,7 +29,7 @@ grep -oh "addEventListener('[a-z]*'" src/renderer/ -r --include="*.ts" --include
       1 addEventListener('focus')
 ```
 
-**Key finding:** 38 `keydown` listeners across the renderer. Risk of conflicting keyboard handlers.
+**Key finding:** 43 `keydown` listeners across the renderer (was 38, +5 on rc). Risk of conflicting keyboard handlers.
 
 ---
 
@@ -274,3 +274,7 @@ grep -rn "homedir()\|getPath.*userData" src/main/ --include="*.ts" | grep -v __t
 | `src/main/stats/stats-db.ts`                       | 1     | Stats database path            |
 | `src/main/storage/codex-session-storage.ts`        | 1     | Session cache path             |
 | `src/main/utils/statsCache.ts`                     | 2     | Stats cache paths              |
+
+---
+
+Re-validated 2026-04-01 against rc. keydown listeners updated from 38 to 43. All other findings confirmed.

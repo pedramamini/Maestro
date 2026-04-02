@@ -48,8 +48,8 @@ grep -rn "extractTextFromContent" src/ --include="*.ts" | grep -v __tests__
 | --------------------------------------------------- | ---------- | ------------------------------------------------------------------------------- |
 | `src/cli/services/agent-sessions.ts`                | :142       | :175, :182                                                                      |
 | `src/main/ipc/handlers/claude.ts`                   | :137       | :221, :229, :437, :445                                                          |
-| `src/main/storage/claude-session-storage.ts`        | :60        | :107, :115, :767                                                                |
-| `src/main/storage/codex-session-storage.ts`         | :124       | :307, :324, :338, :355, :668, :682, :695, :709, :965, :982, :1132, :1138, :1301 |
+| `src/main/storage/claude-session-storage.ts`        | :61        | :107, :115, :767                                                                |
+| `src/main/storage/codex-session-storage.ts`         | :140       | :307, :324, :338, :355, :668, :682, :695, :709, :965, :982, :1132, :1138, :1301 |
 | `src/main/storage/factory-droid-session-storage.ts` | :138       | :323, :423, :505, :552, :608                                                    |
 
 **Key finding:** The first 3 definitions (`cli/services/agent-sessions.ts`, `main/ipc/handlers/claude.ts`, `main/storage/claude-session-storage.ts`) have identical signatures and likely identical implementations. The codex and factory-droid versions are typed differently but may share extractable logic.
@@ -147,3 +147,7 @@ grep -rn "getConfigDir\|configDir\|CONFIG_DIR" src/ --include="*.ts" | grep -v _
 - `src/cli/services/storage.ts:374` - `return getConfigDir()`
 
 **Key finding:** 4 separate implementations with inconsistent casing (`Maestro` vs `maestro`) that resolve to different directories on case-sensitive filesystems. The codebase is aware of this issue (comments in `cli-activity.ts`) but has not resolved it.
+
+---
+
+Re-validated 2026-04-01 against rc. extractTextFromContent line shifts: claude-session-storage.ts now line 61 (was 60), codex-session-storage.ts now line 140 (was 124). All other findings confirmed.

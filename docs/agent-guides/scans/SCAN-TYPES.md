@@ -29,7 +29,7 @@ src/shared/types.ts:43                       export interface UsageStats
 src/web/hooks/useWebSocket.ts:29             export interface UsageStats
 ```
 
-### SessionInfo (4 definitions, was 6 - partially resolved)
+### SessionInfo (3 definitions, was 6 - partially resolved)
 
 ```
 src/main/debug-package/collectors/sessions.ts:13    export interface SessionInfo
@@ -40,6 +40,8 @@ src/shared/types.ts:31                               export interface SessionInf
 ~~src/renderer/components/CuePipelineEditor/PipelineCanvas.tsx:56~~ **RESOLVED on rc**
 ~~src/renderer/hooks/cue/usePipelineLayout.ts:19~~ **RESOLVED on rc**
 ~~src/renderer/hooks/cue/usePipelineState.ts:30~~ **RESOLVED on rc**
+
+**Re-vet 2026-04-01:** Confirmed 3 Cue pipeline definitions removed on rc (PipelineCanvas.tsx, usePipelineLayout.ts, usePipelineState.ts). Now 3 definitions remain.
 
 ### AgentConfig (5 definitions)
 
@@ -269,11 +271,11 @@ Note: These are exact `className="..."` matches only (not template literal class
 
 ## Summary
 
-| Category                | Total Duplicates                    | Top Offenders                                          |
-| ----------------------- | ----------------------------------- | ------------------------------------------------------ |
-| Interfaces with 4+ defs | 11 interfaces, 50 total definitions | AgentCapabilities (6), UsageStats (6), SessionInfo (6) |
-| Interfaces with 3 defs  | 17 interfaces, 51 total definitions | Cue types (3x3), preload mirrors                       |
-| Duplicate constants     | 5 definitions                       | AUTO_RUN_FOLDER_NAME (3), DEFAULT_CAPABILITIES (2)     |
-| Repeated CSS patterns   | 1,704 class repetitions (top 20)    | Icon sizes: 1,062 occurrences                          |
+| Category                | Total Duplicates                    | Top Offenders                                                 |
+| ----------------------- | ----------------------------------- | ------------------------------------------------------------- |
+| Interfaces with 4+ defs | 11 interfaces, 50 total definitions | AgentCapabilities (6), UsageStats (6), SessionInfo (3, was 6) |
+| Interfaces with 3 defs  | 17 interfaces, 51 total definitions | Cue types (3x3), preload mirrors                              |
+| Duplicate constants     | 5 definitions                       | AUTO_RUN_FOLDER_NAME (3), DEFAULT_CAPABILITIES (2)            |
+| Repeated CSS patterns   | 1,704 class repetitions (top 20)    | Icon sizes: 1,062 occurrences                                 |
 
 **Root cause pattern:** Types are defined at the canonical source (e.g., `shared/types.ts`), then re-declared in preload files (`main/preload/*.ts`), then re-declared again in renderer type files (`renderer/types/index.ts`, `renderer/global.d.ts`), and sometimes a fourth time in component-local interfaces. The preload boundary is the primary driver of this duplication.

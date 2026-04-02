@@ -423,3 +423,7 @@ Methodology: For each export, count references in all `.ts`/`.tsx` files excludi
 | Shared utils           | 44 exports           |
 | Main process           | 75 exports           |
 | **Grand Total**        | **179 dead exports** |
+
+---
+
+Re-validated 2026-04-01 against rc. All findings confirmed.

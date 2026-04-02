@@ -6,98 +6,101 @@ Generated: 2026-03-20 via `wc -l` and `grep -cE` against `src/`
 
 ## Source Files Over 800 Lines (excluding tests)
 
-| Lines | File                                                               |
-| ----- | ------------------------------------------------------------------ |
-| 3619  | `renderer/App.tsx`                                                 |
-| 3301  | `main/ipc/handlers/symphony.ts`                                    |
-| 2839  | `renderer/components/TabBar.tsx`                                   |
-| 2662  | `renderer/components/FilePreview.tsx`                              |
-| 2610  | `renderer/components/SymphonyModal.tsx`                            |
-| 2287  | `renderer/components/AutoRun.tsx`                                  |
-| 2142  | `renderer/components/DocumentGraph/DocumentGraphView.tsx`          |
-| 2047  | `renderer/hooks/batch/useBatchProcessor.ts`                        |
-| 1987  | `renderer/components/MainPanel.tsx`                                |
-| 1975  | `generated/prompts.ts`                                             |
-| 1928  | `renderer/utils/tabHelpers.ts`                                     |
-| 1923  | `renderer/stores/settingsStore.ts`                                 |
-| 1908  | `main/ipc/handlers/claude.ts`                                      |
-| 1845  | `renderer/components/NewInstanceModal.tsx`                         |
-| 1785  | `renderer/components/TerminalOutput.tsx`                           |
-| 1759  | `main/storage/opencode-session-storage.ts`                         |
-| 1749  | `renderer/components/ProcessMonitor.tsx`                           |
-| 1668  | `renderer/components/QuickActionsModal.tsx`                        |
-| 1625  | `renderer/hooks/tabs/useTabHandlers.ts`                            |
-| 1608  | `renderer/components/PlaygroundPanel.tsx`                          |
-| 1578  | `renderer/hooks/agent/useAgentListeners.ts`                        |
-| 1575  | `main/group-chat/group-chat-router.ts`                             |
-| 1539  | `renderer/components/FileExplorerPanel.tsx`                        |
-| 1534  | `renderer/components/AgentSessionsBrowser.tsx`                     |
-| 1521  | `renderer/components/Wizard/screens/ConversationScreen.tsx`        |
-| 1460  | `main/ipc/handlers/git.ts`                                         |
-| 1434  | `renderer/components/MarketplaceModal.tsx`                         |
-| 1425  | `renderer/components/Wizard/screens/AgentSelectionScreen.tsx`      |
-| 1411  | `web/mobile/MobileHistoryPanel.tsx`                                |
-| 1392  | `main/storage/codex-session-storage.ts`                            |
-| 1375  | `renderer/components/LeaderboardRegistrationModal.tsx`             |
-| 1366  | `renderer/components/DocumentGraph/MindMap.tsx`                    |
-| 1353  | `renderer/components/Wizard/services/phaseGenerator.ts`            |
-| 1339  | `renderer/components/SessionList/SessionList.tsx`                  |
-| 1330  | `web/mobile/App.tsx`                                               |
-| 1329  | `renderer/hooks/wizard/useWizardHandlers.ts`                       |
-| 1307  | `renderer/components/DocumentsPanel.tsx`                           |
-| 1294  | `renderer/services/inlineWizardDocumentGeneration.ts`              |
-| 1286  | `main/ipc/handlers/autorun.ts`                                     |
-| 1234  | `renderer/components/InlineWizard/DocumentGenerationView.tsx`      |
-| 1228  | `renderer/components/UsageDashboard/UsageDashboardModal.tsx`       |
-| 1200  | `renderer/components/DocumentGraph/graphDataBuilder.ts`            |
-| 1196  | `renderer/hooks/input/useInputProcessing.ts`                       |
-| 1172  | `renderer/components/InputArea.tsx`                                |
-| 1167  | `web/mobile/SessionPillBar.tsx`                                    |
-| 1142  | `main/storage/claude-session-storage.ts`                           |
-| 1085  | `main/ipc/handlers/agents.ts`                                      |
-| 1070  | `web/mobile/ResponseViewer.tsx`                                    |
-| 1066  | `renderer/stores/modalStore.ts`                                    |
-| 1065  | `renderer/components/MergeSessionModal.tsx`                        |
-| 1062  | `renderer/components/Settings/tabs/GeneralTab.tsx`                 |
-| 1056  | `renderer/components/AppModals/AppModals.tsx`                      |
-| 1049  | `renderer/components/Wizard/services/conversationManager.ts`       |
-| 1046  | `renderer/components/TabSwitcherModal.tsx`                         |
-| 1020  | `renderer/components/Wizard/WizardContext.tsx`                     |
-| 1009  | `renderer/components/CueModal.tsx`                                 |
-| 1001  | `main/parsers/error-patterns.ts`                                   |
-| 1000  | `main/ipc/handlers/marketplace.ts`                                 |
-| 975   | `renderer/components/UsageDashboard/ActivityHeatmap.tsx`           |
-| 974   | `renderer/types/index.ts`                                          |
-| 971   | `main/ipc/handlers/agentSessions.ts`                               |
-| 965   | `renderer/hooks/modal/useModalHandlers.ts`                         |
-| 962   | `renderer/components/DocumentGraph/mindMapLayouts.ts`              |
-| 951   | `main/web-server/handlers/messageHandlers.ts`                      |
-| 949   | `renderer/components/BatchRunnerModal.tsx`                         |
-| 943   | `renderer/components/CueHelpModal.tsx`                             |
-| 937   | `renderer/hooks/keyboard/useMainKeyboardHandler.ts`                |
-| 935   | `web/mobile/CommandInputBar.tsx`                                   |
-| 934   | `web/hooks/useWebSocket.ts`                                        |
-| 927   | `main/index.ts`                                                    |
-| 914   | `renderer/components/Wizard/screens/PreparingPlanScreen.tsx`       |
-| 900   | `main/ipc/handlers/groupChat.ts`                                   |
-| 874   | `main/ipc/handlers/process.ts`                                     |
-| 872   | `renderer/services/inlineWizardConversation.ts`                    |
-| 860   | `renderer/components/Wizard/screens/DirectorySelectionScreen.tsx`  |
-| 849   | `renderer/components/CuePipelineEditor/panels/NodeConfigPanel.tsx` |
-| 845   | `renderer/hooks/worktree/useWorktreeHandlers.ts`                   |
-| 839   | `main/utils/remote-fs.ts`                                          |
-| 832   | `main/stats/stats-db.ts`                                           |
-| 831   | `renderer/components/RightPanel.tsx`                               |
-| 827   | `renderer/components/Settings/SshRemoteModal.tsx`                  |
-| 826   | `renderer/hooks/agent/useMergeSession.ts`                          |
-| 808   | `renderer/components/DocumentGraph/layoutAlgorithms.ts`            |
+| Lines | File                                                                                                                                                                   |
+| ----- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 4034  | `renderer/App.tsx` **(REGRESSION, was 3619, +415 lines)**                                                                                                              |
+| 3318  | `main/ipc/handlers/symphony.ts` **(was 3301, +17)**                                                                                                                    |
+| 542   | `renderer/components/TabBar.tsx` **FULLY RESOLVED** (was 2839, split into TabBar.tsx + AITab.tsx + FileTab.tsx + TerminalTabItem.tsx)                                  |
+| 1320  | `renderer/components/FilePreview.tsx` **PARTIALLY RESOLVED** (was 2662, split into FilePreview.tsx + FilePreviewHeader + FilePreviewToc + ImageViewer + MarkdownImage) |
+| 2610  | `renderer/components/SymphonyModal.tsx`                                                                                                                                |
+| 2287  | `renderer/components/AutoRun.tsx`                                                                                                                                      |
+| 2142  | `renderer/components/DocumentGraph/DocumentGraphView.tsx`                                                                                                              |
+| 2047  | `renderer/hooks/batch/useBatchProcessor.ts`                                                                                                                            |
+| 1987  | `renderer/components/MainPanel.tsx`                                                                                                                                    |
+| 1975  | `generated/prompts.ts`                                                                                                                                                 |
+| 1928  | `renderer/utils/tabHelpers.ts`                                                                                                                                         |
+| 1923  | `renderer/stores/settingsStore.ts`                                                                                                                                     |
+| 1908  | `main/ipc/handlers/claude.ts`                                                                                                                                          |
+| 1845  | `renderer/components/NewInstanceModal.tsx`                                                                                                                             |
+| 1785  | `renderer/components/TerminalOutput.tsx`                                                                                                                               |
+| 1759  | `main/storage/opencode-session-storage.ts`                                                                                                                             |
+| 1749  | `renderer/components/ProcessMonitor.tsx`                                                                                                                               |
+| 1668  | `renderer/components/QuickActionsModal.tsx`                                                                                                                            |
+| 1625  | `renderer/hooks/tabs/useTabHandlers.ts`                                                                                                                                |
+| 1608  | `renderer/components/PlaygroundPanel.tsx`                                                                                                                              |
+| 1578  | `renderer/hooks/agent/useAgentListeners.ts`                                                                                                                            |
+| 1575  | `main/group-chat/group-chat-router.ts`                                                                                                                                 |
+| 1539  | `renderer/components/FileExplorerPanel.tsx`                                                                                                                            |
+| 1534  | `renderer/components/AgentSessionsBrowser.tsx`                                                                                                                         |
+| 1521  | `renderer/components/Wizard/screens/ConversationScreen.tsx`                                                                                                            |
+| 1460  | `main/ipc/handlers/git.ts`                                                                                                                                             |
+| 1434  | `renderer/components/MarketplaceModal.tsx`                                                                                                                             |
+| 1425  | `renderer/components/Wizard/screens/AgentSelectionScreen.tsx`                                                                                                          |
+| 1411  | `web/mobile/MobileHistoryPanel.tsx`                                                                                                                                    |
+| 1392  | `main/storage/codex-session-storage.ts`                                                                                                                                |
+| 1375  | `renderer/components/LeaderboardRegistrationModal.tsx`                                                                                                                 |
+| 1366  | `renderer/components/DocumentGraph/MindMap.tsx`                                                                                                                        |
+| 1353  | `renderer/components/Wizard/services/phaseGenerator.ts`                                                                                                                |
+| 1339  | `renderer/components/SessionList/SessionList.tsx`                                                                                                                      |
+| 1330  | `web/mobile/App.tsx`                                                                                                                                                   |
+| 1329  | `renderer/hooks/wizard/useWizardHandlers.ts`                                                                                                                           |
+| 1307  | `renderer/components/DocumentsPanel.tsx`                                                                                                                               |
+| 1294  | `renderer/services/inlineWizardDocumentGeneration.ts`                                                                                                                  |
+| 1286  | `main/ipc/handlers/autorun.ts`                                                                                                                                         |
+| 1234  | `renderer/components/InlineWizard/DocumentGenerationView.tsx`                                                                                                          |
+| 1228  | `renderer/components/UsageDashboard/UsageDashboardModal.tsx`                                                                                                           |
+| 1200  | `renderer/components/DocumentGraph/graphDataBuilder.ts`                                                                                                                |
+| 1196  | `renderer/hooks/input/useInputProcessing.ts`                                                                                                                           |
+| 1172  | `renderer/components/InputArea.tsx`                                                                                                                                    |
+| 1167  | `web/mobile/SessionPillBar.tsx`                                                                                                                                        |
+| 1142  | `main/storage/claude-session-storage.ts`                                                                                                                               |
+| 1085  | `main/ipc/handlers/agents.ts`                                                                                                                                          |
+| 1070  | `web/mobile/ResponseViewer.tsx`                                                                                                                                        |
+| 1066  | `renderer/stores/modalStore.ts`                                                                                                                                        |
+| 1065  | `renderer/components/MergeSessionModal.tsx`                                                                                                                            |
+| 1062  | `renderer/components/Settings/tabs/GeneralTab.tsx`                                                                                                                     |
+| 1056  | `renderer/components/AppModals/AppModals.tsx`                                                                                                                          |
+| 1049  | `renderer/components/Wizard/services/conversationManager.ts`                                                                                                           |
+| 1046  | `renderer/components/TabSwitcherModal.tsx`                                                                                                                             |
+| 1020  | `renderer/components/Wizard/WizardContext.tsx`                                                                                                                         |
+| 1009  | `renderer/components/CueModal.tsx`                                                                                                                                     |
+| 1001  | `main/parsers/error-patterns.ts`                                                                                                                                       |
+| 1000  | `main/ipc/handlers/marketplace.ts`                                                                                                                                     |
+| 975   | `renderer/components/UsageDashboard/ActivityHeatmap.tsx`                                                                                                               |
+| 974   | `renderer/types/index.ts`                                                                                                                                              |
+| 971   | `main/ipc/handlers/agentSessions.ts`                                                                                                                                   |
+| 965   | `renderer/hooks/modal/useModalHandlers.ts`                                                                                                                             |
+| 962   | `renderer/components/DocumentGraph/mindMapLayouts.ts`                                                                                                                  |
+| 951   | `main/web-server/handlers/messageHandlers.ts`                                                                                                                          |
+| 949   | `renderer/components/BatchRunnerModal.tsx`                                                                                                                             |
+| 943   | `renderer/components/CueHelpModal.tsx`                                                                                                                                 |
+| 937   | `renderer/hooks/keyboard/useMainKeyboardHandler.ts`                                                                                                                    |
+| 935   | `web/mobile/CommandInputBar.tsx`                                                                                                                                       |
+| 934   | `web/hooks/useWebSocket.ts`                                                                                                                                            |
+| 927   | `main/index.ts`                                                                                                                                                        |
+| 914   | `renderer/components/Wizard/screens/PreparingPlanScreen.tsx`                                                                                                           |
+| 900   | `main/ipc/handlers/groupChat.ts`                                                                                                                                       |
+| 874   | `main/ipc/handlers/process.ts`                                                                                                                                         |
+| 872   | `renderer/services/inlineWizardConversation.ts`                                                                                                                        |
+| 860   | `renderer/components/Wizard/screens/DirectorySelectionScreen.tsx`                                                                                                      |
+| 849   | `renderer/components/CuePipelineEditor/panels/NodeConfigPanel.tsx`                                                                                                     |
+| 845   | `renderer/hooks/worktree/useWorktreeHandlers.ts`                                                                                                                       |
+| 839   | `main/utils/remote-fs.ts`                                                                                                                                              |
+| 832   | `main/stats/stats-db.ts`                                                                                                                                               |
+| 831   | `renderer/components/RightPanel.tsx`                                                                                                                                   |
+| 827   | `renderer/components/Settings/SshRemoteModal.tsx`                                                                                                                      |
+| 826   | `renderer/hooks/agent/useMergeSession.ts`                                                                                                                              |
+| 808   | `renderer/components/DocumentGraph/layoutAlgorithms.ts`                                                                                                                |
 
 **Total: 82 source files exceed 800-line limit.**
 
 ### By severity:
 
-- **3000+ lines (critical):** 3 files (App.tsx, symphony handler, TabBar)
-- **2000-3000 lines:** 7 files
+- **4000+ lines (critical):** 1 file (App.tsx at 4034 - REGRESSION)
+- **3000-4000 lines (critical):** 1 file (symphony handler at 3318)
+- **TabBar.tsx:** FULLY RESOLVED (2839 -> 542 lines, refactored into TabBar.tsx + AITab.tsx + FileTab.tsx + TerminalTabItem.tsx)
+- **FilePreview.tsx:** PARTIALLY RESOLVED (2662 -> 1320 lines, split into FilePreview.tsx + FilePreviewHeader + FilePreviewToc + ImageViewer + MarkdownImage)
+- **2000-3000 lines:** 5 files (was 7, minus TabBar and FilePreview)
 - **1500-2000 lines:** 12 files
 - **1000-1500 lines:** 28 files
 - **800-1000 lines:** 32 files
@@ -176,8 +179,17 @@ Counted via `export (async )?function` and `export const name = (async )?(` patt
 
 ### Top 5 worst offenders (lines + function count + other issues):
 
-1. **`renderer/App.tsx`** - 3619 lines, 22 setSessions calls
-2. **`main/ipc/handlers/symphony.ts`** - 3301 lines, 49 functions, 20 ipcMain.handle
-3. **`renderer/components/TabBar.tsx`** - 2839 lines
-4. **`renderer/components/FilePreview.tsx`** - 2662 lines, 26 functions
+1. **`renderer/App.tsx`** - 4034 lines (REGRESSION from 3619, +415), 22 setSessions calls
+2. **`main/ipc/handlers/symphony.ts`** - 3318 lines (was 3301, +17), 49 functions, 20 ipcMain.handle
+3. ~~**`renderer/components/TabBar.tsx`** - 2839 lines~~ **FULLY RESOLVED** (now 542 lines)
+4. ~~**`renderer/components/FilePreview.tsx`** - 2662 lines~~ **PARTIALLY RESOLVED** (now 1320 lines)
 5. **`renderer/components/SymphonyModal.tsx`** - 2610 lines, 9 spinners
+
+---
+
+Re-validated 2026-04-01 against rc.
+
+- App.tsx: 3619 -> 4034 lines (REGRESSION, +415 lines)
+- symphony.ts: 3301 -> 3318 lines (+17)
+- TabBar.tsx: FULLY RESOLVED - refactored from 2839 to 542 lines
+- FilePreview.tsx: PARTIALLY RESOLVED - split from 2662 to 1320 lines

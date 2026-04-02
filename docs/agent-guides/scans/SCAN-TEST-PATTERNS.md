@@ -13,7 +13,7 @@ grep -oh "vi\.mock('[^']*'" src/__tests__/ -r --include="*.ts" --include="*.tsx"
 
 ```
      78 vi.mock('electron')
-     51 vi.mock('lucide-react')
+     54 vi.mock('lucide-react')
      39 vi.mock('../../../../main/utils/logger')
      32 vi.mock('fs')
      29 vi.mock('../../../renderer/contexts/LayerStackContext')
@@ -34,7 +34,7 @@ grep -oh "vi\.mock('[^']*'" src/__tests__/ -r --include="*.ts" --include="*.tsx"
      12 vi.mock('electron-store')
 ```
 
-**Key finding:** `lucide-react` is mocked in 51 individual test files despite already being mocked in `src/__tests__/setup.ts:30`. All 51 per-file mocks are redundant.
+**Key finding:** `lucide-react` is mocked in 54 individual test files (was 51, +3) despite already being mocked in `src/__tests__/setup.ts:30`. All 54 per-file mocks are redundant.
 
 ---
 
@@ -137,7 +137,7 @@ grep -rn "vi\.mock.*lucide-react" src/__tests__/ --include="*.ts" --include="*.t
 
 ## Logger Mock Copies
 
-128 matches across 100 files. Logger is mocked via 4 different relative paths depending on test location:
+133 matches across 100+ files (was 128, +5). Logger is mocked via 4 different relative paths depending on test location:
 
 ```
 grep -rn "vi\.mock.*logger" src/__tests__/ --include="*.ts" --include="*.tsx"
@@ -260,3 +260,11 @@ find src/__tests__ -name "*.ts" -o -name "*.tsx" | xargs wc -l | sort -rn | awk 
 | 2469  | `src/__tests__/renderer/components/SettingsModal.test.tsx`                   |
 
 Total test lines: 463,231
+
+---
+
+Re-validated 2026-04-01 against rc.
+
+- lucide-react mocks: 51 -> 54 (+3)
+- Logger mocks: 128 -> 133 (+5)
+  All other findings confirmed.

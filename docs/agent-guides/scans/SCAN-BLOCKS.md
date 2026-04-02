@@ -241,3 +241,7 @@ Every `s.aiTabs.map(...)` or `session.aiTabs.map(...)` inside a setSessions upda
 | 1     | `Install GUID Copied`                  |
 
 **Total notifyToast calls: 65+ across 18 files**
+
+---
+
+Re-validated 2026-04-01 against rc. All findings confirmed.

@@ -76,12 +76,12 @@ The `SessionState` union type differs between web and renderer:
 
 Direct imports from `src/web/` into `src/renderer/` (or vice versa):
 
-| Source file                                 | Import                                                                     |
-| ------------------------------------------- | -------------------------------------------------------------------------- |
-| `src/web/mobile/App.tsx:26`                 | `import { estimateContextUsage } from '../../renderer/utils/contextUsage'` |
-| `src/web/mobile/SessionStatusBanner.tsx:36` | `import { estimateContextUsage } from '../../renderer/utils/contextUsage'` |
+| Source file                                 | Import                                                                         | Status             |
+| ------------------------------------------- | ------------------------------------------------------------------------------ | ------------------ |
+| ~~`src/web/mobile/App.tsx:26`~~             | ~~`import { estimateContextUsage } from '../../renderer/utils/contextUsage'`~~ | **RESOLVED on rc** |
+| `src/web/mobile/SessionStatusBanner.tsx:36` | `import { estimateContextUsage } from '../../renderer/utils/contextUsage'`     | Remaining          |
 
-**2 cross-boundary imports found.** Both are `src/web/` importing from `src/renderer/`. The imported function `estimateContextUsage` should be moved to `src/shared/` or duplicated into `src/web/`.
+**1 cross-boundary import remaining** (was 2, App.tsx import resolved on rc). `estimateContextUsage` should be moved to `src/shared/` or duplicated into `src/web/`.
 
 No imports from `src/renderer/` into `src/web/` were found.
 
@@ -142,10 +142,14 @@ No imports from `src/renderer/` into `src/web/` were found.
 | ------------------------------------ | ------------- | ------------------------------------------------------------------------ |
 | Shared function names (web/renderer) | 8+            | High - independent implementations can drift                             |
 | Shared type names (web/renderer)     | 14            | High - `SessionState` already diverges                                   |
-| Cross-boundary imports               | 2             | Medium - architectural boundary violation                                |
+| Cross-boundary imports               | 1 (was 2)     | Medium - architectural boundary violation (1 resolved)                   |
 | `SessionStatus` defined within web/  | 2 (identical) | Low - simple dedup                                                       |
 | `LogEntry` defined within web/       | 2             | Low - simple dedup                                                       |
 | `SlashCommand` defined in renderer/  | 3             | Medium - three separate interface definitions                            |
 | `getSessionDisplayName` in renderer/ | 5             | High - five independent implementations                                  |
 | `formatTime`/`formatTimestamp` total | 8             | High - scattered across both directories                                 |
 | `generateId` total                   | 5             | Medium - different implementations (crypto.randomUUID vs Date.now-based) |
+
+---
+
+Re-validated 2026-04-01 against rc. Cross-boundary imports: 1 resolved (App.tsx import), 1 remaining (estimateContextUsage in SessionStatusBanner). All other findings confirmed.

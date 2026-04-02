@@ -228,3 +228,7 @@ src/main/index.ts:620     usage
 | `sessions.find` lookups        | 71    | Should use `getActiveSession` / `getSessionById` selectors |
 | `getSshRemoteById` definitions | 6     | 5 local copies of a function already exported from stores  |
 | Wizard re-lookups              | 8     | Re-finds session that's already in scope                   |
+
+---
+
+Re-validated 2026-04-01 against rc. All findings confirmed.

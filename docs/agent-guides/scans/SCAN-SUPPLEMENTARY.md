@@ -15,7 +15,7 @@ Additional duplicated functions found via cross-codebase function name analysis.
 - `src/renderer/components/UsageDashboard/AgentUsageChart.tsx:143` - `function getSessionDisplayName(sessionId: string, sessions?: Session[]): string` (different signature)
 - `src/renderer/hooks/agent/useMergeSession.ts:115` - `function getSessionDisplayName(session: Session): string`
 - `src/renderer/hooks/agent/useSendToAgent.ts:113` - `function getSessionDisplayName(session: Session): string`
-- `src/web/mobile/AllSessionsView.tsx:258` - `function getSessionDisplayName(session: Session, sessions: Session[]): string` (different signature)
+- `src/web/mobile/AllSessionsView.tsx:856` - `function getSessionDisplayName(session: Session, sessions: Session[]): string` (different signature, line shifted from 258)
 
 ### Analysis:
 
@@ -54,3 +54,7 @@ Additional duplicated functions found via cross-codebase function name analysis.
 | `getSessionDisplayName` | 6 definitions  | ~60 lines    |
 | `formatTimestamp`       | 6 definitions  | ~50 lines    |
 | **Total**               | 12 definitions | ~110 lines   |
+
+---
+
+Re-validated 2026-04-01 against rc. getSessionDisplayName line shift in AllSessionsView (258->856). All other findings confirmed.

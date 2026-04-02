@@ -93,7 +93,7 @@ Consolidated tracking of all duplicate/dead code in the Maestro codebase. Grep-v
 ### 10. Test Mock Factories - createMockTheme + mockTheme (97 definitions)
 
 - **Evidence:** SCAN-MOCKS.md, "createMockTheme definitions" (31) + "mockTheme object definitions" (66)
-- **Count:** 31 `createMockTheme` functions + 66 `mockTheme` inline objects = 97 total
+- **Count:** 35 `createMockTheme` functions (was 31) + 119 `mockTheme` inline objects (was 66) = 154 total (was 97, REGRESSION)
 - **KEEP:** Create shared `src/__tests__/helpers/mockTheme.ts`
 - **REMOVE:** 97 local definitions, replace with imports from shared helper
 - **Estimated savings:** ~500 lines
@@ -101,16 +101,17 @@ Consolidated tracking of all duplicate/dead code in the Maestro codebase. Grep-v
 ### 11. Test window.maestro Mock Setup (64 files)
 
 - **Evidence:** SCAN-MOCKS.md, "Test files with window.maestro mock setup"
-- **Count:** 64 test files set up their own `window.maestro` mock despite shared mock existing in `src/__tests__/setup.ts:205`
+- **Count:** 117 test file instances set up their own `window.maestro` mock (was 64, REGRESSION) despite shared mock existing in `src/__tests__/setup.ts:205`
 - **KEEP:** `src/__tests__/setup.ts` centralized mock
-- **CONSOLIDATE:** Extend `setup.ts` to cover all namespaces, remove 64 local setups
-- **Estimated savings:** ~1,000 lines (avg ~15 lines per file)
+- **CONSOLIDATE:** Extend `setup.ts` to cover all namespaces, remove 117 local setups
+- **Estimated savings:** ~1,755 lines (avg ~15 lines per instance)
 
 ### 12. Formatter Duplication - formatDuration (22 redundant definitions)
 
 - **Evidence:** SCAN-FORMATTERS.md, "formatDuration / formatElapsed / formatTime definitions"
 - **Count:** 22 local `formatDuration` definitions; 9 identical copies in UsageDashboard alone
 - **NOTE (re-vetted 2026-03-28):** Count increased from 21 to 22 since original scan. New `formatDuration` added in `CueModal/cueModalUtils.ts:25` (Cue feature on rc).
+- **NOTE (re-vetted 2026-04-01):** Count confirmed at 22. CueModal/cueModalUtils.ts:25 entry verified.
 - **KEEP:** `src/shared/formatters.ts:144` (`formatElapsedTime`) and `src/shared/performance-metrics.ts:336` (`formatDuration`)
 - **REMOVE:** 22 local re-definitions including all 9 UsageDashboard copies, `AboutModal.tsx`, `FirstRunCelebration.tsx`, `SymphonyModal.tsx`, `Toast.tsx`, `AIOverviewTab.tsx`, `useContributorStats.ts`, `groupChatExport.ts`, `tabExport.ts`, `cli/output/formatter.ts` (2), `CueModal/cueModalUtils.ts`
 - **Estimated savings:** ~210 lines
@@ -126,8 +127,9 @@ Consolidated tracking of all duplicate/dead code in the Maestro codebase. Grep-v
 ### 14. Duplicate Type/Interface Definitions (28 interfaces, 98 redundant definitions)
 
 - **Evidence:** SCAN-TYPES.md, all sections
-- **Count:** 11 interfaces with 4+ definitions (47 total defs), 17 interfaces with 3 definitions (51 total defs). Top offenders: `AgentCapabilities` (6 defs), `UsageStats` (6 defs), `SessionInfo` (4 defs, was 6 - 3 Cue pipeline dups resolved on rc), `AgentConfig` (5 defs), `AgentConfigsData` (5 defs)
+- **Count:** 11 interfaces with 4+ definitions (47 total defs), 17 interfaces with 3 definitions (51 total defs). Top offenders: `AgentCapabilities` (6 defs), `UsageStats` (6 defs), `SessionInfo` (3 defs, was 6 - 3 Cue pipeline dups removed on rc), `AgentConfig` (5 defs), `AgentConfigsData` (5 defs)
 - **NOTE (re-vetted 2026-03-28):** SessionInfo reduced from 6 to 4 definitions. 3 Cue pipeline duplicates were removed on rc.
+- **NOTE (re-vetted 2026-04-01):** SessionInfo now at 3 definitions (was listed as 4 on 2026-03-28, corrected).
 - **KEEP:** Canonical definitions in `shared/types.ts`, `shared/stats-types.ts`, or domain-specific files
 - **CONSOLIDATE:** Root cause is preload boundary re-declaration pattern. Types defined in `shared/`, re-declared in `main/preload/`, re-declared in `renderer/types/index.ts` and `renderer/global.d.ts`, then again locally. Fix the preload type-sharing mechanism
 - **Estimated savings:** ~370 lines
@@ -235,10 +237,10 @@ Consolidated tracking of all duplicate/dead code in the Maestro codebase. Grep-v
 ### 27. resolve() in Zustand Stores (5 identical copies)
 
 - **Evidence:** SCAN-PATTERNS.md, "resolve() definitions in stores"
-- **Count:** 5 identical `resolve<T>()` helper functions across 5 store files
-- **KEEP:** Extract to `renderer/stores/utils.ts`
-- **REMOVE:** Copies in `batchStore.ts:86`, `fileExplorerStore.ts:81`, `groupChatStore.ts:136`, `sessionStore.ts:145`, `uiStore.ts:129`
-- **Estimated savings:** ~40 lines
+- **Count:** 1 confirmed `resolve<T>()` helper (was listed as 5, re-vetted 2026-04-01 - only `batchStore.ts:86` confirmed on rc)
+- **KEEP:** Extract to `renderer/stores/utils.ts` if pattern is still used inline elsewhere
+- **REMOVE:** Confirmed copy in `batchStore.ts:86`
+- **Estimated savings:** ~8 lines (reduced from ~40)
 
 ---
 
@@ -335,8 +337,8 @@ Consolidated tracking of all duplicate/dead code in the Maestro codebase. Grep-v
 ### 39. Oversized Files (82 files over 800-line limit)
 
 - **Evidence:** SCAN-OVERSIZED.md, "Source Files Over 800 Lines"
-- **Count:** 82 source files exceed 800 lines: 3 files over 3,000 lines (`App.tsx` at 3,619, `symphony.ts` handler at 3,301, `TabBar.tsx` at 2,839), 7 files between 2,000-3,000, 12 files between 1,500-2,000, 28 files between 1,000-1,500, 32 files between 800-1,000
-- **Action:** Decompose top offenders as part of dedup work (many contain the duplicated patterns listed above). Prioritize `App.tsx`, `TabBar.tsx`, `SymphonyModal.tsx`, `useTabHandlers.ts`, `useInputProcessing.ts`
+- **Count:** 82 source files exceed 800 lines. `App.tsx` at 4,034 (REGRESSION from 3,619), `symphony.ts` handler at 3,318 (was 3,301). `TabBar.tsx` FULLY RESOLVED (2,839 -> 542). `FilePreview.tsx` PARTIALLY RESOLVED (2,662 -> 1,320).
+- **Action:** Decompose top offenders as part of dedup work (many contain the duplicated patterns listed above). Prioritize `App.tsx` (worst offender, growing), `SymphonyModal.tsx`, `useTabHandlers.ts`, `useInputProcessing.ts`
 - **Estimated savings:** No direct line savings, but improved maintainability
 
 ### 40. Oversized Test Files (28 files over 2,000 lines)
@@ -350,15 +352,34 @@ Consolidated tracking of all duplicate/dead code in the Maestro codebase. Grep-v
 
 ## Summary
 
-_Re-vetted against origin/rc on 2026-03-28. All 40 findings verified. 1 false positive removed (ORPHANED_SESSION_ID), 1 new duplication found (CueModal formatDuration). Net counts adjusted._
+_Last validated: 2026-04-01 against origin/rc. All 40 findings re-verified. Changes since 2026-03-28 noted inline._
 
-| Priority  | Items  | Estimated Lines Saved | Key Themes                                                                 |
-| --------- | ------ | --------------------- | -------------------------------------------------------------------------- |
-| P0        | 5      | ~1,040                | Dead code removal (178 exports, 7 components, 1 type bug)                  |
-| P1        | 9      | ~4,570                | State management patterns, test mocks, formatters, SpecKit/OpenSpec, types |
-| P2        | 13     | ~1,360                | UI components, logging, selectors, hooks, error handling                   |
-| P3        | 13     | ~621                  | Constants, minor formatters, CSS patterns, file size                       |
-| **Total** | **40** | **~7,591**            |                                                                            |
+**What improved (2026-04-01):**
+
+- TabBar.tsx: FULLY RESOLVED (2839 -> 542 lines, split into 4 files)
+- FilePreview.tsx: PARTIALLY RESOLVED (2662 -> 1320 lines, split into 5 files)
+- SessionInfo type: reduced from 6 to 3 definitions (3 Cue pipeline defs removed)
+- catch(error: any): reduced from 17 to 15 (2 migrated to unknown)
+- Cross-boundary imports: 1 resolved (App.tsx estimateContextUsage)
+
+**What regressed (2026-04-01):**
+
+- App.tsx: grew from 3619 to 4034 lines (+415)
+- `as any` casts: 108 -> 115 (+7)
+- Test mock proliferation accelerating: mockTheme 66->119, window.maestro 64->117
+- lucide-react redundant mocks: 51 -> 54
+- Logger mocks: 128 -> 133
+- 2000ms timeouts: 25 -> 32
+- Port generation duplication: 5 -> 6 locations
+- keydown listeners: 38 -> 43
+
+| Priority  | Items  | Estimated Lines Saved | Key Themes                                                                           |
+| --------- | ------ | --------------------- | ------------------------------------------------------------------------------------ |
+| P0        | 5      | ~1,040                | Dead code removal (179 exports, 7 components, 1 type bug)                            |
+| P1        | 9      | ~5,325                | State management patterns, test mocks (growing), formatters, SpecKit/OpenSpec, types |
+| P2        | 13     | ~1,328                | UI components, logging, selectors, hooks, error handling (resolve() reduced)         |
+| P3        | 13     | ~621                  | Constants, minor formatters, CSS patterns, file size                                 |
+| **Total** | **40** | **~8,314**            | Mock proliferation driving increase                                                  |
 
 ---
 

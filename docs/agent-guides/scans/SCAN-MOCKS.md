@@ -79,7 +79,7 @@ src/__tests__/web/mobile/SessionPillBar.test.tsx:50
 
 ---
 
-## createMockTheme definitions (31 total)
+## createMockTheme definitions (35 total, was 31)
 
 ```
 src/__tests__/integration/AutoRunBatchProcessing.test.tsx:123
@@ -115,7 +115,7 @@ src/__tests__/renderer/hooks/useTabExportHandlers.test.ts:128
 src/__tests__/web/utils/cssCustomProperties.test.ts:24
 ```
 
-## mockTheme object definitions (66 total)
+## mockTheme object definitions (119 total, was 66 - REGRESSION)
 
 ```
 src/__tests__/renderer/components/AchievementCard.test.tsx:80
@@ -186,7 +186,7 @@ src/__tests__/renderer/utils/tabExport.test.ts:14
 src/__tests__/renderer/utils/theme.test.tsx:22
 ```
 
-**Combined theme mock total: 97 definitions** (31 createMockTheme + 66 mockTheme objects)
+**Combined theme mock total: 154 definitions** (35 createMockTheme + 119 mockTheme objects) - **REGRESSION from 97, growing rapidly**
 
 ---
 
@@ -207,7 +207,7 @@ src/__tests__/renderer/hooks/useRemoteIntegration.test.ts:6            createMoc
 
 ---
 
-## Test files with window.maestro mock setup (64 files)
+## Test files with window.maestro mock setup (117 instances, was 64 files - REGRESSION)
 
 Pattern: `window.maestro = {...}` or `(window as any).maestro = mockMaestro`
 
@@ -278,16 +278,25 @@ src/__tests__/renderer/utils/shortcutFormatter.test.ts
 src/__tests__/renderer/utils/spawnHelpers.test.ts
 ```
 
-Note: A shared `mockMaestro` is defined in `src/__tests__/setup.ts:205` but 64 test files still set up their own `window.maestro` mock objects.
+Note: A shared `mockMaestro` is defined in `src/__tests__/setup.ts:205` but 117 test file instances still set up their own `window.maestro` mock objects (was 64, REGRESSION - nearly doubled).
 
 ---
 
 ## Summary
 
-| Mock Type              | Definitions | Suggested Action                                                |
-| ---------------------- | ----------- | --------------------------------------------------------------- |
-| `createMockSession`    | 66          | Extract to shared `src/__tests__/helpers/mockSession.ts`        |
-| `createMockTheme`      | 31          | Extract to shared `src/__tests__/helpers/mockTheme.ts`          |
-| `mockTheme` objects    | 66          | Consolidate with createMockTheme                                |
-| `createMockTab`        | 12          | Extract to shared `src/__tests__/helpers/mockTab.ts`            |
-| `window.maestro` setup | 64 files    | Centralize in `src/__tests__/setup.ts` (already partially done) |
+| Mock Type              | Definitions                  | Suggested Action                                           |
+| ---------------------- | ---------------------------- | ---------------------------------------------------------- |
+| `createMockSession`    | 66                           | Extract to shared `src/__tests__/helpers/mockSession.ts`   |
+| `createMockTheme`      | 35 (was 31)                  | Extract to shared `src/__tests__/helpers/mockTheme.ts`     |
+| `mockTheme` objects    | 119 (was 66)                 | Consolidate with createMockTheme - **GETTING WORSE**       |
+| `createMockTab`        | 12                           | Extract to shared `src/__tests__/helpers/mockTab.ts`       |
+| `window.maestro` setup | 117 instances (was 64 files) | Centralize in `src/__tests__/setup.ts` - **GETTING WORSE** |
+
+---
+
+Re-validated 2026-04-01 against rc. Mock proliferation is accelerating:
+
+- createMockTheme: 31 -> 35 (+4)
+- mockTheme objects: 66 -> 119 (+53, nearly doubled)
+- window.maestro mocks: 64 -> 117 instances (+53, nearly doubled)
+  This is the fastest-growing category of duplication and should be prioritized.

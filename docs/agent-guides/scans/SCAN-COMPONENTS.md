@@ -135,6 +135,10 @@ The "ghost icon button" is `p-1 rounded hover:bg-white/10 transition-colors` (or
 
 ---
 
+Re-validated 2026-04-01 against rc. All findings confirmed.
+
+---
+
 ## Spinner Instances (Loader2 animate-spin)
 
 **Total Loader2 render instances (excluding imports): 95+ across 43 files**

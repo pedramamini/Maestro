@@ -222,3 +222,7 @@ Both gamification systems are centralized with no duplication:
 2. **`renderer/utils/agentArgsBuilder.ts`** - Extract `buildArgsForAgent` with `readOnly` parameter
 3. **`renderer/services/promptCommandService.ts`** - Generic factory for SpecKit/OpenSpec pattern
 4. **`processService.onThinkingChunk`** - Add missing event wrapper
+
+---
+
+Re-validated 2026-04-01 against rc. All findings confirmed.

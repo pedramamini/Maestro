@@ -15,7 +15,7 @@ src/shared/formatters.ts:188               export function formatElapsedTimeColo
 src/shared/performance-metrics.ts:336      export function formatDuration(durationMs: number): string
 ```
 
-### Local re-definitions of formatDuration (ms -> string)
+### Local re-definitions of formatDuration (ms -> string) - 22 total (was 21, +1 CueModal on rc)
 
 ```
 src/cli/output/formatter.ts:478                             function formatDuration(ms: number): string
@@ -160,15 +160,15 @@ src/web/hooks/useOfflineQueue.ts:107                            function generat
 
 ## Summary
 
-| Formatter               | Canonical Location                         | Duplicates | Worst Offender                                   |
-| ----------------------- | ------------------------------------------ | ---------- | ------------------------------------------------ |
-| `formatDuration(ms)`    | `shared/formatters.ts`                     | 22         | UsageDashboard (11 copies), CueModal (new on rc) |
-| `formatElapsedTime(ms)` | `shared/formatters.ts:144`                 | 5          | Progress modals (3 identical copies)             |
-| `formatTime(timestamp)` | none                                       | 15         | No canonical, 15 local definitions               |
-| `formatNumber(num)`     | `shared/formatters.ts:41`                  | 5          | UsageDashboard (5 copies)                        |
-| `formatFileSize(bytes)` | `shared/formatters.ts:27` (as formatSize)  | 2          | FilePreview, documentStats                       |
-| `estimateTokens`        | `shared/formatters.ts:176`                 | 4          | Merge/SendTo modal pairs (identical)             |
-| `stripAnsi`             | `main/utils/stripAnsi.ts`                  | 1          | `shared/stringUtils.ts` (duplicate)              |
-| `generateId`            | `shared/uuid.ts` + `renderer/utils/ids.ts` | 4          | web hooks, layer stack                           |
+| Formatter               | Canonical Location                         | Duplicates | Worst Offender                                                       |
+| ----------------------- | ------------------------------------------ | ---------- | -------------------------------------------------------------------- |
+| `formatDuration(ms)`    | `shared/formatters.ts`                     | 22         | UsageDashboard (11 copies), CueModal/cueModalUtils.ts:25 (new on rc) |
+| `formatElapsedTime(ms)` | `shared/formatters.ts:144`                 | 5          | Progress modals (3 identical copies)                                 |
+| `formatTime(timestamp)` | none                                       | 15         | No canonical, 15 local definitions                                   |
+| `formatNumber(num)`     | `shared/formatters.ts:41`                  | 5          | UsageDashboard (5 copies)                                            |
+| `formatFileSize(bytes)` | `shared/formatters.ts:27` (as formatSize)  | 2          | FilePreview, documentStats                                           |
+| `estimateTokens`        | `shared/formatters.ts:176`                 | 4          | Merge/SendTo modal pairs (identical)                                 |
+| `stripAnsi`             | `main/utils/stripAnsi.ts`                  | 1          | `shared/stringUtils.ts` (duplicate)                                  |
+| `generateId`            | `shared/uuid.ts` + `renderer/utils/ids.ts` | 4          | web hooks, layer stack                                               |
 
 **Total: 47 time formatters, 10 number/size formatters, 7 token estimators, 2 stripAnsi, 7 ID generators = 73 formatter definitions that should consolidate to ~8.**

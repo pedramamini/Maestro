@@ -10,8 +10,8 @@ Every `setTimeout(() => ref.current?.focus(), N)` instance in production code:
 
 | File                                                            | Line | Delay |
 | --------------------------------------------------------------- | ---- | ----- |
-| `renderer/App.tsx`                                              | 1053 | 0ms   |
-| `renderer/App.tsx`                                              | 2120 | 50ms  |
+| `renderer/App.tsx`                                              | 1075 | 0ms   |
+| `renderer/App.tsx`                                              | 2523 | 50ms  |
 | `renderer/components/AgentSessionsBrowser.tsx`                  | 373  | 50ms  |
 | `renderer/components/AgentSessionsBrowser.tsx`                  | 458  | 50ms  |
 | `renderer/components/AgentSessionsBrowser.tsx`                  | 698  | 50ms  |
@@ -57,6 +57,10 @@ Every `setTimeout(() => ref.current?.focus(), N)` instance in production code:
 | `web/mobile/MobileHistoryPanel.tsx`                             | 948  | 50ms  |
 
 **Total: 45 setTimeout-focus calls across 28 files.** No shared `useFocusAfterRender` hook exists.
+
+---
+
+Re-validated 2026-04-01 against rc. App.tsx line numbers shifted (1053->1075, 2120->2523). All other findings confirmed.
 
 ---
 

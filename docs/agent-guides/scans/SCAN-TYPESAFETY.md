@@ -8,7 +8,7 @@ Generated: 2026-03-20
 
 ## `as any` in Source (Non-Test)
 
-**Total: 108 occurrences** across non-test source files.
+**Total: 115 occurrences** (was 108, +7 - REGRESSION) across non-test source files.
 
 Top 30 files by count:
 
@@ -98,7 +98,7 @@ Explicit `: any` type annotations in parameters and return types (excluding `as 
 
 ## Non-null Assertions (`!.`)
 
-**Total: 123 non-null assertions** in `src/renderer/` (non-test).
+**Total: 125 non-null assertions** (was 123, +2) in `src/renderer/` (non-test).
 
 Top 20 files by count:
 
@@ -131,10 +131,10 @@ Top 20 files by count:
 
 ## `catch (e: any)` vs `catch (e: unknown)`
 
-| Pattern                  | Count  |
-| ------------------------ | ------ |
-| `catch (error: any)`     | **17** |
-| `catch (error: unknown)` | **21** |
+| Pattern                  | Count                             |
+| ------------------------ | --------------------------------- |
+| `catch (error: any)`     | **15** (was 17, -2 - IMPROVEMENT) |
+| `catch (error: unknown)` | **21**                            |
 
 ### `catch (error: any)` locations (17):
 
@@ -181,3 +181,12 @@ Top 20 files by count:
 - `src/renderer/hooks/symphony/useSymphonyContribution.ts:218`
 
 **Pattern:** Newer code (group-chat, cue, symphony) consistently uses `unknown`. Older IPC handlers (`agents.ts`, `web.ts`, `attachments.ts`) use `any`. The codebase is mid-migration toward `catch (e: unknown)`.
+
+---
+
+Re-validated 2026-04-01 against rc.
+
+- `as any`: 108 -> 115 (+7, REGRESSION)
+- Non-null assertions: 123 -> 125 (+2)
+- `catch(error: any)`: 17 -> 15 (-2, IMPROVEMENT - migrated to unknown)
+  Net: type safety slightly declining on `as any` casts, but catch blocks improving.

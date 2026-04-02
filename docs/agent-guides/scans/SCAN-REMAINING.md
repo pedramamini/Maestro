@@ -200,3 +200,7 @@ The `execFileNoThrow` utility it uses is shared from `src/main/utils/execFile.ts
 | R-4 | All web/utils/ files                           | No duplication found                                 | None     | No action needed                                   |
 | R-5 | symphony-runner.ts                             | No duplication found                                 | None     | No action needed                                   |
 | R-6 | All context providers                          | No context/store duplication found                   | None     | No action needed                                   |
+
+---
+
+Re-validated 2026-04-01 against rc. All findings confirmed.

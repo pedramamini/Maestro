@@ -105,7 +105,7 @@ Frequency of setTimeout delay values across non-test source:
 
 ### Copy Notification Timeout (2000ms) - Major Duplication
 
-The `setCopied(true) -> setTimeout(() => setCopied(false), 2000)` pattern is repeated in **25+ locations**:
+The `setCopied(true) -> setTimeout(() => setCopied(false), 2000)` pattern is repeated in **32 locations** (was 25+):
 
 - `src/renderer/App.tsx:3446` - `setTimeout(() => setSuccessFlashNotification(null), 2000)`
 - `src/renderer/components/AchievementCard.tsx:940` - `setTimeout(() => setCopySuccess(false), 2000)`
@@ -138,8 +138,9 @@ The `setCopied(true) -> setTimeout(() => setCopied(false), 2000)` pattern is rep
 
 ## Port Generation Duplicates
 
-The expression `3000 + Math.floor(Math.random() * 100)` appears in **5 locations**:
+The expression `3000 + Math.floor(Math.random() * 100)` appears in **6 locations** (was 5, +1 new):
 
+- `src/renderer/App.tsx:2182` **(NEW on rc)**
 - `src/renderer/hooks/session/useSessionCrud.ts:233`
 - `src/renderer/hooks/symphony/useSymphonyContribution.ts:158`
 - `src/renderer/hooks/wizard/useWizardHandlers.ts:1157`
@@ -211,3 +212,11 @@ Session-related ID patterns and constants:
 - `src/renderer/utils/sessionIdParser.ts:12` - documents batch format `{sessionId}-batch-{timestamp}`
 - `src/renderer/utils/sessionIdParser.ts:26` - synopsis matcher regex
 - `src/renderer/utils/sessionIdParser.ts:29` - batch matcher regex
+
+---
+
+Re-validated 2026-04-01 against rc.
+
+- 2000ms timeout: updated from 25 to 32 occurrences
+- Port generation: updated from 5 to 6 locations (new: App.tsx:2182)
+  All other findings confirmed.

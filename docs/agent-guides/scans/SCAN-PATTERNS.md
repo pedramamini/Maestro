@@ -129,19 +129,15 @@ src/web/utils/logger.ts
 
 ---
 
-## resolve() definitions in stores (5 identical)
+## resolve() definitions in stores (1 confirmed, was listed as 5)
 
-Every Zustand store defines its own identical `resolve` helper:
+**Re-vet 2026-04-01:** Only `batchStore.ts:86` confirmed as having the standalone `resolve()` helper on rc. The other 4 stores (fileExplorerStore, groupChatStore, sessionStore, uiStore) may have been refactored or the pattern inlined. Original scan listed 5 identical copies - now 1 confirmed.
 
 ```
 src/renderer/stores/batchStore.ts:86           function resolve<T>(valOrFn: T | ((prev: T) => T), prev: T): T
-src/renderer/stores/fileExplorerStore.ts:81    function resolve<T>(valOrFn: T | ((prev: T) => T), prev: T): T
-src/renderer/stores/groupChatStore.ts:136      function resolve<T>(valOrFn: T | ((prev: T) => T), prev: T): T
-src/renderer/stores/sessionStore.ts:145        function resolve<T>(valOrFn: T | ((prev: T) => T), prev: T): T
-src/renderer/stores/uiStore.ts:129             function resolve<T>(valOrFn: T | ((prev: T) => T), prev: T): T
 ```
 
-All 5 have identical signatures and identical implementations. Should be extracted to a shared store utility.
+Should be extracted to a shared store utility if other stores still use the pattern inline.
 
 ---
 
@@ -222,6 +218,10 @@ src/main/ipc/handlers/groupChat.ts:637     batch spawn via processManager
 | Pattern                           | Count                    | Impact                                            |
 | --------------------------------- | ------------------------ | ------------------------------------------------- |
 | catch + console.error (no Sentry) | 252 blocks in 118 files  | Silent error swallowing, no production visibility |
-| `resolve()` in stores             | 5 identical copies       | Trivial dedup to shared utility                   |
+| `resolve()` in stores             | 1 confirmed (was 5)      | Trivial dedup to shared utility                   |
 | SpecKit/OpenSpec parallel code    | ~2,431 lines             | ~1,100 lines removable via shared base            |
 | Group chat spawn boilerplate      | 5 sites, ~150 lines each | Extract `spawnGroupChatAgent()` helper            |
+
+---
+
+Re-validated 2026-04-01 against rc. resolve() in stores updated from 5 to 1 confirmed (batchStore.ts:86). All other findings confirmed.

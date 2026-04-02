@@ -5,6 +5,8 @@ Source: `src/main/cue/` (rc branch, commit 4563239d), `src/main/debug-package/` 
 
 **Re-vet note (2026-03-28):** Cue module grew from 4 files to 15 files on rc. Original 4 files (cue-types, cue-db, cue-engine, cue-executor) still exist with same functions and line numbers. New files: cue-activity-log.ts, cue-fan-in-tracker.ts, cue-file-watcher.ts, cue-filter.ts, cue-github-poller.ts, cue-heartbeat.ts, cue-reconciler.ts, cue-run-manager.ts, cue-subscription-setup.ts, cue-task-scanner.ts, cue-yaml-loader.ts. These new files have not been scanned for duplication yet.
 
+**Re-vet note (2026-04-01):** Cue module growth confirmed: 4 -> 15 files on rc. The 11 new files still have not been fully scanned for dedup. This is a gap in coverage that should be addressed in the next scan cycle.
+
 ---
 
 ## Part 1: Cue (`src/main/cue/`)
@@ -377,3 +379,7 @@ No duplication. Both collectors correctly import from the shared utility.
 | #   | Severity | Finding                                                         | Recommendation                                               |
 | --- | -------- | --------------------------------------------------------------- | ------------------------------------------------------------ |
 | 1   | MEDIUM   | Both cue-db and stats-db duplicate SQLite lifecycle boilerplate | Shared base DB module could eliminate ~30 lines per consumer |
+
+---
+
+Re-validated 2026-04-01 against rc. Cue module grew from 4 to 15 files on rc. 11 new files not yet scanned for dedup. All existing findings from original 4 files confirmed.

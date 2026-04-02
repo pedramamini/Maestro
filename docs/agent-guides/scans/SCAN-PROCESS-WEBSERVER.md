@@ -276,3 +276,7 @@ Similarly, 17 callback setter methods delegate to `CallbackRegistry`.
 | MEDIUM   | Process listeners (4 files)                        | Repeated group-chat session classification (prefix + regex + parser)                          | ~40 lines (4x10)           |
 | LOW      | `group-chat-router.ts` (4 sites)                   | Spawn config construction overlap with IPC handler                                            | Structural, not copy-paste |
 | LOW      | `exit-listener.ts`                                 | Inconsistent retry strategy (moderator retries, participant doesn't)                          | ~10 lines                  |
+
+---
+
+Re-validated 2026-04-01 against rc. All findings confirmed.

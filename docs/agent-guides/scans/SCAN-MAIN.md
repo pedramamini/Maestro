@@ -141,6 +141,8 @@ The 5-line destructure block is repeated verbatim at every call site.
 
 **Key finding:** `main/group-chat/group-chat-router.ts` has 130 `console.log` calls and only uses `logger` in some places. This is the largest offender. Many renderer files also use `console.log` instead of the available logger.
 
+**Note (2026-04-01):** The 130 count for group-chat-router.ts needs methodology clarification. A direct grep for `console.log` on rc shows approximately 25 unique console.log call sites in that file. The higher count may include matches from comments, strings, or grep false positives. Recommend re-counting with stricter pattern matching.
+
 ---
 
 ## Settings Store Access Patterns by File (top 25)
@@ -173,3 +175,7 @@ The 5-line destructure block is repeated verbatim at every call site.
 | 3     | `main/ipc/handlers/debug.ts`                       |
 
 **Pattern:** Settings store is accessed from 25+ files in main process. Most access `settingsStore.get(key)` inline rather than through a centralized accessor.
+
+---
+
+Re-validated 2026-04-01 against rc. No major changes. Note: console.log count methodology for group-chat-router.ts needs clarification (see note above).
