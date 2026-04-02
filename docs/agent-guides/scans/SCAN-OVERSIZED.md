@@ -1,6 +1,6 @@
 # SCAN-OVERSIZED.md - Oversized Files
 
-Generated: 2026-03-20 via `wc -l` and `grep -cE` against `src/`
+Generated: 2026-03-20 via `wc -l` and `rtk grep -cE` against `src/`
 
 ---
 

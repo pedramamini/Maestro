@@ -1,6 +1,6 @@
 # SCAN-MAIN.md - Main Process Duplicates
 
-Generated: 2026-03-20 via `grep -rn` against `src/`
+Generated: 2026-03-20 via `rtk grep -rn` against `src/`
 
 ---
 

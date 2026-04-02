@@ -1,6 +1,6 @@
 # SCAN-TYPES.md - Type and Constant Duplicates
 
-Generated via `grep -rn` on `src/`. All matches are file:line verified. Tests excluded.
+Generated via `rtk grep -rn` on `src/`. All matches are file:line verified. Tests excluded.
 Re-vetted 2026-03-28 against origin/rc. Minor line number shifts noted inline.
 
 ---

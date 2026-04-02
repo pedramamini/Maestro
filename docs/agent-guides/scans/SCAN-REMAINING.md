@@ -20,7 +20,7 @@ No duplication found. Each context provides data that does not exist in any zust
 ### Usage Analysis
 
 ```
-grep -rn "useContext.*GitStatus|useContext.*InlineWizard|useContext.*Input\b|useContext.*LayerStack" src/renderer/
+rtk grep -rn "useContext.*GitStatus|useContext.*InlineWizard|useContext.*Input\b|useContext.*LayerStack" src/renderer/
 ```
 
 Results - raw `useContext` calls only appear inside the context definition files themselves (3 total). All external consumers use the exported hooks (`useGitBranch`, `useInputContext`, etc.), which is the intended pattern.
@@ -50,7 +50,7 @@ All four contexts serve distinct, non-overlapping purposes. No context duplicate
 ### All Type Exports
 
 ```
-grep -rn "export type|export interface" src/renderer/types/ --include="*.ts"
+rtk grep -rn "export type|export interface" src/renderer/types/ --include="*.ts"
 ```
 
 81 total exports across 4 files:
@@ -63,7 +63,7 @@ grep -rn "export type|export interface" src/renderer/types/ --include="*.ts"
 ### Cross-Reference with `shared/types.ts`
 
 ```
-grep -rn "export type|export interface" src/shared/types.ts
+rtk grep -rn "export type|export interface" src/shared/types.ts
 ```
 
 Shared exports: AgentId, ToolType, ThinkingMode, Group, SessionInfo, UsageStats, HistoryEntryType, HistoryEntry, PlaybookDocumentEntry, Playbook, BatchDocumentEntry, WorktreeConfig, WorktreeRunTarget, BatchRunConfig, AgentConfig, AgentErrorType, AgentError, AgentErrorRecovery, PowerStatus, SshRemoteConfig, SshRemoteStatus, SshRemoteTestResult, AgentSshRemoteConfig, ProviderStats, GlobalAgentStats.
@@ -105,7 +105,7 @@ The massive `Session` interface (~200 fields) exists only in `renderer/types/ind
 ### All Exports
 
 ```
-grep -rn "function |const " src/web/utils/ --include="*.ts"
+rtk grep -rn "function |const " src/web/utils/ --include="*.ts"
 ```
 
 40 exports across 5 files:
@@ -157,7 +157,7 @@ All web utilities are platform-specific (browser/PWA) with no overlap against th
 ### Cross-Reference with Batch Processing
 
 ```
-grep -rn "useBatchProcessor|BatchProcessor|batchStateMachine|BatchProcessingState" src/cli/
+rtk grep -rn "useBatchProcessor|BatchProcessor|batchStateMachine|BatchProcessingState" src/cli/
 ```
 
 No results. The CLI has no batch processor overlap with Symphony.

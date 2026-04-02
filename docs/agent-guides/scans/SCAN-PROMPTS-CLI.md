@@ -8,8 +8,8 @@ Source: `src/cli/`, `src/main/`, `src/shared/`
 ## CLI Functions Also in Main
 
 ```
-comm -12 <(grep -roh "function [a-zA-Z]*" src/cli/ --include="*.ts" | sed 's/function //' | sort -u) \
-         <(grep -roh "function [a-zA-Z]*" src/main/ --include="*.ts" | sed 's/function //' | sort -u)
+comm -12 <(rtk grep -roh "function [a-zA-Z]*" src/cli/ --include="*.ts" | sed 's/function //' | sort -u) \
+         <(rtk grep -roh "function [a-zA-Z]*" src/main/ --include="*.ts" | sed 's/function //' | sort -u)
 ```
 
 7 duplicated function names:
@@ -29,7 +29,7 @@ sleep
 ## extractTextFromContent Copies
 
 ```
-grep -rn "extractTextFromContent" src/ --include="*.ts" | grep -v __tests__
+rtk grep -rn "extractTextFromContent" src/ --include="*.ts" | grep -v __tests__
 ```
 
 6 independent definitions across 5 files:
@@ -60,8 +60,8 @@ grep -rn "extractTextFromContent" src/ --include="*.ts" | grep -v __tests__
 
 ```
 wc -l src/main/speckit-manager.ts src/main/openspec-manager.ts \
-      src/main/ipc/handlers/speckit.ts src/main/ipc/handlers/openspec.ts \
-      src/renderer/components/SpecKitCommandsPanel.tsx src/renderer/components/OpenSpecCommandsPanel.tsx
+    src/main/ipc/handlers/speckit.ts src/main/ipc/handlers/openspec.ts \
+    src/renderer/components/SpecKitCommandsPanel.tsx src/renderer/components/OpenSpecCommandsPanel.tsx
 ```
 
 | File                                                | Lines    |
@@ -81,7 +81,7 @@ wc -l src/main/speckit-manager.ts src/main/openspec-manager.ts \
 ## CLI Importing from Main
 
 ```
-grep -rn "from '.*main/" src/cli/ --include="*.ts"
+rtk grep -rn "from '.*main/" src/cli/ --include="*.ts"
 ```
 
 11 cross-boundary imports across 4 CLI files:
@@ -114,7 +114,7 @@ grep -rn "from '.*main/" src/cli/ --include="*.ts"
 ## getConfigDir Definitions
 
 ```
-grep -rn "getConfigDir\|configDir\|CONFIG_DIR" src/ --include="*.ts" | grep -v __tests__
+rtk grep -rn "getConfigDir\|configDir\|CONFIG_DIR" src/ --include="*.ts" | grep -v __tests__
 ```
 
 37 matches. 4 independent `getConfigDir` implementations:

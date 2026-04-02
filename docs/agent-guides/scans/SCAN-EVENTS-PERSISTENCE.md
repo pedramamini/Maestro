@@ -8,7 +8,7 @@ Source: `src/renderer/`, `src/main/`, `src/web/`
 ## addEventListener by Event Type
 
 ```
-grep -oh "addEventListener('[a-z]*'" src/renderer/ -r --include="*.ts" --include="*.tsx" | sort | uniq -c | sort -rn | head -15
+rtk grep -oh "addEventListener('[a-z]*'" src/renderer/ -r --include="*.ts" --include="*.tsx" | sort | uniq -c | sort -rn | head -15
 ```
 
 ```
@@ -36,7 +36,7 @@ grep -oh "addEventListener('[a-z]*'" src/renderer/ -r --include="*.ts" --include
 ## Files with Most Listeners
 
 ```
-grep -c "addEventListener" src/renderer/ -r --include="*.ts" --include="*.tsx" | grep -v ":0$\|__tests__" | sort -t: -k2 -rn | head -15
+rtk grep -c "addEventListener" src/renderer/ -r --include="*.ts" --include="*.tsx" | grep -v ":0$\|__tests__" | sort -t: -k2 -rn | head -15
 ```
 
 | File                                                    | Count |
@@ -62,7 +62,7 @@ grep -c "addEventListener" src/renderer/ -r --include="*.ts" --include="*.tsx" |
 ## IPC Events (webContents.send)
 
 ```
-grep -oh "webContents\.send('[^']*'" src/main/ -r --include="*.ts" | sort | uniq -c | sort -rn
+rtk grep -oh "webContents\.send('[^']*'" src/main/ -r --include="*.ts" | sort | uniq -c | sort -rn
 ```
 
 42 unique IPC event channels, all used exactly once:
@@ -116,7 +116,7 @@ grep -oh "webContents\.send('[^']*'" src/main/ -r --include="*.ts" | sort | uniq
 ## localStorage Usage in Web
 
 ```
-grep -rn "localStorage" src/web/ --include="*.ts" --include="*.tsx"
+rtk grep -rn "localStorage" src/web/ --include="*.ts" --include="*.tsx"
 ```
 
 45 matches in 7 files:
@@ -150,7 +150,7 @@ grep -rn "localStorage" src/web/ --include="*.ts" --include="*.tsx"
 ## writeFileSync (Blocking Writes)
 
 ```
-grep -rn "writeFileSync" src/main/ --include="*.ts" | grep -v __tests__
+rtk grep -rn "writeFileSync" src/main/ --include="*.ts" | grep -v __tests__
 ```
 
 | File                                           | Line | Context                                                                              |
@@ -174,7 +174,7 @@ grep -rn "writeFileSync" src/main/ --include="*.ts" | grep -v __tests__
 ## JSON.parse Usage (Main Process)
 
 ```
-grep -rn "JSON\.parse" src/main/ --include="*.ts" | grep -v __tests__
+rtk grep -rn "JSON\.parse" src/main/ --include="*.ts" | grep -v __tests__
 ```
 
 96 matches across the main process. Highest concentration files:
@@ -218,7 +218,7 @@ grep -rn "JSON\.parse" src/main/ --include="*.ts" | grep -v __tests__
 ## Path Construction (homedir, userData)
 
 ```
-grep -rn "homedir()\|getPath.*userData" src/main/ --include="*.ts" | grep -v __tests__
+rtk grep -rn "homedir()\|getPath.*userData" src/main/ --include="*.ts" | grep -v __tests__
 ```
 
 88 matches. Major clusters:

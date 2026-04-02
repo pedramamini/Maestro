@@ -1,6 +1,6 @@
 # SCAN-PATTERNS.md - Structural Pattern Duplicates
 
-Generated via `grep -rn` on `src/`. All matches are file:line verified. Tests excluded.
+Generated via `rtk grep -rn` on `src/`. All matches are file:line verified. Tests excluded.
 
 ---
 

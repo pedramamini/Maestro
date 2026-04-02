@@ -8,7 +8,7 @@ Source: `src/__tests__/`
 ## Most Common vi.mock Targets
 
 ```
-grep -oh "vi\.mock('[^']*'" src/__tests__/ -r --include="*.ts" --include="*.tsx" | sort | uniq -c | sort -rn | head -20
+rtk grep -oh "vi\.mock('[^']*'" src/__tests__/ -r --include="*.ts" --include="*.tsx" | sort | uniq -c | sort -rn | head -20
 ```
 
 ```
@@ -41,7 +41,7 @@ grep -oh "vi\.mock('[^']*'" src/__tests__/ -r --include="*.ts" --include="*.tsx"
 ## Duplicate Test Names
 
 ```
-grep -oh "it('[^']*'\|it(\"[^\"]*\"" src/__tests__/ -r --include="*.ts" --include="*.tsx" | sort | uniq -c | sort -rn | awk '$1 > 1' | head -20
+rtk grep -oh "it('[^']*'\|it(\"[^\"]*\"" src/__tests__/ -r --include="*.ts" --include="*.tsx" | sort | uniq -c | sort -rn | awk '$1 > 1' | head -20
 ```
 
 ```
@@ -76,7 +76,7 @@ grep -oh "it('[^']*'\|it(\"[^\"]*\"" src/__tests__/ -r --include="*.ts" --includ
 Already mocked globally in `src/__tests__/setup.ts:30`. These 51 per-file mocks are unnecessary:
 
 ```
-grep -rn "vi\.mock.*lucide-react" src/__tests__/ --include="*.ts" --include="*.tsx"
+rtk grep -rn "vi\.mock.*lucide-react" src/__tests__/ --include="*.ts" --include="*.tsx"
 ```
 
 | File                                                                                    | Line                                 |
@@ -140,7 +140,7 @@ grep -rn "vi\.mock.*lucide-react" src/__tests__/ --include="*.ts" --include="*.t
 133 matches across 100+ files (was 128, +5). Logger is mocked via 4 different relative paths depending on test location:
 
 ```
-grep -rn "vi\.mock.*logger" src/__tests__/ --include="*.ts" --include="*.tsx"
+rtk grep -rn "vi\.mock.*logger" src/__tests__/ --include="*.ts" --include="*.tsx"
 ```
 
 **Path variants (vi.mock definitions only):**
@@ -163,7 +163,7 @@ All use the same mock shape: `{ logger: { info: vi.fn(), error: vi.fn(), warn: v
 17 independent definitions of `renderWithLayerStack` across test files:
 
 ```
-grep -rn "renderWithLayerStack" src/__tests__/ --include="*.ts" --include="*.tsx" | grep "const renderWithLayerStack\|function renderWithLayerStack"
+rtk grep -rn "renderWithLayerStack" src/__tests__/ --include="*.ts" --include="*.tsx" | grep "const renderWithLayerStack\|function renderWithLayerStack"
 ```
 
 | File                                                                       | Line |
@@ -193,7 +193,7 @@ grep -rn "renderWithLayerStack" src/__tests__/ --include="*.ts" --include="*.tsx
 40 matches across 27 files. Three patterns observed:
 
 ```
-grep -rn "LayerStackContext\|layerStack.*mock\|registerLayer.*vi.fn" src/__tests__/ --include="*.ts" --include="*.tsx" | head -40
+rtk grep -rn "LayerStackContext\|layerStack.*mock\|registerLayer.*vi.fn" src/__tests__/ --include="*.ts" --include="*.tsx" | head -40
 ```
 
 **Pattern 1 - Import LayerStackProvider (wraps in real context):**
@@ -234,7 +234,7 @@ grep -rn "LayerStackContext\|layerStack.*mock\|registerLayer.*vi.fn" src/__tests
 ## Test Files Over 2000 Lines
 
 ```
-find src/__tests__ -name "*.ts" -o -name "*.tsx" | xargs wc -l | sort -rn | awk '$1 > 2000'
+rtk find src/__tests__ -name "*.ts" -o -name "*.tsx" | xargs wc -l | sort -rn | awk '$1 > 2000'
 ```
 
 | Lines | File                                                                         |

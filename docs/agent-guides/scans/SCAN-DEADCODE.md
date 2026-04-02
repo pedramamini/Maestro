@@ -1,6 +1,6 @@
 # SCAN-DEADCODE.md - Dead Code
 
-Generated: 2026-03-20 via `grep -rn` against `src/`
+Generated: 2026-03-20 via `rtk grep -rn` against `src/`
 
 Methodology: For each export, count references in all `.ts`/`.tsx` files excluding the defining file and test files. Zero external references = dead.
 

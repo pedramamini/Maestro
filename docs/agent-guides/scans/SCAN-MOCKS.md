@@ -1,6 +1,6 @@
 # SCAN-MOCKS.md - Test Mock Duplicates
 
-Generated via `grep -rn` on `src/`. All matches are file:line verified.
+Generated via `rtk grep -rn` on `src/`. All matches are file:line verified.
 
 ---
 

@@ -1,6 +1,6 @@
 # SCAN-STATE.md - State Management Duplicates
 
-Generated via `grep -rn` on `src/`. All matches are file:line verified. Tests excluded.
+Generated via `rtk grep -rn` on `src/`. All matches are file:line verified. Tests excluded.
 
 ---
 
