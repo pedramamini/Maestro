@@ -174,17 +174,15 @@ beforeEach(() => {
 	(stableDeps.setActiveSessionId as ReturnType<typeof vi.fn>).mockReset();
 
 	// Mock window.maestro APIs
-	(window as any).maestro = {
-		notification: { show: vi.fn() },
-		agents: {
-			get: vi.fn().mockResolvedValue({
-				command: 'claude',
-				args: [],
-				path: '/usr/bin/claude',
-			}),
-		},
-		process: { spawn: vi.fn().mockResolvedValue(undefined) },
-	};
+	Object.assign(window.maestro.notification, { show: vi.fn() });
+	Object.assign(window.maestro.agents, {
+		get: vi.fn().mockResolvedValue({
+			command: 'claude',
+			args: [],
+			path: '/usr/bin/claude',
+		}),
+	});
+	Object.assign(window.maestro.process, { spawn: vi.fn().mockResolvedValue(undefined) });
 });
 
 afterEach(() => {

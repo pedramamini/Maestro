@@ -135,11 +135,9 @@ const mockFs = {
 };
 
 beforeEach(() => {
-	(window as any).maestro = {
-		stats: mockStats,
-		dialog: mockDialog,
-		fs: mockFs,
-	};
+	Object.assign(window.maestro.stats, mockStats);
+	Object.assign(window.maestro.dialog, mockDialog);
+	Object.assign(window.maestro.fs, mockFs);
 
 	// Reset mocks with default data
 	mockStats.getAggregation.mockResolvedValue({

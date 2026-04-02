@@ -19,8 +19,6 @@ const createMockTab = (overrides: Partial<AITab> = {}): AITab => ({
 });
 
 describe('useRemoteIntegration', () => {
-	const originalMaestro = { ...window.maestro };
-
 	let onRemoteCommandHandler:
 		| ((sessionId: string, command: string, inputMode?: 'ai' | 'terminal') => void)
 		| undefined;
@@ -198,19 +196,14 @@ describe('useRemoteIntegration', () => {
 		onRemoteReorderTabHandler = undefined;
 		onRemoteToggleBookmarkHandler = undefined;
 
-		window.maestro = {
-			...originalMaestro,
+		Object.assign(window.maestro, {
 			process: mockProcess as typeof window.maestro.process,
 			live: mockLive as typeof window.maestro.live,
 			web: mockWeb as typeof window.maestro.web,
 			claude: mockClaude as typeof window.maestro.claude,
 			agentSessions: mockAgentSessions as typeof window.maestro.agentSessions,
 			history: mockHistory as typeof window.maestro.history,
-		};
-	});
-
-	afterEach(() => {
-		window.maestro = originalMaestro;
+		});
 	});
 
 	const createDeps = (

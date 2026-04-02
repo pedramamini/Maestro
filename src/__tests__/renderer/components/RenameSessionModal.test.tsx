@@ -78,16 +78,14 @@ describe('RenameSessionModal', () => {
 		});
 		mockSessions = createMockSessions();
 
-		// Setup window.maestro mock
-		(window as unknown as { maestro: Record<string, unknown> }).maestro = {
-			claude: {
-				updateSessionName: vi.fn().mockResolvedValue(undefined),
-			},
-			agentSessions: {
-				setSessionName: vi.fn().mockResolvedValue(undefined),
-				updateSessionName: vi.fn().mockResolvedValue(undefined),
-			},
-		};
+		// Setup window.maestro mock overrides on the centralized mock from setup.ts
+		Object.assign(window.maestro.claude, {
+			updateSessionName: vi.fn().mockResolvedValue(undefined),
+		});
+		Object.assign(window.maestro.agentSessions, {
+			setSessionName: vi.fn().mockResolvedValue(undefined),
+			updateSessionName: vi.fn().mockResolvedValue(undefined),
+		});
 	});
 
 	afterEach(() => {

@@ -142,20 +142,19 @@ beforeEach(() => {
 	});
 
 	// Ensure window.maestro.app is available for quit confirmation
-	(window as any).maestro = {
-		...((window as any).maestro || {}),
-		app: {
-			onQuitConfirmationRequest: vi.fn().mockReturnValue(vi.fn()),
-			confirmQuit: vi.fn(),
-			cancelQuit: vi.fn(),
-		},
+	Object.assign(window.maestro.app, {
+		onQuitConfirmationRequest: vi.fn().mockReturnValue(vi.fn()),
+		confirmQuit: vi.fn(),
+		cancelQuit: vi.fn(),
+	});
+	Object.assign(window.maestro, {
 		history: {
 			add: vi.fn().mockResolvedValue(undefined),
 		},
-		leaderboard: {
-			submit: vi.fn().mockResolvedValue({ success: false }),
-		},
-	};
+	});
+	Object.assign(window.maestro.leaderboard, {
+		submit: vi.fn().mockResolvedValue({ success: false }),
+	});
 });
 
 afterEach(() => {

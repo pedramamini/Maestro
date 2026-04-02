@@ -15,8 +15,6 @@ const createMockConfig = (overrides: Partial<SshRemoteConfig> = {}): SshRemoteCo
 });
 
 describe('useSshRemotes', () => {
-	const originalMaestro = { ...window.maestro };
-
 	const mockSshRemote = {
 		getConfigs: vi.fn(),
 		getDefaultId: vi.fn(),
@@ -40,14 +38,9 @@ describe('useSshRemotes', () => {
 			result: { success: true, remoteInfo: { hostname: 'test-host' } },
 		});
 
-		window.maestro = {
-			...originalMaestro,
+		Object.assign(window.maestro, {
 			sshRemote: mockSshRemote as typeof window.maestro.sshRemote,
-		};
-	});
-
-	afterEach(() => {
-		window.maestro = originalMaestro;
+		});
 	});
 
 	describe('initial loading', () => {

@@ -86,19 +86,16 @@ beforeEach(() => {
 	});
 
 	// Setup window.maestro
-	(window as any).maestro = {
-		...(window as any).maestro,
-		shell: { openExternal: vi.fn(), openPath: vi.fn() },
-		fs: {
-			readFile: vi.fn().mockResolvedValue('file content'),
-			stat: vi.fn().mockResolvedValue({ modifiedAt: '2024-01-01T00:00:00Z' }),
-		},
-		settings: {
-			get: vi.fn().mockResolvedValue(undefined),
-			set: vi.fn().mockResolvedValue(undefined),
-			getAll: vi.fn().mockResolvedValue({}),
-		},
-	};
+	Object.assign(window.maestro.shell, { openExternal: vi.fn(), openPath: vi.fn() });
+	Object.assign(window.maestro.fs, {
+		readFile: vi.fn().mockResolvedValue('file content'),
+		stat: vi.fn().mockResolvedValue({ modifiedAt: '2024-01-01T00:00:00Z' }),
+	});
+	Object.assign(window.maestro.settings, {
+		get: vi.fn().mockResolvedValue(undefined),
+		set: vi.fn().mockResolvedValue(undefined),
+		getAll: vi.fn().mockResolvedValue({}),
+	});
 });
 
 // ============================================================================

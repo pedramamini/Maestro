@@ -243,19 +243,17 @@ const createMatchingInlineWizardTabState = (wizardState: any) => ({
 });
 
 const setupMaestroMocks = () => {
-	(window as any).maestro = {
-		claude: {
-			getCommands: vi.fn().mockResolvedValue([]),
-			getSkills: vi.fn().mockResolvedValue([]),
-		},
-		agents: {
-			discoverSlashCommands: vi.fn().mockResolvedValue([]),
-			get: vi.fn().mockResolvedValue({ id: 'claude-code', name: 'Claude Code' }),
-		},
-		stats: {
-			recordSessionCreated: vi.fn(),
-		},
-	};
+	Object.assign(window.maestro.claude, {
+		getCommands: vi.fn().mockResolvedValue([]),
+		getSkills: vi.fn().mockResolvedValue([]),
+	});
+	Object.assign(window.maestro.agents, {
+		discoverSlashCommands: vi.fn().mockResolvedValue([]),
+		get: vi.fn().mockResolvedValue({ id: 'claude-code', name: 'Claude Code' }),
+	});
+	Object.assign(window.maestro.stats, {
+		recordSessionCreated: vi.fn(),
+	});
 };
 
 // ============================================================================

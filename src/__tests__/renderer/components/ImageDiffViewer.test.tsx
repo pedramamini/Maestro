@@ -12,15 +12,13 @@ const mockReadFile = vi.fn();
 beforeEach(() => {
 	vi.clearAllMocks();
 
-	// Reset maestro mocks
-	(window as any).maestro = {
-		git: {
-			showFile: mockShowFile,
-		},
-		fs: {
-			readFile: mockReadFile,
-		},
-	};
+	// Override maestro mocks on the centralized mock from setup.ts
+	Object.assign(window.maestro.git, {
+		showFile: mockShowFile,
+	});
+	Object.assign(window.maestro.fs, {
+		readFile: mockReadFile,
+	});
 });
 
 // Import after mocks are set up

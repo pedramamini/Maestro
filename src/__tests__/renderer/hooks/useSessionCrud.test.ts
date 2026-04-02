@@ -85,7 +85,12 @@ const mockMaestro = {
 	},
 };
 
-(window as any).maestro = mockMaestro;
+Object.assign(window.maestro.agents, mockMaestro.agents);
+Object.assign(window.maestro.stats, mockMaestro.stats);
+Object.assign(window.maestro.process, mockMaestro.process);
+Object.assign(window.maestro, { playbooks: mockMaestro.playbooks });
+Object.assign(window.maestro.claude, mockMaestro.claude);
+Object.assign(window.maestro.agentSessions, mockMaestro.agentSessions);
 
 // ============================================================================
 // Helpers

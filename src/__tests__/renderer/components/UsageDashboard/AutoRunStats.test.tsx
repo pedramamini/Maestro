@@ -152,10 +152,8 @@ const mockStatsApi = {
 };
 
 beforeEach(() => {
-	// Setup mock API
-	(window as any).maestro = {
-		stats: mockStatsApi,
-	};
+	// Apply mock overrides on the centralized mock from setup.ts
+	Object.assign(window.maestro.stats, mockStatsApi);
 
 	// Reset all mocks
 	vi.clearAllMocks();

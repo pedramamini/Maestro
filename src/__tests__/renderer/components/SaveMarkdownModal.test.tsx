@@ -44,14 +44,12 @@ const mockSelectFolder = vi.fn();
 const mockWriteFile = vi.fn();
 
 beforeEach(() => {
-	(window as any).maestro = {
-		dialog: {
-			selectFolder: mockSelectFolder,
-		},
-		fs: {
-			writeFile: mockWriteFile,
-		},
-	};
+	Object.assign(window.maestro.dialog, {
+		selectFolder: mockSelectFolder,
+	});
+	Object.assign(window.maestro.fs, {
+		writeFile: mockWriteFile,
+	});
 });
 
 afterEach(() => {

@@ -16,12 +16,10 @@ vi.mock('../../../../renderer/utils/clipboard', () => ({
 	safeClipboardWrite: vi.fn(),
 }));
 
-// Mock window.maestro
-(window as any).maestro = {
-	shell: {
-		openExternal: vi.fn(),
-	},
-};
+// Override window.maestro.shell on the centralized mock from setup.ts
+Object.assign(window.maestro.shell, {
+	openExternal: vi.fn(),
+});
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------

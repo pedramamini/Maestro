@@ -21,11 +21,8 @@ const mockOpenspec = {
 beforeEach(() => {
 	vi.clearAllMocks();
 
-	// Ensure window.maestro.openspec is mocked
-	(window as any).maestro = {
-		...(window as any).maestro,
-		openspec: mockOpenspec,
-	};
+	// Add openspec namespace to window.maestro (not in setup.ts base mock)
+	(window as any).maestro.openspec = mockOpenspec;
 
 	// Mock console.error to prevent noise in test output
 	vi.spyOn(console, 'error').mockImplementation(() => {});

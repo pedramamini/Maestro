@@ -652,8 +652,7 @@ describe('useBatchProcessor hook', () => {
 			.mockResolvedValue({ success: true, prUrl: 'https://github.com/test/test/pull/1' });
 
 		// Configure window.maestro
-		window.maestro = {
-			...window.maestro,
+		Object.assign(window.maestro, {
 			autorun: {
 				readDoc: mockReadDoc,
 				writeDoc: mockWriteDoc,
@@ -661,23 +660,6 @@ describe('useBatchProcessor hook', () => {
 				watchFolder: vi.fn(),
 				unwatchFolder: vi.fn(),
 				readFolder: vi.fn(),
-			},
-			git: {
-				...window.maestro.git,
-				status: mockStatus,
-				branch: mockBranch,
-				worktreeSetup: mockWorktreeSetup,
-				worktreeCheckout: mockWorktreeCheckout,
-				getDefaultBranch: mockGetDefaultBranch,
-				createPR: mockCreatePR,
-			},
-			web: {
-				...window.maestro.web,
-				broadcastAutoRunState: mockBroadcastAutoRunState,
-			},
-			agentSessions: {
-				...window.maestro.agentSessions,
-				registerSessionOrigin: mockRegisterSessionOrigin,
 			},
 			power: {
 				addReason: vi.fn(),
@@ -688,7 +670,21 @@ describe('useBatchProcessor hook', () => {
 					.fn()
 					.mockResolvedValue({ enabled: true, blocking: false, reasons: [], platform: 'darwin' }),
 			},
-		};
+		});
+		Object.assign(window.maestro.git, {
+			status: mockStatus,
+			branch: mockBranch,
+			worktreeSetup: mockWorktreeSetup,
+			worktreeCheckout: mockWorktreeCheckout,
+			getDefaultBranch: mockGetDefaultBranch,
+			createPR: mockCreatePR,
+		});
+		Object.assign(window.maestro.web, {
+			broadcastAutoRunState: mockBroadcastAutoRunState,
+		});
+		Object.assign(window.maestro.agentSessions, {
+			registerSessionOrigin: mockRegisterSessionOrigin,
+		});
 	});
 
 	afterEach(() => {

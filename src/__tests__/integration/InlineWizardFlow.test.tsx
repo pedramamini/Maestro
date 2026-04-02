@@ -28,28 +28,36 @@ import { parseWizardIntent } from '../../renderer/services/wizardIntentParser';
 import type { Theme } from '../../renderer/types';
 import { createMockTheme } from '../helpers/mockTheme';
 
-// Mock the maestro API
+// Override specific window.maestro namespaces (setup.ts provides the base mock)
+// Keep references for assertions in tests
+const mockAutorun = {
+	listDocs: vi.fn(),
+	readDoc: vi.fn(),
+	writeDoc: vi.fn(),
+};
+const mockAgents = {
+	get: vi.fn(),
+};
+const mockProcess = {
+	spawn: vi.fn(),
+	kill: vi.fn(),
+	onData: vi.fn(),
+	onExit: vi.fn(),
+};
+
+// Alias for backward compatibility with test assertions
 const mockMaestro = {
-	autorun: {
-		listDocs: vi.fn(),
-		readDoc: vi.fn(),
-		writeDoc: vi.fn(),
-	},
-	agents: {
-		get: vi.fn(),
-	},
-	process: {
-		spawn: vi.fn(),
-		kill: vi.fn(),
-		onData: vi.fn(),
-		onExit: vi.fn(),
-	},
+	autorun: mockAutorun,
+	agents: mockAgents,
+	process: mockProcess,
 };
 
 // Setup window.maestro mock before each test
 beforeEach(() => {
-	(window as any).maestro = mockMaestro;
 	vi.clearAllMocks();
+	Object.assign(window.maestro.autorun, mockAutorun);
+	Object.assign(window.maestro.agents, mockAgents);
+	Object.assign(window.maestro.process, mockProcess);
 });
 
 afterEach(() => {

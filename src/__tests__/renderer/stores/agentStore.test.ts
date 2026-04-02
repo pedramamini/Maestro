@@ -52,7 +52,7 @@ function createMockAgentConfig(overrides: Partial<AgentConfig> = {}): AgentConfi
 // Setup
 // ============================================================================
 
-// Mock window.maestro (add to existing window, don't replace it)
+// Override window.maestro namespaces with test-specific mocks (setup.ts provides base)
 const mockSpawn = vi.fn().mockResolvedValue({ pid: 123, success: true });
 const mockKill = vi.fn().mockResolvedValue(true);
 const mockInterrupt = vi.fn().mockResolvedValue(true);
@@ -60,19 +60,18 @@ const mockDetect = vi.fn().mockResolvedValue([]);
 const mockGetAgent = vi.fn().mockResolvedValue(null);
 const mockClearError = vi.fn().mockResolvedValue(undefined);
 
-(window as any).maestro = {
-	process: {
-		spawn: mockSpawn,
-		kill: mockKill,
-		interrupt: mockInterrupt,
-	},
-	agents: {
-		detect: mockDetect,
-		get: mockGetAgent,
-	},
-	agentError: {
-		clearError: mockClearError,
-	},
+Object.assign(window.maestro.process, {
+	spawn: mockSpawn,
+	kill: mockKill,
+	interrupt: mockInterrupt,
+});
+Object.assign(window.maestro.agents, {
+	detect: mockDetect,
+	get: mockGetAgent,
+});
+// Add agentError namespace (not in setup.ts base mock)
+(window as any).maestro.agentError = {
+	clearError: mockClearError,
 };
 
 // Mock gitService

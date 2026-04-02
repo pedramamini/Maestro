@@ -39,7 +39,6 @@ const baseUsage: UsageStats = {
 };
 
 describe('useAgentExecution', () => {
-	const originalMaestro = { ...window.maestro };
 	const mockProcess = {
 		...window.maestro.process,
 		spawn: vi.fn(),
@@ -82,23 +81,18 @@ describe('useAgentExecution', () => {
 			return () => {};
 		});
 
-		window.maestro = {
-			...window.maestro,
-			agents: {
-				...window.maestro.agents,
-				get: vi.fn().mockResolvedValue({
-					id: 'claude-code',
-					command: 'claude-code',
-					args: ['--print'],
-				}),
-			},
-			process: mockProcess,
-		};
+		Object.assign(window.maestro.agents, {
+			get: vi.fn().mockResolvedValue({
+				id: 'claude-code',
+				command: 'claude-code',
+				args: ['--print'],
+			}),
+		});
+		Object.assign(window.maestro, { process: mockProcess });
 	});
 
 	afterEach(() => {
 		vi.useRealTimers();
-		Object.assign(window.maestro, originalMaestro);
 	});
 
 	it('spawns a batch agent and returns aggregated results', async () => {
@@ -168,7 +162,7 @@ describe('useAgentExecution', () => {
 
 	it('uses raw stdin prompt delivery for local Windows batch runs when stream-json input is unsupported', async () => {
 		const originalPlatform = (window as any).maestro?.platform;
-		(window as any).maestro = { ...((window as any).maestro || {}), platform: 'win32' };
+		(window as any).maestro.platform = 'win32';
 		const session = createMockSession({ toolType: 'codex' });
 		const sessionsRef = { current: [session] };
 		const setSessions = vi.fn();

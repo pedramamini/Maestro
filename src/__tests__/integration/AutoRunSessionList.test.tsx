@@ -174,31 +174,24 @@ vi.mock('../../renderer/hooks/useLiveOverlay', () => ({
 vi.mock('qrcode.react', () => ({
 	QRCodeSVG: () => <div data-testid="qrcode">QR Code</div>,
 }));
-// Setup window.maestro mock
-const setupMaestroMock = () => {
-	const mockMaestro = {
-		fs: {
-			readFile: vi.fn().mockResolvedValue('data:image/png;base64,abc123'),
-			readDir: vi.fn().mockResolvedValue([]),
-		},
-		autorun: {
-			listDocs: vi
-				.fn()
-				.mockResolvedValue({ success: true, files: ['Phase 1', 'Phase 2'], tree: [] }),
-			readDoc: vi.fn().mockResolvedValue({ success: true, content: '# Test Content' }),
-			listImages: vi.fn().mockResolvedValue({ success: true, images: [] }),
-			saveImage: vi.fn().mockResolvedValue({ success: true, relativePath: 'images/test-123.png' }),
-			deleteImage: vi.fn().mockResolvedValue({ success: true }),
-			writeDoc: vi.fn().mockResolvedValue({ success: true }),
-		},
-		settings: {
-			get: vi.fn().mockResolvedValue(null),
-			set: vi.fn().mockResolvedValue(undefined),
-		},
-	};
-
-	(window as any).maestro = mockMaestro;
-	return mockMaestro;
+// Override specific window.maestro namespaces (setup.ts provides the base mock)
+const overrideMaestroMock = () => {
+	Object.assign(window.maestro.fs, {
+		readFile: vi.fn().mockResolvedValue('data:image/png;base64,abc123'),
+		readDir: vi.fn().mockResolvedValue([]),
+	});
+	Object.assign(window.maestro.autorun, {
+		listDocs: vi.fn().mockResolvedValue({ success: true, files: ['Phase 1', 'Phase 2'], tree: [] }),
+		readDoc: vi.fn().mockResolvedValue({ success: true, content: '# Test Content' }),
+		listImages: vi.fn().mockResolvedValue({ success: true, images: [] }),
+		saveImage: vi.fn().mockResolvedValue({ success: true, relativePath: 'images/test-123.png' }),
+		deleteImage: vi.fn().mockResolvedValue({ success: true }),
+		writeDoc: vi.fn().mockResolvedValue({ success: true }),
+	});
+	Object.assign(window.maestro.settings, {
+		get: vi.fn().mockResolvedValue(null),
+		set: vi.fn().mockResolvedValue(undefined),
+	});
 };
 
 // Create mock group
@@ -525,10 +518,8 @@ const IntegrationTestWrapper = ({
 };
 
 describe('Auto Run + Session List Integration', () => {
-	let mockMaestro: ReturnType<typeof setupMaestroMock>;
-
 	beforeEach(() => {
-		mockMaestro = setupMaestroMock();
+		overrideMaestroMock();
 		vi.useFakeTimers({ shouldAdvanceTime: true });
 		vi.spyOn(window, 'requestAnimationFrame').mockImplementation((cb) => {
 			cb(0);

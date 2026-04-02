@@ -24,10 +24,7 @@ beforeEach(() => {
 	vi.clearAllMocks();
 
 	// Ensure window.maestro.git is mocked
-	(window as any).maestro = {
-		...(window as any).maestro,
-		git: mockGit,
-	};
+	Object.assign(window.maestro.git, mockGit);
 });
 
 afterEach(() => {

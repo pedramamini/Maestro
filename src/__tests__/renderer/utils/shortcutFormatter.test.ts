@@ -22,13 +22,19 @@ import {
 } from '../../../renderer/utils/shortcutFormatter';
 
 describe('shortcutFormatter', () => {
+	const savedMaestro = (window as any).maestro;
+
 	afterEach(() => {
 		vi.unstubAllGlobals();
+		// Restore maestro object if a test set it to undefined
+		if (!(window as any).maestro) {
+			(window as any).maestro = savedMaestro;
+		}
 	});
 
 	describe('macOS Platform', () => {
 		beforeEach(() => {
-			(window as any).maestro = { platform: 'darwin' };
+			(window as any).maestro.platform = 'darwin';
 		});
 
 		describe('isMacOS()', () => {
@@ -203,7 +209,7 @@ describe('shortcutFormatter', () => {
 
 	describe('Windows/Linux Platform', () => {
 		beforeEach(() => {
-			(window as any).maestro = { platform: 'win32' };
+			(window as any).maestro.platform = 'win32';
 		});
 
 		describe('isMacOS()', () => {
@@ -384,7 +390,7 @@ describe('shortcutFormatter', () => {
 		});
 
 		it('handles Linux platform', () => {
-			(window as any).maestro = { platform: 'linux' };
+			(window as any).maestro.platform = 'linux';
 			expect(isMacOS()).toBe(false);
 			expect(formatKey('Meta')).toBe('Ctrl');
 		});
@@ -395,7 +401,7 @@ describe('shortcutFormatter', () => {
 		});
 
 		it('handles special characters in key names', () => {
-			(window as any).maestro = { platform: 'darwin' };
+			(window as any).maestro.platform = 'darwin';
 			// Key names with special characters should be returned as-is
 			expect(formatKey('+')).toBe('+');
 			expect(formatKey('-')).toBe('-');
@@ -403,7 +409,7 @@ describe('shortcutFormatter', () => {
 		});
 
 		it('handles unicode characters', () => {
-			(window as any).maestro = { platform: 'darwin' };
+			(window as any).maestro.platform = 'darwin';
 			// Unicode characters should be uppercased if single char
 			expect(formatKey('a')).toBe('A');
 			// Multi-char unicode should be returned as-is
@@ -414,7 +420,7 @@ describe('shortcutFormatter', () => {
 	describe('All Key Mappings Coverage', () => {
 		describe('macOS - complete key map coverage', () => {
 			beforeEach(() => {
-				(window as any).maestro = { platform: 'darwin' };
+				(window as any).maestro.platform = 'darwin';
 			});
 
 			it('covers all 16 macOS key mappings', () => {
@@ -445,7 +451,7 @@ describe('shortcutFormatter', () => {
 
 		describe('Windows/Linux - complete key map coverage', () => {
 			beforeEach(() => {
-				(window as any).maestro = { platform: 'win32' };
+				(window as any).maestro.platform = 'win32';
 			});
 
 			it('covers all 16 Windows/Linux key mappings', () => {

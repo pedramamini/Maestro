@@ -3,8 +3,6 @@ import { renderHook, act } from '@testing-library/react';
 import { useLiveMode } from '../../../renderer/hooks/remote/useLiveMode';
 
 describe('useLiveMode', () => {
-	const originalMaestro = (window as any).maestro;
-
 	const mockTunnel = {
 		stop: vi.fn(),
 	};
@@ -23,15 +21,13 @@ describe('useLiveMode', () => {
 		mockLive.stopServer.mockResolvedValue(undefined);
 		mockLive.disableAll.mockResolvedValue(undefined);
 
-		(window as any).maestro = {
-			...originalMaestro,
+		Object.assign(window.maestro, {
 			tunnel: mockTunnel,
 			live: mockLive,
-		};
+		});
 	});
 
 	afterEach(() => {
-		(window as any).maestro = originalMaestro;
 		vi.restoreAllMocks();
 	});
 

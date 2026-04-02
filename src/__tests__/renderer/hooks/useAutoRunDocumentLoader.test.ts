@@ -86,15 +86,13 @@ beforeEach(() => {
 	mockUnwatchFolder.mockResolvedValue(undefined);
 
 	// Setup window.maestro
-	(window as any).maestro = {
-		autorun: {
-			listDocs: mockListDocs,
-			readDoc: mockReadDoc,
-			watchFolder: mockWatchFolder,
-			onFileChanged: mockOnFileChanged,
-			unwatchFolder: mockUnwatchFolder,
-		},
-	};
+	Object.assign(window.maestro.autorun, {
+		listDocs: mockListDocs,
+		readDoc: mockReadDoc,
+		watchFolder: mockWatchFolder,
+		onFileChanged: mockOnFileChanged,
+		unwatchFolder: mockUnwatchFolder,
+	});
 });
 
 afterEach(() => {

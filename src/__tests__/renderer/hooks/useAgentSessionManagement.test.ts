@@ -27,16 +27,13 @@ const createMockTab = (overrides: Partial<AITab> = {}): AITab => ({
 });
 
 describe('useAgentSessionManagement', () => {
-	const originalMaestro = { ...window.maestro };
-
 	const createRightPanelRef = (): RefObject<RightPanelHandle | null> =>
 		({ current: { refreshHistoryPanel: vi.fn() } }) as RefObject<RightPanelHandle | null>;
 
 	beforeEach(() => {
 		vi.clearAllMocks();
 
-		window.maestro = {
-			...window.maestro,
+		Object.assign(window.maestro, {
 			history: {
 				add: vi.fn().mockResolvedValue(true),
 				getAll: vi.fn().mockResolvedValue([]),
@@ -48,19 +45,13 @@ describe('useAgentSessionManagement', () => {
 				onExternalChange: vi.fn().mockReturnValue(() => {}),
 				reload: vi.fn().mockResolvedValue(true),
 			} satisfies MaestroHistoryApi,
-			agentSessions: {
-				...window.maestro.agentSessions,
-				read: vi.fn().mockResolvedValue({ messages: [], total: 0, hasMore: false }),
-			} satisfies MaestroAgentSessionsApi,
-			claude: {
-				...window.maestro.claude,
-				getSessionOrigins: vi.fn().mockResolvedValue({}),
-			} satisfies MaestroClaudeApi,
-		};
-	});
-
-	afterEach(() => {
-		Object.assign(window.maestro, originalMaestro);
+		});
+		Object.assign(window.maestro.agentSessions, {
+			read: vi.fn().mockResolvedValue({ messages: [], total: 0, hasMore: false }),
+		});
+		Object.assign(window.maestro.claude, {
+			getSessionOrigins: vi.fn().mockResolvedValue({}),
+		});
 	});
 
 	it('adds history entries using active session metadata', async () => {

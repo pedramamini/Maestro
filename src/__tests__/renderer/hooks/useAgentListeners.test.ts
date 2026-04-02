@@ -183,26 +183,25 @@ beforeEach(() => {
 	useModalStore.getState().closeAll();
 
 	// Mock window.maestro
-	(window as any).maestro = {
-		...((window as any).maestro || {}),
+	Object.assign(window.maestro, {
 		process: mockProcess,
 		agentError: {
 			clearError: vi.fn().mockResolvedValue(undefined),
 		},
-		agentSessions: {
-			registerSessionOrigin: vi.fn().mockResolvedValue(undefined),
-		},
-		stats: {
-			recordQuery: vi.fn().mockResolvedValue(undefined),
-		},
-		logger: {
-			log: vi.fn(),
-		},
-		agents: {
-			detect: vi.fn().mockResolvedValue([]),
-			get: vi.fn().mockResolvedValue(null),
-		},
-	};
+	});
+	Object.assign(window.maestro.agentSessions, {
+		registerSessionOrigin: vi.fn().mockResolvedValue(undefined),
+	});
+	Object.assign(window.maestro.stats, {
+		recordQuery: vi.fn().mockResolvedValue(undefined),
+	});
+	Object.assign(window.maestro.logger, {
+		log: vi.fn(),
+	});
+	Object.assign(window.maestro.agents, {
+		detect: vi.fn().mockResolvedValue([]),
+		get: vi.fn().mockResolvedValue(null),
+	});
 });
 
 afterEach(() => {

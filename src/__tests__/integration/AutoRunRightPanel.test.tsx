@@ -124,27 +124,22 @@ vi.mock('../../renderer/utils/shortcutFormatter', () => ({
 	formatShortcutKeys: vi.fn((keys) => keys?.join('+') || ''),
 	isMacOS: vi.fn(() => false),
 }));
-// Setup window.maestro mock
-const setupMaestroMock = () => {
-	const mockMaestro = {
-		fs: {
-			readFile: vi.fn().mockResolvedValue('data:image/png;base64,abc123'),
-			readDir: vi.fn().mockResolvedValue([]),
-		},
-		autorun: {
-			listImages: vi.fn().mockResolvedValue({ success: true, images: [] }),
-			saveImage: vi.fn().mockResolvedValue({ success: true, relativePath: 'images/test-123.png' }),
-			deleteImage: vi.fn().mockResolvedValue({ success: true }),
-			writeDoc: vi.fn().mockResolvedValue(undefined),
-		},
-		settings: {
-			get: vi.fn().mockResolvedValue(null),
-			set: vi.fn().mockResolvedValue(undefined),
-		},
-	};
-
-	(window as any).maestro = mockMaestro;
-	return mockMaestro;
+// Override specific window.maestro namespaces (setup.ts provides the base mock)
+const overrideMaestroMock = () => {
+	Object.assign(window.maestro.fs, {
+		readFile: vi.fn().mockResolvedValue('data:image/png;base64,abc123'),
+		readDir: vi.fn().mockResolvedValue([]),
+	});
+	Object.assign(window.maestro.autorun, {
+		listImages: vi.fn().mockResolvedValue({ success: true, images: [] }),
+		saveImage: vi.fn().mockResolvedValue({ success: true, relativePath: 'images/test-123.png' }),
+		deleteImage: vi.fn().mockResolvedValue({ success: true }),
+		writeDoc: vi.fn().mockResolvedValue(undefined),
+	});
+	Object.assign(window.maestro.settings, {
+		get: vi.fn().mockResolvedValue(null),
+		set: vi.fn().mockResolvedValue(undefined),
+	});
 };
 
 // Create mock shortcuts
@@ -267,10 +262,8 @@ const RightPanelTestWrapper = ({
 };
 
 describe('Auto Run + RightPanel Integration', () => {
-	let mockMaestro: ReturnType<typeof setupMaestroMock>;
-
 	beforeEach(() => {
-		mockMaestro = setupMaestroMock();
+		overrideMaestroMock();
 		vi.useFakeTimers({ shouldAdvanceTime: true });
 		vi.spyOn(window, 'requestAnimationFrame').mockImplementation((cb) => {
 			cb(0);

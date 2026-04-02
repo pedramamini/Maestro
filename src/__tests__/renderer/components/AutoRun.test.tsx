@@ -152,9 +152,9 @@ vi.mock('../../../renderer/hooks/input/useTemplateAutocomplete', () => ({
 vi.mock('../../../renderer/components/TemplateAutocompleteDropdown', () => ({
 	TemplateAutocompleteDropdown: React.forwardRef(() => null),
 }));
-// Setup window.maestro mock
+// Setup window.maestro mock overrides on the centralized mock from setup.ts
 const setupMaestroMock = () => {
-	const mockMaestro = {
+	const mockOverrides = {
 		fs: {
 			readFile: vi.fn().mockResolvedValue('data:image/png;base64,abc123'),
 			readDir: vi.fn().mockResolvedValue([]),
@@ -171,8 +171,10 @@ const setupMaestroMock = () => {
 		},
 	};
 
-	(window as any).maestro = mockMaestro;
-	return mockMaestro;
+	Object.assign(window.maestro.fs, mockOverrides.fs);
+	Object.assign(window.maestro.autorun, mockOverrides.autorun);
+	Object.assign(window.maestro.settings, mockOverrides.settings);
+	return mockOverrides;
 };
 
 // Helper to create a valid BatchRunState with the new interface

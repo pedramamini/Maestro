@@ -8,18 +8,23 @@ import {
 } from '../../../renderer/utils/platformUtils';
 
 describe('platformUtils', () => {
+	const savedMaestro = (window as any).maestro;
+
 	afterEach(() => {
-		(window as any).maestro = { platform: 'darwin' };
+		// Restore maestro object if a test set it to undefined
+		if (!(window as any).maestro) {
+			(window as any).maestro = savedMaestro;
+		}
 	});
 
 	describe('isWindowsPlatform', () => {
 		it('returns true for win32', () => {
-			(window as any).maestro = { platform: 'win32' };
+			(window as any).maestro.platform = 'win32';
 			expect(isWindowsPlatform()).toBe(true);
 		});
 
 		it('returns false for darwin', () => {
-			(window as any).maestro = { platform: 'darwin' };
+			(window as any).maestro.platform = 'darwin';
 			expect(isWindowsPlatform()).toBe(false);
 		});
 
@@ -31,29 +36,29 @@ describe('platformUtils', () => {
 
 	describe('isMacOSPlatform', () => {
 		it('returns true for darwin', () => {
-			(window as any).maestro = { platform: 'darwin' };
+			(window as any).maestro.platform = 'darwin';
 			expect(isMacOSPlatform()).toBe(true);
 		});
 
 		it('returns false for win32', () => {
-			(window as any).maestro = { platform: 'win32' };
+			(window as any).maestro.platform = 'win32';
 			expect(isMacOSPlatform()).toBe(false);
 		});
 
 		it('returns false for linux', () => {
-			(window as any).maestro = { platform: 'linux' };
+			(window as any).maestro.platform = 'linux';
 			expect(isMacOSPlatform()).toBe(false);
 		});
 	});
 
 	describe('isLinuxPlatform', () => {
 		it('returns true for linux', () => {
-			(window as any).maestro = { platform: 'linux' };
+			(window as any).maestro.platform = 'linux';
 			expect(isLinuxPlatform()).toBe(true);
 		});
 
 		it('returns false for darwin', () => {
-			(window as any).maestro = { platform: 'darwin' };
+			(window as any).maestro.platform = 'darwin';
 			expect(isLinuxPlatform()).toBe(false);
 		});
 	});

@@ -126,27 +126,22 @@ vi.mock('../../renderer/hooks/useTemplateAutocomplete', () => ({
 vi.mock('../../renderer/components/TemplateAutocompleteDropdown', () => ({
 	TemplateAutocompleteDropdown: React.forwardRef(() => null),
 }));
-// Setup window.maestro mock
-const setupMaestroMock = () => {
-	const mockMaestro = {
-		fs: {
-			readFile: vi.fn().mockResolvedValue('data:image/png;base64,abc123'),
-			readDir: vi.fn().mockResolvedValue([]),
-		},
-		autorun: {
-			listImages: vi.fn().mockResolvedValue({ success: true, images: [] }),
-			saveImage: vi.fn().mockResolvedValue({ success: true, relativePath: 'images/test-123.png' }),
-			deleteImage: vi.fn().mockResolvedValue({ success: true }),
-			writeDoc: vi.fn().mockResolvedValue(undefined),
-		},
-		settings: {
-			get: vi.fn().mockResolvedValue(null),
-			set: vi.fn().mockResolvedValue(undefined),
-		},
-	};
-
-	(window as any).maestro = mockMaestro;
-	return mockMaestro;
+// Override specific window.maestro namespaces (setup.ts provides the base mock)
+const overrideMaestroMock = () => {
+	Object.assign(window.maestro.fs, {
+		readFile: vi.fn().mockResolvedValue('data:image/png;base64,abc123'),
+		readDir: vi.fn().mockResolvedValue([]),
+	});
+	Object.assign(window.maestro.autorun, {
+		listImages: vi.fn().mockResolvedValue({ success: true, images: [] }),
+		saveImage: vi.fn().mockResolvedValue({ success: true, relativePath: 'images/test-123.png' }),
+		deleteImage: vi.fn().mockResolvedValue({ success: true }),
+		writeDoc: vi.fn().mockResolvedValue(undefined),
+	});
+	Object.assign(window.maestro.settings, {
+		get: vi.fn().mockResolvedValue(null),
+		set: vi.fn().mockResolvedValue(undefined),
+	});
 };
 
 // Default props factory
@@ -181,10 +176,8 @@ function generateLargeContent(sizeInKB: number): string {
 }
 
 describe('AutoRun Memory Leak Detection', () => {
-	let mockMaestro: ReturnType<typeof setupMaestroMock>;
-
 	beforeEach(() => {
-		mockMaestro = setupMaestroMock();
+		overrideMaestroMock();
 		vi.useFakeTimers({ shouldAdvanceTime: true });
 	});
 
@@ -327,7 +320,7 @@ describe('AutoRun Memory Leak Detection', () => {
 		});
 
 		it('handles mount/unmount with attachments loaded', async () => {
-			mockMaestro.autorun.listImages.mockResolvedValue({
+			window.maestro.autorun.listImages.mockResolvedValue({
 				success: true,
 				images: [
 					{ filename: 'img1.png', relativePath: 'images/img1.png' },
@@ -956,7 +949,7 @@ describe('AutoRun Memory Leak Detection', () => {
 
 		it('async operations complete or cancel cleanly on unmount', async () => {
 			// Mock listImages to return with a delay
-			mockMaestro.autorun.listImages.mockImplementation(
+			window.maestro.autorun.listImages.mockImplementation(
 				() =>
 					new Promise((resolve) => {
 						setTimeout(() => {
@@ -982,7 +975,7 @@ describe('AutoRun Memory Leak Detection', () => {
 		it('state updates do not occur after unmount', async () => {
 			const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
 
-			mockMaestro.autorun.listImages.mockImplementation(
+			window.maestro.autorun.listImages.mockImplementation(
 				() =>
 					new Promise((resolve) => {
 						setTimeout(() => {

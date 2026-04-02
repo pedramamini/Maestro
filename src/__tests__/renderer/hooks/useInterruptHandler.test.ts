@@ -48,7 +48,7 @@ const mockMaestro = {
 	},
 };
 
-(window as any).maestro = mockMaestro;
+Object.assign(window.maestro.process, mockMaestro.process);
 
 // Mock confirm for force-kill dialog
 const originalConfirm = window.confirm;

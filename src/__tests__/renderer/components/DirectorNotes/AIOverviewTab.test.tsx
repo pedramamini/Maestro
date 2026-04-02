@@ -54,11 +54,9 @@ beforeEach(() => {
 	// Reset module-level synopsis cache so each test starts fresh
 	_resetCacheForTesting();
 
-	(window as any).maestro = {
-		directorNotes: {
-			generateSynopsis: mockGenerateSynopsis,
-			onSynopsisProgress: () => () => {},
-		},
+	(window as any).maestro.directorNotes = {
+		generateSynopsis: mockGenerateSynopsis,
+		onSynopsisProgress: () => () => {},
 	};
 
 	mockGenerateSynopsis.mockResolvedValue({

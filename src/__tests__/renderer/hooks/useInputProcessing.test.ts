@@ -71,40 +71,26 @@ describe('useInputProcessing', () => {
 	const mockOnHistoryCommand = vi.fn().mockResolvedValue(undefined);
 	const mockInputRef = { current: null } as React.RefObject<HTMLTextAreaElement | null>;
 
-	// Store original window.maestro
-	const originalMaestro = { ...window.maestro };
-
 	beforeEach(() => {
 		vi.clearAllMocks();
 		mockGetBatchState.mockReturnValue(defaultBatchState);
 
-		// Mock window.maestro.process.spawn
-		window.maestro = {
-			...window.maestro,
-			process: {
-				...window.maestro?.process,
-				spawn: vi.fn().mockResolvedValue(undefined),
-				write: vi.fn().mockResolvedValue(undefined),
-				runCommand: vi.fn().mockResolvedValue(undefined),
-			},
-			agents: {
-				...window.maestro?.agents,
-				get: vi.fn().mockResolvedValue({
-					id: 'claude-code',
-					command: 'claude',
-					path: '/usr/local/bin/claude',
-					args: ['--print', '--verbose'],
-				}),
-			},
-			web: {
-				...window.maestro?.web,
-				broadcastUserInput: vi.fn().mockResolvedValue(undefined),
-			},
-		} as typeof window.maestro;
-	});
-
-	afterEach(() => {
-		Object.assign(window.maestro, originalMaestro);
+		Object.assign(window.maestro.process, {
+			spawn: vi.fn().mockResolvedValue(undefined),
+			write: vi.fn().mockResolvedValue(undefined),
+			runCommand: vi.fn().mockResolvedValue(undefined),
+		});
+		Object.assign(window.maestro.agents, {
+			get: vi.fn().mockResolvedValue({
+				id: 'claude-code',
+				command: 'claude',
+				path: '/usr/local/bin/claude',
+				args: ['--print', '--verbose'],
+			}),
+		});
+		Object.assign(window.maestro.web, {
+			broadcastUserInput: vi.fn().mockResolvedValue(undefined),
+		});
 	});
 
 	// Helper to create hook dependencies
@@ -982,12 +968,11 @@ describe('useInputProcessing', () => {
 			mockGenerateTabName.mockResolvedValue('Generated Tab Name');
 
 			// Add tabNaming mock to window.maestro
-			window.maestro = {
-				...window.maestro,
+			Object.assign(window.maestro, {
 				tabNaming: {
 					generateTabName: mockGenerateTabName,
 				},
-			} as typeof window.maestro;
+			});
 		});
 
 		it('triggers tab naming for new AI session with text message', async () => {

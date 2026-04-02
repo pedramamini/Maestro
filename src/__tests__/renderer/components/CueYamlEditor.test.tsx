@@ -105,29 +105,22 @@ const mockOnExit = vi.fn();
 const mockOnSessionId = vi.fn();
 const mockOnAgentError = vi.fn();
 
-const existingWindowMaestro = (window as any).maestro;
-
 beforeEach(() => {
 	vi.clearAllMocks();
 
-	(window as any).maestro = {
-		...existingWindowMaestro,
-		cue: {
-			...existingWindowMaestro?.cue,
-			readYaml: mockReadYaml,
-			writeYaml: mockWriteYaml,
-			validateYaml: mockValidateYaml,
-			refreshSession: mockRefreshSession,
-		},
-		process: {
-			...existingWindowMaestro?.process,
-			spawn: mockSpawn,
-			onData: mockOnData,
-			onExit: mockOnExit,
-			onSessionId: mockOnSessionId,
-			onAgentError: mockOnAgentError,
-		},
-	};
+	Object.assign(window.maestro.cue, {
+		readYaml: mockReadYaml,
+		writeYaml: mockWriteYaml,
+		validateYaml: mockValidateYaml,
+		refreshSession: mockRefreshSession,
+	});
+	Object.assign(window.maestro.process, {
+		spawn: mockSpawn,
+		onData: mockOnData,
+		onExit: mockOnExit,
+		onSessionId: mockOnSessionId,
+		onAgentError: mockOnAgentError,
+	});
 
 	// Default: file doesn't exist, YAML is valid
 	mockReadYaml.mockResolvedValue(null);
@@ -153,7 +146,6 @@ beforeEach(() => {
 
 afterEach(() => {
 	vi.restoreAllMocks();
-	(window as any).maestro = existingWindowMaestro;
 });
 const defaultProps = {
 	isOpen: true,

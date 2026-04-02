@@ -19,18 +19,16 @@ const mockGetModels = vi.fn();
 const mockRefresh = vi.fn();
 const mockGetSshConfigs = vi.fn();
 
-(window as any).maestro = {
-	agents: {
-		detect: mockDetect,
-		getConfig: mockGetConfig,
-		setConfig: mockSetConfig,
-		getModels: mockGetModels,
-		refresh: mockRefresh,
-	},
-	sshRemote: {
-		getConfigs: mockGetSshConfigs,
-	},
-};
+Object.assign(window.maestro.agents, {
+	detect: mockDetect,
+	getConfig: mockGetConfig,
+	setConfig: mockSetConfig,
+	getModels: mockGetModels,
+	refresh: mockRefresh,
+});
+Object.assign(window.maestro.sshRemote, {
+	getConfigs: mockGetSshConfigs,
+});
 
 function makeAgent(overrides: Partial<AgentConfig> = {}): AgentConfig {
 	return {

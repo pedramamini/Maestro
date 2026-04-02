@@ -395,7 +395,7 @@ describe('inlineWizardConversation', () => {
 
 		it('should use sendPromptViaStdinRaw for claude-code on Windows (text-only, no images)', async () => {
 			// Mock Windows platform
-			(window as any).maestro = { ...((window as any).maestro || {}), platform: 'win32' };
+			(window as any).maestro.platform = 'win32';
 
 			const mockAgent = {
 				id: 'claude-code',
@@ -433,7 +433,7 @@ describe('inlineWizardConversation', () => {
 
 		it('should use sendPromptViaStdinRaw for opencode on Windows', async () => {
 			// Mock Windows platform
-			(window as any).maestro = { ...((window as any).maestro || {}), platform: 'win32' };
+			(window as any).maestro.platform = 'win32';
 
 			const mockAgent = {
 				id: 'opencode',
@@ -471,7 +471,7 @@ describe('inlineWizardConversation', () => {
 
 		it('should not use stdin flags on non-Windows platforms', async () => {
 			// Mock macOS platform
-			(window as any).maestro = { ...((window as any).maestro || {}), platform: 'darwin' };
+			(window as any).maestro.platform = 'darwin';
 
 			const mockAgent = {
 				id: 'opencode',
@@ -509,7 +509,7 @@ describe('inlineWizardConversation', () => {
 
 		it('should NOT add --input-format stream-json for claude-code on Windows (text-only)', async () => {
 			// Mock Windows platform
-			(window as any).maestro = { ...((window as any).maestro || {}), platform: 'win32' };
+			(window as any).maestro.platform = 'win32';
 
 			const mockAgent = {
 				id: 'claude-code',

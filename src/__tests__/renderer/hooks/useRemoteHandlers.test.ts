@@ -123,19 +123,17 @@ beforeEach(() => {
 	} as any);
 
 	// Mock window.maestro APIs
-	(window as any).maestro = {
-		process: {
-			spawn: vi.fn().mockResolvedValue(undefined),
-			runCommand: vi.fn().mockResolvedValue(undefined),
-		},
-		agents: {
-			get: vi.fn().mockResolvedValue({
-				command: 'claude',
-				path: '/usr/local/bin/claude',
-				args: [],
-			}),
-		},
-	};
+	Object.assign(window.maestro.process, {
+		spawn: vi.fn().mockResolvedValue(undefined),
+		runCommand: vi.fn().mockResolvedValue(undefined),
+	});
+	Object.assign(window.maestro.agents, {
+		get: vi.fn().mockResolvedValue({
+			command: 'claude',
+			path: '/usr/local/bin/claude',
+			args: [],
+		}),
+	});
 
 	// Spy on addEventListener/removeEventListener for event listener tests
 	vi.spyOn(window, 'addEventListener');

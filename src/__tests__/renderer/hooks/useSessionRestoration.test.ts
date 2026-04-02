@@ -115,15 +115,12 @@ beforeEach(() => {
 	} as any);
 
 	// Setup IPC mocks
-	if (!(window as any).maestro) {
-		(window as any).maestro = {};
-	}
-	(window as any).maestro.sessions = { getAll: mockGetAll };
-	(window as any).maestro.groups = { getAll: mockGroupsGetAll };
-	(window as any).maestro.groupChat = { list: mockGroupChatList };
-	(window as any).maestro.agents = {
+	Object.assign(window.maestro.sessions, { getAll: mockGetAll });
+	Object.assign(window.maestro.groups, { getAll: mockGroupsGetAll });
+	Object.assign(window.maestro, { groupChat: { list: mockGroupChatList } });
+	Object.assign(window.maestro.agents, {
 		get: mockAgentsGet.mockResolvedValue({ id: 'claude-code', name: 'Claude Code' }),
-	};
+	});
 
 	mockGetAll.mockResolvedValue([]);
 	mockGroupsGetAll.mockResolvedValue([]);

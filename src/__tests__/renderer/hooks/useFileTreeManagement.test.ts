@@ -72,29 +72,20 @@ const createDeps = (
 // ============================================================================
 
 describe('useFileTreeManagement', () => {
-	let originalHistory: typeof window.maestro.history | undefined;
-
 	beforeEach(() => {
 		vi.clearAllMocks();
 		useFileExplorerStore.setState({ fileTreeFilter: '' });
 		// Most tests assume sessions are loaded (safety timeout can fire)
 		useSessionStore.setState({ sessionsLoaded: true });
-		originalHistory = window.maestro.history as typeof window.maestro.history | undefined;
-		window.maestro = {
-			...window.maestro,
+		Object.assign(window.maestro, {
 			history: {
 				reload: vi.fn().mockResolvedValue(true),
 			},
-		};
+		});
 	});
 
 	afterEach(() => {
 		useSessionStore.setState({ sessionsLoaded: false, initialFileTreeReady: false });
-		if (originalHistory) {
-			window.maestro.history = originalHistory;
-		} else {
-			delete (window.maestro as { history?: unknown }).history;
-		}
 	});
 
 	it('refreshFileTree updates tree and returns changes', async () => {
@@ -323,14 +314,7 @@ describe('useFileTreeManagement', () => {
 			totalSize: 1000,
 		});
 
-		const originalFs = window.maestro?.fs;
-		window.maestro = {
-			...window.maestro,
-			fs: {
-				...originalFs,
-				directorySize: mockDirectorySize,
-			},
-		};
+		Object.assign(window.maestro.fs, { directorySize: mockDirectorySize });
 
 		const sshSession = createMockSession({
 			fileTree: [],
@@ -368,10 +352,6 @@ describe('useFileTreeManagement', () => {
 			expect(state.getSessions()[0].fileTree).toEqual(fullTree);
 			expect(state.getSessions()[0].fileTreeLoading).toBe(false);
 		});
-
-		if (originalFs) {
-			window.maestro.fs = originalFs;
-		}
 	});
 
 	it('does not fire shallow load for local sessions on initial mount', async () => {
@@ -418,14 +398,7 @@ describe('useFileTreeManagement', () => {
 		);
 		const mockDirectorySize = vi.fn().mockReturnValue(statsPromise);
 
-		const originalFs = window.maestro?.fs;
-		window.maestro = {
-			...window.maestro,
-			fs: {
-				...originalFs,
-				directorySize: mockDirectorySize,
-			},
-		};
+		Object.assign(window.maestro.fs, { directorySize: mockDirectorySize });
 
 		const state = createSessionsState([createMockSession({ fileTree: [] })]);
 		const deps = createDeps(state);
@@ -454,10 +427,6 @@ describe('useFileTreeManagement', () => {
 			folderCount: 2,
 			totalSize: 10000,
 		});
-
-		if (originalFs) {
-			window.maestro.fs = originalFs;
-		}
 	});
 
 	it('fetches stats for sessions with file tree but no stats (migration)', async () => {
@@ -468,14 +437,7 @@ describe('useFileTreeManagement', () => {
 			totalSize: 5000000,
 		});
 
-		const originalFs = window.maestro?.fs;
-		window.maestro = {
-			...window.maestro,
-			fs: {
-				...originalFs,
-				directorySize: mockDirectorySize,
-			},
-		};
+		Object.assign(window.maestro.fs, { directorySize: mockDirectorySize });
 
 		// Create session with file tree but no stats (simulating pre-Dec 2025 session)
 		const sessionWithTreeNoStats = createMockSession({
@@ -508,11 +470,6 @@ describe('useFileTreeManagement', () => {
 				totalSize: 5000000,
 			});
 		});
-
-		// Restore original
-		if (originalFs) {
-			window.maestro.fs = originalFs;
-		}
 	});
 
 	it('does not fire file-tree safety timeout until sessionsLoaded is true', () => {
@@ -585,14 +542,7 @@ describe('useFileTreeManagement', () => {
 	it('does not fetch stats when session already has stats', async () => {
 		const mockDirectorySize = vi.fn();
 
-		const originalFs = window.maestro?.fs;
-		window.maestro = {
-			...window.maestro,
-			fs: {
-				...originalFs,
-				directorySize: mockDirectorySize,
-			},
-		};
+		Object.assign(window.maestro.fs, { directorySize: mockDirectorySize });
 
 		// Create session with both file tree and stats (no migration needed)
 		const sessionWithStats = createMockSession({
@@ -612,10 +562,5 @@ describe('useFileTreeManagement', () => {
 		// Give it a moment to not be called
 		await new Promise((resolve) => setTimeout(resolve, 50));
 		expect(mockDirectorySize).not.toHaveBeenCalled();
-
-		// Restore original
-		if (originalFs) {
-			window.maestro.fs = originalFs;
-		}
 	});
 });

@@ -3148,13 +3148,9 @@ describe('FileTab overlay menu', () => {
 	it('calls openPath when clicking Open in Default App', async () => {
 		vi.useFakeTimers();
 		const mockOpenPath = vi.fn().mockResolvedValue(undefined);
-		window.maestro = {
-			...window.maestro,
-			shell: {
-				...window.maestro.shell,
-				openPath: mockOpenPath,
-			},
-		} as typeof window.maestro;
+		Object.assign(window.maestro.shell, {
+			openPath: mockOpenPath,
+		});
 
 		render(
 			<TabBar
@@ -3191,13 +3187,9 @@ describe('FileTab overlay menu', () => {
 	it('calls showItemInFolder when clicking Reveal in Finder/Explorer', async () => {
 		vi.useFakeTimers();
 		const mockShowItemInFolder = vi.fn().mockResolvedValue(undefined);
-		window.maestro = {
-			...window.maestro,
-			shell: {
-				...window.maestro.shell,
-				showItemInFolder: mockShowItemInFolder,
-			},
-		} as typeof window.maestro;
+		Object.assign(window.maestro.shell, {
+			showItemInFolder: mockShowItemInFolder,
+		});
 
 		render(
 			<TabBar

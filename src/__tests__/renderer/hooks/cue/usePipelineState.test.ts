@@ -57,14 +57,12 @@ const mockGetGraphData = vi.fn().mockResolvedValue([]);
 
 beforeEach(() => {
 	vi.clearAllMocks();
-	(window as any).maestro = {
-		cue: {
-			getSettings: mockGetSettings,
-			writeYaml: mockWriteYaml,
-			refreshSession: mockRefreshSession,
-			getGraphData: mockGetGraphData,
-		},
-	};
+	Object.assign(window.maestro.cue, {
+		getSettings: mockGetSettings,
+		writeYaml: mockWriteYaml,
+		refreshSession: mockRefreshSession,
+		getGraphData: mockGetGraphData,
+	});
 	vi.spyOn(window, 'confirm').mockReturnValue(true);
 });
 

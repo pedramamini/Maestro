@@ -212,14 +212,12 @@ const createPaginatedResponse = (entries: any[], hasMore = false, total?: number
 
 beforeEach(() => {
 	mockDirNotesSettings.defaultLookbackDays = 7;
-	(window as any).maestro = {
-		directorNotes: {
-			getUnifiedHistory: mockGetUnifiedHistory,
-			onHistoryEntryAdded: vi.fn().mockReturnValue(() => {}),
-		},
-		history: {
-			update: mockHistoryUpdate,
-		},
+	(window as any).maestro.directorNotes = {
+		getUnifiedHistory: mockGetUnifiedHistory,
+		onHistoryEntryAdded: vi.fn().mockReturnValue(() => {}),
+	};
+	(window as any).maestro.history = {
+		update: mockHistoryUpdate,
 	};
 	mockHistoryUpdate.mockResolvedValue(true);
 	mockGetUnifiedHistory.mockResolvedValue(createPaginatedResponse(createMockEntries()));

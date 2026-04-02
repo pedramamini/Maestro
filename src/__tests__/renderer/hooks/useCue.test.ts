@@ -45,20 +45,17 @@ beforeEach(() => {
 	mockStopAll.mockResolvedValue(undefined);
 	mockOnActivityUpdate.mockReturnValue(mockUnsubscribe);
 
-	(window as any).maestro = {
-		...(window as any).maestro,
-		cue: {
-			getStatus: mockGetStatus,
-			getActiveRuns: mockGetActiveRuns,
-			getActivityLog: mockGetActivityLog,
-			getQueueStatus: mockGetQueueStatus,
-			enable: mockEnable,
-			disable: mockDisable,
-			stopRun: mockStopRun,
-			stopAll: mockStopAll,
-			onActivityUpdate: mockOnActivityUpdate,
-		},
-	};
+	Object.assign(window.maestro.cue, {
+		getStatus: mockGetStatus,
+		getActiveRuns: mockGetActiveRuns,
+		getActivityLog: mockGetActivityLog,
+		getQueueStatus: mockGetQueueStatus,
+		enable: mockEnable,
+		disable: mockDisable,
+		stopRun: mockStopRun,
+		stopAll: mockStopAll,
+		onActivityUpdate: mockOnActivityUpdate,
+	});
 });
 
 afterEach(() => {
