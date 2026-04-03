@@ -357,7 +357,7 @@ See [MCP Server documentation](https://docs.runmaestro.ai/mcp-server) for full d
 
 # GitNexus — Code Intelligence
 
-This project is indexed by GitNexus as **Maestro** (8103 symbols, 19683 relationships, 300 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
+This project is indexed by GitNexus as **Maestro** (8195 symbols, 19963 relationships, 300 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
 
 > If any GitNexus tool warns the index is stale, run `npx gitnexus analyze` in terminal first.
 
@@ -456,3 +456,9 @@ To check whether embeddings exist, inspect `.gitnexus/meta.json` — the `stats.
 | Index, status, clean, wiki CLI commands      | `.claude/skills/gitnexus/gitnexus-cli/SKILL.md`             |
 
 <!-- gitnexus:end -->
+
+## 🚨 CRITICAL GIT RULES 🚨
+
+- **NEVER** create Pull Requests against the upstream \RunMaestro/Maestro\ repository.
+- Your \origin\ is \ShunsukeHayashi/Maestro\. All pushes and PRs must remain strictly within the fork or local environment.
+- If you violate this and send a PR to RunMaestro, the system will be immediately killed.
