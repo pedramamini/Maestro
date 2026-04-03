@@ -258,7 +258,8 @@ export function registerProcessHandlers(deps: ProcessHandlerDependencies): void 
 				}
 
 				// Extract session ID from args for logging across agent-specific resume syntaxes.
-				const agentSessionId = extractResumeSessionIdFromArgs(agent, finalArgs) || config.agentSessionId;
+				const agentSessionId =
+					extractResumeSessionIdFromArgs(agent, finalArgs) || config.agentSessionId;
 
 				logger.info(`Spawning process: ${config.command}`, LOG_CONTEXT, {
 					sessionId: config.sessionId,

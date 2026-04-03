@@ -170,7 +170,9 @@ test.describe('OpenClaw session flow', () => {
 		});
 
 		await helpers.openAgentSessions(window);
-		const sessionsPanelTitle = window.getByText(new RegExp(`OpenClaw Sessions for ${agentName}`, 'i'));
+		const sessionsPanelTitle = window.getByText(
+			new RegExp(`OpenClaw Sessions for ${agentName}`, 'i')
+		);
 		await expect(sessionsPanelTitle).toBeVisible({ timeout: 10000 });
 		await expect(window.getByText(/1 session/i)).toBeVisible({ timeout: 10000 });
 		await expect(window.getByText(/# Maestro System Context/i).first()).toBeVisible({

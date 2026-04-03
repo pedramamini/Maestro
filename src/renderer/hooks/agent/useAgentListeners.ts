@@ -922,8 +922,7 @@ export function useAgentListeners(deps: UseAgentListenersDeps): void {
 					const normalizedAgentSessionId =
 						session.toolType === 'openclaw'
 							? (() => {
-									const normalized =
-										normalizeOpenClawSessionId(agentSessionId) || agentSessionId;
+									const normalized = normalizeOpenClawSessionId(agentSessionId) || agentSessionId;
 									const knownSessionIds = [
 										session.agentSessionId,
 										...session.aiTabs.map((tab) => tab.agentSessionId),

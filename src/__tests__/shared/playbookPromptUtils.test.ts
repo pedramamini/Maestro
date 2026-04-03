@@ -32,12 +32,8 @@ describe('playbookPromptUtils', () => {
 
 	it('stores empty prompt when the prompt matches the selected profile default', () => {
 		expect(normalizePlaybookPromptForStorage(FULL_AUTORUN_PROMPT, 'full')).toBe('');
-		expect(normalizePlaybookPromptForStorage(COMPACT_CODE_AUTORUN_PROMPT, 'compact-code')).toBe(
-			''
-		);
+		expect(normalizePlaybookPromptForStorage(COMPACT_CODE_AUTORUN_PROMPT, 'compact-code')).toBe('');
 		expect(normalizePlaybookPromptForStorage(COMPACT_DOC_AUTORUN_PROMPT, 'compact-doc')).toBe('');
-		expect(normalizePlaybookPromptForStorage('Custom prompt', 'compact-doc')).toBe(
-			'Custom prompt'
-		);
+		expect(normalizePlaybookPromptForStorage('Custom prompt', 'compact-doc')).toBe('Custom prompt');
 	});
 });

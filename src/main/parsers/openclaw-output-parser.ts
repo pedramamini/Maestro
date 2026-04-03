@@ -110,9 +110,10 @@ export class OpenClawOutputParser implements AgentOutputParser {
 			return {
 				type: 'error',
 				text: this.extractFailureMessage(msg),
-				sessionId: extractOpenClawSessionIdFromJson(parsed, {
-					agentName: this.openclawAgentName,
-				}) || undefined,
+				sessionId:
+					extractOpenClawSessionIdFromJson(parsed, {
+						agentName: this.openclawAgentName,
+					}) || undefined,
 				raw: msg,
 			};
 		}
@@ -132,15 +133,16 @@ export class OpenClawOutputParser implements AgentOutputParser {
 		}
 
 		// Fallback: future JSONL streaming support
-			const eventType = (msg.type as string) || '';
+		const eventType = (msg.type as string) || '';
 
 		if (eventType === 'error') {
 			return {
 				type: 'error',
 				text: (msg.message as string) || (msg.error as string) || 'Unknown OpenClaw error',
-				sessionId: extractOpenClawSessionIdFromJson(parsed, {
-					agentName: this.openclawAgentName,
-				}) || undefined,
+				sessionId:
+					extractOpenClawSessionIdFromJson(parsed, {
+						agentName: this.openclawAgentName,
+					}) || undefined,
 				raw: msg,
 			};
 		}

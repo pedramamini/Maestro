@@ -124,10 +124,7 @@ export function extractResumeSessionIdFromArgs(
 	return undefined;
 }
 
-export function hasResumeSessionArgs(
-	agent: ResumeTokenSource,
-	args: string[]
-): boolean {
+export function hasResumeSessionArgs(agent: ResumeTokenSource, args: string[]): boolean {
 	return typeof extractResumeSessionIdFromArgs(agent, args) === 'string';
 }
 

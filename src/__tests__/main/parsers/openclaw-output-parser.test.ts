@@ -373,7 +373,6 @@ describe('OpenClawOutputParser', () => {
 			expect(event!.sessionId).toBe('ops:session-err-2');
 		});
 
-
 		it('should return null for null input', () => {
 			expect(parser.detectErrorFromParsed(null)).toBeNull();
 		});

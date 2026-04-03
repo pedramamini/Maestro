@@ -271,7 +271,13 @@ describe('buildAgentArgs', () => {
 	it('extracts OpenClaw resume session IDs from --session-id args', () => {
 		const openclaw = getAgentDefinition('openclaw') as AgentConfig;
 		expect(
-			extractResumeSessionIdFromArgs(openclaw, ['--json', '--agent', 'main', '--session-id', 'abc-123'])
+			extractResumeSessionIdFromArgs(openclaw, [
+				'--json',
+				'--agent',
+				'main',
+				'--session-id',
+				'abc-123',
+			])
 		).toBe('abc-123');
 		expect(
 			hasResumeSessionArgs(openclaw, ['--json', '--agent', 'main', '--session-id', 'abc-123'])

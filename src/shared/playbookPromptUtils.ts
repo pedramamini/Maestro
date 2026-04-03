@@ -24,9 +24,7 @@ Rules:
 - Update the Auto Run document by checking the completed task or adding a brief blocker note.
 - Stop after finishing the active task.`;
 
-export function getDefaultPlaybookPrompt(
-	profile: PlaybookPromptProfile = 'compact-code'
-): string {
+export function getDefaultPlaybookPrompt(profile: PlaybookPromptProfile = 'compact-code'): string {
 	switch (profile) {
 		case 'full':
 			return FULL_AUTORUN_PROMPT;

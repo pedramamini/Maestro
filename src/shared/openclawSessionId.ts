@@ -120,7 +120,9 @@ export function extractOpenClawAgentNameFromJson(parsed: unknown): string | null
 		const record = current as Record<string, unknown>;
 		const agentMeta =
 			record.meta && typeof record.meta === 'object'
-				? ((record.meta as Record<string, unknown>).agentMeta as Record<string, unknown> | undefined)
+				? ((record.meta as Record<string, unknown>).agentMeta as
+						| Record<string, unknown>
+						| undefined)
 				: undefined;
 
 		const candidates = [
@@ -178,7 +180,9 @@ export function extractOpenClawSessionIdFromJson(
 		const record = current as Record<string, unknown>;
 		const agentMeta =
 			record.meta && typeof record.meta === 'object'
-				? ((record.meta as Record<string, unknown>).agentMeta as Record<string, unknown> | undefined)
+				? ((record.meta as Record<string, unknown>).agentMeta as
+						| Record<string, unknown>
+						| undefined)
 				: undefined;
 
 		const candidates = [

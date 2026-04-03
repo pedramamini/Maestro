@@ -250,13 +250,15 @@ export function emitAgent(agent: {
 /**
  * Emit a playbook event (for list playbooks)
  */
-export function emitPlaybook(playbook: {
-	id: string;
-	name: string;
-	sessionId: string;
-	documents: string[];
-	loopEnabled: boolean;
-	maxLoops?: number | null;
-} & PlaybookBaselineMetadata): void {
+export function emitPlaybook(
+	playbook: {
+		id: string;
+		name: string;
+		sessionId: string;
+		documents: string[];
+		loopEnabled: boolean;
+		maxLoops?: number | null;
+	} & PlaybookBaselineMetadata
+): void {
 	emitJsonl({ type: 'playbook', ...playbook });
 }
