@@ -477,6 +477,7 @@ export async function getParticipant(
 export type ParticipantUpdate = Partial<
 	Pick<
 		GroupChatParticipant,
+		| 'agentId'
 		| 'lastActivity'
 		| 'lastSummary'
 		| 'contextUsage'

@@ -192,6 +192,14 @@ export function GroupChatRightPanel({
 		[groupChatId]
 	);
 
+	// Handle removing a participant from the group chat
+	const handleRemoveParticipant = useCallback(
+		async (participantName: string) => {
+			await window.maestro.groupChat.removeParticipant(groupChatId, participantName);
+		},
+		[groupChatId]
+	);
+
 	// History entries state
 	const [historyEntries, setHistoryEntries] = useState<GroupChatHistoryEntry[]>([]);
 	const [isLoadingHistory, setIsLoadingHistory] = useState(true);
@@ -325,6 +333,7 @@ export function GroupChatRightPanel({
 									color={participantColors[participant.name]}
 									groupChatId={groupChatId}
 									onContextReset={handleContextReset}
+									onRemove={handleRemoveParticipant}
 									liveOutput={participantLiveOutput.get(`${groupChatId}:${participant.name}`)}
 								/>
 							);

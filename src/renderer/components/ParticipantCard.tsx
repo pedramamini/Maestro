@@ -12,6 +12,7 @@ import {
 	DollarSign,
 	RotateCcw,
 	Server,
+	UserMinus,
 	Eye,
 	EyeOff,
 } from 'lucide-react';
@@ -28,6 +29,7 @@ interface ParticipantCardProps {
 	color?: string;
 	groupChatId?: string;
 	onContextReset?: (participantName: string) => void;
+	onRemove?: (participantName: string) => void;
 	liveOutput?: string;
 }
 
@@ -49,10 +51,13 @@ export function ParticipantCard({
 	color,
 	groupChatId,
 	onContextReset,
+	onRemove,
 	liveOutput,
 }: ParticipantCardProps): JSX.Element {
 	const [copied, setCopied] = useState(false);
 	const [isResetting, setIsResetting] = useState(false);
+	const [isRemoving, setIsRemoving] = useState(false);
+	const [confirmRemove, setConfirmRemove] = useState(false);
 	const [peekOpen, setPeekOpen] = useState(false);
 	const peekRef = useRef<HTMLPreElement>(null);
 
@@ -106,6 +111,19 @@ export function ParticipantCard({
 			setIsResetting(false);
 		}
 	}, [onContextReset, groupChatId, participant.name]);
+
+	const handleRemove = useCallback(async () => {
+		if (!onRemove || !groupChatId) return;
+		setIsRemoving(true);
+		try {
+			await onRemove(participant.name);
+		} finally {
+			setIsRemoving(false);
+			setConfirmRemove(false);
+		}
+	}, [onRemove, groupChatId, participant.name]);
+
+	const showRemoveButton = onRemove && groupChatId && !isRemoving;
 
 	return (
 		<div
@@ -254,6 +272,61 @@ export function ParticipantCard({
 					>
 						<RotateCcw className="w-3 h-3 animate-spin" />
 						Resetting...
+					</span>
+				)}
+				{/* Remove button */}
+				{showRemoveButton && !confirmRemove && (
+					<button
+						onClick={() => setConfirmRemove(true)}
+						className="flex items-center gap-0.5 text-[10px] px-1.5 py-0.5 rounded shrink-0 hover:opacity-80 transition-opacity cursor-pointer"
+						style={{
+							backgroundColor: `${theme.colors.error}20`,
+							color: theme.colors.error,
+							border: `1px solid ${theme.colors.error}40`,
+						}}
+						title="Remove participant from group chat"
+					>
+						<UserMinus className="w-3 h-3" />
+						Remove
+					</button>
+				)}
+				{/* Remove confirmation */}
+				{confirmRemove && !isRemoving && (
+					<span className="flex items-center gap-1 text-[10px] shrink-0">
+						<button
+							onClick={handleRemove}
+							className="px-1.5 py-0.5 rounded cursor-pointer hover:opacity-80 transition-opacity"
+							style={{
+								backgroundColor: `${theme.colors.error}30`,
+								color: theme.colors.error,
+								border: `1px solid ${theme.colors.error}60`,
+							}}
+						>
+							Confirm
+						</button>
+						<button
+							onClick={() => setConfirmRemove(false)}
+							className="px-1.5 py-0.5 rounded cursor-pointer hover:opacity-80 transition-opacity"
+							style={{
+								backgroundColor: `${theme.colors.textDim}20`,
+								color: theme.colors.textDim,
+							}}
+						>
+							Cancel
+						</button>
+					</span>
+				)}
+				{/* Remove in progress indicator */}
+				{isRemoving && (
+					<span
+						className="flex items-center gap-0.5 text-[10px] px-1.5 py-0.5 rounded shrink-0 animate-pulse"
+						style={{
+							backgroundColor: `${theme.colors.error}20`,
+							color: theme.colors.error,
+						}}
+					>
+						<UserMinus className="w-3 h-3" />
+						Removing...
 					</span>
 				)}
 				{/* Peek button - always visible */}
