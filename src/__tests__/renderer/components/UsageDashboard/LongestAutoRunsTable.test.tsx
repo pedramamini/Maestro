@@ -2,6 +2,7 @@ import React from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { LongestAutoRunsTable } from '../../../../renderer/components/UsageDashboard/LongestAutoRunsTable';
+import { DEFAULT_AUTORUN_ANALYTICS_FILTERS } from '../../../../renderer/components/UsageDashboard/autoRunFilters';
 import { THEMES } from '../../../../shared/themes';
 
 const theme = THEMES.dracula;
@@ -26,6 +27,7 @@ const mockSessions = [
 		promptProfile: 'compact-code',
 		agentStrategy: 'plan-execute-verify',
 		worktreeMode: 'create-new',
+		schedulerMode: 'dag',
 	},
 	{
 		id: 'run-2',
@@ -41,6 +43,7 @@ const mockSessions = [
 		promptProfile: 'compact-doc',
 		agentStrategy: 'single',
 		worktreeMode: 'disabled',
+		schedulerMode: 'sequential',
 	},
 ];
 
@@ -86,13 +89,40 @@ describe('LongestAutoRunsTable', () => {
 		render(<LongestAutoRunsTable timeRange="week" theme={theme} />);
 
 		await waitFor(() => {
-			expect(screen.getByLabelText('Worktree')).toBeInTheDocument();
+			expect(screen.getByLabelText('Playbook')).toBeInTheDocument();
+			expect(screen.getByLabelText('Scheduler')).toBeInTheDocument();
 		});
 
-		fireEvent.change(screen.getByLabelText('Worktree'), {
-			target: { value: 'Managed' },
+		fireEvent.change(screen.getByLabelText('Playbook'), {
+			target: { value: 'Regression Sweep' },
+		});
+		fireEvent.change(screen.getByLabelText('Scheduler'), {
+			target: { value: 'sequential' },
 		});
 
 		expect(screen.getByText('No Auto Run sessions match the current filters.')).toBeInTheDocument();
+	});
+
+	it('applies controlled filters from the parent dashboard state', async () => {
+		const onFiltersChange = vi.fn();
+		render(
+			<LongestAutoRunsTable
+				timeRange="week"
+				theme={theme}
+				filters={{
+					...DEFAULT_AUTORUN_ANALYTICS_FILTERS,
+					playbookName: 'Regression Sweep',
+				}}
+				onFiltersChange={onFiltersChange}
+			/>
+		);
+
+		await waitFor(() => {
+			expect(screen.getByDisplayValue('Regression Sweep')).toBeInTheDocument();
+		});
+
+		const table = within(screen.getByRole('table'));
+		expect(table.getByText('Regression Sweep')).toBeInTheDocument();
+		expect(table.queryByText('Docs Sweep')).not.toBeInTheDocument();
 	});
 });

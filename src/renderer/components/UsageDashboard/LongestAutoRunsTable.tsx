@@ -19,6 +19,15 @@ import type { Theme } from '../../types';
 import type { StatsTimeRange } from '../../hooks/stats/useStats';
 import { captureException } from '../../utils/sentry';
 import { getAgentDisplayName } from '../../../shared/agentMetadata';
+import {
+	DEFAULT_AUTORUN_ANALYTICS_FILTERS,
+	formatAgentStrategy,
+	formatPromptProfile,
+	formatSchedulerMode,
+	formatWorktreeMode,
+	hasActiveAutoRunFilters,
+	type AutoRunAnalyticsFilters,
+} from './autoRunFilters';
 
 /**
  * Auto Run session data shape from the API
@@ -37,6 +46,7 @@ interface AutoRunSession {
 	promptProfile?: 'full' | 'compact-code' | 'compact-doc';
 	agentStrategy?: 'single' | 'plan-execute-verify';
 	worktreeMode?: 'disabled' | 'managed' | 'existing-open' | 'existing-closed' | 'create-new';
+	schedulerMode?: 'sequential' | 'dag';
 }
 
 interface LongestAutoRunsTableProps {
@@ -44,10 +54,13 @@ interface LongestAutoRunsTableProps {
 	timeRange: StatsTimeRange;
 	/** Current theme for styling */
 	theme: Theme;
+	/** Shared Auto Run filters for linked dashboard views */
+	filters?: AutoRunAnalyticsFilters;
+	/** Callback for controlled filter changes */
+	onFiltersChange?: (filters: AutoRunAnalyticsFilters) => void;
 }
 
 const MAX_ROWS = 25;
-const ALL_FILTER_VALUE = '__all__';
 
 /**
  * Format duration in milliseconds to human-readable string
@@ -94,52 +107,14 @@ function extractProjectName(path?: string): string {
 	return segments[segments.length - 1] || '—';
 }
 
-function formatPromptProfile(promptProfile?: AutoRunSession['promptProfile']): string {
-	switch (promptProfile) {
-		case 'compact-code':
-			return 'Code';
-		case 'compact-doc':
-			return 'Doc';
-		case 'full':
-			return 'Full';
-		default:
-			return '—';
-	}
-}
-
-function formatAgentStrategy(agentStrategy?: AutoRunSession['agentStrategy']): string {
-	switch (agentStrategy) {
-		case 'plan-execute-verify':
-			return 'PEV';
-		case 'single':
-			return 'Single';
-		default:
-			return '—';
-	}
-}
-
-function formatWorktreeMode(worktreeMode?: AutoRunSession['worktreeMode']): string {
-	switch (worktreeMode) {
-		case 'existing-open':
-			return 'Open';
-		case 'existing-closed':
-			return 'Closed';
-		case 'create-new':
-			return 'New';
-		case 'managed':
-			return 'Managed';
-		case 'disabled':
-			return 'Off';
-		default:
-			return '—';
-	}
-}
-
-function buildFilterOptions(values: string[]): Array<{ value: string; label: string }> {
+function buildFilterOptions(
+	values: string[],
+	formatLabel?: (value: string) => string
+): Array<{ value: string; label: string }> {
 	return [...new Set(values)]
 		.filter(Boolean)
 		.sort((a, b) => a.localeCompare(b))
-		.map((value) => ({ value, label: value }));
+		.map((value) => ({ value, label: formatLabel ? formatLabel(value) : value }));
 }
 
 /**
@@ -166,13 +141,26 @@ function formatTime(timestamp: number): string {
 export const LongestAutoRunsTable = memo(function LongestAutoRunsTable({
 	timeRange,
 	theme,
+	filters,
+	onFiltersChange,
 }: LongestAutoRunsTableProps) {
 	const [sessions, setSessions] = useState<AutoRunSession[]>([]);
 	const [loading, setLoading] = useState(true);
-	const [playbookFilter, setPlaybookFilter] = useState(ALL_FILTER_VALUE);
-	const [profileFilter, setProfileFilter] = useState(ALL_FILTER_VALUE);
-	const [strategyFilter, setStrategyFilter] = useState(ALL_FILTER_VALUE);
-	const [worktreeFilter, setWorktreeFilter] = useState(ALL_FILTER_VALUE);
+	const [internalFilters, setInternalFilters] = useState<AutoRunAnalyticsFilters>(
+		DEFAULT_AUTORUN_ANALYTICS_FILTERS
+	);
+	const activeFilters = filters ?? internalFilters;
+
+	const updateFilters = useCallback(
+		(nextFilters: AutoRunAnalyticsFilters) => {
+			if (onFiltersChange) {
+				onFiltersChange(nextFilters);
+				return;
+			}
+			setInternalFilters(nextFilters);
+		},
+		[onFiltersChange]
+	);
 
 	const fetchData = useCallback(async () => {
 		setLoading(true);
@@ -203,17 +191,20 @@ export const LongestAutoRunsTable = memo(function LongestAutoRunsTable({
 				sessions.map((session) => session.playbookName).filter(Boolean) as string[]
 			),
 			profiles: buildFilterOptions(
-				sessions
-					.map((session) => formatPromptProfile(session.promptProfile))
-					.filter((v) => v !== '—')
+				sessions.map((session) => session.promptProfile).filter(Boolean) as string[],
+				(value) => formatPromptProfile(value as AutoRunSession['promptProfile'])
 			),
 			strategies: buildFilterOptions(
-				sessions
-					.map((session) => formatAgentStrategy(session.agentStrategy))
-					.filter((v) => v !== '—')
+				sessions.map((session) => session.agentStrategy).filter(Boolean) as string[],
+				(value) => formatAgentStrategy(value as AutoRunSession['agentStrategy'])
 			),
 			worktrees: buildFilterOptions(
-				sessions.map((session) => formatWorktreeMode(session.worktreeMode)).filter((v) => v !== '—')
+				sessions.map((session) => session.worktreeMode).filter(Boolean) as string[],
+				(value) => formatWorktreeMode(value as AutoRunSession['worktreeMode'])
+			),
+			schedulers: buildFilterOptions(
+				sessions.map((session) => session.schedulerMode).filter(Boolean) as string[],
+				(value) => formatSchedulerMode(value as AutoRunSession['schedulerMode'])
 			),
 		}),
 		[sessions]
@@ -221,34 +212,33 @@ export const LongestAutoRunsTable = memo(function LongestAutoRunsTable({
 
 	const filteredSessions = useMemo(() => {
 		return sessions.filter((session) => {
-			if (playbookFilter !== ALL_FILTER_VALUE && (session.playbookName || '') !== playbookFilter) {
-				return false;
-			}
 			if (
-				profileFilter !== ALL_FILTER_VALUE &&
-				formatPromptProfile(session.promptProfile) !== profileFilter
+				activeFilters.playbookName &&
+				(session.playbookName || '') !== activeFilters.playbookName
 			) {
 				return false;
 			}
-			if (
-				strategyFilter !== ALL_FILTER_VALUE &&
-				formatAgentStrategy(session.agentStrategy) !== strategyFilter
-			) {
+			if (activeFilters.promptProfile && session.promptProfile !== activeFilters.promptProfile) {
 				return false;
 			}
-			if (
-				worktreeFilter !== ALL_FILTER_VALUE &&
-				formatWorktreeMode(session.worktreeMode) !== worktreeFilter
-			) {
+			if (activeFilters.agentStrategy && session.agentStrategy !== activeFilters.agentStrategy) {
+				return false;
+			}
+			if (activeFilters.worktreeMode && session.worktreeMode !== activeFilters.worktreeMode) {
+				return false;
+			}
+			if (activeFilters.schedulerMode && session.schedulerMode !== activeFilters.schedulerMode) {
 				return false;
 			}
 			return true;
 		});
-	}, [sessions, playbookFilter, profileFilter, strategyFilter, worktreeFilter]);
+	}, [sessions, activeFilters]);
 
 	const topSessions = useMemo(() => {
 		return [...filteredSessions].sort((a, b) => b.duration - a.duration).slice(0, MAX_ROWS);
 	}, [filteredSessions]);
+
+	const hasActiveFilters = hasActiveAutoRunFilters(activeFilters);
 
 	if (loading) {
 		return (
@@ -287,35 +277,82 @@ export const LongestAutoRunsTable = memo(function LongestAutoRunsTable({
 				<span className="text-xs" style={{ color: theme.colors.textDim }}>
 					({filteredSessions.length} filtered / {sessions.length} total)
 				</span>
+				{hasActiveFilters && (
+					<button
+						type="button"
+						onClick={() => updateFilters(DEFAULT_AUTORUN_ANALYTICS_FILTERS)}
+						className="ml-auto px-2.5 py-1 rounded text-xs font-medium border"
+						style={{
+							color: theme.colors.accent,
+							borderColor: `${theme.colors.accent}55`,
+							backgroundColor: `${theme.colors.accent}10`,
+						}}
+					>
+						Clear Filters
+					</button>
+				)}
 			</div>
 
-			<div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4 mb-4">
-				{[
-					{
-						label: 'Playbook',
-						value: playbookFilter,
-						onChange: setPlaybookFilter,
-						options: filterOptions.playbooks,
-					},
-					{
-						label: 'Prompt Profile',
-						value: profileFilter,
-						onChange: setProfileFilter,
-						options: filterOptions.profiles,
-					},
-					{
-						label: 'Strategy',
-						value: strategyFilter,
-						onChange: setStrategyFilter,
-						options: filterOptions.strategies,
-					},
-					{
-						label: 'Worktree',
-						value: worktreeFilter,
-						onChange: setWorktreeFilter,
-						options: filterOptions.worktrees,
-					},
-				].map((filter) => (
+			<div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5 mb-4">
+				{(
+					[
+						{
+							label: 'Playbook',
+							value: activeFilters.playbookName,
+							onChange: (value: string) =>
+								updateFilters({
+									...activeFilters,
+									playbookName: value,
+								}),
+							options: filterOptions.playbooks,
+						},
+						{
+							label: 'Prompt Profile',
+							value: activeFilters.promptProfile,
+							onChange: (value: AutoRunAnalyticsFilters['promptProfile']) =>
+								updateFilters({
+									...activeFilters,
+									promptProfile: value,
+								}),
+							options: filterOptions.profiles,
+						},
+						{
+							label: 'Strategy',
+							value: activeFilters.agentStrategy,
+							onChange: (value: AutoRunAnalyticsFilters['agentStrategy']) =>
+								updateFilters({
+									...activeFilters,
+									agentStrategy: value,
+								}),
+							options: filterOptions.strategies,
+						},
+						{
+							label: 'Worktree',
+							value: activeFilters.worktreeMode,
+							onChange: (value: AutoRunAnalyticsFilters['worktreeMode']) =>
+								updateFilters({
+									...activeFilters,
+									worktreeMode: value,
+								}),
+							options: filterOptions.worktrees,
+						},
+						{
+							label: 'Scheduler',
+							value: activeFilters.schedulerMode,
+							onChange: (value: AutoRunAnalyticsFilters['schedulerMode']) =>
+								updateFilters({
+									...activeFilters,
+									schedulerMode: value,
+								}),
+							options: filterOptions.schedulers,
+						},
+					] as Array<{
+						label: string;
+						value: string;
+						onChange: (value: string) => void;
+						options: Array<{ value: string; label: string }>;
+					}>
+				).map((filter) => (
 					<label key={filter.label} className="flex flex-col gap-1">
 						<span
 							className="text-[10px] font-bold uppercase"
@@ -333,7 +370,7 @@ export const LongestAutoRunsTable = memo(function LongestAutoRunsTable({
 								color: theme.colors.textMain,
 							}}
 						>
-							<option value={ALL_FILTER_VALUE}>All</option>
+							<option value="">All</option>
 							{filter.options.map((option) => (
 								<option key={option.value} value={option.value}>
 									{option.label}
@@ -450,7 +487,7 @@ export const LongestAutoRunsTable = memo(function LongestAutoRunsTable({
 											className="px-3 py-2 whitespace-nowrap"
 											style={{ color: theme.colors.textDim }}
 										>
-											{`${formatPromptProfile(session.promptProfile)} / ${formatAgentStrategy(session.agentStrategy)} / WT ${formatWorktreeMode(session.worktreeMode)}`}
+											{`${formatPromptProfile(session.promptProfile)} / ${formatAgentStrategy(session.agentStrategy)} / WT ${formatWorktreeMode(session.worktreeMode)} / ${formatSchedulerMode(session.schedulerMode)}`}
 										</td>
 										<td
 											className="px-3 py-2 max-w-[200px] truncate"

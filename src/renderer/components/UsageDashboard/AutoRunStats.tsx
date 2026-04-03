@@ -17,6 +17,15 @@ import { Play, CheckSquare, ListChecks, Target, Clock, Timer } from 'lucide-reac
 import type { Theme } from '../../types';
 import type { StatsTimeRange } from '../../hooks/stats/useStats';
 import { captureException } from '../../utils/sentry';
+import {
+	DEFAULT_AUTORUN_ANALYTICS_FILTERS,
+	formatAgentStrategyLong,
+	formatPromptProfileLong,
+	formatSchedulerMode,
+	formatWorktreeModeLong,
+	hasActiveAutoRunFilters,
+	type AutoRunAnalyticsFilters,
+} from './autoRunFilters';
 
 /**
  * Auto Run session data shape from the API
@@ -53,6 +62,10 @@ interface AutoRunStatsProps {
 	theme: Theme;
 	/** Number of columns for responsive layout (default: 6) */
 	columns?: number;
+	/** Shared Auto Run filters for linked dashboard views */
+	filters?: AutoRunAnalyticsFilters;
+	/** Callback for linked Execution Mix filter interactions */
+	onFiltersChange?: (filters: AutoRunAnalyticsFilters) => void;
 }
 
 /**
@@ -170,38 +183,10 @@ function groupSessionsByDate(
 		.sort((a, b) => a.date.localeCompare(b.date));
 }
 
-function formatCountLabel(value: string): string {
-	switch (value) {
-		case 'compact-code':
-			return 'Compact Code';
-		case 'compact-doc':
-			return 'Compact Doc';
-		case 'full':
-			return 'Full';
-		case 'plan-execute-verify':
-			return 'Plan / Execute / Verify';
-		case 'single':
-			return 'Single Pass';
-		case 'existing-open':
-			return 'Existing Open';
-		case 'existing-closed':
-			return 'Existing Closed';
-		case 'create-new':
-			return 'Create New';
-		case 'managed':
-			return 'Managed';
-		case 'disabled':
-			return 'Disabled';
-		case 'dag':
-			return 'DAG';
-		case 'sequential':
-			return 'Sequential';
-		default:
-			return value;
-	}
-}
-
-function buildCounts(values: Array<string | undefined>): Array<{ label: string; count: number }> {
+function buildCounts(
+	values: Array<string | undefined>,
+	formatLabel?: (value: string) => string
+): Array<{ value: string; label: string; count: number }> {
 	const counts = new Map<string, number>();
 
 	for (const value of values) {
@@ -210,7 +195,11 @@ function buildCounts(values: Array<string | undefined>): Array<{ label: string; 
 	}
 
 	return [...counts.entries()]
-		.map(([label, count]) => ({ label: formatCountLabel(label), count }))
+		.map(([value, count]) => ({
+			value,
+			label: formatLabel ? formatLabel(value) : value,
+			count,
+		}))
 		.sort((a, b) => b.count - a.count || a.label.localeCompare(b.label));
 }
 
@@ -218,6 +207,8 @@ export const AutoRunStats = memo(function AutoRunStats({
 	timeRange,
 	theme,
 	columns = 6,
+	filters = DEFAULT_AUTORUN_ANALYTICS_FILTERS,
+	onFiltersChange,
 }: AutoRunStatsProps) {
 	const [sessions, setSessions] = useState<AutoRunSession[]>([]);
 	const [tasksBySession, setTasksBySession] = useState<Record<string, AutoRunTask[]>>({});
@@ -310,13 +301,42 @@ export const AutoRunStats = memo(function AutoRunStats({
 		const allTasks = Object.values(tasksBySession).flat();
 		return {
 			playbooks: buildCounts(sessions.map((session) => session.playbookName)),
-			profiles: buildCounts(sessions.map((session) => session.promptProfile)),
-			strategies: buildCounts(sessions.map((session) => session.agentStrategy)),
-			worktrees: buildCounts(sessions.map((session) => session.worktreeMode)),
-			schedulers: buildCounts(sessions.map((session) => session.schedulerMode)),
+			profiles: buildCounts(
+				sessions.map((session) => session.promptProfile),
+				(value) => formatPromptProfileLong(value as AutoRunSession['promptProfile'])
+			),
+			strategies: buildCounts(
+				sessions.map((session) => session.agentStrategy),
+				(value) => formatAgentStrategyLong(value as AutoRunSession['agentStrategy'])
+			),
+			worktrees: buildCounts(
+				sessions.map((session) => session.worktreeMode),
+				(value) => formatWorktreeModeLong(value as AutoRunSession['worktreeMode'])
+			),
+			schedulers: buildCounts(
+				sessions.map((session) => session.schedulerMode),
+				(value) => formatSchedulerMode(value as AutoRunSession['schedulerMode'])
+			),
 			verdicts: buildCounts(allTasks.map((task) => task.verifierVerdict)),
 		};
 	}, [sessions, tasksBySession]);
+
+	const hasLinkedFilters = Boolean(onFiltersChange);
+	const hasActiveFilters = hasActiveAutoRunFilters(filters);
+
+	const handleFilterToggle = useCallback(
+		(
+			key: keyof AutoRunAnalyticsFilters,
+			value: AutoRunAnalyticsFilters[keyof AutoRunAnalyticsFilters]
+		) => {
+			if (!onFiltersChange || !value) return;
+			onFiltersChange({
+				...filters,
+				[key]: filters[key] === value ? '' : value,
+			});
+		},
+		[filters, onFiltersChange]
+	);
 
 	// Max count for bar height calculation
 	const maxCount = useMemo(() => {
@@ -585,17 +605,63 @@ export const AutoRunStats = memo(function AutoRunStats({
 				style={{ backgroundColor: theme.colors.bgMain }}
 				data-testid="autorun-analytics-breakdown"
 			>
-				<h3 className="text-sm font-medium mb-4" style={{ color: theme.colors.textMain }}>
-					Execution Mix
-				</h3>
+				<div className="flex items-center justify-between gap-3 mb-4">
+					<div>
+						<h3 className="text-sm font-medium" style={{ color: theme.colors.textMain }}>
+							Execution Mix
+						</h3>
+						{hasLinkedFilters && (
+							<div className="text-xs mt-1" style={{ color: theme.colors.textDim }}>
+								Click a row to sync filters with the table below.
+							</div>
+						)}
+					</div>
+					{hasLinkedFilters && hasActiveFilters && (
+						<button
+							type="button"
+							onClick={() => onFiltersChange?.(DEFAULT_AUTORUN_ANALYTICS_FILTERS)}
+							className="px-2.5 py-1 rounded text-xs font-medium border"
+							style={{
+								color: theme.colors.accent,
+								borderColor: `${theme.colors.accent}55`,
+								backgroundColor: `${theme.colors.accent}10`,
+							}}
+						>
+							Clear Filters
+						</button>
+					)}
+				</div>
 				<div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
 					{[
-						{ title: 'Playbooks', items: analyticsBreakdown.playbooks },
-						{ title: 'Prompt Profiles', items: analyticsBreakdown.profiles },
-						{ title: 'Strategies', items: analyticsBreakdown.strategies },
-						{ title: 'Worktree Modes', items: analyticsBreakdown.worktrees },
-						{ title: 'Schedulers', items: analyticsBreakdown.schedulers },
-						{ title: 'Verifier Verdicts', items: analyticsBreakdown.verdicts },
+						{
+							title: 'Playbooks',
+							items: analyticsBreakdown.playbooks,
+							filterKey: 'playbookName' as const,
+						},
+						{
+							title: 'Prompt Profiles',
+							items: analyticsBreakdown.profiles,
+							filterKey: 'promptProfile' as const,
+						},
+						{
+							title: 'Strategies',
+							items: analyticsBreakdown.strategies,
+							filterKey: 'agentStrategy' as const,
+						},
+						{
+							title: 'Worktree Modes',
+							items: analyticsBreakdown.worktrees,
+							filterKey: 'worktreeMode' as const,
+						},
+						{
+							title: 'Schedulers',
+							items: analyticsBreakdown.schedulers,
+							filterKey: 'schedulerMode' as const,
+						},
+						{
+							title: 'Verifier Verdicts',
+							items: analyticsBreakdown.verdicts,
+						},
 					].map((section) => (
 						<div
 							key={section.title}
@@ -613,22 +679,62 @@ export const AutoRunStats = memo(function AutoRunStats({
 							</div>
 							<div className="space-y-2">
 								{section.items.length > 0 ? (
-									section.items.slice(0, 4).map((item) => (
-										<div key={item.label} className="flex items-center justify-between gap-3">
-											<span className="text-sm truncate" style={{ color: theme.colors.textMain }}>
-												{item.label}
-											</span>
-											<span
-												className="text-xs font-mono px-2 py-0.5 rounded-full"
+									section.items.slice(0, 4).map((item) => {
+										const isInteractive = Boolean(section.filterKey && hasLinkedFilters);
+										const isActive = Boolean(
+											section.filterKey && filters[section.filterKey] === item.value
+										);
+
+										if (!isInteractive) {
+											return (
+												<div key={item.value} className="flex items-center justify-between gap-3">
+													<span
+														className="text-sm truncate"
+														style={{ color: theme.colors.textMain }}
+													>
+														{item.label}
+													</span>
+													<span
+														className="text-xs font-mono px-2 py-0.5 rounded-full"
+														style={{
+															color: theme.colors.accent,
+															backgroundColor: `${theme.colors.accent}15`,
+														}}
+													>
+														{item.count}
+													</span>
+												</div>
+											);
+										}
+
+										return (
+											<button
+												key={item.value}
+												type="button"
+												onClick={() => handleFilterToggle(section.filterKey!, item.value)}
+												className="w-full flex items-center justify-between gap-3 rounded px-2 py-1 text-left transition-colors"
 												style={{
-													color: theme.colors.accent,
-													backgroundColor: `${theme.colors.accent}15`,
+													color: theme.colors.textMain,
+													backgroundColor: isActive ? `${theme.colors.accent}15` : 'transparent',
+													outline: isActive ? `1px solid ${theme.colors.accent}55` : 'none',
 												}}
+												aria-pressed={isActive}
 											>
-												{item.count}
-											</span>
-										</div>
-									))
+												<span className="text-sm truncate">{item.label}</span>
+												<span
+													className="text-xs font-mono px-2 py-0.5 rounded-full"
+													style={{
+														color: isActive ? theme.colors.bgMain : theme.colors.accent,
+														backgroundColor: isActive
+															? theme.colors.accent
+															: `${theme.colors.accent}15`,
+													}}
+												>
+													{item.count}
+												</span>
+											</button>
+										);
+									})
 								) : (
 									<div className="text-sm" style={{ color: theme.colors.textDim }}>
 										No data

@@ -15,6 +15,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, waitFor, fireEvent, act } from '@testing-library/react';
 import React from 'react';
 import { AutoRunStats } from '../../../../renderer/components/UsageDashboard/AutoRunStats';
+import { DEFAULT_AUTORUN_ANALYTICS_FILTERS } from '../../../../renderer/components/UsageDashboard/autoRunFilters';
 import { THEMES } from '../../../../shared/themes';
 
 // Test theme
@@ -215,6 +216,29 @@ describe('AutoRunStats', () => {
 				expect(screen.getAllByText('Regression Sweep').length).toBeGreaterThan(0);
 				expect(screen.getByText('Plan / Execute / Verify')).toBeInTheDocument();
 				expect(screen.getByText('Create New')).toBeInTheDocument();
+			});
+		});
+
+		it('syncs execution mix filters when a breakdown row is clicked', async () => {
+			const onFiltersChange = vi.fn();
+			render(
+				<AutoRunStats
+					timeRange="week"
+					theme={theme}
+					filters={DEFAULT_AUTORUN_ANALYTICS_FILTERS}
+					onFiltersChange={onFiltersChange}
+				/>
+			);
+
+			await waitFor(() => {
+				expect(screen.getByRole('button', { name: /Regression Sweep/i })).toBeInTheDocument();
+			});
+
+			fireEvent.click(screen.getByRole('button', { name: /Regression Sweep/i }));
+
+			expect(onFiltersChange).toHaveBeenCalledWith({
+				...DEFAULT_AUTORUN_ANALYTICS_FILTERS,
+				playbookName: 'Regression Sweep',
 			});
 		});
 
