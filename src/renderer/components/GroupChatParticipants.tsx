@@ -102,6 +102,18 @@ export function GroupChatParticipants({
 		[groupChatId]
 	);
 
+	// Handle removing a participant from the group chat
+	const handleRemoveParticipant = useCallback(
+		async (participantName: string) => {
+			try {
+				await window.maestro.groupChat.removeParticipant(groupChatId, participantName);
+			} catch (error) {
+				console.error(`Failed to remove participant ${participantName}:`, error);
+			}
+		},
+		[groupChatId]
+	);
+
 	if (!isOpen) return null;
 
 	return (
@@ -168,6 +180,7 @@ export function GroupChatParticipants({
 							color={participantColors[participant.name]}
 							groupChatId={groupChatId}
 							onContextReset={handleContextReset}
+							onRemove={handleRemoveParticipant}
 						/>
 					))
 				)}
