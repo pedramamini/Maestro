@@ -282,6 +282,9 @@ const mockMaestro = {
 		write: vi.fn(),
 		kill: vi.fn(),
 	},
+	sessions: {
+		getAll: vi.fn().mockResolvedValue([]),
+	},
 	sshRemote: {
 		getConfigs: vi.fn().mockResolvedValue({ success: true, configs: [] }),
 	},
@@ -1232,11 +1235,17 @@ describe('Wizard Integration Tests', () => {
 
 				React.useEffect(() => {
 					if (!state.isOpen) {
+						openWizard();
+						return;
+					}
+
+					if (
+						state.availableAgents.some((agent) => agent.id === 'claude-code' && agent.available)
+					) {
 						setSelectedAgent('claude-code');
 						setAgentName('My Agent');
-						openWizard();
 					}
-				}, [openWizard, state.isOpen, setSelectedAgent, setAgentName]);
+				}, [openWizard, state.isOpen, state.availableAgents, setSelectedAgent, setAgentName]);
 
 				const canProceed = canProceedToNext();
 
