@@ -1,10 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import {
 	buildOpenClawSessionId,
+	extractOpenClawAgentNameFromJson,
 	extractOpenClawRawSessionId,
+	extractOpenClawSessionIdFromJson,
 	isCanonicalOpenClawSessionId,
 	normalizeOpenClawSessionId,
 	parseOpenClawSessionId,
+	resolveCanonicalOpenClawSessionId,
 } from '../../shared/openclawSessionId';
 
 describe('openclawSessionId', () => {
@@ -24,6 +27,13 @@ describe('openclawSessionId', () => {
 		expect(normalizeOpenClawSessionId('1234-uuid', { agentName: 'main' })).toBe('main:1234-uuid');
 	});
 
+	it('trims whitespace while normalizing raw and composite IDs', () => {
+		expect(normalizeOpenClawSessionId(' 1234-uuid ', { agentName: ' main ' })).toBe(
+			'main:1234-uuid'
+		);
+		expect(normalizeOpenClawSessionId(' main:1234-uuid ')).toBe('main:1234-uuid');
+	});
+
 	it('preserves raw IDs when agent name is unknown', () => {
 		expect(normalizeOpenClawSessionId('1234-uuid')).toBe('1234-uuid');
 	});
@@ -41,5 +51,44 @@ describe('openclawSessionId', () => {
 	it('rejects invalid colon-delimited values', () => {
 		expect(parseOpenClawSessionId('main:sub:1234')).toBeNull();
 		expect(normalizeOpenClawSessionId('main:sub:1234')).toBeNull();
+	});
+
+	it('resolves canonical matches after trimming whitespace', () => {
+		expect(resolveCanonicalOpenClawSessionId(' abc-123 ', ['main:abc-123'])).toBe('main:abc-123');
+	});
+
+	it('extracts agent names from wrapped OpenClaw payloads', () => {
+		expect(
+			extractOpenClawAgentNameFromJson({
+				status: 'error',
+				result: {
+					meta: {
+						agentMeta: {
+							agentName: 'ops',
+						},
+					},
+				},
+			})
+		).toBe('ops');
+	});
+
+	it('extracts canonical session IDs from wrapped OpenClaw payloads', () => {
+		expect(
+			extractOpenClawSessionIdFromJson({
+				status: 'ok',
+				result: {
+					meta: {
+						agentMeta: {
+							agentId: 'main',
+							sessionId: '1234-uuid',
+						},
+					},
+				},
+			})
+		).toBe('main:1234-uuid');
+	});
+
+	it('accepts already canonical values when rebuilding a session ID', () => {
+		expect(buildOpenClawSessionId('main', ' main:1234-uuid ')).toBe('main:1234-uuid');
 	});
 });

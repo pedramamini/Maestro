@@ -92,6 +92,7 @@ export interface AgentConfig {
 	batchModeArgs?: string[]; // Args only applied in batch mode (e.g., ['--skip-git-repo-check'] for Codex exec)
 	jsonOutputArgs?: string[]; // Args for JSON output format (e.g., ['--format', 'json'])
 	resumeArgs?: (sessionId: string) => string[]; // Function to build resume args
+	resumeArgTokens?: string[]; // Tokens that indicate resume mode and are followed by a session ID
 	readOnlyArgs?: string[]; // Args for read-only/plan mode (e.g., ['--agent', 'plan'])
 	modelArgs?: (modelId: string) => string[]; // Function to build model selection args (e.g., ['--model', modelId])
 	yoloModeArgs?: string[]; // Args for YOLO/full-access mode (e.g., ['--dangerously-bypass-approvals-and-sandbox'])
@@ -140,6 +141,7 @@ export const AGENT_DEFINITIONS: AgentDefinition[] = [
 			'--dangerously-skip-permissions',
 		],
 		resumeArgs: (sessionId: string) => ['--resume', sessionId], // Resume with session ID
+		resumeArgTokens: ['--resume'],
 		readOnlyArgs: ['--permission-mode', 'plan'], // Read-only/plan mode
 		readOnlyCliEnforced: true, // CLI enforces read-only via --permission-mode plan
 
@@ -221,6 +223,7 @@ export const AGENT_DEFINITIONS: AgentDefinition[] = [
 		batchModeArgs: ['--dangerously-bypass-approvals-and-sandbox', '--skip-git-repo-check'], // Args only valid on 'exec' subcommand
 		jsonOutputArgs: ['--json'], // JSON output format (must come before resume subcommand)
 		resumeArgs: (sessionId: string) => ['resume', sessionId], // Resume with session/thread ID
+		resumeArgTokens: ['resume'],
 		readOnlyArgs: ['--sandbox', 'read-only'], // Read-only/plan mode
 		readOnlyCliEnforced: true, // CLI enforces read-only via --sandbox read-only
 		yoloModeArgs: ['--dangerously-bypass-approvals-and-sandbox'], // Full access mode
@@ -275,6 +278,7 @@ export const AGENT_DEFINITIONS: AgentDefinition[] = [
 
 		// Session resume
 		resumeArgs: (sessionId: string) => ['--resume', sessionId],
+		resumeArgTokens: ['--resume'],
 
 		// Read-only planning mode
 		readOnlyArgs: ['--mode', 'plan'],
@@ -330,6 +334,7 @@ export const AGENT_DEFINITIONS: AgentDefinition[] = [
 		batchModeArgs: ['-y'],
 		jsonOutputArgs: ['--output-format', 'stream-json'],
 		resumeArgs: (sessionId: string) => ['--resume', sessionId],
+		resumeArgTokens: ['--resume'],
 		// Note: --approval-mode plan requires experimental.plan to be enabled in Gemini CLI config.
 		// Until that feature is generally available, readOnlyArgs is empty and read-only
 		// behavior is enforced via system prompt instructions instead.
@@ -408,6 +413,7 @@ export const AGENT_DEFINITIONS: AgentDefinition[] = [
 		batchModePrefix: ['run'], // OpenCode uses 'run' subcommand for batch mode
 		jsonOutputArgs: ['--format', 'json'], // JSON output format
 		resumeArgs: (sessionId: string) => ['--session', sessionId], // Resume with session ID
+		resumeArgTokens: ['--session'],
 		readOnlyArgs: ['--agent', 'plan'], // Read-only/plan mode
 		readOnlyCliEnforced: true, // CLI enforces read-only via --agent plan
 		modelArgs: (modelId: string) => ['--model', modelId], // Model selection (e.g., 'ollama/qwen3:8b')
@@ -477,6 +483,7 @@ export const AGENT_DEFINITIONS: AgentDefinition[] = [
 
 		// Session resume: -s <id> (requires a prompt)
 		resumeArgs: (sessionId: string) => ['-s', sessionId],
+		resumeArgTokens: ['-s'],
 
 		// Read-only mode is DEFAULT in droid exec (no flag needed)
 		readOnlyArgs: [],
@@ -566,6 +573,7 @@ export const AGENT_DEFINITIONS: AgentDefinition[] = [
 
 		// Session resume: --session-id <id>
 		resumeArgs: (sessionId: string) => ['--session-id', sessionId],
+		resumeArgTokens: ['--session-id'],
 
 		// Read-only mode (not supported at CLI level yet)
 		readOnlyArgs: [],
@@ -633,6 +641,7 @@ export const AGENT_DEFINITIONS: AgentDefinition[] = [
 		batchModePrefix: ['exec'],
 		batchModeArgs: ['--json'],
 		resumeArgs: (sessionId: string) => ['--session-id', sessionId],
+		resumeArgTokens: ['--session-id'],
 		readOnlyArgs: ['--sandbox', 'read-only'],
 		readOnlyCliEnforced: true,
 		workingDirArgs: (dir: string) => ['-C', dir],

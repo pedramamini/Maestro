@@ -29,6 +29,8 @@ type AgentConfigResolution = {
 	modelSource: 'session' | 'agent' | 'default';
 };
 
+type ResumeTokenSource = Pick<AgentConfig, 'resumeArgTokens'> | null | undefined;
+
 function parseCustomArgs(customArgs?: string): string[] {
 	if (!customArgs || typeof customArgs !== 'string') {
 		return [];
@@ -93,6 +95,40 @@ function dedupeFlagAliasesWithValue(args: string[], aliases: string[]): string[]
 	}
 
 	return nextArgs;
+}
+
+function getResumeArgTokens(agent: ResumeTokenSource): string[] {
+	return agent?.resumeArgTokens && agent.resumeArgTokens.length > 0
+		? agent.resumeArgTokens
+		: ['--resume', '--session'];
+}
+
+export function extractResumeSessionIdFromArgs(
+	agent: ResumeTokenSource,
+	args: string[]
+): string | undefined {
+	const resumeArgTokens = getResumeArgTokens(agent);
+
+	for (let index = 0; index < args.length; index += 1) {
+		const currentArg = args[index];
+		if (!resumeArgTokens.includes(currentArg)) {
+			continue;
+		}
+
+		const sessionId = args[index + 1];
+		if (typeof sessionId === 'string' && sessionId.trim()) {
+			return sessionId;
+		}
+	}
+
+	return undefined;
+}
+
+export function hasResumeSessionArgs(
+	agent: ResumeTokenSource,
+	args: string[]
+): boolean {
+	return typeof extractResumeSessionIdFromArgs(agent, args) === 'string';
 }
 
 export function buildAgentArgs(

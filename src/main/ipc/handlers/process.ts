@@ -11,6 +11,7 @@ import {
 	buildAgentArgs,
 	applyAgentConfigOverrides,
 	getContextWindowValue,
+	extractResumeSessionIdFromArgs,
 } from '../../utils/agent-args';
 import {
 	withIpcErrorLogging,
@@ -256,15 +257,8 @@ export function registerProcessHandlers(deps: ProcessHandlerDependencies): void 
 					shellArgsStr = settingsStore.get('shellArgs', '');
 				}
 
-				// Extract session ID from args for logging (supports both --resume and --session flags)
-				const resumeArgIndex = finalArgs.indexOf('--resume');
-				const sessionArgIndex = finalArgs.indexOf('--session');
-				const agentSessionId =
-					resumeArgIndex !== -1
-						? finalArgs[resumeArgIndex + 1]
-						: sessionArgIndex !== -1
-							? finalArgs[sessionArgIndex + 1]
-							: config.agentSessionId;
+				// Extract session ID from args for logging across agent-specific resume syntaxes.
+				const agentSessionId = extractResumeSessionIdFromArgs(agent, finalArgs) || config.agentSessionId;
 
 				logger.info(`Spawning process: ${config.command}`, LOG_CONTEXT, {
 					sessionId: config.sessionId,

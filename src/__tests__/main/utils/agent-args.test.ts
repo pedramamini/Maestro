@@ -8,7 +8,9 @@ import { describe, it, expect, vi } from 'vitest';
 import {
 	buildAgentArgs,
 	applyAgentConfigOverrides,
+	extractResumeSessionIdFromArgs,
 	getContextWindowValue,
+	hasResumeSessionArgs,
 } from '../../../main/utils/agent-args';
 import { getAgentDefinition } from '../../../main/agents/definitions';
 import type { AgentConfig } from '../../../main/agents';
@@ -264,6 +266,16 @@ describe('buildAgentArgs', () => {
 			agentSessionId: 'abc-123',
 		});
 		expect(result).toEqual(['--json', '--session-id', 'abc-123']);
+	});
+
+	it('extracts OpenClaw resume session IDs from --session-id args', () => {
+		const openclaw = getAgentDefinition('openclaw') as AgentConfig;
+		expect(
+			extractResumeSessionIdFromArgs(openclaw, ['--json', '--agent', 'main', '--session-id', 'abc-123'])
+		).toBe('abc-123');
+		expect(
+			hasResumeSessionArgs(openclaw, ['--json', '--agent', 'main', '--session-id', 'abc-123'])
+		).toBe(true);
 	});
 
 	// -- combined --

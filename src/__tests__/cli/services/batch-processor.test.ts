@@ -22,6 +22,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import * as childProcess from 'child_process';
 import type { SessionInfo, Playbook, UsageStats } from '../../../shared/types';
 import type { JsonlEvent } from '../../../cli/output/jsonl';
+import { createOpenClawSessionInfo } from '../../fixtures/openclaw';
 
 // Mock child_process with hoisted mock
 vi.mock('child_process', () => {
@@ -714,11 +715,6 @@ Reduce context.
 						contextWindow: 200000,
 					},
 				})
-				.mockResolvedValueOnce({
-					success: true,
-					response: '**Summary:** Completed the task\n\n**Details:** Applied the requested change.',
-				});
-
 			const session = mockSession();
 			const playbook = mockPlaybook({
 				agentStrategy: 'plan-execute-verify',
@@ -727,7 +723,7 @@ Reduce context.
 
 			const events = await collectEvents(runPlaybook(session, playbook, '/playbooks'));
 
-			expect(spawnAgent).toHaveBeenCalledTimes(4);
+			expect(spawnAgent).toHaveBeenCalledTimes(3);
 			expect(vi.mocked(spawnAgent).mock.calls[0][2]).toContain('You are the planning step');
 			expect(vi.mocked(spawnAgent).mock.calls[1][2]).toContain('## Planner Output');
 			expect(vi.mocked(spawnAgent).mock.calls[1][3]).toBe('planner-session');
@@ -741,6 +737,65 @@ Reduce context.
 			expect(taskCompleteEvent?.usageStats?.inputTokens).toBe(350);
 			expect(taskCompleteEvent?.usageStats?.outputTokens).toBe(150);
 			expect(taskCompleteEvent?.usageStats?.totalCostUsd ?? 0).toBeCloseTo(0.035, 6);
+		});
+
+		it('should only inject shared skill guidance into the planner prompt for plan-execute-verify', async () => {
+			let callCount = 0;
+			vi.mocked(readDocAndCountTasks).mockImplementation(() => {
+				callCount++;
+				if (callCount <= 3) return { content: '- [ ] Task', taskCount: 1 };
+				return { content: '', taskCount: 0 };
+			});
+			vi.mocked(resolvePlaybookSkills).mockReturnValue({
+				resolved: [
+					{
+						name: 'code-review',
+						source: 'project',
+						filePath: '/tmp/.claude/skills/code-review/skill.md',
+						description: 'Review code carefully',
+						instructions: 'Always inspect existing patterns first.',
+					},
+				],
+				missing: [],
+			});
+			vi.mocked(buildSkillPromptBlock).mockReturnValue(
+				'## Project Skills\n\n### code-review\n- Guidance: Always inspect existing patterns first.'
+			);
+
+			vi.mocked(spawnAgent)
+				.mockResolvedValueOnce({
+					success: true,
+					response: '1. Inspect code\n2. Apply patch',
+					agentSessionId: 'planner-session',
+				})
+				.mockResolvedValueOnce({
+					success: true,
+					response: 'Task executed',
+					agentSessionId: 'executor-session',
+				})
+				.mockResolvedValueOnce({
+					success: true,
+					response: 'PASS\nLooks good.',
+				});
+
+			await collectEvents(
+				runPlaybook(
+					mockSession(),
+					mockPlaybook({ agentStrategy: 'plan-execute-verify', skills: ['code-review'] }),
+					'/playbooks'
+				)
+			);
+
+			const plannerPrompt = vi.mocked(spawnAgent).mock.calls[0]?.[2] ?? '';
+			const executorPrompt = vi.mocked(spawnAgent).mock.calls[1]?.[2] ?? '';
+			const verifierPrompt = vi.mocked(spawnAgent).mock.calls[2]?.[2] ?? '';
+
+			expect(plannerPrompt).toContain('## Project Skills');
+			expect(plannerPrompt).toContain('context-and-impact workflow');
+			expect(executorPrompt).not.toContain('## Project Skills');
+			expect(executorPrompt).not.toContain('context-and-impact workflow');
+			expect(verifierPrompt).not.toContain('## Project Skills');
+			expect(verifierPrompt).not.toContain('context-and-impact workflow');
 		});
 
 		it('should fail the task when verifier returns FAIL', async () => {
@@ -807,11 +862,6 @@ Reduce context.
 					success: true,
 					response: 'WARN\nImplementation looks correct but tests were skipped.',
 				})
-				.mockResolvedValueOnce({
-					success: true,
-					response: '**Summary:** Completed the task\n\n**Details:** Applied the requested change.',
-				});
-
 			const session = mockSession();
 			const playbook = mockPlaybook({ agentStrategy: 'plan-execute-verify' });
 
@@ -856,13 +906,10 @@ Reduce context.
 						'WARN\nOpenClaw output rendered correctly, but this smoke path uses deterministic fixtures.',
 					agentSessionId: 'verifier-openclaw-session',
 				})
-				.mockResolvedValueOnce({
-					success: true,
-					response:
-						'**Summary:** Rendered OpenClaw baseline smoke path\n\n**Details:** Baseline metadata stayed intact and the OpenClaw result is ready for History Detail rendering.',
-				});
-
-			const session = mockSession({ toolType: 'openclaw' });
+			const session = createOpenClawSessionInfo({
+				id: 'session-openclaw-smoke',
+				name: 'OpenClaw Smoke Session',
+			});
 			const playbook = mockPlaybook({
 				agentStrategy: 'plan-execute-verify',
 				promptProfile: 'compact-code',
@@ -902,7 +949,81 @@ Reduce context.
 				expect.objectContaining({
 					type: 'AUTO',
 					summary: expect.stringMatching(/^\[WARN\]/),
-					fullResponse: expect.stringContaining('Rendered OpenClaw baseline smoke path'),
+					fullResponse: expect.stringContaining(
+						'Rendered the OpenClaw result with baseline metadata intact.'
+					),
+					agentSessionId: 'main:openclaw-session',
+					verifierVerdict: 'WARN',
+				})
+			);
+		});
+
+		it('surfaces OpenClaw executor failures with verifier context and canonical session IDs', async () => {
+			let callCount = 0;
+			vi.mocked(readDocAndCountTasks).mockImplementation(() => {
+				callCount++;
+				if (callCount <= 2) {
+					return {
+						content: '# Tasks\n\n- [ ] Render OpenClaw result in Maestro history',
+						taskCount: 1,
+					};
+				}
+				if (callCount === 3) {
+					return {
+						content: '# Tasks\n\n- [x] Render OpenClaw result in Maestro history',
+						taskCount: 0,
+					};
+				}
+				return {
+					content: '# Tasks\n\n- [ ] Render OpenClaw result in Maestro history',
+					taskCount: 1,
+				};
+			});
+
+			vi.mocked(spawnAgent)
+				.mockResolvedValueOnce({
+					success: true,
+					response: 'Inspect the OpenClaw render path.',
+					agentSessionId: 'planner-openclaw-session',
+				})
+				.mockResolvedValueOnce({
+					success: false,
+					error: 'OpenClaw gateway authentication failed',
+					agentSessionId: 'main:openclaw-session',
+				})
+				.mockResolvedValueOnce({
+					success: true,
+					response: 'WARN\nCheck the gateway token before retrying.',
+					agentSessionId: 'verifier-openclaw-session',
+				});
+
+			const events = await collectEvents(
+				runPlaybook(
+					createOpenClawSessionInfo({
+						id: 'session-openclaw-failure',
+						name: 'OpenClaw Failure Session',
+					}),
+					mockPlaybook({ agentStrategy: 'plan-execute-verify' }),
+					'/playbooks'
+				)
+			);
+
+			const taskCompleteEvent = events.find((event) => event.type === 'task_complete');
+			expect(taskCompleteEvent).toMatchObject({
+				success: false,
+				agentSessionId: 'main:openclaw-session',
+				verifierVerdict: 'WARN',
+			});
+			expect(taskCompleteEvent?.fullResponse).toContain('OpenClaw gateway authentication failed');
+			expect(taskCompleteEvent?.fullResponse).toContain(
+				'Verifier:\nWARN\nCheck the gateway token before retrying.'
+			);
+			expect(events.find((event) => event.type === 'complete')).toMatchObject({
+				totalTasksCompleted: 0,
+			});
+			expect(addHistoryEntry).toHaveBeenCalledWith(
+				expect.objectContaining({
+					success: false,
 					agentSessionId: 'main:openclaw-session',
 					verifierVerdict: 'WARN',
 				})
@@ -963,7 +1084,7 @@ Reduce context.
 	});
 
 	describe('runPlaybook - synopsis parsing', () => {
-		it('should parse synopsis with summary and details', async () => {
+		it('should parse task response with summary and details without a synopsis turn', async () => {
 			// Mock needs proper counts: initial scan + processing scan + after task
 			let callCount = 0;
 			vi.mocked(readDocAndCountTasks).mockImplementation(() => {
@@ -972,19 +1093,13 @@ Reduce context.
 				return { content: '', taskCount: 0 };
 			});
 
-			// First call is main task, second call is synopsis request
-			vi.mocked(spawnAgent)
-				.mockResolvedValueOnce({
-					success: true,
-					response: 'Task done',
-					agentSessionId: 'session-123',
-				})
-				.mockResolvedValueOnce({
-					success: true,
-					response: `**Summary:** Fixed the authentication bug
+			vi.mocked(spawnAgent).mockResolvedValueOnce({
+				success: true,
+				response: `**Summary:** Fixed the authentication bug
 
 **Details:** Updated the login handler to properly validate tokens and handle edge cases.`,
-				});
+				agentSessionId: 'session-123',
+			});
 
 			const session = mockSession();
 			const playbook = mockPlaybook();
@@ -996,9 +1111,10 @@ Reduce context.
 			expect(taskCompleteEvent?.fullResponse).toContain(
 				'Updated the login handler to properly validate tokens'
 			);
+			expect(spawnAgent).toHaveBeenCalledTimes(1);
 		});
 
-		it('should handle synopsis without details section', async () => {
+		it('should handle task response without details section', async () => {
 			let callCount = 0;
 			vi.mocked(readDocAndCountTasks).mockImplementation(() => {
 				callCount++;
@@ -1006,16 +1122,11 @@ Reduce context.
 				return { content: '', taskCount: 0 };
 			});
 
-			vi.mocked(spawnAgent)
-				.mockResolvedValueOnce({
-					success: true,
-					response: 'Task done',
-					agentSessionId: 'session-123',
-				})
-				.mockResolvedValueOnce({
-					success: true,
-					response: '**Summary:** No changes made.',
-				});
+			vi.mocked(spawnAgent).mockResolvedValueOnce({
+				success: true,
+				response: '**Summary:** No changes made.',
+				agentSessionId: 'session-123',
+			});
 
 			const session = mockSession();
 			const playbook = mockPlaybook();
@@ -1026,7 +1137,7 @@ Reduce context.
 			expect(taskCompleteEvent?.summary).toBe('No changes made.');
 		});
 
-		it('should handle synopsis with ANSI codes and box drawing chars', async () => {
+		it('should handle task response with ANSI codes and box drawing chars', async () => {
 			let callCount = 0;
 			vi.mocked(readDocAndCountTasks).mockImplementation(() => {
 				callCount++;
@@ -1034,17 +1145,12 @@ Reduce context.
 				return { content: '', taskCount: 0 };
 			});
 
-			vi.mocked(spawnAgent)
-				.mockResolvedValueOnce({
-					success: true,
-					response: 'Done',
-					agentSessionId: 'session-123',
-				})
-				.mockResolvedValueOnce({
-					success: true,
-					response:
-						'\x1b[32m───────────────────\x1b[0m\n│**Summary:** Test summary│\n└──────────────────┘',
-				});
+			vi.mocked(spawnAgent).mockResolvedValueOnce({
+				success: true,
+				response:
+					'\x1b[32m───────────────────\x1b[0m\n│**Summary:** Test summary│\n└──────────────────┘',
+				agentSessionId: 'session-123',
+			});
 
 			const session = mockSession();
 			const playbook = mockPlaybook();
@@ -1394,8 +1500,7 @@ Reduce context.
 
 			await collectEvents(runPlaybook(session, playbook, '/playbooks'));
 
-			// Verify spawnAgent was called at least once with session cwd
-			// First call is the main task (no session ID), second call is synopsis (with session ID)
+			// Verify spawnAgent was called with session cwd
 			expect(spawnAgent).toHaveBeenCalled();
 			const firstCall = vi.mocked(spawnAgent).mock.calls[0];
 			expect(firstCall[1]).toBe(session.cwd);

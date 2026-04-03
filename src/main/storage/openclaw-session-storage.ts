@@ -32,7 +32,11 @@ import type {
 	SessionMessage,
 } from '../agents';
 import type { ToolType, SshRemoteConfig } from '../../shared/types';
-import { buildOpenClawSessionId, parseOpenClawSessionId } from '../../shared/openclawSessionId';
+import {
+	buildOpenClawSessionId,
+	extractOpenClawRawSessionId,
+	parseOpenClawSessionId,
+} from '../../shared/openclawSessionId';
 
 const LOG_CONTEXT = '[OpenClawSessionStorage]';
 
@@ -81,8 +85,34 @@ interface OpenClawMessage {
 	};
 }
 
+const WINDOWS_DRIVE_PREFIX_RE = /^[a-zA-Z]:\//;
+
+function stripTrailingSlashes(normalizedPath: string): string {
+	if (
+		normalizedPath === '/' ||
+		(WINDOWS_DRIVE_PREFIX_RE.test(normalizedPath) && normalizedPath.length === 3)
+	) {
+		return normalizedPath;
+	}
+
+	return normalizedPath.replace(/\/+$/g, '');
+}
+
 function normalizeProjectPath(projectPath: string): string {
-	return path.resolve(projectPath);
+	const trimmedPath = projectPath.trim();
+	if (!trimmedPath) {
+		return '';
+	}
+
+	const isWindowsLikePath = /^[a-zA-Z]:[\\/]/.test(trimmedPath) || trimmedPath.includes('\\');
+	const normalizedPath = (
+		trimmedPath.startsWith('~') || isWindowsLikePath ? trimmedPath : path.resolve(trimmedPath)
+	).replace(/\\/g, '/');
+	const withoutTrailingSlashes = stripTrailingSlashes(normalizedPath);
+
+	return WINDOWS_DRIVE_PREFIX_RE.test(withoutTrailingSlashes)
+		? withoutTrailingSlashes.toLowerCase()
+		: withoutTrailingSlashes;
 }
 
 function isSessionForProject(sessionProjectPath: string, projectPath: string): boolean {
@@ -91,9 +121,7 @@ function isSessionForProject(sessionProjectPath: string, projectPath: string): b
 	if (normalizedSession === normalizedProject) {
 		return true;
 	}
-	const prefix = normalizedProject.endsWith(path.sep)
-		? normalizedProject
-		: `${normalizedProject}${path.sep}`;
+	const prefix = normalizedProject.endsWith('/') ? normalizedProject : `${normalizedProject}/`;
 	return normalizedSession.startsWith(prefix);
 }
 
@@ -319,13 +347,18 @@ export class OpenClawSessionStorage extends BaseSessionStorage {
 		const endTime = new Date(lastTimestamp).getTime();
 		const durationSeconds = Math.max(0, Math.floor((endTime - startTime) / 1000));
 
+		const initSessionId =
+			extractOpenClawRawSessionId(typeof init?.id === 'string' ? init.id : null) || '';
 		const rawSessionId =
-			init?.id || path.basename(sessionFilePath).replace(/\.jsonl$/i, '') || 'openclaw-session';
+			initSessionId ||
+			path.basename(sessionFilePath).replace(/\.jsonl$/i, '') ||
+			'openclaw-session';
 		const canonicalSessionId = buildOpenClawSessionId(agentName, rawSessionId);
 		if (!canonicalSessionId) {
 			logger.warn('Failed to build canonical OpenClaw session ID', LOG_CONTEXT, {
 				agentName,
 				rawSessionId,
+				initId: init?.id,
 				sessionFilePath,
 			});
 			return null;

@@ -47,6 +47,15 @@ vi.mock('../../../../main/utils/agent-args', () => ({
 		customEnvSource: 'none' as const,
 		effectiveCustomEnvVars: undefined,
 	})),
+	extractResumeSessionIdFromArgs: vi.fn((agent, args: string[]) => {
+		const resumeTokens = agent?.resumeArgTokens || ['--resume', '--session'];
+		for (let index = 0; index < args.length; index += 1) {
+			if (resumeTokens.includes(args[index]) && typeof args[index + 1] === 'string') {
+				return args[index + 1];
+			}
+		}
+		return undefined;
+	}),
 	getContextWindowValue: vi.fn(() => 0),
 }));
 
@@ -1727,6 +1736,79 @@ describe('process IPC handlers', () => {
 			// Should fall back to config.command when agent.binaryName is unavailable
 			// The stdin script should contain the command
 			expect(spawnCall.sshStdinScript).toContain('custom-agent');
+		});
+
+		it('should preserve canonical OpenClaw resume args when wrapping SSH execution', async () => {
+			const mockAgent = {
+				id: 'openclaw',
+				name: 'OpenClaw',
+				binaryName: 'openclaw',
+				requiresPty: false,
+				capabilities: {
+					supportsStreamJsonInput: false,
+					supportsStreaming: false,
+				},
+			};
+
+			vi.mocked(buildAgentArgs).mockReturnValueOnce([
+				'agent',
+				'--json',
+				'--agent',
+				'main',
+				'--session-id',
+				'abc-123',
+			]);
+			const { applyAgentConfigOverrides } = await import('../../../../main/utils/agent-args');
+			vi.mocked(applyAgentConfigOverrides).mockReturnValueOnce({
+				args: ['agent', '--json', '--agent', 'main', '--session-id', 'abc-123'],
+				modelSource: 'none',
+				customArgsSource: 'none',
+				customEnvSource: 'none',
+				effectiveCustomEnvVars: undefined,
+			});
+
+			mockAgentDetector.getAgent.mockResolvedValue(mockAgent);
+			mockSettingsStore.get.mockImplementation((key, defaultValue) => {
+				if (key === 'sshRemotes') return [mockSshRemote];
+				return defaultValue;
+			});
+			mockProcessManager.spawn.mockReturnValue({ pid: 12345, success: true });
+
+			const handler = handlers.get('process:spawn');
+			await handler!({} as any, {
+				sessionId: 'session-openclaw-ssh-resume',
+				toolType: 'openclaw',
+				cwd: '/home/devuser/project',
+				command: 'openclaw',
+				args: [],
+				prompt: 'continue the plan',
+				agentSessionId: 'main:abc-123',
+				sessionSshRemoteConfig: {
+					enabled: true,
+					remoteId: 'remote-1',
+				},
+			});
+
+			const { buildSshCommandWithStdin: mockBuildSsh } =
+				await import('../../../../main/utils/ssh-command-builder');
+			const sshBuildCalls = vi.mocked(mockBuildSsh).mock.calls;
+			const sshCallArgs = sshBuildCalls[sshBuildCalls.length - 1][1];
+			expect(sshCallArgs.command).toBe('openclaw');
+			expect(sshCallArgs.args).toEqual([
+				'agent',
+				'--json',
+				'--agent',
+				'main',
+				'--session-id',
+				'abc-123',
+			]);
+			expect(sshCallArgs.stdinInput).toBe('continue the plan');
+
+			const spawnCall = mockProcessManager.spawn.mock.calls[0][0];
+			expect(spawnCall.command).toBe('ssh');
+			expect(spawnCall.sshStdinScript).toContain('openclaw');
+			expect(spawnCall.sshStdinScript).toContain("'--agent' 'main'");
+			expect(spawnCall.sshStdinScript).toContain("'--session-id' 'abc-123'");
 		});
 	});
 });

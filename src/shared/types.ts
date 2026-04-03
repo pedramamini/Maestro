@@ -54,6 +54,13 @@ export interface UsageStats {
 	reasoningTokens?: number;
 }
 
+export interface HistoryUsageBreakdown {
+	planner?: UsageStats;
+	executor?: UsageStats;
+	verifier?: UsageStats;
+	synopsis?: UsageStats;
+}
+
 // History entry types for the History panel
 export type HistoryEntryType = 'AUTO' | 'USER';
 
@@ -69,6 +76,8 @@ export interface HistoryEntry {
 	sessionId?: string;
 	contextUsage?: number;
 	usageStats?: UsageStats;
+	contextDisplayUsageStats?: UsageStats;
+	usageBreakdown?: HistoryUsageBreakdown;
 	success?: boolean;
 	elapsedTimeMs?: number;
 	validated?: boolean;

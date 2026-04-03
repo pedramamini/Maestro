@@ -13,23 +13,41 @@ export interface OpenClawSessionIdParts {
 
 export const OPENCLAW_SESSION_ID_SEPARATOR = ':';
 
+function normalizeOpenClawIdentifier(value: string | null | undefined): string | null {
+	if (typeof value !== 'string') {
+		return null;
+	}
+
+	const trimmedValue = value.trim();
+	return trimmedValue || null;
+}
+
 export function buildOpenClawCompositeSessionId(agentName: string, sessionId: string): string {
 	return `${agentName}${OPENCLAW_SESSION_ID_SEPARATOR}${sessionId}`;
 }
 
 export function parseOpenClawCompositeSessionId(sessionId: string): OpenClawSessionIdParts | null {
-	const idx = sessionId.indexOf(OPENCLAW_SESSION_ID_SEPARATOR);
-	if (idx <= 0 || idx >= sessionId.length - 1) {
+	const trimmedSessionId = sessionId.trim();
+	if (!trimmedSessionId) {
 		return null;
 	}
 
-	const rawSessionId = sessionId.slice(idx + 1);
+	const idx = trimmedSessionId.indexOf(OPENCLAW_SESSION_ID_SEPARATOR);
+	if (idx <= 0 || idx >= trimmedSessionId.length - 1) {
+		return null;
+	}
+
+	const agentName = trimmedSessionId.slice(0, idx).trim();
+	const rawSessionId = trimmedSessionId.slice(idx + 1).trim();
 	if (rawSessionId.includes(OPENCLAW_SESSION_ID_SEPARATOR)) {
+		return null;
+	}
+	if (!agentName || !rawSessionId) {
 		return null;
 	}
 
 	return {
-		agentName: sessionId.slice(0, idx),
+		agentName,
 		sessionId: rawSessionId,
 	};
 }
@@ -39,29 +57,35 @@ export function isOpenClawCompositeSessionId(sessionId: string): boolean {
 }
 
 export function normalizeOpenClawSessionId(
-	sessionId: string,
+	sessionId: string | null | undefined,
 	agentNameOrOptions?: string | null | { agentName?: string | null }
 ): string | null {
-	if (!sessionId) {
-		return sessionId;
+	if (typeof sessionId !== 'string') {
+		return null;
 	}
 
-	if (isOpenClawCompositeSessionId(sessionId)) {
-		return sessionId;
+	const trimmedSessionId = sessionId.trim();
+	if (!trimmedSessionId) {
+		return trimmedSessionId;
 	}
 
-	if (sessionId.includes(OPENCLAW_SESSION_ID_SEPARATOR)) {
+	const parsedComposite = parseOpenClawCompositeSessionId(trimmedSessionId);
+	if (parsedComposite) {
+		return buildOpenClawCompositeSessionId(parsedComposite.agentName, parsedComposite.sessionId);
+	}
+
+	if (trimmedSessionId.includes(OPENCLAW_SESSION_ID_SEPARATOR)) {
 		return null;
 	}
 
 	const agentName =
 		typeof agentNameOrOptions === 'string' ? agentNameOrOptions : agentNameOrOptions?.agentName;
 
-	if (agentName) {
-		return buildOpenClawCompositeSessionId(agentName, sessionId);
+	if (agentName?.trim()) {
+		return buildOpenClawCompositeSessionId(agentName.trim(), trimmedSessionId);
 	}
 
-	return sessionId;
+	return trimmedSessionId;
 }
 
 export function extractOpenClawAgentNameFromArgs(args?: string[]): string | null {
@@ -83,24 +107,107 @@ export function extractOpenClawAgentNameFromJson(parsed: unknown): string | null
 		return null;
 	}
 
-	const record = parsed as Record<string, unknown>;
-	const agentMeta =
-		record.meta && typeof record.meta === 'object'
-			? ((record.meta as Record<string, unknown>).agentMeta as Record<string, unknown> | undefined)
-			: undefined;
+	const queue: unknown[] = [parsed];
+	const visited = new Set<unknown>();
 
-	const candidates = [
-		agentMeta?.agentId,
-		agentMeta?.agentName,
-		agentMeta?.agent,
-		record.agentId,
-		record.agentName,
-		record.agent,
-	];
+	while (queue.length > 0) {
+		const current = queue.shift();
+		if (!current || typeof current !== 'object' || visited.has(current)) {
+			continue;
+		}
 
-	for (const candidate of candidates) {
-		if (typeof candidate === 'string' && candidate.trim()) {
-			return candidate.trim();
+		visited.add(current);
+		const record = current as Record<string, unknown>;
+		const agentMeta =
+			record.meta && typeof record.meta === 'object'
+				? ((record.meta as Record<string, unknown>).agentMeta as Record<string, unknown> | undefined)
+				: undefined;
+
+		const candidates = [
+			agentMeta?.agentId,
+			agentMeta?.agentName,
+			agentMeta?.agent,
+			record.agentId,
+			record.agentName,
+			record.agent,
+		];
+
+		for (const candidate of candidates) {
+			const normalizedCandidate = normalizeOpenClawIdentifier(
+				candidate as string | null | undefined
+			);
+			if (normalizedCandidate) {
+				return normalizedCandidate;
+			}
+		}
+
+		for (const nestedKey of ['result', 'meta', 'error', 'data']) {
+			const nested = record[nestedKey];
+			if (nested && typeof nested === 'object') {
+				queue.push(nested);
+			}
+		}
+	}
+
+	return null;
+}
+
+export function extractOpenClawSessionIdFromJson(
+	parsed: unknown,
+	agentNameOrOptions?: string | null | { agentName?: string | null }
+): string | null {
+	if (!parsed || typeof parsed !== 'object') {
+		return null;
+	}
+
+	const fallbackAgentName =
+		typeof agentNameOrOptions === 'string'
+			? normalizeOpenClawIdentifier(agentNameOrOptions)
+			: normalizeOpenClawIdentifier(agentNameOrOptions?.agentName);
+	const resolvedAgentName = fallbackAgentName ?? extractOpenClawAgentNameFromJson(parsed);
+	const queue: unknown[] = [parsed];
+	const visited = new Set<unknown>();
+
+	while (queue.length > 0) {
+		const current = queue.shift();
+		if (!current || typeof current !== 'object' || visited.has(current)) {
+			continue;
+		}
+
+		visited.add(current);
+		const record = current as Record<string, unknown>;
+		const agentMeta =
+			record.meta && typeof record.meta === 'object'
+				? ((record.meta as Record<string, unknown>).agentMeta as Record<string, unknown> | undefined)
+				: undefined;
+
+		const candidates = [
+			record.session_id,
+			record.sessionId,
+			agentMeta?.sessionId,
+			agentMeta?.session_id,
+		];
+
+		for (const candidate of candidates) {
+			const normalizedCandidate = normalizeOpenClawIdentifier(
+				candidate as string | null | undefined
+			);
+			if (!normalizedCandidate) {
+				continue;
+			}
+
+			return (
+				normalizeOpenClawSessionId(normalizedCandidate, {
+					agentName: resolvedAgentName,
+				}) || normalizedCandidate
+			);
+		}
+
+		for (const nestedKey of ['result', 'meta', 'error', 'data']) {
+			const nested = record[nestedKey];
+			if (nested && typeof nested === 'object') {
+				queue.push(nested);
+			}
 		}
 	}
 
@@ -111,16 +218,17 @@ export function resolveCanonicalOpenClawSessionId(
 	sessionId: string,
 	knownSessionIds: string[]
 ): string | null {
-	if (!sessionId) {
+	const trimmedSessionId = sessionId.trim();
+	if (!trimmedSessionId) {
 		return null;
 	}
 
-	if (knownSessionIds.includes(sessionId)) {
-		return sessionId;
+	if (knownSessionIds.includes(trimmedSessionId)) {
+		return trimmedSessionId;
 	}
 
-	const parsed = parseOpenClawCompositeSessionId(sessionId);
-	const rawSessionId = parsed?.sessionId || sessionId;
+	const parsed = parseOpenClawCompositeSessionId(trimmedSessionId);
+	const rawSessionId = parsed?.sessionId || trimmedSessionId;
 	const matches = knownSessionIds.filter((candidate) => {
 		const candidateParts = parseOpenClawCompositeSessionId(candidate);
 		return candidateParts?.sessionId === rawSessionId;
@@ -130,18 +238,26 @@ export function resolveCanonicalOpenClawSessionId(
 }
 
 export function buildOpenClawSessionId(agentName: string, rawSessionId: string): string | null {
-	if (!agentName?.trim() || !rawSessionId?.trim()) {
+	const normalizedAgentName = normalizeOpenClawIdentifier(agentName);
+	const normalizedRawSessionId = normalizeOpenClawIdentifier(rawSessionId);
+
+	if (!normalizedAgentName || !normalizedRawSessionId) {
 		return null;
 	}
 
+	const parsedComposite = parseOpenClawSessionId(normalizedRawSessionId);
+	if (parsedComposite) {
+		return parsedComposite.agentName === normalizedAgentName ? parsedComposite.compositeId : null;
+	}
+
 	if (
-		agentName.includes(OPENCLAW_SESSION_ID_SEPARATOR) ||
-		rawSessionId.includes(OPENCLAW_SESSION_ID_SEPARATOR)
+		normalizedAgentName.includes(OPENCLAW_SESSION_ID_SEPARATOR) ||
+		normalizedRawSessionId.includes(OPENCLAW_SESSION_ID_SEPARATOR)
 	) {
 		return null;
 	}
 
-	return buildOpenClawCompositeSessionId(agentName.trim(), rawSessionId.trim());
+	return buildOpenClawCompositeSessionId(normalizedAgentName, normalizedRawSessionId);
 }
 
 export function parseOpenClawSessionId(
@@ -151,7 +267,7 @@ export function parseOpenClawSessionId(
 		return null;
 	}
 
-	const parsed = parseOpenClawCompositeSessionId(sessionId.trim());
+	const parsed = parseOpenClawCompositeSessionId(sessionId);
 	if (!parsed) {
 		return null;
 	}
@@ -168,14 +284,15 @@ export function isCanonicalOpenClawSessionId(sessionId: string | null | undefine
 }
 
 export function extractOpenClawRawSessionId(sessionId: string | null | undefined): string | null {
-	if (!sessionId) {
+	const normalizedSessionId = normalizeOpenClawIdentifier(sessionId);
+	if (!normalizedSessionId) {
 		return null;
 	}
 
-	const parsed = parseOpenClawSessionId(sessionId);
+	const parsed = parseOpenClawSessionId(normalizedSessionId);
 	if (parsed) {
 		return parsed.rawSessionId;
 	}
 
-	return sessionId.includes(OPENCLAW_SESSION_ID_SEPARATOR) ? null : sessionId;
+	return normalizedSessionId.includes(OPENCLAW_SESSION_ID_SEPARATOR) ? null : normalizedSessionId;
 }

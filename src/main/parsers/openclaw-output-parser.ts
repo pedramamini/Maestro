@@ -32,6 +32,7 @@ import { stripAnsiCodes } from '../../shared/stringUtils';
 import {
 	normalizeOpenClawSessionId,
 	extractOpenClawAgentNameFromJson,
+	extractOpenClawSessionIdFromJson,
 } from '../../shared/openclawSessionId';
 import { logger } from '../utils/logger';
 
@@ -109,6 +110,9 @@ export class OpenClawOutputParser implements AgentOutputParser {
 			return {
 				type: 'error',
 				text: this.extractFailureMessage(msg),
+				sessionId: extractOpenClawSessionIdFromJson(parsed, {
+					agentName: this.openclawAgentName,
+				}) || undefined,
 				raw: msg,
 			};
 		}
@@ -128,12 +132,15 @@ export class OpenClawOutputParser implements AgentOutputParser {
 		}
 
 		// Fallback: future JSONL streaming support
-		const eventType = (msg.type as string) || '';
+			const eventType = (msg.type as string) || '';
 
 		if (eventType === 'error') {
 			return {
 				type: 'error',
 				text: (msg.message as string) || (msg.error as string) || 'Unknown OpenClaw error',
+				sessionId: extractOpenClawSessionIdFromJson(parsed, {
+					agentName: this.openclawAgentName,
+				}) || undefined,
 				raw: msg,
 			};
 		}
@@ -180,9 +187,13 @@ export class OpenClawOutputParser implements AgentOutputParser {
 		return {
 			type: 'result',
 			sessionId:
+				extractOpenClawSessionIdFromJson(normalizationInput, {
+					agentName: resolvedAgentName,
+				}) ||
 				normalizeOpenClawSessionId(agentMeta?.sessionId, {
 					agentName: resolvedAgentName,
-				}) || undefined,
+				}) ||
+				undefined,
 			text,
 			usage,
 			raw,
@@ -256,6 +267,11 @@ export class OpenClawOutputParser implements AgentOutputParser {
 	}
 
 	private extractFailureMessage(msg: Record<string, unknown>): string {
+		const nestedResult =
+			msg.result && typeof msg.result === 'object'
+				? (msg.result as Record<string, unknown>)
+				: undefined;
+
 		if (typeof msg.message === 'string' && msg.message.trim()) {
 			return msg.message;
 		}
@@ -275,24 +291,48 @@ export class OpenClawOutputParser implements AgentOutputParser {
 			}
 		}
 
+		if (nestedResult) {
+			for (const candidate of [nestedResult.message, nestedResult.summary, nestedResult.error]) {
+				if (typeof candidate === 'string' && candidate.trim()) {
+					return candidate;
+				}
+			}
+		}
+
 		return 'Unknown OpenClaw error';
 	}
 
 	detectErrorFromExit(exitCode: number, stderr: string, _stdout: string): AgentError | null {
 		if (exitCode === 0) return null;
 
-		if (stderr) {
-			const cleanStderr = stripAnsiCodes(stderr);
-			const match = matchErrorPattern(this.errorPatterns, cleanStderr);
-			if (match) {
-				return {
-					type: match.type,
-					message: match.message,
-					recoverable: match.recoverable,
-					agentId: this.agentId,
-					timestamp: Date.now(),
-				};
+		const matchOutput = (output: string): AgentError | null => {
+			if (!output) {
+				return null;
 			}
+
+			const cleanOutput = stripAnsiCodes(output);
+			const match = matchErrorPattern(this.errorPatterns, cleanOutput);
+			if (!match) {
+				return null;
+			}
+
+			return {
+				type: match.type,
+				message: match.message,
+				recoverable: match.recoverable,
+				agentId: this.agentId,
+				timestamp: Date.now(),
+			};
+		};
+
+		const stderrError = matchOutput(stderr);
+		if (stderrError) {
+			return stderrError;
+		}
+
+		const stdoutError = matchOutput(_stdout);
+		if (stdoutError) {
+			return stdoutError;
 		}
 
 		return {

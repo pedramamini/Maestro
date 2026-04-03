@@ -2,7 +2,14 @@
 // Executes playbooks and yields JSONL events
 
 import { execFileSync } from 'child_process';
-import type { Playbook, SessionInfo, UsageStats, HistoryEntry } from '../../shared/types';
+import type {
+	HistoryEntry,
+	HistoryUsageBreakdown,
+	Playbook,
+	SessionInfo,
+	ToolType,
+	UsageStats,
+} from '../../shared/types';
 import type { JsonlEvent } from '../output/jsonl';
 import {
 	spawnAgent,
@@ -16,7 +23,6 @@ import { addHistoryEntry, readGroups } from './storage';
 import { substituteTemplateVariables, TemplateContext } from '../../shared/templateVariables';
 import { registerCliActivity, unregisterCliActivity } from '../../shared/cli-activity';
 import { logger } from '../../main/utils/logger';
-import { autorunSynopsisPrompt } from '../../prompts';
 import { parseSynopsis } from '../../shared/synopsis';
 import { generateUUID } from '../../shared/uuid';
 import { estimateTokenCount, formatElapsedTime } from '../../shared/formatters';
@@ -36,8 +42,6 @@ import type {
 	PlaybookSkillPromptMode,
 } from '../../shared/types';
 
-// Synopsis prompt for batch tasks
-const BATCH_SYNOPSIS_PROMPT = autorunSynopsisPrompt;
 const DEFAULT_TASK_TIMEOUT_MS = 60000;
 
 const PLAN_STEP_INSTRUCTION = `You are the planning step for Maestro Auto Run.
@@ -68,6 +72,51 @@ const AUTORUN_CONTEXT_AND_IMPACT_INSTRUCTION = `Before making any non-trivial co
 - use GitNexus/context to inspect the target symbol or file
 - use GitNexus/impact to check upstream blast radius
 - if GitNexus misses the symbol, state that and fall back to focused local code search before editing`;
+
+function calculateUsageContextTokens(stats: UsageStats, toolType: ToolType): number {
+	const combinedContextAgents: ToolType[] = ['codex', 'zai'];
+	if (combinedContextAgents.includes(toolType)) {
+		return (
+			(stats.inputTokens || 0) +
+			(stats.outputTokens || 0) +
+			(stats.cacheCreationInputTokens || 0)
+		);
+	}
+
+	return (
+		(stats.inputTokens || 0) +
+		(stats.cacheReadInputTokens || 0) +
+		(stats.cacheCreationInputTokens || 0)
+	);
+}
+
+function pickContextDisplayUsageStats(
+	toolType: ToolType,
+	usageBreakdown: HistoryUsageBreakdown | undefined,
+	fallback: UsageStats | undefined
+): UsageStats | undefined {
+	const candidates = [
+		usageBreakdown?.planner,
+		usageBreakdown?.executor,
+		usageBreakdown?.verifier,
+		usageBreakdown?.synopsis,
+	].filter((stats): stats is UsageStats => Boolean(stats));
+
+	if (candidates.length === 0) {
+		return fallback;
+	}
+
+	return candidates.reduce((peak, current) =>
+		calculateUsageContextTokens(current, toolType) > calculateUsageContextTokens(peak, toolType)
+			? current
+			: peak
+	);
+}
+
+function formatUsageDebug(usage: UsageStats | undefined): string {
+	if (!usage) return 'none';
+	return `in=${usage.inputTokens || 0}, out=${usage.outputTokens || 0}, cacheRead=${usage.cacheReadInputTokens || 0}, context=${usage.contextWindow || 0}, reasoning=${usage.reasoningTokens || 0}, cost=${usage.totalCostUsd || 0}`;
+}
 
 function buildDefinitionOfDoneSection(definitionOfDone: string[] = []): string {
 	if (definitionOfDone.length === 0) {
@@ -129,6 +178,7 @@ function getDocumentPromptSection(
 
 function buildStrategyPrompt(
 	stage: 'planner' | 'executor' | 'verifier',
+	agentStrategy: PlaybookAgentStrategy,
 	basePrompt: string,
 	documentPrompt: string,
 	skillPromptBlock: string,
@@ -137,6 +187,8 @@ function buildStrategyPrompt(
 	verificationSteps: string[] = []
 ): string {
 	const sections: string[] = [];
+	const includeSharedSkillGuidance =
+		agentStrategy === 'single' || stage === 'planner';
 
 	if (stage === 'planner') {
 		sections.push(PLAN_STEP_INSTRUCTION);
@@ -149,9 +201,11 @@ function buildStrategyPrompt(
 		sections.push(VERIFY_STEP_INSTRUCTION);
 	}
 
-	sections.push(AUTORUN_CONTEXT_AND_IMPACT_INSTRUCTION);
+	if (includeSharedSkillGuidance) {
+		sections.push(AUTORUN_CONTEXT_AND_IMPACT_INSTRUCTION);
+	}
 	sections.push(basePrompt);
-	if (skillPromptBlock) {
+	if (includeSharedSkillGuidance && skillPromptBlock) {
 		sections.push(skillPromptBlock);
 	}
 	if (stage === 'verifier' && verificationSteps.length > 0) {
@@ -186,6 +240,31 @@ function mergeUsageStats(
 	}
 
 	return merged;
+}
+
+function buildSynopsisFromTaskResponse(
+	response: string | undefined,
+	error: string | undefined,
+	defaultLabel: string
+): { shortSummary: string; fullSynopsis: string } {
+	const text = response?.trim();
+	if (!text) {
+		const fallback = error || defaultLabel;
+		return { shortSummary: fallback, fullSynopsis: fallback };
+	}
+
+	const parsed = parseSynopsis(text);
+	if (parsed.nothingToReport) {
+		return {
+			shortSummary: defaultLabel,
+			fullSynopsis: defaultLabel,
+		};
+	}
+
+	return {
+		shortSummary: parsed.shortSummary || defaultLabel,
+		fullSynopsis: parsed.fullSynopsis || text,
+	};
 }
 
 function buildVerifierNote(response?: string, error?: string): string | undefined {
@@ -649,6 +728,7 @@ export async function* runPlaybook(
 				);
 				const finalPrompt = buildStrategyPrompt(
 					'executor',
+					'single',
 					basePrompt,
 					documentPromptSection,
 					skillPromptBlock
@@ -689,10 +769,12 @@ export async function* runPlaybook(
 				let plannerSessionId: string | undefined;
 				let verifierNote: string | undefined;
 				let verifierVerdict: 'PASS' | 'WARN' | 'FAIL' | null = null;
+				const usageBreakdown: HistoryUsageBreakdown = {};
 
 				if (agentStrategy === 'plan-execute-verify') {
 					const plannerPrompt = buildStrategyPrompt(
 						'planner',
+						agentStrategy,
 						basePrompt,
 						documentPromptSection,
 						skillPromptBlock
@@ -706,6 +788,7 @@ export async function* runPlaybook(
 							timeoutMs: taskTimeoutMs > 0 ? taskTimeoutMs : undefined,
 						}
 					);
+					usageBreakdown.planner = plannerResult.usageStats;
 					plannerSummary = plannerResult.response?.trim();
 					plannerSessionId = plannerResult.agentSessionId;
 
@@ -716,10 +799,17 @@ export async function* runPlaybook(
 							category: 'strategy',
 							message: `Planner ${plannerResult.success ? 'completed' : 'failed'} for ${docEntry.filename}#${taskIndex}`,
 						};
+						yield {
+							type: 'debug',
+							timestamp: Date.now(),
+							category: 'strategy',
+							message: `Planner usage for ${docEntry.filename}#${taskIndex}: ${formatUsageDebug(plannerResult.usageStats)}`,
+						};
 					}
 
 					const executorPrompt = buildStrategyPrompt(
 						'executor',
+						agentStrategy,
 						basePrompt,
 						documentPromptSection,
 						skillPromptBlock,
@@ -736,10 +826,21 @@ export async function* runPlaybook(
 							timeoutMs: taskTimeoutMs > 0 ? taskTimeoutMs : undefined,
 						}
 					);
+					usageBreakdown.executor = result.usageStats;
 					result.usageStats = mergeUsageStats(plannerResult.usageStats, result.usageStats);
+
+					if (debug) {
+						yield {
+							type: 'debug',
+							timestamp: Date.now(),
+							category: 'strategy',
+							message: `Executor usage for ${docEntry.filename}#${taskIndex}: ${formatUsageDebug(usageBreakdown.executor)}`,
+						};
+					}
 
 					const verifierPrompt = buildStrategyPrompt(
 						'verifier',
+						agentStrategy,
 						basePrompt,
 						documentPromptSection,
 						skillPromptBlock,
@@ -756,6 +857,7 @@ export async function* runPlaybook(
 							timeoutMs: taskTimeoutMs > 0 ? taskTimeoutMs : undefined,
 						}
 					);
+					usageBreakdown.verifier = verifierResult.usageStats;
 					verifierNote = buildVerifierNote(verifierResult.response, verifierResult.error);
 					verifierVerdict = getVerifierVerdict(verifierResult.response);
 					if (!verifierResult.success || verifierVerdict === 'FAIL') {
@@ -773,12 +875,19 @@ export async function* runPlaybook(
 							category: 'strategy',
 							message: `Verifier ${verifierResult.success ? 'completed' : 'failed'} for ${docEntry.filename}#${taskIndex}`,
 						};
+						yield {
+							type: 'debug',
+							timestamp: Date.now(),
+							category: 'strategy',
+							message: `Verifier usage for ${docEntry.filename}#${taskIndex}: ${formatUsageDebug(verifierResult.usageStats)}`,
+						};
 					}
 				} else {
 					// Spawn agent with combined prompt + document
 					result = await spawnAgent(session.toolType, session.cwd, finalPrompt, undefined, {
 						timeoutMs: taskTimeoutMs > 0 ? taskTimeoutMs : undefined,
 					});
+					usageBreakdown.executor = result.usageStats;
 				}
 
 				const elapsedMs = Date.now() - taskStartTime;
@@ -826,27 +935,23 @@ export async function* runPlaybook(
 				// Generate synopsis
 				let shortSummary = `[${docEntry.filename}] Task completed`;
 				let fullSynopsis = shortSummary;
+				const contextDisplayUsageStats = pickContextDisplayUsageStats(
+					session.toolType,
+					usageBreakdown,
+					result.usageStats
+				);
 
 				if (completedAfterTimeout) {
 					shortSummary = `[${docEntry.filename}] Task completed before timeout`;
 					fullSynopsis = result.response || result.error || shortSummary;
-				} else if (result.success && result.agentSessionId) {
-					// Request synopsis from the agent
-					const synopsisResult = await spawnAgent(
-						session.toolType,
-						session.cwd,
-						BATCH_SYNOPSIS_PROMPT,
-						result.agentSessionId,
-						{
-							timeoutMs: taskTimeoutMs > 0 ? taskTimeoutMs : undefined,
-						}
+				} else if (result.success) {
+					const parsedSynopsis = buildSynopsisFromTaskResponse(
+						result.response,
+						result.error,
+						shortSummary
 					);
-
-					if (synopsisResult.success && synopsisResult.response) {
-						const parsed = parseSynopsis(synopsisResult.response);
-						shortSummary = parsed.shortSummary;
-						fullSynopsis = parsed.fullSynopsis;
-					}
+					shortSummary = parsedSynopsis.shortSummary;
+					fullSynopsis = parsedSynopsis.fullSynopsis;
 				} else if (!taskSucceeded) {
 					shortSummary = `[${docEntry.filename}] Task failed`;
 					fullSynopsis = result.error || shortSummary;
@@ -905,6 +1010,8 @@ export async function* runPlaybook(
 						sessionId: session.id,
 						success: taskSucceeded,
 						usageStats: result.usageStats,
+						contextDisplayUsageStats,
+						usageBreakdown,
 						elapsedTimeMs: elapsedMs,
 						verifierVerdict: verifierVerdict ?? undefined,
 					};

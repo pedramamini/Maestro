@@ -529,6 +529,43 @@ async function spawnJsonLineAgent(
 			if (forceKillTimer) clearTimeout(forceKillTimer);
 		};
 
+		const processLine = (line: string): void => {
+			if (!line.trim()) return;
+			const event = parser.parseJsonLine(line);
+			if (!event) return;
+
+			if (event.type === 'init' && event.sessionId && !sessionId) {
+				sessionId = event.sessionId;
+			}
+
+			if (event.type === 'result' && event.text) {
+				result = result ? `${result}\n${event.text}` : event.text;
+			}
+
+			if (event.type === 'error' && event.text && !errorText) {
+				errorText = event.text;
+			}
+
+			const usage = parser.extractUsage(event);
+			if (usage) {
+				usageStats = mergeUsageStats(usageStats, {
+					inputTokens: usage.inputTokens || 0,
+					outputTokens: usage.outputTokens || 0,
+					cacheReadTokens: usage.cacheReadTokens || 0,
+					cacheCreationTokens: usage.cacheCreationTokens || 0,
+					costUsd: usage.costUsd || 0,
+					contextWindow: usage.contextWindow || 0,
+					reasoningTokens: usage.reasoningTokens || 0,
+				});
+			}
+		};
+
+		const flushJsonBuffer = (): void => {
+			if (!jsonBuffer.trim()) return;
+			processLine(jsonBuffer);
+			jsonBuffer = '';
+		};
+
 		const finalize = (payload: AgentResult): void => {
 			if (settled) return;
 			settled = true;
@@ -542,34 +579,7 @@ async function spawnJsonLineAgent(
 			jsonBuffer = lines.pop() || '';
 
 			for (const line of lines) {
-				if (!line.trim()) continue;
-				const event = parser.parseJsonLine(line);
-				if (!event) continue;
-
-				if (event.type === 'init' && event.sessionId && !sessionId) {
-					sessionId = event.sessionId;
-				}
-
-				if (event.type === 'result' && event.text) {
-					result = result ? `${result}\n${event.text}` : event.text;
-				}
-
-				if (event.type === 'error' && event.text && !errorText) {
-					errorText = event.text;
-				}
-
-				const usage = parser.extractUsage(event);
-				if (usage) {
-					usageStats = mergeUsageStats(usageStats, {
-						inputTokens: usage.inputTokens || 0,
-						outputTokens: usage.outputTokens || 0,
-						cacheReadTokens: usage.cacheReadTokens || 0,
-						cacheCreationTokens: usage.cacheCreationTokens || 0,
-						costUsd: usage.costUsd || 0,
-						contextWindow: usage.contextWindow || 0,
-						reasoningTokens: usage.reasoningTokens || 0,
-					});
-				}
+				processLine(line);
 			}
 		});
 
@@ -596,7 +606,16 @@ async function spawnJsonLineAgent(
 
 		const agentName = def?.name || toolType;
 		child.on('close', (code) => {
-			if (code === 0 && !errorText) {
+			flushJsonBuffer();
+			if (timedOut && timeoutMs) {
+				finalize({
+					success: false,
+					error: `Timed out after ${timeoutMs}ms`,
+					agentSessionId: sessionId,
+					usageStats,
+					timedOut: true,
+				});
+			} else if (code === 0 && !errorText) {
 				finalize({
 					success: true,
 					response: result,

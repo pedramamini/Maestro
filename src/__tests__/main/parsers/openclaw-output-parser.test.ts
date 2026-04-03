@@ -348,6 +348,31 @@ describe('OpenClawOutputParser', () => {
 		it('should return null for non-error event', () => {
 			expect(parser.detectErrorFromParsed({ type: 'result' })).toBeNull();
 		});
+		it('should extract nested failure summaries when top-level message is missing', () => {
+			const payload = {
+				status: 'failed',
+				result: {
+					summary: 'Nested failure summary',
+					meta: {
+						agentMeta: {
+							agentName: 'ops',
+							sessionId: 'session-err-2',
+						},
+					},
+				},
+			};
+
+			const error = parser.detectErrorFromParsed(payload);
+			const event = parser.parseJsonObject(payload);
+
+			expect(error).not.toBeNull();
+			expect(error!.message).toBe('Nested failure summary');
+			expect(event).not.toBeNull();
+			expect(event!.type).toBe('error');
+			expect(event!.text).toBe('Nested failure summary');
+			expect(event!.sessionId).toBe('ops:session-err-2');
+		});
+
 
 		it('should return null for null input', () => {
 			expect(parser.detectErrorFromParsed(null)).toBeNull();
@@ -371,6 +396,12 @@ describe('OpenClawOutputParser', () => {
 			expect(error).not.toBeNull();
 			expect(error!.type).toBe('agent_crashed');
 			expect(error!.recoverable).toBe(true);
+		});
+
+		it('should return matched error when stdout contains patterns and stderr is empty', () => {
+			const error = parser.detectErrorFromExit(1, '', 'gateway token invalid');
+			expect(error).not.toBeNull();
+			expect(error!.type).toBe('auth_expired');
 		});
 
 		it('should return agent_crashed for exit 1 with stderr that does not match patterns', () => {

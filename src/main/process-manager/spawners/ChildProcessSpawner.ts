@@ -6,7 +6,7 @@ import * as path from 'path';
 import * as fs from 'fs';
 import { logger } from '../../utils/logger';
 import { getOutputParser, OpenClawOutputParser } from '../../parsers';
-import { getAgentCapabilities } from '../../agents';
+import { getAgentCapabilities, getAgentDefinition } from '../../agents';
 import type { ProcessConfig, ManagedProcess, SpawnResult } from '../types';
 import type { DataBufferManager } from '../handlers/DataBufferManager';
 import { StdoutHandler } from '../handlers/StdoutHandler';
@@ -18,6 +18,8 @@ import { saveImageToTempFile, buildImagePromptPrefix } from '../utils/imageUtils
 import { buildStreamJsonMessage } from '../utils/streamJsonBuilder';
 import { escapeArgsForShell, isPowerShellShell } from '../utils/shellEscape';
 import { isWindows } from '../../../shared/platformDetection';
+import { hasResumeSessionArgs } from '../../utils/agent-args';
+import type { ToolType } from '../../../shared/types';
 
 /**
  * Handles spawning of child processes (non-PTY).
@@ -208,8 +210,8 @@ export class ChildProcessSpawner {
 		});
 
 		try {
-			// Build environment
-			const isResuming = finalArgs.includes('--resume') || finalArgs.includes('--session');
+			const agentDefinition = getAgentDefinition(toolType as ToolType);
+			const isResuming = hasResumeSessionArgs(agentDefinition, finalArgs);
 			const env = buildChildProcessEnv(customEnvVars, isResuming, shellEnvVars);
 
 			// Log environment variable application for troubleshooting
@@ -331,7 +333,7 @@ export class ChildProcessSpawner {
 				exitCode: childProcess.exitCode,
 			});
 
-			const isBatchMode = !!prompt;
+			const isBatchMode = !!prompt || (toolType === 'openclaw' && !!config.sshStdinScript);
 			// Detect whether stdout should be processed incrementally as streaming JSON.
 			// OpenClaw is the notable exception: it uses `--json`, but emits one final JSON
 			// object instead of line-delimited streaming output, so it must stay in buffered

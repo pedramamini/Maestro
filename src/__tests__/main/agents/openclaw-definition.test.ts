@@ -12,6 +12,7 @@ describe('OpenClaw Agent Definition', () => {
 		expect(def?.binaryName).toBe('openclaw');
 		expect(def?.batchModePrefix).toEqual(['agent']);
 		expect(def?.jsonOutputArgs).toEqual(['--json']);
+		expect(def?.resumeArgTokens).toEqual(['--session-id']);
 		expect(def?.noPromptSeparator).toBe(true);
 	});
 

@@ -36,6 +36,14 @@ export interface HistoryEntry {
 		totalCostUsd: number;
 		contextWindow: number;
 	};
+	contextDisplayUsageStats?: {
+		inputTokens: number;
+		outputTokens: number;
+		cacheReadInputTokens: number;
+		cacheCreationInputTokens: number;
+		totalCostUsd: number;
+		contextWindow: number;
+	};
 	success?: boolean;
 	elapsedTimeMs?: number;
 	validated?: boolean;

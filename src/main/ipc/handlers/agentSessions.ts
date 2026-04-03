@@ -517,14 +517,20 @@ export function registerAgentSessionsHandlers(deps?: AgentSessionsHandlerDepende
 		'agentSessions:getPath',
 		withIpcErrorLogging(
 			handlerOpts('getPath'),
-			async (agentId: string, projectPath: string, sessionId: string): Promise<string | null> => {
+			async (
+				agentId: string,
+				projectPath: string,
+				sessionId: string,
+				sshRemoteId?: string
+			): Promise<string | null> => {
 				const storage = getSessionStorage(agentId);
 				if (!storage) {
 					logger.warn(`No session storage available for agent: ${agentId}`, LOG_CONTEXT);
 					return null;
 				}
 
-				return storage.getSessionPath(projectPath, sessionId);
+				const sshConfig = sshRemoteId ? getSshRemoteById(sshRemoteId) : undefined;
+				return storage.getSessionPath(projectPath, sessionId, sshConfig);
 			}
 		)
 	);
@@ -540,7 +546,8 @@ export function registerAgentSessionsHandlers(deps?: AgentSessionsHandlerDepende
 				projectPath: string,
 				sessionId: string,
 				userMessageUuid: string,
-				fallbackContent?: string
+				fallbackContent?: string,
+				sshRemoteId?: string
 			): Promise<{ success: boolean; error?: string; linesRemoved?: number }> => {
 				const storage = getSessionStorage(agentId);
 				if (!storage) {
@@ -548,7 +555,14 @@ export function registerAgentSessionsHandlers(deps?: AgentSessionsHandlerDepende
 					return { success: false, error: `No session storage available for agent: ${agentId}` };
 				}
 
-				return storage.deleteMessagePair(projectPath, sessionId, userMessageUuid, fallbackContent);
+				const sshConfig = sshRemoteId ? getSshRemoteById(sshRemoteId) : undefined;
+				return storage.deleteMessagePair(
+					projectPath,
+					sessionId,
+					userMessageUuid,
+					fallbackContent,
+					sshConfig
+				);
 			}
 		)
 	);
