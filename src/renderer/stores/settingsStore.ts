@@ -193,6 +193,8 @@ export interface SettingsStoreState {
 	customThemeBaseId: ThemeId;
 	enterToSendAI: boolean;
 	enterToSendTerminal: boolean;
+	forcedParallelExecution: boolean;
+	forcedParallelAcknowledged: boolean;
 	defaultSaveToHistory: boolean;
 	defaultShowThinking: ThinkingMode;
 	leftSidebarWidth: number;
@@ -275,6 +277,8 @@ export interface SettingsStoreActions {
 	setCustomThemeBaseId: (value: ThemeId) => void;
 	setEnterToSendAI: (value: boolean) => void;
 	setEnterToSendTerminal: (value: boolean) => void;
+	setForcedParallelExecution: (value: boolean) => void;
+	setForcedParallelAcknowledged: (value: boolean) => void;
 	setDefaultSaveToHistory: (value: boolean) => void;
 	setDefaultShowThinking: (value: ThinkingMode) => void;
 	setLeftSidebarWidth: (value: number) => void;
@@ -419,6 +423,8 @@ export const useSettingsStore = create<SettingsStore>()((set, get) => {
 		customThemeBaseId: 'dracula',
 		enterToSendAI: false,
 		enterToSendTerminal: true,
+		forcedParallelExecution: false,
+		forcedParallelAcknowledged: false,
 		defaultSaveToHistory: true,
 		defaultShowThinking: 'off',
 		leftSidebarWidth: 256,
@@ -565,6 +571,16 @@ export const useSettingsStore = create<SettingsStore>()((set, get) => {
 		setEnterToSendTerminal: (value) => {
 			set({ enterToSendTerminal: value });
 			window.maestro.settings.set('enterToSendTerminal', value);
+		},
+
+		setForcedParallelExecution: (value) => {
+			set({ forcedParallelExecution: value });
+			window.maestro.settings.set('forcedParallelExecution', value);
+		},
+
+		setForcedParallelAcknowledged: (value) => {
+			set({ forcedParallelAcknowledged: value });
+			window.maestro.settings.set('forcedParallelAcknowledged', value);
 		},
 
 		setDefaultSaveToHistory: (value) => {
@@ -1455,6 +1471,11 @@ export async function loadAllSettings(): Promise<void> {
 		if (allSettings['enterToSendTerminal'] !== undefined)
 			patch.enterToSendTerminal = allSettings['enterToSendTerminal'] as boolean;
 
+		if (allSettings['forcedParallelExecution'] !== undefined)
+			patch.forcedParallelExecution = allSettings['forcedParallelExecution'] as boolean;
+		if (allSettings['forcedParallelAcknowledged'] !== undefined)
+			patch.forcedParallelAcknowledged = allSettings['forcedParallelAcknowledged'] as boolean;
+
 		if (allSettings['defaultSaveToHistory'] !== undefined)
 			patch.defaultSaveToHistory = allSettings['defaultSaveToHistory'] as boolean;
 
@@ -1850,6 +1871,8 @@ export function getSettingsActions() {
 		setCustomThemeBaseId: state.setCustomThemeBaseId,
 		setEnterToSendAI: state.setEnterToSendAI,
 		setEnterToSendTerminal: state.setEnterToSendTerminal,
+		setForcedParallelExecution: state.setForcedParallelExecution,
+		setForcedParallelAcknowledged: state.setForcedParallelAcknowledged,
 		setDefaultSaveToHistory: state.setDefaultSaveToHistory,
 		setDefaultShowThinking: state.setDefaultShowThinking,
 		setLeftSidebarWidth: state.setLeftSidebarWidth,

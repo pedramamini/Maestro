@@ -17,6 +17,7 @@ vi.mock('../../../renderer/hooks/agent/useAgentCapabilities', async () => {
 });
 
 import { useInputProcessing } from '../../../renderer/hooks/input/useInputProcessing';
+import { useSettingsStore } from '../../../renderer/stores/settingsStore';
 import type {
 	Session,
 	AITab,
@@ -873,6 +874,108 @@ describe('useInputProcessing', () => {
 			expect(updatedSessions[0].state).toBe('idle'); // Session stays idle
 			expect(updatedSessions[0].executionQueue.length).toBe(1); // Message is queued
 			expect(updatedSessions[0].executionQueue[0].text).toBe('regular message');
+		});
+	});
+
+	describe('forced parallel execution', () => {
+		it('bypasses queue when forceParallel is true and setting is enabled', async () => {
+			useSettingsStore.setState({ forcedParallelExecution: true } as any);
+
+			const busySession = createMockSession({
+				state: 'busy',
+				aiTabs: [createMockTab({ state: 'busy' })],
+			});
+			const deps = createDeps({
+				activeSession: busySession,
+				sessionsRef: { current: [busySession] },
+				inputValue: 'forced message',
+			});
+			const { result } = renderHook(() => useInputProcessing(deps));
+
+			await act(async () => {
+				await result.current.processInput(undefined, { forceParallel: true });
+			});
+
+			// Should NOT queue — should process immediately (spawn called)
+			expect(window.maestro.process.spawn).toHaveBeenCalled();
+		});
+
+		it('bypasses queue when forceParallel is true and AutoRun is active', async () => {
+			useSettingsStore.setState({ forcedParallelExecution: true } as any);
+
+			const runningBatchState: BatchRunState = {
+				...defaultBatchState,
+				isRunning: true,
+			};
+			mockGetBatchState.mockReturnValue(runningBatchState);
+
+			const session = createMockSession({ state: 'busy' });
+			const deps = createDeps({
+				activeSession: session,
+				sessionsRef: { current: [session] },
+				inputValue: 'forced during autorun',
+				activeBatchRunState: runningBatchState,
+			});
+			const { result } = renderHook(() => useInputProcessing(deps));
+
+			await act(async () => {
+				await result.current.processInput(undefined, { forceParallel: true });
+			});
+
+			// Should process immediately, not queue
+			expect(window.maestro.process.spawn).toHaveBeenCalled();
+		});
+
+		it('still queues when forceParallel is true but setting is disabled', async () => {
+			useSettingsStore.setState({ forcedParallelExecution: false } as any);
+
+			const busySession = createMockSession({
+				state: 'busy',
+				aiTabs: [createMockTab({ state: 'busy' })],
+			});
+			const deps = createDeps({
+				activeSession: busySession,
+				inputValue: 'should be queued',
+			});
+			const { result } = renderHook(() => useInputProcessing(deps));
+
+			await act(async () => {
+				await result.current.processInput(undefined, { forceParallel: true });
+			});
+
+			// Should add to execution queue because setting is off
+			expect(mockSetSessions).toHaveBeenCalled();
+			const setSessionsCall = mockSetSessions.mock.calls[0][0];
+			const updatedSessions = setSessionsCall([busySession]);
+			expect(updatedSessions[0].executionQueue.length).toBe(1);
+		});
+
+		it('queues normally when forceParallel is absent and session is busy', async () => {
+			useSettingsStore.setState({ forcedParallelExecution: true } as any);
+
+			const busySession = createMockSession({
+				state: 'busy',
+				aiTabs: [createMockTab({ state: 'busy' })],
+			});
+			const deps = createDeps({
+				activeSession: busySession,
+				inputValue: 'regular message',
+			});
+			const { result } = renderHook(() => useInputProcessing(deps));
+
+			await act(async () => {
+				await result.current.processInput(); // No forceParallel option
+			});
+
+			// Should queue normally
+			expect(mockSetSessions).toHaveBeenCalled();
+			const setSessionsCall = mockSetSessions.mock.calls[0][0];
+			const updatedSessions = setSessionsCall([busySession]);
+			expect(updatedSessions[0].executionQueue.length).toBe(1);
+		});
+
+		afterEach(() => {
+			useSettingsStore.setState({ forcedParallelExecution: false } as any);
 		});
 	});
 
