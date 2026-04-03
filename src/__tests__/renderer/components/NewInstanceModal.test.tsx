@@ -10,6 +10,7 @@ import { NewInstanceModal } from '../../../renderer/components/NewInstanceModal'
 import { formatShortcutKeys } from '../../../renderer/utils/shortcutFormatter';
 import type { Theme, Session } from '../../../renderer/types';
 import type { AgentConfig } from '../../../renderer/types';
+import { createOpenClawAgentConfig } from '../../fixtures/openclaw';
 
 // lucide-react icons are mocked globally in src/__tests__/setup.ts using a Proxy
 
@@ -414,9 +415,7 @@ describe('NewInstanceModal', () => {
 		});
 
 		it('should allow selecting openclaw when available', async () => {
-			vi.mocked(window.maestro.agents.detect).mockResolvedValue([
-				createAgentConfig({ id: 'openclaw', name: 'OpenClaw', available: true }),
-			]);
+			vi.mocked(window.maestro.agents.detect).mockResolvedValue([createOpenClawAgentConfig()]);
 
 			render(
 				<NewInstanceModal
@@ -2167,11 +2166,7 @@ describe('NewInstanceModal', () => {
 
 	describe('OpenClaw support', () => {
 		it('shows OpenClaw as a supported beta provider in the create flow', async () => {
-			const openClawAgent = createAgentConfig({
-				id: 'openclaw',
-				name: 'OpenClaw',
-				available: true,
-			});
+			const openClawAgent = createOpenClawAgentConfig();
 
 			vi.mocked(window.maestro.agents.detect).mockResolvedValue([openClawAgent]);
 			vi.mocked(window.maestro.agents.getConfig).mockResolvedValue({});

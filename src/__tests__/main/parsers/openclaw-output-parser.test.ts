@@ -1,11 +1,11 @@
 import { describe, it, expect } from 'vitest';
 import { OpenClawOutputParser } from '../../../main/parsers/openclaw-output-parser';
+import { createOpenClawJsonResult, OPENCLAW_FIXTURE_RAW_SESSION_ID } from '../../fixtures/openclaw';
 
 const parser = new OpenClawOutputParser();
 
 function makeStandardResult(overrides: Partial<any> = {}) {
-	return {
-		payloads: [{ text: 'Hello', mediaUrl: null }],
+	return createOpenClawJsonResult({
 		meta: {
 			durationMs: 123,
 			agentMeta: {
@@ -17,7 +17,7 @@ function makeStandardResult(overrides: Partial<any> = {}) {
 			},
 		},
 		...overrides,
-	};
+	});
 }
 
 describe('OpenClawOutputParser', () => {
@@ -85,6 +85,35 @@ describe('OpenClawOutputParser', () => {
 			expect(event).not.toBeNull();
 			expect(event!.type).toBe('error');
 			expect(event!.text).toBe('Boom');
+		});
+
+		it('should preserve canonical session IDs on wrapped failure envelopes', () => {
+			const parserWithAgent = new OpenClawOutputParser({ agentName: 'main' });
+			const payload = {
+				status: 'error',
+				result: {
+					summary: 'Wrapped OpenClaw batch failure',
+					meta: {
+						agentMeta: {
+							agentId: 'main',
+							sessionId: 'session-err-1',
+						},
+					},
+				},
+			};
+
+			const event = parserWithAgent.parseJsonObject(payload);
+			expect(event).not.toBeNull();
+			expect(event!.type).toBe('error');
+			expect(event!.text).toBe('Wrapped OpenClaw batch failure');
+			expect(event!.sessionId).toBe('main:session-err-1');
+		});
+
+		it('should use the shared fixture default session ID when no overrides are passed', () => {
+			const event = parser.parseJsonObject(createOpenClawJsonResult());
+
+			expect(event).not.toBeNull();
+			expect(event!.sessionId).toBe(OPENCLAW_FIXTURE_RAW_SESSION_ID);
 		});
 
 		it('should return null for unrecognized structure', () => {

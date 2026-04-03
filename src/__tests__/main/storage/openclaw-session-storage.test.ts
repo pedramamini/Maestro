@@ -2,42 +2,22 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import fs from 'fs/promises';
 import os from 'os';
 import path from 'path';
+import {
+	createOpenClawSessionJsonl,
+	OPENCLAW_FIXTURE_AGENT_NAME,
+	OPENCLAW_FIXTURE_ASSISTANT_MESSAGE,
+	OPENCLAW_FIXTURE_CANONICAL_SESSION_ID,
+	OPENCLAW_FIXTURE_PROJECT_PATH,
+	OPENCLAW_FIXTURE_RAW_SESSION_ID,
+	OPENCLAW_FIXTURE_USER_MESSAGE,
+} from '../../fixtures/openclaw';
 
 type OpenClawSessionStorageModule = typeof import('../../../main/storage/openclaw-session-storage');
 
-const RAW_SESSION_ID = '1234-uuid';
-const CANONICAL_SESSION_ID = `main:${RAW_SESSION_ID}`;
-const PROJECT_PATH = '/tmp/openclaw-regression-project';
-
-const SESSION_MESSAGE_FILE_CONTENT = `
-${JSON.stringify({
-	type: 'session',
-	version: 3,
-	id: RAW_SESSION_ID,
-	timestamp: '2026-04-01T10:00:00.000Z',
-	cwd: PROJECT_PATH,
-})}
-${JSON.stringify({
-	type: 'message',
-	id: 'msg-1',
-	parentId: 'parent-1',
-	timestamp: '2026-04-01T10:00:01.000Z',
-	message: {
-		role: 'user',
-		content: [{ type: 'text', text: 'First message for OpenClaw' }],
-	},
-})}
-${JSON.stringify({
-	type: 'message',
-	id: 'msg-2',
-	parentId: 'msg-1',
-	timestamp: '2026-04-01T10:00:02.000Z',
-	message: {
-		role: 'assistant',
-		content: [{ type: 'text', text: 'Reply from OpenClaw' }],
-	},
-})}
-`;
+const RAW_SESSION_ID = OPENCLAW_FIXTURE_RAW_SESSION_ID;
+const CANONICAL_SESSION_ID = OPENCLAW_FIXTURE_CANONICAL_SESSION_ID;
+const PROJECT_PATH = OPENCLAW_FIXTURE_PROJECT_PATH;
+const SESSION_MESSAGE_FILE_CONTENT = createOpenClawSessionJsonl();
 
 describe('OpenClawSessionStorage', () => {
 	let StorageCtor: OpenClawSessionStorageModule['OpenClawSessionStorage'];
@@ -127,12 +107,44 @@ describe('OpenClawSessionStorage', () => {
 		expect(result.messages[0]).toMatchObject({
 			type: 'user',
 			role: 'user',
-			content: 'First message for OpenClaw',
+			content: OPENCLAW_FIXTURE_USER_MESSAGE,
 		});
 		expect(result.messages[1]).toMatchObject({
 			type: 'assistant',
 			role: 'assistant',
-			content: 'Reply from OpenClaw',
+			content: OPENCLAW_FIXTURE_ASSISTANT_MESSAGE,
 		});
+	});
+
+	it('supports alternate agent names through the shared fixture builder', async () => {
+		const agentName = 'planner';
+		const rawSessionId = 'planner-uuid';
+		await fs.mkdir(path.join(tempHome, '.openclaw', '.openclaw', 'agents', agentName, 'sessions'), {
+			recursive: true,
+		});
+		await fs.writeFile(
+			path.join(
+				tempHome,
+				'.openclaw',
+				'.openclaw',
+				'agents',
+				agentName,
+				'sessions',
+				`${rawSessionId}.jsonl`
+			),
+			createOpenClawSessionJsonl({
+				agentName,
+				rawSessionId,
+				initSessionId: rawSessionId,
+			})
+		);
+
+		const storage = new StorageCtor();
+		const sessions = await storage.listSessions(PROJECT_PATH);
+
+		expect(sessions.some((session) => session.sessionId === `${agentName}:${rawSessionId}`)).toBe(
+			true
+		);
+		expect(OPENCLAW_FIXTURE_AGENT_NAME).toBe('main');
 	});
 });
