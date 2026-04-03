@@ -6,7 +6,7 @@
  */
 
 import { describe, it, expect, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { AgentConfigPanel } from '../../../../renderer/components/shared/AgentConfigPanel';
 import type { Theme, AgentConfig } from '../../../../renderer/types';
 
@@ -209,6 +209,32 @@ describe('AgentConfigPanel', () => {
 			// The input should show the custom path
 			const pathInput = screen.getByDisplayValue('/custom/path/to/claude');
 			expect(pathInput).toBeInTheDocument();
+		});
+
+		it('should let SSH sessions opt into overriding the default remote command', () => {
+			const onCustomPathChange = vi.fn();
+			render(
+				<AgentConfigPanel
+					{...createDefaultProps({
+						agent: createMockAgent({
+							id: 'openclaw',
+							name: 'OpenClaw',
+							binaryName: 'openclaw',
+							path: '/usr/local/bin/openclaw',
+						}),
+						isSshEnabled: true,
+						onCustomPathChange,
+					})}
+				/>
+			);
+
+			expect(screen.getByText('Remote Command')).toBeInTheDocument();
+			expect(screen.getByText('Override')).toBeInTheDocument();
+			expect(screen.getByDisplayValue('openclaw')).toHaveAttribute('readonly');
+
+			fireEvent.click(screen.getByText('Override'));
+
+			expect(onCustomPathChange).toHaveBeenCalledWith('openclaw');
 		});
 
 		it('should show Reset button when custom path differs from detected path', () => {

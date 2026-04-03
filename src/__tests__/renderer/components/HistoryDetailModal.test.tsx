@@ -554,6 +554,36 @@ describe('HistoryDetailModal', () => {
 			expect(screen.getByText('567')).toBeInTheDocument();
 		});
 
+		it('should use contextDisplayUsageStats for the context gauge when present', () => {
+			render(
+				<HistoryDetailModal
+					theme={mockTheme}
+					entry={createMockEntry({
+						usageStats: {
+							inputTokens: 500000,
+							outputTokens: 200000,
+							cacheReadInputTokens: 0,
+							cacheCreationInputTokens: 0,
+							contextWindow: 200000,
+							totalCostUsd: 0.5,
+						},
+						contextDisplayUsageStats: {
+							inputTokens: 10000,
+							outputTokens: 1000,
+							cacheReadInputTokens: 0,
+							cacheCreationInputTokens: 0,
+							contextWindow: 200000,
+							totalCostUsd: 0.1,
+						},
+					})}
+					onClose={mockOnClose}
+				/>
+			);
+
+			expect(screen.getByText('5%')).toBeInTheDocument();
+			expect(screen.getByText(/10\.0k \/ 200k tokens/)).toBeInTheDocument();
+		});
+
 		it('should display cost when totalCostUsd > 0', () => {
 			render(
 				<HistoryDetailModal
@@ -1395,6 +1425,61 @@ describe('HistoryDetailModal', () => {
 
 			expect(screen.getByTitle('Previous entry (←)')).toBeInTheDocument();
 			expect(screen.getByTitle('Next entry (→)')).toBeInTheDocument();
+		});
+	});
+
+	describe('Usage Breakdown', () => {
+		it('should render stage usage breakdown when usageBreakdown is available', () => {
+			render(
+				<HistoryDetailModal
+					theme={mockTheme}
+					entry={createMockEntry({
+						type: 'AUTO',
+						usageStats: {
+							inputTokens: 1200,
+							outputTokens: 300,
+							cacheReadInputTokens: 0,
+							cacheCreationInputTokens: 0,
+							totalCostUsd: 0,
+							contextWindow: 200000,
+						},
+						usageBreakdown: {
+							planner: {
+								inputTokens: 100,
+								outputTokens: 20,
+								cacheReadInputTokens: 0,
+								cacheCreationInputTokens: 0,
+								totalCostUsd: 0,
+								contextWindow: 200000,
+							},
+							executor: {
+								inputTokens: 900,
+								outputTokens: 250,
+								cacheReadInputTokens: 0,
+								cacheCreationInputTokens: 0,
+								totalCostUsd: 0,
+								contextWindow: 200000,
+							},
+							verifier: {
+								inputTokens: 200,
+								outputTokens: 30,
+								cacheReadInputTokens: 0,
+								cacheCreationInputTokens: 0,
+								totalCostUsd: 0,
+								contextWindow: 200000,
+							},
+						},
+					})}
+					onClose={mockOnClose}
+				/>
+			);
+
+			expect(screen.getByText('Stages')).toBeInTheDocument();
+			expect(screen.getByText('Planner')).toBeInTheDocument();
+			expect(screen.getByText('Executor')).toBeInTheDocument();
+			expect(screen.getByText('Verifier')).toBeInTheDocument();
+			expect(screen.getByText('In 100')).toBeInTheDocument();
+			expect(screen.getByText('Out 250')).toBeInTheDocument();
 		});
 	});
 

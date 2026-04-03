@@ -210,6 +210,19 @@ export function HistoryDetailModal({
 	const colors = getPillColor();
 	const Icon = entry.type === 'AUTO' ? Bot : User;
 	const verifierPill = getVerifierPill(entry.verifierVerdict, theme);
+	const usageBreakdownStages = [
+		{ key: 'planner', label: 'Planner', stats: entry.usageBreakdown?.planner },
+		{ key: 'executor', label: 'Executor', stats: entry.usageBreakdown?.executor },
+		{ key: 'verifier', label: 'Verifier', stats: entry.usageBreakdown?.verifier },
+		{ key: 'synopsis', label: 'Synopsis', stats: entry.usageBreakdown?.synopsis },
+	].filter(
+		(stage) =>
+			stage.stats &&
+			(stage.stats.inputTokens > 0 ||
+				stage.stats.outputTokens > 0 ||
+				stage.stats.cacheCreationInputTokens > 0 ||
+				stage.stats.cacheReadInputTokens > 0)
+	);
 
 	// Access agentName from unified history entries (Director's Notes)
 	const agentName = (entry as HistoryEntry & { agentName?: string }).agentName;
@@ -443,7 +456,8 @@ export function HistoryDetailModal({
 					>
 						<div className="flex items-center gap-6 flex-wrap">
 							{/* Context Window Widget - calculated from usageStats */}
-							{entry.usageStats && entry.usageStats.contextWindow > 0 && (
+							{(entry.contextDisplayUsageStats || entry.usageStats) &&
+								(entry.contextDisplayUsageStats || entry.usageStats)!.contextWindow > 0 && (
 								<div className="flex items-center gap-3">
 									<div className="flex items-center gap-1.5">
 										<Cpu className="w-4 h-4" style={{ color: theme.colors.textDim }} />
@@ -455,15 +469,18 @@ export function HistoryDetailModal({
 										</span>
 									</div>
 									{(() => {
+										const contextStats =
+											entry.contextDisplayUsageStats || entry.usageStats!;
 										const { tokens: contextTokens, percentage: contextUsage } =
 											calculateContextDisplay(
 												{
-													inputTokens: entry.usageStats!.inputTokens,
-													outputTokens: entry.usageStats!.outputTokens,
-													cacheCreationInputTokens: entry.usageStats!.cacheCreationInputTokens ?? 0,
-													cacheReadInputTokens: entry.usageStats!.cacheReadInputTokens ?? 0,
+													inputTokens: contextStats.inputTokens,
+													outputTokens: contextStats.outputTokens,
+													cacheCreationInputTokens:
+														contextStats.cacheCreationInputTokens ?? 0,
+													cacheReadInputTokens: contextStats.cacheReadInputTokens ?? 0,
 												},
-												entry.usageStats!.contextWindow,
+												contextStats.contextWindow,
 												undefined,
 												entry.contextUsage
 											);
@@ -494,7 +511,7 @@ export function HistoryDetailModal({
 													style={{ color: theme.colors.textDim }}
 												>
 													{(contextTokens / 1000).toFixed(1)}k /{' '}
-													{(entry.usageStats!.contextWindow / 1000).toFixed(0)}k tokens
+													{(contextStats.contextWindow / 1000).toFixed(0)}k tokens
 												</span>
 											</div>
 										);
@@ -523,6 +540,49 @@ export function HistoryDetailModal({
 											<span style={{ color: theme.colors.textDim }}>Out:</span>{' '}
 											{(entry.usageStats.outputTokens ?? 0).toLocaleString('en-US')}
 										</span>
+									</div>
+								</div>
+							)}
+
+							{/* Stage Breakdown - only shown for batch runs with per-stage usage */}
+							{usageBreakdownStages.length > 0 && (
+								<div className="flex items-center gap-3 flex-wrap">
+									<div className="flex items-center gap-1.5">
+										<Bot className="w-4 h-4" style={{ color: theme.colors.textDim }} />
+										<span
+											className="text-[10px] font-bold uppercase"
+											style={{ color: theme.colors.textDim }}
+										>
+											Stages
+										</span>
+									</div>
+									<div className="flex items-center gap-2 flex-wrap">
+										{usageBreakdownStages.map((stage) => (
+											<div
+												key={stage.key}
+												className="px-2.5 py-1 rounded-md border"
+												style={{
+													backgroundColor: theme.colors.bgActivity,
+													borderColor: theme.colors.border,
+												}}
+												title={`${stage.label}: ${(stage.stats!.inputTokens ?? 0).toLocaleString('en-US')} in / ${(stage.stats!.outputTokens ?? 0).toLocaleString('en-US')} out`}
+											>
+												<div
+													className="text-[10px] font-bold uppercase"
+													style={{ color: theme.colors.textDim }}
+												>
+													{stage.label}
+												</div>
+												<div className="flex items-center gap-2 text-[11px] font-mono">
+													<span style={{ color: theme.colors.accent }}>
+														In {(stage.stats!.inputTokens ?? 0).toLocaleString('en-US')}
+													</span>
+													<span style={{ color: theme.colors.success }}>
+														Out {(stage.stats!.outputTokens ?? 0).toLocaleString('en-US')}
+													</span>
+												</div>
+											</div>
+										))}
 									</div>
 								</div>
 							)}

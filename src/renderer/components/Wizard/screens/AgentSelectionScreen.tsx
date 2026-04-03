@@ -822,8 +822,10 @@ export function AgentSelectionScreen({ theme }: AgentSelectionScreenProps): JSX.
 				}
 			}
 
-			// Auto-select this agent when opening config
-			setSelectedAgent(agentId as any);
+			// Only auto-select agents that are actually available to run.
+			if (isAgentSelectable(agentId)) {
+				setSelectedAgent(agentId as any);
+			}
 
 			// Trigger transition
 			setIsTransitioning(true);
@@ -836,7 +838,7 @@ export function AgentSelectionScreen({ theme }: AgentSelectionScreenProps): JSX.
 			setAnnouncement(`Configuring ${tile?.name || agentId}`);
 			setAnnouncementKey((prev) => prev + 1);
 		},
-		[detectedAgents, setSelectedAgent, sshRemoteConfig]
+		[detectedAgents, isAgentSelectable, setSelectedAgent, sshRemoteConfig]
 	);
 
 	/**

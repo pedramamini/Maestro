@@ -189,4 +189,15 @@ describe('SkinnySidebar', () => {
 		expect(dot.style.backgroundColor).toBe('transparent');
 		expect(dot.style.border).toContain('1.5px solid');
 	});
+
+	it('shows SSH tooltip state when only sshRemoteId is populated', () => {
+		const s1 = makeSession({
+			sshRemoteId: 'remote-1',
+			sessionSshRemoteConfig: undefined,
+		});
+		render(<SkinnySidebar {...createProps({ sortedSessions: [s1] })} />);
+
+		expect(screen.getByText('REMOTE')).toBeTruthy();
+		expect(screen.getByText(/idle • Claude Code \(SSH\)/i)).toBeTruthy();
+	});
 });

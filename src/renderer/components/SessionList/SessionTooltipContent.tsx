@@ -2,6 +2,7 @@ import { memo } from 'react';
 import { Folder, GitBranch, Bot, Clock, Server } from 'lucide-react';
 import type { Session, Theme } from '../../types';
 import { getContextColor, formatActiveTime } from '../../utils/theme';
+import { isSessionRemote } from '../../utils/sessionHelpers';
 import { getAgentDisplayName } from '../../../shared/agentMetadata';
 
 interface SessionTooltipContentProps {
@@ -24,6 +25,8 @@ export const SessionTooltipContent = memo(function SessionTooltipContent({
 	contextWarningRedThreshold = 80,
 }: SessionTooltipContentProps) {
 	const clampedContextUsage = Math.max(0, Math.min(100, session.contextUsage));
+	const hasSshRemote = isSessionRemote(session);
+	const showRemoteConnected = hasSshRemote && !session.sshConnectionFailed;
 
 	return (
 		<>
@@ -41,7 +44,7 @@ export const SessionTooltipContent = memo(function SessionTooltipContent({
 				</span>
 				{session.toolType !== 'terminal' && (
 					<>
-						{session.sessionSshRemoteConfig?.enabled && session.sshConnectionFailed && (
+						{hasSshRemote && session.sshConnectionFailed && (
 							<span
 								className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold"
 								style={{
@@ -58,7 +61,7 @@ export const SessionTooltipContent = memo(function SessionTooltipContent({
 						)}
 						{session.isGitRepo || session.worktreeBranch ? (
 							<>
-								{session.sessionSshRemoteConfig?.enabled && !session.sshConnectionFailed && (
+								{showRemoteConnected && (
 									<span
 										className="flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold"
 										style={{
@@ -80,7 +83,7 @@ export const SessionTooltipContent = memo(function SessionTooltipContent({
 									GIT
 								</span>
 							</>
-						) : session.sessionSshRemoteConfig?.enabled ? (
+						) : hasSshRemote ? (
 							!session.sshConnectionFailed && (
 								<span
 									className="px-1.5 py-0.5 rounded text-[9px] font-bold uppercase"
@@ -120,7 +123,7 @@ export const SessionTooltipContent = memo(function SessionTooltipContent({
 			</div>
 			<div className="text-[10px] mb-2" style={{ color: theme.colors.textDim }}>
 				{session.state} • {getAgentDisplayName(session.toolType)}
-				{session.sessionSshRemoteConfig?.enabled ? ' (SSH)' : ''}
+				{hasSshRemote ? ' (SSH)' : ''}
 			</div>
 
 			<div

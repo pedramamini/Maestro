@@ -96,6 +96,13 @@ export function useAgentSessionManagement(
 
 	// Refs for functions that need to be accessed from other callbacks
 	const addHistoryEntryRef = useRef<((entry: HistoryEntryInput) => Promise<void>) | null>(null);
+	const sshRemoteId =
+		activeSession?.sshRemoteId || activeSession?.sessionSshRemoteConfig?.remoteId || undefined;
+	const projectPathForSessions = sshRemoteId
+		? activeSession?.remoteCwd ||
+			activeSession?.sessionSshRemoteConfig?.workingDirOverride ||
+			activeSession?.projectRoot
+		: activeSession?.projectRoot;
 
 	/**
 	 * Add a history entry for a session.
@@ -171,8 +178,7 @@ export function useAgentSessionManagement(
 			starred?: boolean,
 			usageStats?: UsageStats
 		) => {
-			// Use projectRoot (not cwd) for consistent session storage access
-			if (!activeSession?.projectRoot) return;
+			if (!activeSession?.projectRoot || !projectPathForSessions) return;
 
 			const isOpenClaw = activeSession.toolType === 'openclaw';
 			let resolvedSessionId = isOpenClaw
@@ -183,7 +189,8 @@ export function useAgentSessionManagement(
 				try {
 					const sessions = await window.maestro.agentSessions.list(
 						activeSession.toolType,
-						activeSession.projectRoot
+						projectPathForSessions,
+						sshRemoteId
 					);
 					const listedSessionIds = sessions.map((session) => session.sessionId);
 					const canonicalSessionId = resolveCanonicalOpenClawSessionId(
@@ -242,9 +249,10 @@ export function useAgentSessionManagement(
 					const agentId = activeSession.toolType || 'claude-code';
 					const result = await window.maestro.agentSessions.read(
 						agentId,
-						activeSession.projectRoot,
+						projectPathForSessions,
 						resolvedSessionId,
-						{ offset: 0, limit: 100 }
+						{ offset: 0, limit: 100 },
+						sshRemoteId
 					);
 
 					// Convert to log entries
@@ -269,15 +277,33 @@ export function useAgentSessionManagement(
 					try {
 						// Look up session metadata from session origins (name, starred, contextUsage)
 						// Claude uses claude-specific storage APIs; OpenClaw uses generic origins storage
-						// Use projectRoot (not cwd) for consistent session storage access
-						const origins =
+						const originData =
 							activeSession.toolType === 'openclaw'
-								? await window.maestro.agentSessions.getOrigins(
-										activeSession.toolType,
-										activeSession.projectRoot
-									)
-								: await window.maestro.claude.getSessionOrigins(activeSession.projectRoot);
-						const originData = origins[resolvedSessionId];
+								? await (async () => {
+										const originProjectPaths = Array.from(
+											new Set(
+												[projectPathForSessions, activeSession.projectRoot].filter(
+													(pathCandidate): pathCandidate is string => !!pathCandidate
+												)
+											)
+										);
+
+										for (const originProjectPath of originProjectPaths) {
+											const origins = await window.maestro.agentSessions.getOrigins(
+												activeSession.toolType,
+												originProjectPath
+											);
+											const matchedOrigin = origins[resolvedSessionId];
+											if (matchedOrigin) {
+												return matchedOrigin;
+											}
+										}
+
+										return undefined;
+									})()
+								: (await window.maestro.claude.getSessionOrigins(activeSession.projectRoot))[
+										resolvedSessionId
+									];
 						if (originData && typeof originData === 'object') {
 							const originWithUsage = originData as {
 								contextUsage?: number;
@@ -348,10 +374,16 @@ export function useAgentSessionManagement(
 			activeSession?.id,
 			activeSession?.aiTabs,
 			activeSession?.toolType,
+			activeSession?.remoteCwd,
+			activeSession?.sshRemoteId,
+			activeSession?.sessionSshRemoteConfig?.remoteId,
+			activeSession?.sessionSshRemoteConfig?.workingDirOverride,
 			setSessions,
 			setActiveAgentSessionId,
 			defaultSaveToHistory,
 			defaultShowThinking,
+			projectPathForSessions,
+			sshRemoteId,
 		]
 	);
 

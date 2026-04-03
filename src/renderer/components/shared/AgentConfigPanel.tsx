@@ -388,6 +388,10 @@ export function AgentConfigPanel({
 		onEnvVarsBlur();
 	};
 
+	const handleEnableRemoteCommandOverride = () => {
+		onCustomPathChange(agent.binaryName || agent.command || '');
+	};
+
 	return (
 		<div className={spacing}>
 			{/* Path input - pre-filled with detected path, editable to override */}
@@ -401,17 +405,30 @@ export function AgentConfigPanel({
 					style={{ color: theme.colors.textDim }}
 				>
 					<span>{isSshEnabled ? 'Remote Command' : 'Path'}</span>
-					{onRefreshAgent && !isSshEnabled && (
-						<button
-							onClick={onRefreshAgent}
-							className="p-1 rounded hover:bg-white/10 transition-colors flex items-center gap-1"
-							title="Re-detect agent path"
-							style={{ color: theme.colors.textDim }}
-						>
-							<RefreshCw className={`w-3 h-3 ${refreshingAgent ? 'animate-spin' : ''}`} />
-							<span className="text-xs">Detect</span>
-						</button>
-					)}
+					<div className="flex items-center gap-2">
+						{isSshEnabled && !customPath && (
+							<button
+								type="button"
+								onClick={handleEnableRemoteCommandOverride}
+								className="p-1 rounded hover:bg-white/10 transition-colors"
+								title={`Override default remote command (${agent.binaryName})`}
+								style={{ color: theme.colors.textDim }}
+							>
+								<span className="text-xs">Override</span>
+							</button>
+						)}
+						{onRefreshAgent && !isSshEnabled && (
+							<button
+								onClick={onRefreshAgent}
+								className="p-1 rounded hover:bg-white/10 transition-colors flex items-center gap-1"
+								title="Re-detect agent path"
+								style={{ color: theme.colors.textDim }}
+							>
+								<RefreshCw className={`w-3 h-3 ${refreshingAgent ? 'animate-spin' : ''}`} />
+								<span className="text-xs">Detect</span>
+							</button>
+						)}
+					</div>
 				</label>
 				<div className="flex gap-2">
 					<input

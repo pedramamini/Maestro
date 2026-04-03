@@ -46,7 +46,10 @@ import {
 import { isLikelyConcatenatedToolNames, getSlashCommandDescription } from '../../constants/app';
 import { getActiveTab, getWriteModeTab } from '../../utils/tabHelpers';
 import { formatRelativeTime } from '../../../shared/formatters';
-import { normalizeOpenClawSessionId } from '../../../shared/openclawSessionId';
+import {
+	normalizeOpenClawSessionId,
+	resolveCanonicalOpenClawSessionId,
+} from '../../../shared/openclawSessionId';
 import { parseSynopsis } from '../../../shared/synopsis';
 import { autorunSynopsisPrompt } from '../../../prompts';
 import type { RightPanelHandle } from '../../components/RightPanel';
@@ -901,7 +904,7 @@ export function useAgentListeners(deps: UseAgentListenersDeps): void {
 		);
 
 		// ================================================================
-		// onSessionId — Handle Claude session ID capture
+		// onSessionId — Handle agent session ID capture
 		// ================================================================
 		const unsubscribeSessionId = window.maestro.process.onSessionId(
 			async (sessionId: string, agentSessionId: string) => {
@@ -918,7 +921,17 @@ export function useAgentListeners(deps: UseAgentListenersDeps): void {
 					if (!session) return prev;
 					const normalizedAgentSessionId =
 						session.toolType === 'openclaw'
-							? normalizeOpenClawSessionId(agentSessionId) || agentSessionId
+							? (() => {
+									const normalized =
+										normalizeOpenClawSessionId(agentSessionId) || agentSessionId;
+									const knownSessionIds = [
+										session.agentSessionId,
+										...session.aiTabs.map((tab) => tab.agentSessionId),
+									].filter((candidate): candidate is string => typeof candidate === 'string');
+									return (
+										resolveCanonicalOpenClawSessionId(normalized, knownSessionIds) || normalized
+									);
+								})()
 							: agentSessionId;
 
 					window.maestro.agentSessions

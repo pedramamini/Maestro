@@ -346,7 +346,8 @@ describe('useAgentSessionManagement', () => {
 			'claude-code',
 			'/test/project',
 			'agent-456',
-			{ offset: 0, limit: 100 }
+			{ offset: 0, limit: 100 },
+			undefined
 		);
 		expect(window.maestro.claude.getSessionOrigins).toHaveBeenCalledOnce();
 		expect(setActiveAgentSessionId).toHaveBeenCalledWith('agent-456');
@@ -423,7 +424,8 @@ describe('useAgentSessionManagement', () => {
 			'openclaw',
 			'/test/project',
 			'main:abc-123',
-			{ offset: 0, limit: 100 }
+			{ offset: 0, limit: 100 },
+			undefined
 		);
 		expect(setActiveAgentSessionId).toHaveBeenCalledWith('main:abc-123');
 
@@ -431,6 +433,92 @@ describe('useAgentSessionManagement', () => {
 		const [updatedSession] = updateFn([activeSession]);
 		const resumedTab = updatedSession.aiTabs.find((tab) => tab.agentSessionId === 'main:abc-123');
 		expect(resumedTab).toBeTruthy();
+	});
+
+	it('uses remote OpenClaw session storage context when resuming over SSH', async () => {
+		const activeSession = createMockSession({
+			toolType: 'openclaw',
+			projectRoot: '/local/project',
+			sshRemoteId: 'ssh-remote-1',
+			remoteCwd: '/remote/project',
+			sessionSshRemoteConfig: {
+				enabled: true,
+				remoteId: 'ssh-remote-1',
+				workingDirOverride: '/remote/fallback',
+			},
+		});
+		const setSessions = vi.fn();
+		const setActiveAgentSessionId = vi.fn();
+
+		window.maestro.agentSessions.list = vi
+			.fn()
+			.mockResolvedValue([{ sessionId: 'main:remote-abc' }]);
+		window.maestro.agentSessions.read = vi.fn().mockResolvedValue({
+			messages: [
+				{
+					type: 'assistant',
+					content: 'Remote welcome back',
+					timestamp: '2024-01-01T00:00:00.000Z',
+					uuid: 'msg-remote-1',
+				},
+			],
+			total: 1,
+			hasMore: false,
+		});
+		window.maestro.agentSessions.getOrigins = vi
+			.fn()
+			.mockResolvedValueOnce({})
+			.mockResolvedValueOnce({
+				'main:remote-abc': { sessionName: 'Remote Session', starred: true },
+			});
+
+		const { result } = renderHook(() =>
+			useAgentSessionManagement({
+				activeSession,
+				setSessions,
+				setActiveAgentSessionId,
+				setAgentSessionsOpen: vi.fn(),
+				rightPanelRef: createRightPanelRef(),
+				defaultSaveToHistory: true,
+			})
+		);
+
+		await act(async () => {
+			await result.current.handleResumeSession('remote-abc');
+		});
+
+		expect(window.maestro.agentSessions.list).toHaveBeenCalledWith(
+			'openclaw',
+			'/remote/project',
+			'ssh-remote-1'
+		);
+		expect(window.maestro.agentSessions.read).toHaveBeenCalledWith(
+			'openclaw',
+			'/remote/project',
+			'main:remote-abc',
+			{ offset: 0, limit: 100 },
+			'ssh-remote-1'
+		);
+		expect(window.maestro.agentSessions.getOrigins).toHaveBeenNthCalledWith(
+			1,
+			'openclaw',
+			'/remote/project'
+		);
+		expect(window.maestro.agentSessions.getOrigins).toHaveBeenNthCalledWith(
+			2,
+			'openclaw',
+			'/local/project'
+		);
+		expect(setActiveAgentSessionId).toHaveBeenCalledWith('main:remote-abc');
+
+		const updateFn = setSessions.mock.calls[0][0];
+		const [updatedSession] = updateFn([activeSession]);
+		const resumedTab = updatedSession.aiTabs.find(
+			(tab) => tab.agentSessionId === 'main:remote-abc'
+		);
+
+		expect(resumedTab?.name).toBe('Remote Session');
+		expect(resumedTab?.starred).toBe(true);
 	});
 
 	it('skips message fetch when messages are already provided', async () => {
