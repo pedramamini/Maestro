@@ -978,6 +978,44 @@ Some text with [x] in it that's not a checkbox
 			expect(result.success).toBe(true);
 		});
 
+		it('should flush final Codex usage event without trailing newline on close', async () => {
+			vi.mocked(fs.existsSync).mockImplementation((filePath) =>
+				String(filePath).endsWith('/.codex/auth.json')
+			);
+
+			const resultPromise = spawnAgent('codex', '/project/path', 'Test prompt');
+
+			await new Promise((resolve) => setTimeout(resolve, 0));
+
+			mockStdout.emit(
+				'data',
+				Buffer.from('{"type":"thread.started","thread_id":"codex-thread"}\n')
+			);
+			mockStdout.emit(
+				'data',
+				Buffer.from('{"type":"item.completed","item":{"type":"agent_message","text":"Done"}}\n')
+			);
+			mockStdout.emit(
+				'data',
+				Buffer.from(
+					'{"type":"turn.completed","usage":{"input_tokens":10,"output_tokens":5,"cached_input_tokens":2}}'
+				)
+			);
+			await new Promise((resolve) => setTimeout(resolve, 0));
+			mockChild.emit('close', 0);
+
+			const result = await resultPromise;
+			expect(result.success).toBe(true);
+			expect(result.usageStats).toMatchObject({
+				inputTokens: 10,
+				outputTokens: 5,
+				cacheReadInputTokens: 2,
+				cacheCreationInputTokens: 0,
+				totalCostUsd: 0,
+			});
+			expect(result.usageStats?.contextWindow).toBeGreaterThan(0);
+		});
+
 		it('should time out and terminate Codex when batch execution does not exit', async () => {
 			vi.useFakeTimers();
 			try {
@@ -1001,6 +1039,42 @@ Some text with [x] in it that's not a checkbox
 				expect(result.success).toBe(false);
 				expect(result.timedOut).toBe(true);
 				expect(result.error).toBe('Timed out after 1000ms');
+			} finally {
+				vi.useRealTimers();
+			}
+		});
+
+		it('should still report timeout when Codex exits with code 0 after SIGTERM', async () => {
+			vi.useFakeTimers();
+			try {
+				vi.mocked(fs.existsSync).mockImplementation((filePath) =>
+					String(filePath).endsWith('/.codex/auth.json')
+				);
+
+				const resultPromise = spawnAgent('codex', '/project/path', 'Test prompt', undefined, {
+					timeoutMs: 1000,
+				});
+
+				await Promise.resolve();
+				vi.advanceTimersByTime(1000);
+				await Promise.resolve();
+
+				expect(mockChild.kill).toHaveBeenCalledWith('SIGTERM');
+
+				mockStdout.emit(
+					'data',
+					Buffer.from(
+						'{"type":"item.completed","item":{"type":"agent_message","text":"Partial"}}\n'
+					)
+				);
+				await Promise.resolve();
+				mockChild.emit('close', 0);
+
+				const result = await resultPromise;
+				expect(result.success).toBe(false);
+				expect(result.timedOut).toBe(true);
+				expect(result.error).toBe('Timed out after 1000ms');
+				expect(result.response).toBeUndefined();
 			} finally {
 				vi.useRealTimers();
 			}
