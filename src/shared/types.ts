@@ -378,7 +378,7 @@ export interface AgentSshRemoteConfig {
 	/** Override working directory for this agent */
 	workingDirOverride?: string;
 
-	/** Sync history entries to .maestro/history/ on the remote host (default: true) */
+	/** Sync history entries to .maestro/history/ on the remote host (opt-in, default: false) */
 	syncHistory?: boolean;
 }
 

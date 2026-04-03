@@ -1,5 +1,5 @@
 import { memo } from 'react';
-import { ExternalLink, Check, X, Clock, Award, Cloud, Server } from 'lucide-react';
+import { ExternalLink, Check, X, Clock, Award, Server } from 'lucide-react';
 import type { Theme, HistoryEntry } from '../../types';
 import { formatElapsedTime } from '../../utils/formatters';
 import { stripMarkdown } from '../../utils/textProcessing';
@@ -226,34 +226,20 @@ export const HistoryEntryItem = memo(function HistoryEntryItem({
 							View Achievements
 						</button>
 					)}
-					{/* Remote origin pills - shown for entries from other hosts */}
+					{/* Remote hostname pill - shown for entries from other hosts */}
 					{entry.hostname && (
-						<div className={`flex items-center gap-2 ${entry.achievementAction ? '' : 'ml-auto'}`}>
-							<span
-								className="flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-bold"
-								style={{
-									backgroundColor: theme.colors.accent + '15',
-									color: theme.colors.accent,
-									border: `1px solid ${theme.colors.accent}30`,
-								}}
-								title="Entry synced from remote host"
-							>
-								<Cloud className="w-2.5 h-2.5" />
-								Remote
-							</span>
-							<span
-								className="flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-mono font-bold"
-								style={{
-									backgroundColor: theme.colors.bgActivity,
-									color: theme.colors.textDim,
-									border: `1px solid ${theme.colors.border}`,
-								}}
-								title={`Origin: ${entry.hostname}`}
-							>
-								<Server className="w-2.5 h-2.5" />
-								{entry.hostname}
-							</span>
-						</div>
+						<span
+							className={`flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-mono font-bold ${entry.achievementAction ? '' : 'ml-auto'}`}
+							style={{
+								backgroundColor: theme.colors.bgActivity,
+								color: theme.colors.textDim,
+								border: `1px solid ${theme.colors.border}`,
+							}}
+							title={`Origin: ${entry.hostname}`}
+						>
+							<Server className="w-2.5 h-2.5" />
+							{entry.hostname}
+						</span>
 					)}
 				</div>
 			)}

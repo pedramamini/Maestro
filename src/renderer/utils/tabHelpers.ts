@@ -270,7 +270,11 @@ export function getNavigableTabs(session: Session, showUnreadOnly = false): AITa
 	}
 
 	if (showUnreadOnly) {
-		return session.aiTabs.filter((tab) => tab.hasUnread || tab.state === 'busy' || hasDraft(tab));
+		const showStarred = useSettingsStore.getState().showStarredInUnreadFilter;
+		return session.aiTabs.filter(
+			(tab) =>
+				tab.hasUnread || tab.state === 'busy' || hasDraft(tab) || (showStarred && tab.starred)
+		);
 	}
 
 	return session.aiTabs;
@@ -1619,14 +1623,21 @@ export function navigateToNextUnifiedTab(
 			const nextIndex = (currentIndex + offset) % length;
 			const tabRef = effectiveOrder[nextIndex];
 
-			// File and terminal tabs are always navigable (if they still exist)
-			if (tabRef.type === 'file' || tabRef.type === 'terminal') {
+			// File tabs: only navigable if setting enabled; terminal tabs always navigable
+			if (tabRef.type === 'file') {
+				if (useSettingsStore.getState().showFilePreviewsInUnreadFilter) {
+					const result = navigateToUnifiedTabByIndex(session, nextIndex);
+					if (result) return result;
+				}
+				continue;
+			}
+			if (tabRef.type === 'terminal') {
 				const result = navigateToUnifiedTabByIndex(session, nextIndex);
 				if (result) return result;
-				continue; // Orphaned tab, skip
+				continue;
 			}
 
-			// For AI tabs, check if it's unread, busy, has a draft, or is the active tab
+			// For AI tabs, check if it's unread, busy, has a draft, starred (if setting enabled), or is the active tab
 			// (the active tab is always shown in the tab bar, so it must be reachable)
 			const aiTab = session.aiTabs.find((t) => t.id === tabRef.id);
 			if (
@@ -1634,7 +1645,8 @@ export function navigateToNextUnifiedTab(
 				(aiTab.hasUnread ||
 					aiTab.state === 'busy' ||
 					hasDraft(aiTab) ||
-					tabRef.id === session.activeTabId)
+					tabRef.id === session.activeTabId ||
+					(useSettingsStore.getState().showStarredInUnreadFilter && aiTab.starred))
 			) {
 				return navigateToUnifiedTabByIndex(session, nextIndex);
 			}
@@ -1701,14 +1713,21 @@ export function navigateToPrevUnifiedTab(
 			const prevIndex = (currentIndex - offset + length) % length;
 			const tabRef = effectiveOrder[prevIndex];
 
-			// File and terminal tabs are always navigable (if they still exist)
-			if (tabRef.type === 'file' || tabRef.type === 'terminal') {
+			// File tabs: only navigable if setting enabled; terminal tabs always navigable
+			if (tabRef.type === 'file') {
+				if (useSettingsStore.getState().showFilePreviewsInUnreadFilter) {
+					const result = navigateToUnifiedTabByIndex(session, prevIndex);
+					if (result) return result;
+				}
+				continue;
+			}
+			if (tabRef.type === 'terminal') {
 				const result = navigateToUnifiedTabByIndex(session, prevIndex);
 				if (result) return result;
-				continue; // Orphaned tab, skip
+				continue;
 			}
 
-			// For AI tabs, check if it's unread, busy, has a draft, or is the active tab
+			// For AI tabs, check if it's unread, busy, has a draft, starred (if setting enabled), or is the active tab
 			// (the active tab is always shown in the tab bar, so it must be reachable)
 			const aiTab = session.aiTabs.find((t) => t.id === tabRef.id);
 			if (
@@ -1716,7 +1735,8 @@ export function navigateToPrevUnifiedTab(
 				(aiTab.hasUnread ||
 					aiTab.state === 'busy' ||
 					hasDraft(aiTab) ||
-					tabRef.id === session.activeTabId)
+					tabRef.id === session.activeTabId ||
+					(useSettingsStore.getState().showStarredInUnreadFilter && aiTab.starred))
 			) {
 				return navigateToUnifiedTabByIndex(session, prevIndex);
 			}

@@ -234,6 +234,8 @@ export interface SettingsStoreState {
 	contextManagementSettings: ContextManagementSettings;
 	keyboardMasteryStats: KeyboardMasteryStats;
 	colorBlindMode: boolean;
+	showStarredInUnreadFilter: boolean;
+	showFilePreviewsInUnreadFilter: boolean;
 	documentGraphShowExternalLinks: boolean;
 	documentGraphMaxNodes: number;
 	documentGraphPreviewCharLimit: number;
@@ -309,6 +311,8 @@ export interface SettingsStoreActions {
 	setWebInterfaceUseCustomPort: (value: boolean) => void;
 	setWebInterfaceCustomPort: (value: number) => void;
 	setColorBlindMode: (value: boolean) => void;
+	setShowStarredInUnreadFilter: (value: boolean) => void;
+	setShowFilePreviewsInUnreadFilter: (value: boolean) => void;
 	setDocumentGraphShowExternalLinks: (value: boolean) => void;
 	setDocumentGraphMaxNodes: (value: number) => void;
 	setDocumentGraphPreviewCharLimit: (value: number) => void;
@@ -462,6 +466,8 @@ export const useSettingsStore = create<SettingsStore>()((set, get) => {
 		contextManagementSettings: DEFAULT_CONTEXT_MANAGEMENT_SETTINGS,
 		keyboardMasteryStats: DEFAULT_KEYBOARD_MASTERY_STATS,
 		colorBlindMode: false,
+		showStarredInUnreadFilter: false,
+		showFilePreviewsInUnreadFilter: false,
 		documentGraphShowExternalLinks: false,
 		documentGraphMaxNodes: 50,
 		documentGraphPreviewCharLimit: 100,
@@ -780,6 +786,16 @@ export const useSettingsStore = create<SettingsStore>()((set, get) => {
 		setColorBlindMode: (value) => {
 			set({ colorBlindMode: value });
 			window.maestro.settings.set('colorBlindMode', value);
+		},
+
+		setShowStarredInUnreadFilter: (value) => {
+			set({ showStarredInUnreadFilter: value });
+			window.maestro.settings.set('showStarredInUnreadFilter', value);
+		},
+
+		setShowFilePreviewsInUnreadFilter: (value) => {
+			set({ showFilePreviewsInUnreadFilter: value });
+			window.maestro.settings.set('showFilePreviewsInUnreadFilter', value);
 		},
 
 		setDocumentGraphShowExternalLinks: (value) => {
@@ -1705,6 +1721,14 @@ export async function loadAllSettings(): Promise<void> {
 		if (allSettings['colorBlindMode'] !== undefined)
 			patch.colorBlindMode = allSettings['colorBlindMode'] as boolean;
 
+		if (allSettings['showStarredInUnreadFilter'] !== undefined)
+			patch.showStarredInUnreadFilter = allSettings['showStarredInUnreadFilter'] as boolean;
+
+		if (allSettings['showFilePreviewsInUnreadFilter'] !== undefined)
+			patch.showFilePreviewsInUnreadFilter = allSettings[
+				'showFilePreviewsInUnreadFilter'
+			] as boolean;
+
 		// Document Graph settings (with validation)
 		if (allSettings['documentGraphShowExternalLinks'] !== undefined)
 			patch.documentGraphShowExternalLinks = allSettings[
@@ -1925,6 +1949,8 @@ export function getSettingsActions() {
 		acknowledgeKeyboardMasteryLevel: state.acknowledgeKeyboardMasteryLevel,
 		getUnacknowledgedKeyboardMasteryLevel: state.getUnacknowledgedKeyboardMasteryLevel,
 		setColorBlindMode: state.setColorBlindMode,
+		setShowStarredInUnreadFilter: state.setShowStarredInUnreadFilter,
+		setShowFilePreviewsInUnreadFilter: state.setShowFilePreviewsInUnreadFilter,
 		setDocumentGraphShowExternalLinks: state.setDocumentGraphShowExternalLinks,
 		setDocumentGraphMaxNodes: state.setDocumentGraphMaxNodes,
 		setDocumentGraphPreviewCharLimit: state.setDocumentGraphPreviewCharLimit,

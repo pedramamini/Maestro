@@ -7,7 +7,7 @@ import { LOOKBACK_OPTIONS, CUE_COLOR } from './historyConstants';
 export interface ActivityGraphProps {
 	entries: HistoryEntry[];
 	theme: Theme;
-	referenceTime?: number; // The "end" of the window (defaults to now)
+	viewportRange?: { start: number; end: number }; // Timestamps of currently visible entries in the list
 	onBarClick?: (bucketStartTime: number, bucketEndTime: number) => void;
 	lookbackHours: number | null; // null = all time
 	onLookbackChange: (hours: number | null) => void;
@@ -16,7 +16,7 @@ export interface ActivityGraphProps {
 export const ActivityGraph: React.FC<ActivityGraphProps> = ({
 	entries,
 	theme,
-	referenceTime,
+	viewportRange,
 	onBarClick,
 	lookbackHours,
 	onLookbackChange,
@@ -31,8 +31,8 @@ export const ActivityGraph: React.FC<ActivityGraphProps> = ({
 		[lookbackHours]
 	);
 
-	// Use referenceTime as the end of our window, or current time if not provided
-	const endTime = referenceTime || Date.now();
+	// Always use current time as the end of the window (graph is static)
+	const endTime = Date.now();
 
 	// Calculate time range based on lookback setting
 	const { startTime, msPerBucket, bucketCount } = useMemo(() => {
@@ -160,21 +160,32 @@ export const ActivityGraph: React.FC<ActivityGraphProps> = ({
 		}
 	}, [contextMenu]);
 
-	// Format the reference time for display (shows what time point we're viewing)
-	const formatReferenceTime = () => {
-		const now = Date.now();
-		const diffMs = now - endTime;
-		const diffMins = Math.floor(diffMs / 60000);
-		const diffHours = Math.floor(diffMins / 60);
+	// Compute viewport indicator position as a percentage (0% = left/oldest, 100% = right/now)
+	// Uses the newest visible entry's timestamp to position the indicator
+	const viewportIndicatorPercent = useMemo(() => {
+		if (!viewportRange) return null;
+		const totalMs = endTime - startTime;
+		if (totalMs <= 0) return null;
+		const percent = ((viewportRange.end - startTime) / totalMs) * 100;
+		return Math.max(0, Math.min(100, percent));
+	}, [viewportRange, startTime, endTime]);
 
-		if (diffMins < 1) return 'Now';
-		if (diffMins < 60) return `${diffMins}m ago`;
-		if (diffHours < 24) return `${diffHours}h ago`;
-		return new Date(endTime).toLocaleDateString([], { month: 'short', day: 'numeric' });
-	};
-
-	// Check if we're viewing historical data (not "now")
-	const isHistorical = referenceTime && Date.now() - referenceTime > 60000;
+	// Format the viewport indicator timestamp for display in the axis row
+	const viewportIndicatorLabel = useMemo(() => {
+		if (!viewportRange) return null;
+		const ts = viewportRange.end;
+		const date = new Date(ts);
+		if (lookbackHours !== null && lookbackHours <= 24) {
+			// Short lookback: show time of day
+			const hour = date.getHours();
+			const min = date.getMinutes();
+			const ampm = hour >= 12 ? 'PM' : 'AM';
+			const hour12 = hour % 12 || 12;
+			return `${hour12}:${min.toString().padStart(2, '0')}${ampm}`;
+		}
+		// Longer lookback or all-time: show date
+		return date.toLocaleDateString([], { month: 'short', day: 'numeric' });
+	}, [viewportRange, lookbackHours]);
 
 	// Generate labels for the x-axis
 	const getAxisLabels = () => {
@@ -223,7 +234,7 @@ export const ActivityGraph: React.FC<ActivityGraphProps> = ({
 			className="flex-1 min-w-0 flex flex-col relative mt-0.5"
 			title={
 				hoveredIndex === null
-					? `${isHistorical ? `Viewing: ${formatReferenceTime()} • ` : ''}${lookbackConfig.label}: ${totalAuto} auto, ${totalUser} user${totalCue > 0 ? `, ${totalCue} cue` : ''} (right-click to change)`
+					? `${lookbackConfig.label}: ${totalAuto} auto, ${totalUser} user${totalCue > 0 ? `, ${totalCue} cue` : ''} (right-click to change)`
 					: undefined
 			}
 			onContextMenu={handleContextMenu}
@@ -286,11 +297,6 @@ export const ActivityGraph: React.FC<ActivityGraphProps> = ({
 				>
 					<div className="font-bold mb-1" style={{ color: theme.colors.textMain }}>
 						{getTimeRangeLabel(hoveredIndex)}
-						{isHistorical && (
-							<span className="ml-2 font-normal" style={{ color: theme.colors.accent }}>
-								{formatReferenceTime()}
-							</span>
-						)}
 					</div>
 					<div className="flex flex-col gap-0.5">
 						<div className="flex items-center justify-between gap-3">
@@ -317,9 +323,21 @@ export const ActivityGraph: React.FC<ActivityGraphProps> = ({
 
 			{/* Graph container with border */}
 			<div
-				className="flex items-end gap-px h-6 rounded border px-1 pt-1"
+				className="flex items-end gap-px h-6 rounded border px-1 pt-1 relative"
 				style={{ borderColor: theme.colors.border }}
 			>
+				{/* Viewport position indicator — shows where you are in the history */}
+				{viewportIndicatorPercent !== null && (
+					<div
+						className="absolute top-0 bottom-0 pointer-events-none z-20"
+						style={{
+							left: `${viewportIndicatorPercent}%`,
+							width: '2px',
+							backgroundColor: theme.colors.error,
+							transition: 'left 0.15s ease-out',
+						}}
+					/>
+				)}
 				{bucketData.map((bucket, index) => {
 					const total = bucket.auto + bucket.user + bucket.cue;
 					const heightPercent = total > 0 ? (total / maxValue) * 100 : 0;
@@ -416,6 +434,24 @@ export const ActivityGraph: React.FC<ActivityGraphProps> = ({
 						{label}
 					</span>
 				))}
+				{/* Viewport indicator label — hidden near edges to avoid overlapping axis labels */}
+				{viewportIndicatorPercent !== null &&
+					viewportIndicatorLabel &&
+					viewportIndicatorPercent > 12 &&
+					viewportIndicatorPercent < 88 && (
+						<span
+							className="absolute text-[8px] font-mono"
+							data-testid="viewport-indicator-label"
+							style={{
+								color: theme.colors.error,
+								left: `${viewportIndicatorPercent}%`,
+								transform: 'translateX(-50%)',
+								transition: 'left 0.15s ease-out',
+							}}
+						>
+							{viewportIndicatorLabel}
+						</span>
+					)}
 			</div>
 		</div>
 	);

@@ -244,7 +244,7 @@ Shared history is enabled per-session via the **Sync history to remote** toggle,
 
 1. Create or edit an agent session
 2. Select an SSH remote from the dropdown
-3. The **Sync history to remote** checkbox appears below the status indicator (enabled by default)
+3. The **Sync history to remote** checkbox appears below the status indicator (disabled by default)
 4. When enabled, every history entry is written to both your local Maestro store and the remote project's `.maestro/history/` directory
 
 ### Use Case: Same User, Multiple Machines

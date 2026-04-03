@@ -16,6 +16,7 @@ import { HistoryEntry, ToolType } from '../../../shared/types';
 import { paginateEntries } from '../../../shared/history';
 import type { PaginatedResult } from '../../../shared/history';
 import { getHistoryManager } from '../../history-manager';
+import { readRemoteEntriesLocal } from '../../shared-history-manager';
 import { getSessionsStore } from '../../stores';
 import {
 	withIpcErrorLogging,
@@ -180,6 +181,36 @@ export function registerDirectorNotesHandlers(deps: DirectorNotesHandlerDependen
 							sourceSessionId: sessionId,
 							agentName: maestroSessionName,
 						});
+					}
+				}
+
+				// Merge shared history entries from other hosts (local .maestro/history/ only)
+				const seenIds = new Set(allEntries.map((e) => e.id));
+				const seenProjectPaths = new Set(allEntries.map((e) => e.projectPath).filter(Boolean));
+
+				for (const projectPath of seenProjectPaths) {
+					try {
+						const sharedEntries = readRemoteEntriesLocal(projectPath);
+						for (const entry of sharedEntries) {
+							if (seenIds.has(entry.id)) continue;
+							if (cutoffTime > 0 && entry.timestamp < cutoffTime) continue;
+
+							seenIds.add(entry.id);
+							agentsWithEntries.add(entry.hostname || 'remote');
+							if (entry.type === 'AUTO') autoCount++;
+							else if (entry.type === 'USER') userCount++;
+							if (entry.agentSessionId) uniqueAgentSessions.add(entry.agentSessionId);
+
+							if (filter && entry.type !== filter) continue;
+
+							allEntries.push({
+								...entry,
+								sourceSessionId: entry.sessionId || 'shared',
+								agentName: entry.hostname ? `${entry.hostname} (remote)` : undefined,
+							});
+						}
+					} catch {
+						// Shared history is best-effort; don't break unified view
 					}
 				}
 

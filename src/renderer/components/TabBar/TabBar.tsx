@@ -79,6 +79,8 @@ function TabBarInner({
 
 	const shortcuts = useSettingsStore((s) => s.shortcuts);
 	const tabShortcuts = useSettingsStore((s) => s.tabShortcuts);
+	const showStarredInUnreadFilter = useSettingsStore((s) => s.showStarredInUnreadFilter);
+	const showFilePreviewsInUnreadFilter = useSettingsStore((s) => s.showFilePreviewsInUnreadFilter);
 
 	const tabBarRef = useRef<HTMLDivElement>(null);
 	const stickyLeftRef = useRef<HTMLDivElement>(null);
@@ -123,7 +125,14 @@ function TabBarInner({
 
 	// Filter tabs for display
 	const displayedTabs = showUnreadOnly
-		? tabs.filter((t) => t.hasUnread || t.state === 'busy' || t.id === activeTabId || hasDraft(t))
+		? tabs.filter(
+				(t) =>
+					t.hasUnread ||
+					t.state === 'busy' ||
+					t.id === activeTabId ||
+					hasDraft(t) ||
+					(showStarredInUnreadFilter && t.starred)
+			)
 		: tabs;
 
 	const displayedUnifiedTabs = useMemo(() => {
@@ -138,13 +147,27 @@ function TabBarInner({
 					ut.data.hasUnread ||
 					ut.data.state === 'busy' ||
 					ut.id === activeTabId ||
-					hasDraft(ut.data)
+					hasDraft(ut.data) ||
+					(showStarredInUnreadFilter && ut.data.starred)
 				);
 			}
-			// File and terminal tabs are always visible
+			// File preview tabs: hidden by default in unread filter, shown if setting enabled
+			if (ut.type === 'file') {
+				return showFilePreviewsInUnreadFilter;
+			}
+			// Terminal tabs are always visible
 			return true;
 		});
-	}, [unifiedTabs, showUnreadOnly, activeTabId, activeFileTabId, activeTerminalTabId, inputMode]);
+	}, [
+		unifiedTabs,
+		showUnreadOnly,
+		activeTabId,
+		activeFileTabId,
+		activeTerminalTabId,
+		inputMode,
+		showStarredInUnreadFilter,
+		showFilePreviewsInUnreadFilter,
+	]);
 
 	// Drag handlers
 	const handleDragStart = useCallback((tabId: string, e: React.DragEvent) => {
