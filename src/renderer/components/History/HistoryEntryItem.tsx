@@ -31,6 +31,45 @@ const getVerifierPill = (
 	}
 };
 
+function formatPromptProfileLabel(promptProfile: HistoryEntry['promptProfile']): string | null {
+	switch (promptProfile) {
+		case 'compact-code':
+			return 'PROFILE CODE';
+		case 'compact-doc':
+			return 'PROFILE DOC';
+		case 'full':
+			return 'PROFILE FULL';
+		default:
+			return null;
+	}
+}
+
+function formatAgentStrategyLabel(agentStrategy: HistoryEntry['agentStrategy']): string | null {
+	switch (agentStrategy) {
+		case 'plan-execute-verify':
+			return 'STRATEGY PEV';
+		case 'single':
+			return 'STRATEGY SINGLE';
+		default:
+			return null;
+	}
+}
+
+function formatWorktreeModeLabel(worktreeMode: HistoryEntry['worktreeMode']): string | null {
+	switch (worktreeMode) {
+		case 'managed':
+			return 'WT MANAGED';
+		case 'existing-open':
+			return 'WT OPEN';
+		case 'existing-closed':
+			return 'WT CLOSED';
+		case 'create-new':
+			return 'WT NEW';
+		default:
+			return null;
+	}
+}
+
 // Get pill color based on entry type
 const getPillColor = (type: HistoryEntryType, theme: Theme) => {
 	switch (type) {
@@ -113,6 +152,36 @@ export const HistoryEntryItem = memo(function HistoryEntryItem({
 	const agentName = showAgentName
 		? (entry as HistoryEntry & { agentName?: string }).agentName
 		: undefined;
+	const analyticsPills = [
+		entry.playbookName
+			? {
+					key: 'playbook',
+					label: entry.playbookName,
+					title: `Playbook: ${entry.playbookName}`,
+				}
+			: null,
+		formatPromptProfileLabel(entry.promptProfile)
+			? {
+					key: 'prompt-profile',
+					label: formatPromptProfileLabel(entry.promptProfile)!,
+					title: `Prompt profile: ${entry.promptProfile}`,
+				}
+			: null,
+		formatAgentStrategyLabel(entry.agentStrategy)
+			? {
+					key: 'agent-strategy',
+					label: formatAgentStrategyLabel(entry.agentStrategy)!,
+					title: `Agent strategy: ${entry.agentStrategy}`,
+				}
+			: null,
+		formatWorktreeModeLabel(entry.worktreeMode)
+			? {
+					key: 'worktree-mode',
+					label: formatWorktreeModeLabel(entry.worktreeMode)!,
+					title: `Worktree mode: ${entry.worktreeMode}`,
+				}
+			: null,
+	].filter((pill): pill is { key: string; label: string; title: string } => Boolean(pill));
 
 	return (
 		<div
@@ -226,6 +295,22 @@ export const HistoryEntryItem = memo(function HistoryEntryItem({
 							{verifierPill.label}
 						</span>
 					)}
+
+					{entry.type === 'AUTO' &&
+						analyticsPills.map((pill) => (
+							<span
+								key={pill.key}
+								className="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase flex-shrink-0 max-w-[180px] truncate"
+								style={{
+									backgroundColor: theme.colors.bgActivity,
+									color: theme.colors.textDim,
+									border: `1px solid ${theme.colors.border}`,
+								}}
+								title={pill.title}
+							>
+								{pill.label}
+							</span>
+						))}
 				</div>
 
 				{/* Timestamp */}

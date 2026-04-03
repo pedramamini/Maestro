@@ -114,6 +114,31 @@ describe('HistoryDetailModal', () => {
 			expect(screen.getByText('VERIFY WARN')).toBeInTheDocument();
 		});
 
+		it('should render Auto Run metadata when present', () => {
+			render(
+				<HistoryDetailModal
+					theme={mockTheme}
+					entry={createMockEntry({
+						type: 'AUTO',
+						playbookName: 'Regression Sweep',
+						promptProfile: 'compact-code',
+						agentStrategy: 'plan-execute-verify',
+						worktreeMode: 'create-new',
+						schedulerMode: 'dag',
+						schedulerOutcome: 'completed',
+					})}
+					onClose={mockOnClose}
+				/>
+			);
+
+			expect(screen.getByText('Auto Run Metadata')).toBeInTheDocument();
+			expect(screen.getByText('Regression Sweep')).toBeInTheDocument();
+			expect(screen.getByText('Compact Code')).toBeInTheDocument();
+			expect(screen.getByText('Plan / Execute / Verify')).toBeInTheDocument();
+			expect(screen.getByText('Create New Worktree')).toBeInTheDocument();
+			expect(screen.getByText('DAG')).toBeInTheDocument();
+		});
+
 		it('should render Close button', () => {
 			render(
 				<HistoryDetailModal theme={mockTheme} entry={createMockEntry()} onClose={mockOnClose} />

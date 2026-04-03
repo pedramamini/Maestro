@@ -31,6 +31,19 @@ interface AutoRunSession {
 	tasksTotal?: number;
 	tasksCompleted?: number;
 	projectPath?: string;
+	playbookName?: string;
+	promptProfile?: 'full' | 'compact-code' | 'compact-doc';
+	agentStrategy?: 'single' | 'plan-execute-verify';
+	worktreeMode?: 'disabled' | 'managed' | 'existing-open' | 'existing-closed' | 'create-new';
+	schedulerMode?: 'sequential' | 'dag';
+	maxParallelism?: number;
+}
+
+interface AutoRunTask {
+	id: string;
+	autoRunSessionId: string;
+	verifierVerdict?: 'PASS' | 'WARN' | 'FAIL';
+	schedulerOutcome?: 'completed' | 'failed' | 'timed_out';
 }
 
 interface AutoRunStatsProps {
@@ -157,12 +170,57 @@ function groupSessionsByDate(
 		.sort((a, b) => a.date.localeCompare(b.date));
 }
 
+function formatCountLabel(value: string): string {
+	switch (value) {
+		case 'compact-code':
+			return 'Compact Code';
+		case 'compact-doc':
+			return 'Compact Doc';
+		case 'full':
+			return 'Full';
+		case 'plan-execute-verify':
+			return 'Plan / Execute / Verify';
+		case 'single':
+			return 'Single Pass';
+		case 'existing-open':
+			return 'Existing Open';
+		case 'existing-closed':
+			return 'Existing Closed';
+		case 'create-new':
+			return 'Create New';
+		case 'managed':
+			return 'Managed';
+		case 'disabled':
+			return 'Disabled';
+		case 'dag':
+			return 'DAG';
+		case 'sequential':
+			return 'Sequential';
+		default:
+			return value;
+	}
+}
+
+function buildCounts(values: Array<string | undefined>): Array<{ label: string; count: number }> {
+	const counts = new Map<string, number>();
+
+	for (const value of values) {
+		if (!value) continue;
+		counts.set(value, (counts.get(value) ?? 0) + 1);
+	}
+
+	return [...counts.entries()]
+		.map(([label, count]) => ({ label: formatCountLabel(label), count }))
+		.sort((a, b) => b.count - a.count || a.label.localeCompare(b.label));
+}
+
 export const AutoRunStats = memo(function AutoRunStats({
 	timeRange,
 	theme,
 	columns = 6,
 }: AutoRunStatsProps) {
 	const [sessions, setSessions] = useState<AutoRunSession[]>([]);
+	const [tasksBySession, setTasksBySession] = useState<Record<string, AutoRunTask[]>>({});
 	const [loading, setLoading] = useState(true);
 	const [error, setError] = useState<string | null>(null);
 	const [hoveredBar, setHoveredBar] = useState<{
@@ -180,6 +238,16 @@ export const AutoRunStats = memo(function AutoRunStats({
 		try {
 			const autoRunSessions = await window.maestro.stats.getAutoRunSessions(timeRange);
 			setSessions(autoRunSessions);
+			const taskEntries = await Promise.all(
+				autoRunSessions.map(
+					async (session) =>
+						[
+							session.id,
+							(await window.maestro.stats.getAutoRunTasks(session.id)) as AutoRunTask[],
+						] as const
+				)
+			);
+			setTasksBySession(Object.fromEntries(taskEntries));
 		} catch (err) {
 			captureException(err);
 			setError(err instanceof Error ? err.message : 'Failed to load Auto Run stats');
@@ -237,6 +305,18 @@ export const AutoRunStats = memo(function AutoRunStats({
 	const tasksByDate = useMemo(() => {
 		return groupSessionsByDate(sessions);
 	}, [sessions]);
+
+	const analyticsBreakdown = useMemo(() => {
+		const allTasks = Object.values(tasksBySession).flat();
+		return {
+			playbooks: buildCounts(sessions.map((session) => session.playbookName)),
+			profiles: buildCounts(sessions.map((session) => session.promptProfile)),
+			strategies: buildCounts(sessions.map((session) => session.agentStrategy)),
+			worktrees: buildCounts(sessions.map((session) => session.worktreeMode)),
+			schedulers: buildCounts(sessions.map((session) => session.schedulerMode)),
+			verdicts: buildCounts(allTasks.map((task) => task.verifierVerdict)),
+		};
+	}, [sessions, tasksBySession]);
 
 	// Max count for bar height calculation
 	const maxCount = useMemo(() => {
@@ -498,6 +578,66 @@ export const AutoRunStats = memo(function AutoRunStats({
 						<span className="text-sm">No task data available</span>
 					</div>
 				)}
+			</div>
+
+			<div
+				className="p-4 rounded-lg"
+				style={{ backgroundColor: theme.colors.bgMain }}
+				data-testid="autorun-analytics-breakdown"
+			>
+				<h3 className="text-sm font-medium mb-4" style={{ color: theme.colors.textMain }}>
+					Execution Mix
+				</h3>
+				<div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+					{[
+						{ title: 'Playbooks', items: analyticsBreakdown.playbooks },
+						{ title: 'Prompt Profiles', items: analyticsBreakdown.profiles },
+						{ title: 'Strategies', items: analyticsBreakdown.strategies },
+						{ title: 'Worktree Modes', items: analyticsBreakdown.worktrees },
+						{ title: 'Schedulers', items: analyticsBreakdown.schedulers },
+						{ title: 'Verifier Verdicts', items: analyticsBreakdown.verdicts },
+					].map((section) => (
+						<div
+							key={section.title}
+							className="rounded-lg border p-3"
+							style={{
+								borderColor: theme.colors.border,
+								backgroundColor: theme.colors.bgActivity,
+							}}
+						>
+							<div
+								className="text-xs font-bold uppercase mb-2"
+								style={{ color: theme.colors.textDim }}
+							>
+								{section.title}
+							</div>
+							<div className="space-y-2">
+								{section.items.length > 0 ? (
+									section.items.slice(0, 4).map((item) => (
+										<div key={item.label} className="flex items-center justify-between gap-3">
+											<span className="text-sm truncate" style={{ color: theme.colors.textMain }}>
+												{item.label}
+											</span>
+											<span
+												className="text-xs font-mono px-2 py-0.5 rounded-full"
+												style={{
+													color: theme.colors.accent,
+													backgroundColor: `${theme.colors.accent}15`,
+												}}
+											>
+												{item.count}
+											</span>
+										</div>
+									))
+								) : (
+									<div className="text-sm" style={{ color: theme.colors.textDim }}>
+										No data
+									</div>
+								)}
+							</div>
+						</div>
+					))}
+				</div>
 			</div>
 		</div>
 	);

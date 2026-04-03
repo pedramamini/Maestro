@@ -32,6 +32,11 @@ const mockSessions = [
 		tasksTotal: 5,
 		tasksCompleted: 4,
 		projectPath: '/project',
+		playbookName: 'Regression Sweep',
+		promptProfile: 'compact-code',
+		agentStrategy: 'plan-execute-verify',
+		worktreeMode: 'create-new',
+		schedulerMode: 'dag',
 	},
 	{
 		id: 'session-2',
@@ -43,6 +48,11 @@ const mockSessions = [
 		tasksTotal: 3,
 		tasksCompleted: 3,
 		projectPath: '/project',
+		playbookName: 'Regression Sweep',
+		promptProfile: 'compact-code',
+		agentStrategy: 'plan-execute-verify',
+		worktreeMode: 'create-new',
+		schedulerMode: 'dag',
 	},
 ];
 
@@ -95,6 +105,7 @@ const mockTasksSession1 = [
 	{
 		id: 'task-5',
 		autoRunSessionId: 'session-1',
+		verifierVerdict: 'WARN',
 		sessionId: 'maestro-1',
 		agentType: 'claude-code',
 		taskIndex: 4,
@@ -109,6 +120,7 @@ const mockTasksSession2 = [
 	{
 		id: 'task-6',
 		autoRunSessionId: 'session-2',
+		verifierVerdict: 'PASS',
 		sessionId: 'maestro-2',
 		agentType: 'claude-code',
 		taskIndex: 0,
@@ -120,6 +132,7 @@ const mockTasksSession2 = [
 	{
 		id: 'task-7',
 		autoRunSessionId: 'session-2',
+		verifierVerdict: 'PASS',
 		sessionId: 'maestro-2',
 		agentType: 'claude-code',
 		taskIndex: 1,
@@ -131,6 +144,7 @@ const mockTasksSession2 = [
 	{
 		id: 'task-8',
 		autoRunSessionId: 'session-2',
+		verifierVerdict: 'PASS',
 		sessionId: 'maestro-2',
 		agentType: 'claude-code',
 		taskIndex: 2,
@@ -192,12 +206,24 @@ describe('AutoRunStats', () => {
 			});
 		});
 
+		it('renders execution mix analytics', async () => {
+			render(<AutoRunStats timeRange="week" theme={theme} />);
+
+			await waitFor(() => {
+				expect(screen.getByText('Execution Mix')).toBeInTheDocument();
+				expect(screen.getByText('Playbooks')).toBeInTheDocument();
+				expect(screen.getAllByText('Regression Sweep').length).toBeGreaterThan(0);
+				expect(screen.getByText('Plan / Execute / Verify')).toBeInTheDocument();
+				expect(screen.getByText('Create New')).toBeInTheDocument();
+			});
+		});
+
 		it('renders Total Sessions metric', async () => {
 			render(<AutoRunStats timeRange="week" theme={theme} />);
 
 			await waitFor(() => {
 				expect(screen.getByText('Total Sessions')).toBeInTheDocument();
-				expect(screen.getByText('2')).toBeInTheDocument();
+				expect(screen.getByLabelText('Total Sessions: 2')).toBeInTheDocument();
 			});
 		});
 

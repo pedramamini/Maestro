@@ -174,6 +174,29 @@ describe('HistoryEntryItem', () => {
 		expect(screen.getByText('VERIFY FAIL')).toBeInTheDocument();
 	});
 
+	it('shows Auto Run analytics pills when metadata is present', () => {
+		render(
+			<HistoryEntryItem
+				entry={createMockEntry({
+					type: 'AUTO',
+					playbookName: 'Regression Sweep',
+					promptProfile: 'compact-code',
+					agentStrategy: 'plan-execute-verify',
+					worktreeMode: 'create-new',
+				})}
+				index={0}
+				isSelected={false}
+				theme={mockTheme}
+				onOpenDetailModal={vi.fn()}
+			/>
+		);
+
+		expect(screen.getByText('Regression Sweep')).toBeInTheDocument();
+		expect(screen.getByText('PROFILE CODE')).toBeInTheDocument();
+		expect(screen.getByText('STRATEGY PEV')).toBeInTheDocument();
+		expect(screen.getByText('WT NEW')).toBeInTheDocument();
+	});
+
 	it('does not show success/failure indicator for USER entries', () => {
 		render(
 			<HistoryEntryItem
