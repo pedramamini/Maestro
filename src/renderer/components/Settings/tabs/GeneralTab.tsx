@@ -38,7 +38,11 @@ import {
 } from 'lucide-react';
 import { useSettings } from '../../../hooks';
 import type { Theme, ShellInfo } from '../../../types';
-import { formatMetaKey, formatEnterToSend, formatShortcutKeys } from '../../../utils/shortcutFormatter';
+import {
+	formatMetaKey,
+	formatEnterToSend,
+	formatShortcutKeys,
+} from '../../../utils/shortcutFormatter';
 import { ForcedParallelWarningModal } from '../../ForcedParallelWarningModal';
 import { getOpenInLabel, isLinuxPlatform } from '../../../utils/platformUtils';
 import { ToggleButtonGroup } from '../../ToggleButtonGroup';
@@ -749,7 +753,7 @@ export function GeneralTab({ theme, isOpen }: GeneralTabProps) {
 									opacity: forcedParallelExecution ? 1 : 0.5,
 								}}
 							>
-								{shortcuts.forcedParallelSend
+								{shortcuts?.forcedParallelSend
 									? formatShortcutKeys(shortcuts.forcedParallelSend.keys)
 									: '⌘ ⇧ ↩'}
 							</span>
@@ -784,12 +788,12 @@ export function GeneralTab({ theme, isOpen }: GeneralTabProps) {
 						<span>
 							When enabled, use{' '}
 							<strong>
-								{shortcuts.forcedParallelSend
+								{shortcuts?.forcedParallelSend
 									? formatShortcutKeys(shortcuts.forcedParallelSend.keys)
 									: '⌘ ⇧ ↩'}
 							</strong>{' '}
-							to send messages even while the agent is busy. Parallel writes to the same
-							files may cause one to overwrite the other.
+							to send messages even while the agent is busy. Parallel writes to the same files may
+							cause one to overwrite the other.
 						</span>
 					</div>
 				</div>
