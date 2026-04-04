@@ -551,6 +551,64 @@ describe('CueEngine Concurrency Control', () => {
 			engine.stopAll();
 			engine.stop();
 		});
+
+		it('preserves app.startup events when preserveStartup is true', async () => {
+			// Use a never-resolving onCueRun so the first run stays in-flight
+			const deps = createMockDeps({
+				onCueRun: vi.fn(() => new Promise<CueRunResult>(() => {})),
+			});
+			const config = createMockConfig({
+				settings: {
+					timeout_minutes: 30,
+					timeout_on_fail: 'break',
+					max_concurrent: 1,
+					queue_size: 10,
+				},
+				subscriptions: [
+					{
+						name: 'startup-a',
+						event: 'app.startup',
+						enabled: true,
+						prompt: 'first startup',
+					},
+					{
+						name: 'startup-b',
+						event: 'app.startup',
+						enabled: true,
+						prompt: 'second startup',
+					},
+					{
+						name: 'timer',
+						event: 'time.heartbeat',
+						enabled: true,
+						prompt: 'heartbeat',
+						interval_minutes: 1,
+					},
+				],
+			});
+			mockLoadCueConfig.mockReturnValue(config);
+			const engine = new CueEngine(deps);
+			engine.start(true);
+
+			// Heartbeat fires immediately and takes the slot.
+			// Both startup-a and startup-b are queued (max_concurrent=1).
+			expect(engine.getQueueStatus().get('session-1')).toBe(2);
+
+			// Advance time to queue another heartbeat event
+			vi.advanceTimersByTime(60 * 1000);
+			expect(engine.getQueueStatus().get('session-1')).toBe(3);
+
+			// clearQueue with preserveStartup=true should keep only the 2 startup events
+			engine.clearQueue('session-1', true);
+			expect(engine.getQueueStatus().get('session-1')).toBe(2);
+
+			// clearQueue without preserveStartup should wipe everything
+			engine.clearQueue('session-1');
+			expect(engine.getQueueStatus().size).toBe(0);
+
+			engine.stopAll();
+			engine.stop();
+		});
 	});
 
 	describe('getQueueStatus', () => {
