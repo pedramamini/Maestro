@@ -92,41 +92,58 @@ export function EditAgentModal({
 		const isProviderSwitch = activeToolType !== session.toolType;
 
 		// Load agent definition to get configOptions
-		window.maestro.agents.detect().then((agents: AgentConfig[]) => {
-			if (stale) return;
-			const foundAgent = agents.find((a) => a.id === activeToolType);
-			setAgent(foundAgent || null);
+		window.maestro.agents
+			.detect()
+			.then((agents: AgentConfig[]) => {
+				if (stale) return;
+				const foundAgent = agents.find((a) => a.id === activeToolType);
+				setAgent(foundAgent || null);
 
-			// Load models if agent supports model selection
-			if (foundAgent?.capabilities?.supportsModelSelection) {
-				setLoadingModels(true);
-				window.maestro.agents
-					.getModels(activeToolType)
-					.then((models) => {
-						if (!stale) setAvailableModels(models);
-					})
-					.catch((err) => console.error('Failed to load models:', err))
-					.finally(() => {
-						if (!stale) setLoadingModels(false);
-					});
-			} else {
-				setAvailableModels([]);
-			}
-		});
+				// Load models if agent supports model selection
+				if (foundAgent?.capabilities?.supportsModelSelection) {
+					setLoadingModels(true);
+					window.maestro.agents
+						.getModels(activeToolType)
+						.then((models) => {
+							if (!stale) setAvailableModels(models);
+						})
+						.catch((err) => console.error('Failed to load models:', err))
+						.finally(() => {
+							if (!stale) setLoadingModels(false);
+						});
+				} else {
+					setAvailableModels([]);
+				}
+			})
+			.catch((err) => {
+				console.error('Failed to detect agents:', err);
+				if (!stale) {
+					setAgent(null);
+					setAvailableModels([]);
+					setLoadingModels(false);
+				}
+			});
 		// Load agent config for defaults, but use session-level overrides when available
 		// Both model and contextWindow are now per-session
-		window.maestro.agents.getConfig(activeToolType).then((globalConfig) => {
-			if (stale) return;
-			if (isProviderSwitch) {
-				// When provider changed, use global defaults for the new provider
-				setAgentConfig(globalConfig);
-			} else {
-				// Use session-level values if set, otherwise use global defaults
-				const modelValue = session.customModel ?? globalConfig.model ?? '';
-				const contextWindowValue = session.customContextWindow ?? globalConfig.contextWindow;
-				setAgentConfig({ ...globalConfig, model: modelValue, contextWindow: contextWindowValue });
-			}
-		});
+		window.maestro.agents
+			.getConfig(activeToolType)
+			.then((globalConfig) => {
+				if (stale) return;
+				if (isProviderSwitch) {
+					// When provider changed, use global defaults for the new provider
+					setAgentConfig(globalConfig);
+				} else {
+					// Use session-level values if set, otherwise use global defaults
+					const modelValue = session.customModel ?? globalConfig.model ?? '';
+					const contextWindowValue = session.customContextWindow ?? globalConfig.contextWindow;
+					setAgentConfig({
+						...globalConfig,
+						model: modelValue,
+						contextWindow: contextWindowValue,
+					});
+				}
+			})
+			.catch((err) => console.error('Failed to load agent config:', err));
 
 		// Load SSH remote config from session (per-session, not global)
 		if (session.sessionSshRemoteConfig?.enabled && session.sessionSshRemoteConfig?.remoteId) {
