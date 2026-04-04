@@ -40,6 +40,7 @@ import { SummarizeProgressOverlay } from './SummarizeProgressOverlay';
 import { WizardInputPanel } from './InlineWizard';
 import { useAgentCapabilities, useScrollIntoView } from '../hooks';
 import { getProviderDisplayName } from '../utils/sessionValidation';
+import { filterSlashCommands, highlightSlashCommand } from '../utils/search';
 import { getReadOnlyModeLabel, getReadOnlyModeTooltip } from '../../shared/agentMetadata';
 
 interface SlashCommand {
@@ -364,14 +365,8 @@ export const InputArea = React.memo(function InputArea(props: InputAreaProps) {
 	// recalculating on every render - inputValue changes on every keystroke
 	const inputValueLower = useMemo(() => inputValue.toLowerCase(), [inputValue]);
 	const filteredSlashCommands = useMemo(() => {
-		return slashCommands.filter((cmd) => {
-			// Check if command is only available in terminal mode
-			if (cmd.terminalOnly && !isTerminalMode) return false;
-			// Check if command is only available in AI mode
-			if (cmd.aiOnly && isTerminalMode) return false;
-			// Check if command matches input
-			return cmd.command.toLowerCase().startsWith(inputValueLower);
-		});
+		const query = inputValueLower.replace(/^\//, '');
+		return filterSlashCommands(slashCommands, query, isTerminalMode);
 	}, [slashCommands, isTerminalMode, inputValueLower]);
 
 	// Ensure selectedSlashCommandIndex is valid for the filtered list
@@ -588,7 +583,9 @@ export const InputArea = React.memo(function InputArea(props: InputAreaProps) {
 								}}
 								onMouseEnter={() => setSelectedSlashCommandIndex(idx)}
 							>
-								<div className="font-mono text-sm">{cmd.command}</div>
+								<div className="font-mono text-sm">
+									{highlightSlashCommand(cmd.command, inputValueLower.replace(/^\//, ''))}
+								</div>
 								<div className="text-xs opacity-70 mt-0.5">{cmd.description}</div>
 							</button>
 						))}
