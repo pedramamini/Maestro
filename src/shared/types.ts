@@ -141,17 +141,173 @@ export interface BatchRunConfig {
 	worktreeTarget?: WorktreeRunTarget;
 }
 
-// Agent configuration
+// ============================================================================
+// Agent Capabilities
+// ============================================================================
+
+/**
+ * Capability flags that determine what features are available for each agent.
+ * This is the single canonical definition - all other files should import from here.
+ */
+export interface AgentCapabilities {
+	/** Agent supports resuming existing sessions (e.g., --resume flag) */
+	supportsResume: boolean;
+
+	/** Agent supports read-only/plan mode (e.g., --permission-mode plan) */
+	supportsReadOnlyMode: boolean;
+
+	/** Agent outputs JSON-formatted responses (for parsing) */
+	supportsJsonOutput: boolean;
+
+	/** Agent provides a session ID for conversation continuity */
+	supportsSessionId: boolean;
+
+	/** Agent can accept image inputs (screenshots, diagrams, etc.) */
+	supportsImageInput: boolean;
+
+	/** Agent can accept image inputs when resuming an existing session */
+	supportsImageInputOnResume: boolean;
+
+	/** Agent supports slash commands (e.g., /help, /compact) */
+	supportsSlashCommands: boolean;
+
+	/** Agent stores session history in a discoverable location */
+	supportsSessionStorage: boolean;
+
+	/** Agent provides cost/pricing information */
+	supportsCostTracking: boolean;
+
+	/** Agent provides token usage statistics */
+	supportsUsageStats: boolean;
+
+	/** Agent supports batch/headless mode (non-interactive) */
+	supportsBatchMode: boolean;
+
+	/** Agent requires a prompt to start (no eager spawn on session creation) */
+	requiresPromptToStart: boolean;
+
+	/** Agent streams responses in real-time */
+	supportsStreaming: boolean;
+
+	/** Agent provides distinct "result" messages when done */
+	supportsResultMessages: boolean;
+
+	/** Agent supports selecting different models (e.g., --model flag) */
+	supportsModelSelection: boolean;
+
+	/** Agent supports --input-format stream-json for image input via stdin */
+	supportsStreamJsonInput: boolean;
+
+	/** Agent emits streaming thinking/reasoning content that can be displayed */
+	supportsThinkingDisplay: boolean;
+
+	/** Agent can receive merged context from other sessions/tabs */
+	supportsContextMerge: boolean;
+
+	/** Agent can export its context for transfer to other sessions/agents */
+	supportsContextExport: boolean;
+
+	/** Agent supports inline wizard structured output conversations */
+	supportsWizard: boolean;
+
+	/** Agent can serve as a group chat moderator */
+	supportsGroupChatModeration: boolean;
+
+	/** Agent uses JSON line (JSONL) output format in CLI batch mode */
+	usesJsonLineOutput: boolean;
+
+	/** Agent uses a combined input+output context window (vs separate limits) */
+	usesCombinedContextWindow: boolean;
+
+	/** Agent supports --append-system-prompt for separate system prompt delivery */
+	supportsAppendSystemPrompt: boolean;
+
+	/** How images should be handled on resume when -i flag is not available.
+	 * 'prompt-embed': Save images to temp files and embed file paths in the prompt text.
+	 * undefined: Use default image handling (or no special resume handling needed). */
+	imageResumeMode?: 'prompt-embed';
+}
+
+/**
+ * Default capabilities - safe defaults for unknown agents.
+ * All capabilities disabled by default (conservative approach).
+ */
+export const DEFAULT_CAPABILITIES: AgentCapabilities = {
+	supportsResume: false,
+	supportsReadOnlyMode: false,
+	supportsJsonOutput: false,
+	supportsSessionId: false,
+	supportsImageInput: false,
+	supportsImageInputOnResume: false,
+	supportsSlashCommands: false,
+	supportsSessionStorage: false,
+	supportsCostTracking: false,
+	supportsUsageStats: false,
+	supportsBatchMode: false,
+	requiresPromptToStart: false,
+	supportsStreaming: false,
+	supportsResultMessages: false,
+	supportsModelSelection: false,
+	supportsStreamJsonInput: false,
+	supportsThinkingDisplay: false,
+	supportsContextMerge: false,
+	supportsContextExport: false,
+	supportsWizard: false,
+	supportsGroupChatModeration: false,
+	usesJsonLineOutput: false,
+	usesCombinedContextWindow: false,
+	supportsAppendSystemPrompt: false,
+};
+
+// ============================================================================
+// Agent Configuration Types
+// ============================================================================
+
+/**
+ * Simplified agent configuration option (IPC-safe, no discriminated union).
+ * The main process uses a richer discriminated union in definitions.ts.
+ * This is the single canonical definition for cross-process usage.
+ */
+export interface AgentConfigOption {
+	key: string;
+	type: 'checkbox' | 'text' | 'number' | 'select';
+	label: string;
+	description: string;
+	// eslint-disable-next-line @typescript-eslint/no-explicit-any
+	default: any;
+	options?: string[];
+}
+
+/**
+ * Agent configuration - serializable fields that can cross the IPC boundary.
+ * This is the single canonical definition - all other files should import from here.
+ *
+ * The main process extends this with function-typed arg builders in definitions.ts.
+ * The renderer and preload import this type directly.
+ */
 export interface AgentConfig {
 	id: string;
 	name: string;
-	binaryName: string;
-	command: string;
-	args: string[];
+	binaryName?: string;
+	command?: string;
+	args?: string[];
 	available: boolean;
 	path?: string;
+	customPath?: string;
 	requiresPty?: boolean;
+	configOptions?: AgentConfigOption[];
 	hidden?: boolean;
+	capabilities?: AgentCapabilities;
+	// Serializable arg config arrays (no functions)
+	batchModePrefix?: string[];
+	batchModeArgs?: string[];
+	jsonOutputArgs?: string[];
+	readOnlyArgs?: string[];
+	yoloModeArgs?: string[];
+	noPromptSeparator?: boolean;
+	defaultEnvVars?: Record<string, string>;
+	readOnlyEnvOverrides?: Record<string, string>;
+	readOnlyCliEnforced?: boolean;
 }
 
 // ============================================================================
@@ -331,20 +487,6 @@ export interface SshRemoteConfig {
 	 * Used for display purposes to show where the config came from.
 	 */
 	sshConfigHost?: string;
-}
-
-/**
- * Status of an SSH remote connection from last test.
- */
-export interface SshRemoteStatus {
-	/** Last connection test result */
-	lastTestSuccess: boolean | null;
-
-	/** Last connection test timestamp */
-	lastTestAt: number | null;
-
-	/** Error message from last test */
-	lastTestError: string | null;
 }
 
 /**

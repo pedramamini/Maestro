@@ -82,9 +82,25 @@ Types in `src/shared/` are importable by all three. The problem is that instead 
 
 ### Task 5: Consolidate AgentConfig (5 definitions)
 
-- [ ] Read all 5 definitions and compare fields
-- [ ] Keep canonical in `src/shared/types.ts` or `src/main/agents/definitions.ts`
-- [ ] Replace other 4 definitions with imports
+- [x] Read all 5 definitions and compare fields
+  - `shared/types.ts:263` (8 fields, minimal, unused by imports)
+  - `definitions.ts:72` (30 fields, richest, includes function-typed arg builders)
+  - `preload/agents.ts:20` (7 fields, minimal for preload API signatures)
+  - `renderer/global.d.ts:65` (12 fields, ambient declaration)
+  - `renderer/types/index.ts:753` (12 fields, exported for renderer)
+  - `group-chat-integration.test.ts:43` (test-specific type with completely different fields - NOT a true duplicate)
+  - Verdict: definitions.ts is the richest; shared needs all serializable fields; renderer needs optional binaryName/command/args
+- [x] Keep canonical in `src/shared/types.ts` (serializable base) + `src/main/agents/definitions.ts` (extends with function fields)
+  - Expanded `shared/types.ts` AgentConfig to include all serializable fields (customPath, configOptions, capabilities, batchModePrefix, etc.)
+  - Also added canonical `AgentConfigOption` to shared/types.ts
+  - `definitions.ts` now extends BaseAgentConfig with function-typed fields (resumeArgs, modelArgs, etc.) and narrows optionals to required
+- [x] Replaced 4 duplicate definitions with imports:
+  - `preload/agents.ts` - imports AgentConfig from shared/types
+  - `renderer/global.d.ts` - uses `import()` type alias for AgentConfig and AgentConfigOption
+  - `renderer/types/index.ts` - re-exports AgentConfig and AgentConfigOption from shared/types
+  - `group-chat-integration.test.ts` - renamed to `TestAgentConfig` (not a true duplicate, different fields)
+- [x] TypeScript compilation passes (tsconfig.main.json + tsconfig.lint.json)
+- [x] 596 related tests pass (15 test files: agents, agent-args, context-groomer, tabNaming, agentStore, AgentConfigPanel, useAgentConfiguration, GroupChatModals, NewInstanceModal, sessionHelpers, EncoreTab, WizardKeyboardNavigation, WizardIntegration, WizardContext, SendToAgentModal)
 
 ### Task 6: Consolidate AgentConfigsData (5 definitions)
 

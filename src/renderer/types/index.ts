@@ -9,6 +9,9 @@ export { isValidThemeId } from '../../shared/theme-types';
 
 // Re-export types from shared location
 export type {
+	AgentCapabilities,
+	AgentConfig,
+	AgentConfigOption,
 	AgentError,
 	AgentErrorType,
 	AgentErrorRecovery,
@@ -21,6 +24,7 @@ export type {
 	ThinkingMode,
 	WorktreeRunTarget,
 } from '../../shared/types';
+export { DEFAULT_CAPABILITIES } from '../../shared/types';
 
 // Re-export Symphony types for session metadata
 export type { SymphonySessionMetadata } from '../../shared/symphony-types';
@@ -29,6 +33,7 @@ import type { SymphonySessionMetadata } from '../../shared/symphony-types';
 
 // Import for extension in this file
 import type {
+	AgentCapabilities,
 	WorktreeConfig as BaseWorktreeConfig,
 	WorktreeRunTarget,
 	BatchDocumentEntry,
@@ -735,58 +740,7 @@ export interface Session {
 	symphonyMetadata?: SymphonySessionMetadata;
 }
 
-export interface AgentConfigOption {
-	key: string;
-	type: 'checkbox' | 'text' | 'number' | 'select';
-	label: string;
-	description: string;
-	default: any;
-	options?: string[];
-	argBuilder?: (value: any) => string[];
-}
-
-export interface AgentCapabilities {
-	supportsResume: boolean;
-	supportsReadOnlyMode: boolean;
-	supportsJsonOutput: boolean;
-	supportsSessionId: boolean;
-	supportsImageInput: boolean;
-	supportsImageInputOnResume: boolean;
-	supportsSlashCommands: boolean;
-	supportsSessionStorage: boolean;
-	supportsCostTracking: boolean;
-	supportsUsageStats: boolean;
-	supportsBatchMode: boolean;
-	requiresPromptToStart: boolean;
-	supportsStreaming: boolean;
-	supportsResultMessages: boolean;
-	supportsModelSelection?: boolean;
-	supportsStreamJsonInput?: boolean;
-	supportsThinkingDisplay?: boolean;
-	supportsContextMerge?: boolean;
-	supportsContextExport?: boolean;
-	supportsWizard?: boolean;
-	supportsGroupChatModeration?: boolean;
-	usesJsonLineOutput?: boolean;
-	usesCombinedContextWindow?: boolean;
-	supportsAppendSystemPrompt?: boolean;
-}
-
-export interface AgentConfig {
-	id: string;
-	name: string;
-	binaryName?: string;
-	available: boolean;
-	path?: string;
-	customPath?: string; // User-specified custom path (shown in UI even if not available)
-	command?: string;
-	args?: string[];
-	hidden?: boolean; // If true, agent is hidden from UI (internal use only)
-	configOptions?: AgentConfigOption[]; // Agent-specific configuration options
-	yoloModeArgs?: string[]; // Args for YOLO/full-access mode (e.g., ['--dangerously-skip-permissions'])
-	readOnlyCliEnforced?: boolean; // Whether the agent's CLI enforces read-only mode (false = prompt-only enforcement)
-	capabilities?: AgentCapabilities; // Agent capabilities (added at runtime)
-}
+// AgentConfigOption and AgentConfig are re-exported from shared/types.ts at top of file
 
 // Process spawning configuration
 export interface ProcessConfig {
