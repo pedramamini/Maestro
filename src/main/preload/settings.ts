@@ -36,6 +36,8 @@ export function createSessionsApi() {
 	return {
 		getAll: () => ipcRenderer.invoke('sessions:getAll'),
 		setAll: (sessions: StoredSession[]) => ipcRenderer.invoke('sessions:setAll', sessions),
+		getActiveSessionId: () => ipcRenderer.invoke('sessions:getActiveSessionId') as Promise<string>,
+		setActiveSessionId: (id: string) => ipcRenderer.invoke('sessions:setActiveSessionId', id),
 	};
 }
 

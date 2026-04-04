@@ -254,6 +254,8 @@ interface MaestroAPI {
 	sessions: {
 		getAll: () => Promise<any[]>;
 		setAll: (sessions: any[]) => Promise<boolean>;
+		getActiveSessionId: () => Promise<string>;
+		setActiveSessionId: (id: string) => Promise<void>;
 	};
 	groups: {
 		getAll: () => Promise<any[]>;
