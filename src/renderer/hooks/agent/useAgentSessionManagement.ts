@@ -2,6 +2,7 @@ import { useCallback, useRef } from 'react';
 import type { Session, LogEntry, UsageStats, ThinkingMode } from '../../types';
 import { createTab, getActiveTab } from '../../utils/tabHelpers';
 import { generateId } from '../../utils/ids';
+import { buildSharedHistoryContext } from '../../utils/sessionHelpers';
 import type { RightPanelHandle } from '../../components/RightPanel';
 import { FALLBACK_CONTEXT_WINDOW } from '../../../shared/agentConstants';
 
@@ -114,25 +115,28 @@ export function useAgentSessionManagement(
 
 			const shouldIncludeContextUsage = !entry.sessionId || entry.sessionId === activeSession?.id;
 
-			await window.maestro.history.add({
-				id: generateId(),
-				type: entry.type,
-				timestamp: Date.now(),
-				summary: entry.summary,
-				fullResponse: entry.fullResponse,
-				agentSessionId: entry.agentSessionId,
-				sessionId: targetSessionId,
-				sessionName: sessionName,
-				projectPath: targetProjectPath,
-				...(shouldIncludeContextUsage ? { contextUsage: activeSession?.contextUsage } : {}),
-				// Only include usageStats if explicitly provided (per-task tracking)
-				// Never use cumulative session stats - they're lifetime totals
-				usageStats: entry.usageStats,
-				// Pass through success field for error/failure tracking
-				success: entry.success,
-				// Pass through task execution time
-				elapsedTimeMs: entry.elapsedTimeMs,
-			});
+			await window.maestro.history.add(
+				{
+					id: generateId(),
+					type: entry.type,
+					timestamp: Date.now(),
+					summary: entry.summary,
+					fullResponse: entry.fullResponse,
+					agentSessionId: entry.agentSessionId,
+					sessionId: targetSessionId,
+					sessionName: sessionName,
+					projectPath: targetProjectPath,
+					...(shouldIncludeContextUsage ? { contextUsage: activeSession?.contextUsage } : {}),
+					// Only include usageStats if explicitly provided (per-task tracking)
+					// Never use cumulative session stats - they're lifetime totals
+					usageStats: entry.usageStats,
+					// Pass through success field for error/failure tracking
+					success: entry.success,
+					// Pass through task execution time
+					elapsedTimeMs: entry.elapsedTimeMs,
+				},
+				buildSharedHistoryContext(activeSession)
+			);
 
 			// Refresh history panel to show the new entry
 			rightPanelRef.current?.refreshHistoryPanel();
@@ -179,7 +183,13 @@ export function useAgentSessionManagement(
 				setSessions((prev) =>
 					prev.map((s) =>
 						s.id === activeSession.id
-							? { ...s, activeTabId: existingTab.id, activeFileTabId: null, inputMode: 'ai' }
+							? {
+									...s,
+									activeTabId: existingTab.id,
+									activeFileTabId: null,
+									activeTerminalTabId: null,
+									inputMode: 'ai',
+								}
 							: s
 					)
 				);
@@ -203,15 +213,20 @@ export function useAgentSessionManagement(
 						{ offset: 0, limit: 100 }
 					);
 
-					// Convert to log entries
-					messages = result.messages.map(
-						(msg: { type: string; content: string; timestamp: string; uuid: string }) => ({
+					// Convert to log entries, skipping tool call messages
+					// Tool entries are only shown in live sessions when showThinking is on;
+					// restored tabs start with thinking off, matching Claude Code behavior
+					messages = result.messages
+						.filter(
+							(msg: { toolUse?: unknown }) =>
+								!(msg.toolUse && Array.isArray(msg.toolUse) && msg.toolUse.length > 0)
+						)
+						.map((msg: { type: string; content: string; timestamp: string; uuid: string }) => ({
 							id: msg.uuid || generateId(),
 							timestamp: new Date(msg.timestamp).getTime(),
 							source: msg.type === 'user' ? ('user' as const) : ('stdout' as const),
 							text: msg.content || '',
-						})
-					);
+						}));
 				}
 
 				// Look up starred status, session name, and context usage from stores if not provided

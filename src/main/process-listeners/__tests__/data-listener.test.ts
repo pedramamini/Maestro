@@ -208,14 +208,27 @@ describe('Data Listener', () => {
 	});
 
 	describe('Web Broadcast Filtering', () => {
-		it('should skip PTY terminal output', () => {
+		it('should broadcast PTY terminal output as terminal_data', () => {
 			setupListener();
 			const handler = eventHandlers.get('data');
 
 			handler?.('session-123-terminal', 'terminal output');
 
-			expect(mockWebServer.broadcastToSessionClients).not.toHaveBeenCalled();
-			// But should still forward to renderer
+			// Should broadcast as terminal_data (for xterm.js in web client)
+			expect(mockWebServer.broadcastToSessionClients).toHaveBeenCalledWith(
+				'session-123',
+				expect.objectContaining({
+					type: 'terminal_data',
+					sessionId: 'session-123',
+					data: 'terminal output',
+				})
+			);
+			// Should NOT broadcast as session_output
+			expect(mockWebServer.broadcastToSessionClients).not.toHaveBeenCalledWith(
+				expect.anything(),
+				expect.objectContaining({ type: 'session_output' })
+			);
+			// Should still forward to renderer
 			expect(mockSafeSend).toHaveBeenCalledWith(
 				'process:data',
 				'session-123-terminal',

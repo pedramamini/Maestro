@@ -22,6 +22,8 @@ export type {
 	SessionRemovedMessage,
 	ThemeMessage,
 	ErrorMessage,
+	GroupData,
+	GroupsChangedMessage,
 	TypedServerMessage,
 	WebSocketEventHandlers,
 	UseWebSocketOptions,
@@ -182,3 +184,27 @@ export type {
 	UseMobileAutoReconnectDeps,
 	UseMobileAutoReconnectReturn,
 } from './useMobileAutoReconnect';
+
+export { useAgentManagement, default as useAgentManagementDefault } from './useAgentManagement';
+
+export type { UseAgentManagementReturn } from './useAgentManagement';
+
+export { useGitStatus, default as useGitStatusDefault } from './useGitStatus';
+
+export type {
+	GitStatusFile,
+	GitStatusResult,
+	GitDiffResult,
+	UseGitStatusReturn,
+} from './useGitStatus';
+
+export { useGroupChat, default as useGroupChatDefault } from './useGroupChat';
+
+export type { UseGroupChatReturn } from './useGroupChat';
+
+export type {
+	GroupChatMessage,
+	GroupChatState,
+	GroupChatMessageBroadcast,
+	GroupChatStateChangeBroadcast,
+} from './useWebSocket';

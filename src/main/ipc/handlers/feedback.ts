@@ -454,7 +454,9 @@ export function registerFeedbackHandlers(_deps: FeedbackHandlerDependencies): vo
 		)
 	);
 
-	// Search existing GitHub issues for potential duplicates
+	// Search existing GitHub issues for potential duplicates.
+	// Extracts keywords from the query and runs multiple short searches to avoid
+	// GitHub's strict AND matching on long phrases, then deduplicates results.
 	ipcMain.handle(
 		'feedback:search-issues',
 		withIpcErrorLogging(
@@ -478,54 +480,120 @@ export function registerFeedbackHandlers(_deps: FeedbackHandlerDependencies): vo
 					return { issues: [] };
 				}
 
-				// Use `gh search issues` for full-text search across open AND closed issues
-				const searchResult = await execFileNoThrow(
-					'gh',
-					[
-						'search',
-						'issues',
-						query,
-						'--repo',
-						'RunMaestro/Maestro',
-						'--limit',
-						'10',
-						'--json',
-						'number,title,url,state,labels,createdAt,author',
-					],
-					undefined,
-					getExpandedEnv()
-				);
+				// Extract meaningful keywords (drop short words, punctuation, duplicates)
+				const stopWords = new Set([
+					'a',
+					'an',
+					'the',
+					'and',
+					'or',
+					'but',
+					'in',
+					'on',
+					'at',
+					'to',
+					'for',
+					'of',
+					'with',
+					'by',
+					'from',
+					'is',
+					'it',
+					'as',
+					'be',
+					'was',
+					'are',
+					'that',
+					'this',
+					'not',
+					'can',
+					'has',
+					'have',
+					'do',
+					'does',
+					'will',
+				]);
+				const keywords = query
+					.replace(/[^a-zA-Z0-9\s-]/g, ' ')
+					.split(/\s+/)
+					.map((w) => w.toLowerCase())
+					.filter((w) => w.length >= 3 && !stopWords.has(w));
+				const uniqueKeywords = [...new Set(keywords)];
 
-				if (searchResult.exitCode !== 0 || !searchResult.stdout.trim()) {
+				if (uniqueKeywords.length === 0) {
 					return { issues: [] };
 				}
 
-				try {
-					const raw = JSON.parse(searchResult.stdout) as Array<{
-						number: number;
-						title: string;
-						url: string;
-						state: string;
-						labels: Array<{ name: string }>;
-						createdAt: string;
-						author: { login: string };
-					}>;
-
-					return {
-						issues: raw.map((issue) => ({
-							number: issue.number,
-							title: issue.title,
-							url: issue.url,
-							state: issue.state,
-							labels: issue.labels?.map((l) => l.name) ?? [],
-							createdAt: issue.createdAt,
-							author: issue.author?.login ?? 'unknown',
-							commentCount: 0, // gh search issues doesn't include comment count
-						})),
-					};
-				} catch {
-					return { issues: [] };
+				// Build 2-3 keyword search queries (overlapping windows for coverage)
+				const chunkSize = 3;
+				const searchQueries: string[] = [];
+				for (let i = 0; i < uniqueKeywords.length && searchQueries.length < 3; i += 2) {
+					const chunk = uniqueKeywords.slice(i, i + chunkSize).join(' ');
+					if (chunk) searchQueries.push(chunk);
 				}
+				// Also add the full query (truncated) as a final attempt
+				if (uniqueKeywords.length > chunkSize) {
+					searchQueries.push(uniqueKeywords.slice(0, 5).join(' '));
+				}
+
+				// Run searches in parallel
+				type RawIssue = {
+					number: number;
+					title: string;
+					url: string;
+					state: string;
+					labels: Array<{ name: string }>;
+					createdAt: string;
+					author: { login: string };
+				};
+
+				const searchPromises = searchQueries.map(async (q) => {
+					const result = await execFileNoThrow(
+						'gh',
+						[
+							'search',
+							'issues',
+							q,
+							'--repo',
+							'RunMaestro/Maestro',
+							'--limit',
+							'5',
+							'--json',
+							'number,title,url,state,labels,createdAt,author',
+						],
+						undefined,
+						getExpandedEnv()
+					);
+					if (result.exitCode !== 0 || !result.stdout.trim()) return [];
+					try {
+						return JSON.parse(result.stdout) as RawIssue[];
+					} catch {
+						return [];
+					}
+				});
+
+				const allResults = (await Promise.all(searchPromises)).flat();
+
+				// Deduplicate by issue number, preserve first occurrence order
+				const seen = new Set<number>();
+				const deduped = allResults.filter((issue) => {
+					if (seen.has(issue.number)) return false;
+					seen.add(issue.number);
+					return true;
+				});
+
+				return {
+					issues: deduped.slice(0, 10).map((issue) => ({
+						number: issue.number,
+						title: issue.title,
+						url: issue.url,
+						state: issue.state,
+						labels: issue.labels?.map((l) => l.name) ?? [],
+						createdAt: issue.createdAt,
+						author: issue.author?.login ?? 'unknown',
+						commentCount: 0,
+					})),
+				};
 			}
 		)
 	);
@@ -722,11 +790,9 @@ export function registerFeedbackHandlers(_deps: FeedbackHandlerDependencies): vo
 		withIpcErrorLogging(
 			handlerOpts('get-conversation-prompt'),
 			async (): Promise<{ prompt: string; environment: string }> => {
-				const conversationPromptPath = app.isPackaged
-					? path.join(process.resourcesPath, 'prompts', 'feedback-conversation.md')
-					: path.join(app.getAppPath(), 'src', 'prompts', 'feedback-conversation.md');
-
-				const promptTemplate = await fs.readFile(conversationPromptPath, 'utf-8');
+				// Use the build-time generated prompt constant (no runtime file I/O needed)
+				const { feedbackConversationPrompt } = await import('../../../generated/prompts');
+				const promptTemplate = feedbackConversationPrompt;
 
 				const platformLabel = getPlatformLabel(process.platform);
 				const osVersion = typeof os.version === 'function' ? os.version() : '';

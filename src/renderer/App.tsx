@@ -20,6 +20,7 @@ import {
 	MaestroWizard,
 	useWizard,
 	WizardResumeModal,
+	AUTO_RUN_FOLDER_NAME,
 	type SerializableWizardState,
 	type WizardStep,
 } from './components/Wizard';
@@ -157,6 +158,8 @@ import { useModalActions, useModalStore } from './stores/modalStore';
 import { GitStatusProvider } from './contexts/GitStatusContext';
 import { InputProvider, useInputContext } from './contexts/InputContext';
 import { useGroupChatStore } from './stores/groupChatStore';
+import { registerGroupChatAutoRun } from './utils/groupChatAutoRunRegistry';
+import { resolveGroupChatAutoRunTarget } from './utils/groupChatAutoRun';
 import { useBatchStore } from './stores/batchStore';
 // All session state is read directly from useSessionStore in MaestroConsoleInner.
 import { useSessionStore, selectActiveSession } from './stores/sessionStore';
@@ -169,7 +172,15 @@ import { ToastContainer } from './components/Toast';
 
 // Import types and constants
 // Note: GroupChat, GroupChatState are imported from types (re-exported from shared)
-import type { RightPanelTab, Session, QueuedItem, CustomAICommand, ThinkingItem } from './types';
+import type {
+	RightPanelTab,
+	Session,
+	QueuedItem,
+	CustomAICommand,
+	ThinkingItem,
+	AITab,
+	ToolType,
+} from './types';
 import { THEMES } from './constants/themes';
 import { generateId } from './utils/ids';
 import { getContextColor } from './utils/theme';
@@ -193,6 +204,7 @@ import {
 // validateNewSession moved to useSymphonyContribution, useSessionCrud hooks
 // formatLogsForClipboard moved to useTabExportHandlers hook
 // getSlashCommandDescription moved to useWizardHandlers
+import { useSettingsStore } from './stores/settingsStore';
 import { useUIStore } from './stores/uiStore';
 import { useTabStore } from './stores/tabStore';
 import { useFileExplorerStore } from './stores/fileExplorerStore';
@@ -899,6 +911,7 @@ function MaestroConsoleInner() {
 		handleOpenModeratorSession,
 		handleJumpToGroupChatMessage,
 		handleGroupChatRightTabChange,
+		handleStopAll,
 		handleSendGroupChatMessage,
 		handleGroupChatDraftChange,
 		handleRemoveGroupChatQueueItem,
@@ -1313,6 +1326,7 @@ function MaestroConsoleInner() {
 	// --- BATCH HANDLERS (Auto Run processing, quit confirmation, error handling) ---
 	const {
 		startBatchRun,
+		stopBatchRun,
 		getBatchState,
 		handleStopBatchRun,
 		handleKillBatchRun,
@@ -1331,6 +1345,91 @@ function MaestroConsoleInner() {
 		processQueuedItemRef,
 		handleClearAgentError,
 	});
+
+	// --- GROUP CHAT AUTO RUN BRIDGE ---
+	// When the moderator issues !autorun @AgentName, the main process emits
+	// groupChat:autoRunTriggered. Here we intercept that, find the session,
+	// and start a proper batch run via useBatchProcessor for full UI feedback.
+	const startBatchRunRef = useRef(startBatchRun);
+	startBatchRunRef.current = startBatchRun;
+
+	useEffect(() => {
+		const unsub = window.maestro.groupChat.onAutoRunTriggered?.(
+			(groupChatId, participantName, targetFilename) => {
+				// Helper: report failure back to the group chat as a system message so the
+				// moderator and user can see what went wrong and take corrective action.
+				const reportFailure = (reason: string) => {
+					console.warn(`[GroupChat:AutoRun] ${reason}`);
+					window.maestro.groupChat
+						.reportAutoRunComplete(
+							groupChatId,
+							participantName,
+							`⚠️ Auto Run could not start for @${participantName}: ${reason}`
+						)
+						.catch((e) =>
+							console.error('[GroupChat:AutoRun] Failed to report failure to moderator:', e)
+						);
+				};
+
+				const sessions = useSessionStore.getState().sessions;
+				const session = sessions.find((s) => s.name === participantName);
+				if (!session) {
+					reportFailure(
+						`No Maestro agent named "${participantName}" found. Make sure the agent exists and is open.`
+					);
+					return;
+				}
+				if (!session.autoRunFolderPath) {
+					reportFailure(
+						`Agent "${participantName}" has no Auto Run folder configured. Open the agent, go to the Auto Run tab, and configure a folder first.`
+					);
+					return;
+				}
+
+				// Fetch the document list, then start the batch run
+				window.maestro.autorun
+					.listDocs(session.autoRunFolderPath, session.sshRemoteId || undefined)
+					.then((result) => {
+						const allFiles = result.files || [];
+						if (allFiles.length === 0) {
+							reportFailure(
+								`No Auto Run documents found in "${session.autoRunFolderPath}". Create a document in the Auto Run tab first.`
+							);
+							return;
+						}
+
+						const resolvedTarget = resolveGroupChatAutoRunTarget(allFiles, targetFilename);
+						if ('error' in resolvedTarget) {
+							reportFailure(
+								`${resolvedTarget.error} in "${session.autoRunFolderPath}" for "${participantName}".`
+							);
+							return;
+						}
+						const files = resolvedTarget.files;
+
+						const documents = files.map((filename, i) => ({
+							id: `${session.id}-${i}`,
+							filename,
+							resetOnCompletion: false,
+							isDuplicate: false,
+						}));
+						const config = {
+							documents,
+							prompt: '',
+							loopEnabled: false,
+							maxLoops: null,
+						};
+						// Register AFTER validating docs exist so no stale entry on failure
+						registerGroupChatAutoRun(session.id, groupChatId, participantName);
+						startBatchRunRef.current(session.id, config, session.autoRunFolderPath!);
+					})
+					.catch((err) => {
+						reportFailure(`Failed to read Auto Run folder: ${String(err)}`);
+					});
+			}
+		);
+		return () => unsub?.();
+	}, []); // Stable — reads sessions and startBatchRun from refs/store at call time
 
 	// --- AGENT IPC LISTENERS ---
 	// Extracted hook for all window.maestro.process.onXxx listeners
@@ -1693,6 +1792,7 @@ function MaestroConsoleInner() {
 	const {
 		handleSaveEditAgent,
 		handleRenameTab,
+		handleAutoNameTab,
 		performDeleteSession,
 		showConfirmation,
 		toggleTabStar,
@@ -1994,6 +2094,375 @@ function MaestroConsoleInner() {
 		window.addEventListener('maestro:configureAutoRun', handler);
 		return () => window.removeEventListener('maestro:configureAutoRun', handler);
 	}, [sessionsRef, startBatchRun]);
+
+	// Handle remote get auto-run docs from web interface
+	useEffect(() => {
+		const handler = async (e: Event) => {
+			const { sessionId, responseChannel } = (e as CustomEvent).detail;
+			try {
+				const session = sessionsRef.current.find((s) => s.id === sessionId);
+				if (!session?.autoRunFolderPath) {
+					window.maestro.process.sendRemoteGetAutoRunDocsResponse(responseChannel, []);
+					return;
+				}
+				const sshRemoteId =
+					session.sshRemoteId || session.sessionSshRemoteConfig?.remoteId || undefined;
+				const listResult = await window.maestro.autorun.listDocs(
+					session.autoRunFolderPath,
+					sshRemoteId
+				);
+				const filePaths: string[] = listResult.success ? listResult.files || [] : [];
+
+				// Transform file paths into AutoRunDocument objects with task counts
+				const docs = await Promise.all(
+					filePaths.map(async (filePath) => {
+						const filename = filePath.split('/').pop() || filePath;
+						let taskCount = 0;
+						let completedCount = 0;
+						try {
+							const result = await window.maestro.autorun.readDoc(
+								session.autoRunFolderPath!,
+								filePath,
+								sshRemoteId
+							);
+							if (result?.content) {
+								const unchecked = result.content.match(/^[\s]*-\s*\[\s*\]\s*.+$/gm);
+								const checked = result.content.match(/^[\s]*-\s*\[x\]\s*.+$/gim);
+								taskCount = (unchecked?.length || 0) + (checked?.length || 0);
+								completedCount = checked?.length || 0;
+							}
+						} catch {
+							// If reading fails, leave counts at 0
+						}
+						return { filename, path: filePath, taskCount, completedCount };
+					})
+				);
+				window.maestro.process.sendRemoteGetAutoRunDocsResponse(responseChannel, docs);
+			} catch (error) {
+				console.error('[Remote] Failed to get auto-run docs:', error);
+				window.maestro.process.sendRemoteGetAutoRunDocsResponse(responseChannel, []);
+			}
+		};
+		window.addEventListener('maestro:getAutoRunDocs', handler);
+		return () => window.removeEventListener('maestro:getAutoRunDocs', handler);
+	}, [sessionsRef]);
+
+	// Handle remote get auto-run doc content from web interface
+	useEffect(() => {
+		const handler = async (e: Event) => {
+			const { sessionId, filename, responseChannel } = (e as CustomEvent).detail;
+			try {
+				const session = sessionsRef.current.find((s) => s.id === sessionId);
+				if (!session?.autoRunFolderPath) {
+					window.maestro.process.sendRemoteGetAutoRunDocContentResponse(responseChannel, '');
+					return;
+				}
+				const sshRemoteId =
+					session.sshRemoteId || session.sessionSshRemoteConfig?.remoteId || undefined;
+				const contentResult = await window.maestro.autorun.readDoc(
+					session.autoRunFolderPath,
+					filename,
+					sshRemoteId
+				);
+				const content = contentResult.success ? contentResult.content || '' : '';
+				window.maestro.process.sendRemoteGetAutoRunDocContentResponse(responseChannel, content);
+			} catch (error) {
+				console.error('[Remote] Failed to get auto-run doc content:', error);
+				window.maestro.process.sendRemoteGetAutoRunDocContentResponse(responseChannel, '');
+			}
+		};
+		window.addEventListener('maestro:getAutoRunDocContent', handler);
+		return () => window.removeEventListener('maestro:getAutoRunDocContent', handler);
+	}, [sessionsRef]);
+
+	// Handle remote save auto-run doc from web interface
+	useEffect(() => {
+		const handler = async (e: Event) => {
+			const { sessionId, filename, content, responseChannel } = (e as CustomEvent).detail;
+			try {
+				const session = sessionsRef.current.find((s) => s.id === sessionId);
+				if (!session?.autoRunFolderPath) {
+					window.maestro.process.sendRemoteSaveAutoRunDocResponse(responseChannel, false);
+					return;
+				}
+				const sshRemoteId =
+					session.sshRemoteId || session.sessionSshRemoteConfig?.remoteId || undefined;
+				const writeResult = await window.maestro.autorun.writeDoc(
+					session.autoRunFolderPath,
+					filename,
+					content,
+					sshRemoteId
+				);
+				window.maestro.process.sendRemoteSaveAutoRunDocResponse(
+					responseChannel,
+					writeResult.success ?? false
+				);
+			} catch (error) {
+				console.error('[Remote] Failed to save auto-run doc:', error);
+				window.maestro.process.sendRemoteSaveAutoRunDocResponse(responseChannel, false);
+			}
+		};
+		window.addEventListener('maestro:saveAutoRunDoc', handler);
+		return () => window.removeEventListener('maestro:saveAutoRunDoc', handler);
+	}, [sessionsRef]);
+
+	// Handle remote stop auto-run from web interface (fire-and-forget, no confirmation dialog)
+	useEffect(() => {
+		const handler = (e: Event) => {
+			const { sessionId } = (e as CustomEvent).detail;
+			stopBatchRun(sessionId);
+		};
+		window.addEventListener('maestro:stopAutoRun', handler);
+		return () => window.removeEventListener('maestro:stopAutoRun', handler);
+	}, [stopBatchRun]);
+
+	// Handle remote create session from web interface
+	useEffect(() => {
+		const handler = async (e: Event) => {
+			const { name, toolType, cwd, groupId, responseChannel } = (e as CustomEvent).detail;
+			try {
+				// Get agent definition to validate
+				const agent = await (window as any).maestro.agents.get(toolType);
+				if (!agent) {
+					window.maestro.process.sendRemoteCreateSessionResponse(responseChannel, null);
+					return;
+				}
+
+				const currentDefaults = useSettingsStore.getState();
+				const newId = generateId();
+				const initialTabId = generateId();
+				const initialTab: AITab = {
+					id: initialTabId,
+					agentSessionId: null,
+					name: null,
+					starred: false,
+					logs: [],
+					inputValue: '',
+					stagedImages: [],
+					createdAt: Date.now(),
+					state: 'idle',
+					saveToHistory: currentDefaults.defaultSaveToHistory,
+					showThinking: currentDefaults.defaultShowThinking,
+				};
+
+				const newSession: Session = {
+					id: newId,
+					name,
+					toolType: toolType as ToolType,
+					state: 'idle',
+					cwd,
+					fullPath: cwd,
+					projectRoot: cwd,
+					isGitRepo: false,
+					aiLogs: [],
+					shellLogs: [
+						{
+							id: generateId(),
+							timestamp: Date.now(),
+							source: 'system',
+							text: 'Shell Session Ready.',
+						},
+					],
+					workLog: [],
+					contextUsage: 0,
+					inputMode: toolType === 'terminal' ? 'terminal' : 'ai',
+					aiPid: 0,
+					terminalPid: 0,
+					port: 3000 + Math.floor(Math.random() * 100),
+					isLive: false,
+					changedFiles: [],
+					fileTree: [],
+					fileExplorerExpanded: [],
+					fileExplorerScrollPos: 0,
+					fileTreeAutoRefreshInterval: 180,
+					shellCwd: cwd,
+					aiCommandHistory: [],
+					shellCommandHistory: [],
+					executionQueue: [],
+					activeTimeMs: 0,
+					aiTabs: [initialTab],
+					activeTabId: initialTabId,
+					closedTabHistory: [],
+					filePreviewTabs: [],
+					activeFileTabId: null,
+					terminalTabs: [],
+					activeTerminalTabId: null,
+					unifiedTabOrder: [{ type: 'ai' as const, id: initialTabId }],
+					unifiedClosedTabHistory: [],
+					groupId: groupId || undefined,
+					autoRunFolderPath: `${cwd}/${AUTO_RUN_FOLDER_NAME}`,
+				};
+
+				setSessions((prev) => [...prev, newSession]);
+				setActiveSessionId(newId);
+				(window as any).maestro.stats.recordSessionCreated({
+					sessionId: newId,
+					agentType: toolType,
+					projectPath: cwd,
+					createdAt: Date.now(),
+					isRemote: false,
+				});
+
+				window.maestro.process.sendRemoteCreateSessionResponse(responseChannel, {
+					sessionId: newId,
+				});
+			} catch (error) {
+				console.error('[Remote] Failed to create session:', error);
+				window.maestro.process.sendRemoteCreateSessionResponse(responseChannel, null);
+			}
+		};
+		window.addEventListener('maestro:remoteCreateSession', handler);
+		return () => window.removeEventListener('maestro:remoteCreateSession', handler);
+	}, [setSessions, setActiveSessionId]);
+
+	// Handle remote delete session from web interface (skip confirmation dialog)
+	useEffect(() => {
+		const handler = async (e: Event) => {
+			const { sessionId } = (e as CustomEvent).detail;
+			const session = sessionsRef.current.find((s) => s.id === sessionId);
+			if (!session) return;
+
+			// Kill processes
+			try {
+				await window.maestro.process.kill(`${sessionId}-ai`);
+			} catch {
+				/* ignore */
+			}
+			try {
+				await window.maestro.process.kill(`${sessionId}-terminal`);
+			} catch {
+				/* ignore */
+			}
+			for (const tab of session.terminalTabs || []) {
+				try {
+					await window.maestro.process.kill(`${sessionId}-terminal-${tab.id}`);
+				} catch {
+					/* ignore */
+				}
+			}
+
+			// Remove session
+			setSessions((prev) => {
+				const filtered = prev.filter((s) => s.id !== sessionId);
+				if (filtered.length > 0 && useSessionStore.getState().activeSessionId === sessionId) {
+					setActiveSessionId(filtered[0].id);
+				}
+				return filtered;
+			});
+		};
+		window.addEventListener('maestro:remoteDeleteSession', handler);
+		return () => window.removeEventListener('maestro:remoteDeleteSession', handler);
+	}, [sessionsRef, setSessions, setActiveSessionId]);
+
+	// Handle remote rename session from web interface
+	useEffect(() => {
+		const handler = (e: Event) => {
+			const { sessionId, newName, responseChannel } = (e as CustomEvent).detail;
+			const session = sessionsRef.current.find((s) => s.id === sessionId);
+			if (!session) {
+				window.maestro.process.sendRemoteRenameSessionResponse(responseChannel, false);
+				return;
+			}
+
+			setSessions((prev) => {
+				const updated = prev.map((s) => (s.id === sessionId ? { ...s, name: newName } : s));
+				const sess = updated.find((s) => s.id === sessionId);
+				// Persist name to agent storage
+				const providerSessionId =
+					sess?.agentSessionId ||
+					sess?.aiTabs?.find((t) => t.id === sess.activeTabId)?.agentSessionId ||
+					sess?.aiTabs?.[0]?.agentSessionId;
+				if (providerSessionId && sess?.projectRoot) {
+					const agentId = sess.toolType || 'claude-code';
+					if (agentId === 'claude-code') {
+						(window as any).maestro.claude
+							.updateSessionName(sess.projectRoot, providerSessionId, newName)
+							.catch(() => {});
+					} else {
+						(window as any).maestro.agentSessions
+							.setSessionName(agentId, sess.projectRoot, providerSessionId, newName)
+							.catch(() => {});
+					}
+				}
+				return updated;
+			});
+
+			window.maestro.process.sendRemoteRenameSessionResponse(responseChannel, true);
+		};
+		window.addEventListener('maestro:remoteRenameSession', handler);
+		return () => window.removeEventListener('maestro:remoteRenameSession', handler);
+	}, [sessionsRef, setSessions]);
+
+	// Handle remote create group from web interface
+	useEffect(() => {
+		const handler = (e: Event) => {
+			const { name, emoji, responseChannel } = (e as CustomEvent).detail;
+			const trimmed = name.trim();
+			if (!trimmed) {
+				window.maestro.process.sendRemoteCreateGroupResponse(responseChannel, null);
+				return;
+			}
+			const newGroupId = `group-${generateId()}`;
+			setGroups((prev) => [
+				...prev,
+				{ id: newGroupId, name: trimmed.toUpperCase(), emoji: emoji || '📂', collapsed: false },
+			]);
+			window.maestro.process.sendRemoteCreateGroupResponse(responseChannel, { id: newGroupId });
+		};
+		window.addEventListener('maestro:remoteCreateGroup', handler);
+		return () => window.removeEventListener('maestro:remoteCreateGroup', handler);
+	}, [setGroups]);
+
+	// Handle remote rename group from web interface
+	useEffect(() => {
+		const handler = (e: Event) => {
+			const { groupId, name, responseChannel } = (e as CustomEvent).detail;
+			const trimmed = name.trim();
+			if (!trimmed) {
+				window.maestro.process.sendRemoteRenameGroupResponse(responseChannel, false);
+				return;
+			}
+			setGroups((prev) =>
+				prev.map((g) => (g.id === groupId ? { ...g, name: trimmed.toUpperCase() } : g))
+			);
+			window.maestro.process.sendRemoteRenameGroupResponse(responseChannel, true);
+		};
+		window.addEventListener('maestro:remoteRenameGroup', handler);
+		return () => window.removeEventListener('maestro:remoteRenameGroup', handler);
+	}, [setGroups]);
+
+	// Handle remote delete group from web interface (fire-and-forget)
+	useEffect(() => {
+		const handler = (e: Event) => {
+			const { groupId } = (e as CustomEvent).detail;
+			// Ungroup sessions in this group
+			setSessions((prev) =>
+				prev.map((s) => (s.groupId === groupId ? { ...s, groupId: undefined } : s))
+			);
+			// Remove the group
+			setGroups((prev) => prev.filter((g) => g.id !== groupId));
+		};
+		window.addEventListener('maestro:remoteDeleteGroup', handler);
+		return () => window.removeEventListener('maestro:remoteDeleteGroup', handler);
+	}, [setSessions, setGroups]);
+
+	// Handle remote move session to group from web interface
+	useEffect(() => {
+		const handler = (e: Event) => {
+			const { sessionId, groupId, responseChannel } = (e as CustomEvent).detail;
+			const session = sessionsRef.current.find((s) => s.id === sessionId);
+			if (!session) {
+				window.maestro.process.sendRemoteMoveSessionToGroupResponse(responseChannel, false);
+				return;
+			}
+			setSessions((prev) =>
+				prev.map((s) => (s.id === sessionId ? { ...s, groupId: groupId || undefined } : s))
+			);
+			window.maestro.process.sendRemoteMoveSessionToGroupResponse(responseChannel, true);
+		};
+		window.addEventListener('maestro:remoteMoveSessionToGroup', handler);
+		return () => window.removeEventListener('maestro:remoteMoveSessionToGroup', handler);
+	}, [sessionsRef, setSessions]);
 
 	// --- GROUP MANAGEMENT ---
 	// Extracted hook for group CRUD operations (toggle, rename, create, drag-drop)
@@ -2873,6 +3342,7 @@ function MaestroConsoleInner() {
 					renameTabInitialName={renameTabInitialName}
 					onCloseRenameTabModal={handleCloseRenameTabModal}
 					onRenameTab={handleRenameTab}
+					onAutoNameTab={handleAutoNameTab}
 					// AppGroupModals props
 					createGroupModalOpen={createGroupModalOpen}
 					onCloseCreateGroupModal={handleCloseCreateGroupModal}
@@ -3046,6 +3516,7 @@ function MaestroConsoleInner() {
 						activeGroupChatId ? groupChatReadOnlyMode : (activeTab?.readOnlyMode ?? false)
 					}
 					onPromptToggleTabReadOnlyMode={handlePromptToggleTabReadOnlyMode}
+					promptComposerAgentId={activeGroupChatId ? undefined : activeSession?.toolType}
 					promptTabShowThinking={activeGroupChatId ? 'off' : (activeTab?.showThinking ?? 'off')}
 					onPromptToggleTabShowThinking={
 						activeGroupChatId ? undefined : handlePromptToggleTabShowThinking
@@ -3316,8 +3787,10 @@ function MaestroConsoleInner() {
 								useFileExplorerStore.getState().setIsGraphViewOpen(false);
 							}}
 							onExternalLinkOpen={(url) => {
-								// Open external URL in default browser
-								window.maestro.shell.openExternal(url);
+								// Open external URL in default browser — guard against non-URL strings (MAESTRO-F4)
+								if (/^https?:\/\/|^mailto:/.test(url)) {
+									window.maestro.shell.openExternal(url);
+								}
 							}}
 							focusFilePath={graphFocusFilePath}
 							defaultShowExternalLinks={documentGraphShowExternalLinks}
@@ -3441,6 +3914,7 @@ function MaestroConsoleInner() {
 										return anyParticipantMissingCost || moderatorMissingCost;
 									})()}
 									onSendMessage={handleSendGroupChatMessage}
+									onStopAll={handleStopAll}
 									onRename={() =>
 										activeGroupChatId && handleOpenRenameGroupChatModal(activeGroupChatId)
 									}

@@ -517,6 +517,569 @@ export function createProcessApi() {
 		},
 
 		/**
+		 * Subscribe to remote get auto-run docs from web interface (request-response)
+		 */
+		onRemoteGetAutoRunDocs: (
+			callback: (sessionId: string, responseChannel: string) => void
+		): (() => void) => {
+			const handler = (_: unknown, sessionId: string, responseChannel: string) => {
+				try {
+					Promise.resolve(callback(sessionId, responseChannel)).catch(() => {
+						ipcRenderer.send(responseChannel, []);
+					});
+				} catch {
+					ipcRenderer.send(responseChannel, []);
+				}
+			};
+			ipcRenderer.on('remote:getAutoRunDocs', handler);
+			return () => ipcRenderer.removeListener('remote:getAutoRunDocs', handler);
+		},
+
+		/**
+		 * Send response for remote get auto-run docs
+		 */
+		sendRemoteGetAutoRunDocsResponse: (responseChannel: string, documents: any[]): void => {
+			ipcRenderer.send(responseChannel, documents);
+		},
+
+		/**
+		 * Subscribe to remote get auto-run doc content from web interface (request-response)
+		 */
+		onRemoteGetAutoRunDocContent: (
+			callback: (sessionId: string, filename: string, responseChannel: string) => void
+		): (() => void) => {
+			const handler = (
+				_: unknown,
+				sessionId: string,
+				filename: string,
+				responseChannel: string
+			) => {
+				try {
+					Promise.resolve(callback(sessionId, filename, responseChannel)).catch(() => {
+						ipcRenderer.send(responseChannel, '');
+					});
+				} catch {
+					ipcRenderer.send(responseChannel, '');
+				}
+			};
+			ipcRenderer.on('remote:getAutoRunDocContent', handler);
+			return () => ipcRenderer.removeListener('remote:getAutoRunDocContent', handler);
+		},
+
+		/**
+		 * Send response for remote get auto-run doc content
+		 */
+		sendRemoteGetAutoRunDocContentResponse: (responseChannel: string, content: string): void => {
+			ipcRenderer.send(responseChannel, content);
+		},
+
+		/**
+		 * Subscribe to remote save auto-run doc from web interface (request-response)
+		 */
+		onRemoteSaveAutoRunDoc: (
+			callback: (
+				sessionId: string,
+				filename: string,
+				content: string,
+				responseChannel: string
+			) => void
+		): (() => void) => {
+			const handler = (
+				_: unknown,
+				sessionId: string,
+				filename: string,
+				content: string,
+				responseChannel: string
+			) => {
+				try {
+					Promise.resolve(callback(sessionId, filename, content, responseChannel)).catch(() => {
+						ipcRenderer.send(responseChannel, false);
+					});
+				} catch {
+					ipcRenderer.send(responseChannel, false);
+				}
+			};
+			ipcRenderer.on('remote:saveAutoRunDoc', handler);
+			return () => ipcRenderer.removeListener('remote:saveAutoRunDoc', handler);
+		},
+
+		/**
+		 * Send response for remote save auto-run doc
+		 */
+		sendRemoteSaveAutoRunDocResponse: (responseChannel: string, success: boolean): void => {
+			ipcRenderer.send(responseChannel, success);
+		},
+
+		/**
+		 * Subscribe to remote stop auto-run from web interface (fire-and-forget)
+		 */
+		onRemoteStopAutoRun: (callback: (sessionId: string) => void): (() => void) => {
+			const handler = (_: unknown, sessionId: string) => callback(sessionId);
+			ipcRenderer.on('remote:stopAutoRun', handler);
+			return () => ipcRenderer.removeListener('remote:stopAutoRun', handler);
+		},
+
+		/**
+		 * Subscribe to remote set setting from web interface
+		 * Uses request-response pattern with a unique responseChannel
+		 */
+		onRemoteSetSetting: (
+			callback: (key: string, value: unknown, responseChannel: string) => void
+		): (() => void) => {
+			const handler = (_: unknown, key: string, value: unknown, responseChannel: string) =>
+				callback(key, value, responseChannel);
+			ipcRenderer.on('remote:setSetting', handler);
+			return () => ipcRenderer.removeListener('remote:setSetting', handler);
+		},
+
+		/**
+		 * Send response for remote set setting
+		 */
+		sendRemoteSetSettingResponse: (responseChannel: string, success: boolean): void => {
+			ipcRenderer.send(responseChannel, success);
+		},
+
+		/**
+		 * Subscribe to remote create session from web interface
+		 * Uses request-response pattern with a unique responseChannel
+		 */
+		onRemoteCreateSession: (
+			callback: (
+				name: string,
+				toolType: string,
+				cwd: string,
+				groupId: string | undefined,
+				responseChannel: string
+			) => void
+		): (() => void) => {
+			const handler = (
+				_: unknown,
+				name: string,
+				toolType: string,
+				cwd: string,
+				groupId: string | undefined,
+				responseChannel: string
+			) => callback(name, toolType, cwd, groupId, responseChannel);
+			ipcRenderer.on('remote:createSession', handler);
+			return () => ipcRenderer.removeListener('remote:createSession', handler);
+		},
+
+		/**
+		 * Send response for remote create session
+		 */
+		sendRemoteCreateSessionResponse: (
+			responseChannel: string,
+			result: { sessionId: string } | null
+		): void => {
+			ipcRenderer.send(responseChannel, result);
+		},
+
+		/**
+		 * Subscribe to remote delete session from web interface (fire-and-forget)
+		 */
+		onRemoteDeleteSession: (callback: (sessionId: string) => void): (() => void) => {
+			const handler = (_: unknown, sessionId: string) => callback(sessionId);
+			ipcRenderer.on('remote:deleteSession', handler);
+			return () => ipcRenderer.removeListener('remote:deleteSession', handler);
+		},
+
+		/**
+		 * Subscribe to remote rename session from web interface
+		 * Uses request-response pattern with a unique responseChannel
+		 */
+		onRemoteRenameSession: (
+			callback: (sessionId: string, newName: string, responseChannel: string) => void
+		): (() => void) => {
+			const handler = (_: unknown, sessionId: string, newName: string, responseChannel: string) =>
+				callback(sessionId, newName, responseChannel);
+			ipcRenderer.on('remote:renameSession', handler);
+			return () => ipcRenderer.removeListener('remote:renameSession', handler);
+		},
+
+		/**
+		 * Send response for remote rename session
+		 */
+		sendRemoteRenameSessionResponse: (responseChannel: string, success: boolean): void => {
+			ipcRenderer.send(responseChannel, success);
+		},
+
+		/**
+		 * Subscribe to remote create group from web interface
+		 * Uses request-response pattern with a unique responseChannel
+		 */
+		onRemoteCreateGroup: (
+			callback: (name: string, emoji: string | undefined, responseChannel: string) => void
+		): (() => void) => {
+			const handler = (
+				_: unknown,
+				name: string,
+				emoji: string | undefined,
+				responseChannel: string
+			) => callback(name, emoji, responseChannel);
+			ipcRenderer.on('remote:createGroup', handler);
+			return () => ipcRenderer.removeListener('remote:createGroup', handler);
+		},
+
+		/**
+		 * Send response for remote create group
+		 */
+		sendRemoteCreateGroupResponse: (
+			responseChannel: string,
+			result: { id: string } | null
+		): void => {
+			ipcRenderer.send(responseChannel, result);
+		},
+
+		/**
+		 * Subscribe to remote rename group from web interface
+		 * Uses request-response pattern with a unique responseChannel
+		 */
+		onRemoteRenameGroup: (
+			callback: (groupId: string, name: string, responseChannel: string) => void
+		): (() => void) => {
+			const handler = (_: unknown, groupId: string, name: string, responseChannel: string) =>
+				callback(groupId, name, responseChannel);
+			ipcRenderer.on('remote:renameGroup', handler);
+			return () => ipcRenderer.removeListener('remote:renameGroup', handler);
+		},
+
+		/**
+		 * Send response for remote rename group
+		 */
+		sendRemoteRenameGroupResponse: (responseChannel: string, success: boolean): void => {
+			ipcRenderer.send(responseChannel, success);
+		},
+
+		/**
+		 * Subscribe to remote delete group from web interface (fire-and-forget)
+		 */
+		onRemoteDeleteGroup: (callback: (groupId: string) => void): (() => void) => {
+			const handler = (_: unknown, groupId: string) => callback(groupId);
+			ipcRenderer.on('remote:deleteGroup', handler);
+			return () => ipcRenderer.removeListener('remote:deleteGroup', handler);
+		},
+
+		/**
+		 * Subscribe to remote move session to group from web interface
+		 * Uses request-response pattern with a unique responseChannel
+		 */
+		onRemoteMoveSessionToGroup: (
+			callback: (sessionId: string, groupId: string | null, responseChannel: string) => void
+		): (() => void) => {
+			const handler = (
+				_: unknown,
+				sessionId: string,
+				groupId: string | null,
+				responseChannel: string
+			) => callback(sessionId, groupId, responseChannel);
+			ipcRenderer.on('remote:moveSessionToGroup', handler);
+			return () => ipcRenderer.removeListener('remote:moveSessionToGroup', handler);
+		},
+
+		/**
+		 * Send response for remote move session to group
+		 */
+		sendRemoteMoveSessionToGroupResponse: (responseChannel: string, success: boolean): void => {
+			ipcRenderer.send(responseChannel, success);
+		},
+
+		/**
+		 * Subscribe to remote get git status from web interface
+		 * Uses request-response pattern with a unique responseChannel
+		 */
+		onRemoteGetGitStatus: (
+			callback: (sessionId: string, responseChannel: string) => void
+		): (() => void) => {
+			const handler = (_: unknown, sessionId: string, responseChannel: string) => {
+				try {
+					Promise.resolve(callback(sessionId, responseChannel)).catch(() => {
+						ipcRenderer.send(responseChannel, { branch: '', files: [], ahead: 0, behind: 0 });
+					});
+				} catch {
+					ipcRenderer.send(responseChannel, { branch: '', files: [], ahead: 0, behind: 0 });
+				}
+			};
+			ipcRenderer.on('remote:getGitStatus', handler);
+			return () => ipcRenderer.removeListener('remote:getGitStatus', handler);
+		},
+
+		/**
+		 * Send response for remote get git status
+		 */
+		sendRemoteGetGitStatusResponse: (responseChannel: string, result: any): void => {
+			ipcRenderer.send(responseChannel, result);
+		},
+
+		/**
+		 * Subscribe to remote get git diff from web interface
+		 * Uses request-response pattern with a unique responseChannel
+		 */
+		onRemoteGetGitDiff: (
+			callback: (sessionId: string, filePath: string | undefined, responseChannel: string) => void
+		): (() => void) => {
+			const handler = (
+				_: unknown,
+				sessionId: string,
+				filePath: string | undefined,
+				responseChannel: string
+			) => {
+				try {
+					Promise.resolve(callback(sessionId, filePath, responseChannel)).catch(() => {
+						ipcRenderer.send(responseChannel, { diff: '', files: [] });
+					});
+				} catch {
+					ipcRenderer.send(responseChannel, { diff: '', files: [] });
+				}
+			};
+			ipcRenderer.on('remote:getGitDiff', handler);
+			return () => ipcRenderer.removeListener('remote:getGitDiff', handler);
+		},
+
+		/**
+		 * Send response for remote get git diff
+		 */
+		sendRemoteGetGitDiffResponse: (responseChannel: string, result: any): void => {
+			ipcRenderer.send(responseChannel, result);
+		},
+
+		/**
+		 * Subscribe to remote get group chats from web interface
+		 * Uses request-response pattern with a unique responseChannel
+		 */
+		onRemoteGetGroupChats: (callback: (responseChannel: string) => void): (() => void) => {
+			const handler = (_: unknown, responseChannel: string) => callback(responseChannel);
+			ipcRenderer.on('remote:getGroupChats', handler);
+			return () => ipcRenderer.removeListener('remote:getGroupChats', handler);
+		},
+
+		/**
+		 * Send response for remote get group chats
+		 */
+		sendRemoteGetGroupChatsResponse: (responseChannel: string, result: any): void => {
+			ipcRenderer.send(responseChannel, result);
+		},
+
+		/**
+		 * Subscribe to remote start group chat from web interface
+		 * Uses request-response pattern with a unique responseChannel
+		 */
+		onRemoteStartGroupChat: (
+			callback: (topic: string, participantIds: string[], responseChannel: string) => void
+		): (() => void) => {
+			const handler = (
+				_: unknown,
+				topic: string,
+				participantIds: string[],
+				responseChannel: string
+			) => callback(topic, participantIds, responseChannel);
+			ipcRenderer.on('remote:startGroupChat', handler);
+			return () => ipcRenderer.removeListener('remote:startGroupChat', handler);
+		},
+
+		/**
+		 * Send response for remote start group chat
+		 */
+		sendRemoteStartGroupChatResponse: (
+			responseChannel: string,
+			result: { chatId: string } | null
+		): void => {
+			ipcRenderer.send(responseChannel, result);
+		},
+
+		/**
+		 * Subscribe to remote get group chat state from web interface
+		 * Uses request-response pattern with a unique responseChannel
+		 */
+		onRemoteGetGroupChatState: (
+			callback: (chatId: string, responseChannel: string) => void
+		): (() => void) => {
+			const handler = (_: unknown, chatId: string, responseChannel: string) =>
+				callback(chatId, responseChannel);
+			ipcRenderer.on('remote:getGroupChatState', handler);
+			return () => ipcRenderer.removeListener('remote:getGroupChatState', handler);
+		},
+
+		/**
+		 * Send response for remote get group chat state
+		 */
+		sendRemoteGetGroupChatStateResponse: (responseChannel: string, result: any): void => {
+			ipcRenderer.send(responseChannel, result);
+		},
+
+		/**
+		 * Subscribe to remote stop group chat from web interface
+		 * Uses request-response pattern with a unique responseChannel
+		 */
+		onRemoteStopGroupChat: (
+			callback: (chatId: string, responseChannel: string) => void
+		): (() => void) => {
+			const handler = (_: unknown, chatId: string, responseChannel: string) =>
+				callback(chatId, responseChannel);
+			ipcRenderer.on('remote:stopGroupChat', handler);
+			return () => ipcRenderer.removeListener('remote:stopGroupChat', handler);
+		},
+
+		/**
+		 * Send response for remote stop group chat
+		 */
+		sendRemoteStopGroupChatResponse: (responseChannel: string, success: boolean): void => {
+			ipcRenderer.send(responseChannel, success);
+		},
+
+		/**
+		 * Subscribe to remote send group chat message from web interface
+		 * Uses request-response pattern with a unique responseChannel
+		 */
+		onRemoteSendGroupChatMessage: (
+			callback: (chatId: string, message: string, responseChannel: string) => void
+		): (() => void) => {
+			const handler = (_: unknown, chatId: string, message: string, responseChannel: string) =>
+				callback(chatId, message, responseChannel);
+			ipcRenderer.on('remote:sendGroupChatMessage', handler);
+			return () => ipcRenderer.removeListener('remote:sendGroupChatMessage', handler);
+		},
+
+		/**
+		 * Send response for remote send group chat message
+		 */
+		sendRemoteSendGroupChatMessageResponse: (responseChannel: string, success: boolean): void => {
+			ipcRenderer.send(responseChannel, success);
+		},
+
+		/**
+		 * Subscribe to remote merge context from web interface
+		 * Uses request-response pattern with a unique responseChannel
+		 */
+		onRemoteMergeContext: (
+			callback: (sourceSessionId: string, targetSessionId: string, responseChannel: string) => void
+		): (() => void) => {
+			const handler = (
+				_: unknown,
+				sourceSessionId: string,
+				targetSessionId: string,
+				responseChannel: string
+			) => callback(sourceSessionId, targetSessionId, responseChannel);
+			ipcRenderer.on('remote:mergeContext', handler);
+			return () => ipcRenderer.removeListener('remote:mergeContext', handler);
+		},
+
+		/**
+		 * Send response for remote merge context
+		 */
+		sendRemoteMergeContextResponse: (responseChannel: string, success: boolean): void => {
+			ipcRenderer.send(responseChannel, success);
+		},
+
+		/**
+		 * Subscribe to remote transfer context from web interface
+		 * Uses request-response pattern with a unique responseChannel
+		 */
+		onRemoteTransferContext: (
+			callback: (sourceSessionId: string, targetSessionId: string, responseChannel: string) => void
+		): (() => void) => {
+			const handler = (
+				_: unknown,
+				sourceSessionId: string,
+				targetSessionId: string,
+				responseChannel: string
+			) => callback(sourceSessionId, targetSessionId, responseChannel);
+			ipcRenderer.on('remote:transferContext', handler);
+			return () => ipcRenderer.removeListener('remote:transferContext', handler);
+		},
+
+		/**
+		 * Send response for remote transfer context
+		 */
+		sendRemoteTransferContextResponse: (responseChannel: string, success: boolean): void => {
+			ipcRenderer.send(responseChannel, success);
+		},
+
+		/**
+		 * Subscribe to remote summarize context from web interface
+		 * Uses request-response pattern with a unique responseChannel
+		 */
+		onRemoteSummarizeContext: (
+			callback: (sessionId: string, responseChannel: string) => void
+		): (() => void) => {
+			const handler = (_: unknown, sessionId: string, responseChannel: string) =>
+				callback(sessionId, responseChannel);
+			ipcRenderer.on('remote:summarizeContext', handler);
+			return () => ipcRenderer.removeListener('remote:summarizeContext', handler);
+		},
+
+		/**
+		 * Send response for remote summarize context
+		 */
+		sendRemoteSummarizeContextResponse: (responseChannel: string, success: boolean): void => {
+			ipcRenderer.send(responseChannel, success);
+		},
+
+		/**
+		 * Subscribe to remote get Cue subscriptions from web interface
+		 */
+		onRemoteGetCueSubscriptions: (
+			callback: (sessionId: string | undefined, responseChannel: string) => void
+		): (() => void) => {
+			const handler = (_: unknown, sessionId: string | undefined, responseChannel: string) =>
+				callback(sessionId, responseChannel);
+			ipcRenderer.on('remote:getCueSubscriptions', handler);
+			return () => ipcRenderer.removeListener('remote:getCueSubscriptions', handler);
+		},
+
+		/**
+		 * Send response for remote get Cue subscriptions
+		 */
+		sendRemoteGetCueSubscriptionsResponse: (responseChannel: string, result: unknown): void => {
+			ipcRenderer.send(responseChannel, result);
+		},
+
+		/**
+		 * Subscribe to remote toggle Cue subscription from web interface
+		 */
+		onRemoteToggleCueSubscription: (
+			callback: (subscriptionId: string, enabled: boolean, responseChannel: string) => void
+		): (() => void) => {
+			const handler = (
+				_: unknown,
+				subscriptionId: string,
+				enabled: boolean,
+				responseChannel: string
+			) => callback(subscriptionId, enabled, responseChannel);
+			ipcRenderer.on('remote:toggleCueSubscription', handler);
+			return () => ipcRenderer.removeListener('remote:toggleCueSubscription', handler);
+		},
+
+		/**
+		 * Send response for remote toggle Cue subscription
+		 */
+		sendRemoteToggleCueSubscriptionResponse: (responseChannel: string, success: boolean): void => {
+			ipcRenderer.send(responseChannel, success);
+		},
+
+		/**
+		 * Subscribe to remote get Cue activity from web interface
+		 */
+		onRemoteGetCueActivity: (
+			callback: (sessionId: string | undefined, limit: number, responseChannel: string) => void
+		): (() => void) => {
+			const handler = (
+				_: unknown,
+				sessionId: string | undefined,
+				limit: number,
+				responseChannel: string
+			) => callback(sessionId, limit, responseChannel);
+			ipcRenderer.on('remote:getCueActivity', handler);
+			return () => ipcRenderer.removeListener('remote:getCueActivity', handler);
+		},
+
+		/**
+		 * Send response for remote get Cue activity
+		 */
+		sendRemoteGetCueActivityResponse: (responseChannel: string, result: unknown): void => {
+			ipcRenderer.send(responseChannel, result);
+		},
+
+		/**
 		 * Subscribe to stderr from runCommand (separate stream)
 		 */
 		onStderr: (callback: (sessionId: string, data: string) => void): (() => void) => {

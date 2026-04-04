@@ -28,6 +28,7 @@ import { buildExpandedEnv } from '../../../shared/pathUtils';
 import type { SshRemoteConfig } from '../../../shared/types';
 import { powerManager } from '../../power-manager';
 import { MaestroSettings } from './persistence';
+import { getDefaultShell } from '../../stores/defaults';
 
 const LOG_CONTEXT = '[ProcessManager]';
 
@@ -122,6 +123,7 @@ export function registerProcessHandlers(deps: ProcessHandlerDependencies): void 
 				sessionCustomArgs?: string; // Session-specific custom args
 				sessionCustomEnvVars?: Record<string, string>; // Session-specific env vars
 				sessionCustomModel?: string; // Session-specific model selection
+				sessionCustomEffort?: string; // Session-specific effort/reasoning level
 				sessionCustomContextWindow?: number; // Session-specific context window size
 				// Per-session SSH remote config (takes precedence over agent-level SSH config)
 				sessionSshRemoteConfig?: {
@@ -193,6 +195,7 @@ export function registerProcessHandlers(deps: ProcessHandlerDependencies): void 
 				const configResolution = applyAgentConfigOverrides(agent, finalArgs, {
 					agentConfigValues,
 					sessionCustomModel: config.sessionCustomModel,
+					sessionCustomEffort: config.sessionCustomEffort,
 					sessionCustomArgs: config.sessionCustomArgs,
 					sessionCustomEnvVars: config.sessionCustomEnvVars,
 				});
@@ -310,7 +313,9 @@ export function registerProcessHandlers(deps: ProcessHandlerDependencies): void 
 				// For terminal sessions, we also load custom shell path, args, and env vars
 				let shellToUse =
 					config.shell ||
-					(config.toolType === 'terminal' ? settingsStore.get('defaultShell', 'zsh') : undefined);
+					(config.toolType === 'terminal'
+						? settingsStore.get('defaultShell', getDefaultShell())
+						: undefined);
 				let shellArgsStr: string | undefined;
 
 				// Load global shell environment variables for ALL process types (terminals and agents)
@@ -810,7 +815,7 @@ export function registerProcessHandlers(deps: ProcessHandlerDependencies): void 
 
 				// Resolve shell: prefer config.shell, then settings default
 				const globalShellEnvVars = settingsStore.get('shellEnvVars', {}) as Record<string, string>;
-				let shellToUse = config.shell || settingsStore.get('defaultShell', 'zsh');
+				let shellToUse = config.shell || settingsStore.get('defaultShell', getDefaultShell());
 				const customShellPath = settingsStore.get('customShellPath', '');
 				if (customShellPath && (customShellPath as string).trim()) {
 					shellToUse = (customShellPath as string).trim();
@@ -920,7 +925,7 @@ export function registerProcessHandlers(deps: ProcessHandlerDependencies): void 
 
 				// Get the shell from settings if not provided
 				// Custom shell path takes precedence over the selected shell ID
-				let shell = config.shell || settingsStore.get('defaultShell', 'zsh');
+				let shell = config.shell || settingsStore.get('defaultShell', getDefaultShell());
 				const customShellPath = settingsStore.get('customShellPath', '');
 				if (customShellPath && customShellPath.trim()) {
 					shell = customShellPath.trim();

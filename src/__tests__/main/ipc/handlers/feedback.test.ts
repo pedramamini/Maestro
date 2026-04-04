@@ -279,6 +279,172 @@ describe('feedback handlers', () => {
 		expect(cleanupTempFiles).not.toHaveBeenCalled();
 	});
 
+	describe('feedback:search-issues', () => {
+		it('returns empty issues for empty query', async () => {
+			const handler = registeredHandlers.get('feedback:search-issues');
+			const result = await handler!({}, { query: '' });
+			expect(result).toEqual({ issues: [] });
+			expect(execFileNoThrow).not.toHaveBeenCalled();
+		});
+
+		it('returns empty issues when query has only stop words', async () => {
+			const handler = registeredHandlers.get('feedback:search-issues');
+			const result = await handler!({}, { query: 'the and or but' });
+			expect(result).toEqual({ issues: [] });
+			expect(execFileNoThrow).not.toHaveBeenCalled();
+		});
+
+		it('extracts keywords and runs parallel searches', async () => {
+			const mockIssue = {
+				number: 42,
+				title: 'Split pane layouts',
+				url: 'https://github.com/RunMaestro/Maestro/issues/42',
+				state: 'open',
+				labels: [{ name: 'feature' }],
+				createdAt: '2026-03-01T00:00:00Z',
+				author: { login: 'testuser' },
+			};
+
+			vi.mocked(execFileNoThrow).mockResolvedValue({
+				exitCode: 0,
+				stdout: JSON.stringify([mockIssue]),
+				stderr: '',
+			} as any);
+
+			const handler = registeredHandlers.get('feedback:search-issues');
+			const result = await handler!(
+				{},
+				{ query: 'Tiled tab groups: drag-and-drop split-pane layouts with persistence' }
+			);
+
+			// Should have called gh search multiple times (keyword chunks)
+			expect(execFileNoThrow).toHaveBeenCalled();
+			const calls = vi.mocked(execFileNoThrow).mock.calls;
+			for (const call of calls) {
+				expect(call[0]).toBe('gh');
+				expect(call[1]).toContain('search');
+				expect(call[1]).toContain('issues');
+				expect(call[1]).toContain('--repo');
+				expect(call[1]).toContain('RunMaestro/Maestro');
+			}
+
+			// Should return the issue with mapped fields
+			expect(result.issues).toHaveLength(1);
+			expect(result.issues[0]).toEqual({
+				number: 42,
+				title: 'Split pane layouts',
+				url: 'https://github.com/RunMaestro/Maestro/issues/42',
+				state: 'open',
+				labels: ['feature'],
+				createdAt: '2026-03-01T00:00:00Z',
+				author: 'testuser',
+				commentCount: 0,
+			});
+		});
+
+		it('deduplicates issues across multiple search results', async () => {
+			const issue1 = {
+				number: 10,
+				title: 'Issue A',
+				url: 'https://github.com/RunMaestro/Maestro/issues/10',
+				state: 'open',
+				labels: [],
+				createdAt: '2026-03-01T00:00:00Z',
+				author: { login: 'user1' },
+			};
+			const issue2 = {
+				number: 20,
+				title: 'Issue B',
+				url: 'https://github.com/RunMaestro/Maestro/issues/20',
+				state: 'closed',
+				labels: [],
+				createdAt: '2026-03-02T00:00:00Z',
+				author: { login: 'user2' },
+			};
+
+			// First search returns both, second returns issue1 again
+			vi.mocked(execFileNoThrow)
+				.mockResolvedValueOnce({
+					exitCode: 0,
+					stdout: JSON.stringify([issue1, issue2]),
+					stderr: '',
+				} as any)
+				.mockResolvedValue({
+					exitCode: 0,
+					stdout: JSON.stringify([issue1]),
+					stderr: '',
+				} as any);
+
+			const handler = registeredHandlers.get('feedback:search-issues');
+			const result = await handler!(
+				{},
+				{ query: 'split pane tiling drag drop layouts persistence' }
+			);
+
+			const numbers = result.issues.map((i: any) => i.number);
+			expect(numbers).toContain(10);
+			expect(numbers).toContain(20);
+			// No duplicates
+			expect(new Set(numbers).size).toBe(numbers.length);
+		});
+
+		it('handles gh search failures gracefully', async () => {
+			vi.mocked(execFileNoThrow).mockResolvedValue({
+				exitCode: 1,
+				stdout: '',
+				stderr: 'error',
+			} as any);
+
+			const handler = registeredHandlers.get('feedback:search-issues');
+			const result = await handler!({}, { query: 'split pane layouts' });
+			expect(result).toEqual({ issues: [] });
+		});
+
+		it('handles invalid JSON from gh gracefully', async () => {
+			vi.mocked(execFileNoThrow).mockResolvedValue({
+				exitCode: 0,
+				stdout: 'not valid json',
+				stderr: '',
+			} as any);
+
+			const handler = registeredHandlers.get('feedback:search-issues');
+			const result = await handler!({}, { query: 'split pane layouts' });
+			expect(result).toEqual({ issues: [] });
+		});
+
+		it('caps results at 10 issues', async () => {
+			const issues = Array.from({ length: 5 }, (_, i) => ({
+				number: i + 1,
+				title: `Issue ${i + 1}`,
+				url: `https://github.com/RunMaestro/Maestro/issues/${i + 1}`,
+				state: 'open',
+				labels: [],
+				createdAt: '2026-03-01T00:00:00Z',
+				author: { login: 'user' },
+			}));
+
+			// Each search returns 5 unique issues — with enough chunks this could exceed 10
+			let callCount = 0;
+			vi.mocked(execFileNoThrow).mockImplementation(async () => {
+				const batch = issues.map((iss) => ({
+					...iss,
+					number: iss.number + callCount * 5,
+					title: `Issue ${iss.number + callCount * 5}`,
+				}));
+				callCount++;
+				return { exitCode: 0, stdout: JSON.stringify(batch), stderr: '' } as any;
+			});
+
+			const handler = registeredHandlers.get('feedback:search-issues');
+			const result = await handler!(
+				{},
+				{ query: 'alpha bravo charlie delta echo foxtrot golf hotel india juliet' }
+			);
+
+			expect(result.issues.length).toBeLessThanOrEqual(10);
+		});
+	});
+
 	it('revalidates gh auth when cache is empty', async () => {
 		vi.mocked(getCachedGhStatus).mockReturnValue(null);
 		vi.mocked(isGhInstalled).mockResolvedValue(true);

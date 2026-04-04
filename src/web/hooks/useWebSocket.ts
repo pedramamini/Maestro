@@ -49,6 +49,7 @@ export interface AITabData {
 	createdAt: number;
 	state: 'idle' | 'busy';
 	thinkingStartTime?: number | null;
+	hasUnread?: boolean;
 }
 
 /**
@@ -118,11 +119,26 @@ export type ServerMessageType =
 	| 'active_session_changed'
 	| 'session_output'
 	| 'session_exit'
+	| 'session_live'
+	| 'session_offline'
 	| 'user_input'
 	| 'theme'
 	| 'custom_commands'
 	| 'autorun_state'
+	| 'autorun_docs_changed'
+	| 'notification_event'
+	| 'settings_changed'
+	| 'groups_changed'
 	| 'tabs_changed'
+	| 'group_chat_message'
+	| 'group_chat_state_change'
+	| 'context_operation_progress'
+	| 'context_operation_complete'
+	| 'cue_activity_event'
+	| 'cue_subscriptions_changed'
+	| 'tool_event'
+	| 'terminal_data'
+	| 'terminal_ready'
 	| 'pong'
 	| 'subscribed'
 	| 'echo'
@@ -287,6 +303,79 @@ export interface AutoRunStateMessage extends ServerMessage {
 }
 
 /**
+ * AutoRun documents changed message from server
+ * Sent when Auto Run document list changes on the desktop
+ */
+export interface AutoRunDocsChangedMessage extends ServerMessage {
+	type: 'autorun_docs_changed';
+	sessionId: string;
+	documents: Array<{
+		filename: string;
+		path: string;
+		taskCount: number;
+		completedCount: number;
+	}>;
+}
+
+/**
+ * Notification event message from server
+ * Sent when a notification-worthy event occurs (agent complete, error, autorun, etc.)
+ */
+export interface NotificationEventMessage extends ServerMessage {
+	type: 'notification_event';
+	eventType:
+		| 'agent_complete'
+		| 'agent_error'
+		| 'autorun_complete'
+		| 'autorun_task_complete'
+		| 'context_warning';
+	sessionId: string;
+	sessionName: string;
+	message: string;
+	severity: 'info' | 'warning' | 'error';
+}
+
+/**
+ * Settings changed message from server
+ * Sent when settings are modified (from web or desktop)
+ */
+export interface SettingsChangedMessage extends ServerMessage {
+	type: 'settings_changed';
+	settings: {
+		theme: string;
+		fontSize: number;
+		enterToSendAI: boolean;
+		enterToSendTerminal: boolean;
+		defaultSaveToHistory: boolean;
+		defaultShowThinking: string;
+		autoScroll: boolean;
+		notificationsEnabled: boolean;
+		audioFeedbackEnabled: boolean;
+		colorBlindMode: string;
+		conductorProfile: string;
+	};
+}
+
+/**
+ * Group data for web clients
+ */
+export interface GroupData {
+	id: string;
+	name: string;
+	emoji: string | null;
+	sessionIds: string[];
+}
+
+/**
+ * Groups changed message from server
+ * Sent when groups are created, renamed, deleted, or membership changes
+ */
+export interface GroupsChangedMessage extends ServerMessage {
+	type: 'groups_changed';
+	groups: GroupData[];
+}
+
+/**
  * Tabs changed message from server
  * Sent when tabs are added, removed, or active tab changes in a session
  */
@@ -295,6 +384,70 @@ export interface TabsChangedMessage extends ServerMessage {
 	sessionId: string;
 	aiTabs: AITabData[];
 	activeTabId: string;
+}
+
+/**
+ * Group chat message data
+ */
+export interface GroupChatMessage {
+	id: string;
+	participantId: string;
+	participantName: string;
+	content: string;
+	timestamp: number;
+	role: 'user' | 'assistant';
+}
+
+/**
+ * Group chat state data
+ */
+export interface GroupChatState {
+	id: string;
+	topic: string;
+	participants: Array<{ sessionId: string; name: string; toolType: string }>;
+	messages: GroupChatMessage[];
+	isActive: boolean;
+	currentTurn?: string;
+}
+
+/**
+ * Group chat message broadcast from server
+ */
+export interface GroupChatMessageBroadcast extends ServerMessage {
+	type: 'group_chat_message';
+	chatId: string;
+	message: GroupChatMessage;
+}
+
+/**
+ * Group chat state change broadcast from server
+ */
+export interface GroupChatStateChangeBroadcast extends ServerMessage {
+	type: 'group_chat_state_change';
+	chatId: string;
+	[key: string]: unknown;
+}
+
+/**
+ * Tool event message from server (real-time tool execution in thinking stream)
+ */
+export interface ToolEventMessage extends ServerMessage {
+	type: 'tool_event';
+	sessionId: string;
+	tabId: string;
+	toolLog: {
+		id: string;
+		timestamp: number;
+		source: 'tool';
+		text: string;
+		metadata?: {
+			toolState?: {
+				name: string;
+				status: 'running' | 'completed' | 'error';
+				input?: Record<string, unknown>;
+			};
+		};
+	};
 }
 
 /**
@@ -324,7 +477,14 @@ export type TypedServerMessage =
 	| ThemeMessage
 	| CustomCommandsMessage
 	| AutoRunStateMessage
+	| AutoRunDocsChangedMessage
+	| NotificationEventMessage
+	| SettingsChangedMessage
+	| GroupsChangedMessage
 	| TabsChangedMessage
+	| GroupChatMessageBroadcast
+	| GroupChatStateChangeBroadcast
+	| ToolEventMessage
 	| ErrorMessage
 	| ServerMessage;
 
@@ -346,6 +506,8 @@ export interface WebSocketEventHandlers {
 	onSessionRemoved?: (sessionId: string) => void;
 	/** Called when the active session changes on the desktop */
 	onActiveSessionChanged?: (sessionId: string) => void;
+	/** Called when a tool execution event is received (real-time tool usage in thinking stream) */
+	onToolEvent?: (sessionId: string, tabId: string, toolLog: ToolEventMessage['toolLog']) => void;
 	/** Called when session output is received (real-time AI/terminal output) */
 	onSessionOutput?: (
 		sessionId: string,
@@ -363,8 +525,27 @@ export interface WebSocketEventHandlers {
 	onCustomCommands?: (commands: CustomCommand[]) => void;
 	/** Called when AutoRun state changes (batch processing on desktop) */
 	onAutoRunStateChange?: (sessionId: string, state: AutoRunState | null) => void;
+	/** Called when AutoRun document list changes */
+	onAutoRunDocsChanged?: (
+		sessionId: string,
+		documents: AutoRunDocsChangedMessage['documents']
+	) => void;
+	/** Called when a notification event is received */
+	onNotificationEvent?: (event: NotificationEventMessage) => void;
+	/** Called when raw terminal PTY data is received (for xterm.js) */
+	onTerminalData?: (sessionId: string, data: string) => void;
+	/** Called when the web terminal PTY is spawned and ready (re-send dimensions) */
+	onTerminalReady?: (sessionId: string) => void;
+	/** Called when settings are changed (from web or desktop) */
+	onSettingsChanged?: (settings: SettingsChangedMessage['settings']) => void;
+	/** Called when groups are changed (created, renamed, deleted, membership) */
+	onGroupsChanged?: (groups: GroupData[]) => void;
 	/** Called when tabs change in a session */
 	onTabsChanged?: (sessionId: string, aiTabs: AITabData[], activeTabId: string) => void;
+	/** Called when a group chat message is broadcast */
+	onGroupChatMessage?: (chatId: string, message: GroupChatMessage) => void;
+	/** Called when group chat state changes */
+	onGroupChatStateChange?: (chatId: string, state: Partial<GroupChatState>) => void;
 	/** Called when connection state changes */
 	onConnectionChange?: (state: WebSocketState) => void;
 	/** Called when an error occurs */
@@ -419,6 +600,12 @@ export interface UseWebSocketReturn {
 	ping: () => void;
 	/** Send a raw message to the server */
 	send: (message: object) => boolean;
+	/** Send a request and wait for a correlated response */
+	sendRequest: <T = any>(
+		type: string,
+		payload?: Record<string, unknown>,
+		timeoutMs?: number
+	) => Promise<T>;
 }
 
 /**
@@ -501,6 +688,17 @@ export function useWebSocket(options: UseWebSocketOptions = {}): UseWebSocketRet
 	const seenMsgIdsRef = useRef<Set<string>>(new Set());
 	// Ref for handleMessage to avoid stale closure issues
 	const handleMessageRef = useRef<((event: MessageEvent) => void) | null>(null);
+	// Pending request-response map for sendRequest correlation
+	const pendingRequestsRef = useRef<
+		Map<
+			string,
+			{
+				resolve: (data: any) => void;
+				reject: (err: Error) => void;
+				timer: ReturnType<typeof setTimeout>;
+			}
+		>
+	>(new Map());
 
 	// Keep handlers ref up to date SYNCHRONOUSLY to avoid race conditions
 	// This must happen before any WebSocket messages are processed
@@ -541,11 +739,22 @@ export function useWebSocket(options: UseWebSocketOptions = {}): UseWebSocketRet
 			try {
 				const message = JSON.parse(event.data) as TypedServerMessage;
 
-				// Debug: Log all incoming messages (not just session_output)
-				console.log(
-					`[WebSocket] Message received: type=${message.type}`,
-					message.type === 'session_output' ? message : ''
-				);
+				// Check for request-response correlation before dispatching
+				const requestId = (message as any).requestId as string | undefined;
+				if (requestId && pendingRequestsRef.current.has(requestId)) {
+					const pending = pendingRequestsRef.current.get(requestId)!;
+					clearTimeout(pending.timer);
+					pendingRequestsRef.current.delete(requestId);
+					if ((message as any).type === 'error') {
+						pending.reject(new Error((message as any).message ?? 'Server error'));
+					} else {
+						pending.resolve(message);
+					}
+					return;
+				}
+
+				// Log all incoming messages for debugging
+				webLogger.debug(`Message received: type=${message.type}`, 'WebSocket');
 
 				// Call the generic message handler
 				handlersRef.current?.onMessage?.(message);
@@ -635,8 +844,9 @@ export function useWebSocket(options: UseWebSocketOptions = {}): UseWebSocketRet
 						// Dedupe using message ID if available
 						if (outputMsg.msgId) {
 							if (seenMsgIdsRef.current.has(outputMsg.msgId)) {
-								console.log(
-									`[WebSocket] DEDUPE: Skipping duplicate session_output msgId=${outputMsg.msgId}`
+								webLogger.debug(
+									`DEDUPE: Skipping duplicate session_output msgId=${outputMsg.msgId}`,
+									'WebSocket'
 								);
 								break;
 							}
@@ -647,8 +857,9 @@ export function useWebSocket(options: UseWebSocketOptions = {}): UseWebSocketRet
 								seenMsgIdsRef.current = new Set(idsArray.slice(-500));
 							}
 						}
-						console.log(
-							`[WebSocket] Received session_output: msgId=${outputMsg.msgId || 'none'}, session=${outputMsg.sessionId}, tabId=${outputMsg.tabId || 'none'}, source=${outputMsg.source}, dataLen=${outputMsg.data?.length || 0}, hasHandler=${!!handlersRef.current?.onSessionOutput}`
+						webLogger.debug(
+							`Received session_output: msgId=${outputMsg.msgId || 'none'}, session=${outputMsg.sessionId}, tabId=${outputMsg.tabId || 'none'}, source=${outputMsg.source}, dataLen=${outputMsg.data?.length || 0}`,
+							'WebSocket'
 						);
 						handlersRef.current?.onSessionOutput?.(
 							outputMsg.sessionId,
@@ -656,6 +867,12 @@ export function useWebSocket(options: UseWebSocketOptions = {}): UseWebSocketRet
 							outputMsg.source,
 							outputMsg.tabId
 						);
+						break;
+					}
+
+					case 'tool_event': {
+						const toolMsg = message as ToolEventMessage;
+						handlersRef.current?.onToolEvent?.(toolMsg.sessionId, toolMsg.tabId, toolMsg.toolLog);
 						break;
 					}
 
@@ -697,12 +914,69 @@ export function useWebSocket(options: UseWebSocketOptions = {}): UseWebSocketRet
 						break;
 					}
 
+					case 'autorun_docs_changed': {
+						const docsMsg = message as AutoRunDocsChangedMessage;
+						handlersRef.current?.onAutoRunDocsChanged?.(docsMsg.sessionId, docsMsg.documents);
+						break;
+					}
+
+					case 'notification_event': {
+						const notifMsg = message as NotificationEventMessage;
+						handlersRef.current?.onNotificationEvent?.(notifMsg);
+						break;
+					}
+
+					case 'terminal_data': {
+						const sessionId = message.sessionId as string;
+						const data = message.data as string;
+						if (sessionId && data) {
+							handlersRef.current?.onTerminalData?.(sessionId, data);
+						}
+						break;
+					}
+
+					case 'terminal_ready': {
+						const sessionId = message.sessionId as string;
+						if (sessionId) {
+							handlersRef.current?.onTerminalReady?.(sessionId);
+						}
+						break;
+					}
+
+					case 'settings_changed': {
+						const settingsMsg = message as SettingsChangedMessage;
+						handlersRef.current?.onSettingsChanged?.(settingsMsg.settings);
+						break;
+					}
+
+					case 'groups_changed': {
+						const groupsMsg = message as GroupsChangedMessage;
+						handlersRef.current?.onGroupsChanged?.(groupsMsg.groups);
+						break;
+					}
+
 					case 'tabs_changed': {
 						const tabsMsg = message as TabsChangedMessage;
 						handlersRef.current?.onTabsChanged?.(
 							tabsMsg.sessionId,
 							tabsMsg.aiTabs,
 							tabsMsg.activeTabId
+						);
+						break;
+					}
+
+					case 'group_chat_message': {
+						const gcMsg = message as GroupChatMessageBroadcast;
+						handlersRef.current?.onGroupChatMessage?.(gcMsg.chatId, gcMsg.message);
+						break;
+					}
+
+					case 'group_chat_state_change': {
+						const gcStateMsg = message as GroupChatStateChangeBroadcast;
+						const { chatId: gcChatId, type: _gcType, timestamp: _gcTs, ...gcState } = gcStateMsg;
+						handlersRef.current?.onGroupChatStateChange?.(
+							gcChatId,
+							gcState as Partial<GroupChatState>
 						);
 						break;
 					}
@@ -798,6 +1072,12 @@ export function useWebSocket(options: UseWebSocketOptions = {}): UseWebSocketRet
 				webLogger.error('WebSocket connection error', 'WebSocket', event);
 				setError('WebSocket connection error');
 				handlersRef.current?.onError?.('WebSocket connection error');
+				// Reject all pending requests
+				for (const [, pending] of pendingRequestsRef.current) {
+					clearTimeout(pending.timer);
+					pending.reject(new Error('Connection lost'));
+				}
+				pendingRequestsRef.current.clear();
 			};
 
 			ws.onclose = (event) => {
@@ -807,6 +1087,12 @@ export function useWebSocket(options: UseWebSocketOptions = {}): UseWebSocketRet
 				wsRef.current = null;
 				setState('disconnected');
 				handlersRef.current?.onConnectionChange?.('disconnected');
+				// Reject all pending requests
+				for (const [, pending] of pendingRequestsRef.current) {
+					clearTimeout(pending.timer);
+					pending.reject(new Error('Connection lost'));
+				}
+				pendingRequestsRef.current.clear();
 
 				// Attempt to reconnect if not a clean close
 				if (event.code !== 1000 && shouldReconnectRef.current) {
@@ -887,6 +1173,40 @@ export function useWebSocket(options: UseWebSocketOptions = {}): UseWebSocketRet
 		return false;
 	}, []);
 
+	/**
+	 * Send a request and wait for a correlated response.
+	 * The server must echo back the requestId in its response.
+	 */
+	const sendRequest = useCallback(
+		<T = any>(
+			type: string,
+			payload?: Record<string, unknown>,
+			timeoutMs: number = 10000
+		): Promise<T> => {
+			return new Promise<T>((resolve, reject) => {
+				const requestId =
+					typeof crypto !== 'undefined' && crypto.randomUUID
+						? crypto.randomUUID()
+						: Date.now().toString(36) + Math.random().toString(36);
+
+				const timer = setTimeout(() => {
+					pendingRequestsRef.current.delete(requestId);
+					reject(new Error('Request timed out'));
+				}, timeoutMs);
+
+				pendingRequestsRef.current.set(requestId, { resolve, reject, timer });
+
+				const sent = send({ type, ...payload, requestId });
+				if (!sent) {
+					clearTimeout(timer);
+					pendingRequestsRef.current.delete(requestId);
+					reject(new Error('WebSocket not connected'));
+				}
+			});
+		},
+		[send]
+	);
+
 	// Cleanup on unmount - track mount ID to handle StrictMode double-mount
 	useEffect(() => {
 		const thisMountId = ++mountIdRef.current;
@@ -928,6 +1248,7 @@ export function useWebSocket(options: UseWebSocketOptions = {}): UseWebSocketRet
 		authenticate,
 		ping,
 		send,
+		sendRequest,
 	};
 }
 

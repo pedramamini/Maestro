@@ -116,6 +116,10 @@ export function AgentCreationDialog({
 	const [agentConfigs, setAgentConfigs] = useState<Record<string, Record<string, any>>>({});
 	const [availableModels, setAvailableModels] = useState<Record<string, string[]>>({});
 	const [loadingModels, setLoadingModels] = useState<Record<string, boolean>>({});
+	const [dynamicOptions, setDynamicOptions] = useState<Record<string, Record<string, string[]>>>(
+		{}
+	);
+	const [loadingDynamicOptions, setLoadingDynamicOptions] = useState<Record<string, boolean>>({});
 
 	// Reset all state when dialog opens
 	useEffect(() => {
@@ -175,6 +179,36 @@ export function AgentCreationDialog({
 		[availableModels]
 	);
 
+	// Load dynamic config options for an agent
+	const loadDynamicOptionsForAgent = useCallback(
+		async (agentId: string) => {
+			if (dynamicOptions[agentId]) return;
+			const agent = ac.detectedAgents.find((a) => a.id === agentId);
+			const dynamicSelects = agent?.configOptions?.filter(
+				(opt: any) => opt.type === 'select' && opt.dynamic
+			);
+			if (!dynamicSelects?.length) return;
+
+			setLoadingDynamicOptions((prev) => ({ ...prev, [agentId]: true }));
+			try {
+				const results: Record<string, string[]> = {};
+				await Promise.all(
+					dynamicSelects.map(async (opt: any) => {
+						try {
+							results[opt.key] = await window.maestro.agents.getConfigOptions(agentId, opt.key);
+						} catch {
+							/* fall back to static */
+						}
+					})
+				);
+				setDynamicOptions((prev) => ({ ...prev, [agentId]: results }));
+			} finally {
+				setLoadingDynamicOptions((prev) => ({ ...prev, [agentId]: false }));
+			}
+		},
+		[dynamicOptions, ac.detectedAgents]
+	);
+
 	// Refresh single agent detection (re-detects all agents via shared hook)
 	const handleRefreshAgent = useCallback(
 		async (_agentId: string) => {
@@ -225,8 +259,10 @@ export function AgentCreationDialog({
 			if (agent?.capabilities?.supportsModelSelection) {
 				loadModelsForAgent(agentId);
 			}
+			// Load dynamic config options
+			loadDynamicOptionsForAgent(agentId);
 		},
-		[ac.detectedAgents, loadModelsForAgent]
+		[ac.detectedAgents, loadModelsForAgent, loadDynamicOptionsForAgent]
 	);
 
 	// Handle create
@@ -525,6 +561,8 @@ export function AgentCreationDialog({
 														availableModels={availableModels[agent.id] || []}
 														loadingModels={loadingModels[agent.id] || false}
 														onRefreshModels={() => loadModelsForAgent(agent.id, true)}
+														dynamicOptions={dynamicOptions[agent.id] || {}}
+														loadingDynamicOptions={loadingDynamicOptions[agent.id] || false}
 														onRefreshAgent={() => handleRefreshAgent(agent.id)}
 														refreshingAgent={refreshingAgent === agent.id}
 														compact

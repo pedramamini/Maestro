@@ -17,6 +17,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
 	ImagePlus,
 	Loader2,
+	MessageSquareHeart,
 	Send,
 	X,
 	Package,
@@ -38,6 +39,7 @@ import {
 	type FeedbackParsedResponse,
 } from '../services/feedbackConversation';
 import { isBetaAgent } from '../../shared/agentMetadata';
+import { ThemedSelect } from './shared/ThemedSelect';
 
 // ============================================================================
 // Constants
@@ -526,38 +528,45 @@ export function FeedbackChatView({ theme, onCancel, onWidthChange }: FeedbackCha
 	if (step === 'provider-select') {
 		return (
 			<div className="flex flex-col gap-5 p-6">
-				<p className="text-sm" style={{ color: theme.colors.textDim }}>
-					Choose an agent to help collect your feedback. The agent will have a short conversation
-					with you to understand your issue and create a well-structured GitHub issue.
-				</p>
+				<div className="flex items-center gap-4">
+					<div
+						className="w-20 h-20 rounded-xl flex items-center justify-center shrink-0"
+						style={{ backgroundColor: `${theme.colors.accent}20` }}
+					>
+						<MessageSquareHeart className="w-10 h-10" style={{ color: theme.colors.accent }} />
+					</div>
+					<p className="text-sm" style={{ color: theme.colors.textDim }}>
+						Thank you for taking the time to give us feedback! Whether you're reporting an issue or
+						recommending a feature, you'll work with an AI agent that will understand what you need
+						and create a GitHub issue for us to act on.
+					</p>
+				</div>
 
 				<div className="flex flex-col gap-2">
 					<label className="text-xs font-bold" style={{ color: theme.colors.textMain }}>
 						Agent
 					</label>
-					<select
+					<ThemedSelect
 						value={selectedAgent}
-						onChange={(e) => setSelectedAgent(e.target.value as ToolType)}
-						className="w-full px-3 py-2 rounded-lg border outline-none text-sm"
-						style={{
-							backgroundColor: theme.colors.bgMain,
-							borderColor: theme.colors.border,
-							color: theme.colors.textMain,
-						}}
-					>
-						{availableTiles.map((tile) => (
-							<option key={tile.id} value={tile.id}>
-								{tile.name}
-								{isBetaAgent(tile.id) ? ' (Beta)' : ''}
-							</option>
-						))}
-					</select>
+						options={availableTiles.map((tile) => ({
+							value: tile.id,
+							label: `${tile.name}${isBetaAgent(tile.id) ? ' (Beta)' : ''}`,
+						}))}
+						onChange={(v) => setSelectedAgent(v as ToolType)}
+						theme={theme}
+					/>
 					{availableTiles.length === 0 && (
 						<p className="text-xs" style={{ color: theme.colors.warning }}>
 							No supported agents detected. Install Claude Code, Codex, or OpenCode.
 						</p>
 					)}
 				</div>
+
+				{submitError && (
+					<p className="text-xs" style={{ color: theme.colors.warning }}>
+						{submitError}
+					</p>
+				)}
 
 				<div className="flex justify-end gap-2">
 					<button
@@ -795,7 +804,7 @@ export function FeedbackChatView({ theme, onCancel, onWidthChange }: FeedbackCha
 
 	// --- Chat + Submitting ---
 	return (
-		<div className="flex flex-col h-full relative feedback-chat">
+		<div className="flex flex-col h-full min-h-0 relative feedback-chat">
 			{/* Prose styles for markdown rendering */}
 			<style>{proseStyles}</style>
 

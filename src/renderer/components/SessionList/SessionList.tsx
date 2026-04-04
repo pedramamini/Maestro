@@ -27,7 +27,7 @@ import { useSettingsStore } from '../../stores/settingsStore';
 import { useBatchStore, selectActiveBatchSessionIds } from '../../stores/batchStore';
 import { useShallow } from 'zustand/react/shallow';
 import { useGroupChatStore } from '../../stores/groupChatStore';
-import { getModalActions } from '../../stores/modalStore';
+import { getModalActions, useModalStore } from '../../stores/modalStore';
 import { SessionContextMenu } from './SessionContextMenu';
 import { HamburgerMenuContent } from './HamburgerMenuContent';
 import { CollapsedSessionPill } from './CollapsedSessionPill';
@@ -209,7 +209,6 @@ function SessionListInner(props: SessionListProps) {
 		setRenameInstanceModalOpen,
 		setRenameInstanceValue,
 		setRenameInstanceSessionId,
-		setDuplicatingSessionId,
 	} = getModalActions();
 
 	const {
@@ -265,7 +264,7 @@ function SessionListInner(props: SessionListProps) {
 	const { onResizeStart: onSidebarResizeStart, transitionClass: sidebarTransitionClass } =
 		useResizablePanel({
 			width: leftSidebarWidthState,
-			minWidth: 256,
+			minWidth: 280,
 			maxWidth: 600,
 			settingsKey: 'leftSidebarWidth',
 			setWidth: setLeftSidebarWidthState,
@@ -276,6 +275,10 @@ function SessionListInner(props: SessionListProps) {
 	const setSessionFilterOpen = useUIStore((s) => s.setSessionFilterOpen);
 	const showUnreadAgentsOnly = useUIStore((s) => s.showUnreadAgentsOnly);
 	const toggleShowUnreadAgentsOnly = useUIStore((s) => s.toggleShowUnreadAgentsOnly);
+	const hasUnreadAgents = useMemo(
+		() => sessions.some((s) => s.aiTabs?.some((tab) => tab.hasUnread) || s.state === 'busy'),
+		[sessions]
+	);
 	const [menuOpen, setMenuOpen] = useState(false);
 
 	// Live overlay state (extracted hook)
@@ -293,6 +296,7 @@ function SessionListInner(props: SessionListProps) {
 		copyFlash,
 		setCopyFlash,
 		handleTunnelToggle,
+		restartTunnel,
 	} = useLiveOverlay(isLiveMode);
 
 	// Context menu state
@@ -781,6 +785,7 @@ function SessionListInner(props: SessionListProps) {
 										toggleGlobalLive={toggleGlobalLive}
 										setLiveOverlayOpen={setLiveOverlayOpen}
 										restartWebServer={restartWebServer}
+										restartTunnel={restartTunnel}
 									/>
 								)}
 							</div>
@@ -855,7 +860,7 @@ function SessionListInner(props: SessionListProps) {
 			{/* SIDEBAR CONTENT: EXPANDED */}
 			{leftSidebarOpen ? (
 				<div
-					className="flex-1 overflow-y-auto py-2 select-none scrollbar-thin flex flex-col"
+					className="flex-1 min-h-0 flex flex-col overflow-y-auto py-2 select-none scrollbar-thin"
 					data-tour="session-list"
 				>
 					{/* Session Filter */}
@@ -1270,6 +1275,7 @@ function SessionListInner(props: SessionListProps) {
 				hasNoSessions={sessions.length === 0}
 				shortcuts={shortcuts}
 				showUnreadAgentsOnly={showUnreadAgentsOnly}
+				hasUnreadAgents={hasUnreadAgents}
 				addNewSession={addNewSession}
 				openFeedback={props.openFeedback}
 				setLeftSidebarOpen={setLeftSidebarOpen}
@@ -1292,8 +1298,9 @@ function SessionListInner(props: SessionListProps) {
 					}}
 					onEdit={() => onEditAgent(contextMenuSession)}
 					onDuplicate={() => {
-						onNewAgentSession();
-						setDuplicatingSessionId(contextMenuSession.id);
+						useModalStore
+							.getState()
+							.openModal('newInstance', { duplicatingSessionId: contextMenuSession.id });
 						setContextMenu(null);
 					}}
 					onToggleBookmark={() => toggleBookmark(contextMenuSession.id)}

@@ -97,6 +97,8 @@ export function getExpandedEnv(): NodeJS.ProcessEnv {
 			path.join(process.env.ChocolateyInstall || 'C:\\ProgramData\\chocolatey', 'bin'),
 			// Go binaries (some tools installed via 'go install')
 			path.join(home, 'go', 'bin'),
+			// GitHub CLI (official MSI installer)
+			path.join(programFiles, 'GitHub CLI'),
 			// Windows system paths
 			path.join(process.env.SystemRoot || 'C:\\Windows', 'System32'),
 			path.join(process.env.SystemRoot || 'C:\\Windows'),
@@ -316,6 +318,19 @@ function getWindowsKnownPaths(binaryName: string): string[] {
 			// pip installation
 			...pythonScripts('aider'),
 		],
+		gh: [
+			// GitHub CLI official installer (MSI)
+			path.join(programFiles, 'GitHub CLI', 'gh.exe'),
+			// Winget installation
+			...wingetLinks('gh'),
+			// Scoop installation
+			path.join(home, 'scoop', 'shims', 'gh.exe'),
+			path.join(home, 'scoop', 'apps', 'gh', 'current', 'bin', 'gh.exe'),
+			// Chocolatey installation
+			path.join(process.env.ChocolateyInstall || 'C:\\ProgramData\\chocolatey', 'bin', 'gh.exe'),
+			// User local bin
+			...localBin('gh'),
+		],
 	};
 
 	return knownPaths[binaryName] || [];
@@ -425,6 +440,16 @@ function getUnixKnownPaths(binaryName: string): string[] {
 			...homebrew('aider'),
 			// Node version managers (in case installed via npm)
 			...nodeVersionManagers('aider'),
+		],
+		gh: [
+			// Homebrew (Apple Silicon + Intel)
+			...homebrew('gh'),
+			// User local bin (manual install, pipx, etc.)
+			...localBin('gh'),
+			// User bin directory
+			path.join(home, 'bin', 'gh'),
+			// Linuxbrew
+			'/home/linuxbrew/.linuxbrew/bin/gh',
 		],
 	};
 

@@ -23,6 +23,7 @@ import { MermaidRenderer } from '../MermaidRenderer';
 import { CsvTableRenderer } from '../CsvTableRenderer';
 import { getEncoder } from '../../utils/tokenCounter';
 import { remarkFileLinks, buildFileTreeIndices } from '../../utils/remarkFileLinks';
+import { getHomeDir, getHomeDirAsync } from '../../utils/homeDir';
 import remarkFrontmatter from 'remark-frontmatter';
 import { remarkFrontmatterTable } from '../../utils/remarkFrontmatterTable';
 import { REMARK_GFM_PLUGINS, createMarkdownComponents } from '../../utils/markdownConfig';
@@ -312,6 +313,14 @@ export const FilePreview = React.memo(
 			return null;
 		}, [fileTree]);
 
+		// Resolve homeDir for tilde path expansion
+		const [homeDir, setHomeDir] = useState<string | undefined>(getHomeDir);
+		useEffect(() => {
+			if (!homeDir) {
+				getHomeDirAsync()?.then(setHomeDir);
+			}
+		}, [homeDir]);
+
 		// Memoize remarkPlugins to prevent infinite render loops
 		// Creating new arrays/objects on each render causes ReactMarkdown to re-render children
 		const remarkPlugins = useMemo(
@@ -321,10 +330,12 @@ export const FilePreview = React.memo(
 				remarkFrontmatterTable,
 				remarkHighlight,
 				...(fileTree && fileTree.length > 0 && cwd !== undefined
-					? [[remarkFileLinks, { indices: fileTreeIndices || undefined, cwd }] as any]
-					: []),
+					? [[remarkFileLinks, { indices: fileTreeIndices || undefined, cwd, homeDir }] as any]
+					: homeDir
+						? [[remarkFileLinks, { cwd: cwd || '', homeDir }] as any]
+						: []),
 			],
-			[fileTree, fileTreeIndices, cwd]
+			[fileTree, fileTreeIndices, cwd, homeDir]
 		);
 
 		// Memoize rehypePlugins array to prevent unnecessary re-renders
@@ -345,7 +356,9 @@ export const FilePreview = React.memo(
 						void window.maestro.shell.openPath(href.replace(/^file:\/\//, ''));
 						return;
 					}
-					void window.maestro.shell.openExternal(href);
+					if (/^https?:\/\/|^mailto:/.test(href)) {
+						void window.maestro.shell.openExternal(href);
+					}
 				},
 				containerRef: markdownContainerRef,
 			});

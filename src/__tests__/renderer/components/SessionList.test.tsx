@@ -19,6 +19,7 @@ import { useUIStore } from '../../../renderer/stores/uiStore';
 import { useSessionStore } from '../../../renderer/stores/sessionStore';
 import { useSettingsStore, DEFAULT_AUTO_RUN_STATS } from '../../../renderer/stores/settingsStore';
 import { useBatchStore } from '../../../renderer/stores/batchStore';
+import { useModalStore } from '../../../renderer/stores/modalStore';
 import type { BatchRunState } from '../../../renderer/types';
 
 // Mock QRCodeSVG to avoid complex rendering
@@ -70,6 +71,7 @@ vi.mock('lucide-react', () => ({
 	Command: () => <span data-testid="icon-command" />,
 	MessageSquare: () => <span data-testid="icon-message-square" />,
 	MessageSquarePlus: () => <span data-testid="icon-message-square-plus" />,
+	Bell: () => <span data-testid="icon-bell" />,
 	Zap: ({ title, style }: { title?: string; style?: Record<string, string> }) => (
 		<span data-testid="icon-zap" title={title} style={style} />
 	),
@@ -119,7 +121,6 @@ const mockModalActions = {
 	setRenameInstanceModalOpen: vi.fn(),
 	setRenameInstanceValue: vi.fn(),
 	setRenameInstanceSessionId: vi.fn(),
-	setDuplicatingSessionId: vi.fn(),
 };
 
 vi.mock('../../../renderer/stores/modalStore', async (importActual) => {
@@ -1062,6 +1063,32 @@ describe('SessionList', () => {
 			fireEvent.click(screen.getByText('Add Bookmark'));
 
 			expect(setSessions).toHaveBeenCalled();
+		});
+
+		it('opens newInstance modal directly on duplicate (skips newAgentChoice)', () => {
+			const sessions = [createMockSession({ id: 's-dup', name: 'Duplicate Me' })];
+			useSessionStore.setState({ sessions });
+			useUIStore.setState({ leftSidebarOpen: true });
+			const onNewAgentSession = vi.fn();
+			const props = createDefaultProps({
+				sortedSessions: sessions,
+				onNewAgentSession,
+			});
+			render(<SessionList {...props} />);
+
+			// Open context menu
+			fireEvent.contextMenu(screen.getByText('Duplicate Me'), { clientX: 100, clientY: 100 });
+
+			fireEvent.click(screen.getByText('Duplicate...'));
+
+			// Should NOT open the newAgentChoice modal
+			expect(onNewAgentSession).not.toHaveBeenCalled();
+			expect(useModalStore.getState().isOpen('newAgentChoice')).toBe(false);
+
+			// Should directly open newInstance with the duplicating session ID
+			expect(useModalStore.getState().isOpen('newInstance')).toBe(true);
+			const modalData = useModalStore.getState().getData('newInstance');
+			expect(modalData?.duplicatingSessionId).toBe('s-dup');
 		});
 	});
 
@@ -2974,14 +3001,14 @@ describe('SessionList', () => {
 				useSettingsStore.setState({ leftSidebarWidth: 300 });
 			}); // Reset for second drag
 
-			// Try to drag below min (256px)
+			// Try to drag below min (280px)
 			fireEvent.mouseDown(resizeHandle!, { clientX: 300 });
 			fireEvent.mouseMove(document, { clientX: 100 });
 			// State is only updated on mouseUp for performance
 			fireEvent.mouseUp(document);
 
-			// Should be clamped to 256
-			expect(setLeftSidebarWidthState).toHaveBeenCalledWith(256);
+			// Should be clamped to 280
+			expect(setLeftSidebarWidthState).toHaveBeenCalledWith(280);
 		});
 	});
 

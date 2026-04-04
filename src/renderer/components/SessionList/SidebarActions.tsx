@@ -1,5 +1,5 @@
 import { memo } from 'react';
-import { PanelLeftClose, PanelLeftOpen, Bot, MessageSquarePlus } from 'lucide-react';
+import { PanelLeftClose, PanelLeftOpen, Bell, Bot, MessageSquarePlus } from 'lucide-react';
 import type { Theme, Shortcut } from '../../types';
 import { formatShortcutKeys } from '../../utils/shortcutFormatter';
 
@@ -9,6 +9,7 @@ interface SidebarActionsProps {
 	hasNoSessions: boolean;
 	shortcuts: Record<string, Shortcut>;
 	showUnreadAgentsOnly: boolean;
+	hasUnreadAgents: boolean;
 	addNewSession: () => void;
 	openFeedback?: () => void;
 	setLeftSidebarOpen: (open: boolean) => void;
@@ -21,6 +22,7 @@ export const SidebarActions = memo(function SidebarActions({
 	hasNoSessions,
 	shortcuts,
 	showUnreadAgentsOnly,
+	hasUnreadAgents,
 	addNewSession,
 	openFeedback,
 	setLeftSidebarOpen,
@@ -35,7 +37,7 @@ export const SidebarActions = memo(function SidebarActions({
 
 	return (
 		<div
-			className="p-2 border-t flex gap-2 items-center"
+			className="p-2 border-t flex gap-2 items-center shrink-0"
 			style={{ borderColor: theme.colors.border }}
 		>
 			<button
@@ -64,21 +66,21 @@ export const SidebarActions = memo(function SidebarActions({
 					<button
 						type="button"
 						onClick={addNewSession}
-						className="flex items-center justify-center gap-2 py-2 rounded text-xs font-bold transition-colors hover:opacity-90"
+						className="flex items-center justify-center gap-2 py-2 rounded text-xs font-bold transition-colors hover:opacity-90 whitespace-nowrap overflow-hidden"
 						style={{ backgroundColor: theme.colors.accent, color: theme.colors.accentForeground }}
 					>
-						<Bot className="w-3 h-3" /> New Agent
+						<Bot className="w-3 h-3 shrink-0" /> New Agent
 					</button>
 
 					<button
 						type="button"
 						onClick={openFeedback}
 						disabled={!openFeedback}
-						className="flex items-center justify-center gap-2 py-2 rounded text-xs font-bold transition-colors hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
+						className="flex items-center justify-center gap-2 py-2 rounded text-xs font-bold transition-colors hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap overflow-hidden"
 						style={{ backgroundColor: theme.colors.accent, color: theme.colors.accentForeground }}
 						title="Send product feedback"
 					>
-						<MessageSquarePlus className="w-3 h-3" /> Feedback
+						<MessageSquarePlus className="w-3 h-3 shrink-0" /> Feedback
 					</button>
 				</div>
 			)}
@@ -90,8 +92,8 @@ export const SidebarActions = memo(function SidebarActions({
 					onClick={toggleShowUnreadAgentsOnly}
 					className="relative flex items-center justify-center p-2 rounded transition-colors w-8 h-8 shrink-0 hover:bg-white/5"
 					style={{
-						color: showUnreadAgentsOnly ? theme.colors.accent : undefined,
-						opacity: showUnreadAgentsOnly ? 1 : 0.5,
+						color: showUnreadAgentsOnly ? theme.colors.accentForeground : undefined,
+						backgroundColor: showUnreadAgentsOnly ? theme.colors.accent : undefined,
 					}}
 					title={
 						showUnreadAgentsOnly
@@ -99,12 +101,13 @@ export const SidebarActions = memo(function SidebarActions({
 							: `Filter unread agents${filterUnreadAgentsShortcutLabel}`
 					}
 				>
-					<Bot className="w-4 h-4" />
-					{/* Notification dot - always visible to match tab filter icon pattern */}
-					<div
-						className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full"
-						style={{ backgroundColor: theme.colors.accent }}
-					/>
+					<Bell className="w-4 h-4" />
+					{hasUnreadAgents && (
+						<div
+							className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full"
+							style={{ backgroundColor: theme.colors.accent }}
+						/>
+					)}
 				</button>
 			)}
 		</div>

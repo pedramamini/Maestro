@@ -12,11 +12,13 @@ import {
 	CUE_COLOR,
 	type PipelineNode,
 	type AgentNodeData,
+	type TriggerNodeData,
 	type CuePipeline,
 } from '../../../../shared/cue-pipeline-types';
 import { useDebouncedCallback } from '../../../hooks/utils';
 import type { IncomingTriggerEdgeInfo } from './NodeConfigPanel';
 import { EdgePromptRow } from './EdgePromptRow';
+import { CueSelect } from './CueSelect';
 import { getInputStyle, getLabelStyle } from './triggers/triggerConfigStyles';
 
 interface AgentConfigPanelProps {
@@ -25,6 +27,7 @@ interface AgentConfigPanelProps {
 	pipelines: CuePipeline[];
 	hasOutgoingEdge?: boolean;
 	hasIncomingAgentEdges?: boolean;
+	incomingAgentEdgeCount?: number;
 	incomingTriggerEdges?: IncomingTriggerEdgeInfo[];
 	onUpdateNode: (nodeId: string, data: Partial<AgentNodeData>) => void;
 	onUpdateEdgePrompt?: (edgeId: string, prompt: string) => void;
@@ -38,6 +41,7 @@ export function AgentConfigPanel({
 	pipelines,
 	hasOutgoingEdge,
 	hasIncomingAgentEdges,
+	incomingAgentEdgeCount,
 	incomingTriggerEdges,
 	onUpdateNode,
 	onUpdateEdgePrompt,
@@ -98,19 +102,43 @@ export function AgentConfigPanel({
 		)
 	);
 
+	// Detect if this agent has an incoming edge from a GitHub trigger
+	const hasGitHubTrigger = agentPipelines.some((p) => {
+		const incomingEdges = p.edges.filter((e) => e.target === node.id);
+		return incomingEdges.some((e) => {
+			const sourceNode = p.nodes.find((n) => n.id === e.source);
+			if (sourceNode?.type !== 'trigger') return false;
+			const triggerData = sourceNode.data as TriggerNodeData;
+			return (
+				triggerData.eventType === 'github.pull_request' || triggerData.eventType === 'github.issue'
+			);
+		});
+	});
+
 	const outputDisabled = !hasOutgoingEdge;
+
+	const hasFanIn = (incomingAgentEdgeCount ?? 0) > 1;
 
 	return (
 		<div
 			style={{
 				display: 'flex',
 				flexDirection: 'column',
-				gap: 8,
-				flex: expanded ? 1 : undefined,
+				gap: 12,
+				flex: 1,
 				minHeight: 0,
+				overflowY: 'auto',
 			}}
 		>
-			<div style={{ display: 'flex', gap: 12, flex: expanded ? 1 : undefined, minHeight: 0 }}>
+			<div
+				style={{
+					display: 'flex',
+					gap: 12,
+					flex: 1,
+					minHeight: 0,
+					overflow: 'auto',
+				}}
+			>
 				{/* Input Prompt(s) */}
 				{hasMultipleTriggers && onUpdateEdgePrompt ? (
 					<div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 6, minHeight: 0 }}>
@@ -135,56 +163,78 @@ export function AgentConfigPanel({
 								minHeight: 0,
 							}}
 						>
-							Input Prompt
+							<span style={{ display: 'flex', alignItems: 'baseline', gap: 4 }}>
+								Input Prompt
+								{hasIncomingAgentEdges && data.includeUpstreamOutput !== false && (
+									<span
+										style={{
+											fontWeight: 400,
+											color: theme.colors.textDim,
+											fontSize: 10,
+										}}
+									>
+										(optional)
+									</span>
+								)}
+							</span>
 							<textarea
 								value={localInputPrompt}
 								onChange={handleInputPromptChange}
 								rows={expanded ? undefined : 3}
 								placeholder={
 									hasIncomingAgentEdges && data.includeUpstreamOutput !== false
-										? 'Instructions for this agent. Upstream output is auto-included via {{CUE_SOURCE_OUTPUT}}.'
+										? 'Optional — upstream output is auto-included. Add instructions to guide how the agent processes it.'
 										: hasIncomingAgentEdges
 											? 'Instructions for this agent. Use {{CUE_SOURCE_OUTPUT}} to include upstream output.'
-											: 'Prompt sent when this agent receives data from the pipeline...'
+											: hasGitHubTrigger
+												? 'Use {{CUE_GH_URL}}, {{CUE_GH_NUMBER}}, {{CUE_GH_TITLE}}, {{CUE_GH_BODY}} etc. for GitHub context...'
+												: 'Prompt sent when this agent receives data from the pipeline...'
 								}
 								style={{
 									...themedInputStyle,
 									resize: 'vertical',
 									fontFamily: 'inherit',
 									lineHeight: 1.4,
-									...(expanded ? { flex: 1, minHeight: 0 } : { minHeight: 72 }),
+									...(expanded ? { flex: 1, minHeight: 0 } : { minHeight: hasFanIn ? 64 : 80 }),
 								}}
 							/>
 						</label>
 						{hasIncomingAgentEdges && (
-							<>
-								<label
-									style={{
-										display: 'flex',
-										alignItems: 'center',
-										gap: 6,
-										fontSize: 11,
-										color: theme.colors.textDim,
-										cursor: 'pointer',
-										marginTop: 2,
-									}}
-								>
-									<input
-										type="checkbox"
-										checked={data.includeUpstreamOutput !== false}
-										onChange={(e) =>
-											onUpdateNode(node.id, {
-												includeUpstreamOutput: e.target.checked,
-											} as Partial<AgentNodeData>)
-										}
-										style={{ accentColor: CUE_COLOR }}
-									/>
+							<label
+								style={{
+									display: 'flex',
+									alignItems: 'center',
+									gap: 6,
+									fontSize: 11,
+									color: theme.colors.textDim,
+									cursor: 'pointer',
+									marginTop: 2,
+								}}
+							>
+								<input
+									type="checkbox"
+									checked={data.includeUpstreamOutput !== false}
+									onChange={(e) =>
+										onUpdateNode(node.id, {
+											includeUpstreamOutput: e.target.checked,
+										} as Partial<AgentNodeData>)
+									}
+									style={{ accentColor: CUE_COLOR }}
+								/>
+								<span>
 									Auto-include upstream output
-								</label>
-								<div style={{ color: theme.colors.textDim, fontSize: 10, marginTop: 2 }}>
-									Use {'{{CUE_SOURCE_OUTPUT}}'} in your prompt to control placement.
-								</div>
-							</>
+									<span
+										style={{
+											color: theme.colors.textDim,
+											fontSize: 10,
+											marginLeft: 4,
+											opacity: 0.7,
+										}}
+									>
+										— use {'{{CUE_SOURCE_OUTPUT}}'} to control placement
+									</span>
+								</span>
+							</label>
 						)}
 						<div
 							style={{
@@ -237,7 +287,7 @@ export function AgentConfigPanel({
 								fontFamily: 'inherit',
 								lineHeight: 1.4,
 								cursor: outputDisabled ? 'not-allowed' : undefined,
-								...(expanded ? { flex: 1, minHeight: 0 } : { minHeight: 72 }),
+								...(expanded ? { flex: 1, minHeight: 0 } : { minHeight: hasFanIn ? 64 : 80 }),
 							}}
 						/>
 					</label>
@@ -248,6 +298,94 @@ export function AgentConfigPanel({
 					</div>
 				</div>
 			</div>
+
+			{/* Fan-in Settings — full width below prompts */}
+			{(incomingAgentEdgeCount ?? 0) > 1 && (
+				<div
+					style={{
+						padding: '10px 12px',
+						backgroundColor: `${theme.colors.accent}08`,
+						border: `1px solid ${theme.colors.border}`,
+						borderRadius: 6,
+						display: 'flex',
+						flexDirection: 'column',
+						gap: 8,
+						flexShrink: 0,
+					}}
+				>
+					<div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+						<div style={{ fontSize: 11, fontWeight: 600, color: theme.colors.textMain }}>
+							Fan-in
+						</div>
+						<div
+							style={{
+								fontSize: 10,
+								color: theme.colors.textDim,
+								backgroundColor: `${theme.colors.accent}15`,
+								padding: '2px 8px',
+								borderRadius: 10,
+							}}
+						>
+							{incomingAgentEdgeCount} agents →
+						</div>
+					</div>
+					<div style={{ color: theme.colors.textDim, fontSize: 10 }}>
+						Waits for all upstream agents to complete before running
+					</div>
+					<div style={{ display: 'flex', gap: 10 }}>
+						<label style={{ ...getLabelStyle(theme), flex: 1, margin: 0 }}>
+							<span
+								style={{
+									fontSize: 10,
+									color: theme.colors.textDim,
+									marginBottom: 3,
+									display: 'block',
+								}}
+							>
+								Timeout (minutes)
+							</span>
+							<input
+								type="number"
+								min={1}
+								value={data.fanInTimeoutMinutes ?? ''}
+								placeholder="global default"
+								onChange={(e) =>
+									onUpdateNode(node.id, {
+										fanInTimeoutMinutes: e.target.value ? Number(e.target.value) : undefined,
+									} as Partial<AgentNodeData>)
+								}
+								style={{ ...getInputStyle(theme), width: '100%' }}
+							/>
+						</label>
+						<div style={{ ...getLabelStyle(theme), flex: 1, margin: 0 }}>
+							<span
+								style={{
+									fontSize: 10,
+									color: theme.colors.textDim,
+									marginBottom: 3,
+									display: 'block',
+								}}
+							>
+								On timeout
+							</span>
+							<CueSelect
+								value={data.fanInTimeoutOnFail ?? ''}
+								options={[
+									{ value: '', label: 'Global default' },
+									{ value: 'break', label: 'Wait for all' },
+									{ value: 'continue', label: 'Continue with partial' },
+								]}
+								onChange={(v) =>
+									onUpdateNode(node.id, {
+										fanInTimeoutOnFail: (v || undefined) as AgentNodeData['fanInTimeoutOnFail'],
+									} as Partial<AgentNodeData>)
+								}
+								theme={theme}
+							/>
+						</div>
+					</div>
+				</div>
+			)}
 
 			<div
 				style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', flexShrink: 0 }}

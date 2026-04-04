@@ -8,6 +8,10 @@ export interface AgentNodeDataProps {
 	sessionId: string;
 	sessionName: string;
 	toolType: string;
+	/** Instance number when the same agent appears multiple times (e.g. 1, 2, 3) */
+	instanceLabel?: number;
+	/** Number of incoming agent edges (shown as fan-in badge when > 1) */
+	fanInCount?: number;
 	hasPrompt: boolean;
 	hasOutgoingEdge: boolean;
 	pipelineColor: string;
@@ -31,6 +35,7 @@ export const AgentNode = memo(function AgentNode({
 				maxWidth: 360,
 				height: 80,
 				borderRadius: 8,
+				willChange: 'transform',
 				backgroundColor: theme?.colors.bgMain ?? '#1e1e2e',
 				border: `2px solid ${selected ? accentColor : (theme?.colors.border ?? '#333')}`,
 				boxShadow: selected ? `0 4px 16px ${accentColor}30` : '0 2px 8px rgba(0,0,0,0.3)',
@@ -96,6 +101,7 @@ export const AgentNode = memo(function AgentNode({
 						}}
 					>
 						{data.sessionName}
+						{data.instanceLabel != null ? ` (${data.instanceLabel})` : ''}
 					</span>
 					{data.hasPrompt && (
 						<MessageSquare
@@ -202,6 +208,33 @@ export const AgentNode = memo(function AgentNode({
 					left: -8,
 				}}
 			/>
+
+			{/* Fan-in count badge (left side) */}
+			{data.fanInCount != null && (
+				<div
+					style={{
+						position: 'absolute',
+						bottom: -8,
+						left: -8,
+						minWidth: 20,
+						height: 18,
+						borderRadius: 9,
+						backgroundColor: accentColor,
+						color: theme?.colors.accentForeground ?? '#fff',
+						fontSize: 9,
+						fontWeight: 700,
+						display: 'flex',
+						alignItems: 'center',
+						justifyContent: 'center',
+						padding: '0 4px',
+						border: `2px solid ${theme?.colors.bgMain ?? '#1e1e2e'}`,
+						zIndex: 11,
+					}}
+					title={`Fan-in: waiting for ${data.fanInCount} agents`}
+				>
+					{data.fanInCount}→
+				</div>
+			)}
 			<Handle
 				type="source"
 				position={Position.Right}

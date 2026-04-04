@@ -219,10 +219,14 @@ describe('agent-definitions', () => {
 			expect(codex?.configOptions).toBeDefined();
 			expect(Array.isArray(codex?.configOptions)).toBe(true);
 
-			const contextWindowOption = codex?.configOptions?.find((opt) => opt.key === 'contextWindow');
-			expect(contextWindowOption).toBeDefined();
-			expect(contextWindowOption?.type).toBe('number');
-			expect(contextWindowOption?.default).toBe(400000);
+			const modelOption = codex?.configOptions?.find((opt) => opt.key === 'model');
+			expect(modelOption).toBeDefined();
+			expect(modelOption?.type).toBe('text');
+
+			const reasoningOption = codex?.configOptions?.find((opt) => opt.key === 'reasoningEffort');
+			expect(reasoningOption).toBeDefined();
+			expect(reasoningOption?.type).toBe('select');
+			expect((reasoningOption as any)?.dynamic).toBe(true);
 		});
 
 		it('should have configOptions for opencode', () => {

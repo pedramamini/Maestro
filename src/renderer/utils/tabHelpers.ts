@@ -18,6 +18,7 @@ import { generateId } from './ids';
 import { getAutoRunFolderPath } from './existingDocsDetector';
 import { createTerminalTab } from './terminalTabHelpers';
 import { useSettingsStore } from '../stores/settingsStore';
+import { isWindowsPlatform } from './platformUtils';
 
 /**
  * Build the unified tab list from a session's tab data.
@@ -269,7 +270,11 @@ export function getNavigableTabs(session: Session, showUnreadOnly = false): AITa
 	}
 
 	if (showUnreadOnly) {
-		return session.aiTabs.filter((tab) => tab.hasUnread || tab.state === 'busy' || hasDraft(tab));
+		const showStarred = useSettingsStore.getState().showStarredInUnreadFilter;
+		return session.aiTabs.filter(
+			(tab) =>
+				tab.hasUnread || tab.state === 'busy' || hasDraft(tab) || (showStarred && tab.starred)
+		);
 	}
 
 	return session.aiTabs;
@@ -371,15 +376,18 @@ export function createTab(
 		showThinking,
 	};
 
-	// Update the session with the new tab added and set as active
-	// Also clear activeFileTabId so the new AI tab is shown in the main panel
-	// Add the new tab to unifiedTabOrder so it appears in the unified tab bar
+	// Update the session with the new tab added and set as active.
+	// Clear activeFileTabId and activeTerminalTabId so the new AI tab is shown in the
+	// main panel, and set inputMode to 'ai' so callers don't need to patch it manually.
+	// Add the new tab to unifiedTabOrder so it appears in the unified tab bar.
 	const newTabRef = { type: 'ai' as const, id: newTab.id };
 	const updatedSession: Session = {
 		...session,
 		aiTabs: [...(session.aiTabs || []), newTab],
 		activeTabId: newTab.id,
 		activeFileTabId: null,
+		activeTerminalTabId: null,
+		inputMode: 'ai' as const,
 		unifiedTabOrder: [...(session.unifiedTabOrder || []), newTabRef],
 	};
 
@@ -1085,10 +1093,11 @@ export function setActiveTab(session: Session, tabId: string): SetActiveTabResul
 		return null;
 	}
 
-	// If already active, no file tab is selected, and already in AI mode, return current state
+	// If already active, no file/terminal tab is selected, and already in AI mode, return current state
 	if (
 		session.activeTabId === tabId &&
 		session.activeFileTabId === null &&
+		session.activeTerminalTabId === null &&
 		session.inputMode === 'ai'
 	) {
 		return {
@@ -1097,15 +1106,18 @@ export function setActiveTab(session: Session, tabId: string): SetActiveTabResul
 		};
 	}
 
-	// When selecting an AI tab, deselect any active file preview tab and switch to AI mode.
-	// This ensures only one tab type (AI or file) is active at a time, and switching
-	// from terminal mode back to AI mode works by clicking any AI tab.
+	// When selecting an AI tab, deselect any active file/terminal tab and switch to AI mode.
+	// This ensures only one tab type (AI, file, or terminal) is active at a time, and
+	// switching from terminal mode back to AI mode works by clicking any AI tab.
+	// Clearing activeTerminalTabId is critical — getCurrentUnifiedTabIndex checks it first,
+	// so a stale value causes next/prev tab navigation to start from the wrong position.
 	return {
 		tab: targetTab,
 		session: {
 			...session,
 			activeTabId: tabId,
 			activeFileTabId: null,
+			activeTerminalTabId: null,
 			inputMode: 'ai' as const,
 		},
 	};
@@ -1425,10 +1437,14 @@ export function navigateToUnifiedTabByIndex(
 		const aiTab = session.aiTabs.find((tab) => tab.id === targetTabRef.id);
 		if (!aiTab) return null;
 
-		// If already active and in AI mode, return current state (with repair if needed)
+		// If already active, no file/terminal tab selected, and in AI mode, return current state.
+		// The activeTerminalTabId check is critical: without it, a stale terminal selection
+		// causes the early return to fire and skip the clearing update below, leaving
+		// getCurrentUnifiedTabIndex pointing at the wrong tab.
 		if (
 			session.activeTabId === targetTabRef.id &&
 			session.activeFileTabId === null &&
+			session.activeTerminalTabId === null &&
 			session.inputMode === 'ai'
 		) {
 			return {
@@ -1598,22 +1614,40 @@ export function navigateToNextUnifiedTab(
 		return null;
 	}
 
-	// When showUnreadOnly is true, we need to skip AI tabs that are read and have no drafts
+	// When showUnreadOnly is true, we need to skip AI tabs that are read and have no drafts.
+	// The active AI tab (session.activeTabId) is always navigable because the TabBar always
+	// displays it — without this, switching to a terminal/file tab and pressing next/prev
+	// would fail to navigate back to the visible AI tab.
 	if (showUnreadOnly) {
 		for (let offset = 1; offset < length; offset++) {
 			const nextIndex = (currentIndex + offset) % length;
 			const tabRef = effectiveOrder[nextIndex];
 
-			// File and terminal tabs are always navigable (if they still exist)
-			if (tabRef.type === 'file' || tabRef.type === 'terminal') {
+			// File tabs: only navigable if setting enabled; terminal tabs always navigable
+			if (tabRef.type === 'file') {
+				if (useSettingsStore.getState().showFilePreviewsInUnreadFilter) {
+					const result = navigateToUnifiedTabByIndex(session, nextIndex);
+					if (result) return result;
+				}
+				continue;
+			}
+			if (tabRef.type === 'terminal') {
 				const result = navigateToUnifiedTabByIndex(session, nextIndex);
 				if (result) return result;
-				continue; // Orphaned tab, skip
+				continue;
 			}
 
-			// For AI tabs, check if it's unread or has a draft
+			// For AI tabs, check if it's unread, busy, has a draft, starred (if setting enabled), or is the active tab
+			// (the active tab is always shown in the tab bar, so it must be reachable)
 			const aiTab = session.aiTabs.find((t) => t.id === tabRef.id);
-			if (aiTab && (aiTab.hasUnread || aiTab.state === 'busy' || hasDraft(aiTab))) {
+			if (
+				aiTab &&
+				(aiTab.hasUnread ||
+					aiTab.state === 'busy' ||
+					hasDraft(aiTab) ||
+					tabRef.id === session.activeTabId ||
+					(useSettingsStore.getState().showStarredInUnreadFilter && aiTab.starred))
+			) {
 				return navigateToUnifiedTabByIndex(session, nextIndex);
 			}
 		}
@@ -1670,22 +1704,40 @@ export function navigateToPrevUnifiedTab(
 		return null;
 	}
 
-	// When showUnreadOnly is true, we need to skip AI tabs that are read and have no drafts
+	// When showUnreadOnly is true, we need to skip AI tabs that are read and have no drafts.
+	// The active AI tab (session.activeTabId) is always navigable because the TabBar always
+	// displays it — without this, switching to a terminal/file tab and pressing next/prev
+	// would fail to navigate back to the visible AI tab.
 	if (showUnreadOnly) {
 		for (let offset = 1; offset < length; offset++) {
 			const prevIndex = (currentIndex - offset + length) % length;
 			const tabRef = effectiveOrder[prevIndex];
 
-			// File and terminal tabs are always navigable (if they still exist)
-			if (tabRef.type === 'file' || tabRef.type === 'terminal') {
+			// File tabs: only navigable if setting enabled; terminal tabs always navigable
+			if (tabRef.type === 'file') {
+				if (useSettingsStore.getState().showFilePreviewsInUnreadFilter) {
+					const result = navigateToUnifiedTabByIndex(session, prevIndex);
+					if (result) return result;
+				}
+				continue;
+			}
+			if (tabRef.type === 'terminal') {
 				const result = navigateToUnifiedTabByIndex(session, prevIndex);
 				if (result) return result;
-				continue; // Orphaned tab, skip
+				continue;
 			}
 
-			// For AI tabs, check if it's unread, busy, or has a draft
+			// For AI tabs, check if it's unread, busy, has a draft, starred (if setting enabled), or is the active tab
+			// (the active tab is always shown in the tab bar, so it must be reachable)
 			const aiTab = session.aiTabs.find((t) => t.id === tabRef.id);
-			if (aiTab && (aiTab.hasUnread || aiTab.state === 'busy' || hasDraft(aiTab))) {
+			if (
+				aiTab &&
+				(aiTab.hasUnread ||
+					aiTab.state === 'busy' ||
+					hasDraft(aiTab) ||
+					tabRef.id === session.activeTabId ||
+					(useSettingsStore.getState().showStarredInUnreadFilter && aiTab.starred))
+			) {
 				return navigateToUnifiedTabByIndex(session, prevIndex);
 			}
 		}
@@ -1889,7 +1941,7 @@ export function createMergedSession(
 	// Create the merged session with standard structure
 	// Matches the pattern from App.tsx createNewSession
 	const initialMergeTerminalTab = createTerminalTab(
-		useSettingsStore.getState().defaultShell || 'zsh',
+		useSettingsStore.getState().defaultShell || (isWindowsPlatform() ? 'powershell' : 'zsh'),
 		projectRoot,
 		null
 	);

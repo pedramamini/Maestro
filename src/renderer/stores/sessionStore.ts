@@ -72,6 +72,12 @@ export interface SessionStoreActions {
 	setActiveSessionId: (id: string) => void;
 
 	/**
+	 * Set the active session ID from persisted state on startup.
+	 * Updates local state only — does not write back to disk.
+	 */
+	hydrateActiveSessionId: (id: string) => void;
+
+	/**
 	 * Set the active session ID without resetting cycle position.
 	 * Used internally by session cycling (Cmd+J/K).
 	 */
@@ -198,7 +204,16 @@ export const useSessionStore = create<SessionStore>()((set) => ({
 		}),
 
 	// Active session
-	setActiveSessionId: (id) => set({ activeSessionId: id, cyclePosition: -1 }),
+	setActiveSessionId: (id) => {
+		set({ activeSessionId: id, cyclePosition: -1 });
+		// Fire-and-forget: persist to disk for restore on next launch.
+		// Not awaited — UI state must update synchronously; if the write
+		// fails the only consequence is the session won't be pre-selected
+		// on next launch (falls back to first session).
+		window.maestro?.sessions?.setActiveSessionId(id);
+	},
+
+	hydrateActiveSessionId: (id) => set({ activeSessionId: id, cyclePosition: -1 }),
 
 	setActiveSessionIdInternal: (v) =>
 		set((s) => ({ activeSessionId: resolve(v, s.activeSessionId) })),

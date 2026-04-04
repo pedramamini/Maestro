@@ -88,6 +88,7 @@ export interface MaestroSettings {
 
 export interface SessionsData {
 	sessions: StoredSession[];
+	activeSessionId?: string;
 }
 
 // ============================================================================

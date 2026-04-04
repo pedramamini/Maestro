@@ -135,6 +135,59 @@ describe('useRemoteIntegration', () => {
 		}),
 		sendRemoteNewTabResponse: vi.fn(),
 		sendRemoteConfigureAutoRunResponse: vi.fn(),
+		onRemoteGetAutoRunDocs: vi.fn().mockImplementation(() => {
+			return () => {};
+		}),
+		onRemoteGetAutoRunDocContent: vi.fn().mockImplementation(() => {
+			return () => {};
+		}),
+		onRemoteSaveAutoRunDoc: vi.fn().mockImplementation(() => {
+			return () => {};
+		}),
+		sendRemoteSaveAutoRunDocResponse: vi.fn(),
+		sendRemoteGetAutoRunDocsResponse: vi.fn(),
+		sendRemoteGetAutoRunDocContentResponse: vi.fn(),
+		onRemoteStopAutoRun: vi.fn().mockImplementation(() => {
+			return () => {};
+		}),
+		onRemoteSetSetting: vi.fn().mockImplementation(() => {
+			return () => {};
+		}),
+		sendRemoteSetSettingResponse: vi.fn(),
+		onRemoteCreateSession: vi.fn().mockImplementation(() => {
+			return () => {};
+		}),
+		sendRemoteCreateSessionResponse: vi.fn(),
+		onRemoteDeleteSession: vi.fn().mockImplementation(() => {
+			return () => {};
+		}),
+		onRemoteRenameSession: vi.fn().mockImplementation(() => {
+			return () => {};
+		}),
+		sendRemoteRenameSessionResponse: vi.fn(),
+		onRemoteCreateGroup: vi.fn().mockImplementation(() => {
+			return () => {};
+		}),
+		sendRemoteCreateGroupResponse: vi.fn(),
+		onRemoteRenameGroup: vi.fn().mockImplementation(() => {
+			return () => {};
+		}),
+		sendRemoteRenameGroupResponse: vi.fn(),
+		onRemoteDeleteGroup: vi.fn().mockImplementation(() => {
+			return () => {};
+		}),
+		onRemoteMoveSessionToGroup: vi.fn().mockImplementation(() => {
+			return () => {};
+		}),
+		sendRemoteMoveSessionToGroupResponse: vi.fn(),
+		onRemoteGetGitStatus: vi.fn().mockImplementation(() => {
+			return () => {};
+		}),
+		sendRemoteGetGitStatusResponse: vi.fn(),
+		onRemoteGetGitDiff: vi.fn().mockImplementation(() => {
+			return () => {};
+		}),
+		sendRemoteGetGitDiffResponse: vi.fn(),
 	};
 
 	const mockLive = {

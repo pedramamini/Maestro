@@ -119,7 +119,13 @@ export function createCueGitHubPoller(config: CueGitHubPollerConfig): () => void
 			{ cwd: projectRoot, timeout: 30000 }
 		);
 
-		let items = JSON.parse(stdout);
+		let items: any[];
+		try {
+			items = JSON.parse(stdout);
+		} catch {
+			onLog('warn', `[CUE] "${triggerName}" received malformed JSON from gh pr list`);
+			return;
+		}
 
 		// For "merged" state, filter to only merged PRs (have a mergedAt timestamp)
 		if (stateFilter === 'merged') {
@@ -184,7 +190,13 @@ export function createCueGitHubPoller(config: CueGitHubPollerConfig): () => void
 			{ cwd: projectRoot, timeout: 30000 }
 		);
 
-		const items = JSON.parse(stdout);
+		let items: any[];
+		try {
+			items = JSON.parse(stdout);
+		} catch {
+			onLog('warn', `[CUE] "${triggerName}" received malformed JSON from gh issue list`);
+			return;
+		}
 		const isFirstRun = !hasAnyGitHubSeen(subscriptionId);
 
 		for (const item of items) {

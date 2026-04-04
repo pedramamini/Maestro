@@ -300,7 +300,11 @@ function PlaybookDetailView({
 		() =>
 			createMarkdownComponents({
 				theme,
-				onExternalLinkClick: (href) => window.maestro.shell.openExternal(href),
+				onExternalLinkClick: (href) => {
+					if (/^https?:\/\/|^mailto:/.test(href)) {
+						void window.maestro.shell.openExternal(href);
+					}
+				},
 			}),
 		[theme]
 	);

@@ -668,6 +668,396 @@ describe('CueEngine completion chains', () => {
 		});
 	});
 
+	describe('fan-out per-agent prompts', () => {
+		it('delivers per-agent prompts via fan_out_prompts', () => {
+			const sessions = [
+				createMockSession({ id: 'orch', name: 'Orchestrator', projectRoot: '/projects/orch' }),
+				createMockSession({ id: 'agent-a', name: 'agent-a', projectRoot: '/projects/a' }),
+				createMockSession({ id: 'agent-b', name: 'agent-b', projectRoot: '/projects/b' }),
+			];
+			const config = createMockConfig({
+				subscriptions: [
+					{
+						name: 'per-agent',
+						event: 'agent.completed',
+						enabled: true,
+						prompt: 'shared fallback',
+						source_session: 'trigger',
+						fan_out: ['agent-a', 'agent-b'],
+						fan_out_prompts: ['prompt for a', 'prompt for b'],
+					},
+				],
+			});
+			mockLoadCueConfig.mockImplementation((root: string) =>
+				root === '/projects/orch' ? config : null
+			);
+			const deps = createMockDeps({ getSessions: vi.fn(() => sessions) });
+			const engine = new CueEngine(deps);
+			engine.start();
+
+			vi.clearAllMocks();
+			engine.notifyAgentCompleted('trigger');
+
+			expect(deps.onCueRun).toHaveBeenCalledTimes(2);
+			expect(deps.onCueRun).toHaveBeenCalledWith(
+				expect.objectContaining({
+					sessionId: 'agent-a',
+					prompt: 'prompt for a',
+				})
+			);
+			expect(deps.onCueRun).toHaveBeenCalledWith(
+				expect.objectContaining({
+					sessionId: 'agent-b',
+					prompt: 'prompt for b',
+				})
+			);
+
+			engine.stop();
+		});
+
+		it('falls back to shared prompt when fan_out_prompts is absent', () => {
+			const sessions = [
+				createMockSession({ id: 'orch', name: 'Orchestrator', projectRoot: '/projects/orch' }),
+				createMockSession({ id: 'agent-a', name: 'agent-a', projectRoot: '/projects/a' }),
+				createMockSession({ id: 'agent-b', name: 'agent-b', projectRoot: '/projects/b' }),
+			];
+			const config = createMockConfig({
+				subscriptions: [
+					{
+						name: 'shared-prompt',
+						event: 'agent.completed',
+						enabled: true,
+						prompt: 'do the thing',
+						source_session: 'trigger',
+						fan_out: ['agent-a', 'agent-b'],
+					},
+				],
+			});
+			mockLoadCueConfig.mockImplementation((root: string) =>
+				root === '/projects/orch' ? config : null
+			);
+			const deps = createMockDeps({ getSessions: vi.fn(() => sessions) });
+			const engine = new CueEngine(deps);
+			engine.start();
+
+			vi.clearAllMocks();
+			engine.notifyAgentCompleted('trigger');
+
+			expect(deps.onCueRun).toHaveBeenCalledTimes(2);
+			expect(deps.onCueRun).toHaveBeenCalledWith(
+				expect.objectContaining({ sessionId: 'agent-a', prompt: 'do the thing' })
+			);
+			expect(deps.onCueRun).toHaveBeenCalledWith(
+				expect.objectContaining({ sessionId: 'agent-b', prompt: 'do the thing' })
+			);
+
+			engine.stop();
+		});
+
+		it('dispatches twice to the same agent with different prompts', async () => {
+			const sessions = [
+				createMockSession({ id: 'orch', name: 'Orchestrator', projectRoot: '/projects/orch' }),
+				createMockSession({ id: 'agent-a', name: 'agent-a', projectRoot: '/projects/a' }),
+			];
+			const config = createMockConfig({
+				subscriptions: [
+					{
+						name: 'double-dispatch',
+						event: 'agent.completed',
+						enabled: true,
+						prompt: 'fallback',
+						source_session: 'trigger',
+						fan_out: ['agent-a', 'agent-a'],
+						fan_out_prompts: ['task 1', 'task 2'],
+					},
+				],
+				settings: {
+					timeout_minutes: 30,
+					timeout_on_fail: 'break',
+					max_concurrent: 2,
+					queue_size: 10,
+				},
+			});
+			mockLoadCueConfig.mockImplementation((root: string) =>
+				root === '/projects/orch' ? config : null
+			);
+			const deps = createMockDeps({ getSessions: vi.fn(() => sessions) });
+			const engine = new CueEngine(deps);
+			engine.start();
+
+			vi.clearAllMocks();
+			engine.notifyAgentCompleted('trigger');
+			await vi.advanceTimersByTimeAsync(100);
+
+			expect(deps.onCueRun).toHaveBeenCalledTimes(2);
+			expect(deps.onCueRun).toHaveBeenCalledWith(
+				expect.objectContaining({
+					sessionId: 'agent-a',
+					prompt: 'task 1',
+					event: expect.objectContaining({
+						payload: expect.objectContaining({ fanOutIndex: 0 }),
+					}),
+				})
+			);
+			expect(deps.onCueRun).toHaveBeenCalledWith(
+				expect.objectContaining({
+					sessionId: 'agent-a',
+					prompt: 'task 2',
+					event: expect.objectContaining({
+						payload: expect.objectContaining({ fanOutIndex: 1 }),
+					}),
+				})
+			);
+
+			engine.stop();
+		});
+
+		it('partial failure does not prevent other fan-out targets', () => {
+			const sessions = [
+				createMockSession({ id: 'orch', name: 'Orchestrator', projectRoot: '/projects/orch' }),
+				createMockSession({ id: 'agent-a', name: 'agent-a', projectRoot: '/projects/a' }),
+				createMockSession({ id: 'agent-b', name: 'agent-b', projectRoot: '/projects/b' }),
+			];
+			const config = createMockConfig({
+				subscriptions: [
+					{
+						name: 'partial-fail',
+						event: 'agent.completed',
+						enabled: true,
+						prompt: 'work',
+						source_session: 'trigger',
+						fan_out: ['agent-a', 'agent-b'],
+						fan_out_prompts: ['fail task', 'succeed task'],
+					},
+				],
+			});
+			mockLoadCueConfig.mockImplementation((root: string) =>
+				root === '/projects/orch' ? config : null
+			);
+			const deps = createMockDeps({ getSessions: vi.fn(() => sessions) });
+			// Make onCueRun fail for agent-a, succeed for agent-b
+			(deps.onCueRun as ReturnType<typeof vi.fn>).mockImplementation(async (request: any) => {
+				if (request.sessionId === 'agent-a') {
+					throw new Error('agent-a failed');
+				}
+				return {
+					runId: 'run-ok',
+					sessionId: request.sessionId,
+					sessionName: 'agent-b',
+					subscriptionName: request.subscriptionName,
+					event: request.event,
+					status: 'completed' as const,
+					stdout: 'success',
+					stderr: '',
+					exitCode: 0,
+					durationMs: 100,
+					startedAt: new Date().toISOString(),
+					endedAt: new Date().toISOString(),
+				};
+			});
+			const engine = new CueEngine(deps);
+			engine.start();
+
+			vi.clearAllMocks();
+			engine.notifyAgentCompleted('trigger');
+
+			// Both targets should have been called regardless of failure
+			expect(deps.onCueRun).toHaveBeenCalledTimes(2);
+			expect(deps.onCueRun).toHaveBeenCalledWith(
+				expect.objectContaining({ sessionId: 'agent-a', prompt: 'fail task' })
+			);
+			expect(deps.onCueRun).toHaveBeenCalledWith(
+				expect.objectContaining({ sessionId: 'agent-b', prompt: 'succeed task' })
+			);
+
+			engine.stop();
+		});
+
+		it('rapid enable/disable during fan-out does not crash', () => {
+			const sessions = [
+				createMockSession({ id: 'orch', name: 'Orchestrator', projectRoot: '/projects/orch' }),
+				createMockSession({ id: 'agent-a', name: 'agent-a', projectRoot: '/projects/a' }),
+				createMockSession({ id: 'agent-b', name: 'agent-b', projectRoot: '/projects/b' }),
+			];
+			const config = createMockConfig({
+				subscriptions: [
+					{
+						name: 'rapid-toggle',
+						event: 'agent.completed',
+						enabled: true,
+						prompt: 'work',
+						source_session: 'trigger',
+						fan_out: ['agent-a', 'agent-b'],
+					},
+				],
+			});
+			mockLoadCueConfig.mockImplementation((root: string) =>
+				root === '/projects/orch' ? config : null
+			);
+			const deps = createMockDeps({ getSessions: vi.fn(() => sessions) });
+			const engine = new CueEngine(deps);
+			engine.start();
+
+			// Trigger fan-out then immediately stop
+			engine.notifyAgentCompleted('trigger');
+			expect(() => engine.stop()).not.toThrow();
+
+			// Restart and trigger again to verify clean state
+			engine.start();
+			expect(() => {
+				engine.notifyAgentCompleted('trigger');
+				engine.stop();
+			}).not.toThrow();
+		});
+	});
+
+	describe('fan-in per-subscription timeout', () => {
+		it('uses sub.fan_in_timeout_minutes over global setting', () => {
+			const config = createMockConfig({
+				subscriptions: [
+					{
+						name: 'all-done',
+						event: 'agent.completed',
+						enabled: true,
+						prompt: 'aggregate',
+						source_session: ['agent-a', 'agent-b'],
+						fan_in_timeout_minutes: 2,
+					},
+				],
+				settings: {
+					timeout_minutes: 30,
+					timeout_on_fail: 'continue',
+					max_concurrent: 1,
+					queue_size: 10,
+				},
+			});
+			mockLoadCueConfig.mockReturnValue(config);
+			const deps = createMockDeps();
+			const engine = new CueEngine(deps);
+			engine.start();
+
+			vi.clearAllMocks();
+			engine.notifyAgentCompleted('agent-a', { stdout: 'output-a' });
+
+			// Should not fire before 2 minutes
+			expect(deps.onCueRun).not.toHaveBeenCalled();
+
+			// Advance to 2 minutes (per-sub timeout)
+			vi.advanceTimersByTime(2 * 60 * 1000 + 100);
+
+			// Should have fired with partial data (continue mode) at the 2-minute mark
+			expect(deps.onCueRun).toHaveBeenCalledWith(
+				expect.objectContaining({
+					sessionId: 'session-1',
+					prompt: 'aggregate',
+					event: expect.objectContaining({
+						payload: expect.objectContaining({
+							partial: true,
+							timedOutSessions: expect.arrayContaining(['agent-b']),
+						}),
+					}),
+				})
+			);
+
+			engine.stop();
+		});
+
+		it('uses sub.fan_in_timeout_on_fail over global setting', () => {
+			const config = createMockConfig({
+				subscriptions: [
+					{
+						name: 'all-done',
+						event: 'agent.completed',
+						enabled: true,
+						prompt: 'aggregate',
+						source_session: ['agent-a', 'agent-b'],
+						fan_in_timeout_minutes: 1,
+						fan_in_timeout_on_fail: 'continue',
+					},
+				],
+				settings: {
+					timeout_minutes: 30,
+					timeout_on_fail: 'break',
+					max_concurrent: 1,
+					queue_size: 10,
+				},
+			});
+			mockLoadCueConfig.mockReturnValue(config);
+			const deps = createMockDeps();
+			const engine = new CueEngine(deps);
+			engine.start();
+
+			vi.clearAllMocks();
+			engine.notifyAgentCompleted('agent-a', { stdout: 'partial-output' });
+
+			// Advance past per-sub timeout
+			vi.advanceTimersByTime(1 * 60 * 1000 + 100);
+
+			// Despite global break mode, per-sub continue mode should fire
+			expect(deps.onCueRun).toHaveBeenCalledWith(
+				expect.objectContaining({
+					sessionId: 'session-1',
+					prompt: 'aggregate',
+					event: expect.objectContaining({
+						payload: expect.objectContaining({
+							partial: true,
+						}),
+					}),
+				})
+			);
+
+			engine.stop();
+		});
+
+		it('falls back to global timeout when per-sub not set', () => {
+			const config = createMockConfig({
+				subscriptions: [
+					{
+						name: 'all-done',
+						event: 'agent.completed',
+						enabled: true,
+						prompt: 'aggregate',
+						source_session: ['agent-a', 'agent-b'],
+					},
+				],
+				settings: {
+					timeout_minutes: 30,
+					timeout_on_fail: 'continue',
+					max_concurrent: 1,
+					queue_size: 10,
+				},
+			});
+			mockLoadCueConfig.mockReturnValue(config);
+			const deps = createMockDeps();
+			const engine = new CueEngine(deps);
+			engine.start();
+
+			vi.clearAllMocks();
+			engine.notifyAgentCompleted('agent-a', { stdout: 'output-a' });
+
+			// Advance 29 minutes — should not fire yet
+			vi.advanceTimersByTime(29 * 60 * 1000);
+			expect(deps.onCueRun).not.toHaveBeenCalled();
+
+			// Advance 1 more minute + buffer — should fire at 30 minutes
+			vi.advanceTimersByTime(1 * 60 * 1000 + 100);
+			expect(deps.onCueRun).toHaveBeenCalledWith(
+				expect.objectContaining({
+					sessionId: 'session-1',
+					prompt: 'aggregate',
+					event: expect.objectContaining({
+						payload: expect.objectContaining({
+							partial: true,
+							timedOutSessions: expect.arrayContaining(['agent-b']),
+						}),
+					}),
+				})
+			);
+
+			engine.stop();
+		});
+	});
+
 	describe('clearFanInState', () => {
 		it('clears fan-in trackers for a specific session', () => {
 			const config = createMockConfig({

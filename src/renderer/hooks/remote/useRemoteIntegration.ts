@@ -249,7 +249,13 @@ export function useRemoteIntegration(deps: UseRemoteIntegrationDeps): UseRemoteI
 							if (!s.aiTabs.some((t) => t.id === tabId)) {
 								return s;
 							}
-							return { ...s, activeTabId: tabId };
+							return {
+								...s,
+								activeTabId: tabId,
+								activeFileTabId: null,
+								activeTerminalTabId: null,
+								inputMode: 'ai' as const,
+							};
 						})
 					);
 				}
@@ -274,7 +280,13 @@ export function useRemoteIntegration(deps: UseRemoteIntegrationDeps): UseRemoteI
 						if (!s.aiTabs.some((t) => t.id === tabId)) {
 							return s;
 						}
-						return { ...s, activeTabId: tabId };
+						return {
+							...s,
+							activeTabId: tabId,
+							activeFileTabId: null,
+							activeTerminalTabId: null,
+							inputMode: 'ai' as const,
+						};
 					})
 				);
 			}
@@ -493,6 +505,296 @@ export function useRemoteIntegration(deps: UseRemoteIntegrationDeps): UseRemoteI
 		);
 		return () => {
 			unsubscribe();
+		};
+	}, []);
+
+	// Handle remote get auto-run docs from web interface
+	useEffect(() => {
+		const unsubscribe = window.maestro.process.onRemoteGetAutoRunDocs(
+			(sessionId: string, responseChannel: string) => {
+				window.dispatchEvent(
+					new CustomEvent('maestro:getAutoRunDocs', {
+						detail: { sessionId, responseChannel },
+					})
+				);
+			}
+		);
+		return () => {
+			unsubscribe();
+		};
+	}, []);
+
+	// Handle remote get auto-run doc content from web interface
+	useEffect(() => {
+		const unsubscribe = window.maestro.process.onRemoteGetAutoRunDocContent(
+			(sessionId: string, filename: string, responseChannel: string) => {
+				window.dispatchEvent(
+					new CustomEvent('maestro:getAutoRunDocContent', {
+						detail: { sessionId, filename, responseChannel },
+					})
+				);
+			}
+		);
+		return () => {
+			unsubscribe();
+		};
+	}, []);
+
+	// Handle remote save auto-run doc from web interface
+	useEffect(() => {
+		const unsubscribe = window.maestro.process.onRemoteSaveAutoRunDoc(
+			(sessionId: string, filename: string, content: string, responseChannel: string) => {
+				window.dispatchEvent(
+					new CustomEvent('maestro:saveAutoRunDoc', {
+						detail: { sessionId, filename, content, responseChannel },
+					})
+				);
+			}
+		);
+		return () => {
+			unsubscribe();
+		};
+	}, []);
+
+	// Handle remote stop auto-run from web interface
+	useEffect(() => {
+		const unsubscribe = window.maestro.process.onRemoteStopAutoRun((sessionId: string) => {
+			window.dispatchEvent(
+				new CustomEvent('maestro:stopAutoRun', {
+					detail: { sessionId },
+				})
+			);
+		});
+		return () => {
+			unsubscribe();
+		};
+	}, []);
+
+	// Handle remote set setting from web interface
+	// Uses the existing settings infrastructure via window.maestro.settings.set()
+	useEffect(() => {
+		const unsubscribe = window.maestro.process.onRemoteSetSetting(
+			async (key: string, value: unknown, responseChannel: string) => {
+				try {
+					await window.maestro.settings.set(key, value);
+					window.maestro.process.sendRemoteSetSettingResponse(responseChannel, true);
+				} catch {
+					window.maestro.process.sendRemoteSetSettingResponse(responseChannel, false);
+				}
+			}
+		);
+		return () => {
+			unsubscribe();
+		};
+	}, []);
+
+	// Handle remote get git status from web interface
+	// Uses existing git IPC infrastructure (window.maestro.git.status + window.maestro.git.branch)
+	useEffect(() => {
+		const unsubscribe = window.maestro.process.onRemoteGetGitStatus(
+			async (sessionId: string, responseChannel: string) => {
+				try {
+					// Look up the session's cwd
+					const session = sessionsRef.current.find((s) => s.id === sessionId);
+					if (!session) {
+						window.maestro.process.sendRemoteGetGitStatusResponse(responseChannel, {
+							branch: '',
+							files: [],
+							ahead: 0,
+							behind: 0,
+						});
+						return;
+					}
+
+					const cwd = session.cwd;
+
+					// Run git status --porcelain and git branch in parallel
+					const [statusResult, branchResult] = await Promise.all([
+						window.maestro.git.status(cwd),
+						window.maestro.git.branch(cwd),
+					]);
+
+					// Parse status output
+					const statusLines = (statusResult.stdout || '')
+						.replace(/\s+$/, '')
+						.split('\n')
+						.filter((line: string) => line.length > 0);
+
+					const files = statusLines.map((line: string) => {
+						const status = line.substring(0, 2);
+						const pathField = line.substring(3);
+						const renameParts = pathField.split(' -> ');
+						const filePath = renameParts[renameParts.length - 1] || pathField;
+						// Staged if index column (first char) is not space or ?
+						const staged = status[0] !== ' ' && status[0] !== '?';
+						return { path: filePath, status: status.trim(), staged };
+					});
+
+					const branch = (branchResult.stdout || '').trim();
+
+					// Get ahead/behind info
+					let ahead = 0;
+					let behind = 0;
+					try {
+						const infoResult = await window.maestro.git.info(cwd);
+						ahead = infoResult.ahead || 0;
+						behind = infoResult.behind || 0;
+					} catch {
+						// ahead/behind not available, that's fine
+					}
+
+					window.maestro.process.sendRemoteGetGitStatusResponse(responseChannel, {
+						branch,
+						files,
+						ahead,
+						behind,
+					});
+				} catch {
+					window.maestro.process.sendRemoteGetGitStatusResponse(responseChannel, {
+						branch: '',
+						files: [],
+						ahead: 0,
+						behind: 0,
+					});
+				}
+			}
+		);
+		return () => {
+			unsubscribe();
+		};
+	}, []);
+
+	// Handle remote get git diff from web interface
+	// Uses existing git IPC infrastructure (window.maestro.git.diff)
+	useEffect(() => {
+		const unsubscribe = window.maestro.process.onRemoteGetGitDiff(
+			async (sessionId: string, filePath: string | undefined, responseChannel: string) => {
+				try {
+					// Look up the session's cwd
+					const session = sessionsRef.current.find((s) => s.id === sessionId);
+					if (!session) {
+						window.maestro.process.sendRemoteGetGitDiffResponse(responseChannel, {
+							diff: '',
+							files: [],
+						});
+						return;
+					}
+
+					const cwd = session.cwd;
+					const diffResult = await window.maestro.git.diff(cwd, filePath);
+					const diff = diffResult.stdout || '';
+
+					// Extract changed file paths from diff output
+					const fileMatches = diff.match(/^diff --git a\/.+ b\/(.+)$/gm) || [];
+					const files = fileMatches
+						.map((line: string) => {
+							const match = line.match(/^diff --git a\/.+ b\/(.+)$/);
+							return match ? match[1] : '';
+						})
+						.filter(Boolean);
+
+					window.maestro.process.sendRemoteGetGitDiffResponse(responseChannel, {
+						diff,
+						files,
+					});
+				} catch {
+					window.maestro.process.sendRemoteGetGitDiffResponse(responseChannel, {
+						diff: '',
+						files: [],
+					});
+				}
+			}
+		);
+		return () => {
+			unsubscribe();
+		};
+	}, []);
+
+	// Handle remote session/group management from web interface
+	// These dispatch CustomEvents for App.tsx to handle via existing session/group management hooks
+	useEffect(() => {
+		const unsubscribeCreateSession = window.maestro.process.onRemoteCreateSession(
+			(
+				name: string,
+				toolType: string,
+				cwd: string,
+				groupId: string | undefined,
+				responseChannel: string
+			) => {
+				window.dispatchEvent(
+					new CustomEvent('maestro:remoteCreateSession', {
+						detail: { name, toolType, cwd, groupId, responseChannel },
+					})
+				);
+			}
+		);
+
+		const unsubscribeDeleteSession = window.maestro.process.onRemoteDeleteSession(
+			(sessionId: string) => {
+				window.dispatchEvent(
+					new CustomEvent('maestro:remoteDeleteSession', {
+						detail: { sessionId },
+					})
+				);
+			}
+		);
+
+		const unsubscribeRenameSession = window.maestro.process.onRemoteRenameSession(
+			(sessionId: string, newName: string, responseChannel: string) => {
+				window.dispatchEvent(
+					new CustomEvent('maestro:remoteRenameSession', {
+						detail: { sessionId, newName, responseChannel },
+					})
+				);
+			}
+		);
+
+		const unsubscribeCreateGroup = window.maestro.process.onRemoteCreateGroup(
+			(name: string, emoji: string | undefined, responseChannel: string) => {
+				window.dispatchEvent(
+					new CustomEvent('maestro:remoteCreateGroup', {
+						detail: { name, emoji, responseChannel },
+					})
+				);
+			}
+		);
+
+		const unsubscribeRenameGroup = window.maestro.process.onRemoteRenameGroup(
+			(groupId: string, name: string, responseChannel: string) => {
+				window.dispatchEvent(
+					new CustomEvent('maestro:remoteRenameGroup', {
+						detail: { groupId, name, responseChannel },
+					})
+				);
+			}
+		);
+
+		const unsubscribeDeleteGroup = window.maestro.process.onRemoteDeleteGroup((groupId: string) => {
+			window.dispatchEvent(
+				new CustomEvent('maestro:remoteDeleteGroup', {
+					detail: { groupId },
+				})
+			);
+		});
+
+		const unsubscribeMoveSessionToGroup = window.maestro.process.onRemoteMoveSessionToGroup(
+			(sessionId: string, groupId: string | null, responseChannel: string) => {
+				window.dispatchEvent(
+					new CustomEvent('maestro:remoteMoveSessionToGroup', {
+						detail: { sessionId, groupId, responseChannel },
+					})
+				);
+			}
+		);
+
+		return () => {
+			unsubscribeCreateSession();
+			unsubscribeDeleteSession();
+			unsubscribeRenameSession();
+			unsubscribeCreateGroup();
+			unsubscribeRenameGroup();
+			unsubscribeDeleteGroup();
+			unsubscribeMoveSessionToGroup();
 		};
 	}, []);
 

@@ -406,9 +406,7 @@ export class CueEngine {
 				sessionId,
 				sessionName: session.name,
 				toolType: session.toolType,
-				subscriptions: state.config.subscriptions.filter(
-					(s) => !s.agent_id || s.agent_id === sessionId
-				),
+				subscriptions: state.config.subscriptions,
 			});
 		}
 
@@ -423,9 +421,7 @@ export class CueEngine {
 					sessionId: session.id,
 					sessionName: session.name,
 					toolType: session.toolType,
-					subscriptions: config.subscriptions.filter(
-						(s) => !s.agent_id || s.agent_id === session.id
-					),
+					subscriptions: config.subscriptions,
 				});
 			}
 		}
@@ -456,8 +452,8 @@ export class CueEngine {
 	}
 
 	/** Clears queued events for a session */
-	clearQueue(sessionId: string): void {
-		this.runManager.clearQueue(sessionId);
+	clearQueue(sessionId: string, preserveStartup = false): void {
+		this.runManager.clearQueue(sessionId, preserveStartup);
 	}
 
 	/**
@@ -608,9 +604,11 @@ export class CueEngine {
 						fanOutIndex: i,
 					},
 				};
+				const perTargetPrompt = sub.fan_out_prompts?.[i];
+				const prompt = perTargetPrompt || sub.prompt_file || sub.prompt;
 				this.runManager.execute(
 					targetSession.id,
-					sub.prompt_file ?? sub.prompt,
+					prompt,
 					fanOutEvent,
 					sub.name,
 					sub.output_prompt,
@@ -779,7 +777,9 @@ export class CueEngine {
 		this.clearFanInState(sessionId);
 
 		// Clean up queued events for this session (prevents stale events after config reload)
-		this.clearQueue(sessionId);
+		// Preserve app.startup events — they are one-time boot intents that should survive
+		// config hot-reloads (e.g., OneDrive touching the YAML file during the boot scan).
+		this.clearQueue(sessionId, /* preserveStartup */ true);
 
 		// Clean up scheduledFiredKeys for this session's subscriptions
 		for (const sub of state.config.subscriptions) {

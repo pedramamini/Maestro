@@ -80,7 +80,7 @@ export function createCueFanInTracker(deps: CueFanInDeps): CueFanInTracker {
 			return !completedIds.includes(sessionId) && !completedIds.includes(src);
 		});
 
-		if (settings.timeout_on_fail === 'continue') {
+		if ((sub.fan_in_timeout_on_fail ?? settings.timeout_on_fail) === 'continue') {
 			// Fire with partial data
 			const completions = [...tracker.values()];
 			fanInTrackers.delete(key);
@@ -143,7 +143,8 @@ export function createCueFanInTracker(deps: CueFanInDeps): CueFanInTracker {
 
 			// Start timeout timer on first source completion
 			if (tracker.size === 1 && !fanInTimers.has(key)) {
-				const timeoutMs = (settings.timeout_minutes ?? 30) * 60 * 1000;
+				const timeoutMs =
+					(sub.fan_in_timeout_minutes ?? settings.timeout_minutes ?? 30) * 60 * 1000;
 				const timer = setTimeout(() => {
 					handleFanInTimeout(key, ownerSessionId, settings, sub, sources);
 				}, timeoutMs);

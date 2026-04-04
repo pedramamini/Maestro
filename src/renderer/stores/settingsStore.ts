@@ -15,6 +15,7 @@
  */
 
 import { create } from 'zustand';
+import { isWindowsPlatform } from '../utils/platformUtils';
 import type {
 	LLMProvider,
 	ThemeId,
@@ -196,6 +197,8 @@ export interface SettingsStoreState {
 	customThemeBaseId: ThemeId;
 	enterToSendAI: boolean;
 	enterToSendTerminal: boolean;
+	forcedParallelExecution: boolean;
+	forcedParallelAcknowledged: boolean;
 	defaultSaveToHistory: boolean;
 	defaultShowThinking: ThinkingMode;
 	leftSidebarWidth: number;
@@ -233,6 +236,8 @@ export interface SettingsStoreState {
 	contextManagementSettings: ContextManagementSettings;
 	keyboardMasteryStats: KeyboardMasteryStats;
 	colorBlindMode: boolean;
+	showStarredInUnreadFilter: boolean;
+	showFilePreviewsInUnreadFilter: boolean;
 	documentGraphShowExternalLinks: boolean;
 	documentGraphMaxNodes: number;
 	documentGraphPreviewCharLimit: number;
@@ -259,6 +264,7 @@ export interface SettingsStoreState {
 	wakatimeDetailedTracking: boolean;
 	useNativeTitleBar: boolean;
 	autoHideMenuBar: boolean;
+	moderatorStandingInstructions: string;
 }
 
 export interface SettingsStoreActions {
@@ -279,6 +285,8 @@ export interface SettingsStoreActions {
 	setCustomThemeBaseId: (value: ThemeId) => void;
 	setEnterToSendAI: (value: boolean) => void;
 	setEnterToSendTerminal: (value: boolean) => void;
+	setForcedParallelExecution: (value: boolean) => void;
+	setForcedParallelAcknowledged: (value: boolean) => void;
 	setDefaultSaveToHistory: (value: boolean) => void;
 	setDefaultShowThinking: (value: ThinkingMode) => void;
 	setLeftSidebarWidth: (value: number) => void;
@@ -308,6 +316,8 @@ export interface SettingsStoreActions {
 	setWebInterfaceUseCustomPort: (value: boolean) => void;
 	setWebInterfaceCustomPort: (value: number) => void;
 	setColorBlindMode: (value: boolean) => void;
+	setShowStarredInUnreadFilter: (value: boolean) => void;
+	setShowFilePreviewsInUnreadFilter: (value: boolean) => void;
 	setDocumentGraphShowExternalLinks: (value: boolean) => void;
 	setDocumentGraphMaxNodes: (value: number) => void;
 	setDocumentGraphPreviewCharLimit: (value: number) => void;
@@ -333,6 +343,7 @@ export interface SettingsStoreActions {
 	setWakatimeDetailedTracking: (value: boolean) => void;
 	setUseNativeTitleBar: (value: boolean) => void;
 	setAutoHideMenuBar: (value: boolean) => void;
+	setModeratorStandingInstructions: (value: string) => void;
 
 	// Async setters
 	setLogLevel: (value: string) => Promise<void>;
@@ -412,7 +423,7 @@ export const useSettingsStore = create<SettingsStore>()((set, get) => {
 		llmProvider: 'openrouter',
 		modelSlug: 'anthropic/claude-3.5-sonnet',
 		apiKey: '',
-		defaultShell: 'zsh',
+		defaultShell: isWindowsPlatform() ? 'powershell' : 'zsh',
 		customShellPath: '',
 		shellArgs: '',
 		shellEnvVars: {},
@@ -424,6 +435,8 @@ export const useSettingsStore = create<SettingsStore>()((set, get) => {
 		customThemeBaseId: 'dracula',
 		enterToSendAI: false,
 		enterToSendTerminal: true,
+		forcedParallelExecution: false,
+		forcedParallelAcknowledged: false,
 		defaultSaveToHistory: true,
 		defaultShowThinking: 'off',
 		leftSidebarWidth: 256,
@@ -461,6 +474,8 @@ export const useSettingsStore = create<SettingsStore>()((set, get) => {
 		contextManagementSettings: DEFAULT_CONTEXT_MANAGEMENT_SETTINGS,
 		keyboardMasteryStats: DEFAULT_KEYBOARD_MASTERY_STATS,
 		colorBlindMode: false,
+		showStarredInUnreadFilter: false,
+		showFilePreviewsInUnreadFilter: false,
 		documentGraphShowExternalLinks: false,
 		documentGraphMaxNodes: 50,
 		documentGraphPreviewCharLimit: 100,
@@ -485,8 +500,9 @@ export const useSettingsStore = create<SettingsStore>()((set, get) => {
 		wakatimeApiKey: '',
 		wakatimeEnabled: false,
 		wakatimeDetailedTracking: false,
-		useNativeTitleBar: false,
+		useNativeTitleBar: isWindowsPlatform(),
 		autoHideMenuBar: false,
+		moderatorStandingInstructions: '',
 
 		// ============================================================================
 		// Simple Setters
@@ -571,6 +587,16 @@ export const useSettingsStore = create<SettingsStore>()((set, get) => {
 		setEnterToSendTerminal: (value) => {
 			set({ enterToSendTerminal: value });
 			window.maestro.settings.set('enterToSendTerminal', value);
+		},
+
+		setForcedParallelExecution: (value) => {
+			set({ forcedParallelExecution: value });
+			window.maestro.settings.set('forcedParallelExecution', value);
+		},
+
+		setForcedParallelAcknowledged: (value) => {
+			set({ forcedParallelAcknowledged: value });
+			window.maestro.settings.set('forcedParallelAcknowledged', value);
 		},
 
 		setDefaultSaveToHistory: (value) => {
@@ -781,6 +807,16 @@ export const useSettingsStore = create<SettingsStore>()((set, get) => {
 			window.maestro.settings.set('colorBlindMode', value);
 		},
 
+		setShowStarredInUnreadFilter: (value) => {
+			set({ showStarredInUnreadFilter: value });
+			window.maestro.settings.set('showStarredInUnreadFilter', value);
+		},
+
+		setShowFilePreviewsInUnreadFilter: (value) => {
+			set({ showFilePreviewsInUnreadFilter: value });
+			window.maestro.settings.set('showFilePreviewsInUnreadFilter', value);
+		},
+
 		setDocumentGraphShowExternalLinks: (value) => {
 			set({ documentGraphShowExternalLinks: value });
 			window.maestro.settings.set('documentGraphShowExternalLinks', value);
@@ -907,6 +943,12 @@ export const useSettingsStore = create<SettingsStore>()((set, get) => {
 		setAutoHideMenuBar: (value) => {
 			set({ autoHideMenuBar: value });
 			window.maestro.settings.set('autoHideMenuBar', value);
+		},
+
+		setModeratorStandingInstructions: (value) => {
+			const trimmed = value.slice(0, 2000);
+			set({ moderatorStandingInstructions: trimmed });
+			window.maestro.settings.set('moderatorStandingInstructions', trimmed);
 		},
 
 		// ============================================================================
@@ -1466,6 +1508,11 @@ export async function loadAllSettings(): Promise<void> {
 		if (allSettings['enterToSendTerminal'] !== undefined)
 			patch.enterToSendTerminal = allSettings['enterToSendTerminal'] as boolean;
 
+		if (allSettings['forcedParallelExecution'] !== undefined)
+			patch.forcedParallelExecution = allSettings['forcedParallelExecution'] as boolean;
+		if (allSettings['forcedParallelAcknowledged'] !== undefined)
+			patch.forcedParallelAcknowledged = allSettings['forcedParallelAcknowledged'] as boolean;
+
 		if (allSettings['defaultSaveToHistory'] !== undefined)
 			patch.defaultSaveToHistory = allSettings['defaultSaveToHistory'] as boolean;
 
@@ -1704,6 +1751,14 @@ export async function loadAllSettings(): Promise<void> {
 		if (allSettings['colorBlindMode'] !== undefined)
 			patch.colorBlindMode = allSettings['colorBlindMode'] as boolean;
 
+		if (allSettings['showStarredInUnreadFilter'] !== undefined)
+			patch.showStarredInUnreadFilter = allSettings['showStarredInUnreadFilter'] as boolean;
+
+		if (allSettings['showFilePreviewsInUnreadFilter'] !== undefined)
+			patch.showFilePreviewsInUnreadFilter = allSettings[
+				'showFilePreviewsInUnreadFilter'
+			] as boolean;
+
 		// Document Graph settings (with validation)
 		if (allSettings['documentGraphShowExternalLinks'] !== undefined)
 			patch.documentGraphShowExternalLinks = allSettings[
@@ -1832,6 +1887,9 @@ export async function loadAllSettings(): Promise<void> {
 		if (allSettings['autoHideMenuBar'] !== undefined)
 			patch.autoHideMenuBar = allSettings['autoHideMenuBar'] as boolean;
 
+		if (allSettings['moderatorStandingInstructions'] !== undefined)
+			patch.moderatorStandingInstructions = allSettings['moderatorStandingInstructions'] as string;
+
 		// Apply the entire patch in one setState call
 		patch.settingsLoaded = true;
 		useSettingsStore.setState(patch);
@@ -1869,6 +1927,8 @@ export function getSettingsActions() {
 		setCustomThemeBaseId: state.setCustomThemeBaseId,
 		setEnterToSendAI: state.setEnterToSendAI,
 		setEnterToSendTerminal: state.setEnterToSendTerminal,
+		setForcedParallelExecution: state.setForcedParallelExecution,
+		setForcedParallelAcknowledged: state.setForcedParallelAcknowledged,
 		setDefaultSaveToHistory: state.setDefaultSaveToHistory,
 		setDefaultShowThinking: state.setDefaultShowThinking,
 		setLeftSidebarWidth: state.setLeftSidebarWidth,
@@ -1924,6 +1984,8 @@ export function getSettingsActions() {
 		acknowledgeKeyboardMasteryLevel: state.acknowledgeKeyboardMasteryLevel,
 		getUnacknowledgedKeyboardMasteryLevel: state.getUnacknowledgedKeyboardMasteryLevel,
 		setColorBlindMode: state.setColorBlindMode,
+		setShowStarredInUnreadFilter: state.setShowStarredInUnreadFilter,
+		setShowFilePreviewsInUnreadFilter: state.setShowFilePreviewsInUnreadFilter,
 		setDocumentGraphShowExternalLinks: state.setDocumentGraphShowExternalLinks,
 		setDocumentGraphMaxNodes: state.setDocumentGraphMaxNodes,
 		setDocumentGraphPreviewCharLimit: state.setDocumentGraphPreviewCharLimit,
@@ -1949,5 +2011,6 @@ export function getSettingsActions() {
 		setWakatimeDetailedTracking: state.setWakatimeDetailedTracking,
 		setUseNativeTitleBar: state.setUseNativeTitleBar,
 		setAutoHideMenuBar: state.setAutoHideMenuBar,
+		setModeratorStandingInstructions: state.setModeratorStandingInstructions,
 	};
 }

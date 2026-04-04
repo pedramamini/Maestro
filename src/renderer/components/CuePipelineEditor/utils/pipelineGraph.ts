@@ -147,6 +147,19 @@ export function convertToReactFlowNodes(
 		}
 	}
 
+	// Count agent session occurrences for duplicate instance labeling
+	const agentSessionCounts = new Map<string, number>();
+	const agentSessionIndex = new Map<string, number>();
+	for (const pipeline of pipelines) {
+		if (selectedPipelineId !== null && pipeline.id !== selectedPipelineId) continue;
+		for (const pNode of pipeline.nodes) {
+			if (pNode.type === 'agent') {
+				const sid = (pNode.data as AgentNodeData).sessionId;
+				agentSessionCounts.set(sid, (agentSessionCounts.get(sid) ?? 0) + 1);
+			}
+		}
+	}
+
 	for (const pipeline of pipelines) {
 		const isActive = selectedPipelineId === null || pipeline.id === selectedPipelineId;
 
@@ -163,6 +176,7 @@ export function convertToReactFlowNodes(
 
 			if (pNode.type === 'trigger') {
 				const triggerData = pNode.data as TriggerNodeData;
+				const fanOutCount = pipeline.edges.filter((e) => e.source === pNode.id).length;
 				const nodeData: TriggerNodeDataProps = {
 					compositeId,
 					eventType: triggerData.eventType,
@@ -173,6 +187,7 @@ export function convertToReactFlowNodes(
 					pipelineName: pipeline.name,
 					isSaved: triggerOptions?.isSaved,
 					isRunning: triggerOptions?.runningPipelineIds?.has(pipeline.id),
+					fanOutCount: fanOutCount > 1 ? fanOutCount : undefined,
 					theme,
 				};
 				nodes.push({
@@ -187,11 +202,24 @@ export function convertToReactFlowNodes(
 				const pipelineColors = agentPipelineMap.get(agentData.sessionId) ?? [pipeline.color];
 				const hasOutgoingEdge = pipeline.edges.some((e) => e.source === pNode.id);
 				const hasEdgePrompt = pipeline.edges.some((e) => e.target === pNode.id && !!e.prompt);
+				// Compute instance index for duplicate agent differentiation
+				const totalInstances = agentSessionCounts.get(agentData.sessionId) ?? 1;
+				const currentIdx = (agentSessionIndex.get(agentData.sessionId) ?? 0) + 1;
+				agentSessionIndex.set(agentData.sessionId, currentIdx);
+				const instanceLabel = totalInstances > 1 ? currentIdx : undefined;
+				// Compute fan-in count: incoming edges from other agent nodes
+				const incomingAgentEdgeCount = pipeline.edges.filter((e) => {
+					if (e.target !== pNode.id) return false;
+					const srcNode = pipeline.nodes.find((n) => n.id === e.source);
+					return srcNode?.type === 'agent';
+				}).length;
 				const nodeData: AgentNodeDataProps = {
 					compositeId,
 					sessionId: agentData.sessionId,
 					sessionName: agentData.sessionName,
 					toolType: agentData.toolType,
+					instanceLabel,
+					fanInCount: incomingAgentEdgeCount > 1 ? incomingAgentEdgeCount : undefined,
 					hasPrompt: !!(agentData.inputPrompt || agentData.outputPrompt || hasEdgePrompt),
 					hasOutgoingEdge,
 					pipelineColor: pipeline.color,
@@ -233,6 +261,13 @@ export function convertToReactFlowEdges(
 
 	for (const pipeline of pipelines) {
 		const isActive = selectedPipelineId === null || pipeline.id === selectedPipelineId;
+
+		// Skip non-active pipelines entirely — their nodes are not rendered by
+		// convertToReactFlowNodes, so edges referencing them would be orphaned.
+		// React Flow may cache the "invalid" state of orphaned edges internally,
+		// causing them to not re-appear when switching back to All Pipelines view.
+		if (!isActive) continue;
+
 		const isRunning = runningPipelineIds?.has(pipeline.id) ?? false;
 
 		for (const pEdge of pipeline.edges) {

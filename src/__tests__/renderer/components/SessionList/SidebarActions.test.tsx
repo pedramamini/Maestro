@@ -32,6 +32,7 @@ function createProps(overrides: Partial<Parameters<typeof SidebarActions>[0]> = 
 		hasNoSessions: false,
 		shortcuts: defaultShortcuts,
 		showUnreadAgentsOnly: false,
+		hasUnreadAgents: false,
 		addNewSession: vi.fn(),
 		setLeftSidebarOpen: vi.fn(),
 		toggleShowUnreadAgentsOnly: vi.fn(),
@@ -140,5 +141,17 @@ describe('SidebarActions', () => {
 		const newAgentBtn = screen.getByText('New Agent');
 		const grid = newAgentBtn.closest('div[style]');
 		expect(grid?.style.gridTemplateColumns).toBe('repeat(2, minmax(0, 1fr))');
+	});
+
+	it('prevents text wrapping in action buttons', () => {
+		render(<SidebarActions {...createProps({ openFeedback: vi.fn() })} />);
+
+		const newAgentBtn = screen.getByText('New Agent').closest('button');
+		const feedbackBtn = screen.getByText('Feedback').closest('button');
+
+		expect(newAgentBtn?.className).toContain('whitespace-nowrap');
+		expect(feedbackBtn?.className).toContain('whitespace-nowrap');
+		expect(newAgentBtn?.className).toContain('overflow-hidden');
+		expect(feedbackBtn?.className).toContain('overflow-hidden');
 	});
 });

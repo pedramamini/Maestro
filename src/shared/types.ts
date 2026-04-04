@@ -37,6 +37,7 @@ export interface SessionInfo {
 	projectRoot: string;
 	autoRunFolderPath?: string;
 	customModel?: string;
+	customEffort?: string;
 }
 
 // Usage statistics from AI agent CLI (Claude Code, Codex, etc.)
@@ -76,6 +77,8 @@ export interface HistoryEntry {
 	cueTriggerName?: string;
 	cueEventType?: string;
 	cueSourceSession?: string;
+	/** Hostname of the machine that created this entry (for shared history) */
+	hostname?: string;
 }
 
 // Document entry within a playbook
@@ -375,6 +378,9 @@ export interface AgentSshRemoteConfig {
 
 	/** Override working directory for this agent */
 	workingDirOverride?: string;
+
+	/** Sync history entries to .maestro/history/ on the remote host (opt-in, default: false) */
+	syncHistory?: boolean;
 }
 
 // ============================================================================

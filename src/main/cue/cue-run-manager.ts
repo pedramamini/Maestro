@@ -76,7 +76,7 @@ export interface CueRunManager {
 	getActiveRunCount(sessionId: string): number;
 	getActiveRunMap(): Map<string, ActiveRun>;
 	getQueueStatus(): Map<string, number>;
-	clearQueue(sessionId: string): void;
+	clearQueue(sessionId: string, preserveStartup?: boolean): void;
 	reset(): void;
 }
 
@@ -424,8 +424,19 @@ export function createCueRunManager(deps: CueRunManagerDeps): CueRunManager {
 			return result;
 		},
 
-		clearQueue(sessionId: string): void {
-			eventQueue.delete(sessionId);
+		clearQueue(sessionId: string, preserveStartup = false): void {
+			if (!preserveStartup) {
+				eventQueue.delete(sessionId);
+				return;
+			}
+			const queue = eventQueue.get(sessionId);
+			if (!queue) return;
+			const kept = queue.filter((e) => e.event.type === 'app.startup');
+			if (kept.length === 0) {
+				eventQueue.delete(sessionId);
+			} else {
+				eventQueue.set(sessionId, kept);
+			}
 		},
 
 		reset(): void {

@@ -5,6 +5,7 @@
 
 import type { ProcessManager } from '../process-manager';
 import { GROUP_CHAT_PREFIX, type ProcessListenerDependencies } from './types';
+import { groupChatEmitters } from '../ipc/handlers/groupChat';
 
 /**
  * Maximum buffer size per session (10MB).
@@ -40,6 +41,21 @@ export function setupDataListener(
 		REGEX_BATCH_SESSION,
 		REGEX_SYNOPSIS_SESSION,
 	} = patterns;
+
+	// Listen to raw stdout for live output streaming to group chat participant peek panels.
+	// The 'data' event for stream-json sessions only fires at turn completion (result ready),
+	// so we need raw-stdout to stream chunks in real time during agent work.
+	processManager.on('raw-stdout', (sessionId: string, chunk: string) => {
+		if (!sessionId.startsWith(GROUP_CHAT_PREFIX)) return;
+		const participantInfo = outputParser.parseParticipantSessionId(sessionId);
+		if (participantInfo) {
+			groupChatEmitters.emitParticipantLiveOutput?.(
+				participantInfo.groupChatId,
+				participantInfo.participantName,
+				chunk
+			);
+		}
+	});
 
 	processManager.on('data', (sessionId: string, data: string) => {
 		// Fast path: skip regex for non-group-chat sessions (performance optimization)
@@ -91,6 +107,7 @@ export function setupDataListener(
 					`WARNING: Buffer size ${totalLength} exceeds ${MAX_BUFFER_SIZE} bytes for participant ${participantInfo.participantName}`
 				);
 			}
+			// Note: live output is streamed via raw-stdout listener above (fires per chunk during work).
 			return; // Don't send to regular process:data handler
 		}
 
@@ -101,9 +118,19 @@ export function setupDataListener(
 		// Web interface terminal commands use runCommand() which emits with plain session IDs.
 		const webServer = getWebServer();
 		if (webServer) {
-			// Don't broadcast raw PTY terminal output to web clients
+			// Broadcast raw PTY terminal output as terminal_data (for xterm.js in web client)
 			if (sessionId.endsWith('-terminal')) {
-				debugLog('WebBroadcast', `SKIPPING PTY terminal output for web: session=${sessionId}`);
+				const baseSessionId = sessionId.replace(/-terminal$/, '');
+				debugLog(
+					'WebBroadcast',
+					`Broadcasting terminal_data: session=${baseSessionId}, dataLen=${data.length}`
+				);
+				webServer.broadcastToSessionClients(baseSessionId, {
+					type: 'terminal_data',
+					sessionId: baseSessionId,
+					data,
+					timestamp: Date.now(),
+				});
 				return;
 			}
 

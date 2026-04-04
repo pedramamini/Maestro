@@ -884,3 +884,405 @@ describe('ensureSourceOutputVariable', () => {
 		expect(ensureSourceOutputVariable(prompt)).toBe(prompt);
 	});
 });
+
+describe('chain agent with empty prompt', () => {
+	it('generates {{CUE_SOURCE_OUTPUT}} prompt for chain agent with empty inputPrompt', () => {
+		const pipeline = makePipeline({
+			nodes: [
+				{
+					id: 'trigger-1',
+					type: 'trigger',
+					position: { x: 0, y: 0 },
+					data: { eventType: 'file.changed', label: 'File Change', config: { watch: '**/*' } },
+				},
+				{
+					id: 'agent-1',
+					type: 'agent',
+					position: { x: 200, y: 0 },
+					data: {
+						sessionId: 's1',
+						sessionName: 'builder',
+						toolType: 'claude-code',
+						inputPrompt: 'Build the project',
+					},
+				},
+				{
+					id: 'agent-2',
+					type: 'agent',
+					position: { x: 400, y: 0 },
+					data: {
+						sessionId: 's2',
+						sessionName: 'tester',
+						toolType: 'claude-code',
+						inputPrompt: '',
+					},
+				},
+			],
+			edges: [
+				{ id: 'e1', source: 'trigger-1', target: 'agent-1', mode: 'pass' },
+				{ id: 'e2', source: 'agent-1', target: 'agent-2', mode: 'pass' },
+			],
+		});
+
+		const subs = pipelineToYamlSubscriptions(pipeline);
+		const chainSub = subs.find((s) => s.event === 'agent.completed');
+		expect(chainSub).toBeDefined();
+		expect(chainSub!.prompt).toBe('{{CUE_SOURCE_OUTPUT}}');
+		expect(chainSub!.source_session).toBe('builder');
+	});
+
+	it('generates {{CUE_SOURCE_OUTPUT}} prompt for chain agent with undefined inputPrompt', () => {
+		const pipeline = makePipeline({
+			nodes: [
+				{
+					id: 'trigger-1',
+					type: 'trigger',
+					position: { x: 0, y: 0 },
+					data: { eventType: 'file.changed', label: 'File Change', config: { watch: '**/*' } },
+				},
+				{
+					id: 'agent-1',
+					type: 'agent',
+					position: { x: 200, y: 0 },
+					data: {
+						sessionId: 's1',
+						sessionName: 'builder',
+						toolType: 'claude-code',
+						inputPrompt: 'Build',
+					},
+				},
+				{
+					id: 'agent-2',
+					type: 'agent',
+					position: { x: 400, y: 0 },
+					data: {
+						sessionId: 's2',
+						sessionName: 'reviewer',
+						toolType: 'claude-code',
+						// inputPrompt intentionally omitted
+					},
+				},
+			],
+			edges: [
+				{ id: 'e1', source: 'trigger-1', target: 'agent-1', mode: 'pass' },
+				{ id: 'e2', source: 'agent-1', target: 'agent-2', mode: 'pass' },
+			],
+		});
+
+		const subs = pipelineToYamlSubscriptions(pipeline);
+		const chainSub = subs.find((s) => s.event === 'agent.completed');
+		expect(chainSub).toBeDefined();
+		expect(chainSub!.prompt).toBe('{{CUE_SOURCE_OUTPUT}}');
+	});
+});
+
+describe('fan-out with per-edge prompts', () => {
+	it('produces fan_out_prompts when edges have different prompts', () => {
+		const pipeline = makePipeline({
+			nodes: [
+				{
+					id: 'trigger-1',
+					type: 'trigger',
+					position: { x: 0, y: 0 },
+					data: { eventType: 'file.changed', label: 'Files', config: { watch: 'src/**' } },
+				},
+				{
+					id: 'agent-1',
+					type: 'agent',
+					position: { x: 300, y: 0 },
+					data: {
+						sessionId: 's1',
+						sessionName: 'worker-1',
+						toolType: 'claude-code',
+						inputPrompt: 'default prompt 1',
+					},
+				},
+				{
+					id: 'agent-2',
+					type: 'agent',
+					position: { x: 300, y: 100 },
+					data: {
+						sessionId: 's2',
+						sessionName: 'worker-2',
+						toolType: 'claude-code',
+						inputPrompt: 'default prompt 2',
+					},
+				},
+			],
+			edges: [
+				{ id: 'e1', source: 'trigger-1', target: 'agent-1', mode: 'pass', prompt: 'edge prompt 1' },
+				{ id: 'e2', source: 'trigger-1', target: 'agent-2', mode: 'pass', prompt: 'edge prompt 2' },
+			],
+		});
+
+		const subs = pipelineToYamlSubscriptions(pipeline);
+		expect(subs).toHaveLength(1);
+		expect(subs[0].fan_out).toEqual(['worker-1', 'worker-2']);
+		expect(subs[0].fan_out_prompts).toEqual(['edge prompt 1', 'edge prompt 2']);
+	});
+
+	it('falls back to agent inputPrompt when edges have no prompt', () => {
+		const pipeline = makePipeline({
+			nodes: [
+				{
+					id: 'trigger-1',
+					type: 'trigger',
+					position: { x: 0, y: 0 },
+					data: { eventType: 'file.changed', label: 'Files', config: { watch: 'src/**' } },
+				},
+				{
+					id: 'agent-1',
+					type: 'agent',
+					position: { x: 300, y: 0 },
+					data: {
+						sessionId: 's1',
+						sessionName: 'worker-1',
+						toolType: 'claude-code',
+						inputPrompt: 'same prompt',
+					},
+				},
+				{
+					id: 'agent-2',
+					type: 'agent',
+					position: { x: 300, y: 100 },
+					data: {
+						sessionId: 's2',
+						sessionName: 'worker-2',
+						toolType: 'claude-code',
+						inputPrompt: 'same prompt',
+					},
+				},
+			],
+			edges: [
+				{ id: 'e1', source: 'trigger-1', target: 'agent-1', mode: 'pass' },
+				{ id: 'e2', source: 'trigger-1', target: 'agent-2', mode: 'pass' },
+			],
+		});
+
+		const subs = pipelineToYamlSubscriptions(pipeline);
+		expect(subs).toHaveLength(1);
+		expect(subs[0].prompt).toBe('same prompt');
+		expect(subs[0].fan_out_prompts).toBeUndefined();
+	});
+
+	it('handles mixed edge and agent prompts', () => {
+		const pipeline = makePipeline({
+			nodes: [
+				{
+					id: 'trigger-1',
+					type: 'trigger',
+					position: { x: 0, y: 0 },
+					data: { eventType: 'file.changed', label: 'Files', config: { watch: 'src/**' } },
+				},
+				{
+					id: 'agent-1',
+					type: 'agent',
+					position: { x: 300, y: 0 },
+					data: {
+						sessionId: 's1',
+						sessionName: 'worker-1',
+						toolType: 'claude-code',
+						inputPrompt: 'default prompt 1',
+					},
+				},
+				{
+					id: 'agent-2',
+					type: 'agent',
+					position: { x: 300, y: 100 },
+					data: {
+						sessionId: 's2',
+						sessionName: 'worker-2',
+						toolType: 'claude-code',
+						inputPrompt: 'default prompt 2',
+					},
+				},
+			],
+			edges: [
+				{ id: 'e1', source: 'trigger-1', target: 'agent-1', mode: 'pass', prompt: 'edge prompt 1' },
+				{ id: 'e2', source: 'trigger-1', target: 'agent-2', mode: 'pass' },
+			],
+		});
+
+		const subs = pipelineToYamlSubscriptions(pipeline);
+		expect(subs).toHaveLength(1);
+		expect(subs[0].fan_out_prompts).toEqual(['edge prompt 1', 'default prompt 2']);
+	});
+
+	it('single-target pipeline has no fan_out or fan_out_prompts', () => {
+		const pipeline = makePipeline({
+			nodes: [
+				{
+					id: 'trigger-1',
+					type: 'trigger',
+					position: { x: 0, y: 0 },
+					data: { eventType: 'file.changed', label: 'Files', config: { watch: 'src/**' } },
+				},
+				{
+					id: 'agent-1',
+					type: 'agent',
+					position: { x: 300, y: 0 },
+					data: {
+						sessionId: 's1',
+						sessionName: 'worker-1',
+						toolType: 'claude-code',
+						inputPrompt: 'do work',
+					},
+				},
+			],
+			edges: [{ id: 'e1', source: 'trigger-1', target: 'agent-1', mode: 'pass' }],
+		});
+
+		const subs = pipelineToYamlSubscriptions(pipeline);
+		expect(subs).toHaveLength(1);
+		expect(subs[0].fan_out).toBeUndefined();
+		expect(subs[0].fan_out_prompts).toBeUndefined();
+		expect(subs[0].prompt).toBe('do work');
+	});
+
+	it('handles duplicate agent names in fan-out', () => {
+		const pipeline = makePipeline({
+			nodes: [
+				{
+					id: 'trigger-1',
+					type: 'trigger',
+					position: { x: 0, y: 0 },
+					data: { eventType: 'file.changed', label: 'Files', config: { watch: 'src/**' } },
+				},
+				{
+					id: 'agent-1',
+					type: 'agent',
+					position: { x: 300, y: 0 },
+					data: {
+						sessionId: 's1',
+						sessionName: 'worker',
+						toolType: 'claude-code',
+						inputPrompt: 'task a',
+					},
+				},
+				{
+					id: 'agent-2',
+					type: 'agent',
+					position: { x: 300, y: 100 },
+					data: {
+						sessionId: 's2',
+						sessionName: 'worker',
+						toolType: 'claude-code',
+						inputPrompt: 'task b',
+					},
+				},
+			],
+			edges: [
+				{ id: 'e1', source: 'trigger-1', target: 'agent-1', mode: 'pass' },
+				{ id: 'e2', source: 'trigger-1', target: 'agent-2', mode: 'pass' },
+			],
+		});
+
+		const subs = pipelineToYamlSubscriptions(pipeline);
+		expect(subs).toHaveLength(1);
+		expect(subs[0].fan_out).toEqual(['worker', 'worker']);
+	});
+});
+
+describe('fan-out to fan-in pipeline', () => {
+	function makeFanOutFanInPipeline(agentDOverrides: Record<string, unknown> = {}) {
+		return makePipeline({
+			nodes: [
+				{
+					id: 'trigger-1',
+					type: 'trigger',
+					position: { x: 0, y: 0 },
+					data: {
+						eventType: 'time.scheduled',
+						label: 'Morning',
+						config: { schedule_times: ['09:00'] },
+					},
+				},
+				{
+					id: 'agent-a',
+					type: 'agent',
+					position: { x: 300, y: 0 },
+					data: {
+						sessionId: 'sa',
+						sessionName: 'researcher-1',
+						toolType: 'claude-code',
+						inputPrompt: 'Research topic A',
+					},
+				},
+				{
+					id: 'agent-b',
+					type: 'agent',
+					position: { x: 300, y: 100 },
+					data: {
+						sessionId: 'sb',
+						sessionName: 'researcher-2',
+						toolType: 'claude-code',
+						inputPrompt: 'Research topic B',
+					},
+				},
+				{
+					id: 'agent-c',
+					type: 'agent',
+					position: { x: 300, y: 200 },
+					data: {
+						sessionId: 'sc',
+						sessionName: 'researcher-3',
+						toolType: 'claude-code',
+						inputPrompt: 'Research topic C',
+					},
+				},
+				{
+					id: 'agent-d',
+					type: 'agent',
+					position: { x: 600, y: 100 },
+					data: {
+						sessionId: 'sd',
+						sessionName: 'synthesizer',
+						toolType: 'claude-code',
+						inputPrompt: 'Summarize all findings',
+						...agentDOverrides,
+					},
+				},
+			],
+			edges: [
+				{ id: 'e1', source: 'trigger-1', target: 'agent-a', mode: 'pass' },
+				{ id: 'e2', source: 'trigger-1', target: 'agent-b', mode: 'pass' },
+				{ id: 'e3', source: 'trigger-1', target: 'agent-c', mode: 'pass' },
+				{ id: 'e4', source: 'agent-a', target: 'agent-d', mode: 'pass' },
+				{ id: 'e5', source: 'agent-b', target: 'agent-d', mode: 'pass' },
+				{ id: 'e6', source: 'agent-c', target: 'agent-d', mode: 'pass' },
+			],
+		});
+	}
+
+	it('produces source_session array for fan-in', () => {
+		const pipeline = makeFanOutFanInPipeline();
+		const subs = pipelineToYamlSubscriptions(pipeline);
+
+		const fanInSub = subs.find((s) => s.source_session && Array.isArray(s.source_session));
+		expect(fanInSub).toBeDefined();
+		expect(fanInSub!.source_session).toEqual(['researcher-1', 'researcher-2', 'researcher-3']);
+	});
+
+	it('includes fan-in timeout fields when set', () => {
+		const pipeline = makeFanOutFanInPipeline({
+			fanInTimeoutMinutes: 5,
+			fanInTimeoutOnFail: 'continue',
+		});
+		const subs = pipelineToYamlSubscriptions(pipeline);
+
+		const fanInSub = subs.find((s) => s.source_session && Array.isArray(s.source_session));
+		expect(fanInSub).toBeDefined();
+		expect(fanInSub!.fan_in_timeout_minutes).toBe(5);
+		expect(fanInSub!.fan_in_timeout_on_fail).toBe('continue');
+	});
+
+	it('omits fan-in timeout fields when not set', () => {
+		const pipeline = makeFanOutFanInPipeline();
+		const subs = pipelineToYamlSubscriptions(pipeline);
+
+		const fanInSub = subs.find((s) => s.source_session && Array.isArray(s.source_session));
+		expect(fanInSub).toBeDefined();
+		expect(fanInSub!).not.toHaveProperty('fan_in_timeout_minutes');
+		expect(fanInSub!).not.toHaveProperty('fan_in_timeout_on_fail');
+	});
+});

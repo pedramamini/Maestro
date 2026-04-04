@@ -134,7 +134,11 @@ beforeEach(() => {
 	if (!(window as any).maestro) {
 		(window as any).maestro = {};
 	}
-	(window as any).maestro.sessions = { getAll: mockGetAll };
+	(window as any).maestro.sessions = {
+		getAll: mockGetAll,
+		getActiveSessionId: vi.fn().mockResolvedValue(''),
+		setActiveSessionId: vi.fn(),
+	};
 	(window as any).maestro.groups = { getAll: mockGroupsGetAll };
 	(window as any).maestro.groupChat = { list: mockGroupChatList };
 	(window as any).maestro.agents = {
@@ -978,6 +982,25 @@ describe('Session & Group loading effect', () => {
 		});
 
 		expect(useSessionStore.getState().activeSessionId).toBe('real-1');
+	});
+
+	it('restores persisted activeSessionId from disk', async () => {
+		useSessionStore.setState({ activeSessionId: '' } as any);
+		const session1 = createMockSession({ id: 'sess-1' });
+		const session2 = createMockSession({ id: 'sess-2' });
+		mockGetAll.mockResolvedValueOnce([session1, session2]);
+		// Mock the persisted active session ID to be the second session
+		(window as any).maestro.sessions.getActiveSessionId = vi.fn().mockResolvedValue('sess-2');
+
+		renderHook(() => useSessionRestoration());
+
+		await act(async () => {
+			await new Promise((r) => setTimeout(r, 50));
+		});
+
+		expect(useSessionStore.getState().activeSessionId).toBe('sess-2');
+		// Reset mock
+		(window as any).maestro.sessions.getActiveSessionId = vi.fn().mockResolvedValue('');
 	});
 
 	it('keeps activeSessionId when it matches a loaded session', async () => {

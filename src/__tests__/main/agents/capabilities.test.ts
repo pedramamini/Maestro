@@ -93,7 +93,7 @@ describe('agent-capabilities', () => {
 		it('should have capabilities for codex', () => {
 			const capabilities = AGENT_CAPABILITIES['codex'];
 			expect(capabilities).toBeDefined();
-			// Verified capabilities based on CLI testing (v0.73.0+)
+			// Verified capabilities based on CLI testing (v0.111.0+)
 			expect(capabilities.supportsResume).toBe(true);
 			expect(capabilities.supportsReadOnlyMode).toBe(true);
 			expect(capabilities.supportsJsonOutput).toBe(true);

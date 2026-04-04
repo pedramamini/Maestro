@@ -8,6 +8,8 @@ import {
 	getAgentDisplayName,
 	BETA_AGENTS,
 	isBetaAgent,
+	getReadOnlyModeLabel,
+	getReadOnlyModeTooltip,
 } from '../../shared/agentMetadata';
 import { AGENT_IDS } from '../../shared/agentIds';
 import type { AgentId } from '../../shared/agentIds';
@@ -115,6 +117,34 @@ describe('agentMetadata', () => {
 			for (const id of AGENT_IDS) {
 				expect(isBetaAgent(id)).toBe(BETA_AGENTS.has(id));
 			}
+		});
+	});
+
+	describe('getReadOnlyModeLabel', () => {
+		it('should return "Plan-Mode" for agents that use plan mode', () => {
+			expect(getReadOnlyModeLabel('claude-code')).toBe('Plan-Mode');
+			expect(getReadOnlyModeLabel('opencode')).toBe('Plan-Mode');
+		});
+
+		it('should return "Read-Only" for agents with true read-only enforcement', () => {
+			expect(getReadOnlyModeLabel('codex')).toBe('Read-Only');
+			expect(getReadOnlyModeLabel('factory-droid')).toBe('Read-Only');
+		});
+
+		it('should return "Read-Only" for unknown agents', () => {
+			expect(getReadOnlyModeLabel('unknown-agent')).toBe('Read-Only');
+		});
+	});
+
+	describe('getReadOnlyModeTooltip', () => {
+		it('should return plan mode tooltip for plan mode agents', () => {
+			expect(getReadOnlyModeTooltip('claude-code')).toContain('plan mode');
+			expect(getReadOnlyModeTooltip('opencode')).toContain('plan mode');
+		});
+
+		it('should return read-only tooltip for other agents', () => {
+			expect(getReadOnlyModeTooltip('codex')).toContain('Read-Only');
+			expect(getReadOnlyModeTooltip('factory-droid')).toContain('Read-Only');
 		});
 	});
 });

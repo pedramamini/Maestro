@@ -984,6 +984,18 @@ export function registerAgentsHandlers(deps: AgentsHandlerDependencies): void {
 		)
 	);
 
+	// Discover available values for a dynamic select config option
+	ipcMain.handle(
+		'agents:getConfigOptions',
+		withIpcErrorLogging(
+			handlerOpts('getConfigOptions'),
+			async (agentId: string, optionKey: string, forceRefresh?: boolean) => {
+				const agentDetector = requireDependency(getAgentDetector, 'Agent detector');
+				return agentDetector.discoverConfigOptions(agentId, optionKey, forceRefresh ?? false);
+			}
+		)
+	);
+
 	// Discover available slash commands for an agent by spawning it briefly
 	// This allows the UI to show available commands before the user sends their first message
 	ipcMain.handle(

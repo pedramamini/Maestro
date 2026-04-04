@@ -28,6 +28,8 @@ interface NodeConfigPanelProps {
 	hasOutgoingEdge?: boolean;
 	/** Whether the selected agent has incoming edges from other agents (not triggers) */
 	hasIncomingAgentEdges?: boolean;
+	/** Count of incoming agent edges (for fan-in configuration) */
+	incomingAgentEdgeCount?: number;
 	/** Incoming trigger edges for the selected agent node (for per-edge prompts) */
 	incomingTriggerEdges?: IncomingTriggerEdgeInfo[];
 	onUpdateNode: (nodeId: string, data: Partial<TriggerNodeData | AgentNodeData>) => void;
@@ -52,6 +54,7 @@ export function NodeConfigPanel({
 	pipelines,
 	hasOutgoingEdge,
 	hasIncomingAgentEdges,
+	incomingAgentEdgeCount,
 	incomingTriggerEdges,
 	onUpdateNode,
 	onUpdateEdgePrompt,
@@ -76,7 +79,9 @@ export function NodeConfigPanel({
 	const Icon = triggerData ? (EVENT_ICONS[triggerData.eventType] ?? Zap) : null;
 	const ExpandIcon = expanded ? ChevronsDown : ChevronsUp;
 
-	const collapsedHeight = isTrigger ? 'auto' : 240;
+	const hasFanIn = (incomingAgentEdgeCount ?? 0) > 1;
+	const hasUpstreamAgents = hasIncomingAgentEdges === true;
+	const collapsedHeight = isTrigger ? 'auto' : hasFanIn ? 420 : hasUpstreamAgents ? 360 : 320;
 
 	return (
 		<div
@@ -244,6 +249,7 @@ export function NodeConfigPanel({
 						pipelines={pipelines}
 						hasOutgoingEdge={hasOutgoingEdge}
 						hasIncomingAgentEdges={hasIncomingAgentEdges}
+						incomingAgentEdgeCount={incomingAgentEdgeCount}
 						incomingTriggerEdges={incomingTriggerEdges}
 						onUpdateNode={onUpdateNode}
 						onUpdateEdgePrompt={onUpdateEdgePrompt}

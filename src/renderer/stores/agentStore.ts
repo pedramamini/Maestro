@@ -321,6 +321,7 @@ export const useAgentStore = create<AgentStore>()((set, get) => ({
 						groupId: session.groupId,
 						activeTabId: targetTab.id,
 						conductorProfile: deps.conductorProfile,
+						readOnlyMode: isReadOnly,
 					});
 				}
 
@@ -358,6 +359,7 @@ export const useAgentStore = create<AgentStore>()((set, get) => ({
 					sessionCustomArgs: session.customArgs,
 					sessionCustomEnvVars: session.customEnvVars,
 					sessionCustomModel: session.customModel,
+					sessionCustomEffort: session.customEffort,
 					sessionCustomContextWindow: session.customContextWindow,
 					sessionSshRemoteConfig: session.sessionSshRemoteConfig,
 					sendPromptViaStdin,
@@ -415,6 +417,7 @@ export const useAgentStore = create<AgentStore>()((set, get) => ({
 							groupId: session.groupId,
 							activeTabId: targetTab.id,
 							conductorProfile: deps.conductorProfile,
+							readOnlyMode: isReadOnly,
 						});
 					}
 
@@ -461,6 +464,7 @@ export const useAgentStore = create<AgentStore>()((set, get) => ({
 						sessionCustomArgs: session.customArgs,
 						sessionCustomEnvVars: session.customEnvVars,
 						sessionCustomModel: session.customModel,
+						sessionCustomEffort: session.customEffort,
 						sessionCustomContextWindow: session.customContextWindow,
 						sessionSshRemoteConfig: session.sessionSshRemoteConfig,
 						sendPromptViaStdin: cmdSendViaStdin,

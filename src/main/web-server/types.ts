@@ -329,3 +329,307 @@ export type GetHistoryCallback = (
  * Callback to get all connected web clients.
  */
 export type GetWebClientsCallback = () => Map<string, WebClient>;
+
+// =============================================================================
+// Web UX Parity Types
+// =============================================================================
+
+/**
+ * Union type for setting values exposed to web.
+ */
+export type SettingValue = string | number | boolean | null;
+
+/**
+ * Curated subset of settings exposed to the web interface.
+ */
+export interface WebSettings {
+	theme: string;
+	fontSize: number;
+	enterToSendAI: boolean;
+	enterToSendTerminal: boolean;
+	defaultSaveToHistory: boolean;
+	defaultShowThinking: string;
+	autoScroll: boolean;
+	notificationsEnabled: boolean;
+	audioFeedbackEnabled: boolean;
+	colorBlindMode: string;
+	conductorProfile: string;
+}
+
+/**
+ * Group info for web.
+ */
+export interface GroupData {
+	id: string;
+	name: string;
+	emoji: string | null;
+	sessionIds: string[];
+}
+
+/**
+ * Auto Run document metadata.
+ */
+export interface AutoRunDocument {
+	filename: string;
+	path: string;
+	taskCount: number;
+	completedCount: number;
+}
+
+/**
+ * File tree entry.
+ */
+export interface FileTreeNode {
+	name: string;
+	path: string;
+	isDirectory: boolean;
+	children?: FileTreeNode[];
+	size?: number;
+}
+
+/**
+ * File content response.
+ */
+export interface FileContentResult {
+	content: string;
+	language: string;
+	size: number;
+	truncated: boolean;
+}
+
+/**
+ * Git status entry.
+ */
+export interface GitStatusFile {
+	path: string;
+	status: string;
+	staged: boolean;
+}
+
+/**
+ * Git status response.
+ */
+export interface GitStatusResult {
+	branch: string;
+	files: GitStatusFile[];
+	ahead: number;
+	behind: number;
+}
+
+/**
+ * Git diff response.
+ */
+export interface GitDiffResult {
+	diff: string;
+	files: string[];
+}
+
+/**
+ * Notification preferences configuration.
+ */
+export interface NotificationPreferences {
+	agentComplete: boolean;
+	agentError: boolean;
+	autoRunComplete: boolean;
+	autoRunTaskComplete: boolean;
+	contextWarning: boolean;
+	soundEnabled: boolean;
+}
+
+/**
+ * Notification broadcast payload.
+ */
+export interface NotificationEvent {
+	eventType:
+		| 'agent_complete'
+		| 'agent_error'
+		| 'autorun_complete'
+		| 'autorun_task_complete'
+		| 'context_warning';
+	sessionId: string;
+	sessionName: string;
+	message: string;
+	severity: 'info' | 'warning' | 'error';
+}
+
+// =============================================================================
+// Web UX Parity Callback Types
+// =============================================================================
+
+export type GetSettingsCallback = () => WebSettings;
+export type SetSettingCallback = (key: string, value: SettingValue) => Promise<boolean>;
+export type GetGroupsCallback = () => GroupData[];
+export type CreateGroupCallback = (name: string, emoji?: string) => Promise<{ id: string } | null>;
+export type RenameGroupCallback = (groupId: string, name: string) => Promise<boolean>;
+export type DeleteGroupCallback = (groupId: string) => Promise<boolean>;
+export type MoveSessionToGroupCallback = (
+	sessionId: string,
+	groupId: string | null
+) => Promise<boolean>;
+export type CreateSessionCallback = (
+	name: string,
+	toolType: string,
+	cwd: string,
+	groupId?: string
+) => Promise<{ sessionId: string } | null>;
+export type DeleteSessionCallback = (sessionId: string) => Promise<boolean>;
+export type RenameSessionCallback = (sessionId: string, newName: string) => Promise<boolean>;
+export type GetAutoRunDocsCallback = (sessionId: string) => Promise<AutoRunDocument[]>;
+export type GetAutoRunDocContentCallback = (sessionId: string, filename: string) => Promise<string>;
+export type SaveAutoRunDocCallback = (
+	sessionId: string,
+	filename: string,
+	content: string
+) => Promise<boolean>;
+export type StopAutoRunCallback = (sessionId: string) => Promise<boolean>;
+export type GetFileTreeCallback = (sessionId: string, subPath?: string) => Promise<FileTreeNode[]>;
+export type GetFileContentCallback = (
+	sessionId: string,
+	filePath: string
+) => Promise<FileContentResult>;
+export type GetGitStatusCallback = (sessionId: string) => Promise<GitStatusResult>;
+export type GetGitDiffCallback = (sessionId: string, filePath?: string) => Promise<GitDiffResult>;
+
+// =============================================================================
+// Group Chat Types
+// =============================================================================
+
+/**
+ * Group chat message for web interface.
+ */
+export interface GroupChatMessage {
+	id: string;
+	participantId: string;
+	participantName: string;
+	content: string;
+	timestamp: number;
+	role: 'user' | 'assistant';
+}
+
+/**
+ * Group chat state for web interface.
+ */
+export interface GroupChatState {
+	id: string;
+	topic: string;
+	participants: Array<{ sessionId: string; name: string; toolType: string }>;
+	messages: GroupChatMessage[];
+	isActive: boolean;
+	currentTurn?: string;
+}
+
+// =============================================================================
+// Group Chat Callback Types
+// =============================================================================
+
+export type StartGroupChatCallback = (
+	topic: string,
+	participantIds: string[]
+) => Promise<{ chatId: string } | null>;
+export type GetGroupChatStateCallback = (chatId: string) => Promise<GroupChatState | null>;
+export type StopGroupChatCallback = (chatId: string) => Promise<boolean>;
+export type SendGroupChatMessageCallback = (chatId: string, message: string) => Promise<boolean>;
+export type GetGroupChatsCallback = () => Promise<GroupChatState[]>;
+
+// =============================================================================
+// Context Management Callback Types
+// =============================================================================
+
+export type MergeContextCallback = (
+	sourceSessionId: string,
+	targetSessionId: string
+) => Promise<boolean>;
+export type TransferContextCallback = (
+	sourceSessionId: string,
+	targetSessionId: string
+) => Promise<boolean>;
+export type SummarizeContextCallback = (sessionId: string) => Promise<boolean>;
+
+// =============================================================================
+// Cue Automation Types
+// =============================================================================
+
+/** Web-specific Cue subscription metadata (simplified from engine types) */
+export interface CueSubscriptionInfo {
+	id: string;
+	name: string;
+	eventType: string;
+	pattern?: string;
+	schedule?: string;
+	sessionId: string;
+	sessionName: string;
+	enabled: boolean;
+	lastTriggered?: number;
+	triggerCount: number;
+}
+
+/** Web-specific Cue activity log entry (simplified from engine types) */
+export interface CueActivityEntry {
+	id: string;
+	subscriptionId: string;
+	subscriptionName: string;
+	eventType: string;
+	sessionId: string;
+	timestamp: number;
+	status: 'triggered' | 'running' | 'completed' | 'failed';
+	result?: string;
+	duration?: number;
+}
+
+// =============================================================================
+// Cue Automation Callback Types
+// =============================================================================
+
+export type GetCueSubscriptionsCallback = (sessionId?: string) => Promise<CueSubscriptionInfo[]>;
+export type ToggleCueSubscriptionCallback = (
+	subscriptionId: string,
+	enabled: boolean
+) => Promise<boolean>;
+export type GetCueActivityCallback = (
+	sessionId?: string,
+	limit?: number
+) => Promise<CueActivityEntry[]>;
+
+// =============================================================================
+// Usage Dashboard Types
+// =============================================================================
+
+/** Usage dashboard aggregate data for web interface */
+export interface UsageDashboardData {
+	totalTokensIn: number;
+	totalTokensOut: number;
+	totalCost: number;
+	sessionBreakdown: Array<{
+		sessionId: string;
+		sessionName: string;
+		tokensIn: number;
+		tokensOut: number;
+		cost: number;
+	}>;
+	dailyUsage: Array<{
+		date: string;
+		tokensIn: number;
+		tokensOut: number;
+		cost: number;
+	}>;
+}
+
+/** Achievement data for web interface */
+export interface AchievementData {
+	id: string;
+	name: string;
+	description: string;
+	unlocked: boolean;
+	unlockedAt?: number;
+	progress?: number;
+	maxProgress?: number;
+}
+
+// =============================================================================
+// Usage Dashboard Callback Types
+// =============================================================================
+
+export type GetUsageDashboardCallback = (
+	timeRange: 'day' | 'week' | 'month' | 'all'
+) => Promise<UsageDashboardData>;
+export type GetAchievementsCallback = () => Promise<AchievementData[]>;

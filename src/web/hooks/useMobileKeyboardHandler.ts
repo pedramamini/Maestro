@@ -2,6 +2,8 @@
  * useMobileKeyboardHandler - Mobile keyboard shortcuts handler hook
  *
  * Handles keyboard shortcuts for the mobile web interface:
+ * - Cmd+K / Ctrl+K: Toggle command palette
+ * - Escape: Close command palette
  * - Cmd+J / Ctrl+J: Toggle between AI and Terminal mode
  * - Cmd+[ / Ctrl+[: Switch to previous tab
  * - Cmd+] / Ctrl+]: Switch to next tab
@@ -53,6 +55,12 @@ export interface UseMobileKeyboardHandlerDeps {
 	handleModeToggle: (mode: MobileInputMode) => void;
 	/** Handler to select a tab */
 	handleSelectTab: (tabId: string) => void;
+	/** Handler to open the command palette (Cmd+K / Ctrl+K) */
+	onOpenCommandPalette?: () => void;
+	/** Handler to close the command palette (Escape) */
+	onCloseCommandPalette?: () => void;
+	/** Whether the command palette is currently open */
+	isCommandPaletteOpen?: boolean;
 }
 
 /**
@@ -64,10 +72,37 @@ export interface UseMobileKeyboardHandlerDeps {
  * @param deps - Dependencies including session state and handlers
  */
 export function useMobileKeyboardHandler(deps: UseMobileKeyboardHandlerDeps): void {
-	const { activeSessionId, activeSession, handleModeToggle, handleSelectTab } = deps;
+	const {
+		activeSessionId,
+		activeSession,
+		handleModeToggle,
+		handleSelectTab,
+		onOpenCommandPalette,
+		onCloseCommandPalette,
+		isCommandPaletteOpen,
+	} = deps;
 
 	useEffect(() => {
 		const handleKeyDown = (e: KeyboardEvent) => {
+			// Cmd+K / Ctrl+K: Open command palette
+			if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+				if (isCommandPaletteOpen && onCloseCommandPalette) {
+					e.preventDefault();
+					onCloseCommandPalette();
+				} else if (onOpenCommandPalette) {
+					e.preventDefault();
+					onOpenCommandPalette();
+				}
+				return;
+			}
+
+			// Escape: Close command palette if open
+			if (e.key === 'Escape' && isCommandPaletteOpen && onCloseCommandPalette) {
+				e.preventDefault();
+				onCloseCommandPalette();
+				return;
+			}
+
 			// Check for Cmd+J (Mac) or Ctrl+J (Windows/Linux) to toggle AI/CLI mode
 			if ((e.metaKey || e.ctrlKey) && e.key === 'j') {
 				e.preventDefault();
@@ -118,7 +153,15 @@ export function useMobileKeyboardHandler(deps: UseMobileKeyboardHandlerDeps): vo
 
 		document.addEventListener('keydown', handleKeyDown);
 		return () => document.removeEventListener('keydown', handleKeyDown);
-	}, [activeSessionId, activeSession, handleModeToggle, handleSelectTab]);
+	}, [
+		activeSessionId,
+		activeSession,
+		handleModeToggle,
+		handleSelectTab,
+		onOpenCommandPalette,
+		onCloseCommandPalette,
+		isCommandPaletteOpen,
+	]);
 }
 
 export default useMobileKeyboardHandler;

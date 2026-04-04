@@ -35,12 +35,14 @@ interface ProcessConfig {
 	sessionCustomArgs?: string;
 	sessionCustomEnvVars?: Record<string, string>;
 	sessionCustomModel?: string;
+	sessionCustomEffort?: string;
 	sessionCustomContextWindow?: number;
 	// Per-session SSH remote config (takes precedence over agent-level SSH config)
 	sessionSshRemoteConfig?: {
 		enabled: boolean;
 		remoteId: string | null;
 		workingDirOverride?: string;
+		syncHistory?: boolean;
 	};
 	// System prompt delivery (separate from user message for token efficiency)
 	appendSystemPrompt?: string; // System prompt to pass via --append-system-prompt or embed in prompt
@@ -184,6 +186,7 @@ type GroupChatData = {
 		customArgs?: string;
 		customEnvVars?: Record<string, string>;
 		customModel?: string;
+		customEffort?: string;
 		sshRemoteConfig?: {
 			enabled: boolean;
 			remoteId: string | null;
@@ -249,10 +252,13 @@ interface MaestroAPI {
 		get: (key: string) => Promise<unknown>;
 		set: (key: string, value: unknown) => Promise<boolean>;
 		getAll: () => Promise<Record<string, unknown>>;
+		onExternalChange: (handler: () => void) => () => void;
 	};
 	sessions: {
 		getAll: () => Promise<any[]>;
 		setAll: (sessions: any[]) => Promise<boolean>;
+		getActiveSessionId: () => Promise<string>;
+		setActiveSessionId: (id: string) => Promise<void>;
 	};
 	groups: {
 		getAll: () => Promise<any[]>;
@@ -272,6 +278,7 @@ interface MaestroAPI {
 				enabled: boolean;
 				remoteId: string | null;
 				workingDirOverride?: string;
+				syncHistory?: boolean;
 			};
 		}) => Promise<{ pid: number; success: boolean }>;
 		write: (sessionId: string, data: string) => Promise<boolean>;
@@ -287,6 +294,7 @@ interface MaestroAPI {
 				enabled: boolean;
 				remoteId: string | null;
 				workingDirOverride?: string;
+				syncHistory?: boolean;
 			};
 		}) => Promise<{ exitCode: number }>;
 		getActiveProcesses: () => Promise<
@@ -367,6 +375,67 @@ interface MaestroAPI {
 			responseChannel: string,
 			result: { success: boolean; playbookId?: string; error?: string }
 		) => void;
+		onRemoteGetAutoRunDocs: (
+			callback: (sessionId: string, responseChannel: string) => void
+		) => () => void;
+		sendRemoteGetAutoRunDocsResponse: (responseChannel: string, documents: any[]) => void;
+		onRemoteGetAutoRunDocContent: (
+			callback: (sessionId: string, filename: string, responseChannel: string) => void
+		) => () => void;
+		sendRemoteGetAutoRunDocContentResponse: (responseChannel: string, content: string) => void;
+		onRemoteSaveAutoRunDoc: (
+			callback: (
+				sessionId: string,
+				filename: string,
+				content: string,
+				responseChannel: string
+			) => void
+		) => () => void;
+		sendRemoteSaveAutoRunDocResponse: (responseChannel: string, success: boolean) => void;
+		onRemoteStopAutoRun: (callback: (sessionId: string) => void) => () => void;
+		onRemoteSetSetting: (
+			callback: (key: string, value: unknown, responseChannel: string) => void
+		) => () => void;
+		sendRemoteSetSettingResponse: (responseChannel: string, success: boolean) => void;
+		onRemoteCreateSession: (
+			callback: (
+				name: string,
+				toolType: string,
+				cwd: string,
+				groupId: string | undefined,
+				responseChannel: string
+			) => void
+		) => () => void;
+		sendRemoteCreateSessionResponse: (
+			responseChannel: string,
+			result: { sessionId: string } | null
+		) => void;
+		onRemoteDeleteSession: (callback: (sessionId: string) => void) => () => void;
+		onRemoteRenameSession: (
+			callback: (sessionId: string, newName: string, responseChannel: string) => void
+		) => () => void;
+		sendRemoteRenameSessionResponse: (responseChannel: string, success: boolean) => void;
+		onRemoteCreateGroup: (
+			callback: (name: string, emoji: string | undefined, responseChannel: string) => void
+		) => () => void;
+		sendRemoteCreateGroupResponse: (responseChannel: string, result: { id: string } | null) => void;
+		onRemoteRenameGroup: (
+			callback: (groupId: string, name: string, responseChannel: string) => void
+		) => () => void;
+		sendRemoteRenameGroupResponse: (responseChannel: string, success: boolean) => void;
+		onRemoteDeleteGroup: (callback: (groupId: string) => void) => () => void;
+		onRemoteMoveSessionToGroup: (
+			callback: (sessionId: string, groupId: string | null, responseChannel: string) => void
+		) => () => void;
+		sendRemoteMoveSessionToGroupResponse: (responseChannel: string, success: boolean) => void;
+		onRemoteGetGitStatus: (
+			callback: (sessionId: string, responseChannel: string) => void
+		) => () => void;
+		sendRemoteGetGitStatusResponse: (responseChannel: string, result: any) => void;
+		onRemoteGetGitDiff: (
+			callback: (sessionId: string, filePath: string | undefined, responseChannel: string) => void
+		) => () => void;
+		sendRemoteGetGitDiffResponse: (responseChannel: string, result: any) => void;
 		onStderr: (callback: (sessionId: string, data: string) => void) => () => void;
 		onCommandExit: (callback: (sessionId: string, code: number) => void) => () => void;
 		onUsage: (callback: (sessionId: string, usageStats: UsageStats) => void) => () => void;
@@ -818,6 +887,11 @@ interface MaestroAPI {
 		getCustomEnvVars: (agentId: string) => Promise<Record<string, string> | null>;
 		getAllCustomEnvVars: () => Promise<Record<string, Record<string, string>>>;
 		getModels: (agentId: string, forceRefresh?: boolean, sshRemoteId?: string) => Promise<string[]>;
+		getConfigOptions: (
+			agentId: string,
+			optionKey: string,
+			forceRefresh?: boolean
+		) => Promise<string[]>;
 		discoverSlashCommands: (
 			agentId: string,
 			cwd: string,
@@ -1360,7 +1434,8 @@ interface MaestroAPI {
 	history: {
 		getAll: (
 			projectPath?: string,
-			sessionId?: string
+			sessionId?: string,
+			sharedContext?: { sshRemoteId: string; remoteCwd: string }
 		) => Promise<
 			Array<{
 				id: string;
@@ -1377,6 +1452,7 @@ interface MaestroAPI {
 				success?: boolean;
 				elapsedTimeMs?: number;
 				validated?: boolean;
+				hostname?: string;
 			}>
 		>;
 		getAllPaginated: (options?: {
@@ -1399,28 +1475,33 @@ interface MaestroAPI {
 				success?: boolean;
 				elapsedTimeMs?: number;
 				validated?: boolean;
+				hostname?: string;
 			}>;
 			total: number;
 			limit: number;
 			offset: number;
 			hasMore: boolean;
 		}>;
-		add: (entry: {
-			id: string;
-			type: HistoryEntryType;
-			timestamp: number;
-			summary: string;
-			fullResponse?: string;
-			agentSessionId?: string;
-			projectPath: string;
-			sessionId?: string;
-			sessionName?: string;
-			contextUsage?: number;
-			usageStats?: UsageStats;
-			success?: boolean;
-			elapsedTimeMs?: number;
-			validated?: boolean;
-		}) => Promise<boolean>;
+		add: (
+			entry: {
+				id: string;
+				type: HistoryEntryType;
+				timestamp: number;
+				summary: string;
+				fullResponse?: string;
+				agentSessionId?: string;
+				projectPath: string;
+				sessionId?: string;
+				sessionName?: string;
+				contextUsage?: number;
+				usageStats?: UsageStats;
+				success?: boolean;
+				elapsedTimeMs?: number;
+				validated?: boolean;
+				hostname?: string;
+			},
+			sharedContext?: { sshRemoteId: string; remoteCwd: string }
+		) => Promise<boolean>;
 		clear: (projectPath?: string, sessionId?: string) => Promise<boolean>;
 		delete: (entryId: string, sessionId?: string) => Promise<boolean>;
 		update: (
@@ -1861,6 +1942,12 @@ interface MaestroAPI {
 			readOnly?: boolean
 		) => Promise<void>;
 		stopModerator: (id: string) => Promise<void>;
+		stopAll: (id: string) => Promise<void>;
+		reportAutoRunComplete: (
+			groupChatId: string,
+			participantName: string,
+			summary: string
+		) => Promise<void>;
 		getModeratorSessionId: (id: string) => Promise<string | null>;
 		// Participants
 		addParticipant: (
@@ -1988,8 +2075,17 @@ interface MaestroAPI {
 		onParticipantState: (
 			callback: (groupChatId: string, participantName: string, state: 'idle' | 'working') => void
 		) => () => void;
+		onParticipantLiveOutput: (
+			callback: (groupChatId: string, participantName: string, chunk: string) => void
+		) => () => void;
 		onModeratorSessionIdChanged: (
 			callback: (groupChatId: string, sessionId: string) => void
+		) => () => void;
+		onAutoRunTriggered: (
+			callback: (groupChatId: string, participantName: string, filename?: string) => void
+		) => () => void;
+		onAutoRunBatchComplete: (
+			callback: (groupChatId: string, participantName: string) => void
 		) => () => void;
 	};
 	// Leaderboard API
@@ -2813,6 +2909,7 @@ interface MaestroAPI {
 				enabled: boolean;
 				remoteId: string | null;
 				workingDirOverride?: string;
+				syncHistory?: boolean;
 			};
 		}) => Promise<string | null>;
 	};

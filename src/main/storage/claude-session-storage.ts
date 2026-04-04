@@ -220,6 +220,10 @@ async function parseSessionFile(
 		const content = await fs.readFile(filePath, 'utf-8');
 		return parseSessionContent(content, sessionId, projectPath, stats);
 	} catch (error) {
+		if (error instanceof RangeError) {
+			logger.warn('Session file too large to parse', LOG_CONTEXT, { filePath });
+			return null;
+		}
 		logger.error(`Error reading session file: ${filePath}`, LOG_CONTEXT, error);
 		captureException(error, { operation: 'claudeStorage:readSessionFile', filePath });
 		return null;

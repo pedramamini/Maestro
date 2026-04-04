@@ -72,6 +72,10 @@ export interface AgentNodeData {
 	outputPrompt?: string;
 	/** Whether to auto-include {{CUE_SOURCE_OUTPUT}} in generated chain prompts. Default: true. */
 	includeUpstreamOutput?: boolean;
+	/** Per-node fan-in timeout override (minutes). Used when this agent has multiple incoming agent edges. */
+	fanInTimeoutMinutes?: number;
+	/** Per-node fan-in timeout-on-fail override. 'break' waits for all, 'continue' fires with partial data. */
+	fanInTimeoutOnFail?: 'break' | 'continue';
 }
 
 export type PipelineNodeType = 'trigger' | 'agent';
@@ -137,12 +141,15 @@ export interface CueGraphSession {
 		watch?: string;
 		source_session?: string | string[];
 		fan_out?: string[];
+		fan_out_prompts?: string[];
 		filter?: Record<string, string | number | boolean>;
 		repo?: string;
 		poll_minutes?: number;
 		gh_state?: string;
 		agent_id?: string;
 		label?: string;
+		fan_in_timeout_minutes?: number;
+		fan_in_timeout_on_fail?: 'break' | 'continue';
 	}>;
 }
 

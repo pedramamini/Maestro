@@ -44,10 +44,13 @@ import type {
 	AITabData,
 	CustomAICommand,
 	AutoRunState,
+	AutoRunDocument,
 	CliActivity,
+	NotificationEvent,
 	SessionBroadcastData,
 	WebClient,
 	WebClientMessage,
+	WebSettings,
 	GetSessionsCallback,
 	GetSessionDetailCallback,
 	WriteToSessionCallback,
@@ -69,6 +72,40 @@ import type {
 	GetThemeCallback,
 	GetCustomCommandsCallback,
 	GetHistoryCallback,
+	GetAutoRunDocsCallback,
+	GetAutoRunDocContentCallback,
+	SaveAutoRunDocCallback,
+	StopAutoRunCallback,
+	GetSettingsCallback,
+	SetSettingCallback,
+	GetGroupsCallback,
+	CreateGroupCallback,
+	RenameGroupCallback,
+	DeleteGroupCallback,
+	MoveSessionToGroupCallback,
+	CreateSessionCallback,
+	DeleteSessionCallback,
+	RenameSessionCallback,
+	GetGitStatusCallback,
+	GetGitDiffCallback,
+	GroupData,
+	GetGroupChatsCallback,
+	StartGroupChatCallback,
+	GetGroupChatStateCallback,
+	StopGroupChatCallback,
+	SendGroupChatMessageCallback,
+	GroupChatMessage,
+	GroupChatState,
+	MergeContextCallback,
+	TransferContextCallback,
+	SummarizeContextCallback,
+	GetCueSubscriptionsCallback,
+	ToggleCueSubscriptionCallback,
+	GetCueActivityCallback,
+	CueActivityEntry,
+	CueSubscriptionInfo,
+	GetUsageDashboardCallback,
+	GetAchievementsCallback,
 } from './types';
 
 // Logger context for all web server logs
@@ -266,6 +303,41 @@ export class WebServer {
 		this.callbackRegistry.setWriteToSessionCallback(callback);
 	}
 
+	private writeToTerminalCallback: ((sessionId: string, data: string) => boolean) | null = null;
+	private resizeTerminalCallback:
+		| ((sessionId: string, cols: number, rows: number) => boolean)
+		| null = null;
+	private spawnTerminalForWebCallback:
+		| ((
+				sessionId: string,
+				config: { cwd: string; cols?: number; rows?: number }
+		  ) => Promise<{ success: boolean; pid: number }>)
+		| null = null;
+	private killTerminalForWebCallback: ((sessionId: string) => boolean) | null = null;
+
+	setWriteToTerminalCallback(callback: (sessionId: string, data: string) => boolean): void {
+		this.writeToTerminalCallback = callback;
+	}
+
+	setResizeTerminalCallback(
+		callback: (sessionId: string, cols: number, rows: number) => boolean
+	): void {
+		this.resizeTerminalCallback = callback;
+	}
+
+	setSpawnTerminalForWebCallback(
+		callback: (
+			sessionId: string,
+			config: { cwd: string; cols?: number; rows?: number }
+		) => Promise<{ success: boolean; pid: number }>
+	): void {
+		this.spawnTerminalForWebCallback = callback;
+	}
+
+	setKillTerminalForWebCallback(callback: (sessionId: string) => boolean): void {
+		this.killTerminalForWebCallback = callback;
+	}
+
 	setExecuteCommandCallback(callback: ExecuteCommandCallback): void {
 		this.callbackRegistry.setExecuteCommandCallback(callback);
 	}
@@ -328,6 +400,126 @@ export class WebServer {
 
 	setGetHistoryCallback(callback: GetHistoryCallback): void {
 		this.callbackRegistry.setGetHistoryCallback(callback);
+	}
+
+	setGetAutoRunDocsCallback(callback: GetAutoRunDocsCallback): void {
+		this.callbackRegistry.setGetAutoRunDocsCallback(callback);
+	}
+
+	setGetAutoRunDocContentCallback(callback: GetAutoRunDocContentCallback): void {
+		this.callbackRegistry.setGetAutoRunDocContentCallback(callback);
+	}
+
+	setSaveAutoRunDocCallback(callback: SaveAutoRunDocCallback): void {
+		this.callbackRegistry.setSaveAutoRunDocCallback(callback);
+	}
+
+	setStopAutoRunCallback(callback: StopAutoRunCallback): void {
+		this.callbackRegistry.setStopAutoRunCallback(callback);
+	}
+
+	setGetSettingsCallback(callback: GetSettingsCallback): void {
+		this.callbackRegistry.setGetSettingsCallback(callback);
+	}
+
+	setSetSettingCallback(callback: SetSettingCallback): void {
+		this.callbackRegistry.setSetSettingCallback(callback);
+	}
+
+	setGetGroupsCallback(callback: GetGroupsCallback): void {
+		this.callbackRegistry.setGetGroupsCallback(callback);
+	}
+
+	setCreateGroupCallback(callback: CreateGroupCallback): void {
+		this.callbackRegistry.setCreateGroupCallback(callback);
+	}
+
+	setRenameGroupCallback(callback: RenameGroupCallback): void {
+		this.callbackRegistry.setRenameGroupCallback(callback);
+	}
+
+	setDeleteGroupCallback(callback: DeleteGroupCallback): void {
+		this.callbackRegistry.setDeleteGroupCallback(callback);
+	}
+
+	setMoveSessionToGroupCallback(callback: MoveSessionToGroupCallback): void {
+		this.callbackRegistry.setMoveSessionToGroupCallback(callback);
+	}
+
+	setCreateSessionCallback(callback: CreateSessionCallback): void {
+		this.callbackRegistry.setCreateSessionCallback(callback);
+	}
+
+	setDeleteSessionCallback(callback: DeleteSessionCallback): void {
+		this.callbackRegistry.setDeleteSessionCallback(callback);
+	}
+
+	setRenameSessionCallback(callback: RenameSessionCallback): void {
+		this.callbackRegistry.setRenameSessionCallback(callback);
+	}
+
+	setGetGitStatusCallback(callback: GetGitStatusCallback): void {
+		this.callbackRegistry.setGetGitStatusCallback(callback);
+	}
+
+	setGetGitDiffCallback(callback: GetGitDiffCallback): void {
+		this.callbackRegistry.setGetGitDiffCallback(callback);
+	}
+
+	setGetGroupChatsCallback(callback: GetGroupChatsCallback): void {
+		this.callbackRegistry.setGetGroupChatsCallback(callback);
+	}
+
+	setStartGroupChatCallback(callback: StartGroupChatCallback): void {
+		this.callbackRegistry.setStartGroupChatCallback(callback);
+	}
+
+	setGetGroupChatStateCallback(callback: GetGroupChatStateCallback): void {
+		this.callbackRegistry.setGetGroupChatStateCallback(callback);
+	}
+
+	setStopGroupChatCallback(callback: StopGroupChatCallback): void {
+		this.callbackRegistry.setStopGroupChatCallback(callback);
+	}
+
+	setSendGroupChatMessageCallback(callback: SendGroupChatMessageCallback): void {
+		this.callbackRegistry.setSendGroupChatMessageCallback(callback);
+	}
+
+	setMergeContextCallback(callback: MergeContextCallback): void {
+		this.callbackRegistry.setMergeContextCallback(callback);
+	}
+
+	setTransferContextCallback(callback: TransferContextCallback): void {
+		this.callbackRegistry.setTransferContextCallback(callback);
+	}
+
+	setSummarizeContextCallback(callback: SummarizeContextCallback): void {
+		this.callbackRegistry.setSummarizeContextCallback(callback);
+	}
+
+	setGetCueSubscriptionsCallback(callback: GetCueSubscriptionsCallback): void {
+		this.callbackRegistry.setGetCueSubscriptionsCallback(callback);
+	}
+
+	setToggleCueSubscriptionCallback(callback: ToggleCueSubscriptionCallback): void {
+		this.callbackRegistry.setToggleCueSubscriptionCallback(callback);
+	}
+
+	setGetCueActivityCallback(callback: GetCueActivityCallback): void {
+		this.callbackRegistry.setGetCueActivityCallback(callback);
+	}
+
+	setGetUsageDashboardCallback(callback: GetUsageDashboardCallback): void {
+		this.callbackRegistry.setGetUsageDashboardCallback(callback);
+	}
+
+	setGetAchievementsCallback(callback: GetAchievementsCallback): void {
+		this.callbackRegistry.setGetAchievementsCallback(callback);
+	}
+
+	broadcastGroupsChanged(groups: GroupData[]): void {
+		this.broadcastService.broadcastGroupsChanged(groups);
 	}
 
 	// ============ Rate Limiting ============
@@ -433,6 +625,17 @@ export class WebServer {
 				logger.info(`Client connected: ${client.id} (total: ${this.webClients.size})`, LOG_CONTEXT);
 			},
 			onClientDisconnect: (clientId) => {
+				const client = this.webClients.get(clientId);
+				if (client?.subscribedSessionId) {
+					// Kill any terminal PTY spawned for this web client's session
+					const killed = this.killTerminalForWebCallback?.(client.subscribedSessionId);
+					if (killed) {
+						logger.info(
+							`Killed terminal PTY for disconnected client ${clientId} (session: ${client.subscribedSessionId})`,
+							LOG_CONTEXT
+						);
+					}
+				}
 				this.webClients.delete(clientId);
 				logger.info(
 					`Client disconnected: ${clientId} (total: ${this.webClients.size})`,
@@ -482,12 +685,72 @@ export class WebServer {
 				this.callbackRegistry.refreshFileTree(sessionId),
 			refreshAutoRunDocs: async (sessionId: string) =>
 				this.callbackRegistry.refreshAutoRunDocs(sessionId),
-			configureAutoRun: async (sessionId: string, config: any) =>
-				this.callbackRegistry.configureAutoRun(sessionId, config),
+			configureAutoRun: async (
+				sessionId: string,
+				config: Parameters<CallbackRegistry['configureAutoRun']>[1]
+			) => this.callbackRegistry.configureAutoRun(sessionId, config),
 			getSessions: () => this.callbackRegistry.getSessions(),
 			getLiveSessionInfo: (sessionId: string) =>
 				this.liveSessionManager.getLiveSessionInfo(sessionId),
 			isSessionLive: (sessionId: string) => this.liveSessionManager.isSessionLive(sessionId),
+			getAutoRunDocs: async (sessionId: string) => this.callbackRegistry.getAutoRunDocs(sessionId),
+			getAutoRunDocContent: async (sessionId: string, filename: string) =>
+				this.callbackRegistry.getAutoRunDocContent(sessionId, filename),
+			saveAutoRunDoc: async (sessionId: string, filename: string, content: string) =>
+				this.callbackRegistry.saveAutoRunDoc(sessionId, filename, content),
+			stopAutoRun: async (sessionId: string) => this.callbackRegistry.stopAutoRun(sessionId),
+			getSettings: () => this.callbackRegistry.getSettings(),
+			setSetting: async (key: string, value: any) => this.callbackRegistry.setSetting(key, value),
+			getGroups: () => this.callbackRegistry.getGroups(),
+			createGroup: async (name: string, emoji?: string) =>
+				this.callbackRegistry.createGroup(name, emoji),
+			renameGroup: async (groupId: string, name: string) =>
+				this.callbackRegistry.renameGroup(groupId, name),
+			deleteGroup: async (groupId: string) => this.callbackRegistry.deleteGroup(groupId),
+			moveSessionToGroup: async (sessionId: string, groupId: string | null) =>
+				this.callbackRegistry.moveSessionToGroup(sessionId, groupId),
+			createSession: async (name: string, toolType: string, cwd: string, groupId?: string) =>
+				this.callbackRegistry.createSession(name, toolType, cwd, groupId),
+			deleteSession: async (sessionId: string) => this.callbackRegistry.deleteSession(sessionId),
+			renameSession: async (sessionId: string, newName: string) =>
+				this.callbackRegistry.renameSession(sessionId, newName),
+			getGitStatus: async (sessionId: string) => this.callbackRegistry.getGitStatus(sessionId),
+			getGitDiff: async (sessionId: string, filePath?: string) =>
+				this.callbackRegistry.getGitDiff(sessionId, filePath),
+			getGroupChats: async () => this.callbackRegistry.getGroupChats(),
+			startGroupChat: async (topic: string, participantIds: string[]) =>
+				this.callbackRegistry.startGroupChat(topic, participantIds),
+			getGroupChatState: async (chatId: string) => this.callbackRegistry.getGroupChatState(chatId),
+			stopGroupChat: async (chatId: string) => this.callbackRegistry.stopGroupChat(chatId),
+			sendGroupChatMessage: async (chatId: string, message: string) =>
+				this.callbackRegistry.sendGroupChatMessage(chatId, message),
+			mergeContext: async (sourceSessionId: string, targetSessionId: string) =>
+				this.callbackRegistry.mergeContext(sourceSessionId, targetSessionId),
+			transferContext: async (sourceSessionId: string, targetSessionId: string) =>
+				this.callbackRegistry.transferContext(sourceSessionId, targetSessionId),
+			summarizeContext: async (sessionId: string) =>
+				this.callbackRegistry.summarizeContext(sessionId),
+			getCueSubscriptions: async (sessionId?: string) =>
+				this.callbackRegistry.getCueSubscriptions(sessionId),
+			toggleCueSubscription: async (subscriptionId: string, enabled: boolean) =>
+				this.callbackRegistry.toggleCueSubscription(subscriptionId, enabled),
+			getCueActivity: async (sessionId?: string, limit?: number) =>
+				this.callbackRegistry.getCueActivity(sessionId, limit),
+			getUsageDashboard: async (timeRange: 'day' | 'week' | 'month' | 'all') =>
+				this.callbackRegistry.getUsageDashboard(timeRange),
+			getAchievements: async () => this.callbackRegistry.getAchievements(),
+			writeToTerminal: (sessionId: string, data: string) =>
+				this.writeToTerminalCallback?.(sessionId, data) ?? false,
+			resizeTerminal: (sessionId: string, cols: number, rows: number) =>
+				this.resizeTerminalCallback?.(sessionId, cols, rows) ?? false,
+			spawnTerminalForWeb: (
+				sessionId: string,
+				config: { cwd: string; cols?: number; rows?: number }
+			) =>
+				this.spawnTerminalForWebCallback?.(sessionId, config) ??
+				Promise.resolve({ success: false, pid: 0 }),
+			killTerminalForWeb: (sessionId: string) =>
+				this.killTerminalForWebCallback?.(sessionId) ?? false,
 		});
 	}
 
@@ -495,6 +758,10 @@ export class WebServer {
 
 	broadcastToWebClients(message: object): void {
 		this.broadcastService.broadcastToAll(message);
+	}
+
+	broadcastNotificationEvent(event: NotificationEvent): void {
+		this.broadcastService.broadcastNotificationEvent(event);
 	}
 
 	broadcastToSessionClients(sessionId: string, message: object): void {
@@ -543,12 +810,64 @@ export class WebServer {
 		this.broadcastService.broadcastCustomCommands(commands);
 	}
 
+	broadcastSettingsChanged(settings: WebSettings): void {
+		this.broadcastService.broadcastSettingsChanged(settings);
+	}
+
 	broadcastAutoRunState(sessionId: string, state: AutoRunState | null): void {
 		this.liveSessionManager.setAutoRunState(sessionId, state);
 	}
 
+	broadcastAutoRunDocsChanged(sessionId: string, documents: AutoRunDocument[]): void {
+		this.broadcastService.broadcastAutoRunDocsChanged(sessionId, documents);
+	}
+
 	broadcastUserInput(sessionId: string, command: string, inputMode: 'ai' | 'terminal'): void {
 		this.broadcastService.broadcastUserInput(sessionId, command, inputMode);
+	}
+
+	broadcastGroupChatMessage(chatId: string, message: GroupChatMessage): void {
+		this.broadcastService.broadcastGroupChatMessage(chatId, message);
+	}
+
+	broadcastGroupChatStateChange(chatId: string, state: Partial<GroupChatState>): void {
+		this.broadcastService.broadcastGroupChatStateChange(chatId, state);
+	}
+
+	broadcastContextOperationProgress(sessionId: string, operation: string, progress: number): void {
+		this.broadcastService.broadcastContextOperationProgress(sessionId, operation, progress);
+	}
+
+	broadcastContextOperationComplete(sessionId: string, operation: string, success: boolean): void {
+		this.broadcastService.broadcastContextOperationComplete(sessionId, operation, success);
+	}
+
+	broadcastCueActivity(entry: CueActivityEntry): void {
+		this.broadcastService.broadcastCueActivity(entry);
+	}
+
+	broadcastCueSubscriptionsChanged(subscriptions: CueSubscriptionInfo[]): void {
+		this.broadcastService.broadcastCueSubscriptionsChanged(subscriptions);
+	}
+
+	broadcastToolEvent(
+		sessionId: string,
+		tabId: string,
+		toolLog: {
+			id: string;
+			timestamp: number;
+			source: 'tool';
+			text: string;
+			metadata?: {
+				toolState?: {
+					name: string;
+					status: 'running' | 'completed' | 'error';
+					input?: Record<string, unknown>;
+				};
+			};
+		}
+	): void {
+		this.broadcastService.broadcastToolEvent(sessionId, tabId, toolLog);
 	}
 
 	// ============ Server Lifecycle ============

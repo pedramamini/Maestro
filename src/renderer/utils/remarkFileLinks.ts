@@ -38,6 +38,8 @@ export interface RemarkFileLinksOptions {
 	cwd: string;
 	/** Project root absolute path - used to convert absolute paths to relative */
 	projectRoot?: string;
+	/** User's home directory (e.g. /Users/pedram) - used to expand ~/... paths */
+	homeDir?: string;
 }
 
 /**
@@ -194,6 +196,15 @@ function validatePathReference(reference: string, allPaths: Set<string>): string
 	return null;
 }
 
+// Shared file extension list used across all path-matching patterns.
+// Covers code, config, docs, media, data, and archive formats.
+const LINKABLE_EXTENSIONS =
+	'md|txt|json|yaml|yml|toml|ts|tsx|js|jsx|py|rb|go|rs|java|c|cpp|h|hpp|css|scss|html|xml|sh|bash|zsh' +
+	'|pdf|csv|tsv|sql|log|diff|patch|env|ini|cfg|conf|lock|makefile' +
+	'|wav|mp3|flac|aac|ogg|m4a|mp4|mkv|avi|mov|webm' +
+	'|zip|tar|gz|rar|7z' +
+	'|doc|docx|xls|xlsx|ppt|pptx|rtf';
+
 // Regex patterns
 // Image embed: ![[image.png]] or ![[folder/image.png]] or ![[image.png|300]] (with width)
 // Must have image extension (png, jpg, jpeg, gif, webp, svg, bmp, ico)
@@ -207,22 +218,38 @@ const WIKI_LINK_PATTERN = /\[\[([^\]|]+)(?:\|([^\]]+))?\]\]/g;
 
 // Path-style: Must contain a slash OR end with common file extensions
 // Avoid matching URLs (no :// prefix)
-const PATH_PATTERN =
-	/(?<![:\w])(?:(?:[A-Za-z0-9_-]+\/)+[A-Za-z0-9_.-]+|[A-Za-z0-9_-]+\.(?:md|txt|json|yaml|yml|toml|ts|tsx|js|jsx|py|rb|go|rs|java|c|cpp|h|hpp|css|scss|html|xml|sh|bash|zsh))(?![:\w/])/g;
+const PATH_PATTERN = new RegExp(
+	`(?<![:\\w])(?:(?:[A-Za-z0-9_-]+\\/)+[A-Za-z0-9_.-]+|[A-Za-z0-9_-]+\\.(?:${LINKABLE_EXTENSIONS}))(?![:\\w/])`,
+	'g'
+);
 
 // Absolute path pattern: Starts with / and contains path segments
 // Matches paths like /Users/pedram/Project/file.md or /home/user/docs/note.txt
 // Must end with a file extension to avoid matching arbitrary paths
 // Supports spaces, unicode, emoji, and special characters in path segments
 // Lookahead allows: whitespace, end of string, or common punctuation (including period, backtick)
-const ABSOLUTE_PATH_PATTERN =
-	/\/(?:[^/\n]+\/)+[^/\n]+\.(?:md|txt|json|yaml|yml|toml|ts|tsx|js|jsx|py|rb|go|rs|java|c|cpp|h|hpp|css|scss|html|xml|sh|bash|zsh)(?=\s|$|[.,;:!?`'")\]}>])/g;
+const ABSOLUTE_PATH_PATTERN = new RegExp(
+	`\\/(?:[^/\\n]+\\/)+[^/\\n]+\\.(?:${LINKABLE_EXTENSIONS})(?=\\s|$|[.,;:!?\`'"\\)\\]}>])`,
+	'g'
+);
+
+// Tilde path pattern: Starts with ~/ and contains path segments
+// Matches paths like ~/Downloads/audio/file.wav or ~/Documents/notes.md
+// Requires homeDir to expand ~ to absolute path
+// Path segments use [^\s/] to avoid matching across whitespace boundaries in running text
+const TILDE_PATH_PATTERN = new RegExp(
+	`~\\/(?:[^\\s/]+\\/)*[^\\s/]+\\.(?:${LINKABLE_EXTENSIONS})(?=\\s|$|[.,;:!?\`'"\\)\\]}>])`,
+	'g'
+);
+
+// Extension pattern for inline code validation (case-insensitive, anchored to end)
+const INLINE_CODE_EXT_PATTERN = new RegExp(`\\.(?:${LINKABLE_EXTENSIONS})$`, 'i');
 
 /**
  * The remark plugin
  */
 export function remarkFileLinks(options: RemarkFileLinksOptions) {
-	const { fileTree, indices, cwd, projectRoot } = options;
+	const { fileTree, indices, cwd, projectRoot, homeDir } = options;
 
 	// Use pre-built indices if provided, otherwise build them (fallback for backwards compatibility)
 	let allPaths: Set<string>;
@@ -272,6 +299,7 @@ export function remarkFileLinks(options: RemarkFileLinksOptions) {
 				isRelativeToCwd?: boolean; // For images: true if path needs cwd prepended (fallback paths)
 				isFromFileTree?: boolean; // For images: true if path was found in file tree (complete from project root)
 				imageWidth?: number; // For images: optional width in pixels
+				absoluteUrl?: string; // For links outside projectRoot: use file:// URL instead of maestro-file://
 			}
 			const matches: Match[] = [];
 
@@ -374,6 +402,46 @@ export function remarkFileLinks(options: RemarkFileLinksOptions) {
 				}
 			}
 
+			// Find tilde path references (e.g., ~/Downloads/audio/file.wav)
+			if (homeDir) {
+				let tildeMatch;
+				TILDE_PATH_PATTERN.lastIndex = 0;
+				while ((tildeMatch = TILDE_PATH_PATTERN.exec(text)) !== null) {
+					const tildePath = tildeMatch[0];
+
+					// Skip if already inside another match
+					const isInsideExisting = matches.some(
+						(m) => tildeMatch!.index >= m.start && tildeMatch!.index < m.end
+					);
+					if (isInsideExisting) continue;
+
+					// Expand ~ to home directory
+					const absolutePath = homeDir + tildePath.slice(1);
+
+					// If within projectRoot, convert to relative maestro-file:// link
+					const relativePath = toRelativePath(absolutePath);
+					if (relativePath) {
+						matches.push({
+							start: tildeMatch.index,
+							end: tildeMatch.index + tildePath.length,
+							display: tildePath,
+							resolvedPath: relativePath,
+							type: 'link',
+						});
+					} else {
+						// Outside projectRoot — use file:// URL to open in system default app
+						matches.push({
+							start: tildeMatch.index,
+							end: tildeMatch.index + tildePath.length,
+							display: tildePath,
+							resolvedPath: absolutePath,
+							type: 'link',
+							absoluteUrl: `file://${absolutePath}`,
+						});
+					}
+				}
+			}
+
 			// Find path-style references (relative paths)
 			let pathMatch;
 			PATH_PATTERN.lastIndex = 0;
@@ -453,6 +521,14 @@ export function remarkFileLinks(options: RemarkFileLinksOptions) {
 							},
 						},
 					} as Image);
+				} else if (match.absoluteUrl) {
+					// External file link (outside projectRoot) — use file:// URL
+					// MarkdownRenderer's <a> handler calls shell.openPath for file:// URLs
+					replacements.push({
+						type: 'link',
+						url: match.absoluteUrl,
+						children: [{ type: 'text', value: match.display }],
+					});
 				} else {
 					// Add the link - use data-hProperties to pass the file path as a data attribute
 					// This survives rehype processing which may strip custom protocols from href
@@ -518,9 +594,7 @@ export function remarkFileLinks(options: RemarkFileLinksOptions) {
 			// Check for absolute path
 			if (projectRoot && code.startsWith('/')) {
 				// Check if it has a valid file extension
-				const extMatch = code.match(
-					/\.(?:md|txt|json|yaml|yml|toml|ts|tsx|js|jsx|py|rb|go|rs|java|c|cpp|h|hpp|css|scss|html|xml|sh|bash|zsh)$/i
-				);
+				const extMatch = code.match(INLINE_CODE_EXT_PATTERN);
 				if (extMatch) {
 					const relativePath = toRelativePath(code);
 					if (relativePath) {
@@ -542,12 +616,42 @@ export function remarkFileLinks(options: RemarkFileLinksOptions) {
 				}
 			}
 
+			// Check for tilde path (e.g., ~/Downloads/file.wav)
+			if (homeDir && code.startsWith('~/')) {
+				const extMatch = code.match(INLINE_CODE_EXT_PATTERN);
+				if (extMatch) {
+					const absolutePath = homeDir + code.slice(1);
+					const relativePath = toRelativePath(absolutePath);
+					const filename = code.split('/').pop() || code;
+					if (relativePath) {
+						const link: Link = {
+							type: 'link',
+							url: `maestro-file://${relativePath}`,
+							data: {
+								hProperties: {
+									'data-maestro-file': relativePath,
+								},
+							},
+							children: [{ type: 'text', value: filename }],
+						};
+						parent.children.splice(index, 1, link);
+						return index + 1;
+					} else {
+						// Outside projectRoot — open via file:// URL
+						const link: Link = {
+							type: 'link',
+							url: `file://${absolutePath}`,
+							children: [{ type: 'text', value: filename }],
+						};
+						parent.children.splice(index, 1, link);
+						return index + 1;
+					}
+				}
+			}
+
 			// Check for relative path (with slash or valid extension)
 			const hasSlash = code.includes('/') && !code.includes('://');
-			const hasValidExt =
-				/\.(?:md|txt|json|yaml|yml|toml|ts|tsx|js|jsx|py|rb|go|rs|java|c|cpp|h|hpp|css|scss|html|xml|sh|bash|zsh)$/i.test(
-					code
-				);
+			const hasValidExt = INLINE_CODE_EXT_PATTERN.test(code);
 			if ((hasSlash || hasValidExt) && allPaths.has(code)) {
 				const filename = code.split('/').pop() || code;
 				const link: Link = {

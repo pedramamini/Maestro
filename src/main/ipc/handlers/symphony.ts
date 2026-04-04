@@ -20,6 +20,7 @@ import type { SessionsData, StoredSession, MaestroSettings } from '../../stores/
 import { createIpcHandler, CreateHandlerOptions } from '../../utils/ipcHandler';
 import { execFileNoThrow } from '../../utils/execFile';
 import { getExpandedEnv } from '../../agents/path-prober';
+import { resolveGhPath } from '../../utils/cliDetection';
 import { ensureForkSetup } from '../../utils/symphony-fork';
 import {
 	SYMPHONY_REGISTRY_URL,
@@ -730,7 +731,8 @@ async function createBranch(
  * Check if gh CLI is authenticated.
  */
 async function checkGhAuthentication(): Promise<{ authenticated: boolean; error?: string }> {
-	const result = await execFileNoThrow('gh', ['auth', 'status'], undefined, getExpandedEnv());
+	const ghCommand = await resolveGhPath();
+	const result = await execFileNoThrow(ghCommand, ['auth', 'status'], undefined, getExpandedEnv());
 	if (result.exitCode !== 0) {
 		// gh auth status outputs to stderr even on success for some info
 		const output = result.stderr + result.stdout;
@@ -847,7 +849,8 @@ async function createDraftPR(
 		prArgs.push('--repo', upstreamSlug);
 	}
 
-	const prResult = await execFileNoThrow('gh', prArgs, repoPath, getExpandedEnv());
+	const ghCommand = await resolveGhPath();
+	const prResult = await execFileNoThrow(ghCommand, prArgs, repoPath, getExpandedEnv());
 
 	if (prResult.exitCode !== 0) {
 		// If PR creation failed after push, try to delete the remote branch.
@@ -874,11 +877,12 @@ async function markPRReady(
 	prNumber: number,
 	upstreamSlug?: string
 ): Promise<{ success: boolean; error?: string }> {
+	const ghCommand = await resolveGhPath();
 	const args = ['pr', 'ready', String(prNumber)];
 	if (upstreamSlug) {
 		args.push('--repo', upstreamSlug);
 	}
-	const result = await execFileNoThrow('gh', args, repoPath, getExpandedEnv());
+	const result = await execFileNoThrow(ghCommand, args, repoPath, getExpandedEnv());
 
 	if (result.exitCode !== 0) {
 		return { success: false, error: result.stderr };
@@ -1001,11 +1005,12 @@ This pull request was created using [Maestro Symphony](https://runmaestro.ai/sym
 ---
 *Powered by [Maestro](https://runmaestro.ai) • [Learn about Symphony](https://docs.runmaestro.ai/symphony)*`;
 
+	const ghCommand = await resolveGhPath();
 	const commentArgs = ['pr', 'comment', String(prNumber), '--body', commentBody];
 	if (upstreamSlug) {
 		commentArgs.push('--repo', upstreamSlug);
 	}
-	const result = await execFileNoThrow('gh', commentArgs, repoPath, getExpandedEnv());
+	const result = await execFileNoThrow(ghCommand, commentArgs, repoPath, getExpandedEnv());
 
 	if (result.exitCode !== 0) {
 		return { success: false, error: result.stderr };

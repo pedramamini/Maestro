@@ -38,6 +38,7 @@ export interface CueExecutionConfig {
 	customArgs?: string;
 	customEnvVars?: Record<string, string>;
 	customModel?: string;
+	customEffort?: string;
 	onLog: (level: string, message: string) => void;
 	/** Optional SSH settings store for SSH remote execution */
 	sshStore?: SshRemoteSettingsStore;
@@ -139,6 +140,7 @@ export async function executeCuePrompt(config: CueExecutionConfig): Promise<CueR
 		customArgs,
 		customEnvVars,
 		customModel,
+		customEffort,
 		onLog,
 		sshStore,
 		agentConfigValues,
@@ -274,6 +276,7 @@ export async function executeCuePrompt(config: CueExecutionConfig): Promise<CueR
 	const configResolution = applyAgentConfigOverrides(agentConfig, finalArgs, {
 		agentConfigValues: (agentConfigValues ?? {}) as Record<string, any>,
 		sessionCustomModel: customModel,
+		sessionCustomEffort: customEffort,
 		sessionCustomArgs: customArgs,
 		sessionCustomEnvVars: customEnvVars,
 	});

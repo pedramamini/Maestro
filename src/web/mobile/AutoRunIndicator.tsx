@@ -14,6 +14,8 @@ interface AutoRunIndicatorProps {
 	state: AutoRunState | null;
 	/** Name of the session running AutoRun */
 	sessionName?: string;
+	/** Handler when the indicator is tapped - opens the full Auto Run panel */
+	onTap?: () => void;
 }
 
 /**
@@ -21,7 +23,7 @@ interface AutoRunIndicatorProps {
  * Shows task progress when batch processing is active
  * PROMINENT: Uses bold colors and large text for visibility
  */
-export function AutoRunIndicator({ state, sessionName }: AutoRunIndicatorProps) {
+export function AutoRunIndicator({ state, sessionName, onTap }: AutoRunIndicatorProps) {
 	const colors = useThemeColors();
 
 	// Don't render if no state or not running
@@ -35,6 +37,9 @@ export function AutoRunIndicator({ state, sessionName }: AutoRunIndicatorProps) 
 
 	return (
 		<div
+			onClick={onTap}
+			role={onTap ? 'button' : undefined}
+			tabIndex={onTap ? 0 : undefined}
 			style={{
 				// PROMINENT: Use solid, vibrant background color
 				backgroundColor: isStopping ? colors.warning : colors.accent,
@@ -45,6 +50,9 @@ export function AutoRunIndicator({ state, sessionName }: AutoRunIndicatorProps) 
 				gap: '12px',
 				// Add shadow to stand out
 				boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
+				cursor: onTap ? 'pointer' : 'default',
+				touchAction: onTap ? 'manipulation' : undefined,
+				WebkitTapHighlightColor: onTap ? 'transparent' : undefined,
 			}}
 		>
 			{/* Animated indicator icon - white circle with icon */}

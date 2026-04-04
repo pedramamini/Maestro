@@ -22,7 +22,7 @@ export function FeedbackModal({ theme, sessions, onClose, onSwitchToSession }: F
 			onClose={onClose}
 			width={width}
 			maxHeight="85vh"
-			contentClassName="flex-1 flex flex-col overflow-hidden p-0"
+			contentClassName="flex-1 flex flex-col min-h-0 p-0"
 		>
 			<FeedbackChatView
 				theme={theme}

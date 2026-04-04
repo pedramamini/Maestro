@@ -21,7 +21,7 @@ import { FileSearchModal } from '../FileSearchModal';
 import { PromptComposerModal } from '../PromptComposerModal';
 import { ExecutionQueueBrowser } from '../ExecutionQueueBrowser';
 import { BatchRunnerModal } from '../BatchRunnerModal';
-import { AutoRunSetupModal } from '../AutoRunSetupModal';
+import { AutoRunSetupModal } from '../AutoRun/AutoRunSetupModal';
 import { LightboxModal } from '../LightboxModal';
 
 // Lazy-loaded heavy modals (rarely used, loaded on-demand)
@@ -230,6 +230,7 @@ export interface AppUtilityModalsProps {
 	onPromptToggleTabSaveToHistory?: () => void;
 	promptTabReadOnlyMode: boolean;
 	onPromptToggleTabReadOnlyMode: () => void;
+	promptComposerAgentId?: string;
 	promptTabShowThinking: ThinkingMode;
 	onPromptToggleTabShowThinking?: () => void;
 	promptSupportsThinking: boolean;
@@ -414,6 +415,7 @@ export const AppUtilityModals = memo(function AppUtilityModals({
 	onPromptToggleTabSaveToHistory,
 	promptTabReadOnlyMode,
 	onPromptToggleTabReadOnlyMode,
+	promptComposerAgentId,
 	promptTabShowThinking,
 	onPromptToggleTabShowThinking,
 	promptSupportsThinking,
@@ -655,6 +657,7 @@ export const AppUtilityModals = memo(function AppUtilityModals({
 					onToggleTabSaveToHistory={onPromptToggleTabSaveToHistory}
 					tabReadOnlyMode={promptTabReadOnlyMode}
 					onToggleTabReadOnlyMode={onPromptToggleTabReadOnlyMode}
+					agentId={promptComposerAgentId}
 					tabShowThinking={promptTabShowThinking}
 					onToggleTabShowThinking={onPromptToggleTabShowThinking}
 					supportsThinking={promptSupportsThinking}

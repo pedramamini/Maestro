@@ -13,6 +13,7 @@ import { remarkFrontmatterTable } from '../utils/remarkFrontmatterTable';
 import { REMARK_GFM_PLUGINS } from '../utils/markdownConfig';
 import { LinkContextMenu, type LinkContextMenuState } from './LinkContextMenu';
 import { FileContextMenu, type FileContextMenuState } from './FileContextMenu';
+import { getHomeDir, getHomeDirAsync } from '../utils/homeDir';
 
 // ============================================================================
 // LocalImage - Loads local images via IPC
@@ -258,6 +259,14 @@ export const MarkdownRenderer = memo(
 		allowRawHtml = false,
 		sshRemoteId,
 	}: MarkdownRendererProps) => {
+		// Resolve homeDir for tilde path expansion (module-level cache, fetched once)
+		const [homeDir, setHomeDir] = useState<string | undefined>(getHomeDir);
+		useEffect(() => {
+			if (!homeDir) {
+				getHomeDirAsync()?.then(setHomeDir);
+			}
+		}, [homeDir]);
+
 		// Memoize file tree indices to avoid O(n) traversal on every render
 		// Only rebuild when fileTree reference changes
 		const fileTreeIndices = useMemo(() => {
@@ -272,14 +281,15 @@ export const MarkdownRenderer = memo(
 			const plugins: any[] = [...REMARK_GFM_PLUGINS, remarkFrontmatter, remarkFrontmatterTable];
 			// Add remarkFileLinks if we have file tree for relative paths,
 			// OR if we have projectRoot for absolute paths (even with empty file tree)
-			if ((fileTree && fileTree.length > 0 && cwd !== undefined) || projectRoot) {
+			// OR if we have homeDir for tilde paths (even without file tree or projectRoot)
+			if ((fileTree && fileTree.length > 0 && cwd !== undefined) || projectRoot || homeDir) {
 				plugins.push([
 					remarkFileLinks,
-					{ indices: fileTreeIndices || undefined, cwd: cwd || '', projectRoot },
+					{ indices: fileTreeIndices || undefined, cwd: cwd || '', projectRoot, homeDir },
 				]);
 			}
 			return plugins;
-		}, [fileTree, fileTreeIndices, cwd, projectRoot]);
+		}, [fileTree, fileTreeIndices, cwd, projectRoot, homeDir]);
 
 		// Defense-in-depth: sanitize raw HTML with DOMPurify before markdown parsing
 		// to strip script tags, event handlers, and other XSS vectors

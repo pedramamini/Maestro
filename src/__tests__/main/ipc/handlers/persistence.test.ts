@@ -141,6 +141,8 @@ describe('persistence IPC handlers', () => {
 				'settings:set',
 				'settings:getAll',
 				'sessions:getAll',
+				'sessions:getActiveSessionId',
+				'sessions:setActiveSessionId',
 				'sessions:setAll',
 				'groups:getAll',
 				'groups:setAll',
@@ -151,6 +153,24 @@ describe('persistence IPC handlers', () => {
 				expect(handlers.has(channel)).toBe(true);
 			}
 			expect(handlers.size).toBe(expectedChannels.length);
+		});
+	});
+
+	describe('sessions:getActiveSessionId', () => {
+		it('should return empty string when no active session is set', async () => {
+			mockSessionsStore.get.mockReturnValue('');
+			const handler = handlers.get('sessions:getActiveSessionId');
+			const result = await handler!({} as any);
+			expect(mockSessionsStore.get).toHaveBeenCalledWith('activeSessionId', '');
+			expect(result).toBe('');
+		});
+	});
+
+	describe('sessions:setActiveSessionId', () => {
+		it('should persist and retrieve an active session ID', async () => {
+			const setHandler = handlers.get('sessions:setActiveSessionId');
+			await setHandler!({} as any, 'test-session-123');
+			expect(mockSessionsStore.set).toHaveBeenCalledWith('activeSessionId', 'test-session-123');
 		});
 	});
 

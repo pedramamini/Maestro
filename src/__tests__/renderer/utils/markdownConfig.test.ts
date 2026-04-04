@@ -17,6 +17,7 @@ import {
 	generateDiffViewStyles,
 	createWizardBubbleMarkdownComponents,
 	createReleaseNotesMarkdownComponents,
+	createMarkdownComponents,
 	REMARK_GFM_PLUGINS,
 } from '../../../renderer/utils/markdownConfig';
 import type { Theme } from '../../../shared/theme-types';
@@ -724,5 +725,81 @@ describe('shared markdown presets', () => {
 		expect(components.li).toBeDefined();
 		expect(components.code).toBeDefined();
 		expect(components.a).toBeDefined();
+	});
+});
+
+// ---------------------------------------------------------------------------
+// createMarkdownComponents — link handling (Fixes MAESTRO-F4, MAESTRO-E5, etc.)
+// ---------------------------------------------------------------------------
+
+describe('createMarkdownComponents link handling', () => {
+	it('should call onExternalLinkClick for http/https URLs', () => {
+		const onExternalLinkClick = vi.fn();
+		const components = createMarkdownComponents({
+			theme: mockTheme,
+			onExternalLinkClick,
+		});
+		const aComponent = components.a as any;
+		expect(aComponent).toBeDefined();
+
+		// Simulate rendering and clicking an https link
+		const element = aComponent({ node: null, href: 'https://example.com', children: 'link' });
+		const clickEvent = { preventDefault: vi.fn() } as any;
+		element.props.onClick(clickEvent);
+		expect(onExternalLinkClick).toHaveBeenCalledWith('https://example.com');
+	});
+
+	it('should call onExternalLinkClick for mailto URLs', () => {
+		const onExternalLinkClick = vi.fn();
+		const components = createMarkdownComponents({
+			theme: mockTheme,
+			onExternalLinkClick,
+		});
+		const aComponent = components.a as any;
+
+		const element = aComponent({ node: null, href: 'mailto:test@example.com', children: 'email' });
+		const clickEvent = { preventDefault: vi.fn() } as any;
+		element.props.onClick(clickEvent);
+		expect(onExternalLinkClick).toHaveBeenCalledWith('mailto:test@example.com');
+	});
+
+	it('should NOT call onExternalLinkClick for relative paths', () => {
+		const onExternalLinkClick = vi.fn();
+		const components = createMarkdownComponents({
+			theme: mockTheme,
+			onExternalLinkClick,
+		});
+		const aComponent = components.a as any;
+
+		// Relative paths like LICENSE, ./README.md should not trigger openExternal
+		for (const href of [
+			'LICENSE',
+			'./README.md',
+			'../docs/spec.md',
+			'constitution/specs/SPEC.md',
+		]) {
+			onExternalLinkClick.mockClear();
+			const element = aComponent({ node: null, href, children: 'link' });
+			const clickEvent = { preventDefault: vi.fn() } as any;
+			element.props.onClick(clickEvent);
+			expect(onExternalLinkClick).not.toHaveBeenCalled();
+		}
+	});
+
+	it('should route relative paths to onFileClick when available', () => {
+		const onExternalLinkClick = vi.fn();
+		const onFileClick = vi.fn();
+		const components = createMarkdownComponents({
+			theme: mockTheme,
+			onExternalLinkClick,
+			onFileClick,
+		});
+		const aComponent = components.a as any;
+
+		const element = aComponent({ node: null, href: 'LICENSE', children: 'license' });
+		const clickEvent = { preventDefault: vi.fn(), metaKey: false, ctrlKey: false } as any;
+		element.props.onClick(clickEvent);
+		expect(onFileClick).toHaveBeenCalledWith('LICENSE', { openInNewTab: false });
+		expect(onExternalLinkClick).not.toHaveBeenCalled();
 	});
 });

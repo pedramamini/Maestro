@@ -13,6 +13,7 @@ import { isWebContentsAvailable } from '../utils/safe-send';
 import type { ProcessManager } from '../process-manager';
 import type { StoredSession, SettingsStoreInterface as SettingsStore } from '../stores/types';
 import type { Group } from '../../shared/types';
+import { getDefaultShell } from '../stores/defaults';
 
 /** UUID v4 format regex for validating stored security tokens.
  *  Enforces version nibble (4) and variant bits ([89ab]). */
@@ -174,7 +175,7 @@ export function createWebServerFactory(deps: WebServerFactoryDependencies) {
 
 			// Get the requested tab's logs (or active tab if no tabId provided)
 			// Tabs are the source of truth for AI conversation history
-			// Filter out thinking and tool logs - these should never be shown on the web interface
+			// AI logs include thinking and tool entries for UX parity with desktop
 			let aiLogs: any[] = [];
 			const targetTabId = tabId || session.activeTabId;
 			if (session.aiTabs && session.aiTabs.length > 0) {
@@ -185,8 +186,8 @@ export function createWebServerFactory(deps: WebServerFactoryDependencies) {
 					aiLogs = [];
 				} else {
 					const rawLogs = (targetTab || session.aiTabs[0])?.logs || [];
-					// Web interface should never show thinking/tool logs regardless of desktop settings
-					aiLogs = rawLogs.filter((log: any) => log.source !== 'thinking' && log.source !== 'tool');
+					// Include thinking and tool logs for UX parity with desktop
+					aiLogs = rawLogs;
 				}
 			}
 
@@ -270,6 +271,81 @@ export function createWebServerFactory(deps: WebServerFactoryDependencies) {
 			const result = processManager.write(targetSessionId, data);
 			logger.debug(`Write result: ${result}`, 'WebServer');
 			return result;
+		});
+
+		// Set up callbacks for raw terminal PTY write and resize (for xterm.js in web client)
+		server.setWriteToTerminalCallback((sessionId: string, data: string) => {
+			const processManager = getProcessManager();
+			if (!processManager) {
+				logger.warn('processManager is null for writeToTerminal', 'WebServer');
+				return false;
+			}
+			return processManager.write(`${sessionId}-terminal`, data);
+		});
+
+		server.setResizeTerminalCallback((sessionId: string, cols: number, rows: number) => {
+			const processManager = getProcessManager();
+			if (!processManager) {
+				logger.warn('processManager is null for resizeTerminal', 'WebServer');
+				return false;
+			}
+			return processManager.resize(`${sessionId}-terminal`, cols, rows);
+		});
+
+		// Spawn a dedicated terminal PTY for the web client
+		// Uses session ID format {sessionId}-terminal so data-listener broadcasts terminal_data
+		server.setSpawnTerminalForWebCallback(
+			async (sessionId: string, config: { cwd: string; cols?: number; rows?: number }) => {
+				const processManager = getProcessManager();
+				if (!processManager) {
+					logger.warn('processManager is null for spawnTerminalForWeb', 'WebServer');
+					return { success: false, pid: 0 };
+				}
+				const terminalSessionId = `${sessionId}-terminal`;
+				// Check if a process already exists for this terminal session
+				if (processManager.get(terminalSessionId)) {
+					logger.info(
+						`Terminal PTY already exists for web client: ${terminalSessionId}`,
+						'WebServer'
+					);
+					return { success: true, pid: 0 };
+				}
+				// Resolve shell: custom path > default from settings > system default
+				const customShellPath = settingsStore.get<string>('customShellPath', '');
+				const defaultShell = settingsStore.get<string>('defaultShell', getDefaultShell());
+				const shell = (customShellPath && customShellPath.trim()) || defaultShell;
+				const shellArgs = settingsStore.get<string>('shellArgs', '');
+				const shellEnvVars = settingsStore.get<Record<string, string>>('shellEnvVars', {});
+
+				logger.info(`Spawning terminal PTY for web client: ${terminalSessionId}`, 'WebServer', {
+					shell,
+					cwd: config.cwd,
+				});
+				return processManager.spawnTerminalTab({
+					sessionId: terminalSessionId,
+					cwd: config.cwd,
+					shell,
+					shellArgs,
+					shellEnvVars,
+					cols: config.cols,
+					rows: config.rows,
+				});
+			}
+		);
+
+		// Kill the web client's dedicated terminal PTY
+		server.setKillTerminalForWebCallback((sessionId: string) => {
+			const processManager = getProcessManager();
+			if (!processManager) {
+				logger.warn('processManager is null for killTerminalForWeb', 'WebServer');
+				return false;
+			}
+			const terminalSessionId = `${sessionId}-terminal`;
+			if (!processManager.get(terminalSessionId)) {
+				return true; // Already gone
+			}
+			logger.info(`Killing terminal PTY for web client: ${terminalSessionId}`, 'WebServer');
+			return processManager.kill(terminalSessionId);
 		});
 
 		// Set up callback for web server to execute commands through the desktop
@@ -599,6 +675,1138 @@ export function createWebServerFactory(deps: WebServerFactoryDependencies) {
 					ipcMain.removeListener(responseChannel, handleResponse);
 					logger.warn(`configureAutoRun callback timed out for session ${sessionId}`, 'WebServer');
 					resolve({ success: false, error: 'Timeout' });
+				}, 10000);
+			});
+		});
+
+		// Set up callback for web server to fetch Auto Run documents list
+		// Uses IPC request-response pattern with timeout
+		server.setGetAutoRunDocsCallback(async (sessionId: string) => {
+			const mainWindow = getMainWindow();
+			if (!mainWindow) {
+				logger.warn('mainWindow is null for getAutoRunDocs', 'WebServer');
+				return [];
+			}
+
+			return new Promise((resolve) => {
+				const responseChannel = `remote:getAutoRunDocs:response:${randomUUID()}`;
+				let resolved = false;
+
+				const handleResponse = (_event: Electron.IpcMainEvent, result: any) => {
+					if (resolved) return;
+					resolved = true;
+					clearTimeout(timeoutId);
+					resolve(result || []);
+				};
+
+				ipcMain.once(responseChannel, handleResponse);
+				if (!isWebContentsAvailable(mainWindow)) {
+					logger.warn('webContents is not available for getAutoRunDocs', 'WebServer');
+					ipcMain.removeListener(responseChannel, handleResponse);
+					resolve([]);
+					return;
+				}
+				mainWindow.webContents.send('remote:getAutoRunDocs', sessionId, responseChannel);
+
+				const timeoutId = setTimeout(() => {
+					if (resolved) return;
+					resolved = true;
+					ipcMain.removeListener(responseChannel, handleResponse);
+					logger.warn(`getAutoRunDocs callback timed out for session ${sessionId}`, 'WebServer');
+					resolve([]);
+				}, 10000);
+			});
+		});
+
+		// Set up callback for web server to fetch Auto Run document content
+		// Uses IPC request-response pattern with timeout
+		server.setGetAutoRunDocContentCallback(async (sessionId: string, filename: string) => {
+			const mainWindow = getMainWindow();
+			if (!mainWindow) {
+				logger.warn('mainWindow is null for getAutoRunDocContent', 'WebServer');
+				return '';
+			}
+
+			return new Promise((resolve) => {
+				const responseChannel = `remote:getAutoRunDocContent:response:${randomUUID()}`;
+				let resolved = false;
+
+				const handleResponse = (_event: Electron.IpcMainEvent, result: any) => {
+					if (resolved) return;
+					resolved = true;
+					clearTimeout(timeoutId);
+					resolve(result ?? '');
+				};
+
+				ipcMain.once(responseChannel, handleResponse);
+				if (!isWebContentsAvailable(mainWindow)) {
+					logger.warn('webContents is not available for getAutoRunDocContent', 'WebServer');
+					ipcMain.removeListener(responseChannel, handleResponse);
+					resolve('');
+					return;
+				}
+				mainWindow.webContents.send(
+					'remote:getAutoRunDocContent',
+					sessionId,
+					filename,
+					responseChannel
+				);
+
+				const timeoutId = setTimeout(() => {
+					if (resolved) return;
+					resolved = true;
+					ipcMain.removeListener(responseChannel, handleResponse);
+					logger.warn(
+						`getAutoRunDocContent callback timed out for session ${sessionId}`,
+						'WebServer'
+					);
+					resolve('');
+				}, 10000);
+			});
+		});
+
+		// Set up callback for web server to save Auto Run document content
+		// Uses IPC request-response pattern with timeout
+		server.setSaveAutoRunDocCallback(
+			async (sessionId: string, filename: string, content: string) => {
+				const mainWindow = getMainWindow();
+				if (!mainWindow) {
+					logger.warn('mainWindow is null for saveAutoRunDoc', 'WebServer');
+					return false;
+				}
+
+				return new Promise((resolve) => {
+					const responseChannel = `remote:saveAutoRunDoc:response:${randomUUID()}`;
+					let resolved = false;
+
+					const handleResponse = (_event: Electron.IpcMainEvent, result: any) => {
+						if (resolved) return;
+						resolved = true;
+						clearTimeout(timeoutId);
+						resolve(result ?? false);
+					};
+
+					ipcMain.once(responseChannel, handleResponse);
+					if (!isWebContentsAvailable(mainWindow)) {
+						logger.warn('webContents is not available for saveAutoRunDoc', 'WebServer');
+						ipcMain.removeListener(responseChannel, handleResponse);
+						resolve(false);
+						return;
+					}
+					mainWindow.webContents.send(
+						'remote:saveAutoRunDoc',
+						sessionId,
+						filename,
+						content,
+						responseChannel
+					);
+
+					const timeoutId = setTimeout(() => {
+						if (resolved) return;
+						resolved = true;
+						ipcMain.removeListener(responseChannel, handleResponse);
+						logger.warn(`saveAutoRunDoc callback timed out for session ${sessionId}`, 'WebServer');
+						resolve(false);
+					}, 10000);
+				});
+			}
+		);
+
+		// Set up callback for web server to read settings
+		// Reads directly from settingsStore — maps store keys to WebSettings shape
+		server.setGetSettingsCallback(() => {
+			return {
+				theme: settingsStore.get('activeThemeId', 'dracula') as string,
+				fontSize: settingsStore.get('fontSize', 14) as number,
+				enterToSendAI: settingsStore.get('enterToSendAI', false) as boolean,
+				enterToSendTerminal: settingsStore.get('enterToSendTerminal', true) as boolean,
+				defaultSaveToHistory: settingsStore.get('defaultSaveToHistory', true) as boolean,
+				defaultShowThinking: settingsStore.get('defaultShowThinking', 'off') as string,
+				autoScroll: settingsStore.get('autoScrollAiMode', false) as boolean,
+				notificationsEnabled: settingsStore.get('osNotificationsEnabled', true) as boolean,
+				audioFeedbackEnabled: settingsStore.get('audioFeedbackEnabled', false) as boolean,
+				colorBlindMode: settingsStore.get('colorBlindMode', 'false') as string,
+				conductorProfile: settingsStore.get('conductorProfile', '') as string,
+			};
+		});
+
+		// Set up callback for web server to modify settings
+		// Uses IPC request-response pattern — forwards to renderer which applies via existing settings infrastructure
+		// After a successful set, re-reads all settings and broadcasts the change to all web clients
+		server.setSetSettingCallback(async (key: string, value: unknown) => {
+			const mainWindow = getMainWindow();
+			if (!mainWindow) {
+				logger.warn('mainWindow is null for setSetting', 'WebServer');
+				return false;
+			}
+
+			return new Promise((resolve) => {
+				const responseChannel = `remote:setSetting:response:${randomUUID()}`;
+				let resolved = false;
+
+				const handleResponse = (_event: Electron.IpcMainEvent, result: any) => {
+					if (resolved) return;
+					resolved = true;
+					clearTimeout(timeoutId);
+					const success = result ?? false;
+
+					// After successful setting change, broadcast updated settings to all web clients
+					if (success) {
+						const settings = {
+							theme: settingsStore.get('activeThemeId', 'dracula') as string,
+							fontSize: settingsStore.get('fontSize', 14) as number,
+							enterToSendAI: settingsStore.get('enterToSendAI', false) as boolean,
+							enterToSendTerminal: settingsStore.get('enterToSendTerminal', true) as boolean,
+							defaultSaveToHistory: settingsStore.get('defaultSaveToHistory', true) as boolean,
+							defaultShowThinking: settingsStore.get('defaultShowThinking', 'off') as string,
+							autoScroll: settingsStore.get('autoScrollAiMode', false) as boolean,
+							notificationsEnabled: settingsStore.get('osNotificationsEnabled', true) as boolean,
+							audioFeedbackEnabled: settingsStore.get('audioFeedbackEnabled', false) as boolean,
+							colorBlindMode: settingsStore.get('colorBlindMode', 'false') as string,
+							conductorProfile: settingsStore.get('conductorProfile', '') as string,
+						};
+						server.broadcastSettingsChanged(settings);
+					}
+
+					resolve(success);
+				};
+
+				ipcMain.once(responseChannel, handleResponse);
+				if (!isWebContentsAvailable(mainWindow)) {
+					logger.warn('webContents is not available for setSetting', 'WebServer');
+					ipcMain.removeListener(responseChannel, handleResponse);
+					resolve(false);
+					return;
+				}
+				mainWindow.webContents.send('remote:setSetting', key, value, responseChannel);
+
+				const timeoutId = setTimeout(() => {
+					if (resolved) return;
+					resolved = true;
+					ipcMain.removeListener(responseChannel, handleResponse);
+					logger.warn(`setSetting callback timed out for key ${key}`, 'WebServer');
+					resolve(false);
+				}, 5000);
+			});
+		});
+
+		// Set up callback for web server to read groups
+		// Direct read from groupsStore, derive sessionIds from sessions
+		server.setGetGroupsCallback(() => {
+			const groups = groupsStore.get<Group[]>('groups', []);
+			const sessions = sessionsStore.get<StoredSession[]>('sessions', []);
+			return groups.map((g) => ({
+				id: g.id,
+				name: g.name,
+				emoji: g.emoji || null,
+				sessionIds: sessions.filter((s) => s.groupId === g.id).map((s) => s.id),
+			}));
+		});
+
+		// Set up callback for web server to create a session
+		// Uses IPC request-response pattern — renderer creates the session and responds with sessionId
+		server.setCreateSessionCallback(
+			async (name: string, toolType: string, cwd: string, groupId?: string) => {
+				const mainWindow = getMainWindow();
+				if (!mainWindow) {
+					logger.warn('mainWindow is null for createSession', 'WebServer');
+					return null;
+				}
+
+				return new Promise((resolve) => {
+					const responseChannel = `remote:createSession:response:${randomUUID()}`;
+					let resolved = false;
+
+					const handleResponse = (_event: Electron.IpcMainEvent, result: any) => {
+						if (resolved) return;
+						resolved = true;
+						clearTimeout(timeoutId);
+						resolve(result || null);
+					};
+
+					ipcMain.once(responseChannel, handleResponse);
+					if (!isWebContentsAvailable(mainWindow)) {
+						logger.warn('webContents is not available for createSession', 'WebServer');
+						ipcMain.removeListener(responseChannel, handleResponse);
+						resolve(null);
+						return;
+					}
+					mainWindow.webContents.send(
+						'remote:createSession',
+						name,
+						toolType,
+						cwd,
+						groupId,
+						responseChannel
+					);
+
+					const timeoutId = setTimeout(() => {
+						if (resolved) return;
+						resolved = true;
+						ipcMain.removeListener(responseChannel, handleResponse);
+						logger.warn(`createSession callback timed out`, 'WebServer');
+						resolve(null);
+					}, 10000);
+				});
+			}
+		);
+
+		// Set up callback for web server to delete a session
+		// Fire-and-forget pattern
+		server.setDeleteSessionCallback(async (sessionId: string) => {
+			const mainWindow = getMainWindow();
+			if (!mainWindow) {
+				logger.warn('mainWindow is null for deleteSession', 'WebServer');
+				return false;
+			}
+
+			if (!isWebContentsAvailable(mainWindow)) {
+				logger.warn('webContents is not available for deleteSession', 'WebServer');
+				return false;
+			}
+			mainWindow.webContents.send('remote:deleteSession', sessionId);
+			return true;
+		});
+
+		// Set up callback for web server to rename a session
+		// Uses IPC request-response pattern
+		server.setRenameSessionCallback(async (sessionId: string, newName: string) => {
+			const mainWindow = getMainWindow();
+			if (!mainWindow) {
+				logger.warn('mainWindow is null for renameSession', 'WebServer');
+				return false;
+			}
+
+			return new Promise((resolve) => {
+				const responseChannel = `remote:renameSession:response:${randomUUID()}`;
+				let resolved = false;
+
+				const handleResponse = (_event: Electron.IpcMainEvent, result: any) => {
+					if (resolved) return;
+					resolved = true;
+					clearTimeout(timeoutId);
+					resolve(result ?? false);
+				};
+
+				ipcMain.once(responseChannel, handleResponse);
+				if (!isWebContentsAvailable(mainWindow)) {
+					logger.warn('webContents is not available for renameSession', 'WebServer');
+					ipcMain.removeListener(responseChannel, handleResponse);
+					resolve(false);
+					return;
+				}
+				mainWindow.webContents.send('remote:renameSession', sessionId, newName, responseChannel);
+
+				const timeoutId = setTimeout(() => {
+					if (resolved) return;
+					resolved = true;
+					ipcMain.removeListener(responseChannel, handleResponse);
+					logger.warn(`renameSession callback timed out for session ${sessionId}`, 'WebServer');
+					resolve(false);
+				}, 5000);
+			});
+		});
+
+		// Set up callback for web server to create a group
+		// Uses IPC request-response pattern
+		server.setCreateGroupCallback(async (name: string, emoji?: string) => {
+			const mainWindow = getMainWindow();
+			if (!mainWindow) {
+				logger.warn('mainWindow is null for createGroup', 'WebServer');
+				return null;
+			}
+
+			return new Promise((resolve) => {
+				const responseChannel = `remote:createGroup:response:${randomUUID()}`;
+				let resolved = false;
+
+				const handleResponse = (_event: Electron.IpcMainEvent, result: any) => {
+					if (resolved) return;
+					resolved = true;
+					clearTimeout(timeoutId);
+					resolve(result || null);
+				};
+
+				ipcMain.once(responseChannel, handleResponse);
+				if (!isWebContentsAvailable(mainWindow)) {
+					logger.warn('webContents is not available for createGroup', 'WebServer');
+					ipcMain.removeListener(responseChannel, handleResponse);
+					resolve(null);
+					return;
+				}
+				mainWindow.webContents.send('remote:createGroup', name, emoji, responseChannel);
+
+				const timeoutId = setTimeout(() => {
+					if (resolved) return;
+					resolved = true;
+					ipcMain.removeListener(responseChannel, handleResponse);
+					logger.warn(`createGroup callback timed out`, 'WebServer');
+					resolve(null);
+				}, 5000);
+			});
+		});
+
+		// Set up callback for web server to rename a group
+		// Uses IPC request-response pattern
+		server.setRenameGroupCallback(async (groupId: string, name: string) => {
+			const mainWindow = getMainWindow();
+			if (!mainWindow) {
+				logger.warn('mainWindow is null for renameGroup', 'WebServer');
+				return false;
+			}
+
+			return new Promise((resolve) => {
+				const responseChannel = `remote:renameGroup:response:${randomUUID()}`;
+				let resolved = false;
+
+				const handleResponse = (_event: Electron.IpcMainEvent, result: any) => {
+					if (resolved) return;
+					resolved = true;
+					clearTimeout(timeoutId);
+					resolve(result ?? false);
+				};
+
+				ipcMain.once(responseChannel, handleResponse);
+				if (!isWebContentsAvailable(mainWindow)) {
+					logger.warn('webContents is not available for renameGroup', 'WebServer');
+					ipcMain.removeListener(responseChannel, handleResponse);
+					resolve(false);
+					return;
+				}
+				mainWindow.webContents.send('remote:renameGroup', groupId, name, responseChannel);
+
+				const timeoutId = setTimeout(() => {
+					if (resolved) return;
+					resolved = true;
+					ipcMain.removeListener(responseChannel, handleResponse);
+					logger.warn(`renameGroup callback timed out for group ${groupId}`, 'WebServer');
+					resolve(false);
+				}, 5000);
+			});
+		});
+
+		// Set up callback for web server to delete a group
+		// Fire-and-forget pattern
+		server.setDeleteGroupCallback(async (groupId: string) => {
+			const mainWindow = getMainWindow();
+			if (!mainWindow) {
+				logger.warn('mainWindow is null for deleteGroup', 'WebServer');
+				return false;
+			}
+
+			if (!isWebContentsAvailable(mainWindow)) {
+				logger.warn('webContents is not available for deleteGroup', 'WebServer');
+				return false;
+			}
+			mainWindow.webContents.send('remote:deleteGroup', groupId);
+			return true;
+		});
+
+		// Set up callback for web server to move a session to a group
+		// Uses IPC request-response pattern
+		server.setMoveSessionToGroupCallback(async (sessionId: string, groupId: string | null) => {
+			const mainWindow = getMainWindow();
+			if (!mainWindow) {
+				logger.warn('mainWindow is null for moveSessionToGroup', 'WebServer');
+				return false;
+			}
+
+			return new Promise((resolve) => {
+				const responseChannel = `remote:moveSessionToGroup:response:${randomUUID()}`;
+				let resolved = false;
+
+				const handleResponse = (_event: Electron.IpcMainEvent, result: any) => {
+					if (resolved) return;
+					resolved = true;
+					clearTimeout(timeoutId);
+					resolve(result ?? false);
+				};
+
+				ipcMain.once(responseChannel, handleResponse);
+				if (!isWebContentsAvailable(mainWindow)) {
+					logger.warn('webContents is not available for moveSessionToGroup', 'WebServer');
+					ipcMain.removeListener(responseChannel, handleResponse);
+					resolve(false);
+					return;
+				}
+				mainWindow.webContents.send(
+					'remote:moveSessionToGroup',
+					sessionId,
+					groupId,
+					responseChannel
+				);
+
+				const timeoutId = setTimeout(() => {
+					if (resolved) return;
+					resolved = true;
+					ipcMain.removeListener(responseChannel, handleResponse);
+					logger.warn(
+						`moveSessionToGroup callback timed out for session ${sessionId}`,
+						'WebServer'
+					);
+					resolve(false);
+				}, 5000);
+			});
+		});
+
+		// Set up callback for web server to get git status
+		// Uses IPC request-response pattern with timeout
+		server.setGetGitStatusCallback(async (sessionId: string) => {
+			const mainWindow = getMainWindow();
+			if (!mainWindow) {
+				logger.warn('mainWindow is null for getGitStatus', 'WebServer');
+				return { branch: '', files: [], ahead: 0, behind: 0 };
+			}
+
+			return new Promise((resolve) => {
+				const responseChannel = `remote:getGitStatus:response:${randomUUID()}`;
+				let resolved = false;
+
+				const handleResponse = (_event: Electron.IpcMainEvent, result: any) => {
+					if (resolved) return;
+					resolved = true;
+					clearTimeout(timeoutId);
+					resolve(result || { branch: '', files: [], ahead: 0, behind: 0 });
+				};
+
+				ipcMain.once(responseChannel, handleResponse);
+				if (!isWebContentsAvailable(mainWindow)) {
+					logger.warn('webContents is not available for getGitStatus', 'WebServer');
+					ipcMain.removeListener(responseChannel, handleResponse);
+					resolve({ branch: '', files: [], ahead: 0, behind: 0 });
+					return;
+				}
+				mainWindow.webContents.send('remote:getGitStatus', sessionId, responseChannel);
+
+				const timeoutId = setTimeout(() => {
+					if (resolved) return;
+					resolved = true;
+					ipcMain.removeListener(responseChannel, handleResponse);
+					logger.warn(`getGitStatus callback timed out for session ${sessionId}`, 'WebServer');
+					resolve({ branch: '', files: [], ahead: 0, behind: 0 });
+				}, 10000);
+			});
+		});
+
+		// Set up callback for web server to get git diff
+		// Uses IPC request-response pattern with timeout
+		server.setGetGitDiffCallback(async (sessionId: string, filePath?: string) => {
+			const mainWindow = getMainWindow();
+			if (!mainWindow) {
+				logger.warn('mainWindow is null for getGitDiff', 'WebServer');
+				return { diff: '', files: [] };
+			}
+
+			return new Promise((resolve) => {
+				const responseChannel = `remote:getGitDiff:response:${randomUUID()}`;
+				let resolved = false;
+
+				const handleResponse = (_event: Electron.IpcMainEvent, result: any) => {
+					if (resolved) return;
+					resolved = true;
+					clearTimeout(timeoutId);
+					resolve(result || { diff: '', files: [] });
+				};
+
+				ipcMain.once(responseChannel, handleResponse);
+				if (!isWebContentsAvailable(mainWindow)) {
+					logger.warn('webContents is not available for getGitDiff', 'WebServer');
+					ipcMain.removeListener(responseChannel, handleResponse);
+					resolve({ diff: '', files: [] });
+					return;
+				}
+				mainWindow.webContents.send('remote:getGitDiff', sessionId, filePath, responseChannel);
+
+				const timeoutId = setTimeout(() => {
+					if (resolved) return;
+					resolved = true;
+					ipcMain.removeListener(responseChannel, handleResponse);
+					logger.warn(`getGitDiff callback timed out for session ${sessionId}`, 'WebServer');
+					resolve({ diff: '', files: [] });
+				}, 10000);
+			});
+		});
+
+		// Set up callback for web server to stop Auto Run
+		// Fire-and-forget pattern (like interrupt)
+		server.setStopAutoRunCallback(async (sessionId: string) => {
+			const mainWindow = getMainWindow();
+			if (!mainWindow) {
+				logger.warn('mainWindow is null for stopAutoRun', 'WebServer');
+				return false;
+			}
+
+			if (!isWebContentsAvailable(mainWindow)) {
+				logger.warn('webContents is not available for stopAutoRun', 'WebServer');
+				return false;
+			}
+			mainWindow.webContents.send('remote:stopAutoRun', sessionId);
+			return true;
+		});
+
+		// ============ Group Chat Callbacks ============
+
+		// Get all group chats — uses IPC request-response pattern
+		server.setGetGroupChatsCallback(async () => {
+			const mainWindow = getMainWindow();
+			if (!mainWindow) {
+				logger.warn('mainWindow is null for getGroupChats', 'WebServer');
+				return [];
+			}
+
+			return new Promise((resolve) => {
+				const responseChannel = `remote:getGroupChats:response:${randomUUID()}`;
+				let resolved = false;
+
+				const handleResponse = (_event: Electron.IpcMainEvent, result: any) => {
+					if (resolved) return;
+					resolved = true;
+					clearTimeout(timeoutId);
+					resolve(result || []);
+				};
+
+				ipcMain.once(responseChannel, handleResponse);
+				if (!isWebContentsAvailable(mainWindow)) {
+					logger.warn('webContents is not available for getGroupChats', 'WebServer');
+					ipcMain.removeListener(responseChannel, handleResponse);
+					resolve([]);
+					return;
+				}
+				mainWindow.webContents.send('remote:getGroupChats', responseChannel);
+
+				const timeoutId = setTimeout(() => {
+					if (resolved) return;
+					resolved = true;
+					ipcMain.removeListener(responseChannel, handleResponse);
+					logger.warn(`getGroupChats callback timed out`, 'WebServer');
+					resolve([]);
+				}, 10000);
+			});
+		});
+
+		// Start a group chat — uses IPC request-response pattern
+		server.setStartGroupChatCallback(async (topic: string, participantIds: string[]) => {
+			const mainWindow = getMainWindow();
+			if (!mainWindow) {
+				logger.warn('mainWindow is null for startGroupChat', 'WebServer');
+				return null;
+			}
+
+			return new Promise((resolve) => {
+				const responseChannel = `remote:startGroupChat:response:${randomUUID()}`;
+				let resolved = false;
+
+				const handleResponse = (_event: Electron.IpcMainEvent, result: any) => {
+					if (resolved) return;
+					resolved = true;
+					clearTimeout(timeoutId);
+					resolve(result || null);
+				};
+
+				ipcMain.once(responseChannel, handleResponse);
+				if (!isWebContentsAvailable(mainWindow)) {
+					logger.warn('webContents is not available for startGroupChat', 'WebServer');
+					ipcMain.removeListener(responseChannel, handleResponse);
+					resolve(null);
+					return;
+				}
+				mainWindow.webContents.send(
+					'remote:startGroupChat',
+					topic,
+					participantIds,
+					responseChannel
+				);
+
+				const timeoutId = setTimeout(() => {
+					if (resolved) return;
+					resolved = true;
+					ipcMain.removeListener(responseChannel, handleResponse);
+					logger.warn(`startGroupChat callback timed out`, 'WebServer');
+					resolve(null);
+				}, 15000);
+			});
+		});
+
+		// Get group chat state — uses IPC request-response pattern
+		server.setGetGroupChatStateCallback(async (chatId: string) => {
+			const mainWindow = getMainWindow();
+			if (!mainWindow) {
+				logger.warn('mainWindow is null for getGroupChatState', 'WebServer');
+				return null;
+			}
+
+			return new Promise((resolve) => {
+				const responseChannel = `remote:getGroupChatState:response:${randomUUID()}`;
+				let resolved = false;
+
+				const handleResponse = (_event: Electron.IpcMainEvent, result: any) => {
+					if (resolved) return;
+					resolved = true;
+					clearTimeout(timeoutId);
+					resolve(result || null);
+				};
+
+				ipcMain.once(responseChannel, handleResponse);
+				if (!isWebContentsAvailable(mainWindow)) {
+					logger.warn('webContents is not available for getGroupChatState', 'WebServer');
+					ipcMain.removeListener(responseChannel, handleResponse);
+					resolve(null);
+					return;
+				}
+				mainWindow.webContents.send('remote:getGroupChatState', chatId, responseChannel);
+
+				const timeoutId = setTimeout(() => {
+					if (resolved) return;
+					resolved = true;
+					ipcMain.removeListener(responseChannel, handleResponse);
+					logger.warn(`getGroupChatState callback timed out for chat ${chatId}`, 'WebServer');
+					resolve(null);
+				}, 10000);
+			});
+		});
+
+		// Stop group chat — uses IPC request-response pattern
+		server.setStopGroupChatCallback(async (chatId: string) => {
+			const mainWindow = getMainWindow();
+			if (!mainWindow) {
+				logger.warn('mainWindow is null for stopGroupChat', 'WebServer');
+				return false;
+			}
+
+			return new Promise((resolve) => {
+				const responseChannel = `remote:stopGroupChat:response:${randomUUID()}`;
+				let resolved = false;
+
+				const handleResponse = (_event: Electron.IpcMainEvent, result: any) => {
+					if (resolved) return;
+					resolved = true;
+					clearTimeout(timeoutId);
+					resolve(result ?? false);
+				};
+
+				ipcMain.once(responseChannel, handleResponse);
+				if (!isWebContentsAvailable(mainWindow)) {
+					logger.warn('webContents is not available for stopGroupChat', 'WebServer');
+					ipcMain.removeListener(responseChannel, handleResponse);
+					resolve(false);
+					return;
+				}
+				mainWindow.webContents.send('remote:stopGroupChat', chatId, responseChannel);
+
+				const timeoutId = setTimeout(() => {
+					if (resolved) return;
+					resolved = true;
+					ipcMain.removeListener(responseChannel, handleResponse);
+					logger.warn(`stopGroupChat callback timed out for chat ${chatId}`, 'WebServer');
+					resolve(false);
+				}, 10000);
+			});
+		});
+
+		// Send message to group chat — uses IPC request-response pattern
+		server.setSendGroupChatMessageCallback(async (chatId: string, message: string) => {
+			const mainWindow = getMainWindow();
+			if (!mainWindow) {
+				logger.warn('mainWindow is null for sendGroupChatMessage', 'WebServer');
+				return false;
+			}
+
+			return new Promise((resolve) => {
+				const responseChannel = `remote:sendGroupChatMessage:response:${randomUUID()}`;
+				let resolved = false;
+
+				const handleResponse = (_event: Electron.IpcMainEvent, result: any) => {
+					if (resolved) return;
+					resolved = true;
+					clearTimeout(timeoutId);
+					resolve(result ?? false);
+				};
+
+				ipcMain.once(responseChannel, handleResponse);
+				if (!isWebContentsAvailable(mainWindow)) {
+					logger.warn('webContents is not available for sendGroupChatMessage', 'WebServer');
+					ipcMain.removeListener(responseChannel, handleResponse);
+					resolve(false);
+					return;
+				}
+				mainWindow.webContents.send(
+					'remote:sendGroupChatMessage',
+					chatId,
+					message,
+					responseChannel
+				);
+
+				const timeoutId = setTimeout(() => {
+					if (resolved) return;
+					resolved = true;
+					ipcMain.removeListener(responseChannel, handleResponse);
+					logger.warn(`sendGroupChatMessage callback timed out for chat ${chatId}`, 'WebServer');
+					resolve(false);
+				}, 10000);
+			});
+		});
+
+		// ============ Context Management Callbacks ============
+
+		// Merge context — uses IPC request-response pattern
+		server.setMergeContextCallback(async (sourceSessionId: string, targetSessionId: string) => {
+			const mainWindow = getMainWindow();
+			if (!mainWindow) {
+				logger.warn('mainWindow is null for mergeContext', 'WebServer');
+				return false;
+			}
+
+			return new Promise((resolve) => {
+				const responseChannel = `remote:mergeContext:response:${randomUUID()}`;
+				let resolved = false;
+
+				const handleResponse = (_event: Electron.IpcMainEvent, result: any) => {
+					if (resolved) return;
+					resolved = true;
+					clearTimeout(timeoutId);
+					resolve(result ?? false);
+				};
+
+				ipcMain.once(responseChannel, handleResponse);
+				if (!isWebContentsAvailable(mainWindow)) {
+					logger.warn('webContents is not available for mergeContext', 'WebServer');
+					ipcMain.removeListener(responseChannel, handleResponse);
+					resolve(false);
+					return;
+				}
+				mainWindow.webContents.send(
+					'remote:mergeContext',
+					sourceSessionId,
+					targetSessionId,
+					responseChannel
+				);
+
+				const timeoutId = setTimeout(() => {
+					if (resolved) return;
+					resolved = true;
+					ipcMain.removeListener(responseChannel, handleResponse);
+					logger.warn(
+						`mergeContext callback timed out for sessions ${sourceSessionId} → ${targetSessionId}`,
+						'WebServer'
+					);
+					resolve(false);
+				}, 30000);
+			});
+		});
+
+		// Transfer context — uses IPC request-response pattern
+		server.setTransferContextCallback(async (sourceSessionId: string, targetSessionId: string) => {
+			const mainWindow = getMainWindow();
+			if (!mainWindow) {
+				logger.warn('mainWindow is null for transferContext', 'WebServer');
+				return false;
+			}
+
+			return new Promise((resolve) => {
+				const responseChannel = `remote:transferContext:response:${randomUUID()}`;
+				let resolved = false;
+
+				const handleResponse = (_event: Electron.IpcMainEvent, result: any) => {
+					if (resolved) return;
+					resolved = true;
+					clearTimeout(timeoutId);
+					resolve(result ?? false);
+				};
+
+				ipcMain.once(responseChannel, handleResponse);
+				if (!isWebContentsAvailable(mainWindow)) {
+					logger.warn('webContents is not available for transferContext', 'WebServer');
+					ipcMain.removeListener(responseChannel, handleResponse);
+					resolve(false);
+					return;
+				}
+				mainWindow.webContents.send(
+					'remote:transferContext',
+					sourceSessionId,
+					targetSessionId,
+					responseChannel
+				);
+
+				const timeoutId = setTimeout(() => {
+					if (resolved) return;
+					resolved = true;
+					ipcMain.removeListener(responseChannel, handleResponse);
+					logger.warn(
+						`transferContext callback timed out for sessions ${sourceSessionId} → ${targetSessionId}`,
+						'WebServer'
+					);
+					resolve(false);
+				}, 30000);
+			});
+		});
+
+		// Summarize context — uses IPC request-response pattern
+		server.setSummarizeContextCallback(async (sessionId: string) => {
+			const mainWindow = getMainWindow();
+			if (!mainWindow) {
+				logger.warn('mainWindow is null for summarizeContext', 'WebServer');
+				return false;
+			}
+
+			return new Promise((resolve) => {
+				const responseChannel = `remote:summarizeContext:response:${randomUUID()}`;
+				let resolved = false;
+
+				const handleResponse = (_event: Electron.IpcMainEvent, result: any) => {
+					if (resolved) return;
+					resolved = true;
+					clearTimeout(timeoutId);
+					resolve(result ?? false);
+				};
+
+				ipcMain.once(responseChannel, handleResponse);
+				if (!isWebContentsAvailable(mainWindow)) {
+					logger.warn('webContents is not available for summarizeContext', 'WebServer');
+					ipcMain.removeListener(responseChannel, handleResponse);
+					resolve(false);
+					return;
+				}
+				mainWindow.webContents.send('remote:summarizeContext', sessionId, responseChannel);
+
+				const timeoutId = setTimeout(() => {
+					if (resolved) return;
+					resolved = true;
+					ipcMain.removeListener(responseChannel, handleResponse);
+					logger.warn(`summarizeContext callback timed out for session ${sessionId}`, 'WebServer');
+					resolve(false);
+				}, 60000);
+			});
+		});
+
+		// ============ Cue Automation Callbacks ============
+
+		// Get Cue subscriptions — uses IPC request-response pattern
+		server.setGetCueSubscriptionsCallback(async (sessionId?: string) => {
+			const mainWindow = getMainWindow();
+			if (!mainWindow) {
+				logger.warn('mainWindow is null for getCueSubscriptions', 'WebServer');
+				return [];
+			}
+
+			return new Promise((resolve) => {
+				const responseChannel = `remote:getCueSubscriptions:response:${randomUUID()}`;
+				let resolved = false;
+
+				const handleResponse = (_event: Electron.IpcMainEvent, result: any) => {
+					if (resolved) return;
+					resolved = true;
+					clearTimeout(timeoutId);
+					resolve(result ?? []);
+				};
+
+				ipcMain.once(responseChannel, handleResponse);
+				if (!isWebContentsAvailable(mainWindow)) {
+					logger.warn('webContents is not available for getCueSubscriptions', 'WebServer');
+					ipcMain.removeListener(responseChannel, handleResponse);
+					resolve([]);
+					return;
+				}
+				mainWindow.webContents.send('remote:getCueSubscriptions', sessionId, responseChannel);
+
+				const timeoutId = setTimeout(() => {
+					if (resolved) return;
+					resolved = true;
+					ipcMain.removeListener(responseChannel, handleResponse);
+					logger.warn('getCueSubscriptions callback timed out', 'WebServer');
+					resolve([]);
+				}, 30000);
+			});
+		});
+
+		// Toggle Cue subscription — uses IPC request-response pattern
+		server.setToggleCueSubscriptionCallback(async (subscriptionId: string, enabled: boolean) => {
+			const mainWindow = getMainWindow();
+			if (!mainWindow) {
+				logger.warn('mainWindow is null for toggleCueSubscription', 'WebServer');
+				return false;
+			}
+
+			return new Promise((resolve) => {
+				const responseChannel = `remote:toggleCueSubscription:response:${randomUUID()}`;
+				let resolved = false;
+
+				const handleResponse = (_event: Electron.IpcMainEvent, result: any) => {
+					if (resolved) return;
+					resolved = true;
+					clearTimeout(timeoutId);
+					resolve(result ?? false);
+				};
+
+				ipcMain.once(responseChannel, handleResponse);
+				if (!isWebContentsAvailable(mainWindow)) {
+					logger.warn('webContents is not available for toggleCueSubscription', 'WebServer');
+					ipcMain.removeListener(responseChannel, handleResponse);
+					resolve(false);
+					return;
+				}
+				mainWindow.webContents.send(
+					'remote:toggleCueSubscription',
+					subscriptionId,
+					enabled,
+					responseChannel
+				);
+
+				const timeoutId = setTimeout(() => {
+					if (resolved) return;
+					resolved = true;
+					ipcMain.removeListener(responseChannel, handleResponse);
+					logger.warn(
+						`toggleCueSubscription callback timed out for ${subscriptionId}`,
+						'WebServer'
+					);
+					resolve(false);
+				}, 10000);
+			});
+		});
+
+		// Get Cue activity log — uses IPC request-response pattern
+		server.setGetCueActivityCallback(async (sessionId?: string, limit?: number) => {
+			const mainWindow = getMainWindow();
+			if (!mainWindow) {
+				logger.warn('mainWindow is null for getCueActivity', 'WebServer');
+				return [];
+			}
+
+			return new Promise((resolve) => {
+				const responseChannel = `remote:getCueActivity:response:${randomUUID()}`;
+				let resolved = false;
+
+				const handleResponse = (_event: Electron.IpcMainEvent, result: any) => {
+					if (resolved) return;
+					resolved = true;
+					clearTimeout(timeoutId);
+					resolve(result ?? []);
+				};
+
+				ipcMain.once(responseChannel, handleResponse);
+				if (!isWebContentsAvailable(mainWindow)) {
+					logger.warn('webContents is not available for getCueActivity', 'WebServer');
+					ipcMain.removeListener(responseChannel, handleResponse);
+					resolve([]);
+					return;
+				}
+				mainWindow.webContents.send(
+					'remote:getCueActivity',
+					sessionId,
+					limit ?? 50,
+					responseChannel
+				);
+
+				const timeoutId = setTimeout(() => {
+					if (resolved) return;
+					resolved = true;
+					ipcMain.removeListener(responseChannel, handleResponse);
+					logger.warn('getCueActivity callback timed out', 'WebServer');
+					resolve([]);
+				}, 30000);
+			});
+		});
+
+		// ============ Usage Dashboard & Achievements Callbacks ============
+
+		// Get usage dashboard data — aggregates from session usage stats via IPC
+		server.setGetUsageDashboardCallback(async (timeRange: 'day' | 'week' | 'month' | 'all') => {
+			const mainWindow = getMainWindow();
+			if (!mainWindow) {
+				logger.warn('mainWindow is null for getUsageDashboard', 'WebServer');
+				return {
+					totalTokensIn: 0,
+					totalTokensOut: 0,
+					totalCost: 0,
+					sessionBreakdown: [],
+					dailyUsage: [],
+				};
+			}
+
+			return new Promise((resolve) => {
+				const responseChannel = `remote:getUsageDashboard:response:${randomUUID()}`;
+				let resolved = false;
+
+				const handleResponse = (_event: Electron.IpcMainEvent, result: any) => {
+					if (resolved) return;
+					resolved = true;
+					clearTimeout(timeoutId);
+					resolve(
+						result ?? {
+							totalTokensIn: 0,
+							totalTokensOut: 0,
+							totalCost: 0,
+							sessionBreakdown: [],
+							dailyUsage: [],
+						}
+					);
+				};
+
+				ipcMain.once(responseChannel, handleResponse);
+				if (!isWebContentsAvailable(mainWindow)) {
+					logger.warn('webContents is not available for getUsageDashboard', 'WebServer');
+					ipcMain.removeListener(responseChannel, handleResponse);
+					resolve({
+						totalTokensIn: 0,
+						totalTokensOut: 0,
+						totalCost: 0,
+						sessionBreakdown: [],
+						dailyUsage: [],
+					});
+					return;
+				}
+				mainWindow.webContents.send('remote:getUsageDashboard', timeRange, responseChannel);
+
+				const timeoutId = setTimeout(() => {
+					if (resolved) return;
+					resolved = true;
+					ipcMain.removeListener(responseChannel, handleResponse);
+					logger.warn('getUsageDashboard callback timed out', 'WebServer');
+					resolve({
+						totalTokensIn: 0,
+						totalTokensOut: 0,
+						totalCost: 0,
+						sessionBreakdown: [],
+						dailyUsage: [],
+					});
+				}, 15000);
+			});
+		});
+
+		// Get achievements data — aggregates from settings store via IPC
+		server.setGetAchievementsCallback(async () => {
+			const mainWindow = getMainWindow();
+			if (!mainWindow) {
+				logger.warn('mainWindow is null for getAchievements', 'WebServer');
+				return [];
+			}
+
+			return new Promise((resolve) => {
+				const responseChannel = `remote:getAchievements:response:${randomUUID()}`;
+				let resolved = false;
+
+				const handleResponse = (_event: Electron.IpcMainEvent, result: any) => {
+					if (resolved) return;
+					resolved = true;
+					clearTimeout(timeoutId);
+					resolve(result ?? []);
+				};
+
+				ipcMain.once(responseChannel, handleResponse);
+				if (!isWebContentsAvailable(mainWindow)) {
+					logger.warn('webContents is not available for getAchievements', 'WebServer');
+					ipcMain.removeListener(responseChannel, handleResponse);
+					resolve([]);
+					return;
+				}
+				mainWindow.webContents.send('remote:getAchievements', responseChannel);
+
+				const timeoutId = setTimeout(() => {
+					if (resolved) return;
+					resolved = true;
+					ipcMain.removeListener(responseChannel, handleResponse);
+					logger.warn('getAchievements callback timed out', 'WebServer');
+					resolve([]);
 				}, 10000);
 			});
 		});

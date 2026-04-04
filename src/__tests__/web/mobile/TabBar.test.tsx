@@ -103,7 +103,7 @@ describe('TabBar', () => {
 	});
 
 	describe('Render conditions', () => {
-		it('returns null when tabs array is empty', () => {
+		it('renders tab bar chrome even when tabs array is empty', () => {
 			const { container } = render(
 				<TabBar
 					tabs={[]}
@@ -113,10 +113,10 @@ describe('TabBar', () => {
 					onCloseTab={mockOnCloseTab}
 				/>
 			);
-			expect(container.firstChild).toBeNull();
+			expect(container.firstChild).not.toBeNull();
 		});
 
-		it('returns null when there is only one tab', () => {
+		it('renders tab bar chrome with a single tab', () => {
 			const { container } = render(
 				<TabBar
 					tabs={[defaultTab]}
@@ -126,7 +126,7 @@ describe('TabBar', () => {
 					onCloseTab={mockOnCloseTab}
 				/>
 			);
-			expect(container.firstChild).toBeNull();
+			expect(container.firstChild).not.toBeNull();
 		});
 
 		it('renders when there are two or more tabs', () => {
@@ -761,7 +761,7 @@ describe('TabBar', () => {
 			expect(lines).toHaveLength(2);
 		});
 
-		it('calls onNewTab when clicked', () => {
+		it('calls onNewTab when New AI Chat is selected from the menu', () => {
 			const tabs = [
 				createTab({ id: 'tab-1', name: 'First' }),
 				createTab({ id: 'tab-2', name: 'Second' }),
@@ -776,7 +776,11 @@ describe('TabBar', () => {
 				/>
 			);
 
+			// Click the "New Tab" button to open the dropdown menu
 			fireEvent.click(screen.getByTitle('New Tab'));
+
+			// Then click "New AI Chat" in the dropdown
+			fireEvent.click(screen.getByText('New AI Chat'));
 
 			expect(mockOnNewTab).toHaveBeenCalledTimes(1);
 		});

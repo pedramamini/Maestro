@@ -9,6 +9,7 @@ import fs from 'fs/promises';
 import { logger } from '../utils/logger';
 import { execFileNoThrow } from '../utils/execFile';
 import { ensureForkSetup } from '../utils/symphony-fork';
+import { resolveGhPath } from '../utils/cliDetection';
 import type { DocumentReference } from '../../shared/symphony-types';
 import { PLAYBOOKS_DIR } from '../../shared/maestro-paths';
 
@@ -141,7 +142,8 @@ Closes #${issueNumber}
 		args.push('--head', `${forkOwner}:${branchName}`);
 	}
 
-	const result = await execFileNoThrow('gh', args, localPath);
+	const ghCommand = await resolveGhPath();
+	const result = await execFileNoThrow(ghCommand, args, localPath);
 
 	if (result.exitCode !== 0) {
 		return { success: false, error: `PR creation failed: ${result.stderr}` };
@@ -369,9 +371,10 @@ Processed all Auto Run documents for: ${issueTitle}`;
 	}
 
 	// Convert draft to ready for review
+	const ghCommand = await resolveGhPath();
 	const readyArgs = ['pr', 'ready', prNumber.toString()];
 	if (upstreamSlug) readyArgs.push('--repo', upstreamSlug);
-	const readyResult = await execFileNoThrow('gh', readyArgs, localPath);
+	const readyResult = await execFileNoThrow(ghCommand, readyArgs, localPath);
 	if (readyResult.exitCode !== 0) {
 		return { success: false, error: `Failed to mark PR ready: ${readyResult.stderr}` };
 	}
@@ -391,12 +394,12 @@ Closes #${issueNumber}
 
 	const editArgs = ['pr', 'edit', prNumber.toString(), '--body', body];
 	if (upstreamSlug) editArgs.push('--repo', upstreamSlug);
-	await execFileNoThrow('gh', editArgs, localPath);
+	await execFileNoThrow(ghCommand, editArgs, localPath);
 
 	// Get final PR URL
 	const viewArgs = ['pr', 'view', prNumber.toString(), '--json', 'url', '-q', '.url'];
 	if (upstreamSlug) viewArgs.push('--repo', upstreamSlug);
-	const prInfoResult = await execFileNoThrow('gh', viewArgs, localPath);
+	const prInfoResult = await execFileNoThrow(ghCommand, viewArgs, localPath);
 
 	return {
 		success: true,
@@ -414,6 +417,7 @@ export async function cancelContribution(
 	upstreamSlug?: string
 ): Promise<{ success: boolean; error?: string }> {
 	// Close the draft PR
+	const ghCommand = await resolveGhPath();
 	const closeArgs = ['pr', 'close', prNumber.toString()];
 	if (!upstreamSlug) {
 		// Only delete branch for non-fork PRs — cross-fork delete-branch fails due to permissions
@@ -421,7 +425,7 @@ export async function cancelContribution(
 	} else {
 		closeArgs.push('--repo', upstreamSlug);
 	}
-	const closeResult = await execFileNoThrow('gh', closeArgs, localPath);
+	const closeResult = await execFileNoThrow(ghCommand, closeArgs, localPath);
 	if (closeResult.exitCode !== 0) {
 		logger.warn('Failed to close PR', LOG_CONTEXT, { prNumber, error: closeResult.stderr });
 		return {

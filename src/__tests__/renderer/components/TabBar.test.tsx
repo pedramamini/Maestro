@@ -32,9 +32,9 @@ vi.mock('lucide-react', () => ({
 			✎
 		</span>
 	),
-	Mail: ({ className, style }: { className?: string; style?: React.CSSProperties }) => (
-		<span data-testid="mail-icon" className={className} style={style}>
-			✉
+	Bell: ({ className, style }: { className?: string; style?: React.CSSProperties }) => (
+		<span data-testid="bell-icon" className={className} style={style}>
+			🔔
 		</span>
 	),
 	Pencil: ({ className, style }: { className?: string; style?: React.CSSProperties }) => (
@@ -105,6 +105,11 @@ vi.mock('lucide-react', () => ({
 	FileText: ({ className, style }: { className?: string; style?: React.CSSProperties }) => (
 		<span data-testid="file-text-icon" className={className} style={style}>
 			📄
+		</span>
+	),
+	Mail: ({ className, style }: { className?: string; style?: React.CSSProperties }) => (
+		<span data-testid="mail-icon" className={className} style={style}>
+			✉
 		</span>
 	),
 }));

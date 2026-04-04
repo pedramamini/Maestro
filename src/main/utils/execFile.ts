@@ -52,6 +52,7 @@ export function needsWindowsShell(command: string): boolean {
 	// Use regex to handle both Unix (/) and Windows (\) path separators
 	const knownExeCommands = new Set([
 		'git',
+		'gh',
 		'node',
 		'npm',
 		'npx',

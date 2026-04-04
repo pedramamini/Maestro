@@ -78,6 +78,7 @@ export interface AppSessionModalsProps {
 	renameTabInitialName: string;
 	onCloseRenameTabModal: () => void;
 	onRenameTab: (newName: string) => void;
+	onAutoNameTab: () => void;
 
 	// NewAgentChoiceModal
 	onOpenManualSetup: () => void;
@@ -124,6 +125,7 @@ export const AppSessionModals = memo(function AppSessionModals({
 	renameTabInitialName,
 	onCloseRenameTabModal,
 	onRenameTab,
+	onAutoNameTab,
 	// NewAgentChoiceModal
 	onOpenManualSetup,
 	onOpenWizardSetup,
@@ -199,6 +201,10 @@ export const AppSessionModals = memo(function AppSessionModals({
 					agentSessionId={activeSession?.aiTabs?.find((t) => t.id === renameTabId)?.agentSessionId}
 					onClose={onCloseRenameTabModal}
 					onRename={onRenameTab}
+					onAutoName={onAutoNameTab}
+					hasLogs={
+						(activeSession?.aiTabs?.find((t) => t.id === renameTabId)?.logs?.length ?? 0) > 0
+					}
 				/>
 			)}
 

@@ -207,11 +207,14 @@ const mockMaestro = {
 		get: vi.fn().mockResolvedValue(undefined),
 		set: vi.fn().mockResolvedValue(undefined),
 		getAll: vi.fn().mockResolvedValue({}),
+		onExternalChange: vi.fn().mockReturnValue(() => {}),
 	},
 	sessions: {
 		get: vi.fn().mockResolvedValue([]),
 		save: vi.fn().mockResolvedValue(undefined),
 		setAll: vi.fn().mockResolvedValue(undefined),
+		getActiveSessionId: vi.fn().mockResolvedValue(''),
+		setActiveSessionId: vi.fn().mockResolvedValue(undefined),
 	},
 	groups: {
 		get: vi.fn().mockResolvedValue([]),
@@ -300,6 +303,8 @@ const mockMaestro = {
 		refresh: vi.fn().mockResolvedValue({ agents: [], debugInfo: null }),
 		// Model discovery for agents that support model selection
 		getModels: vi.fn().mockResolvedValue([]),
+		// Config options discovery (effort levels, reasoning, etc.)
+		getConfigOptions: vi.fn().mockResolvedValue([]),
 		// Capabilities for gating UI features based on agent type
 		getCapabilities: vi.fn().mockResolvedValue({
 			supportsResume: true,
