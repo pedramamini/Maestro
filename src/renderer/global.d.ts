@@ -277,6 +277,12 @@ interface MaestroAPI {
 			};
 		}) => Promise<{ pid: number; success: boolean }>;
 		write: (sessionId: string, data: string) => Promise<boolean>;
+		writeInterjection: (
+			sessionId: string,
+			text: string,
+			interjectionId?: string,
+			images?: string[]
+		) => Promise<boolean>;
 		interrupt: (sessionId: string) => Promise<boolean>;
 		kill: (sessionId: string) => Promise<boolean>;
 		resize: (sessionId: string, cols: number, rows: number) => Promise<boolean>;
@@ -292,6 +298,7 @@ interface MaestroAPI {
 				syncHistory?: boolean;
 			};
 		}) => Promise<{ exitCode: number }>;
+		hasResultEmitted: (sessionId: string) => Promise<boolean>;
 		getActiveProcesses: () => Promise<
 			Array<{
 				sessionId: string;
@@ -315,6 +322,9 @@ interface MaestroAPI {
 		onSessionId: (callback: (sessionId: string, agentSessionId: string) => void) => () => void;
 		onSlashCommands: (callback: (sessionId: string, slashCommands: string[]) => void) => () => void;
 		onThinkingChunk: (callback: (sessionId: string, content: string) => void) => () => void;
+		onInterjectionAck: (
+			callback: (sessionId: string, interjectionId: string) => void
+		) => () => void;
 		onToolExecution: (
 			callback: (
 				sessionId: string,

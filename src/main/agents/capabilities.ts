@@ -61,6 +61,9 @@ export interface AgentCapabilities {
 	/** Agent supports --input-format stream-json for image input via stdin */
 	supportsStreamJsonInput: boolean;
 
+	/** Agent can receive additional user messages via stdin while processing a turn */
+	supportsMidTurnInput: boolean;
+
 	/** Agent emits streaming thinking/reasoning content that can be displayed */
 	supportsThinkingDisplay: boolean;
 
@@ -112,6 +115,7 @@ export const DEFAULT_CAPABILITIES: AgentCapabilities = {
 	supportsResultMessages: false,
 	supportsModelSelection: false,
 	supportsStreamJsonInput: false,
+	supportsMidTurnInput: false,
 	supportsThinkingDisplay: false,
 	supportsContextMerge: false,
 	supportsContextExport: false,
@@ -155,6 +159,7 @@ export const AGENT_CAPABILITIES: Record<string, AgentCapabilities> = {
 		supportsResultMessages: true, // "result" event type
 		supportsModelSelection: false, // Model is configured via Anthropic account
 		supportsStreamJsonInput: true, // --input-format stream-json for images via stdin
+		supportsMidTurnInput: true, // NDJSON stream-json stdin accepts multiple messages mid-turn
 		supportsThinkingDisplay: true, // Emits streaming assistant messages
 		supportsContextMerge: true, // Can receive merged context via prompts
 		supportsContextExport: true, // Session storage supports context export
@@ -186,6 +191,7 @@ export const AGENT_CAPABILITIES: Record<string, AgentCapabilities> = {
 		supportsResultMessages: false,
 		supportsModelSelection: false,
 		supportsStreamJsonInput: false,
+		supportsMidTurnInput: false,
 		supportsThinkingDisplay: false, // Terminal is not an AI agent
 		supportsContextMerge: false, // Terminal is not an AI agent
 		supportsContextExport: false, // Terminal has no AI context
@@ -220,6 +226,7 @@ export const AGENT_CAPABILITIES: Record<string, AgentCapabilities> = {
 		supportsResultMessages: false, // All messages are agent_message type (no distinct result) - Verified
 		supportsModelSelection: true, // -m, --model flag - Documented
 		supportsStreamJsonInput: false, // Uses -i, --image flag instead
+		supportsMidTurnInput: false,
 		supportsThinkingDisplay: true, // Emits reasoning tokens (o3/o4-mini)
 		supportsContextMerge: true, // Can receive merged context via prompts
 		supportsContextExport: true, // Session storage supports context export
@@ -254,6 +261,7 @@ export const AGENT_CAPABILITIES: Record<string, AgentCapabilities> = {
 		supportsResultMessages: false,
 		supportsModelSelection: false, // Not yet investigated
 		supportsStreamJsonInput: false,
+		supportsMidTurnInput: false,
 		supportsThinkingDisplay: false, // Not yet investigated
 		supportsContextMerge: false, // Not yet investigated - PLACEHOLDER
 		supportsContextExport: false, // Not yet investigated - PLACEHOLDER
@@ -287,6 +295,7 @@ export const AGENT_CAPABILITIES: Record<string, AgentCapabilities> = {
 		supportsResultMessages: false,
 		supportsModelSelection: false, // Not yet investigated
 		supportsStreamJsonInput: false,
+		supportsMidTurnInput: false,
 		supportsThinkingDisplay: false, // Not yet investigated
 		supportsContextMerge: false, // Not yet investigated - PLACEHOLDER
 		supportsContextExport: false, // Not yet investigated - PLACEHOLDER
@@ -321,6 +330,7 @@ export const AGENT_CAPABILITIES: Record<string, AgentCapabilities> = {
 		supportsResultMessages: true, // step_finish with part.reason:"stop" - Verified
 		supportsModelSelection: true, // --model provider/model (e.g., 'ollama/qwen3:8b') - Verified
 		supportsStreamJsonInput: false, // Uses positional arguments for prompt
+		supportsMidTurnInput: false,
 		supportsThinkingDisplay: true, // Emits streaming text chunks
 		supportsContextMerge: true, // Can receive merged context via prompts
 		supportsContextExport: true, // Session storage supports context export
@@ -354,6 +364,7 @@ export const AGENT_CAPABILITIES: Record<string, AgentCapabilities> = {
 		supportsResultMessages: true, // Can detect end of conversation
 		supportsModelSelection: true, // -m, --model flag - Verified
 		supportsStreamJsonInput: true, // --input-format stream-json - Verified
+		supportsMidTurnInput: true, // Uses same stream-json input format — pending direct verification
 		supportsThinkingDisplay: true, // Emits thinking content in messages - Verified
 		supportsContextMerge: true, // Can receive merged context via prompts
 		supportsContextExport: true, // Session files are exportable
@@ -388,6 +399,7 @@ export const AGENT_CAPABILITIES: Record<string, AgentCapabilities> = {
 		supportsResultMessages: false,
 		supportsModelSelection: false,
 		supportsStreamJsonInput: false,
+		supportsMidTurnInput: false,
 		supportsThinkingDisplay: false,
 		supportsContextMerge: false,
 		supportsContextExport: false,
