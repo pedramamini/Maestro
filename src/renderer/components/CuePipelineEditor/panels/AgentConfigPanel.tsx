@@ -124,8 +124,8 @@ export function AgentConfigPanel({
 			style={{
 				display: 'flex',
 				flexDirection: 'column',
-				gap: 8,
-				flex: expanded ? 1 : undefined,
+				gap: 12,
+				flex: 1,
 				minHeight: 0,
 				overflowY: 'auto',
 			}}
@@ -134,10 +134,9 @@ export function AgentConfigPanel({
 				style={{
 					display: 'flex',
 					gap: 12,
-					flex: expanded ? 1 : undefined,
+					flex: 1,
 					minHeight: 0,
-					// In collapsed view with fan-in, constrain prompts so fan-in card is visible
-					...(hasFanIn && !expanded ? { maxHeight: 120, flexShrink: 1 } : {}),
+					overflow: 'auto',
 				}}
 			>
 				{/* Input Prompt(s) */}
@@ -196,7 +195,7 @@ export function AgentConfigPanel({
 									resize: 'vertical',
 									fontFamily: 'inherit',
 									lineHeight: 1.4,
-									...(expanded ? { flex: 1, minHeight: 0 } : { minHeight: hasFanIn ? 48 : 72 }),
+									...(expanded ? { flex: 1, minHeight: 0 } : { minHeight: hasFanIn ? 64 : 80 }),
 								}}
 							/>
 						</label>
@@ -288,7 +287,7 @@ export function AgentConfigPanel({
 								fontFamily: 'inherit',
 								lineHeight: 1.4,
 								cursor: outputDisabled ? 'not-allowed' : undefined,
-								...(expanded ? { flex: 1, minHeight: 0 } : { minHeight: hasFanIn ? 48 : 72 }),
+								...(expanded ? { flex: 1, minHeight: 0 } : { minHeight: hasFanIn ? 64 : 80 }),
 							}}
 						/>
 					</label>

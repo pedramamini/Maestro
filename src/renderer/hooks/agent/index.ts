@@ -121,3 +121,7 @@ export type {
 	UseAgentConfigurationOptions,
 	UseAgentConfigurationReturn,
 } from './useAgentConfiguration';
+
+// Remote path validation (debounced SSH path checks)
+export { useRemotePathValidation } from './useRemotePathValidation';
+export type { UseRemotePathValidationOptions } from './useRemotePathValidation';

@@ -238,6 +238,7 @@ export function EncoreTab({ theme, isOpen }: EncoreTabProps) {
 
 			{/* Usage & Stats Feature Section */}
 			<div
+				data-setting-id="encore-usage-stats"
 				className="rounded-lg border"
 				style={{
 					borderColor: encoreFeatures.usageStats ? theme.colors.accent : theme.colors.border,
@@ -486,6 +487,7 @@ export function EncoreTab({ theme, isOpen }: EncoreTabProps) {
 
 			{/* Maestro Symphony Feature Section */}
 			<div
+				data-setting-id="encore-symphony"
 				className="rounded-lg border"
 				style={{
 					borderColor: encoreFeatures.symphony ? theme.colors.accent : theme.colors.border,
@@ -653,6 +655,7 @@ export function EncoreTab({ theme, isOpen }: EncoreTabProps) {
 
 			{/* Maestro Cue Feature Section */}
 			<div
+				data-setting-id="encore-cue"
 				className="rounded-lg border"
 				style={{
 					borderColor: encoreFeatures.maestroCue ? theme.colors.accent : theme.colors.border,
@@ -717,6 +720,7 @@ export function EncoreTab({ theme, isOpen }: EncoreTabProps) {
 
 			{/* Director's Notes Feature Section */}
 			<div
+				data-setting-id="encore-director-notes"
 				className="rounded-lg border"
 				style={{
 					borderColor: encoreFeatures.directorNotes ? theme.colors.accent : theme.colors.border,
@@ -950,6 +954,8 @@ export function EncoreTab({ theme, isOpen }: EncoreTabProps) {
 										availableModels={ac.availableModels}
 										loadingModels={ac.loadingModels}
 										onRefreshModels={ac.refreshModels}
+										dynamicOptions={ac.dynamicOptions}
+										loadingDynamicOptions={ac.loadingDynamicOptions}
 										onRefreshAgent={ac.refreshAgent}
 										refreshingAgent={ac.refreshingAgent}
 										compact

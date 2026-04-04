@@ -81,7 +81,7 @@ export function NodeConfigPanel({
 
 	const hasFanIn = (incomingAgentEdgeCount ?? 0) > 1;
 	const hasUpstreamAgents = hasIncomingAgentEdges === true;
-	const collapsedHeight = isTrigger ? 'auto' : hasFanIn ? 340 : hasUpstreamAgents ? 280 : 240;
+	const collapsedHeight = isTrigger ? 'auto' : hasFanIn ? 420 : hasUpstreamAgents ? 360 : 320;
 
 	return (
 		<div

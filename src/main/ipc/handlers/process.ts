@@ -123,6 +123,7 @@ export function registerProcessHandlers(deps: ProcessHandlerDependencies): void 
 				sessionCustomArgs?: string; // Session-specific custom args
 				sessionCustomEnvVars?: Record<string, string>; // Session-specific env vars
 				sessionCustomModel?: string; // Session-specific model selection
+				sessionCustomEffort?: string; // Session-specific effort/reasoning level
 				sessionCustomContextWindow?: number; // Session-specific context window size
 				// Per-session SSH remote config (takes precedence over agent-level SSH config)
 				sessionSshRemoteConfig?: {
@@ -194,6 +195,7 @@ export function registerProcessHandlers(deps: ProcessHandlerDependencies): void 
 				const configResolution = applyAgentConfigOverrides(agent, finalArgs, {
 					agentConfigValues,
 					sessionCustomModel: config.sessionCustomModel,
+					sessionCustomEffort: config.sessionCustomEffort,
 					sessionCustomArgs: config.sessionCustomArgs,
 					sessionCustomEnvVars: config.sessionCustomEnvVars,
 				});

@@ -228,6 +228,12 @@ export interface UseSettingsReturn {
 	colorBlindMode: boolean;
 	setColorBlindMode: (value: boolean) => void;
 
+	// Tab filtering settings
+	showStarredInUnreadFilter: boolean;
+	setShowStarredInUnreadFilter: (value: boolean) => void;
+	showFilePreviewsInUnreadFilter: boolean;
+	setShowFilePreviewsInUnreadFilter: (value: boolean) => void;
+
 	// Document Graph settings
 	documentGraphShowExternalLinks: boolean;
 	setDocumentGraphShowExternalLinks: (value: boolean) => void;
@@ -311,6 +317,10 @@ export interface UseSettingsReturn {
 	setUseNativeTitleBar: (value: boolean) => void;
 	autoHideMenuBar: boolean;
 	setAutoHideMenuBar: (value: boolean) => void;
+
+	// Group Chat settings
+	moderatorStandingInstructions: string;
+	setModeratorStandingInstructions: (value: string) => void;
 }
 
 export function useSettings(): UseSettingsReturn {
@@ -330,6 +340,18 @@ export function useSettings(): UseSettingsReturn {
 		}
 		const cleanup = window.maestro.app.onSystemResume(() => {
 			console.log('[Settings] System resumed from sleep, reloading settings');
+			loadAllSettings();
+		});
+		return cleanup;
+	}, []);
+
+	// Reload settings when external change detected (e.g., maestro-cli settings set)
+	useEffect(() => {
+		if (!window.maestro?.settings?.onExternalChange) {
+			return;
+		}
+		const cleanup = window.maestro.settings.onExternalChange(() => {
+			console.log('[Settings] External settings change detected, reloading');
 			loadAllSettings();
 		});
 		return cleanup;

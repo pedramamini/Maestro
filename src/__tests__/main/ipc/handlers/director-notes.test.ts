@@ -29,6 +29,9 @@ vi.mock('../../../../main/history-manager', () => ({
 	getHistoryManager: vi.fn(),
 }));
 
+// Mock the shared-history-manager module (no longer imported by director-notes)
+vi.mock('../../../../main/shared-history-manager', () => ({}));
+
 // Mock the stores module
 const mockGetSessionsStore = vi.fn().mockReturnValue({
 	get: vi.fn().mockReturnValue([]),

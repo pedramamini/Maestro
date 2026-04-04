@@ -10,6 +10,17 @@ import { AutoRun, AutoRunHandle } from '../../../renderer/components/AutoRun';
 import { LayerStackProvider } from '../../../renderer/contexts/LayerStackContext';
 import { formatShortcutKeys } from '../../../renderer/utils/shortcutFormatter';
 import type { Theme, BatchRunState, SessionState } from '../../../renderer/types';
+import { useBatchStore } from '../../../renderer/stores/batchStore';
+
+// Helper to seed the Zustand batch store so the component's direct store reads
+// (isErrorPaused, batchError) see the expected state for a given session.
+const seedBatchStore = (sessionId: string, state: Partial<BatchRunState>) => {
+	useBatchStore.setState({
+		batchRunStates: {
+			[sessionId]: state as BatchRunState,
+		},
+	});
+};
 
 // Helper to render with LayerStackProvider (required by AutoRunSearchBar)
 const renderWithProvider = (ui: React.ReactElement) => {
@@ -3429,6 +3440,7 @@ describe('Reset Tasks Flash Notification', () => {
 				},
 				errorDocumentIndex: 0,
 			});
+			seedBatchStore('test-session-1', batchRunState);
 			const props = createDefaultProps({
 				batchRunState,
 				onResumeAfterError,
@@ -3455,6 +3467,7 @@ describe('Reset Tasks Flash Notification', () => {
 				},
 				errorDocumentIndex: 0,
 			});
+			seedBatchStore('test-session-1', batchRunState);
 			const props = createDefaultProps({
 				batchRunState,
 				onResumeAfterError,
@@ -3484,6 +3497,7 @@ describe('Reset Tasks Flash Notification', () => {
 				},
 				errorDocumentIndex: 0,
 			});
+			seedBatchStore('test-session-1', batchRunState);
 			const props = createDefaultProps({
 				batchRunState,
 				onAbortBatchOnError,
@@ -3507,6 +3521,7 @@ describe('Reset Tasks Flash Notification', () => {
 				},
 				errorDocumentIndex: 0,
 			});
+			seedBatchStore('test-session-1', batchRunState);
 			const props = createDefaultProps({
 				batchRunState,
 				onResumeAfterError,

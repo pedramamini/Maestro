@@ -35,6 +35,7 @@ interface ProcessConfig {
 	sessionCustomArgs?: string;
 	sessionCustomEnvVars?: Record<string, string>;
 	sessionCustomModel?: string;
+	sessionCustomEffort?: string;
 	sessionCustomContextWindow?: number;
 	// Per-session SSH remote config (takes precedence over agent-level SSH config)
 	sessionSshRemoteConfig?: {
@@ -185,6 +186,7 @@ type GroupChatData = {
 		customArgs?: string;
 		customEnvVars?: Record<string, string>;
 		customModel?: string;
+		customEffort?: string;
 		sshRemoteConfig?: {
 			enabled: boolean;
 			remoteId: string | null;
@@ -250,6 +252,7 @@ interface MaestroAPI {
 		get: (key: string) => Promise<unknown>;
 		set: (key: string, value: unknown) => Promise<boolean>;
 		getAll: () => Promise<Record<string, unknown>>;
+		onExternalChange: (handler: () => void) => () => void;
 	};
 	sessions: {
 		getAll: () => Promise<any[]>;
@@ -882,6 +885,11 @@ interface MaestroAPI {
 		getCustomEnvVars: (agentId: string) => Promise<Record<string, string> | null>;
 		getAllCustomEnvVars: () => Promise<Record<string, Record<string, string>>>;
 		getModels: (agentId: string, forceRefresh?: boolean, sshRemoteId?: string) => Promise<string[]>;
+		getConfigOptions: (
+			agentId: string,
+			optionKey: string,
+			forceRefresh?: boolean
+		) => Promise<string[]>;
 		discoverSlashCommands: (
 			agentId: string,
 			cwd: string,
@@ -1932,6 +1940,12 @@ interface MaestroAPI {
 			readOnly?: boolean
 		) => Promise<void>;
 		stopModerator: (id: string) => Promise<void>;
+		stopAll: (id: string) => Promise<void>;
+		reportAutoRunComplete: (
+			groupChatId: string,
+			participantName: string,
+			summary: string
+		) => Promise<void>;
 		getModeratorSessionId: (id: string) => Promise<string | null>;
 		// Participants
 		addParticipant: (
@@ -2059,8 +2073,17 @@ interface MaestroAPI {
 		onParticipantState: (
 			callback: (groupChatId: string, participantName: string, state: 'idle' | 'working') => void
 		) => () => void;
+		onParticipantLiveOutput: (
+			callback: (groupChatId: string, participantName: string, chunk: string) => void
+		) => () => void;
 		onModeratorSessionIdChanged: (
 			callback: (groupChatId: string, sessionId: string) => void
+		) => () => void;
+		onAutoRunTriggered: (
+			callback: (groupChatId: string, participantName: string, filename?: string) => void
+		) => () => void;
+		onAutoRunBatchComplete: (
+			callback: (groupChatId: string, participantName: string) => void
 		) => () => void;
 	};
 	// Leaderboard API

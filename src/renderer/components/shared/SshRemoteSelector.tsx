@@ -115,7 +115,7 @@ function SshRemoteDropdown({
 							onSshRemoteConfigChange({
 								enabled: true,
 								remoteId: value,
-								syncHistory: sshRemoteConfig?.syncHistory ?? true,
+								syncHistory: sshRemoteConfig?.syncHistory ?? false,
 							});
 						}
 					}}
@@ -170,7 +170,7 @@ function SshRemoteDropdown({
 				>
 					<input
 						type="checkbox"
-						checked={sshRemoteConfig?.syncHistory !== false}
+						checked={sshRemoteConfig?.syncHistory === true}
 						onChange={(e) => {
 							onSshRemoteConfigChange({
 								...sshRemoteConfig!,

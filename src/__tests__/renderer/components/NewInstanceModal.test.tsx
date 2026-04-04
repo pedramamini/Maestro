@@ -2464,7 +2464,7 @@ describe('NewInstanceModal', () => {
 			// This validates the path exists on the remote and enables the Create button
 			await waitFor(
 				() => {
-					expect(screen.getByText('Remote directory found')).toBeInTheDocument();
+					expect(screen.getByText('Directory found on test.example.com')).toBeInTheDocument();
 				},
 				{ timeout: 3000 }
 			);

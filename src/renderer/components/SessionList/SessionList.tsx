@@ -264,7 +264,7 @@ function SessionListInner(props: SessionListProps) {
 	const { onResizeStart: onSidebarResizeStart, transitionClass: sidebarTransitionClass } =
 		useResizablePanel({
 			width: leftSidebarWidthState,
-			minWidth: 256,
+			minWidth: 280,
 			maxWidth: 600,
 			settingsKey: 'leftSidebarWidth',
 			setWidth: setLeftSidebarWidthState,
@@ -275,6 +275,10 @@ function SessionListInner(props: SessionListProps) {
 	const setSessionFilterOpen = useUIStore((s) => s.setSessionFilterOpen);
 	const showUnreadAgentsOnly = useUIStore((s) => s.showUnreadAgentsOnly);
 	const toggleShowUnreadAgentsOnly = useUIStore((s) => s.toggleShowUnreadAgentsOnly);
+	const hasUnreadAgents = useMemo(
+		() => sessions.some((s) => s.aiTabs?.some((tab) => tab.hasUnread) || s.state === 'busy'),
+		[sessions]
+	);
 	const [menuOpen, setMenuOpen] = useState(false);
 
 	// Live overlay state (extracted hook)
@@ -1271,6 +1275,7 @@ function SessionListInner(props: SessionListProps) {
 				hasNoSessions={sessions.length === 0}
 				shortcuts={shortcuts}
 				showUnreadAgentsOnly={showUnreadAgentsOnly}
+				hasUnreadAgents={hasUnreadAgents}
 				addNewSession={addNewSession}
 				openFeedback={props.openFeedback}
 				setLeftSidebarOpen={setLeftSidebarOpen}

@@ -13,6 +13,26 @@ Maestro can update itself automatically! This feature was introduced in **v0.8.7
 
 ---
 
+## v0.16.x - Maestro Cue
+
+**Latest: v0.16.6-RC** | In Development
+
+### New Features
+
+- **Maestro Cue** — Event-driven automation engine that watches for file changes, time intervals, agent completions, GitHub PRs/issues, and pending markdown tasks to trigger automated prompts. Configured via `.maestro/cue.yaml` per project. Gated as an Encore Feature
+- **Environment tab** — Dedicated Settings tab for managing global environment variables passed to all agents
+- **Static history graph with viewport indicator** — The activity graph in the History panel no longer shifts as you scroll; instead, a sliding indicator line with a timestamp label shows your current position in the timeline
+- **File preview tab filtering** — New setting to control whether file preview tabs remain visible when the unread filter is active, with a redesigned Tab Filtering section in Display settings
+- **Cloudflare tunnel auto-restart** — The web/mobile tunnel automatically restarts when the web server port changes
+- **Custom TTS notifications** — Synopsis text is now sent to custom notification commands for user-initiated tasks
+
+### Bug Fixes
+
+- **Auto Run document clarity** — Rewrote the Auto Run instructions in the system prompt for improved agent comprehension
+- **openExternal guard** — Prevented relative paths from being passed to `shell.openExternal`, suppressing RangeError noise
+
+---
+
 ## v0.15.x - Maestro Symphony
 
 **Latest: v0.15.3** | Released January 1, 1
@@ -31,19 +51,24 @@ Maestro can update itself automatically! This feature was introduced in **v0.8.7
 
 ## Changes in v0.15.3
 
-Patch release with new features, SSH remote hardening, mobile improvements, and cross-platform fixes.
+Patch release with new features, SSH remote hardening, markdown unification, and cross-platform fixes.
 
 ### New Features
 
+- **Files pane icon theme:** Choose between default and rich icon themes in the files pane — rich theme adds colorful, language-specific icons for 70+ file types and folder categories. Toggle under Settings > Display
 - **Persistent web link:** The web/mobile interface link now persists across app restarts — no need to re-enable it each session
 - **OpenCode v1.2+ session support:** Automatically reads OpenCode's new SQLite session storage format alongside the legacy JSONL format
 - **Group chat @mentions:** Use `@agent-name` syntax in the prompt composer to direct messages to specific agents in group chat
 - **Batch resume/abort:** New controls in the right panel for resuming or aborting batch operations
 - **Default worktree directory:** Worktree configuration now defaults to the parent of the agent's working directory instead of blank
+- **Drawfinity in Symphony:** Added Drawfinity to the Symphony project registry
 
 ### Bug Fixes
 
+- **Windows quit handler:** Safety timeout prevents the app from lingering indefinitely on Windows when quit cleanup stalls
 - **Windows stop button:** Stop/cancel button now correctly terminates Claude Code agents on Windows
+- **Lightbox copy-to-clipboard:** Image copy in lightbox now uses Electron's native clipboard API for reliable cross-platform behavior
+- **openExternal URL validation:** Guards against relative paths and hardens URL validation before opening external links
 - **PTY spawn failures:** Graceful error handling when terminal process spawn fails instead of silent failure
 - **Toast notification z-index:** Toast notifications now render above modal backdrops via React portal
 - **SSH remote wizard support:** Full SSH remote ID threading through wizard file operations — documents read, write, and save correctly on remote hosts
@@ -53,10 +78,20 @@ Patch release with new features, SSH remote hardening, mobile improvements, and 
 - **Sentry-reported crash guards:** Defensive null checks in error pattern matching, session storage readers, and CLI activity monitoring to prevent crashes reported via Sentry
 - **Version manager PATH:** Agent spawning now includes version manager binary directories (nvm, fnm, mise, etc.) in the expanded PATH
 - **WebContents crash handler:** Restored the renderer crash handler that was accidentally removed during a prior refactor
+- **Icon theme defaults:** Invalid icon theme values now fall back gracefully; restored rich JSON and YAML icons
+- **Sidebar empty group spacer:** Removed unnecessary spacer for collapsed empty groups in the left bar
+- **Group chat idempotent participants:** `addParticipant` is now idempotent, preventing duplicate entries
 
 ### Mobile
 
 - **Remote session stability:** Stabilized mobile remote session UI with improved composer, scoped drafts, and connection handling
+
+### Internal
+
+- **Markdown rendering unification:** Centralized markdown presets and plugins across renderer, wizard, release notes, and mobile into shared configuration
+- **RC branch CI:** CI pipelines, Sentry source maps, and CodeRabbit reviews now work on release candidate branches
+- **Cross-platform test suite:** 57 tests converted to run correctly on Windows, Linux, and macOS
+- **Shared utilities:** Extracted `getParentDir` helper to `shared/formatters` for reuse across main and renderer
 
 ### Previous Releases in this Series
 

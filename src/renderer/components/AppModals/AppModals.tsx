@@ -135,6 +135,7 @@ export interface AppModalsProps {
 	renameTabInitialName: string;
 	onCloseRenameTabModal: () => void;
 	onRenameTab: (newName: string) => void;
+	onAutoNameTab: () => void;
 
 	// --- AppGroupModals props ---
 	createGroupModalOpen: boolean;
@@ -310,6 +311,7 @@ export interface AppModalsProps {
 	onPromptToggleTabSaveToHistory?: () => void;
 	promptTabReadOnlyMode: boolean;
 	onPromptToggleTabReadOnlyMode: () => void;
+	promptComposerAgentId?: string;
 	promptTabShowThinking: ThinkingMode;
 	onPromptToggleTabShowThinking?: () => void;
 	promptSupportsThinking: boolean;
@@ -525,6 +527,7 @@ export const AppModals = memo(function AppModals(props: AppModalsProps) {
 		renameTabInitialName,
 		onCloseRenameTabModal,
 		onRenameTab,
+		onAutoNameTab,
 		// Group modals
 		createGroupModalOpen,
 		onCloseCreateGroupModal,
@@ -677,6 +680,7 @@ export const AppModals = memo(function AppModals(props: AppModalsProps) {
 		onPromptToggleTabSaveToHistory,
 		promptTabReadOnlyMode,
 		onPromptToggleTabReadOnlyMode,
+		promptComposerAgentId,
 		promptTabShowThinking,
 		onPromptToggleTabShowThinking,
 		promptSupportsThinking,
@@ -811,6 +815,7 @@ export const AppModals = memo(function AppModals(props: AppModalsProps) {
 				renameTabInitialName={renameTabInitialName}
 				onCloseRenameTabModal={onCloseRenameTabModal}
 				onRenameTab={onRenameTab}
+				onAutoNameTab={onAutoNameTab}
 				onOpenManualSetup={() =>
 					useModalStore.getState().openModal('newInstance', { duplicatingSessionId: null })
 				}
@@ -999,6 +1004,7 @@ export const AppModals = memo(function AppModals(props: AppModalsProps) {
 				onPromptToggleTabSaveToHistory={onPromptToggleTabSaveToHistory}
 				promptTabReadOnlyMode={promptTabReadOnlyMode}
 				onPromptToggleTabReadOnlyMode={onPromptToggleTabReadOnlyMode}
+				promptComposerAgentId={promptComposerAgentId}
 				promptTabShowThinking={promptTabShowThinking}
 				onPromptToggleTabShowThinking={onPromptToggleTabShowThinking}
 				promptSupportsThinking={promptSupportsThinking}

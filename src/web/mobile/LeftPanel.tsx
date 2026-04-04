@@ -161,7 +161,7 @@ function CreateGroupSheet({
 	onConfirm,
 	onClose,
 }: {
-	onConfirm: (name: string, emoji?: string) => void;
+	onConfirm: (name: string, emoji?: string) => Promise<void>;
 	onClose: () => void;
 }) {
 	const colors = useThemeColors();
@@ -185,11 +185,11 @@ function CreateGroupSheet({
 		setTimeout(() => onClose(), 300);
 	}, [onClose]);
 
-	const handleSubmit = useCallback(() => {
+	const handleSubmit = useCallback(async () => {
 		const trimmed = name.trim();
 		if (!trimmed) return;
 		triggerHaptic(HAPTIC_PATTERNS.tap);
-		onConfirm(trimmed, emoji.trim() || undefined);
+		await onConfirm(trimmed, emoji.trim() || undefined);
 		handleClose();
 	}, [name, emoji, onConfirm, handleClose]);
 
@@ -324,7 +324,7 @@ function MoveToGroupSheet({
 }: {
 	session: Session;
 	groups: GroupData[];
-	onMove: (sessionId: string, groupId: string | null) => void;
+	onMove: (sessionId: string, groupId: string | null) => Promise<void>;
 	onClose: () => void;
 }) {
 	const colors = useThemeColors();
@@ -340,9 +340,9 @@ function MoveToGroupSheet({
 	}, [onClose]);
 
 	const handleMove = useCallback(
-		(groupId: string | null) => {
+		async (groupId: string | null) => {
 			triggerHaptic(HAPTIC_PATTERNS.tap);
-			onMove(session.id, groupId);
+			await onMove(session.id, groupId);
 			handleClose();
 		},
 		[session.id, onMove, handleClose]
@@ -678,14 +678,22 @@ export function LeftPanel({
 	);
 
 	// Long-press detection for context menu
-	const longPressTimerRef2 = useRef<ReturnType<typeof setTimeout> | null>(null);
+	const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 	const longPressTriggeredRef = useRef(false);
+
+	// Cleanup long-press timer on unmount
+	useEffect(
+		() => () => {
+			if (longPressTimerRef.current) clearTimeout(longPressTimerRef.current);
+		},
+		[]
+	);
 
 	const handleLongPressStart = useCallback(
 		(session: Session, clientX: number, clientY: number) => {
 			if (!onMoveToGroup) return;
 			longPressTriggeredRef.current = false;
-			longPressTimerRef2.current = setTimeout(() => {
+			longPressTimerRef.current = setTimeout(() => {
 				longPressTriggeredRef.current = true;
 				triggerHaptic(HAPTIC_PATTERNS.tap);
 				setContextMenu({ session, x: clientX, y: clientY });
@@ -695,23 +703,14 @@ export function LeftPanel({
 	);
 
 	const handleLongPressEnd = useCallback(() => {
-		if (longPressTimerRef2.current) {
-			clearTimeout(longPressTimerRef2.current);
-			longPressTimerRef2.current = null;
+		if (longPressTimerRef.current) {
+			clearTimeout(longPressTimerRef.current);
+			longPressTimerRef.current = null;
 		}
 		// Reset triggered flag after a microtask so the click handler sees it first
 		requestAnimationFrame(() => {
 			longPressTriggeredRef.current = false;
 		});
-	}, []);
-
-	// Clean up long-press timer on unmount
-	useEffect(() => {
-		return () => {
-			if (longPressTimerRef2.current) {
-				clearTimeout(longPressTimerRef2.current);
-			}
-		};
 	}, []);
 
 	const handleCreateGroupConfirm = useCallback(
@@ -1073,6 +1072,7 @@ export function LeftPanel({
 												}}
 												onTouchEnd={handleLongPressEnd}
 												onTouchMove={handleLongPressEnd}
+												onTouchCancel={handleLongPressEnd}
 											>
 												<button
 													onClick={(e) => {

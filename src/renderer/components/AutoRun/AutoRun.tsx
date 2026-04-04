@@ -18,6 +18,7 @@ import { AutoRunToolbar } from './AutoRunToolbar';
 import { AutoRunErrorBanner } from './AutoRunErrorBanner';
 import { AutoRunBottomPanel } from './AutoRunBottomPanel';
 import { NoFolderState, EmptyFolderState } from './AutoRunEmptyStates';
+import { useBatchStore } from '../../stores/batchStore';
 import { AutoRunAttachmentsPanel } from './AutoRunAttachmentsPanel';
 import { useTemplateAutocomplete, useAutoRunUndo, useAutoRunImageHandling } from '../../hooks';
 import { TemplateAutocompleteDropdown } from '../TemplateAutocompleteDropdown';
@@ -92,8 +93,15 @@ const AutoRunInner = forwardRef<AutoRunHandle, AutoRunProps>(function AutoRunInn
 	}, [isAutoRunActive]);
 	const isStopping = batchRunState?.isStopping || false;
 	// Error state (Phase 5.10)
-	const isErrorPaused = batchRunState?.errorPaused || false;
-	const batchError = batchRunState?.error;
+	// Subscribe directly to the Zustand store to bypass the multi-hop prop chain
+	// (store → useBatchProcessor → useBatchHandlers → App → RightPanel → AutoRun)
+	// which drops errorPaused updates via updateBatchStateAndBroadcast/UPDATE_PROGRESS.
+	const isErrorPaused = useBatchStore(
+		useCallback((s) => s.batchRunStates[sessionId]?.errorPaused ?? false, [sessionId])
+	);
+	const batchError = useBatchStore(
+		useCallback((s) => s.batchRunStates[sessionId]?.error, [sessionId])
+	);
 	const errorDocumentName =
 		batchRunState?.errorDocumentIndex !== undefined
 			? batchRunState.documents[batchRunState.errorDocumentIndex]
@@ -741,10 +749,7 @@ export const AutoRun = memo(AutoRunInner, (prevProps, nextProps) => {
 		prevProps.batchRunState?.isStopping === nextProps.batchRunState?.isStopping &&
 		prevProps.batchRunState?.currentTaskIndex === nextProps.batchRunState?.currentTaskIndex &&
 		prevProps.batchRunState?.totalTasks === nextProps.batchRunState?.totalTasks &&
-		// Error state (Phase 5.10)
-		prevProps.batchRunState?.errorPaused === nextProps.batchRunState?.errorPaused &&
-		prevProps.batchRunState?.error?.type === nextProps.batchRunState?.error?.type &&
-		prevProps.batchRunState?.error?.message === nextProps.batchRunState?.error?.message &&
+		// Error state is read directly from Zustand store (not props), so no comparison needed here.
 		// Session state affects UI (busy disables Run button)
 		prevProps.sessionState === nextProps.sessionState &&
 		// Callbacks are typically stable, but check identity

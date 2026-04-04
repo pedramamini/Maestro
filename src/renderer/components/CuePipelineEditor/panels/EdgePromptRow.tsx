@@ -77,7 +77,7 @@ export function EdgePromptRow({
 						fontFamily: 'inherit',
 						lineHeight: 1.4,
 						marginTop: 4,
-						...(expanded ? { flex: 1, minHeight: 0 } : { minHeight: 56 }),
+						...(expanded ? { flex: 1, minHeight: 0 } : { minHeight: 68 }),
 					}}
 				/>
 			</label>

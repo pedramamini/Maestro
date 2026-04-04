@@ -21,12 +21,7 @@ import {
 	sortEntriesByTimestamp,
 } from '../../../shared/history';
 import { getHistoryManager } from '../../history-manager';
-import {
-	writeEntryLocal,
-	writeEntryRemote,
-	readRemoteEntriesLocal,
-	readRemoteEntriesSsh,
-} from '../../shared-history-manager';
+import { writeEntryRemote, readRemoteEntriesSsh } from '../../shared-history-manager';
 import { withIpcErrorLogging, CreateHandlerOptions } from '../../utils/ipcHandler';
 import type { SafeSendFn } from '../../utils/safe-send';
 
@@ -88,11 +83,11 @@ export function registerHistoryHandlers(deps: HistoryHandlerDependencies): void 
 					localEntries = historyManager.getAllEntries();
 				}
 
-				// Merge shared history entries from other hosts
+				// Merge shared history entries from other hosts (only for SSH sessions with syncHistory enabled)
 				let sharedEntries: HistoryEntry[] = [];
 				try {
 					if (sharedContext?.sshRemoteId && sharedContext?.remoteCwd) {
-						// SSH session: read shared files from remote host
+						// SSH session with syncHistory enabled: read shared files from remote host
 						const sshRemote = deps.getSshRemoteById?.(sharedContext.sshRemoteId);
 						if (sshRemote) {
 							sharedEntries = await readRemoteEntriesSsh(
@@ -101,9 +96,6 @@ export function registerHistoryHandlers(deps: HistoryHandlerDependencies): void 
 								maxEntries
 							);
 						}
-					} else if (projectPath) {
-						// Local session: read shared files from local project directory
-						sharedEntries = readRemoteEntriesLocal(projectPath, maxEntries);
 					}
 				} catch (error) {
 					logger.warn(`Failed to read shared history: ${error}`, LOG_CONTEXT);
@@ -179,18 +171,14 @@ export function registerHistoryHandlers(deps: HistoryHandlerDependencies): void 
 					summary: entry.summary,
 				});
 
-				// Shared history: write to .maestro/history/ (fire-and-forget)
+				// Shared history: write to remote .maestro/history/ (only for SSH sessions with syncHistory enabled)
 				if (sharedContext?.sshRemoteId && sharedContext?.remoteCwd) {
-					// SSH session: write to remote .maestro/history/
 					const sshRemote = deps.getSshRemoteById?.(sharedContext.sshRemoteId);
 					if (sshRemote) {
 						writeEntryRemote(sharedContext.remoteCwd, entry, sshRemote).catch((err) =>
 							logger.warn(`Shared history remote write failed: ${err}`, LOG_CONTEXT)
 						);
 					}
-				} else if (entry.projectPath) {
-					// Local session: write to local .maestro/history/
-					writeEntryLocal(entry.projectPath, entry, maxEntries);
 				}
 
 				// Broadcast to renderer for real-time Director's Notes streaming

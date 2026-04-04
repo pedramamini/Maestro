@@ -9,6 +9,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { ipcMain } from 'electron';
 import { registerHistoryHandlers } from '../../../../main/ipc/handlers/history';
 import * as historyManagerModule from '../../../../main/history-manager';
+import * as sharedHistoryModule from '../../../../main/shared-history-manager';
 import type { HistoryManager } from '../../../../main/history-manager';
 import type { HistoryEntry } from '../../../../shared/types';
 
@@ -27,9 +28,7 @@ vi.mock('../../../../main/history-manager', () => ({
 
 // Mock the shared-history-manager module
 vi.mock('../../../../main/shared-history-manager', () => ({
-	writeEntryLocal: vi.fn(),
 	writeEntryRemote: vi.fn(() => Promise.resolve()),
-	readRemoteEntriesLocal: vi.fn(() => []),
 	readRemoteEntriesSsh: vi.fn(() => Promise.resolve([])),
 }));
 
@@ -189,6 +188,46 @@ describe('history IPC handlers', () => {
 
 			expect(result).toEqual([]);
 		});
+
+		it('should NOT read shared history for local agents (no sharedContext)', async () => {
+			const mockEntries = [createMockEntry()];
+			vi.mocked(mockHistoryManager.getEntriesByProjectPath).mockReturnValue(mockEntries);
+
+			const handler = handlers.get('history:getAll');
+			const result = await handler!({} as any, '/test/project');
+
+			expect(sharedHistoryModule.readRemoteEntriesSsh).not.toHaveBeenCalled();
+			expect(result).toEqual(mockEntries);
+		});
+
+		it('should read shared history from remote when sharedContext is provided', async () => {
+			const localEntries = [createMockEntry({ id: 'local-1' })];
+			const remoteEntries = [createMockEntry({ id: 'remote-1', hostname: 'dev-server' })];
+			const mockSshRemote = { id: 'remote-1', host: 'dev-server', user: 'user' };
+
+			vi.mocked(mockHistoryManager.getEntries).mockReturnValue(localEntries);
+			vi.mocked(sharedHistoryModule.readRemoteEntriesSsh).mockResolvedValue(remoteEntries);
+
+			// Re-register with getSshRemoteById
+			registerHistoryHandlers({
+				safeSend: mockSafeSend,
+				getSshRemoteById: () => mockSshRemote as any,
+			});
+			const getAllCalls = (ipcMain.handle as any).mock.calls.filter(
+				([ch]: [string, Function]) => ch === 'history:getAll'
+			);
+			const getAllHandler = getAllCalls[getAllCalls.length - 1][1];
+
+			const sharedContext = { sshRemoteId: 'remote-1', remoteCwd: '/remote/project' };
+			const result = await getAllHandler({} as any, undefined, 'session-1', sharedContext);
+
+			expect(sharedHistoryModule.readRemoteEntriesSsh).toHaveBeenCalledWith(
+				'/remote/project',
+				mockSshRemote,
+				undefined
+			);
+			expect(result).toHaveLength(2);
+		});
 	});
 
 	describe('history:getAllPaginated', () => {
@@ -342,6 +381,39 @@ describe('history IPC handlers', () => {
 				'/project/path',
 				entry,
 				undefined
+			);
+		});
+
+		it('should NOT write shared history for local agents (no sharedContext)', async () => {
+			const entry = createMockEntry({ sessionId: 'session-1', projectPath: '/test' });
+
+			const handler = handlers.get('history:add');
+			await handler!({} as any, entry);
+
+			expect(sharedHistoryModule.writeEntryRemote).not.toHaveBeenCalled();
+		});
+
+		it('should write shared history to remote when sharedContext is provided', async () => {
+			const mockSshRemote = { id: 'remote-1', host: 'dev-server', user: 'user' };
+			registerHistoryHandlers({
+				safeSend: mockSafeSend,
+				getSshRemoteById: () => mockSshRemote as any,
+			});
+			// Re-capture newly registered handlers
+			const addCalls = (ipcMain.handle as any).mock.calls.filter(
+				([ch]: [string, Function]) => ch === 'history:add'
+			);
+			const addHandler = addCalls[addCalls.length - 1][1];
+
+			const entry = createMockEntry({ sessionId: 'session-1', projectPath: '/test' });
+			const sharedContext = { sshRemoteId: 'remote-1', remoteCwd: '/remote/project' };
+
+			await addHandler({} as any, entry, sharedContext);
+
+			expect(sharedHistoryModule.writeEntryRemote).toHaveBeenCalledWith(
+				'/remote/project',
+				entry,
+				mockSshRemote
 			);
 		});
 	});

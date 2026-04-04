@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, startTransition } from 'react';
+import React, { useEffect, useMemo, useRef, useState, startTransition } from 'react';
 import {
 	Terminal,
 	Cpu,
@@ -16,6 +16,8 @@ import {
 	Brain,
 	Wand2,
 	Pin,
+	Sparkles,
+	Gauge,
 } from 'lucide-react';
 import type { Session, Theme, BatchRunState, Shortcut, ThinkingMode, ThinkingItem } from '../types';
 import {
@@ -38,6 +40,7 @@ import { SummarizeProgressOverlay } from './SummarizeProgressOverlay';
 import { WizardInputPanel } from './InlineWizard';
 import { useAgentCapabilities, useScrollIntoView } from '../hooks';
 import { getProviderDisplayName } from '../utils/sessionValidation';
+import { getReadOnlyModeLabel, getReadOnlyModeTooltip } from '../../shared/agentMetadata';
 
 interface SlashCommand {
 	command: string;
@@ -156,6 +159,13 @@ interface InputAreaProps {
 	// Wizard thinking toggle
 	wizardShowThinking?: boolean;
 	onToggleWizardShowThinking?: () => void;
+	// Model/Effort quick-change pills
+	currentModel?: string;
+	currentEffort?: string;
+	availableModels?: string[];
+	availableEfforts?: string[];
+	onModelChange?: (model: string) => void;
+	onEffortChange?: (effort: string) => void;
 }
 
 export const InputArea = React.memo(function InputArea(props: InputAreaProps) {
@@ -247,7 +257,43 @@ export const InputArea = React.memo(function InputArea(props: InputAreaProps) {
 		// Wizard thinking toggle
 		wizardShowThinking = false,
 		onToggleWizardShowThinking,
+		// Model/Effort quick-change pills
+		currentModel,
+		currentEffort,
+		availableModels = [],
+		availableEfforts = [],
+		onModelChange,
+		onEffortChange,
 	} = props;
+
+	// State for model/effort dropdown menus
+	const [modelMenuOpen, setModelMenuOpen] = useState(false);
+	const [effortMenuOpen, setEffortMenuOpen] = useState(false);
+	const modelMenuRef = useRef<HTMLDivElement>(null);
+	const effortMenuRef = useRef<HTMLDivElement>(null);
+
+	// Close dropdown when clicking outside
+	useEffect(() => {
+		if (!modelMenuOpen && !effortMenuOpen) return;
+		const handleClickOutside = (e: MouseEvent) => {
+			if (
+				modelMenuOpen &&
+				modelMenuRef.current &&
+				!modelMenuRef.current.contains(e.target as Node)
+			) {
+				setModelMenuOpen(false);
+			}
+			if (
+				effortMenuOpen &&
+				effortMenuRef.current &&
+				!effortMenuRef.current.contains(e.target as Node)
+			) {
+				setEffortMenuOpen(false);
+			}
+		};
+		document.addEventListener('mousedown', handleClickOutside);
+		return () => document.removeEventListener('mousedown', handleClickOutside);
+	}, [modelMenuOpen, effortMenuOpen]);
 
 	const setCommandHistoryFilterRef = React.useCallback((el: HTMLInputElement | null) => {
 		if (el) {
@@ -957,7 +1003,7 @@ export const InputArea = React.memo(function InputArea(props: InputAreaProps) {
 							/>
 						</div>
 
-						<div className="flex justify-between items-center px-2 pb-2 pt-1">
+						<div className="flex flex-wrap items-center gap-1 px-2 pb-2 pt-1">
 							<div className="flex gap-1 items-center">
 								{session.inputMode === 'terminal' && (
 									<div
@@ -1030,9 +1076,113 @@ export const InputArea = React.memo(function InputArea(props: InputAreaProps) {
 										e.target.value = '';
 									}}
 								/>
+								{/* Model pill — quick-change dropdown */}
+								{session.inputMode === 'ai' && onModelChange && availableModels.length > 0 && (
+									<div className="relative" ref={modelMenuRef}>
+										<button
+											onClick={() => {
+												setModelMenuOpen(!modelMenuOpen);
+												setEffortMenuOpen(false);
+											}}
+											className="flex items-center gap-1 text-[10px] px-2 py-1 rounded-full cursor-pointer transition-all opacity-60 hover:opacity-100"
+											style={{
+												backgroundColor: `${theme.colors.accent}10`,
+												color: theme.colors.accent,
+												border: `1px solid ${theme.colors.accent}25`,
+											}}
+											title="Change model"
+										>
+											<Sparkles className="w-3 h-3" />
+											<span>{currentModel || 'default'}</span>
+										</button>
+										{modelMenuOpen && (
+											<div
+												className="absolute bottom-full left-0 mb-1 max-h-48 overflow-y-auto rounded border shadow-lg z-50 scrollbar-thin"
+												style={{
+													backgroundColor: theme.colors.bgMain,
+													borderColor: theme.colors.border,
+												}}
+											>
+												{availableModels.map((model) => (
+													<button
+														key={model}
+														onClick={() => {
+															onModelChange(model);
+															setModelMenuOpen(false);
+														}}
+														className="w-full text-left px-3 py-1.5 text-xs font-mono whitespace-nowrap hover:bg-white/10 transition-colors"
+														style={{
+															color:
+																model === currentModel
+																	? theme.colors.accent
+																	: theme.colors.textMain,
+															backgroundColor:
+																model === currentModel ? 'rgba(255,255,255,0.05)' : undefined,
+														}}
+													>
+														{model || '(default)'}
+													</button>
+												))}
+											</div>
+										)}
+									</div>
+								)}
+								{/* Effort pill — quick-change dropdown, only shown when agent supports effort selection */}
+								{session.inputMode === 'ai' &&
+									onEffortChange &&
+									availableEfforts.some((e) => e !== '') && (
+										<div className="relative" ref={effortMenuRef}>
+											<button
+												onClick={() => {
+													setEffortMenuOpen(!effortMenuOpen);
+													setModelMenuOpen(false);
+												}}
+												className="flex items-center gap-1 text-[10px] px-2 py-1 rounded-full cursor-pointer transition-all opacity-60 hover:opacity-100"
+												style={{
+													backgroundColor: `${theme.colors.warning}10`,
+													color: theme.colors.warning,
+													border: `1px solid ${theme.colors.warning}25`,
+												}}
+												title="Change effort level"
+											>
+												<Gauge className="w-3 h-3" />
+												<span>{currentEffort || 'default'}</span>
+											</button>
+											{effortMenuOpen && (
+												<div
+													className="absolute bottom-full left-0 mb-1 max-h-48 overflow-y-auto rounded border shadow-lg z-50 scrollbar-thin"
+													style={{
+														backgroundColor: theme.colors.bgMain,
+														borderColor: theme.colors.border,
+													}}
+												>
+													{availableEfforts.map((effort) => (
+														<button
+															key={effort}
+															onClick={() => {
+																onEffortChange(effort);
+																setEffortMenuOpen(false);
+															}}
+															className="w-full text-left px-3 py-1.5 text-xs whitespace-nowrap hover:bg-white/10 transition-colors"
+															style={{
+																color:
+																	effort === currentEffort
+																		? theme.colors.warning
+																		: theme.colors.textMain,
+																backgroundColor:
+																	effort === currentEffort ? 'rgba(255,255,255,0.05)' : undefined,
+															}}
+														>
+															{effort || '(default)'}
+														</button>
+													))}
+												</div>
+											)}
+										</div>
+									)}
 							</div>
 
-							<div className="flex items-center gap-2">
+							<div className="flex items-center gap-2 ml-auto">
 								{/* Save to History toggle - AI mode only */}
 								{session.inputMode === 'ai' && onToggleTabSaveToHistory && (
 									<button
@@ -1074,10 +1224,10 @@ export const InputArea = React.memo(function InputArea(props: InputAreaProps) {
 													? `1px solid ${theme.colors.warning}50`
 													: '1px solid transparent',
 											}}
-											title="Toggle read-only mode (agent won't modify files)"
+											title={getReadOnlyModeTooltip(session.toolType)}
 										>
 											<Eye className="w-3 h-3" />
-											<span>Read-only</span>
+											<span>{getReadOnlyModeLabel(session.toolType)}</span>
 										</button>
 									)}
 								{/* Show Thinking toggle - AI mode only, for agents that support it

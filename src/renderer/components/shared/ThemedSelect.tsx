@@ -61,7 +61,7 @@ export function ThemedSelect({
 			const idx = options.findIndex((o) => o.value === value);
 			setActiveIndex(idx >= 0 ? idx : 0);
 			// Focus the menu so keyboard events work
-			requestAnimationFrame(() => menuRef.current?.focus());
+			requestAnimationFrame(() => menuRef.current?.focus({ preventScroll: true }));
 		}
 	}, [open, options, value]);
 

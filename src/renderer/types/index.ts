@@ -715,6 +715,7 @@ export interface Session {
 	customArgs?: string; // Custom CLI arguments (overrides agent-level)
 	customEnvVars?: Record<string, string>; // Custom environment variables (overrides agent-level)
 	customModel?: string; // Custom model ID (overrides agent-level)
+	customEffort?: string; // Custom effort/reasoning level (overrides agent-level)
 	customProviderPath?: string; // Custom provider path (overrides agent-level)
 	customContextWindow?: number; // Custom context window size (overrides agent-level)
 	documentGraphLayout?: 'mindmap' | 'radial' | 'force'; // Document Graph layout algorithm preference (overrides global default)
@@ -742,6 +743,7 @@ export interface AgentConfigOption {
 	description: string;
 	default: any;
 	options?: string[];
+	dynamic?: boolean; // If true, options are fetched at runtime via agents:getConfigOptions IPC
 	argBuilder?: (value: any) => string[];
 }
 
@@ -808,6 +810,7 @@ export interface ProcessConfig {
 	sessionCustomArgs?: string;
 	sessionCustomEnvVars?: Record<string, string>;
 	sessionCustomModel?: string;
+	sessionCustomEffort?: string;
 	sessionCustomContextWindow?: number;
 	// Per-session SSH remote config (takes precedence over agent-level SSH config)
 	sessionSshRemoteConfig?: {

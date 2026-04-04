@@ -72,10 +72,27 @@ const MODEL_CONTEXT_WINDOWS: Record<string, number> = {
 };
 
 /**
- * Get the context window size for a given model
+ * Get the context window size for a given model.
+ * Checks ~/.codex/models_cache.json first (dynamic), falls back to hardcoded table.
  */
 function getModelContextWindow(model: string): number {
-	// Try exact match first
+	// Try dynamic lookup from Codex CLI's models cache
+	try {
+		const codexHome = process.env.CODEX_HOME || path.join(os.homedir(), '.codex');
+		const cachePath = path.join(codexHome, 'models_cache.json');
+		const cacheContent = fs.readFileSync(cachePath, 'utf8');
+		const cache = JSON.parse(cacheContent);
+		if (Array.isArray(cache.models)) {
+			const found = cache.models.find((m: { slug?: string }) => m.slug === model);
+			if (found?.context_window && typeof found.context_window === 'number') {
+				return found.context_window;
+			}
+		}
+	} catch {
+		// Fall through to hardcoded table
+	}
+
+	// Try exact match from hardcoded table
 	if (MODEL_CONTEXT_WINDOWS[model]) {
 		return MODEL_CONTEXT_WINDOWS[model];
 	}

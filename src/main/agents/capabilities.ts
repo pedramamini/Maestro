@@ -153,7 +153,7 @@ export const AGENT_CAPABILITIES: Record<string, AgentCapabilities> = {
 		requiresPromptToStart: false, // Claude Code can run in --print mode waiting for input
 		supportsStreaming: true, // Stream JSON events
 		supportsResultMessages: true, // "result" event type
-		supportsModelSelection: false, // Model is configured via Anthropic account
+		supportsModelSelection: true, // --model flag (aliases: sonnet, opus, haiku, or full model names)
 		supportsStreamJsonInput: true, // --input-format stream-json for images via stdin
 		supportsThinkingDisplay: true, // Emits streaming assistant messages
 		supportsContextMerge: true, // Can receive merged context via prompts

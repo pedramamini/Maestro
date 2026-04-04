@@ -71,6 +71,12 @@ vi.mock('../../../renderer/stores/modalStore', () => ({
 		openCueYamlEditor: mockOpenCueYamlEditor,
 		showConfirmation: mockShowConfirmation,
 	}),
+	useModalStore: vi.fn((selector: (s: any) => any) =>
+		selector({
+			modals: new Map([['cueModal', { open: true, data: undefined }]]),
+		})
+	),
+	selectModalData: (id: string) => (state: any) => state.modals.get(id)?.data,
 }));
 
 // Mock window.maestro.cue

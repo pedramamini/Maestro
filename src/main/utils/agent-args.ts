@@ -16,6 +16,7 @@ type BuildAgentArgsOptions = {
 type AgentConfigOverrides = {
 	agentConfigValues?: Record<string, any>;
 	sessionCustomModel?: string;
+	sessionCustomEffort?: string;
 	sessionCustomArgs?: string;
 	sessionCustomEnvVars?: Record<string, string>;
 };
@@ -142,6 +143,11 @@ export function applyAgentConfigOverrides(
 					value = option.default;
 					modelSource = 'default';
 				}
+			} else if (
+				(option.key === 'effort' || option.key === 'reasoningEffort') &&
+				overrides.sessionCustomEffort !== undefined
+			) {
+				value = overrides.sessionCustomEffort;
 			} else {
 				value =
 					agentConfigValues[option.key] !== undefined

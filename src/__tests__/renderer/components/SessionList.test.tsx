@@ -71,6 +71,7 @@ vi.mock('lucide-react', () => ({
 	Command: () => <span data-testid="icon-command" />,
 	MessageSquare: () => <span data-testid="icon-message-square" />,
 	MessageSquarePlus: () => <span data-testid="icon-message-square-plus" />,
+	Bell: () => <span data-testid="icon-bell" />,
 	Zap: ({ title, style }: { title?: string; style?: Record<string, string> }) => (
 		<span data-testid="icon-zap" title={title} style={style} />
 	),
@@ -3000,14 +3001,14 @@ describe('SessionList', () => {
 				useSettingsStore.setState({ leftSidebarWidth: 300 });
 			}); // Reset for second drag
 
-			// Try to drag below min (256px)
+			// Try to drag below min (280px)
 			fireEvent.mouseDown(resizeHandle!, { clientX: 300 });
 			fireEvent.mouseMove(document, { clientX: 100 });
 			// State is only updated on mouseUp for performance
 			fireEvent.mouseUp(document);
 
-			// Should be clamped to 256
-			expect(setLeftSidebarWidthState).toHaveBeenCalledWith(256);
+			// Should be clamped to 280
+			expect(setLeftSidebarWidthState).toHaveBeenCalledWith(280);
 		});
 	});
 

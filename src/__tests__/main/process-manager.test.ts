@@ -22,6 +22,17 @@ vi.mock('../../main/utils/logger', () => ({
 	},
 }));
 
+// Mock platform detection — delegates to process.platform by default so
+// pre-existing tests that override process.platform still work. Kill-method
+// tests override via mockReturnValueOnce / mockReturnValue.
+const { mockIsWindows } = vi.hoisted(() => ({
+	mockIsWindows: vi.fn<() => boolean>().mockImplementation(() => process.platform === 'win32'),
+}));
+
+vi.mock('../../shared/platformDetection', () => ({
+	isWindows: () => mockIsWindows(),
+}));
+
 import * as fs from 'fs';
 
 import {
@@ -434,9 +445,6 @@ describe('process-manager.ts', () => {
 			it('should send SIGTERM (not default SIGHUP) to PTY processes', () => {
 				const mockPtyKill = vi.fn();
 				const mockOnExit = vi.fn();
-				// Inject a fake managed process into the processes map via spawn internals
-				// We access the private map through the public get() to verify registration,
-				// but we need to inject directly for kill testing.
 				const processes = (processManager as any).processes as Map<string, any>;
 				processes.set('pty-session', {
 					sessionId: 'pty-session',
@@ -539,6 +547,108 @@ describe('process-manager.ts', () => {
 			});
 		});
 
+		describe('kill method — Windows PTY tree kill', () => {
+			let killWindowsTreeSpy: ReturnType<typeof vi.spyOn>;
+
+			beforeEach(() => {
+				killWindowsTreeSpy = vi
+					.spyOn(ProcessManager.prototype as never, 'killWindowsProcessTree' as never)
+					.mockImplementation(() => {});
+			});
+
+			afterEach(() => {
+				mockIsWindows.mockImplementation(() => process.platform === 'win32');
+				killWindowsTreeSpy.mockRestore();
+			});
+
+			it('should use taskkill tree-kill for PTY processes on Windows', () => {
+				mockIsWindows.mockReturnValue(true);
+
+				const mockPtyProcess = { kill: vi.fn(), onExit: vi.fn() };
+				const processes = (processManager as unknown as { processes: Map<string, unknown> })
+					.processes;
+				processes.set('pty-session', {
+					sessionId: 'pty-session',
+					toolType: 'terminal',
+					ptyProcess: mockPtyProcess,
+					isTerminal: true,
+					pid: 12345,
+					cwd: '/tmp',
+					startTime: Date.now(),
+				});
+
+				processManager.kill('pty-session');
+
+				expect(killWindowsTreeSpy).toHaveBeenCalledWith(12345, 'pty-session');
+				expect(mockPtyProcess.kill).not.toHaveBeenCalled();
+			});
+
+			it('should use SIGTERM for PTY processes on non-Windows', () => {
+				mockIsWindows.mockReturnValue(false);
+
+				const mockPtyProcess = { kill: vi.fn(), onExit: vi.fn() };
+				const processes = (processManager as unknown as { processes: Map<string, unknown> })
+					.processes;
+				processes.set('pty-session', {
+					sessionId: 'pty-session',
+					toolType: 'terminal',
+					ptyProcess: mockPtyProcess,
+					isTerminal: true,
+					pid: 12345,
+					cwd: '/tmp',
+					startTime: Date.now(),
+				});
+
+				processManager.kill('pty-session');
+
+				expect(mockPtyProcess.kill).toHaveBeenCalledWith('SIGTERM');
+				expect(killWindowsTreeSpy).not.toHaveBeenCalled();
+			});
+
+			it('should use taskkill tree-kill for child processes on Windows', () => {
+				mockIsWindows.mockReturnValue(true);
+
+				const mockChildProcess = { kill: vi.fn(), pid: 99999 };
+				const processes = (processManager as unknown as { processes: Map<string, unknown> })
+					.processes;
+				processes.set('child-session', {
+					sessionId: 'child-session',
+					toolType: 'claude-code',
+					childProcess: mockChildProcess,
+					isTerminal: false,
+					pid: 99999,
+					cwd: '/tmp',
+					startTime: Date.now(),
+				});
+
+				processManager.kill('child-session');
+
+				expect(killWindowsTreeSpy).toHaveBeenCalledWith(99999, 'child-session');
+				expect(mockChildProcess.kill).not.toHaveBeenCalled();
+			});
+
+			it('should remove process from map after kill', () => {
+				mockIsWindows.mockReturnValue(true);
+
+				const mockPtyProcess = { kill: vi.fn(), onExit: vi.fn() };
+				const processes = (processManager as unknown as { processes: Map<string, unknown> })
+					.processes;
+				processes.set('pty-session', {
+					sessionId: 'pty-session',
+					toolType: 'terminal',
+					ptyProcess: mockPtyProcess,
+					isTerminal: true,
+					pid: 12345,
+					cwd: '/tmp',
+					startTime: Date.now(),
+				});
+
+				processManager.kill('pty-session');
+
+				expect(processManager.get('pty-session')).toBeUndefined();
+			});
+		});
+
 		describe('spawn() kill-before-spawn guard', () => {
 			it('should kill existing process before spawning with same sessionId', () => {
 				const mockPtyKill = vi.fn();
@@ -561,8 +671,6 @@ describe('process-manager.ts', () => {
 					},
 				});
 
-				// Attempting to spawn with same sessionId should kill the old one first
-				// spawn() will fail because node-pty is mocked, but the kill guard runs first
 				try {
 					processManager.spawn({
 						sessionId: 'dup-session',
@@ -576,7 +684,6 @@ describe('process-manager.ts', () => {
 					// spawn may fail due to mock — we only care about the kill call
 				}
 
-				// The old process should have been killed with SIGTERM
 				expect(mockPtyKill).toHaveBeenCalledWith('SIGTERM');
 			});
 		});
@@ -590,7 +697,6 @@ describe('process-manager.ts', () => {
 					return originalKill(sessionId);
 				};
 
-				// Add multiple fake processes
 				const processes = (processManager as any).processes as Map<string, any>;
 				for (const id of ['a', 'b', 'c']) {
 					processes.set(id, {
@@ -613,7 +719,6 @@ describe('process-manager.ts', () => {
 
 				processManager.killAll();
 
-				// All three should have been killed (snapshot keys before iteration)
 				expect(kills).toEqual(expect.arrayContaining(['a', 'b', 'c']));
 				expect(kills).toHaveLength(3);
 			});

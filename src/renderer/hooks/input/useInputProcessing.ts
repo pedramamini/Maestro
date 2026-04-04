@@ -986,6 +986,7 @@ export function useInputProcessing(deps: UseInputProcessingDeps): UseInputProces
 								activeTabId: freshSession.activeTabId,
 								historyFilePath,
 								conductorProfile,
+								readOnlyMode: isReadOnly,
 							});
 						}
 
@@ -1015,6 +1016,7 @@ export function useInputProcessing(deps: UseInputProcessingDeps): UseInputProces
 							sessionCustomArgs: freshSession.customArgs,
 							sessionCustomEnvVars: freshSession.customEnvVars,
 							sessionCustomModel: freshSession.customModel,
+							sessionCustomEffort: freshSession.customEffort,
 							sessionCustomContextWindow: freshSession.customContextWindow,
 							// Per-session SSH remote config (takes precedence over agent-level SSH config)
 							sessionSshRemoteConfig: freshSession.sessionSshRemoteConfig,

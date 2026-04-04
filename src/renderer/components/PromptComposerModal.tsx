@@ -15,6 +15,7 @@ import type { Theme, ThinkingMode, Session, Group } from '../types';
 import { useLayerStack } from '../contexts/LayerStackContext';
 import { MODAL_PRIORITIES } from '../constants/modalPriorities';
 import { estimateTokenCount } from '../../shared/formatters';
+import { getReadOnlyModeLabel, getReadOnlyModeTooltip } from '../../shared/agentMetadata';
 import {
 	formatShortcutKeys,
 	formatEnterToSend,
@@ -53,6 +54,7 @@ interface PromptComposerModalProps {
 	onToggleTabSaveToHistory?: () => void;
 	tabReadOnlyMode?: boolean;
 	onToggleTabReadOnlyMode?: () => void;
+	agentId?: string;
 	tabShowThinking?: ThinkingMode;
 	onToggleTabShowThinking?: () => void;
 	supportsThinking?: boolean;
@@ -79,6 +81,7 @@ export function PromptComposerModal({
 	onToggleTabSaveToHistory,
 	tabReadOnlyMode = false,
 	onToggleTabReadOnlyMode,
+	agentId,
 	tabShowThinking = 'off',
 	onToggleTabShowThinking,
 	supportsThinking = false,
@@ -655,10 +658,14 @@ export function PromptComposerModal({
 										? `1px solid ${theme.colors.warning}50`
 										: '1px solid transparent',
 								}}
-								title="Toggle read-only mode (Claude won't modify files)"
+								title={
+									agentId
+										? getReadOnlyModeTooltip(agentId)
+										: "Toggle Read-Only mode (agent won't modify files)"
+								}
 							>
 								<Eye className="w-3 h-3" />
-								<span>Read-only</span>
+								<span>{agentId ? getReadOnlyModeLabel(agentId) : 'Read-Only'}</span>
 							</button>
 						)}
 

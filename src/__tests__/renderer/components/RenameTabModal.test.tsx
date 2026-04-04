@@ -564,4 +564,93 @@ describe('RenameTabModal', () => {
 			expect(mockOnRename).not.toHaveBeenCalled();
 		});
 	});
+
+	describe('Auto Button', () => {
+		it('does not render Auto button when onAutoName is not provided', () => {
+			render(
+				<TestWrapper>
+					<RenameTabModal
+						theme={mockTheme}
+						initialName="My Tab"
+						onClose={mockOnClose}
+						onRename={mockOnRename}
+					/>
+				</TestWrapper>
+			);
+
+			expect(screen.queryByText('Auto')).not.toBeInTheDocument();
+		});
+
+		it('does not render Auto button when hasLogs is false', () => {
+			render(
+				<TestWrapper>
+					<RenameTabModal
+						theme={mockTheme}
+						initialName="My Tab"
+						onClose={mockOnClose}
+						onRename={mockOnRename}
+						onAutoName={vi.fn()}
+						hasLogs={false}
+					/>
+				</TestWrapper>
+			);
+
+			expect(screen.queryByText('Auto')).not.toBeInTheDocument();
+		});
+
+		it('renders Auto button when onAutoName and hasLogs are provided', () => {
+			render(
+				<TestWrapper>
+					<RenameTabModal
+						theme={mockTheme}
+						initialName="My Tab"
+						onClose={mockOnClose}
+						onRename={mockOnRename}
+						onAutoName={vi.fn()}
+						hasLogs={true}
+					/>
+				</TestWrapper>
+			);
+
+			expect(screen.getByText('Auto')).toBeInTheDocument();
+		});
+
+		it('calls onAutoName when Auto button is clicked', () => {
+			const mockOnAutoName = vi.fn();
+
+			render(
+				<TestWrapper>
+					<RenameTabModal
+						theme={mockTheme}
+						initialName="My Tab"
+						onClose={mockOnClose}
+						onRename={mockOnRename}
+						onAutoName={mockOnAutoName}
+						hasLogs={true}
+					/>
+				</TestWrapper>
+			);
+
+			fireEvent.click(screen.getByText('Auto'));
+			expect(mockOnAutoName).toHaveBeenCalledTimes(1);
+		});
+
+		it('Auto button is styled with accent color', () => {
+			render(
+				<TestWrapper>
+					<RenameTabModal
+						theme={mockTheme}
+						initialName="My Tab"
+						onClose={mockOnClose}
+						onRename={mockOnRename}
+						onAutoName={vi.fn()}
+						hasLogs={true}
+					/>
+				</TestWrapper>
+			);
+
+			const autoButton = screen.getByText('Auto');
+			expect(autoButton).toHaveStyle({ color: mockTheme.colors.accent });
+		});
+	});
 });

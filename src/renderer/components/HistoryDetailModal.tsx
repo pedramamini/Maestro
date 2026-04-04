@@ -15,7 +15,6 @@ import {
 	ChevronLeft,
 	ChevronRight,
 	AlertTriangle,
-	Cloud,
 	Server,
 } from 'lucide-react';
 import type { Theme, HistoryEntry } from '../types';
@@ -306,34 +305,20 @@ export function HistoryDetailModal({
 								{entry.type}
 							</span>
 
-							{/* Remote origin pills - shown for entries from other hosts */}
+							{/* Remote hostname pill - shown for entries from other hosts */}
 							{entry.hostname && (
-								<>
-									<span
-										className="flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold"
-										style={{
-											backgroundColor: theme.colors.accent + '15',
-											color: theme.colors.accent,
-											border: `1px solid ${theme.colors.accent}30`,
-										}}
-										title="Entry synced from remote host"
-									>
-										<Cloud className="w-2.5 h-2.5" />
-										Remote
-									</span>
-									<span
-										className="flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-mono font-bold"
-										style={{
-											backgroundColor: theme.colors.bgActivity,
-											color: theme.colors.textDim,
-											border: `1px solid ${theme.colors.border}`,
-										}}
-										title={`Origin: ${entry.hostname}`}
-									>
-										<Server className="w-2.5 h-2.5" />
-										{entry.hostname}
-									</span>
-								</>
+								<span
+									className="flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-mono font-bold"
+									style={{
+										backgroundColor: theme.colors.bgActivity,
+										color: theme.colors.textDim,
+										border: `1px solid ${theme.colors.border}`,
+									}}
+									title={`Origin: ${entry.hostname}`}
+								>
+									<Server className="w-2.5 h-2.5" />
+									{entry.hostname}
+								</span>
 							)}
 
 							{/* Agent Name Pill - shown inline when agentName exists but isn't already in the header */}

@@ -24,7 +24,7 @@ import type { CueSessionStatus } from '../../hooks/useCue';
 import { CueHelpContent } from '../CueHelpModal';
 import { CuePipelineEditor } from '../CuePipelineEditor';
 import { useSessionStore } from '../../stores/sessionStore';
-import { getModalActions } from '../../stores/modalStore';
+import { getModalActions, useModalStore, selectModalData } from '../../stores/modalStore';
 import { CUE_COLOR, type CueGraphSession } from '../../../shared/cue-pipeline-types';
 import { graphSessionsToPipelines } from '../CuePipelineEditor/utils/yamlToPipeline';
 import { SessionsTable } from './SessionsTable';
@@ -149,8 +149,9 @@ export function CueModal({ theme, onClose, cueShortcutKeys }: CueModalProps) {
 		};
 	}, [registerLayer, unregisterLayer]);
 
-	// Tab state
-	const [activeTab, setActiveTab] = useState<CueModalTab>('pipeline');
+	// Read initial tab from modal data (e.g., when navigating from YAML editor)
+	const cueModalData = useModalStore(selectModalData('cueModal'));
+	const [activeTab, setActiveTab] = useState<CueModalTab>(cueModalData?.initialTab ?? 'pipeline');
 
 	// Graph data fetch error state
 	const [graphError, setGraphError] = useState<string | null>(null);

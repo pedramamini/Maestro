@@ -27,7 +27,6 @@ import {
 	Tag,
 	User,
 	ArrowDownToLine,
-	HelpCircle,
 	ExternalLink,
 	Keyboard,
 } from 'lucide-react';
@@ -37,7 +36,6 @@ import { formatMetaKey, formatEnterToSend } from '../../../utils/shortcutFormatt
 import { getOpenInLabel, isLinuxPlatform } from '../../../utils/platformUtils';
 import { ToggleButtonGroup } from '../../ToggleButtonGroup';
 import { SettingCheckbox } from '../../SettingCheckbox';
-import { EnvVarsEditor } from '../EnvVarsEditor';
 
 export interface GeneralTabProps {
 	theme: Theme;
@@ -56,8 +54,6 @@ export function GeneralTab({ theme, isOpen }: GeneralTabProps) {
 		setCustomShellPath,
 		shellArgs,
 		setShellArgs,
-		shellEnvVars,
-		setShellEnvVars,
 		ghPath,
 		setGhPath,
 		// Log level
@@ -158,7 +154,7 @@ export function GeneralTab({ theme, isOpen }: GeneralTabProps) {
 	return (
 		<div className="space-y-5">
 			{/* About Me (Conductor Profile) */}
-			<div>
+			<div data-setting-id="general-conductor-profile">
 				<div className="block text-xs font-bold opacity-70 uppercase mb-1 flex items-center gap-2">
 					<User className="w-3 h-3" />
 					Conductor Profile (aka, About Me)
@@ -193,7 +189,7 @@ export function GeneralTab({ theme, isOpen }: GeneralTabProps) {
 			</div>
 
 			{/* Default Shell */}
-			<div>
+			<div data-setting-id="general-default-shell">
 				<div className="block text-xs font-bold opacity-70 uppercase mb-1 flex items-center gap-2">
 					<Terminal className="w-3 h-3" />
 					Default Terminal Shell
@@ -404,49 +400,12 @@ export function GeneralTab({ theme, isOpen }: GeneralTabProps) {
 								Additional CLI arguments passed to every shell session (e.g., --login, -c).
 							</p>
 						</div>
-
-						{/* Global Environment Variables */}
-						<div className="flex items-start gap-2 mb-2">
-							<div className="flex-1">
-								<p className="text-xs opacity-50">
-									<strong>Global Environment Variables</strong> apply to all terminal sessions and
-									AI agent processes. Format: KEY=VALUE (one per line). Variables with special
-									characters should be quoted. Agent-specific settings can override these values.
-									Typical use cases: API keys, proxy settings, custom tool paths.
-								</p>
-							</div>
-							<div
-								className="group relative flex-shrink-0 mt-0.5 outline-none"
-								tabIndex={0}
-								aria-describedby="env-vars-help-tooltip"
-								title="Environment variables configured here are available to all terminal sessions, all AI agent processes (Claude, OpenCode, etc.), and any spawned child processes. Agent-specific settings can override these values."
-							>
-								<HelpCircle
-									className="w-4 h-4 cursor-help"
-									style={{ color: theme.colors.textDim }}
-								/>
-								<div
-									id="env-vars-help-tooltip"
-									role="tooltip"
-									className="absolute hidden group-hover:block group-focus-visible:block bg-black/80 text-white text-xs rounded p-2 z-50 w-60 -right-2 top-5 whitespace-normal"
-								>
-									<p className="mb-1 font-semibold">Environment variables apply to:</p>
-									<ul className="list-disc list-inside space-y-0.5">
-										<li>All terminal sessions</li>
-										<li>All AI agent processes (Claude, OpenCode, etc.)</li>
-										<li>Any spawned child processes</li>
-									</ul>
-									<p className="mt-1">Agent-specific settings can override these values.</p>
-								</div>
-							</div>
-						</div>
-						<EnvVarsEditor envVars={shellEnvVars} setEnvVars={setShellEnvVars} theme={theme} />
 					</div>
 				)}
 			</div>
 
 			{/* System Log Level */}
-			<div>
+			<div data-setting-id="general-log-level">
 				<div className="block text-xs font-bold opacity-70 uppercase mb-2">System Log Level</div>
 				<ToggleButtonGroup
 					options={[
@@ -465,7 +424,7 @@ export function GeneralTab({ theme, isOpen }: GeneralTabProps) {
 			</div>
 
 			{/* GitHub CLI Path */}
-			<div>
+			<div data-setting-id="general-gh-path">
 				<div className="block text-xs font-bold opacity-70 uppercase mb-2 flex items-center gap-2">
 					<Terminal className="w-3 h-3" />
 					GitHub CLI (gh) Path
@@ -511,7 +470,7 @@ export function GeneralTab({ theme, isOpen }: GeneralTabProps) {
 			</div>
 
 			{/* Input Behavior Settings */}
-			<div>
+			<div data-setting-id="general-input-behavior">
 				<div className="block text-xs font-bold opacity-70 uppercase mb-2 flex items-center gap-2">
 					<Keyboard className="w-3 h-3" />
 					Input Send Behavior
@@ -577,18 +536,20 @@ export function GeneralTab({ theme, isOpen }: GeneralTabProps) {
 			</div>
 
 			{/* Default History Toggle */}
-			<SettingCheckbox
-				icon={History}
-				sectionLabel="Default History Toggle"
-				title='Enable "History" by default for new tabs'
-				description='When enabled, new AI tabs will have the "History" toggle on by default, saving a synopsis after each completion'
-				checked={defaultSaveToHistory}
-				onChange={setDefaultSaveToHistory}
-				theme={theme}
-			/>
+			<div data-setting-id="general-history">
+				<SettingCheckbox
+					icon={History}
+					sectionLabel="Default History Toggle"
+					title='Enable "History" by default for new tabs'
+					description='When enabled, new AI tabs will have the "History" toggle on by default, saving a synopsis after each completion'
+					checked={defaultSaveToHistory}
+					onChange={setDefaultSaveToHistory}
+					theme={theme}
+				/>
+			</div>
 
 			{/* Default Thinking Toggle - Three states: Off, On, Sticky */}
-			<div>
+			<div data-setting-id="general-thinking-mode">
 				<div className="block text-xs font-bold opacity-70 uppercase mb-2 flex items-center gap-2">
 					<Brain className="w-3 h-3" />
 					Default Thinking Mode
@@ -619,29 +580,33 @@ export function GeneralTab({ theme, isOpen }: GeneralTabProps) {
 			</div>
 
 			{/* Automatic Tab Naming */}
-			<SettingCheckbox
-				icon={Tag}
-				sectionLabel="Automatic Tab Naming"
-				title="Automatically name tabs based on first message"
-				description="When you send your first message to a new tab, an AI will analyze it and generate a descriptive tab name. The naming request runs in parallel and leaves no history."
-				checked={automaticTabNamingEnabled}
-				onChange={setAutomaticTabNamingEnabled}
-				theme={theme}
-			/>
+			<div data-setting-id="general-tab-naming">
+				<SettingCheckbox
+					icon={Tag}
+					sectionLabel="Automatic Tab Naming"
+					title="Automatically name tabs based on first message"
+					description="When you send your first message to a new tab, an AI will analyze it and generate a descriptive tab name. The naming request runs in parallel and leaves no history."
+					checked={automaticTabNamingEnabled}
+					onChange={setAutomaticTabNamingEnabled}
+					theme={theme}
+				/>
+			</div>
 
 			{/* Auto-scroll AI Output */}
-			<SettingCheckbox
-				icon={ArrowDownToLine}
-				sectionLabel="Auto-scroll AI Output"
-				title="Auto-scroll AI output"
-				description="Automatically scroll to the bottom when new AI output arrives. When disabled, a floating button appears for new messages."
-				checked={autoScrollAiMode}
-				onChange={setAutoScrollAiMode}
-				theme={theme}
-			/>
+			<div data-setting-id="general-auto-scroll">
+				<SettingCheckbox
+					icon={ArrowDownToLine}
+					sectionLabel="Auto-scroll AI Output"
+					title="Auto-scroll AI output"
+					description="Automatically scroll to the bottom when new AI output arrives. When disabled, a floating button appears for new messages."
+					checked={autoScrollAiMode}
+					onChange={setAutoScrollAiMode}
+					theme={theme}
+				/>
+			</div>
 
 			{/* Sleep Prevention */}
-			<div>
+			<div data-setting-id="general-power">
 				<div className="block text-xs font-bold opacity-70 uppercase mb-2 flex items-center gap-2">
 					<Battery className="w-3 h-3" />
 					Power
@@ -710,7 +675,7 @@ export function GeneralTab({ theme, isOpen }: GeneralTabProps) {
 			</div>
 
 			{/* Rendering Options */}
-			<div>
+			<div data-setting-id="general-rendering">
 				<div className="block text-xs font-bold opacity-70 uppercase mb-2 flex items-center gap-2">
 					<Monitor className="w-3 h-3" />
 					Rendering Options
@@ -813,40 +778,46 @@ export function GeneralTab({ theme, isOpen }: GeneralTabProps) {
 			</div>
 
 			{/* Check for Updates on Startup */}
-			<SettingCheckbox
-				icon={Download}
-				sectionLabel="Updates"
-				title="Check for updates on startup"
-				description="Automatically check for new Maestro versions when the app starts"
-				checked={checkForUpdatesOnStartup}
-				onChange={setCheckForUpdatesOnStartup}
-				theme={theme}
-			/>
+			<div data-setting-id="general-updates">
+				<SettingCheckbox
+					icon={Download}
+					sectionLabel="Updates"
+					title="Check for updates on startup"
+					description="Automatically check for new Maestro versions when the app starts"
+					checked={checkForUpdatesOnStartup}
+					onChange={setCheckForUpdatesOnStartup}
+					theme={theme}
+				/>
+			</div>
 
 			{/* Beta Updates */}
-			<SettingCheckbox
-				icon={FlaskConical}
-				sectionLabel="Pre-release Channel"
-				title="Include beta and release candidate updates"
-				description="Opt-in to receive pre-release versions (e.g., v0.11.1-rc, v0.12.0-beta). These may contain experimental features and bugs."
-				checked={enableBetaUpdates}
-				onChange={setEnableBetaUpdates}
-				theme={theme}
-			/>
+			<div data-setting-id="general-beta-updates">
+				<SettingCheckbox
+					icon={FlaskConical}
+					sectionLabel="Pre-release Channel"
+					title="Include beta and release candidate updates"
+					description="Opt-in to receive pre-release versions (e.g., v0.11.1-rc, v0.12.0-beta). These may contain experimental features and bugs."
+					checked={enableBetaUpdates}
+					onChange={setEnableBetaUpdates}
+					theme={theme}
+				/>
+			</div>
 
 			{/* Crash Reporting */}
-			<SettingCheckbox
-				icon={Bug}
-				sectionLabel="Privacy"
-				title="Send anonymous crash reports"
-				description="Help improve Maestro by automatically sending crash reports. No personal data is collected. Changes take effect after restart."
-				checked={crashReportingEnabled}
-				onChange={setCrashReportingEnabled}
-				theme={theme}
-			/>
+			<div data-setting-id="general-crash-reporting">
+				<SettingCheckbox
+					icon={Bug}
+					sectionLabel="Privacy"
+					title="Send anonymous crash reports"
+					description="Help improve Maestro by automatically sending crash reports. No personal data is collected. Changes take effect after restart."
+					checked={crashReportingEnabled}
+					onChange={setCrashReportingEnabled}
+					theme={theme}
+				/>
+			</div>
 
 			{/* Settings Storage Location */}
-			<div>
+			<div data-setting-id="general-storage">
 				<div className="block text-xs font-bold opacity-70 uppercase mb-2 flex items-center gap-2">
 					<FolderSync className="w-3 h-3" />
 					Storage Location

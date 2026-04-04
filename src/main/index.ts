@@ -77,12 +77,14 @@ import {
 	setGetSessionsCallback,
 	setGetCustomEnvVarsCallback,
 	setGetAgentConfigCallback,
+	setGetModeratorSettingsCallback,
 	setSshStore,
 	setGetCustomShellPathCallback,
 	markParticipantResponded,
 	spawnModeratorSynthesis,
 	getGroupChatReadOnlyState,
 	respawnParticipantWithRecovery,
+	clearActiveParticipantTaskSession,
 } from './group-chat/group-chat-router';
 import { createSshRemoteStoreAdapter } from './utils/ssh-remote-resolver';
 import { updateParticipant, loadGroupChat, updateGroupChat } from './group-chat/group-chat-storage';
@@ -120,6 +122,7 @@ import { createWebServerFactory } from './web-server/web-server-factory';
 import {
 	setupGlobalErrorHandlers,
 	createCliWatcher,
+	createSettingsWatcher,
 	createWindowManager,
 	createQuitHandler,
 } from './app-lifecycle';
@@ -285,6 +288,13 @@ const cliWatcher = createCliWatcher({
 	getUserDataPath: () => app.getPath('userData'),
 });
 
+// Create settings file watcher for external changes (e.g., from maestro-cli)
+const settingsWatcher = createSettingsWatcher({
+	getMainWindow: () => mainWindow,
+	getSettingsPath: () => syncPath,
+	getAgentConfigsPath: () => productionDataPath,
+});
+
 const devServerPort = process.env.VITE_PORT ? parseInt(process.env.VITE_PORT, 10) : 5173;
 const devServerUrl = `http://localhost:${devServerPort}`;
 
@@ -448,6 +458,7 @@ app.whenReady().then(async () => {
 				customArgs: storedSession.customArgs,
 				customEnvVars: storedSession.customEnvVars,
 				customModel: storedSession.customModel,
+				customEffort: storedSession.customEffort,
 				onLog: (level, message) => {
 					if (level === 'error') {
 						logger.error(message, 'Cue');
@@ -594,6 +605,9 @@ app.whenReady().then(async () => {
 		settingsStore: store,
 	});
 
+	// Start settings file watcher for external changes (e.g., maestro-cli settings set)
+	settingsWatcher.start();
+
 	app.on('activate', () => {
 		if (BrowserWindow.getAllWindows().length === 0) {
 			createWindow();
@@ -638,6 +652,7 @@ const quitHandler = createQuitHandler({
 			cueEngine.stop();
 		}
 	},
+	stopSettingsWatcher: () => settingsWatcher.stop(),
 	powerManager,
 	stopSessionCleanup,
 });
@@ -849,6 +864,8 @@ function setupIpcHandlers() {
 				sshRemoteName,
 				// Pass full SSH config for remote execution support
 				sshRemoteConfig: s.sessionSshRemoteConfig,
+				autoRunFolderPath: s.autoRunFolderPath,
+				worktreeBasePath: s.worktreeConfig?.basePath,
 			};
 		});
 	});
@@ -856,6 +873,12 @@ function setupIpcHandlers() {
 	// Set up callback for group chat router to lookup custom env vars for agents
 	setGetCustomEnvVarsCallback(getCustomEnvVarsForAgent);
 	setGetAgentConfigCallback(getAgentConfigForAgent);
+
+	// Set up callback for group chat router to get moderator standing instructions + conductor profile
+	setGetModeratorSettingsCallback(() => ({
+		standingInstructions: (store.get('moderatorStandingInstructions', '') as string) || '',
+		conductorProfile: (store.get('conductorProfile', '') as string) || '',
+	}));
 
 	// Set up SSH store for group chat SSH remote execution support
 	setSshStore(createSshRemoteStoreAdapter(store));
@@ -943,6 +966,7 @@ function setupProcessListeners() {
 				spawnModeratorSynthesis,
 				getGroupChatReadOnlyState,
 				respawnParticipantWithRecovery,
+				clearActiveParticipantTaskSession,
 			},
 			groupChatStorage: {
 				loadGroupChat,

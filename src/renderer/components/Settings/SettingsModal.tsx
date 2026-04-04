@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, memo } from 'react';
+import { useState, useEffect, useRef, useCallback, memo } from 'react';
 import {
 	X,
 	Key,
@@ -10,6 +10,8 @@ import {
 	FlaskConical,
 	Server,
 	Monitor,
+	Globe,
+	Users,
 } from 'lucide-react';
 import { useSettings } from '../../hooks';
 import type { Theme, LLMProvider } from '../../types';
@@ -27,6 +29,9 @@ import { DisplayTab } from './tabs/DisplayTab';
 import { EncoreTab } from './tabs/EncoreTab';
 import { ShortcutsTab } from './tabs/ShortcutsTab';
 import { ThemeTab } from './tabs/ThemeTab';
+import { EnvironmentTab } from './tabs/EnvironmentTab';
+import { useSettingsSearch, SettingsSearchInput, SettingsSearchResults } from './SettingsSearch';
+import type { SearchableSetting } from './searchableSettings';
 
 // Feature flags - set to true to enable dormant features
 const FEATURE_FLAGS = {
@@ -46,7 +51,9 @@ interface SettingsModalProps {
 		| 'theme'
 		| 'notifications'
 		| 'aicommands'
+		| 'groupchat'
 		| 'ssh'
+		| 'environment'
 		| 'encore';
 	hasNoAgents?: boolean;
 	onThemeImportError?: (message: string) => void;
@@ -93,6 +100,9 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 		setSshRemoteIgnorePatterns,
 		sshRemoteHonorGitignore,
 		setSshRemoteHonorGitignore,
+		// Group Chat settings
+		moderatorStandingInstructions,
+		setModeratorStandingInstructions,
 	} = useSettings();
 
 	const [activeTab, setActiveTab] = useState<
@@ -103,7 +113,9 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 		| 'theme'
 		| 'notifications'
 		| 'aicommands'
+		| 'groupchat'
 		| 'ssh'
+		| 'environment'
 		| 'encore'
 	>('general');
 	const [testingLLM, setTestingLLM] = useState(false);
@@ -111,6 +123,36 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 		status: 'success' | 'error' | null;
 		message: string;
 	}>({ status: null, message: '' });
+	// Search state
+	const [searchActive, setSearchActive] = useState(false);
+	const contentRef = useRef<HTMLDivElement>(null);
+
+	const handleSearchActiveChange = useCallback((active: boolean) => {
+		setSearchActive(active);
+	}, []);
+
+	const search = useSettingsSearch({ isOpen, onSearchActiveChange: handleSearchActiveChange });
+
+	const handleSearchNavigate = useCallback(
+		(tab: SearchableSetting['tab'], settingId: string) => {
+			search.setQuery('');
+			setActiveTab(tab);
+			// Double-RAF to ensure DOM has rendered the new tab content before scrolling
+			requestAnimationFrame(() => {
+				requestAnimationFrame(() => {
+					const el = contentRef.current?.querySelector(`[data-setting-id="${settingId}"]`);
+					if (el) {
+						el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+						// Brief highlight flash
+						el.classList.add('settings-search-highlight');
+						setTimeout(() => el.classList.remove('settings-search-highlight'), 1500);
+					}
+				});
+			});
+		},
+		[search]
+	);
+
 	// Layer stack integration
 	const { registerLayer, unregisterLayer } = useLayerStack();
 	const layerIdRef = useRef<string>();
@@ -167,7 +209,9 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 				| 'theme'
 				| 'notifications'
 				| 'aicommands'
+				| 'groupchat'
 				| 'ssh'
+				| 'environment'
 				| 'encore'
 			> = FEATURE_FLAGS.LLM_SETTINGS
 				? [
@@ -178,7 +222,9 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 						'theme',
 						'notifications',
 						'aicommands',
+						'groupchat',
 						'ssh',
+						'environment',
 						'encore',
 					]
 				: [
@@ -188,7 +234,9 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 						'theme',
 						'notifications',
 						'aicommands',
+						'groupchat',
 						'ssh',
+						'environment',
 						'encore',
 					];
 			const currentIndex = tabs.indexOf(activeTab);
@@ -323,6 +371,25 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 
 	if (!isOpen) return null;
 
+	const TAB_ITEMS: Array<{
+		id: typeof activeTab;
+		label: string;
+		icon: typeof Settings;
+		featureFlag?: boolean;
+	}> = [
+		{ id: 'general', label: 'General', icon: Settings },
+		{ id: 'display', label: 'Display', icon: Monitor },
+		...(FEATURE_FLAGS.LLM_SETTINGS ? [{ id: 'llm' as const, label: 'LLM', icon: Key }] : []),
+		{ id: 'shortcuts', label: 'Shortcuts', icon: Keyboard },
+		{ id: 'theme', label: 'Themes', icon: Palette },
+		{ id: 'notifications', label: 'Notifications', icon: Bell },
+		{ id: 'aicommands', label: 'AI Commands', icon: Cpu },
+		{ id: 'groupchat', label: 'Group Chat', icon: Users },
+		{ id: 'ssh', label: 'SSH Hosts', icon: Server },
+		{ id: 'environment', label: 'Environment', icon: Globe },
+		{ id: 'encore', label: 'Encore Features', icon: FlaskConical },
+	];
+
 	return (
 		<div
 			className="fixed inset-0 modal-overlay flex items-center justify-center z-[9999]"
@@ -331,267 +398,297 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 			aria-label="Settings"
 		>
 			<div
-				className="w-[780px] h-[720px] rounded-xl border shadow-2xl overflow-hidden flex flex-col"
+				className="w-[960px] h-[720px] rounded-xl border shadow-2xl overflow-hidden flex flex-col"
 				style={{ backgroundColor: theme.colors.bgSidebar, borderColor: theme.colors.border }}
 			>
-				<div className="flex border-b" style={{ borderColor: theme.colors.border }}>
-					<button
-						onClick={() => setActiveTab('general')}
-						className={`px-4 py-4 text-sm font-bold border-b-2 cursor-pointer ${activeTab === 'general' ? 'border-indigo-500' : 'border-transparent'} flex items-center gap-2`}
-						title="General"
-					>
-						<Settings className="w-4 h-4" />
-						{activeTab === 'general' && <span>General</span>}
-					</button>
-					<button
-						onClick={() => setActiveTab('display')}
-						className={`px-4 py-4 text-sm font-bold border-b-2 cursor-pointer ${activeTab === 'display' ? 'border-indigo-500' : 'border-transparent'} flex items-center gap-2`}
-						title="Display"
-					>
-						<Monitor className="w-4 h-4" />
-						{activeTab === 'display' && <span>Display</span>}
-					</button>
-					{FEATURE_FLAGS.LLM_SETTINGS && (
-						<button
-							onClick={() => setActiveTab('llm')}
-							className={`px-4 py-4 text-sm font-bold border-b-2 cursor-pointer ${activeTab === 'llm' ? 'border-indigo-500' : 'border-transparent'}`}
-							title="LLM"
-						>
-							LLM
-						</button>
-					)}
-					<button
-						onClick={() => setActiveTab('shortcuts')}
-						className={`px-4 py-4 text-sm font-bold border-b-2 cursor-pointer ${activeTab === 'shortcuts' ? 'border-indigo-500' : 'border-transparent'} flex items-center gap-2`}
-						title="Shortcuts"
-					>
-						<Keyboard className="w-4 h-4" />
-						{activeTab === 'shortcuts' && <span>Shortcuts</span>}
-					</button>
-					<button
-						onClick={() => setActiveTab('theme')}
-						className={`px-4 py-4 text-sm font-bold border-b-2 cursor-pointer ${activeTab === 'theme' ? 'border-indigo-500' : 'border-transparent'} flex items-center gap-2`}
-						title="Themes"
-					>
-						<Palette className="w-4 h-4" />
-						{activeTab === 'theme' && <span>Themes</span>}
-					</button>
-					<button
-						onClick={() => setActiveTab('notifications')}
-						className={`px-4 py-4 text-sm font-bold border-b-2 cursor-pointer ${activeTab === 'notifications' ? 'border-indigo-500' : 'border-transparent'} flex items-center gap-2`}
-						title="Notifications"
-					>
-						<Bell className="w-4 h-4" />
-						{activeTab === 'notifications' && <span>Notify</span>}
-					</button>
-					<button
-						onClick={() => setActiveTab('aicommands')}
-						className={`px-4 py-4 text-sm font-bold border-b-2 cursor-pointer ${activeTab === 'aicommands' ? 'border-indigo-500' : 'border-transparent'} flex items-center gap-2`}
-						title="AI Commands"
-					>
-						<Cpu className="w-4 h-4" />
-						{activeTab === 'aicommands' && <span>AI Commands</span>}
-					</button>
-					<button
-						onClick={() => setActiveTab('ssh')}
-						className={`px-4 py-4 text-sm font-bold border-b-2 cursor-pointer ${activeTab === 'ssh' ? 'border-indigo-500' : 'border-transparent'} flex items-center gap-2`}
-						title="SSH Hosts"
-					>
-						<Server className="w-4 h-4" />
-						{activeTab === 'ssh' && <span>SSH Hosts</span>}
-					</button>
-					<button
-						onClick={() => setActiveTab('encore')}
-						className={`px-4 py-4 text-sm font-bold border-b-2 cursor-pointer ${activeTab === 'encore' ? 'border-indigo-500' : 'border-transparent'} flex items-center gap-2`}
-						style={{
-							color: activeTab === 'encore' ? theme.colors.textMain : theme.colors.textDim,
-						}}
-						title="Encore Features"
-					>
-						<FlaskConical className="w-4 h-4" />
-						{activeTab === 'encore' && <span>Encore Features</span>}
-					</button>
-					<div className="flex-1 flex justify-end items-center pr-4">
-						<button onClick={onClose} className="cursor-pointer">
-							<X className="w-5 h-5 opacity-50 hover:opacity-100" />
-						</button>
+				{/* Search Bar + Close Button */}
+				<div className="flex items-center border-b" style={{ borderColor: theme.colors.border }}>
+					<div className="flex-1">
+						<SettingsSearchInput
+							theme={theme}
+							query={search.query}
+							setQuery={search.setQuery}
+							inputRef={search.inputRef}
+							isActive={search.isActive}
+							results={search.results}
+							onClear={search.clear}
+						/>
 					</div>
+					<button onClick={onClose} className="cursor-pointer px-4">
+						<X className="w-5 h-5 opacity-50 hover:opacity-100" />
+					</button>
 				</div>
 
-				<div className="flex-1 p-6 overflow-y-auto scrollbar-thin">
-					{activeTab === 'general' && <GeneralTab theme={theme} isOpen={isOpen} />}
+				{/* Search Results (replaces sidebar+content when active) */}
+				{searchActive && (
+					<SettingsSearchResults
+						theme={theme}
+						query={search.query}
+						results={search.results}
+						onNavigate={handleSearchNavigate}
+					/>
+				)}
 
-					{activeTab === 'display' && <DisplayTab theme={theme} />}
-
-					{activeTab === 'llm' && FEATURE_FLAGS.LLM_SETTINGS && (
-						<div className="space-y-5">
-							<div>
-								<div className="block text-xs font-bold opacity-70 uppercase mb-2">
-									LLM Provider
-								</div>
-								<select
-									value={llmProvider}
-									onChange={(e) => setLlmProvider(e.target.value as LLMProvider)}
-									className="w-full p-2 rounded border bg-transparent outline-none"
-									style={{ borderColor: theme.colors.border }}
-								>
-									<option value="openrouter">OpenRouter</option>
-									<option value="anthropic">Anthropic</option>
-									<option value="ollama">Ollama (Local)</option>
-								</select>
-							</div>
-
-							<div>
-								<div className="block text-xs font-bold opacity-70 uppercase mb-2">Model Slug</div>
-								<input
-									value={modelSlug}
-									onChange={(e) => setModelSlug(e.target.value)}
-									className="w-full p-2 rounded border bg-transparent outline-none"
-									style={{ borderColor: theme.colors.border }}
-									placeholder={
-										llmProvider === 'ollama' ? 'llama3:latest' : 'anthropic/claude-3.5-sonnet'
-									}
-								/>
-							</div>
-
-							{llmProvider !== 'ollama' && (
-								<div>
-									<div className="block text-xs font-bold opacity-70 uppercase mb-2">API Key</div>
-									<div
-										className="flex items-center border rounded px-3 py-2"
-										style={{
-											backgroundColor: theme.colors.bgMain,
-											borderColor: theme.colors.border,
-										}}
-									>
-										<Key className="w-4 h-4 mr-2 opacity-50" />
-										<input
-											type="password"
-											value={apiKey}
-											onChange={(e) => setApiKey(e.target.value)}
-											className="bg-transparent flex-1 text-sm outline-none"
-											placeholder="sk-..."
-										/>
-									</div>
-									<p className="text-[10px] mt-2 opacity-50">
-										Keys are stored locally in ~/.maestro/settings.json
-									</p>
-								</div>
-							)}
-
-							{/* Test Connection */}
-							<div className="pt-4 border-t" style={{ borderColor: theme.colors.border }}>
+				{/* Body: Sidebar + Content */}
+				<div className={`flex flex-1 overflow-hidden ${searchActive ? 'hidden' : ''}`}>
+					{/* Left Sidebar Tabs */}
+					<nav
+						className="w-[180px] flex-shrink-0 border-r py-2 overflow-y-auto scrollbar-thin"
+						style={{ borderColor: theme.colors.border, backgroundColor: theme.colors.bgSidebar }}
+						aria-label="Settings tabs"
+					>
+						{TAB_ITEMS.map((tab) => {
+							const Icon = tab.icon;
+							const isActive = activeTab === tab.id;
+							return (
 								<button
-									onClick={testLLMConnection}
-									disabled={testingLLM || (llmProvider !== 'ollama' && !apiKey)}
-									className="w-full py-3 rounded-lg font-bold text-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+									key={tab.id}
+									onClick={() => setActiveTab(tab.id)}
+									className={`w-full flex items-center gap-2.5 px-4 py-2 text-sm text-left transition-colors cursor-pointer ${isActive ? 'font-bold' : 'opacity-70 hover:opacity-100'}`}
 									style={{
-										backgroundColor: theme.colors.accent,
-										color: theme.colors.accentForeground,
+										backgroundColor: isActive ? theme.colors.bgActivity : 'transparent',
+										color: isActive ? theme.colors.accent : theme.colors.textMain,
+										borderRight: isActive
+											? `2px solid ${theme.colors.accent}`
+											: '2px solid transparent',
 									}}
+									title={tab.label}
 								>
-									{testingLLM ? 'Testing Connection...' : 'Test Connection'}
+									<Icon className="w-4 h-4 flex-shrink-0" />
+									<span className="truncate">{tab.label}</span>
 								</button>
+							);
+						})}
+					</nav>
 
-								{testResult.status && (
-									<div
-										className="mt-3 p-3 rounded-lg text-sm"
-										style={{
-											backgroundColor:
-												testResult.status === 'success'
-													? theme.colors.success + '20'
-													: theme.colors.error + '20',
-											color:
-												testResult.status === 'success' ? theme.colors.success : theme.colors.error,
-											border: `1px solid ${testResult.status === 'success' ? theme.colors.success : theme.colors.error}`,
-										}}
+					{/* Content Area */}
+					<div ref={contentRef} className="flex-1 p-6 overflow-y-auto scrollbar-thin">
+						{activeTab === 'general' && <GeneralTab theme={theme} isOpen={isOpen} />}
+
+						{activeTab === 'display' && <DisplayTab theme={theme} />}
+
+						{activeTab === 'llm' && FEATURE_FLAGS.LLM_SETTINGS && (
+							<div className="space-y-5">
+								<div>
+									<div className="block text-xs font-bold opacity-70 uppercase mb-2">
+										LLM Provider
+									</div>
+									<select
+										value={llmProvider}
+										onChange={(e) => setLlmProvider(e.target.value as LLMProvider)}
+										className="w-full p-2 rounded border bg-transparent outline-none"
+										style={{ borderColor: theme.colors.border }}
 									>
-										{testResult.message}
+										<option value="openrouter">OpenRouter</option>
+										<option value="anthropic">Anthropic</option>
+										<option value="ollama">Ollama (Local)</option>
+									</select>
+								</div>
+
+								<div>
+									<div className="block text-xs font-bold opacity-70 uppercase mb-2">
+										Model Slug
+									</div>
+									<input
+										value={modelSlug}
+										onChange={(e) => setModelSlug(e.target.value)}
+										className="w-full p-2 rounded border bg-transparent outline-none"
+										style={{ borderColor: theme.colors.border }}
+										placeholder={
+											llmProvider === 'ollama' ? 'llama3:latest' : 'anthropic/claude-3.5-sonnet'
+										}
+									/>
+								</div>
+
+								{llmProvider !== 'ollama' && (
+									<div>
+										<div className="block text-xs font-bold opacity-70 uppercase mb-2">API Key</div>
+										<div
+											className="flex items-center border rounded px-3 py-2"
+											style={{
+												backgroundColor: theme.colors.bgMain,
+												borderColor: theme.colors.border,
+											}}
+										>
+											<Key className="w-4 h-4 mr-2 opacity-50" />
+											<input
+												type="password"
+												value={apiKey}
+												onChange={(e) => setApiKey(e.target.value)}
+												className="bg-transparent flex-1 text-sm outline-none"
+												placeholder="sk-..."
+											/>
+										</div>
+										<p className="text-[10px] mt-2 opacity-50">
+											Keys are stored locally in ~/.maestro/settings.json
+										</p>
 									</div>
 								)}
 
-								<p className="text-[10px] mt-3 opacity-50 text-center">
-									Test sends a simple prompt to verify connectivity and configuration
-								</p>
+								{/* Test Connection */}
+								<div className="pt-4 border-t" style={{ borderColor: theme.colors.border }}>
+									<button
+										onClick={testLLMConnection}
+										disabled={testingLLM || (llmProvider !== 'ollama' && !apiKey)}
+										className="w-full py-3 rounded-lg font-bold text-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+										style={{
+											backgroundColor: theme.colors.accent,
+											color: theme.colors.accentForeground,
+										}}
+									>
+										{testingLLM ? 'Testing Connection...' : 'Test Connection'}
+									</button>
+
+									{testResult.status && (
+										<div
+											className="mt-3 p-3 rounded-lg text-sm"
+											style={{
+												backgroundColor:
+													testResult.status === 'success'
+														? theme.colors.success + '20'
+														: theme.colors.error + '20',
+												color:
+													testResult.status === 'success'
+														? theme.colors.success
+														: theme.colors.error,
+												border: `1px solid ${testResult.status === 'success' ? theme.colors.success : theme.colors.error}`,
+											}}
+										>
+											{testResult.message}
+										</div>
+									)}
+
+									<p className="text-[10px] mt-3 opacity-50 text-center">
+										Test sends a simple prompt to verify connectivity and configuration
+									</p>
+								</div>
 							</div>
-						</div>
-					)}
+						)}
 
-					{activeTab === 'shortcuts' && (
-						<ShortcutsTab
-							theme={theme}
-							hasNoAgents={hasNoAgents}
-							onRecordingChange={(isRecording) => {
-								isRecordingShortcutRef.current = isRecording;
-							}}
-						/>
-					)}
-
-					{activeTab === 'theme' && (
-						<ThemeTab
-							theme={theme}
-							themes={themes}
-							onThemeImportError={onThemeImportError}
-							onThemeImportSuccess={onThemeImportSuccess}
-						/>
-					)}
-
-					{activeTab === 'notifications' && (
-						<NotificationsPanel
-							osNotificationsEnabled={osNotificationsEnabled}
-							setOsNotificationsEnabled={setOsNotificationsEnabled}
-							audioFeedbackEnabled={audioFeedbackEnabled}
-							setAudioFeedbackEnabled={setAudioFeedbackEnabled}
-							audioFeedbackCommand={audioFeedbackCommand}
-							setAudioFeedbackCommand={setAudioFeedbackCommand}
-							toastDuration={toastDuration}
-							setToastDuration={setToastDuration}
-							theme={theme}
-						/>
-					)}
-
-					{activeTab === 'aicommands' && (
-						<div className="space-y-8">
-							<AICommandsPanel
+						{activeTab === 'shortcuts' && (
+							<ShortcutsTab
 								theme={theme}
-								customAICommands={customAICommands}
-								setCustomAICommands={setCustomAICommands}
+								hasNoAgents={hasNoAgents}
+								onRecordingChange={(isRecording) => {
+									isRecordingShortcutRef.current = isRecording;
+								}}
 							/>
+						)}
 
-							{/* Divider */}
-							<div className="border-t" style={{ borderColor: theme.colors.border }} />
-
-							{/* Spec Kit Commands Section */}
-							<SpecKitCommandsPanel theme={theme} />
-
-							{/* Divider */}
-							<div className="border-t" style={{ borderColor: theme.colors.border }} />
-
-							{/* OpenSpec Commands Section */}
-							<OpenSpecCommandsPanel theme={theme} />
-
-							{/* Divider */}
-							<div className="border-t" style={{ borderColor: theme.colors.border }} />
-
-							{/* BMAD Commands Section */}
-							<BmadCommandsPanel theme={theme} />
-						</div>
-					)}
-
-					{activeTab === 'ssh' && (
-						<div className="space-y-5">
-							<SshRemotesSection theme={theme} />
-							<SshRemoteIgnoreSection
+						{activeTab === 'theme' && (
+							<ThemeTab
 								theme={theme}
-								ignorePatterns={sshRemoteIgnorePatterns}
-								onIgnorePatternsChange={setSshRemoteIgnorePatterns}
-								honorGitignore={sshRemoteHonorGitignore}
-								onHonorGitignoreChange={setSshRemoteHonorGitignore}
+								themes={themes}
+								onThemeImportError={onThemeImportError}
+								onThemeImportSuccess={onThemeImportSuccess}
 							/>
-						</div>
-					)}
+						)}
 
-					{activeTab === 'encore' && <EncoreTab theme={theme} isOpen={isOpen} />}
+						{activeTab === 'notifications' && (
+							<NotificationsPanel
+								osNotificationsEnabled={osNotificationsEnabled}
+								setOsNotificationsEnabled={setOsNotificationsEnabled}
+								audioFeedbackEnabled={audioFeedbackEnabled}
+								setAudioFeedbackEnabled={setAudioFeedbackEnabled}
+								audioFeedbackCommand={audioFeedbackCommand}
+								setAudioFeedbackCommand={setAudioFeedbackCommand}
+								toastDuration={toastDuration}
+								setToastDuration={setToastDuration}
+								theme={theme}
+							/>
+						)}
+
+						{activeTab === 'aicommands' && (
+							<div className="space-y-8">
+								<div data-setting-id="aicommands-custom">
+									<AICommandsPanel
+										theme={theme}
+										customAICommands={customAICommands}
+										setCustomAICommands={setCustomAICommands}
+									/>
+								</div>
+
+								{/* Divider */}
+								<div className="border-t" style={{ borderColor: theme.colors.border }} />
+
+								{/* Spec Kit Commands Section */}
+								<div data-setting-id="aicommands-speckit">
+									<SpecKitCommandsPanel theme={theme} />
+								</div>
+
+								{/* Divider */}
+								<div className="border-t" style={{ borderColor: theme.colors.border }} />
+
+								{/* OpenSpec Commands Section */}
+								<div data-setting-id="aicommands-openspec">
+									<OpenSpecCommandsPanel theme={theme} />
+								</div>
+
+								{/* Divider */}
+								<div className="border-t" style={{ borderColor: theme.colors.border }} />
+
+								{/* BMAD Commands Section */}
+								<div data-setting-id="aicommands-bmad">
+									<BmadCommandsPanel theme={theme} />
+								</div>
+							</div>
+						)}
+
+						{activeTab === 'groupchat' && (
+							<div className="space-y-5">
+								<div>
+									<h3
+										className="text-sm font-bold uppercase tracking-wider mb-1"
+										style={{ color: theme.colors.textMain }}
+									>
+										Moderator Standing Instructions
+									</h3>
+									<p className="text-xs mb-3" style={{ color: theme.colors.textDim }}>
+										These instructions are included in every group chat moderator prompt. Use them
+										for standing practices like branch workflows, autorun setup, or coding
+										standards.
+									</p>
+									<textarea
+										value={moderatorStandingInstructions}
+										onChange={(e) => setModeratorStandingInstructions(e.target.value)}
+										placeholder={`Example:\n- Always instruct agents to work in git branches, not directly on main\n- When delegating tasks, tell agents to enable autorun with: /autorun on\n- Prefer TypeScript strict mode in all new files`}
+										className="w-full p-3 rounded border bg-transparent outline-none resize-vertical text-sm font-mono"
+										style={{
+											borderColor: theme.colors.border,
+											color: theme.colors.textMain,
+											minHeight: '150px',
+										}}
+										maxLength={2000}
+										rows={8}
+									/>
+									<div className="text-xs mt-1 text-right" style={{ color: theme.colors.textDim }}>
+										{moderatorStandingInstructions.length} / 2000
+									</div>
+								</div>
+							</div>
+						)}
+
+						{activeTab === 'ssh' && (
+							<div className="space-y-5">
+								<div data-setting-id="ssh-remotes">
+									<SshRemotesSection theme={theme} />
+								</div>
+								<div data-setting-id="ssh-ignore-patterns">
+									<SshRemoteIgnoreSection
+										theme={theme}
+										ignorePatterns={sshRemoteIgnorePatterns}
+										onIgnorePatternsChange={setSshRemoteIgnorePatterns}
+										honorGitignore={sshRemoteHonorGitignore}
+										onHonorGitignoreChange={setSshRemoteHonorGitignore}
+									/>
+								</div>
+							</div>
+						)}
+
+						{activeTab === 'environment' && <EnvironmentTab theme={theme} />}
+
+						{activeTab === 'encore' && <EncoreTab theme={theme} isOpen={isOpen} />}
+					</div>
 				</div>
 			</div>
 		</div>

@@ -24,7 +24,7 @@ import { useGroupChatStore } from '../../stores/groupChatStore';
 import { useModalStore } from '../../stores/modalStore';
 import { useUIStore } from '../../stores/uiStore';
 import { notifyToast } from '../../stores/notificationStore';
-import { getActiveTab } from '../../utils/tabHelpers';
+import { getActiveTab, extractQuickTabName } from '../../utils/tabHelpers';
 import {
 	renameTerminalTab as renameTerminalTabHelper,
 	getTerminalSessionId,
@@ -69,6 +69,8 @@ export interface SessionLifecycleReturn {
 	) => void;
 	/** Rename the currently-selected tab (persists to agent session storage + history) */
 	handleRenameTab: (newName: string) => void;
+	/** Auto-name the currently-selected tab: close modal, show spinner, generate name via agent */
+	handleAutoNameTab: () => void;
 	/** Delete a session: kill processes, clean up playbooks, optionally erase working dir */
 	performDeleteSession: (session: Session, eraseWorkingDirectory: boolean) => Promise<void>;
 	/** Show a confirmation modal with a message and callback */
@@ -292,6 +294,115 @@ export function useSessionLifecycle(deps: SessionLifecycleDeps): SessionLifecycl
 		},
 		[activeSession, renameTabId]
 	);
+
+	const handleAutoNameTab = useCallback(() => {
+		if (!activeSession || !renameTabId) return;
+
+		const tab = activeSession.aiTabs.find((t) => t.id === renameTabId);
+		if (!tab || !tab.logs.length) return;
+
+		// Collect user messages (first ~2000 chars) for the naming prompt
+		const userMessages: string[] = [];
+		let totalLength = 0;
+		for (const entry of tab.logs) {
+			if (entry.source === 'user' && entry.text.trim()) {
+				const text = entry.text.trim();
+				if (totalLength + text.length > 2000) {
+					userMessages.push(text.substring(0, 2000 - totalLength));
+					break;
+				}
+				userMessages.push(text);
+				totalLength += text.length;
+			}
+		}
+		const summary = userMessages.join('\n\n');
+		if (!summary) return;
+
+		const sessionId = activeSession.id;
+		const tabId = renameTabId;
+
+		// Close the modal immediately
+		useModalStore.getState().closeModal('renameTab');
+
+		// Fast-path: try extracting a name from known patterns first
+		const quickName = extractQuickTabName(summary);
+		if (quickName) {
+			useSessionStore.getState().setSessions((prev) =>
+				prev.map((s) => {
+					if (s.id !== sessionId) return s;
+					return {
+						...s,
+						aiTabs: s.aiTabs.map((t) => (t.id === tabId ? { ...t, name: quickName } : t)),
+					};
+				})
+			);
+			return;
+		}
+
+		// Show spinner on the tab
+		useSessionStore.getState().setSessions((prev) =>
+			prev.map((s) => {
+				if (s.id !== sessionId) return s;
+				return {
+					...s,
+					aiTabs: s.aiTabs.map((t) => (t.id === tabId ? { ...t, isGeneratingName: true } : t)),
+				};
+			})
+		);
+
+		// Fire and forget — generate name via ephemeral agent
+		window.maestro.tabNaming
+			.generateTabName({
+				userMessage: summary,
+				agentType: activeSession.toolType,
+				cwd: activeSession.cwd,
+				sessionSshRemoteConfig: activeSession.sessionSshRemoteConfig,
+			})
+			.then((generatedName) => {
+				useSessionStore.getState().setSessions((prev) =>
+					prev.map((s) => {
+						if (s.id !== sessionId) return s;
+						return {
+							...s,
+							aiTabs: s.aiTabs.map((t) => {
+								if (t.id !== tabId) return t;
+								return {
+									...t,
+									isGeneratingName: false,
+									...(generatedName ? { name: generatedName } : {}),
+								};
+							}),
+						};
+					})
+				);
+
+				if (generatedName) {
+					window.maestro.logger.log(
+						'info',
+						`Auto tab named (manual): "${generatedName}"`,
+						'TabNaming',
+						{ tabId, sessionId, generatedName }
+					);
+				}
+			})
+			.catch((error) => {
+				window.maestro.logger.log('error', 'Auto tab naming (manual) failed', 'TabNaming', {
+					tabId,
+					sessionId,
+					error: String(error),
+				});
+				// Clear spinner on error
+				useSessionStore.getState().setSessions((prev) =>
+					prev.map((s) => {
+						if (s.id !== sessionId) return s;
+						return {
+							...s,
+							aiTabs: s.aiTabs.map((t) => (t.id === tabId ? { ...t, isGeneratingName: false } : t)),
+						};
+					})
+				);
+			});
+	}, [activeSession, renameTabId]);
 
 	const performDeleteSession = useCallback(
 		async (session: Session, eraseWorkingDirectory: boolean) => {
@@ -519,6 +630,7 @@ export function useSessionLifecycle(deps: SessionLifecycleDeps): SessionLifecycl
 	return {
 		handleSaveEditAgent,
 		handleRenameTab,
+		handleAutoNameTab,
 		performDeleteSession,
 		showConfirmation,
 		toggleTabStar,
