@@ -87,20 +87,8 @@
 			"entitlements": "build/entitlements.mac.plist",
 			"entitlementsInherit": "build/entitlements.mac.plist",
 			"target": [
-				{
-					"target": "dmg",
-					"arch": [
-						"x64",
-						"arm64"
-					]
-				},
-				{
-					"target": "zip",
-					"arch": [
-						"x64",
-						"arm64"
-					]
-				}
+				"dmg",
+				"zip"
 			],
 			"artifactName": "${name}-${version}-${arch}-mac.${ext}",
 			"icon": "build/icon.icns",
@@ -315,7 +303,7 @@
 	},
 	"lint-staged": {
 		"*": [
-			"prettier --write"
+			"prettier --write --ignore-unknown"
 		],
 		"*.{js,cjs,mjs,jsx,ts,tsx,mts,cts}": [
 			"eslint --fix"

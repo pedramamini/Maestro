@@ -315,6 +315,7 @@ export const useAgentStore = create<AgentStore>()((set, get) => ({
 						session,
 						gitBranch,
 						conductorProfile: deps.conductorProfile,
+						readOnlyMode: isReadOnly,
 					});
 
 					effectivePrompt = `${substitutedSystemPrompt}\n\n---\n\n# User Request\n\n${effectivePrompt}`;
@@ -395,6 +396,7 @@ export const useAgentStore = create<AgentStore>()((set, get) => ({
 							session,
 							gitBranch,
 							conductorProfile: deps.conductorProfile,
+							readOnlyMode: isReadOnly,
 						});
 						promptForAgent = `${substitutedSystemPrompt}\n\n---\n\n# User Request\n\n${substitutedPrompt}`;
 					}

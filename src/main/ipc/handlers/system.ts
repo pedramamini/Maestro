@@ -200,7 +200,20 @@ export function registerSystemHandlers(deps: SystemHandlerDependencies): void {
 		try {
 			parsed = new URL(url);
 		} catch {
-			throw new Error(`Invalid URL: ${url}`);
+			// Detect absolute file paths and redirect to openPath — Fixes MAESTRO-FN/FA/F4
+			if (path.isAbsolute(url)) {
+				if (fsSync.existsSync(url)) {
+					const errorMessage = await shell.openPath(url);
+					if (errorMessage) {
+						throw new Error(errorMessage);
+					}
+					return;
+				}
+				throw new Error(`Path does not exist: ${url}`);
+			}
+			// Relative paths (LICENSE, ./README.md, vscode/**) are not actionable — log and return
+			logger.warn(`Ignored non-URL string passed to openExternal: "${url}"`, 'Shell');
+			return;
 		}
 		// Redirect file:// URLs to shell.openPath instead of rejecting — Fixes MAESTRO-9M
 		if (parsed.protocol === 'file:') {

@@ -38,6 +38,7 @@ import { SummarizeProgressOverlay } from './SummarizeProgressOverlay';
 import { WizardInputPanel } from './InlineWizard';
 import { useAgentCapabilities, useScrollIntoView } from '../hooks';
 import { getProviderDisplayName } from '../utils/sessionValidation';
+import { getReadOnlyModeLabel, getReadOnlyModeTooltip } from '../../shared/agentMetadata';
 
 interface SlashCommand {
 	command: string;
@@ -1059,10 +1060,10 @@ export const InputArea = React.memo(function InputArea(props: InputAreaProps) {
 													? `1px solid ${theme.colors.warning}50`
 													: '1px solid transparent',
 											}}
-											title="Toggle read-only mode (agent won't modify files)"
+											title={getReadOnlyModeTooltip(session.toolType)}
 										>
 											<Eye className="w-3 h-3" />
-											<span>Read-only</span>
+											<span>{getReadOnlyModeLabel(session.toolType)}</span>
 										</button>
 									)}
 								{/* Show Thinking toggle - AI mode only, for agents that support it

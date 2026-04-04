@@ -586,6 +586,36 @@ describe('system IPC handlers', () => {
 				'Unexpected Electron internal failure'
 			);
 		});
+
+		it('should redirect absolute file paths to openPath', async () => {
+			vi.mocked(fsSync.existsSync).mockReturnValue(true);
+			vi.mocked(shell.openPath).mockResolvedValue('');
+
+			const handler = handlers.get('shell:openExternal');
+			await handler!({} as any, '/Users/test/workspace/src/app.tsx');
+
+			expect(shell.openExternal).not.toHaveBeenCalled();
+			expect(shell.openPath).toHaveBeenCalledWith('/Users/test/workspace/src/app.tsx');
+		});
+
+		it('should throw for non-existent absolute file paths', async () => {
+			vi.mocked(fsSync.existsSync).mockReturnValue(false);
+
+			const handler = handlers.get('shell:openExternal');
+			await expect(handler!({} as any, '/nonexistent/path.tsx')).rejects.toThrow(
+				'Path does not exist'
+			);
+		});
+
+		it('should silently ignore relative paths like LICENSE or ./README.md', async () => {
+			const handler = handlers.get('shell:openExternal');
+
+			await expect(handler!({} as any, 'LICENSE')).resolves.toBeUndefined();
+			await expect(handler!({} as any, './README.md')).resolves.toBeUndefined();
+			await expect(handler!({} as any, 'vscode/**')).resolves.toBeUndefined();
+			expect(shell.openExternal).not.toHaveBeenCalled();
+			expect(shell.openPath).not.toHaveBeenCalled();
+		});
 	});
 
 	describe('shell:showItemInFolder', () => {

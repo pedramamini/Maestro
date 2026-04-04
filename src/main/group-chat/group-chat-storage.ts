@@ -57,11 +57,25 @@ function enqueueWrite<T>(chatId: string, fn: () => Promise<T>): Promise<T> {
  * Atomically write JSON content to a file by writing to a temp file first,
  * then renaming. rename() is atomic on POSIX and effectively atomic on NTFS.
  * This prevents partial/corrupt reads if the process crashes mid-write.
+ * Retries on EPERM/EBUSY errors (Windows file locks from OneDrive/antivirus).
  */
 async function atomicWriteJson(filePath: string, data: unknown): Promise<void> {
 	const tmp = filePath + '.tmp';
 	await fs.writeFile(tmp, JSON.stringify(data, null, 2), 'utf-8');
-	await fs.rename(tmp, filePath);
+	const maxRetries = 3;
+	for (let attempt = 0; attempt <= maxRetries; attempt++) {
+		try {
+			await fs.rename(tmp, filePath);
+			return;
+		} catch (err) {
+			const code = (err as NodeJS.ErrnoException).code;
+			if ((code === 'EPERM' || code === 'EBUSY') && attempt < maxRetries) {
+				await new Promise((resolve) => setTimeout(resolve, 100 * Math.pow(2, attempt)));
+				continue;
+			}
+			throw err;
+		}
+	}
 }
 
 /**

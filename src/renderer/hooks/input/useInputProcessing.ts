@@ -968,6 +968,7 @@ export function useInputProcessing(deps: UseInputProcessingDeps): UseInputProces
 								gitBranch,
 								historyFilePath,
 								conductorProfile,
+								readOnlyMode: isReadOnly,
 							});
 
 							// Prepend system prompt to user's message

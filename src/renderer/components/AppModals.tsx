@@ -945,6 +945,7 @@ export interface AppUtilityModalsProps {
 	onPromptToggleTabSaveToHistory?: () => void;
 	promptTabReadOnlyMode: boolean;
 	onPromptToggleTabReadOnlyMode: () => void;
+	promptComposerAgentId?: string;
 	promptTabShowThinking: ThinkingMode;
 	onPromptToggleTabShowThinking?: () => void;
 	promptSupportsThinking: boolean;
@@ -1123,6 +1124,7 @@ export const AppUtilityModals = memo(function AppUtilityModals({
 	onPromptToggleTabSaveToHistory,
 	promptTabReadOnlyMode,
 	onPromptToggleTabReadOnlyMode,
+	promptComposerAgentId,
 	promptTabShowThinking,
 	onPromptToggleTabShowThinking,
 	promptSupportsThinking,
@@ -1357,6 +1359,7 @@ export const AppUtilityModals = memo(function AppUtilityModals({
 					onToggleTabSaveToHistory={onPromptToggleTabSaveToHistory}
 					tabReadOnlyMode={promptTabReadOnlyMode}
 					onToggleTabReadOnlyMode={onPromptToggleTabReadOnlyMode}
+					agentId={promptComposerAgentId}
 					tabShowThinking={promptTabShowThinking}
 					onToggleTabShowThinking={onPromptToggleTabShowThinking}
 					supportsThinking={promptSupportsThinking}
@@ -2032,6 +2035,7 @@ export interface AppModalsProps {
 	onPromptToggleTabSaveToHistory?: () => void;
 	promptTabReadOnlyMode: boolean;
 	onPromptToggleTabReadOnlyMode: () => void;
+	promptComposerAgentId?: string;
 	promptTabShowThinking: ThinkingMode;
 	onPromptToggleTabShowThinking?: () => void;
 	promptSupportsThinking: boolean;
@@ -2390,6 +2394,7 @@ export const AppModals = memo(function AppModals(props: AppModalsProps) {
 		onPromptToggleTabSaveToHistory,
 		promptTabReadOnlyMode,
 		onPromptToggleTabReadOnlyMode,
+		promptComposerAgentId,
 		promptTabShowThinking,
 		onPromptToggleTabShowThinking,
 		promptSupportsThinking,
@@ -2699,6 +2704,7 @@ export const AppModals = memo(function AppModals(props: AppModalsProps) {
 				onPromptToggleTabSaveToHistory={onPromptToggleTabSaveToHistory}
 				promptTabReadOnlyMode={promptTabReadOnlyMode}
 				onPromptToggleTabReadOnlyMode={onPromptToggleTabReadOnlyMode}
+				promptComposerAgentId={promptComposerAgentId}
 				promptTabShowThinking={promptTabShowThinking}
 				onPromptToggleTabShowThinking={onPromptToggleTabShowThinking}
 				promptSupportsThinking={promptSupportsThinking}
