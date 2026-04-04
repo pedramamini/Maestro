@@ -300,6 +300,12 @@ export interface UseSettingsReturn {
 	symphonyRegistryUrls: string[];
 	setSymphonyRegistryUrls: (value: string[]) => void;
 
+	// Forced Parallel Execution
+	forcedParallelExecution: boolean;
+	setForcedParallelExecution: (value: boolean) => void;
+	forcedParallelAcknowledged: boolean;
+	setForcedParallelAcknowledged: (value: boolean) => void;
+
 	// Director's Notes settings
 	directorNotesSettings: DirectorNotesSettings;
 	setDirectorNotesSettings: (value: DirectorNotesSettings) => void;
