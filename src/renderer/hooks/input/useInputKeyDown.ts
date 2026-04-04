@@ -16,6 +16,7 @@ import { useInputContext } from '../../contexts/InputContext';
 import { useSessionStore, selectActiveSession } from '../../stores/sessionStore';
 import { useUIStore } from '../../stores/uiStore';
 import { useSettingsStore } from '../../stores/settingsStore';
+import { filterSlashCommands } from '../../utils/search';
 
 // ============================================================================
 // Dependencies interface
@@ -205,11 +206,8 @@ export function useInputKeyDown(deps: InputKeyDownDeps): InputKeyDownReturn {
 			// Handle slash command autocomplete
 			if (slashCommandOpen) {
 				const isTerminalMode = activeSession?.inputMode === 'terminal';
-				const filteredCommands = allSlashCommands.filter((cmd) => {
-					if ('terminalOnly' in cmd && cmd.terminalOnly && !isTerminalMode) return false;
-					if ('aiOnly' in cmd && cmd.aiOnly && isTerminalMode) return false;
-					return cmd.command.toLowerCase().startsWith(inputValue.toLowerCase());
-				});
+				const query = inputValue.toLowerCase().replace(/^\//, '');
+				const filteredCommands = filterSlashCommands(allSlashCommands, query, !!isTerminalMode);
 
 				if (e.key === 'ArrowDown') {
 					e.preventDefault();
@@ -219,11 +217,14 @@ export function useInputKeyDown(deps: InputKeyDownDeps): InputKeyDownReturn {
 					setSelectedSlashCommandIndex((prev) => Math.max(prev - 1, 0));
 				} else if (e.key === 'Tab' || e.key === 'Enter') {
 					e.preventDefault();
-					if (filteredCommands[selectedSlashCommandIndex]) {
-						setInputValue(filteredCommands[selectedSlashCommandIndex].command);
-						setSlashCommandOpen(false);
-						inputRef.current?.focus();
-					}
+					if (filteredCommands.length === 0) return;
+					const clampedIndex = Math.max(
+						0,
+						Math.min(selectedSlashCommandIndex, filteredCommands.length - 1)
+					);
+					setInputValue(filteredCommands[clampedIndex].command);
+					setSlashCommandOpen(false);
+					inputRef.current?.focus();
 				} else if (e.key === 'Escape') {
 					e.preventDefault();
 					setSlashCommandOpen(false);
