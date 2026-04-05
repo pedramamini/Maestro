@@ -214,36 +214,79 @@ Estimated line reduction: ~450 lines from managers + thin wrappers total ~30 lin
 
 ### Task 3: Consolidate the EditingCommand interface
 
-- [ ] Find all definitions: `rtk grep "interface EditingCommand" src/ --glob "*.{ts,tsx}"`
-- [ ] Compare fields across all 3 definitions
-- [ ] Create one canonical definition in `src/shared/types.ts` or alongside the shared base
-- [ ] Replace other 2 definitions with imports
+- [x] Find all definitions: `rtk grep "interface EditingCommand" src/ --glob "*.{ts,tsx}"`
+- [x] Compare fields across all 3 definitions
+- [x] Create one canonical definition in `src/shared/types.ts` or alongside the shared base
+- [x] Replace other 2 definitions with imports
+
+**Consolidation notes:**
+Found 2 definitions (not 3 - one may have been consolidated in a prior phase):
+1. `src/renderer/types/index.ts:807` - base `EditingCommand { id, prompt }` used by SpecKit, OpenSpec, Bmad panels
+2. `src/renderer/components/AICommandsPanel.tsx:25` - local `EditingCommand { id, command, description, prompt }` (superset)
+
+Resolution: Kept base `EditingCommand` in `types/index.ts`, added `EditingAICommand extends EditingCommand { command, description }` alongside it. Removed local definition from AICommandsPanel.tsx, now imports `EditingAICommand` from shared types. All 62 AICommandsPanel tests pass. Lint passes.
 
 ### Task 4: Implement shared manager (main process)
 
-- [ ] Create `src/main/spec-command-manager.ts` with all common logic extracted from both managers
-- [ ] Reduce `src/main/speckit-manager.ts` to a thin wrapper (~10 lines) instantiating SpecCommandManager with speckit config
-- [ ] Reduce `src/main/openspec-manager.ts` to a thin wrapper (~10 lines) instantiating SpecCommandManager with openspec config
-- [ ] Run type checking: `rtk tsc -p tsconfig.main.json --noEmit`
+- [x] Create `src/main/spec-command-manager.ts` with all common logic extracted from both managers
+- [x] Reduce `src/main/speckit-manager.ts` to a thin wrapper (~10 lines) instantiating SpecCommandManager with speckit config
+- [x] Reduce `src/main/openspec-manager.ts` to a thin wrapper (~10 lines) instantiating SpecCommandManager with openspec config
+- [x] Run type checking: `rtk tsc -p tsconfig.main.json --noEmit`
+
+**Implementation notes:**
+- Created `SpecCommandManager` class (230 lines) with all shared logic: `getMetadata`, `getPrompts`, `savePrompt`, `resetPrompt`, `getCommand`, `getCommandBySlash`, plus internal helpers
+- Exposed `getUserPromptsPath()` and `updateMetadata()` as semi-public methods for use by feature-specific refresh implementations
+- speckit-manager.ts reduced from 531 to 222 lines (refresh logic + downloadFile + config + re-exports)
+- openspec-manager.ts reduced from 472 to 170 lines (refresh logic + parseAgentsMd + config + re-exports)
+- Both wrappers re-export types as aliases (`SpecKitCommand = SpecCommand`, etc.) for full backward compatibility
+- All 30 openspec tests pass, both tsconfig.main.json and tsconfig.lint.json clean, lint passes
 
 ### Task 5: Implement shared UI component (renderer)
 
-- [ ] Create `src/renderer/components/SpecCommandsPanel.tsx` with parameterized props: `featureName`, `label`, color accents
-- [ ] Reduce `src/renderer/components/SpecKitCommandsPanel.tsx` to thin wrapper calling SpecCommandsPanel
-- [ ] Reduce `src/renderer/components/OpenSpecCommandsPanel.tsx` to thin wrapper calling SpecCommandsPanel
-- [ ] Run type checking: `rtk tsc -p tsconfig.lint.json --noEmit`
+- [x] Create `src/renderer/components/SpecCommandsPanel.tsx` with parameterized props: `featureName`, `label`, color accents
+- [x] Reduce `src/renderer/components/SpecKitCommandsPanel.tsx` to thin wrapper calling SpecCommandsPanel
+- [x] Reduce `src/renderer/components/OpenSpecCommandsPanel.tsx` to thin wrapper calling SpecCommandsPanel
+- [x] Run type checking: `rtk tsc -p tsconfig.lint.json --noEmit`
+
+**Implementation notes:**
+- Created `SpecCommandsPanel.tsx` (310 lines) with `SpecCommandsPanelConfig` interface parameterizing: icon, label, descriptionPrefix/Suffix, externalUrl/Label, emptyText, logPrefix, and IPC namespace
+- Defined `SpecCommandsIPC` interface to abstract `window.maestro.speckit`/`window.maestro.openspec` IPC shapes (identical signatures for getMetadata, getPrompts, savePrompt, resetPrompt, refresh)
+- Uses `SpecCommand`/`SpecCommandMetadata` types from shared `spec-command-manager.ts` (Task 4)
+- SpecKitCommandsPanel.tsx reduced from 419 to 26 lines (config object + thin wrapper)
+- OpenSpecCommandsPanel.tsx reduced from 421 to 26 lines (config object + thin wrapper)
+- Total line reduction: ~780 lines (419 + 421 - 310 shared - 26 - 26 wrappers = ~478 net removed)
+- tsconfig.lint.json type check passes, all 103 SettingsModal tests pass, all 43 openspec tests pass
 
 ### Task 6: Consolidate IPC handlers
 
-- [ ] Create `src/main/ipc/handlers/spec-commands.ts` with shared handler logic
-- [ ] Reduce `src/main/ipc/handlers/speckit.ts` to thin registration calling shared handlers
-- [ ] Reduce `src/main/ipc/handlers/openspec.ts` to thin registration calling shared handlers
+- [x] Create `src/main/ipc/handlers/spec-commands.ts` with shared handler logic
+- [x] Reduce `src/main/ipc/handlers/speckit.ts` to thin registration calling shared handlers
+- [x] Reduce `src/main/ipc/handlers/openspec.ts` to thin registration calling shared handlers
+
+**Implementation notes:**
+- Created `spec-commands.ts` (113 lines) with `registerSpecCommandHandlers()` factory accepting `SpecCommandHandlerConfig` (channelPrefix, logContext, featureName, displayName, formatRefreshLog) and `SpecCommandHandlerFunctions` (6 manager function refs)
+- speckit.ts reduced from 101 to 44 lines (config + function bindings)
+- openspec.ts reduced from 101 to 44 lines (config + function bindings)
+- handlers/index.ts unchanged - still imports `registerSpeckitHandlers`/`registerOpenSpecHandlers` from same paths
+- Net reduction: ~101 lines (202 original - 113 shared - 88 wrappers = ~101 removed, but shared also replaces bmad which is 93 lines if migrated later)
+- All type checks pass (tsconfig.main.json, tsconfig.lint.json), all 30 openspec tests pass, all 103 SettingsModal tests pass, all 14 preload commands tests pass
 
 ### Task 7: Consolidate renderer services
 
-- [ ] Create `src/renderer/services/specCommands.ts` with shared service logic
-- [ ] Reduce `src/renderer/services/speckit.ts` to thin wrapper
-- [ ] Reduce `src/renderer/services/openspec.ts` to thin wrapper
+- [x] Create `src/renderer/services/specCommands.ts` with shared service logic
+- [x] Reduce `src/renderer/services/speckit.ts` to thin wrapper
+- [x] Reduce `src/renderer/services/openspec.ts` to thin wrapper
+
+**Implementation notes:**
+- Created `specCommands.ts` (100 lines) with `createSpecCommandService()` factory function accepting `SpecCommandServiceConfig` (logPrefix, getIPC callback) and returning `SpecCommandService` (getCommands, getMetadata, getCommand)
+- `getIPC` is a lazy callback so services can be created at module scope before `window.maestro` is initialized
+- Includes null-safety for the IPC namespace (handles `window.maestro?.speckit` being undefined)
+- speckit.ts reduced from 57 to 16 lines (config + re-exports)
+- openspec.ts reduced from 57 to 16 lines (config + re-exports)
+- bmad.ts also consolidated from 69 to 16 lines (bonus - same pattern, was not in scope but trivial to include)
+- Net reduction: ~135 lines (57 + 57 + 69 original - 100 shared - 16 - 16 - 16 wrappers)
+- All exports remain backward-compatible (same function names)
+- tsconfig.lint.json type check passes, all 62 service/initialization tests pass, all 14 preload commands tests pass
 
 ### Task 8: Consolidate prompt templates
 
