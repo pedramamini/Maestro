@@ -12,9 +12,9 @@ SpecKit and OpenSpec are near-identical feature implementations totaling ~2,431 
 
 ## Pre-flight Checks
 
-- [ ] Phase 05 (type deduplication) is complete
-- [ ] `rtk npm run lint` passes
-- [ ] `rtk vitest run` passes
+- [x] Phase 05 (type deduplication) is complete
+- [x] `rtk npm run lint` passes
+- [x] `CI=1 rtk vitest run` passes (36 pre-existing failures in 18 files, documented in Phase 05 - none related to SpecKit/OpenSpec)
 
 ---
 
@@ -38,12 +38,34 @@ Also: `EditingCommand` interface has 3 definitions.
 
 ### Task 1: Diff each file pair to identify differences
 
-- [ ] Diff managers: `diff src/main/speckit-manager.ts src/main/openspec-manager.ts`
-- [ ] Diff UI panels: `diff src/renderer/components/SpecKitCommandsPanel.tsx src/renderer/components/OpenSpecCommandsPanel.tsx`
-- [ ] Diff IPC handlers: `diff src/main/ipc/handlers/speckit.ts src/main/ipc/handlers/openspec.ts`
-- [ ] Diff renderer services: `diff src/renderer/services/speckit.ts src/renderer/services/openspec.ts`
-- [ ] Diff prompt templates: `diff src/prompts/speckit/index.ts src/prompts/openspec/index.ts`
-- [ ] Document what actually differs (expected: directory names, feature labels, prompt content)
+- [x] Diff managers: `diff src/main/speckit-manager.ts src/main/openspec-manager.ts`
+- [x] Diff UI panels: `diff src/renderer/components/SpecKitCommandsPanel.tsx src/renderer/components/OpenSpecCommandsPanel.tsx`
+- [x] Diff IPC handlers: `diff src/main/ipc/handlers/speckit.ts src/main/ipc/handlers/openspec.ts`
+- [x] Diff renderer services: `diff src/renderer/services/speckit.ts src/renderer/services/openspec.ts`
+- [x] Diff prompt templates: `diff src/prompts/speckit/index.ts src/prompts/openspec/index.ts`
+- [x] Document what actually differs (expected: directory names, feature labels, prompt content)
+
+**Diff findings:**
+
+**Managers (speckit-manager.ts:531 vs openspec-manager.ts:472):**
+- Identical: `StoredPrompt`, `StoredData` interfaces, `loadUserCustomizations`, `saveUserCustomizations`, `getBundledPrompts`, `getBundledMetadata`, `getMetadata`, `getPrompts`, `savePrompt`, `resetPrompt`, `getCommand`, `getCommandBySlash`
+- Parameterizable: LOG_CONTEXT, file prefix (`speckit.`/`openspec.`), customizations filename, prompts dir name, COMMANDS list, default metadata (URLs/versions), UPSTREAM_COMMANDS
+- **NOT shareable: `refreshPrompts()`** - completely different implementations:
+  - SpecKit: downloads ZIP from GitHub releases, extracts with `unzip` CLI, needs `fsSync`, `https`, `exec`, `child_process`
+  - OpenSpec: fetches AGENTS.md raw file, parses sections with regex markers (`parseAgentsMd()`), no ZIP/exec
+- Command/Metadata types have identical fields but different names
+
+**UI panels (SpecKitCommandsPanel.tsx:419 vs OpenSpecCommandsPanel.tsx:421):**
+- 99% identical. Differences: icon (`Wand2` vs `GitBranch`), label text, description text, external URL, IPC namespace (`window.maestro.speckit` vs `openspec`), type imports, console messages, empty state icon/text
+
+**IPC handlers (speckit.ts:101 vs openspec.ts:101):**
+- 100% identical logic. Differences: LOG_CONTEXT, IPC channel names (`speckit:*` vs `openspec:*`), imported function/type names, log messages
+
+**Renderer services (speckit.ts:57 vs openspec.ts:57):**
+- 100% identical logic. Differences: type names, IPC namespace, log prefix, function names
+
+**Prompt templates (speckit/index.ts:154 vs openspec/index.ts:108):**
+- Identical structure. Differences: command definition list (10 vs 5), file imports (10 vs 5 .md files), type names, exported prompts. Same `CommandDefinition` interface fields.
 
 ### Task 2: Design the shared base
 
@@ -101,7 +123,7 @@ Also: `EditingCommand` interface has 3 definitions.
 
 - [ ] Run lint: `rtk npm run lint`
 - [ ] Find related test files: `rtk grep "speckit\|openspec\|SpecKit\|OpenSpec" src/__tests__/ --glob "*.test.{ts,tsx}" -l`
-- [ ] Run related tests: `rtk vitest run <related-test-files>`
+- [ ] Run related tests: `CI=1 rtk vitest run <related-test-files>`
 - [ ] Confirm zero new test failures
 
 ### Task 11: Manual smoke test checklist
@@ -120,7 +142,7 @@ Also: `EditingCommand` interface has 3 definitions.
 After completing changes, run targeted tests for the files you modified:
 
 ```bash
-rtk vitest run <path-to-relevant-test-files>
+CI=1 rtk vitest run <path-to-relevant-test-files>
 ```
 
 **Rule: Zero new test failures from your changes.** Pre-existing failures on the baseline are acceptable. If a test you didn't touch starts failing, investigate whether your refactoring broke it. If your change removed code that a test depended on, update that test.
