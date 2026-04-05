@@ -964,6 +964,53 @@ describe('LogViewer', () => {
 		});
 	});
 
+	describe('Viewport indicator', () => {
+		it('should show indicator line when scrolled', async () => {
+			getMockGetLogs().mockResolvedValue([
+				createMockLog({ level: 'info', message: 'Log 1' }),
+				createMockLog({ level: 'error', message: 'Log 2' }),
+				createMockLog({ level: 'warn', message: 'Log 3' }),
+			]);
+
+			render(<LogViewer theme={mockTheme} onClose={vi.fn()} />);
+
+			await waitFor(() => {
+				expect(screen.getByText('Log 1')).toBeInTheDocument();
+			});
+
+			const container = screen.getByRole('dialog').querySelector('.overflow-y-auto');
+			if (container) {
+				Object.defineProperty(container, 'scrollHeight', { value: 1000, configurable: true });
+				Object.defineProperty(container, 'clientHeight', { value: 500, configurable: true });
+				Object.defineProperty(container, 'scrollTop', {
+					value: 200,
+					writable: true,
+					configurable: true,
+				});
+				fireEvent.scroll(container);
+			}
+
+			await waitFor(() => {
+				const indicator = screen.getByRole('dialog').querySelector('.pointer-events-none.z-20');
+				expect(indicator).toBeInTheDocument();
+			});
+		});
+
+		it('should not show indicator when at top', async () => {
+			getMockGetLogs().mockResolvedValue([createMockLog({ level: 'info', message: 'Log 1' })]);
+
+			render(<LogViewer theme={mockTheme} onClose={vi.fn()} />);
+
+			await waitFor(() => {
+				expect(screen.getByText('Log 1')).toBeInTheDocument();
+			});
+
+			// No scroll event fired, so no indicator
+			const indicator = screen.getByRole('dialog').querySelector('.pointer-events-none.z-20');
+			expect(indicator).not.toBeInTheDocument();
+		});
+	});
+
 	describe('Log level colors', () => {
 		it('should use correct color for debug level', async () => {
 			getMockGetLogs().mockResolvedValue([createMockLog({ level: 'debug', message: 'Debug' })]);

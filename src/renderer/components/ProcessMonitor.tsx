@@ -328,6 +328,11 @@ export function ProcessMonitor(props: ProcessMonitorProps) {
 		if (aiTabMatch) {
 			return aiTabMatch[1];
 		}
+		// Check for tab-based terminal pattern: {sessionId}-terminal-{tabId}
+		const terminalTabMatch = processSessionId.match(/^(.+)-terminal-.+$/);
+		if (terminalTabMatch) {
+			return terminalTabMatch[1];
+		}
 		// Try to match common suffixes
 		const suffixes = ['-ai', '-terminal'];
 		for (const suffix of suffixes) {
@@ -344,7 +349,8 @@ export function ProcessMonitor(props: ProcessMonitorProps) {
 		processSessionId: string
 	): 'ai' | 'terminal' | 'batch' | 'synopsis' | 'wizard' | 'wizard-gen' | 'cue' => {
 		if (processSessionId.startsWith('cue-run-')) return 'cue';
-		if (processSessionId.endsWith('-terminal')) return 'terminal';
+		if (processSessionId.endsWith('-terminal') || processSessionId.match(/-terminal-.+$/))
+			return 'terminal';
 		if (processSessionId.match(/-batch-\d+$/)) return 'batch';
 		if (processSessionId.match(/-synopsis-\d+$/)) return 'synopsis';
 		// Wizard document generation: inline-wizard-gen-{timestamp}-{random}

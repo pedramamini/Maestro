@@ -1515,6 +1515,18 @@ describe('ProcessMonitor', () => {
 			});
 		});
 
+		it('should parse base session ID from terminal tab process', async () => {
+			const process = createActiveProcess({ sessionId: 'abc123-terminal-tab1' });
+			getActiveProcessesMock().mockResolvedValue([process]);
+
+			const session = createSession({ id: 'abc123' });
+			render(<ProcessMonitor theme={theme} sessions={[session]} groups={[]} onClose={onClose} />);
+
+			await waitFor(() => {
+				expect(screen.getByText('Test Session')).toBeInTheDocument();
+			});
+		});
+
 		it('should parse base session ID from batch process', async () => {
 			const process = createActiveProcess({ sessionId: 'abc123-batch-1234567890' });
 			getActiveProcessesMock().mockResolvedValue([process]);
