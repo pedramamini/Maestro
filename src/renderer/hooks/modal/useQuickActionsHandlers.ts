@@ -57,6 +57,8 @@ export interface UseQuickActionsHandlersReturn {
 	handleQuickActionsSummarizeAndContinue: () => void;
 	/** Open Auto Run reset tasks modal */
 	handleQuickActionsAutoRunResetTasks: () => void;
+	/** Clear the active terminal xterm buffer */
+	handleQuickActionsClearActiveTerminal: () => void;
 }
 
 // ============================================================================
@@ -178,6 +180,10 @@ export function useQuickActionsHandlers(
 		rightPanelRef.current?.openAutoRunResetTasksModal();
 	}, []);
 
+	const handleQuickActionsClearActiveTerminal = useCallback(() => {
+		mainPanelRef.current?.clearActiveTerminal();
+	}, []);
+
 	return {
 		handleQuickActionsToggleReadOnlyMode,
 		handleQuickActionsToggleTabShowThinking,
@@ -186,5 +192,6 @@ export function useQuickActionsHandlers(
 		handleQuickActionsToggleMarkdownEditMode,
 		handleQuickActionsSummarizeAndContinue,
 		handleQuickActionsAutoRunResetTasks,
+		handleQuickActionsClearActiveTerminal,
 	};
 }

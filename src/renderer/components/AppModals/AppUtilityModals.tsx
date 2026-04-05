@@ -126,6 +126,7 @@ export interface AppUtilityModalsProps {
 	autoRunSelectedDocument: string | null;
 	autoRunCompletedTaskCount: number;
 	onAutoRunResetTasks: () => void;
+	onClearActiveTerminal?: () => void;
 
 	// Gist publishing (for QuickActionsModal)
 	isFilePreviewOpen: boolean;
@@ -340,6 +341,7 @@ export const AppUtilityModals = memo(function AppUtilityModals({
 	autoRunSelectedDocument,
 	autoRunCompletedTaskCount,
 	onAutoRunResetTasks,
+	onClearActiveTerminal,
 	// Gist publishing
 	isFilePreviewOpen,
 	ghCliAvailable,
@@ -508,6 +510,7 @@ export const AppUtilityModals = memo(function AppUtilityModals({
 					autoRunSelectedDocument={autoRunSelectedDocument}
 					autoRunCompletedTaskCount={autoRunCompletedTaskCount}
 					onAutoRunResetTasks={onAutoRunResetTasks}
+					onClearActiveTerminal={onClearActiveTerminal}
 					isFilePreviewOpen={isFilePreviewOpen}
 					ghCliAvailable={ghCliAvailable}
 					onPublishGist={onPublishGist}

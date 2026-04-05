@@ -129,7 +129,7 @@ function TabBarInner({
 				(t) =>
 					t.hasUnread ||
 					t.state === 'busy' ||
-					t.id === activeTabId ||
+					(inputMode === 'ai' && t.id === activeTabId) ||
 					hasDraft(t) ||
 					(showStarredInUnreadFilter && t.starred)
 			)
@@ -146,7 +146,7 @@ function TabBarInner({
 				return (
 					ut.data.hasUnread ||
 					ut.data.state === 'busy' ||
-					ut.id === activeTabId ||
+					(inputMode === 'ai' && ut.id === activeTabId) ||
 					hasDraft(ut.data) ||
 					(showStarredInUnreadFilter && ut.data.starred)
 				);

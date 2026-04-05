@@ -433,7 +433,7 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 				<div className={`flex flex-1 overflow-hidden ${searchActive ? 'hidden' : ''}`}>
 					{/* Left Sidebar Tabs */}
 					<nav
-						className="w-[180px] flex-shrink-0 border-r py-2 overflow-y-auto scrollbar-thin"
+						className="w-[200px] flex-shrink-0 border-r py-2 overflow-y-auto scrollbar-thin"
 						style={{ borderColor: theme.colors.border, backgroundColor: theme.colors.bgSidebar }}
 						aria-label="Settings tabs"
 					>
@@ -455,7 +455,7 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 									title={tab.label}
 								>
 									<Icon className="w-4 h-4 flex-shrink-0" />
-									<span className="truncate">{tab.label}</span>
+									<span className="whitespace-nowrap">{tab.label}</span>
 								</button>
 							);
 						})}

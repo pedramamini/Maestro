@@ -106,6 +106,7 @@ interface QuickActionsModalProps {
 	autoRunSelectedDocument?: string | null;
 	autoRunCompletedTaskCount?: number;
 	onAutoRunResetTasks?: () => void;
+	onClearActiveTerminal?: () => void;
 	// Tab close operations
 	onCloseAllTabs?: () => void;
 	onCloseOtherTabs?: () => void;
@@ -204,6 +205,7 @@ export const QuickActionsModal = memo(function QuickActionsModal(props: QuickAct
 		autoRunSelectedDocument,
 		autoRunCompletedTaskCount,
 		onAutoRunResetTasks,
+		onClearActiveTerminal,
 		onCloseAllTabs,
 		onCloseOtherTabs,
 		onCloseTabsLeft,
@@ -630,15 +632,14 @@ export const QuickActionsModal = memo(function QuickActionsModal(props: QuickAct
 					},
 				]
 			: []),
-		...(activeSession
+		...(activeSession && activeSession.inputMode === 'terminal' && onClearActiveTerminal
 			? [
 					{
 						id: 'clearTerminal',
 						label: 'Clear Terminal History',
+						shortcut: shortcuts.clearTerminal,
 						action: () => {
-							setSessions((prev) =>
-								prev.map((s) => (s.id === activeSessionId ? { ...s, shellLogs: [] } : s))
-							);
+							onClearActiveTerminal();
 							setQuickActionOpen(false);
 						},
 					},
