@@ -641,6 +641,7 @@ export const UnifiedHistoryTab = forwardRef<TabFocusHandle, UnifiedHistoryTabPro
 						onLookbackChange={handleLookbackChange}
 						precomputedBuckets={graphBuckets}
 						viewportRange={graphViewportRange}
+						alwaysShowViewportLabel
 						onBarClick={(start, end) => {
 							// Find first entry in range and select it
 							const idx = filteredEntries.findIndex(

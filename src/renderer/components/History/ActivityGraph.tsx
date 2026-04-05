@@ -20,6 +20,8 @@ export interface ActivityGraphProps {
 	onLookbackChange: (hours: number | null) => void;
 	/** Pre-computed buckets from backend (uses all entries, not just first page) */
 	precomputedBuckets?: GraphBucket[];
+	/** Always show the viewport date label, repositioning near edges instead of hiding */
+	alwaysShowViewportLabel?: boolean;
 }
 
 export const ActivityGraph: React.FC<ActivityGraphProps> = ({
@@ -30,6 +32,7 @@ export const ActivityGraph: React.FC<ActivityGraphProps> = ({
 	lookbackHours,
 	onLookbackChange,
 	precomputedBuckets,
+	alwaysShowViewportLabel = false,
 }) => {
 	const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
 	const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
@@ -431,37 +434,60 @@ export const ActivityGraph: React.FC<ActivityGraphProps> = ({
 			</div>
 			{/* Axis labels below */}
 			<div className="relative h-3 mt-0.5">
-				{axisLabels.map(({ label, index }) => (
-					<span
-						key={`${label}-${index}`}
-						className="absolute text-[8px] font-mono"
-						style={{
-							color: theme.colors.textDim,
-							left:
-								index === 0
+				{axisLabels.map(({ label, index }) => {
+					// When alwaysShowViewportLabel is on, fade out edge axis labels that would overlap
+					const isRightEdge = index === bucketCount - 1;
+					const isLeftEdge = index === 0;
+					const hideForIndicator =
+						alwaysShowViewportLabel &&
+						viewportIndicatorPercent !== null &&
+						viewportIndicatorLabel &&
+						((isRightEdge && viewportIndicatorPercent >= 88) ||
+							(isLeftEdge && viewportIndicatorPercent <= 12));
+
+					return (
+						<span
+							key={`${label}-${index}`}
+							className="absolute text-[8px] font-mono"
+							style={{
+								color: theme.colors.textDim,
+								left: isLeftEdge
 									? '0'
-									: index === bucketCount - 1
+									: isRightEdge
 										? 'auto'
 										: `${(index / (bucketCount - 1)) * 100}%`,
-							right: index === bucketCount - 1 ? '0' : 'auto',
-							transform: index > 0 && index < bucketCount - 1 ? 'translateX(-50%)' : 'none',
-						}}
-					>
-						{label}
-					</span>
-				))}
-				{/* Viewport indicator label — hidden near edges to avoid overlapping axis labels */}
+								right: isRightEdge ? '0' : 'auto',
+								transform: index > 0 && index < bucketCount - 1 ? 'translateX(-50%)' : 'none',
+								opacity: hideForIndicator ? 0 : 1,
+								transition: hideForIndicator !== undefined ? 'opacity 0.15s ease-out' : undefined,
+							}}
+						>
+							{label}
+						</span>
+					);
+				})}
+				{/* Viewport indicator label */}
 				{viewportIndicatorPercent !== null &&
 					viewportIndicatorLabel &&
-					viewportIndicatorPercent > 12 &&
-					viewportIndicatorPercent < 88 && (
+					(alwaysShowViewportLabel ||
+						(viewportIndicatorPercent > 12 && viewportIndicatorPercent < 88)) && (
 						<span
 							className="absolute text-[8px] font-mono"
 							data-testid="viewport-indicator-label"
 							style={{
 								color: theme.colors.error,
-								left: `${viewportIndicatorPercent}%`,
-								transform: 'translateX(-50%)',
+								left:
+									alwaysShowViewportLabel && viewportIndicatorPercent <= 12
+										? `${viewportIndicatorPercent}%`
+										: alwaysShowViewportLabel && viewportIndicatorPercent >= 88
+											? 'auto'
+											: `${viewportIndicatorPercent}%`,
+								right: alwaysShowViewportLabel && viewportIndicatorPercent >= 88 ? '0' : 'auto',
+								transform:
+									alwaysShowViewportLabel &&
+									(viewportIndicatorPercent <= 12 || viewportIndicatorPercent >= 88)
+										? 'none'
+										: 'translateX(-50%)',
 								transition: 'left 0.15s ease-out',
 							}}
 						>
