@@ -92,6 +92,7 @@ export function useMainKeyboardHandler(): UseMainKeyboardHandlerReturn {
 			if (
 				isMac &&
 				ctx.activeSession?.inputMode === 'terminal' &&
+				!ctx.activeGroupChatId &&
 				e.ctrlKey &&
 				!e.metaKey &&
 				!e.altKey &&
@@ -923,6 +924,7 @@ export function useMainKeyboardHandler(): UseMainKeyboardHandlerReturn {
 			// apps like vim/vi/nano keep working even after a transient focus loss.
 			if (
 				ctx.activeSession?.inputMode === 'terminal' &&
+				!ctx.activeGroupChatId &&
 				!ctx.hasOpenLayers() &&
 				!e.defaultPrevented
 			) {
