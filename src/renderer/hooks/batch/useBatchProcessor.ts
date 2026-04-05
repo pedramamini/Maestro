@@ -719,14 +719,22 @@ export function useBatchProcessor({
 			const sessionGroup = session.groupId ? groups.find((g) => g.id === session.groupId) : null;
 			const groupName = sessionGroup?.name;
 
-			// Calculate initial total tasks across all documents
+			// Calculate initial total tasks across all documents (checked + unchecked)
 			let initialTotalTasks = 0;
+			let initialCheckedTasks = 0;
 			for (const doc of documents) {
-				const { taskCount } = await readDocAndCountTasks(folderPath, doc.filename, sshRemoteId);
-				initialTotalTasks += taskCount;
+				const { taskCount, checkedCount } = await readDocAndCountTasks(
+					folderPath,
+					doc.filename,
+					sshRemoteId
+				);
+				initialTotalTasks += taskCount + checkedCount;
+				initialCheckedTasks += checkedCount;
 			}
+			// Track unchecked count for the "no tasks" early exit check
+			const initialUncheckedTasks = initialTotalTasks - initialCheckedTasks;
 
-			if (initialTotalTasks === 0) {
+			if (initialUncheckedTasks === 0) {
 				window.maestro.logger.log(
 					'warn',
 					'No unchecked tasks found across all documents',
@@ -746,6 +754,7 @@ export function useBatchProcessor({
 					documents: documents.map((d) => d.filename),
 					lockedDocuments,
 					totalTasksAcrossAllDocs: initialTotalTasks,
+					completedTasksAcrossAllDocs: initialCheckedTasks,
 					loopEnabled,
 					maxLoops,
 					folderPath,
@@ -1058,6 +1067,39 @@ export function useBatchProcessor({
 						// Use extracted document processor hook for task processing
 						// This handles: template substitution, document expansion, agent spawning,
 						// session registration, re-reading document, and synopsis generation
+
+						// Poll all documents every 3s during agent processing for real-time progress
+						const progressPollInterval = setInterval(async () => {
+							try {
+								let polledTotal = 0;
+								let polledChecked = 0;
+								for (const doc of documents) {
+									const r = await readDocAndCountTasks(folderPath, doc.filename, sshRemoteId);
+									polledTotal += r.taskCount + r.checkedCount;
+									polledChecked += r.checkedCount;
+								}
+								updateBatchStateAndBroadcastRef.current!(sessionId, (prev) => {
+									const prevState = prev[sessionId] || DEFAULT_BATCH_STATE;
+									if (
+										polledChecked === prevState.completedTasksAcrossAllDocs &&
+										polledTotal === prevState.totalTasksAcrossAllDocs
+									) {
+										return prev;
+									}
+									return {
+										...prev,
+										[sessionId]: {
+											...prevState,
+											completedTasksAcrossAllDocs: polledChecked,
+											totalTasksAcrossAllDocs: Math.max(0, polledTotal),
+										},
+									};
+								});
+							} catch {
+								// Ignore polling errors — agent may be modifying file
+							}
+						}, 3000);
+
 						try {
 							const taskResult = await documentProcessor.processTask(
 								{
@@ -1078,6 +1120,8 @@ export function useBatchProcessor({
 									onSpawnAgent,
 								}
 							);
+
+							clearInterval(progressPollInterval);
 
 							// Track agent session IDs
 							if (taskResult.agentSessionId) {
@@ -1181,6 +1225,7 @@ export function useBatchProcessor({
 							// Tasks in one document can create tasks in other documents,
 							// so delta-based tracking on just the current doc is insufficient
 							let recountedTotal = 0;
+							let recountedChecked = 0;
 							for (const doc of documents) {
 								const { taskCount, checkedCount } = await readDocAndCountTasks(
 									folderPath,
@@ -1188,6 +1233,7 @@ export function useBatchProcessor({
 									sshRemoteId
 								);
 								recountedTotal += taskCount + checkedCount;
+								recountedChecked += checkedCount;
 							}
 
 							updateBatchStateAndBroadcastRef.current!(sessionId, (prev) => {
@@ -1201,7 +1247,7 @@ export function useBatchProcessor({
 										...prevState,
 										currentDocTasksCompleted: docTasksCompleted,
 										currentDocTasksTotal: docTasksTotal,
-										completedTasksAcrossAllDocs: totalCompletedTasks,
+										completedTasksAcrossAllDocs: recountedChecked,
 										totalTasksAcrossAllDocs: nextTotalAcrossAllDocs,
 										// Accumulate actual task duration (most accurate work time tracking)
 										cumulativeTaskTimeMs: (prevState.cumulativeTaskTimeMs || 0) + elapsedTimeMs,
@@ -1302,6 +1348,7 @@ export function useBatchProcessor({
 							remainingTasks = newRemainingTasks;
 							docContent = taskResult.contentAfterTask;
 						} catch (error) {
+							clearInterval(progressPollInterval);
 							console.error(
 								`[BatchProcessor] Error running task in ${docEntry.filename} for session ${sessionId}:`,
 								error
