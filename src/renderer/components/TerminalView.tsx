@@ -379,6 +379,7 @@ export const TerminalView = memo(
 								theme={theme}
 								fontFamily={fontFamily}
 								fontSize={fontSize}
+								isActive={isActive}
 							/>
 						</div>
 					);
