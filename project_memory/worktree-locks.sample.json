@@ -1,0 +1,41 @@
+[
+	{
+		"taskId": "maestro-bootstrap-000",
+		"repoId": "maestro",
+		"worktreeId": "shared-checkout-main",
+		"path": ".",
+		"baseRepoPath": "/Users/shunsukehayashi/dev/tools/Maestro",
+		"baseBranch": "codex/phase-06-execution-model",
+		"headBranch": "codex/phase-06-execution-model",
+		"allocationMode": "shared-checkout",
+		"lockScope": {
+			"scopeType": "task"
+		},
+		"ownerAgent": "bootstrap-sample",
+		"leaseToken": "bootstrap-seed-lock",
+		"leaseExpiresAt": "2026-04-04T00:00:00Z",
+		"state": "released",
+		"createdAt": "2026-04-04T00:00:00Z",
+		"updatedAt": "2026-04-04T00:00:00Z"
+	},
+	{
+		"taskId": "maestro-bootstrap-003",
+		"repoId": "maestro",
+		"worktreeId": "shared-checkout-main",
+		"path": ".",
+		"baseRepoPath": "/Users/shunsukehayashi/dev/tools/Maestro",
+		"baseBranch": "codex/phase-06-execution-model",
+		"headBranch": "codex/phase-06-execution-model",
+		"allocationMode": "shared-checkout",
+		"lockScope": {
+			"scopeType": "file-set",
+			"files": ["project_memory/schema.task.json", "project_memory/schema.worktree-lock.json"]
+		},
+		"ownerAgent": "bootstrap-sample",
+		"leaseToken": "bootstrap-active-schema-lock",
+		"leaseExpiresAt": "2026-04-05T00:00:00Z",
+		"state": "active",
+		"createdAt": "2026-04-04T00:10:00Z",
+		"updatedAt": "2026-04-04T00:10:00Z"
+	}
+]

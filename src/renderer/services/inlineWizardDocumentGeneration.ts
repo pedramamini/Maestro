@@ -13,9 +13,12 @@ import type { ToolType } from '../types';
 import type { InlineWizardMessage, InlineGeneratedDocument } from '../hooks/batch/useInlineWizard';
 import type { ExistingDocument } from '../utils/existingDocsDetector';
 import { logger } from '../utils/logger';
+import { getStdinFlags } from '../utils/spawnHelpers';
 import { wizardDocumentGenerationPrompt, wizardInlineIterateGenerationPrompt } from '../../prompts';
 import { substituteTemplateVariables, type TemplateContext } from '../utils/templateVariables';
-import { DEFAULT_AUTORUN_SKILLS } from '../../shared/playbookDag';
+import { buildWizardPlaybookDraft, buildWizardPlaybookPackDrafts } from './wizardPlaybookConfig';
+import { projectMemoryService } from './projectMemory';
+import { useSessionStore } from '../stores/sessionStore';
 
 /**
  * Auto Run folder name constant.
@@ -180,6 +183,13 @@ export interface DocumentGenerationResult {
 		id: string;
 		name: string;
 	};
+	playbooks?: Array<{
+		id: string;
+		name: string;
+		sessionId: string;
+		sessionName: string;
+		dependsOnPlaybookNames: string[];
+	}>;
 }
 
 /**
@@ -1013,6 +1023,12 @@ export async function generateInlineDocuments(
 				// For remote sessions, we use the agent type name since the agent is installed on the remote host
 				const commandToUse = agent?.path || agent?.command || agentType;
 
+				const { sendPromptViaStdin: sendViaStdin, sendPromptViaStdinRaw: sendViaStdinRaw } =
+					getStdinFlags({
+						isSshSession: !!config.sessionSshRemoteConfig?.enabled,
+						supportsStreamJsonInput: agent?.capabilities?.supportsStreamJsonInput ?? false,
+					});
+
 				window.maestro.process
 					.spawn({
 						sessionId,
@@ -1021,6 +1037,8 @@ export async function generateInlineDocuments(
 						command: commandToUse,
 						args: argsForSpawn,
 						prompt,
+						sendPromptViaStdin: sendViaStdin,
+						sendPromptViaStdinRaw: sendViaStdinRaw,
 						// Pass SSH config for remote execution
 						sessionSshRemoteConfig: config.sessionSshRemoteConfig,
 						// Pass session-level overrides
@@ -1073,7 +1091,12 @@ export async function generateInlineDocuments(
 			});
 
 			// Create a playbook for the generated documents (if sessionId provided)
-			let playbookInfo: { id: string; name: string } | undefined;
+			let playbookInfo:
+				| {
+						primaryPlaybook: { id: string; name: string };
+						playbooks: DocumentGenerationResult['playbooks'];
+				  }
+				| undefined;
 			if (config.sessionId && sortedDocs.length > 0) {
 				callbacks?.onProgress?.('Creating playbook configuration...');
 				try {
@@ -1081,12 +1104,18 @@ export async function generateInlineDocuments(
 						config.sessionId,
 						projectName,
 						subfolderName,
-						sortedDocs
+						sortedDocs,
+						config.directoryPath,
+						config.agentType
 					);
 					logger.info(
 						`Created playbook for ${sortedDocs.length} document(s)`,
 						'[InlineWizardDocGen]',
-						{ playbookId: playbookInfo?.id, playbookName: playbookInfo?.name, subfolderName }
+						{
+							playbookId: playbookInfo?.primaryPlaybook.id,
+							playbookName: playbookInfo?.primaryPlaybook.name,
+							subfolderName,
+						}
 					);
 				} catch (error) {
 					console.error('[InlineWizardDocGen] Failed to create playbook:', error);
@@ -1102,7 +1131,8 @@ export async function generateInlineDocuments(
 				rawOutput,
 				subfolderName,
 				subfolderPath,
-				playbook: playbookInfo,
+				playbook: playbookInfo?.primaryPlaybook,
+				playbooks: playbookInfo?.playbooks,
 			};
 		}
 
@@ -1158,7 +1188,12 @@ export async function generateInlineDocuments(
 		}
 
 		// Create a playbook for the generated documents (if sessionId provided)
-		let playbookInfo: { id: string; name: string } | undefined;
+		let playbookInfo:
+			| {
+					primaryPlaybook: { id: string; name: string };
+					playbooks: DocumentGenerationResult['playbooks'];
+			  }
+			| undefined;
 		if (config.sessionId && savedDocuments.length > 0) {
 			callbacks?.onProgress?.('Creating playbook configuration...');
 			try {
@@ -1166,12 +1201,18 @@ export async function generateInlineDocuments(
 					config.sessionId,
 					projectName,
 					subfolderName,
-					savedDocuments
+					savedDocuments,
+					config.directoryPath,
+					config.agentType
 				);
 				logger.info(
 					`Created playbook for ${savedDocuments.length} document(s)`,
 					'[InlineWizardDocGen]',
-					{ playbookId: playbookInfo?.id, playbookName: playbookInfo?.name, subfolderName }
+					{
+						playbookId: playbookInfo?.primaryPlaybook.id,
+						playbookName: playbookInfo?.primaryPlaybook.name,
+						subfolderName,
+					}
 				);
 			} catch (error) {
 				console.error('[InlineWizardDocGen] Failed to create playbook:', error);
@@ -1188,7 +1229,8 @@ export async function generateInlineDocuments(
 			rawOutput,
 			subfolderName,
 			subfolderPath,
-			playbook: playbookInfo,
+			playbook: playbookInfo?.primaryPlaybook,
+			playbooks: playbookInfo?.playbooks,
 		};
 	} catch (error) {
 		const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
@@ -1220,39 +1262,109 @@ async function createPlaybookForDocuments(
 	sessionId: string,
 	projectName: string,
 	subfolderName: string,
-	documents: InlineGeneratedDocument[]
-): Promise<{ id: string; name: string }> {
-	// Build document entries for the playbook
-	// Documents are already sorted by phase from generation
-	const documentEntries = documents.map((doc) => ({
-		// Include subfolder in the filename path so playbook can find them
-		filename: `${subfolderName}/${doc.filename}`,
-		resetOnCompletion: false,
-	}));
+	documents: InlineGeneratedDocument[],
+	repoRoot: string,
+	agentType: ToolType
+): Promise<{
+	primaryPlaybook: { id: string; name: string };
+	playbooks: Array<{
+		id: string;
+		name: string;
+		sessionId: string;
+		sessionName: string;
+		dependsOnPlaybookNames: string[];
+	}>;
+}> {
+	const autoRunFolderPath = `${AUTO_RUN_FOLDER_NAME}`;
+	const projectMemoryExecution = await projectMemoryService.inferExecutionContext(
+		repoRoot,
+		agentType
+	);
+	const projectMemoryBindingIntent =
+		agentType === 'codex'
+			? {
+					policyVersion: '2026-04-04',
+					repoRoot,
+					sourceBranch: 'main',
+					bindingPreference: 'shared-branch-serialized' as const,
+					sharedCheckoutAllowed: true,
+					reuseExistingBinding: true,
+					allowRebindIfStale: true,
+				}
+			: null;
+	const availableSessions = useSessionStore
+		.getState()
+		.sessions.map((session) => ({ id: session.id, name: session.name }));
+	const packDrafts = buildWizardPlaybookPackDrafts(
+		projectName,
+		autoRunFolderPath,
+		documents,
+		availableSessions,
+		subfolderName,
+		projectMemoryExecution,
+		projectMemoryBindingIntent
+	);
+
+	if (packDrafts && packDrafts.length > 0) {
+		const createdPlaybooks = [];
+		for (const packDraft of packDrafts) {
+			const result = await window.maestro.playbooks.create(packDraft.sessionId, packDraft.draft);
+			if (!result.success || !result.playbook) {
+				throw new Error(`Failed to create playbook ${packDraft.playbookName}`);
+			}
+			createdPlaybooks.push({
+				id: result.playbook.id,
+				name: result.playbook.name,
+				sessionId: packDraft.sessionId,
+				sessionName: packDraft.sessionName,
+				dependsOnPlaybookNames: packDraft.dependsOnPlaybookNames,
+			});
+		}
+
+		const primaryPlaybook =
+			createdPlaybooks.find((playbook) => playbook.sessionId === sessionId) ?? createdPlaybooks[0];
+
+		return {
+			primaryPlaybook: {
+				id: primaryPlaybook.id,
+				name: primaryPlaybook.name,
+			},
+			playbooks: createdPlaybooks,
+		};
+	}
+
+	const playbookDraft = buildWizardPlaybookDraft(
+		projectName,
+		autoRunFolderPath,
+		documents,
+		subfolderName,
+		projectMemoryExecution,
+		projectMemoryBindingIntent
+	);
 
 	// Create the playbook via IPC
-	const result = await window.maestro.playbooks.create(sessionId, {
-		name: projectName,
-		documents: documentEntries,
-		loopEnabled: false,
-		taskTimeoutMs: 60000,
-		prompt: '',
-		skills: [...DEFAULT_AUTORUN_SKILLS],
-		definitionOfDone: [],
-		verificationSteps: [],
-		promptProfile: 'compact-code',
-		documentContextMode: 'active-task-only',
-		skillPromptMode: 'brief',
-		agentStrategy: 'single',
-	});
+	const result = await window.maestro.playbooks.create(sessionId, playbookDraft);
 
 	if (!result.success || !result.playbook) {
 		throw new Error('Failed to create playbook');
 	}
 
 	return {
-		id: result.playbook.id,
-		name: result.playbook.name,
+		primaryPlaybook: {
+			id: result.playbook.id,
+			name: result.playbook.name,
+		},
+		playbooks: [
+			{
+				id: result.playbook.id,
+				name: result.playbook.name,
+				sessionId,
+				sessionName:
+					useSessionStore.getState().sessions.find((session) => session.id === sessionId)?.name ??
+					'Current Session',
+				dependsOnPlaybookNames: [],
+			},
+		],
 	};
 }
 

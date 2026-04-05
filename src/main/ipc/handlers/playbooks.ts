@@ -12,6 +12,7 @@ import {
 	normalizePlaybookDraft,
 	normalizePlaybookUpdate,
 } from '../../../shared/playbookDag';
+import { ensureMarkdownFilename, stripMarkdownFilename } from '../../../shared/markdownFilenames';
 import type { Playbook, PlaybookDraft, PlaybookUpdate } from '../../../shared/types';
 
 const LOG_CONTEXT = '[Playbooks]';
@@ -132,39 +133,12 @@ export function registerPlaybooksHandlers(deps: PlaybooksHandlerDependencies): v
 
 			// Create new playbook with generated ID and timestamps
 			const now = Date.now();
-			const newPlaybook: Playbook = {
+			const newPlaybook: Playbook = normalizePersistedPlaybook({
 				id: crypto.randomUUID(),
-				name: normalizedDraft.name,
 				createdAt: now,
 				updatedAt: now,
-				documents: normalizedDraft.documents,
-				loopEnabled: normalizedDraft.loopEnabled,
-				maxLoops: normalizedDraft.maxLoops ?? null,
-				taskTimeoutMs: normalizedDraft.taskTimeoutMs ?? null,
-				prompt: normalizedDraft.prompt,
-				skills: normalizedDraft.skills,
-				definitionOfDone: Array.isArray(normalizedDraft.definitionOfDone)
-					? normalizedDraft.definitionOfDone.filter(
-							(item) => typeof item === 'string' && item.trim() !== ''
-						)
-					: [],
-				verificationSteps: Array.isArray(normalizedDraft.verificationSteps)
-					? normalizedDraft.verificationSteps.filter(
-							(item) => typeof item === 'string' && item.trim() !== ''
-						)
-					: [],
-				promptProfile: normalizedDraft.promptProfile,
-				documentContextMode: normalizedDraft.documentContextMode,
-				skillPromptMode: normalizedDraft.skillPromptMode,
-				agentStrategy: normalizedDraft.agentStrategy ?? 'single',
-				maxParallelism: normalizedDraft.maxParallelism,
-				taskGraph: normalizedDraft.taskGraph,
-			};
-
-			// Include worktree settings if provided
-			if (normalizedDraft.worktreeSettings) {
-				newPlaybook.worktreeSettings = normalizedDraft.worktreeSettings;
-			}
+				...normalizedDraft,
+			});
 
 			// Add to list and save
 			playbooks.push(newPlaybook);
@@ -313,13 +287,14 @@ export function registerPlaybooksHandlers(deps: PlaybooksHandlerDependencies): v
 
 				// Add each document markdown file
 				for (const doc of playbook.documents) {
-					const docPath = path.join(autoRunFolderPath, `${doc.filename}.md`);
+					const fullFilename = ensureMarkdownFilename(doc.filename);
+					const docPath = path.join(autoRunFolderPath, fullFilename);
 					try {
 						const content = await fs.readFile(docPath, 'utf-8');
-						archive.append(content, { name: `documents/${doc.filename}.md` });
+						archive.append(content, { name: `documents/${fullFilename}` });
 					} catch {
 						// Document file doesn't exist, skip it but log warning
-						logger.warn(`Document ${doc.filename}.md not found during export`, LOG_CONTEXT);
+						logger.warn(`Document ${fullFilename} not found during export`, LOG_CONTEXT);
 					}
 				}
 
@@ -415,7 +390,7 @@ export function registerPlaybooksHandlers(deps: PlaybooksHandlerDependencies): v
 
 						// Write document file
 						await fs.writeFile(destPath, entry.getData().toString('utf-8'), 'utf-8');
-						importedDocs.push(filename.replace('.md', ''));
+						importedDocs.push(stripMarkdownFilename(filename));
 					}
 				}
 

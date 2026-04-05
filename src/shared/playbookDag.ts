@@ -55,6 +55,8 @@ function cloneTaskGraph(taskGraph: PlaybookTaskGraph): PlaybookTaskGraph {
 			id: node.id,
 			documentIndex: node.documentIndex,
 			dependsOn: Array.isArray(node.dependsOn) ? [...node.dependsOn] : [],
+			isolationMode:
+				node.isolationMode === 'isolated-worktree' ? 'isolated-worktree' : 'shared-checkout',
 		})),
 	};
 }
@@ -72,6 +74,7 @@ export function buildImplicitTaskGraph(documents: DocumentLike[]): PlaybookTaskG
 			id,
 			documentIndex: index,
 			dependsOn: index === 0 ? [] : [nodesIdForIndex(nodes, index - 1)],
+			isolationMode: 'shared-checkout',
 		});
 	}
 
@@ -210,6 +213,38 @@ export function normalizePersistedPlaybook(playbook: Partial<Playbook>): Playboo
 		agentStrategy: playbook.agentStrategy ?? 'single',
 		maxParallelism: normalized.maxParallelism,
 		taskGraph: normalized.taskGraph,
+		projectMemoryExecution:
+			playbook.projectMemoryExecution &&
+			typeof playbook.projectMemoryExecution.repoRoot === 'string' &&
+			typeof playbook.projectMemoryExecution.taskId === 'string' &&
+			typeof playbook.projectMemoryExecution.executorId === 'string'
+				? {
+						repoRoot: playbook.projectMemoryExecution.repoRoot,
+						taskId: playbook.projectMemoryExecution.taskId,
+						executorId: playbook.projectMemoryExecution.executorId,
+					}
+				: null,
+		projectMemoryBindingIntent:
+			playbook.projectMemoryBindingIntent &&
+			typeof playbook.projectMemoryBindingIntent.policyVersion === 'string' &&
+			typeof playbook.projectMemoryBindingIntent.repoRoot === 'string' &&
+			typeof playbook.projectMemoryBindingIntent.sourceBranch === 'string' &&
+			(playbook.projectMemoryBindingIntent.bindingPreference === 'shared-branch-serialized' ||
+				playbook.projectMemoryBindingIntent.bindingPreference ===
+					'prefer-shared-branch-serialized') &&
+			typeof playbook.projectMemoryBindingIntent.sharedCheckoutAllowed === 'boolean' &&
+			typeof playbook.projectMemoryBindingIntent.reuseExistingBinding === 'boolean' &&
+			typeof playbook.projectMemoryBindingIntent.allowRebindIfStale === 'boolean'
+				? {
+						policyVersion: playbook.projectMemoryBindingIntent.policyVersion,
+						repoRoot: playbook.projectMemoryBindingIntent.repoRoot,
+						sourceBranch: playbook.projectMemoryBindingIntent.sourceBranch,
+						bindingPreference: playbook.projectMemoryBindingIntent.bindingPreference,
+						sharedCheckoutAllowed: playbook.projectMemoryBindingIntent.sharedCheckoutAllowed,
+						reuseExistingBinding: playbook.projectMemoryBindingIntent.reuseExistingBinding,
+						allowRebindIfStale: playbook.projectMemoryBindingIntent.allowRebindIfStale,
+					}
+				: null,
 		worktreeSettings: playbook.worktreeSettings,
 	};
 }
@@ -256,6 +291,18 @@ export function validatePlaybookDag(
 
 	if (nodes.length !== documents.length) {
 		errors.push('taskGraph must contain exactly one node per playbook document.');
+	}
+
+	for (const rawNode of taskGraph?.nodes ?? []) {
+		if (
+			rawNode?.isolationMode !== undefined &&
+			rawNode.isolationMode !== 'shared-checkout' &&
+			rawNode.isolationMode !== 'isolated-worktree'
+		) {
+			errors.push(
+				`Node "${String(rawNode.id)}" has an invalid isolationMode "${String(rawNode.isolationMode)}".`
+			);
+		}
 	}
 
 	const idToNode = new Map<string, PlaybookTaskGraphNode>();

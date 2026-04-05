@@ -20,6 +20,8 @@ vi.mock('fs', () => ({
 	readFileSync: vi.fn(),
 	readdirSync: vi.fn(),
 	existsSync: vi.fn(),
+	writeFileSync: vi.fn(),
+	mkdirSync: vi.fn(),
 }));
 
 // Mock the storage service - must mock getConfigDirectory
@@ -33,6 +35,8 @@ import {
 	resolvePlaybookId,
 	findPlaybookById,
 	listAllPlaybooks,
+	writePlaybooks,
+	resolvePlaybooksFilePath,
 } from '../../../cli/services/playbooks';
 
 describe('playbooks service', () => {
@@ -125,6 +129,39 @@ describe('playbooks service', () => {
 			expect(result).toHaveLength(3);
 			expect(result[0].name).toBe('First');
 			expect(result[2].name).toBe('Third');
+		});
+	});
+
+	describe('writePlaybooks', () => {
+		it('should write playbooks to the correct file path', () => {
+			const playbook = mockPlaybook();
+			vi.mocked(fs.existsSync).mockReturnValue(true);
+
+			writePlaybooks('session-1', [playbook]);
+
+			expect(fs.writeFileSync).toHaveBeenCalledWith(
+				path.join('/mock/config', 'playbooks', 'session-1.json'),
+				JSON.stringify({ playbooks: [playbook] }, null, 2),
+				'utf-8'
+			);
+		});
+
+		it('should create the playbooks directory when missing', () => {
+			const playbook = mockPlaybook();
+			vi.mocked(fs.existsSync).mockReturnValue(false);
+
+			writePlaybooks('session-1', [playbook]);
+
+			expect(fs.mkdirSync).toHaveBeenCalledWith(path.join('/mock/config', 'playbooks'), {
+				recursive: true,
+			});
+		});
+	});
+
+	describe('resolvePlaybooksFilePath', () => {
+		it('should resolve playbooks file path for a session', () => {
+			const result = resolvePlaybooksFilePath('session-1');
+			expect(result).toBe(path.join('/mock/config', 'playbooks', 'session-1.json'));
 		});
 	});
 

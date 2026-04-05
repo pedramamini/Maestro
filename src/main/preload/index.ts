@@ -50,6 +50,7 @@ import { createSymphonyApi } from './symphony';
 import { createTabNamingApi } from './tabNaming';
 import { createDirectorNotesApi } from './directorNotes';
 import { createWakatimeApi } from './wakatime';
+import { createProjectMemoryApi } from './projectMemory';
 
 // Expose protected methods that allow the renderer process to use
 // the ipcRenderer without exposing the entire object
@@ -194,6 +195,9 @@ contextBridge.exposeInMainWorld('maestro', {
 
 	// WakaTime API (CLI check, API key validation)
 	wakatime: createWakatimeApi(),
+
+	// Project Memory API
+	projectMemory: createProjectMemoryApi(),
 });
 
 // Re-export factory functions for external consumers (e.g., tests)
@@ -268,6 +272,8 @@ export {
 	createDirectorNotesApi,
 	// WakaTime
 	createWakatimeApi,
+	// Project Memory
+	createProjectMemoryApi,
 };
 
 // Re-export types for TypeScript consumers
@@ -477,3 +483,7 @@ export type {
 	// From wakatime
 	WakatimeApi,
 } from './wakatime';
+export type {
+	// From projectMemory
+	ProjectMemoryApi,
+} from './projectMemory';

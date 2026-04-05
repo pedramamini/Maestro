@@ -33,3 +33,21 @@ export type { SummarizationConfig } from './contextSummarizer';
 // Wizard intent parser service
 export { parseWizardIntent, suggestsIterateIntent, suggestsNewIntent } from './wizardIntentParser';
 export type { WizardIntentResult } from './wizardIntentParser';
+
+// Wizard task emission service
+export {
+	wizardTaskEmissionService,
+	emitWizardTasks,
+	formatEmissionError,
+} from './wizardTaskEmission';
+export type {
+	EmitWizardTasksOptions,
+	EmitWizardTasksResult,
+	EmitWizardTasksSuccess,
+	EmitWizardTasksFailure,
+	EmissionDiagnostics,
+	EmissionSuccessCallback,
+	EmissionErrorCallback,
+	LoadingStateCallback,
+	WizardTaskEmissionService,
+} from './wizardTaskEmission';

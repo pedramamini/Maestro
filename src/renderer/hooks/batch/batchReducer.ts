@@ -12,6 +12,7 @@
  */
 
 import type { BatchRunState, AgentError } from '../../types';
+import type { ProjectMemoryExecutionContext } from '../../../shared/projectMemory';
 import {
 	transition,
 	canTransition,
@@ -111,6 +112,7 @@ function validateAndTransition(
 export const DEFAULT_BATCH_STATE: BatchRunState = {
 	isRunning: false,
 	isStopping: false,
+	projectMemoryExecution: null,
 	// State machine integration (Phase 11)
 	processingState: 'IDLE',
 	// Multi-document progress
@@ -119,6 +121,7 @@ export const DEFAULT_BATCH_STATE: BatchRunState = {
 	currentDocumentIndex: 0,
 	currentDocTasksTotal: 0,
 	currentDocTasksCompleted: 0,
+	scheduler: undefined,
 	totalTasksAcrossAllDocs: 0,
 	completedTasksAcrossAllDocs: 0,
 	// Loop mode
@@ -164,6 +167,8 @@ export interface StartBatchPayload {
 	worktreeActive: boolean;
 	worktreePath?: string;
 	worktreeBranch?: string;
+	projectMemoryExecution?: ProjectMemoryExecutionContext | null;
+	scheduler?: BatchRunState['scheduler'];
 	customPrompt?: string;
 	startTime: number;
 	// Time tracking
@@ -179,6 +184,7 @@ export interface UpdateProgressPayload {
 	currentDocumentIndex?: number;
 	currentDocTasksTotal?: number;
 	currentDocTasksCompleted?: number;
+	scheduler?: BatchRunState['scheduler'];
 	totalTasksAcrossAllDocs?: number;
 	completedTasksAcrossAllDocs?: number;
 	// Legacy fields
@@ -256,6 +262,7 @@ export function batchReducer(state: BatchState, action: BatchAction): BatchState
 				[sessionId]: {
 					isRunning: true,
 					isStopping: false,
+					projectMemoryExecution: payload.projectMemoryExecution ?? null,
 					// State machine integration
 					processingState,
 					// Multi-document progress
@@ -264,6 +271,7 @@ export function batchReducer(state: BatchState, action: BatchAction): BatchState
 					currentDocumentIndex: 0,
 					currentDocTasksTotal: 0,
 					currentDocTasksCompleted: 0,
+					scheduler: payload.scheduler,
 					totalTasksAcrossAllDocs: payload.totalTasksAcrossAllDocs,
 					completedTasksAcrossAllDocs: 0,
 					// Loop mode
@@ -336,6 +344,9 @@ export function batchReducer(state: BatchState, action: BatchAction): BatchState
 					}),
 					...(payload.currentDocTasksCompleted !== undefined && {
 						currentDocTasksCompleted: payload.currentDocTasksCompleted,
+					}),
+					...(payload.scheduler !== undefined && {
+						scheduler: payload.scheduler,
 					}),
 					...(payload.totalTasksAcrossAllDocs !== undefined && {
 						totalTasksAcrossAllDocs: payload.totalTasksAcrossAllDocs,
@@ -512,6 +523,7 @@ export function batchReducer(state: BatchState, action: BatchAction): BatchState
 					currentDocumentIndex: 0,
 					currentDocTasksTotal: 0,
 					currentDocTasksCompleted: 0,
+					scheduler: undefined,
 					totalTasksAcrossAllDocs: 0,
 					completedTasksAcrossAllDocs: 0,
 					loopEnabled: false,

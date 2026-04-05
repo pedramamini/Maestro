@@ -1,6 +1,8 @@
 // Shared type definitions for Maestro CLI and Electron app
 // These types are used by both the CLI tool and the renderer process
 
+import type { ProjectMemoryBindingIntent, ProjectMemoryExecutionContext } from './projectMemory';
+
 // Re-export agent ID constants and types from the single source of truth
 export { AGENT_IDS, isValidAgentId } from './agentIds';
 export type { AgentId } from './agentIds';
@@ -70,6 +72,60 @@ export type AutoRunWorktreeMode =
 
 export type AutoRunSchedulerMode = 'sequential' | 'dag';
 export type AutoRunSchedulerOutcome = 'completed' | 'failed' | 'timed_out';
+export type AutoRunSchedulerNodeState =
+	| 'blocked'
+	| 'ready'
+	| 'running'
+	| 'completed'
+	| 'failed'
+	| 'skipped';
+
+export interface AutoRunSchedulerNodeSnapshot {
+	id: string;
+	documentIndex: number;
+	dependsOn: string[];
+	isolationMode: PlaybookTaskIsolationMode;
+	state: AutoRunSchedulerNodeState;
+	dispatchOrder: number | null;
+}
+
+export interface AutoRunSchedulerDispatchStats {
+	totalClaims: number;
+	maxParallelClaims: number;
+	maxRunningNodes: number;
+}
+
+export interface AutoRunSchedulerQueueStats {
+	blocked: number;
+	ready: number;
+	running: number;
+	completed: number;
+	failed: number;
+	skipped: number;
+}
+
+export interface AutoRunDispatchProfile {
+	configuredMode: AutoRunSchedulerMode;
+	observedMode: AutoRunSchedulerMode;
+	maxParallelism: number;
+	totalClaims: number;
+	maxParallelClaims: number;
+	maxRunningNodes: number;
+	hasObservedParallelDispatch: boolean;
+	queue: AutoRunSchedulerQueueStats;
+}
+
+export interface AutoRunSchedulerSnapshot {
+	mode: AutoRunSchedulerMode;
+	configuredMode: AutoRunSchedulerMode;
+	observedMode: AutoRunSchedulerMode;
+	maxParallelism: number;
+	readyNodeIds: string[];
+	dispatchStats: AutoRunSchedulerDispatchStats;
+	queue: AutoRunSchedulerQueueStats;
+	dispatchProfile: AutoRunDispatchProfile;
+	nodes: AutoRunSchedulerNodeSnapshot[];
+}
 
 // History entry types for the History panel
 export type HistoryEntryType = 'AUTO' | 'USER';
@@ -98,7 +154,15 @@ export interface HistoryEntry {
 	agentStrategy?: PlaybookAgentStrategy;
 	worktreeMode?: AutoRunWorktreeMode;
 	schedulerMode?: AutoRunSchedulerMode;
+	configuredSchedulerMode?: AutoRunSchedulerMode;
+	actualParallelNodeCount?: number;
+	sharedCheckoutFallbackCount?: number;
+	blockedNodeCount?: number;
+	skippedNodeCount?: number;
 	schedulerOutcome?: AutoRunSchedulerOutcome;
+	queueWaitMs?: number;
+	retryCount?: number;
+	timedOut?: boolean;
 }
 
 // Document entry within a playbook
@@ -107,10 +171,13 @@ export interface PlaybookDocumentEntry {
 	resetOnCompletion: boolean;
 }
 
+export type PlaybookTaskIsolationMode = 'shared-checkout' | 'isolated-worktree';
+
 export interface PlaybookTaskGraphNode {
 	id: string;
 	documentIndex: number;
 	dependsOn?: string[];
+	isolationMode?: PlaybookTaskIsolationMode;
 }
 
 export interface PlaybookTaskGraph {
@@ -132,6 +199,8 @@ export interface PlaybookBaselineMetadata {
 	agentStrategy?: PlaybookAgentStrategy;
 	maxParallelism?: number | null;
 	taskGraph?: PlaybookTaskGraph;
+	projectMemoryExecution?: ProjectMemoryExecutionContext | null;
+	projectMemoryBindingIntent?: ProjectMemoryBindingIntent | null;
 }
 
 export interface PlaybookWorktreeSettings {
@@ -184,6 +253,12 @@ export interface WorktreeRunTarget {
 	createPROnCompletion: boolean;
 }
 
+export interface BatchRunIsolatedWorktreeTarget {
+	sessionId: string;
+	cwd: string;
+	branchName?: string;
+}
+
 // Configuration for starting a batch run
 export interface BatchRunConfig {
 	documents: BatchDocumentEntry[];
@@ -202,8 +277,12 @@ export interface BatchRunConfig {
 	skillPromptMode?: PlaybookSkillPromptMode;
 	maxParallelism?: number | null;
 	taskGraph?: PlaybookTaskGraph;
+	projectMemoryExecution?: ProjectMemoryExecutionContext | null;
+	projectMemoryBindingIntent?: ProjectMemoryBindingIntent | null;
 	worktree?: WorktreeConfig;
 	worktreeTarget?: WorktreeRunTarget;
+	isolatedWorktreeTarget?: BatchRunIsolatedWorktreeTarget;
+	isolatedWorktreeTargets?: BatchRunIsolatedWorktreeTarget[];
 }
 
 // Agent configuration

@@ -778,6 +778,30 @@ describe('useAutoRunHandlers', () => {
 			);
 		});
 
+		it('should not append .md twice when filename already includes extension', async () => {
+			const mockSession = createMockSession();
+			const mockDeps = createMockDeps();
+
+			vi.mocked(window.maestro.autorun.readDoc).mockResolvedValue({
+				success: true,
+				content: '- [ ] Task one',
+			});
+
+			const { result } = renderHook(() => useAutoRunHandlers(mockSession, mockDeps));
+
+			let count = 0;
+			await act(async () => {
+				count = await result.current.getDocumentTaskCount('Tasks.md');
+			});
+
+			expect(count).toBe(1);
+			expect(window.maestro.autorun.readDoc).toHaveBeenCalledWith(
+				'/test/autorun',
+				'Tasks.md',
+				undefined
+			);
+		});
+
 		it('should return 0 for document with no tasks', async () => {
 			const mockSession = createMockSession();
 			const mockDeps = createMockDeps();

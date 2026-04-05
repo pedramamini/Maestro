@@ -22,6 +22,7 @@ export type {
 	Playbook,
 	ThinkingMode,
 	WorktreeRunTarget,
+	AutoRunSchedulerSnapshot,
 } from '../../shared/types';
 
 // Re-export Symphony types for session metadata
@@ -37,6 +38,7 @@ import type {
 	UsageStats,
 	ToolType,
 	ThinkingMode,
+	AutoRunSchedulerSnapshot,
 } from '../../shared/types';
 
 // Re-export group chat types from shared location
@@ -279,11 +281,13 @@ export interface BatchRunConfig extends Omit<SharedBatchRunConfig, 'worktree'> {
 
 // Import BatchProcessingState for state machine integration
 import type { BatchProcessingState } from '../hooks/batch/batchStateMachine';
+import type { ProjectMemoryExecutionContext } from '../../shared/projectMemory';
 
 // Batch processing state
 export interface BatchRunState {
 	isRunning: boolean;
 	isStopping: boolean; // Waiting for current task to finish before stopping
+	projectMemoryExecution?: ProjectMemoryExecutionContext | null;
 
 	// State machine integration (Phase 11)
 	// Tracks explicit processing state for invariant checking and debugging
@@ -297,6 +301,7 @@ export interface BatchRunState {
 	// Task-level progress within current document
 	currentDocTasksTotal: number; // Total tasks in current document
 	currentDocTasksCompleted: number; // Completed tasks in current document
+	scheduler?: AutoRunSchedulerSnapshot;
 
 	// Overall progress (grows as reset docs add tasks back)
 	totalTasksAcrossAllDocs: number;
@@ -715,6 +720,7 @@ export interface AgentConfigOption {
 	options?: string[];
 	placeholder?: string;
 	suggestions?: string[];
+	globalOnly?: boolean;
 	argBuilder?: (value: any) => string[];
 }
 

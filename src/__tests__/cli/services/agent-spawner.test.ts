@@ -96,8 +96,10 @@ vi.mock('os', async () => {
 
 // Mock storage service
 const mockGetAgentCustomPath = vi.fn();
+const mockReadAgentConfigs = vi.fn();
 vi.mock('../../../cli/services/storage', () => ({
 	getAgentCustomPath: (...args: unknown[]) => mockGetAgentCustomPath(...args),
+	readAgentConfigs: (...args: unknown[]) => mockReadAgentConfigs(...args),
 }));
 
 import {
@@ -121,6 +123,7 @@ describe('agent-spawner', () => {
 		mockStderr.removeAllListeners();
 		(mockChild as EventEmitter).removeAllListeners();
 		mockGetAgentCustomPath.mockReturnValue(undefined);
+		mockReadAgentConfigs.mockReturnValue({});
 		delete process.env.CODEX_THREAD_ID;
 		delete process.env.MCP_SERVER_HOST;
 		delete process.env.MCP_SERVER_PORT;
@@ -151,6 +154,7 @@ describe('agent-spawner', () => {
 			const result = readDocAndCountTasks('/playbooks', 'tasks');
 
 			expect(result.taskCount).toBe(3);
+			expect(result.checkedCount).toBe(1);
 			expect(result.content).toContain('First task');
 		});
 
@@ -165,6 +169,7 @@ describe('agent-spawner', () => {
 			const result = readDocAndCountTasks('/playbooks', 'tasks');
 
 			expect(result.taskCount).toBe(0);
+			expect(result.checkedCount).toBe(2);
 		});
 
 		it('should return empty content and zero count when file does not exist', () => {
@@ -176,6 +181,7 @@ describe('agent-spawner', () => {
 
 			expect(result.content).toBe('');
 			expect(result.taskCount).toBe(0);
+			expect(result.checkedCount).toBe(0);
 		});
 
 		it('should handle various checkbox formats', () => {
@@ -195,6 +201,14 @@ describe('agent-spawner', () => {
 			vi.mocked(fs.readFileSync).mockReturnValue('- [ ] Task');
 
 			readDocAndCountTasks('/playbooks', 'tasks');
+
+			expect(fs.readFileSync).toHaveBeenCalledWith('/playbooks/tasks.md', 'utf-8');
+		});
+
+		it('should not append .md twice when filename already includes extension', () => {
+			vi.mocked(fs.readFileSync).mockReturnValue('- [ ] Task');
+
+			readDocAndCountTasks('/playbooks', 'tasks.md');
 
 			expect(fs.readFileSync).toHaveBeenCalledWith('/playbooks/tasks.md', 'utf-8');
 		});
@@ -330,6 +344,14 @@ text - [ ] This should not count
 			vi.mocked(fs.readFileSync).mockReturnValue('- [ ] Task');
 
 			readDocAndGetTasks('/playbooks', 'tasks');
+
+			expect(fs.readFileSync).toHaveBeenCalledWith('/playbooks/tasks.md', 'utf-8');
+		});
+
+		it('should not append .md twice when filename already includes extension', () => {
+			vi.mocked(fs.readFileSync).mockReturnValue('- [ ] Task');
+
+			readDocAndGetTasks('/playbooks', 'tasks.md');
 
 			expect(fs.readFileSync).toHaveBeenCalledWith('/playbooks/tasks.md', 'utf-8');
 		});
@@ -1474,6 +1496,51 @@ Some text with [x] in it that's not a checkbox
 			expect(resumeIndex).toBeGreaterThan(-1);
 			expect(cwdIndex).toBeLessThan(resumeIndex);
 
+			mockChild.emit('close', 0);
+			await resultPromise;
+		});
+	});
+
+	describe('OpenClaw prompt argument handling', () => {
+		it('passes prompts via --message instead of positional args', async () => {
+			mockSpawn.mockReturnValue(mockChild);
+
+			const resultPromise = spawnAgent('openclaw', '/project', 'prompt text');
+			await new Promise((resolve) => setTimeout(resolve, 0));
+
+			const args = mockSpawn.mock.calls[0][1] as string[];
+			expect(args).toContain('agent');
+			expect(args).toContain('--json');
+			expect(args).toContain('--message');
+			expect(args).toContain('prompt text');
+			expect(args).not.toContain('--');
+
+			mockStdout.emit('data', Buffer.from('{"type":"result","result":"Done"}\n'));
+			mockChild.emit('close', 0);
+			await resultPromise;
+		});
+
+		it('applies stored OpenClaw agent config args in CLI batch mode', async () => {
+			mockSpawn.mockReturnValue(mockChild);
+			mockReadAgentConfigs.mockReturnValue({
+				openclaw: {
+					agentId: 'main',
+					thinking: 'high',
+					localMode: true,
+				},
+			});
+
+			const resultPromise = spawnAgent('openclaw', '/project', 'prompt text');
+			await new Promise((resolve) => setTimeout(resolve, 0));
+
+			const args = mockSpawn.mock.calls[0][1] as string[];
+			expect(args).toContain('--agent');
+			expect(args).toContain('main');
+			expect(args).toContain('--thinking');
+			expect(args).toContain('high');
+			expect(args).toContain('--local');
+
+			mockStdout.emit('data', Buffer.from('{"type":"result","result":"Done"}\n'));
 			mockChild.emit('close', 0);
 			await resultPromise;
 		});

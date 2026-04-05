@@ -13,13 +13,45 @@ import type { Theme, BatchRunState, SessionState } from '../../../renderer/types
 
 // Helper to render with LayerStackProvider (required by AutoRunSearchBar)
 const renderWithProvider = (ui: React.ReactElement) => {
-	const result = render(<LayerStackProvider>{ui}</LayerStackProvider>);
+	let result!: ReturnType<typeof render>;
+	act(() => {
+		result = render(<LayerStackProvider>{ui}</LayerStackProvider>);
+		try {
+			vi.advanceTimersByTime(20);
+		} catch {
+			// Some suites in this file switch back to real timers.
+		}
+	});
 	// Return a rerender function that wraps in provider
 	return {
 		...result,
 		rerender: (newUi: React.ReactElement) =>
-			result.rerender(<LayerStackProvider>{newUi}</LayerStackProvider>),
+			act(() => {
+				result.rerender(<LayerStackProvider>{newUi}</LayerStackProvider>);
+				try {
+					vi.advanceTimersByTime(20);
+				} catch {
+					// Some suites in this file switch back to real timers.
+				}
+			}),
 	};
+};
+
+const changeTextareaValue = async (textarea: HTMLElement, value: string) => {
+	await act(async () => {
+		fireEvent.change(textarea, { target: { value } });
+		await Promise.resolve();
+	});
+};
+
+const rerenderWithAct = async (
+	rerender: (ui: React.ReactElement) => void,
+	ui: React.ReactElement
+) => {
+	await act(async () => {
+		rerender(ui);
+		await Promise.resolve();
+	});
 };
 
 // Custom text matcher for fragmented text nodes (e.g., "1 of 2 tasks completed" rendered across spans)
@@ -142,6 +174,11 @@ vi.mock('../../../renderer/components/TemplateAutocompleteDropdown', () => ({
 	TemplateAutocompleteDropdown: React.forwardRef(() => null),
 }));
 
+vi.mock('../../../renderer/utils/tokenCounter', () => ({
+	getEncoder: vi.fn(() => new Promise(() => {})),
+	formatTokenCount: vi.fn((count: number) => String(count)),
+}));
+
 // Create a mock theme for testing
 const createMockTheme = (): Theme => ({
 	id: 'test-theme',
@@ -169,6 +206,60 @@ const setupMaestroMock = () => {
 		fs: {
 			readFile: vi.fn().mockResolvedValue('data:image/png;base64,abc123'),
 			readDir: vi.fn().mockResolvedValue([]),
+		},
+		projectMemory: {
+			getSnapshot: vi.fn().mockResolvedValue({
+				success: true,
+				snapshot: {
+					projectId: 'maestro',
+					version: '2026-04-04',
+					taskCount: 1,
+					generatedAt: 'now',
+					tasks: [
+						{
+							id: 'PM-01',
+							title: 'Layout',
+							status: 'in_progress',
+							dependsOn: [],
+							executionMode: 'shared-serialized',
+							bindingMode: 'shared-branch-serialized',
+							worktreePath: '/test/folder',
+							executorState: 'running',
+							executorId: 'codex-main',
+						},
+					],
+				},
+			}),
+			validateState: vi.fn().mockResolvedValue({
+				success: true,
+				report: {
+					ok: true,
+					projectId: 'maestro',
+					taskCount: 1,
+					bindingCount: 1,
+					runtimeCount: 1,
+					taskLockCount: 1,
+					worktreeLockCount: 1,
+					expiredTaskLockCount: 0,
+					expiredWorktreeLockCount: 0,
+					issues: [],
+				},
+			}),
+			getTaskDetail: vi.fn().mockResolvedValue({
+				success: true,
+				detail: {
+					task: { id: 'PM-01', title: 'Layout' },
+					binding: {
+						binding_mode: 'shared-branch-serialized',
+						branch_name: 'main',
+						worktree_path: '/test/folder',
+					},
+					runtime: { executor_state: 'running', executor_id: 'codex-main' },
+					taskLock: { owner: 'codex-main' },
+					worktreeLock: { owner: 'codex-main' },
+					worktree: { worktree_id: 'shared-main' },
+				},
+			}),
 		},
 		autorun: {
 			listImages: vi.fn().mockResolvedValue({ success: true, images: [] }),
@@ -213,6 +304,7 @@ const createDefaultProps = (overrides: Partial<React.ComponentProps<typeof AutoR
 	theme: createMockTheme(),
 	sessionId: 'test-session-1',
 	folderPath: '/test/folder',
+	projectMemoryRepoRoot: null,
 	selectedFile: 'test-doc',
 	documentList: ['test-doc', 'another-doc'],
 	content: '# Test Content\n\nSome markdown content.',
@@ -296,6 +388,277 @@ describe('AutoRun', () => {
 
 			expect(screen.getByText('Stop')).toBeInTheDocument();
 		});
+
+		it('shows live status card with current document progress when auto run is active', () => {
+			const batchRunState = createBatchRunState({
+				documents: ['phase-06', 'phase-07'],
+				currentDocumentIndex: 1,
+				currentDocTasksCompleted: 3,
+				currentDocTasksTotal: 5,
+				loopEnabled: true,
+				loopIteration: 1,
+			});
+			const props = createDefaultProps({ batchRunState });
+			renderWithProvider(<AutoRun {...props} />);
+
+			expect(screen.getByTestId('autorun-live-status')).toBeInTheDocument();
+			expect(screen.getByText('phase-07')).toBeInTheDocument();
+			expect(screen.getByText('Loop 2 · 3 / 5 tasks')).toBeInTheDocument();
+		});
+
+		it('shows project memory binding in the live status card when present', () => {
+			const batchRunState = createBatchRunState({
+				projectMemoryExecution: {
+					repoRoot: '/test/folder',
+					taskId: 'PM-01',
+					executorId: 'codex-main',
+				},
+			});
+			const props = createDefaultProps({ batchRunState });
+			renderWithProvider(<AutoRun {...props} />);
+
+			expect(screen.getByTestId('autorun-live-status')).toBeInTheDocument();
+			expect(screen.getByText(/PM Binding:/)).toBeInTheDocument();
+			expect(screen.getByText(/PM-01/)).toBeInTheDocument();
+			expect(screen.getByText(/codex-main/)).toBeInTheDocument();
+		});
+
+		it('opens project memory task detail from the live status binding', async () => {
+			const batchRunState = createBatchRunState({
+				projectMemoryExecution: {
+					repoRoot: '/test/folder',
+					taskId: 'PM-01',
+					executorId: 'codex-main',
+				},
+			});
+			const props = createDefaultProps({
+				batchRunState,
+				projectMemoryRepoRoot: '/test/folder',
+			});
+			renderWithProvider(<AutoRun {...props} />);
+
+			expect(await screen.findByText('1 tracked tasks')).toBeInTheDocument();
+
+			fireEvent.click(screen.getByRole('button', { name: /PM Binding:/i }));
+
+			await waitFor(() => {
+				expect(mockMaestro.projectMemory.getTaskDetail).toHaveBeenCalledWith(
+					'/test/folder',
+					'PM-01'
+				);
+			});
+
+			expect(await screen.findByText(/Task:/)).toBeInTheDocument();
+		});
+
+		it('shows DAG scheduler counts in the live status card', () => {
+			const batchRunState = createBatchRunState({
+				scheduler: {
+					mode: 'dag',
+					maxParallelism: 2,
+					readyNodeIds: ['b'],
+					nodes: [
+						{
+							id: 'a',
+							documentIndex: 0,
+							dependsOn: [],
+							isolationMode: 'shared-checkout',
+							state: 'running',
+						},
+						{
+							id: 'b',
+							documentIndex: 1,
+							dependsOn: [],
+							isolationMode: 'shared-checkout',
+							state: 'ready',
+						},
+						{
+							id: 'c',
+							documentIndex: 2,
+							dependsOn: ['a'],
+							isolationMode: 'shared-checkout',
+							state: 'blocked',
+						},
+					],
+				},
+			});
+			const props = createDefaultProps({ batchRunState });
+			renderWithProvider(<AutoRun {...props} />);
+
+			expect(screen.getByText('RUN 1')).toBeInTheDocument();
+			expect(screen.getByText('READY 1')).toBeInTheDocument();
+			expect(screen.getByText('BLOCKED 1')).toBeInTheDocument();
+		});
+
+		it('shows DAG node list with blocked and skipped reasons', () => {
+			const batchRunState = createBatchRunState({
+				documents: ['phase-06', 'phase-07', 'phase-08'],
+				scheduler: {
+					mode: 'dag',
+					maxParallelism: 2,
+					readyNodeIds: [],
+					nodes: [
+						{
+							id: 'a',
+							documentIndex: 0,
+							dependsOn: [],
+							isolationMode: 'shared-checkout',
+							state: 'failed',
+						},
+						{
+							id: 'b',
+							documentIndex: 1,
+							dependsOn: ['a'],
+							isolationMode: 'shared-checkout',
+							state: 'blocked',
+						},
+						{
+							id: 'c',
+							documentIndex: 2,
+							dependsOn: ['a'],
+							isolationMode: 'shared-checkout',
+							state: 'skipped',
+						},
+					],
+				},
+			});
+			const props = createDefaultProps({ batchRunState });
+			renderWithProvider(<AutoRun {...props} />);
+
+			expect(screen.getByTestId('autorun-dag-node-list')).toBeInTheDocument();
+			expect(screen.getByText('phase-07')).toBeInTheDocument();
+			expect(screen.getByText('blocked')).toBeInTheDocument();
+			expect(screen.getByText('Waiting for: phase-06')).toBeInTheDocument();
+			expect(screen.getByText('skipped')).toBeInTheDocument();
+			expect(screen.getByText('Skipped after dependency failure: phase-06')).toBeInTheDocument();
+		});
+
+		it('loads active project memory task detail from the status card', async () => {
+			const props = createDefaultProps({ projectMemoryRepoRoot: '/test/folder' });
+			renderWithProvider(<AutoRun {...props} />);
+
+			await waitFor(() => {
+				expect(mockMaestro.projectMemory.getSnapshot).toHaveBeenCalledWith('/test/folder');
+			});
+
+			expect(await screen.findByText('1 tracked tasks')).toBeInTheDocument();
+
+			fireEvent.click(screen.getByRole('button', { name: /view detail/i }));
+
+			await waitFor(() => {
+				expect(mockMaestro.projectMemory.getTaskDetail).toHaveBeenCalledWith(
+					'/test/folder',
+					'PM-01'
+				);
+			});
+
+			expect(await screen.findByText(/Task:/)).toBeInTheDocument();
+			expect(screen.getByText(/PM-01/)).toBeInTheDocument();
+		});
+
+		it('refreshes expanded project memory detail and closes it when no active task remains', async () => {
+			mockMaestro.projectMemory.getSnapshot.mockResolvedValueOnce({
+				success: true,
+				snapshot: {
+					projectId: 'maestro',
+					version: '2026-04-04',
+					taskCount: 1,
+					generatedAt: 'now',
+					tasks: [
+						{
+							id: 'PM-01',
+							title: 'Layout',
+							status: 'in_progress',
+							dependsOn: [],
+							executionMode: 'shared-serialized',
+							bindingMode: 'shared-branch-serialized',
+							worktreePath: '/test/folder',
+							executorState: 'running',
+							executorId: 'codex-main',
+						},
+					],
+				},
+			});
+
+			const props = createDefaultProps({ projectMemoryRepoRoot: '/test/folder' });
+			renderWithProvider(<AutoRun {...props} />);
+
+			expect(await screen.findByText('1 tracked tasks')).toBeInTheDocument();
+
+			fireEvent.click(screen.getByRole('button', { name: /view detail/i }));
+
+			await waitFor(() => {
+				expect(mockMaestro.projectMemory.getTaskDetail).toHaveBeenCalledTimes(1);
+			});
+			expect(await screen.findByText(/Task:/)).toBeInTheDocument();
+
+			mockMaestro.projectMemory.getSnapshot.mockResolvedValueOnce({
+				success: true,
+				snapshot: {
+					projectId: 'maestro',
+					version: '2026-04-04',
+					taskCount: 1,
+					generatedAt: 'later',
+					tasks: [
+						{
+							id: 'PM-01',
+							title: 'Layout',
+							status: 'completed',
+							dependsOn: [],
+							executionMode: 'shared-serialized',
+							bindingMode: 'shared-branch-serialized',
+							worktreePath: '/test/folder',
+							executorState: 'completed',
+							executorId: 'codex-main',
+						},
+					],
+				},
+			});
+
+			const snapshotCallCountBeforeRefresh =
+				mockMaestro.projectMemory.getSnapshot.mock.calls.length;
+			fireEvent.click(screen.getByTitle('Refresh project memory snapshot'));
+
+			await waitFor(() => {
+				expect(mockMaestro.projectMemory.getSnapshot.mock.calls.length).toBeGreaterThan(
+					snapshotCallCountBeforeRefresh
+				);
+			});
+
+			await waitFor(() => {
+				expect(screen.queryByText(/Task:/)).not.toBeInTheDocument();
+			});
+			expect(screen.queryByRole('button', { name: /hide detail/i })).not.toBeInTheDocument();
+		});
+
+		it('shows unhealthy validation summary from project memory state validation', async () => {
+			mockMaestro.projectMemory.validateState.mockResolvedValueOnce({
+				success: true,
+				report: {
+					ok: false,
+					projectId: 'maestro',
+					taskCount: 1,
+					bindingCount: 1,
+					runtimeCount: 1,
+					taskLockCount: 1,
+					worktreeLockCount: 1,
+					expiredTaskLockCount: 1,
+					expiredWorktreeLockCount: 1,
+					issues: [
+						'expired task lock: PM-01',
+						'expired worktree lock: shared-main',
+						'binding mismatch: PM-01 expected shared-main',
+					],
+				},
+			});
+
+			const props = createDefaultProps({ projectMemoryRepoRoot: '/test/folder' });
+			renderWithProvider(<AutoRun {...props} />);
+
+			expect(await screen.findByText(/UNHEALTHY/)).toBeInTheDocument();
+			expect(screen.getByText(/2 lock drift · 1 binding mismatch/i)).toBeInTheDocument();
+			expect(mockMaestro.projectMemory.validateState).toHaveBeenCalledWith('/test/folder');
+		});
 	});
 
 	describe('Mode Toggling', () => {
@@ -367,10 +730,13 @@ describe('AutoRun', () => {
 			renderWithProvider(<AutoRun {...props} />);
 
 			const textarea = screen.getByRole('textbox');
-			fireEvent.change(textarea, { target: { value: 'Updated content' } });
+			await changeTextareaValue(textarea, 'Updated content');
 
 			// Click the Save button
-			fireEvent.click(screen.getByText('Save'));
+			await act(async () => {
+				fireEvent.click(screen.getByText('Save'));
+				await Promise.resolve();
+			});
 
 			expect(mockMaestro.autorun.writeDoc).toHaveBeenCalledWith(
 				'/test/folder',
@@ -385,13 +751,16 @@ describe('AutoRun', () => {
 			renderWithProvider(<AutoRun {...props} />);
 
 			const textarea = screen.getByRole('textbox');
-			fireEvent.change(textarea, { target: { value: 'Changed content' } });
+			await changeTextareaValue(textarea, 'Changed content');
 
 			// Textarea should show changed content
 			expect(textarea).toHaveValue('Changed content');
 
 			// Click the Revert button
-			fireEvent.click(screen.getByText('Revert'));
+			await act(async () => {
+				fireEvent.click(screen.getByText('Revert'));
+				await Promise.resolve();
+			});
 
 			// Content should revert back
 			expect(textarea).toHaveValue('Initial');
@@ -1031,7 +1400,7 @@ describe('AutoRun', () => {
 	});
 
 	describe('Session Switching', () => {
-		it('resets local content when session changes', () => {
+		it('resets local content when session changes', async () => {
 			const props = createDefaultProps({ content: 'Session 1 content' });
 			const { rerender } = renderWithProvider(<AutoRun {...props} />);
 
@@ -1039,12 +1408,15 @@ describe('AutoRun', () => {
 			expect(textarea).toHaveValue('Session 1 content');
 
 			// Change session
-			rerender(<AutoRun {...props} sessionId="new-session" content="Session 2 content" />);
+			await rerenderWithAct(
+				rerender,
+				<AutoRun {...props} sessionId="new-session" content="Session 2 content" />
+			);
 
 			expect(textarea).toHaveValue('Session 2 content');
 		});
 
-		it('syncs content when switching documents', () => {
+		it('syncs content when switching documents', async () => {
 			const props = createDefaultProps({ content: 'Doc 1 content', selectedFile: 'doc1' });
 			const { rerender } = renderWithProvider(<AutoRun {...props} />);
 
@@ -1052,7 +1424,10 @@ describe('AutoRun', () => {
 			expect(textarea).toHaveValue('Doc 1 content');
 
 			// Change document
-			rerender(<AutoRun {...props} selectedFile="doc2" content="Doc 2 content" />);
+			await rerenderWithAct(
+				rerender,
+				<AutoRun {...props} selectedFile="doc2" content="Doc 2 content" />
+			);
 
 			expect(textarea).toHaveValue('Doc 2 content');
 		});
@@ -2738,7 +3113,7 @@ describe('Template Autocomplete Integration', () => {
 		renderWithProvider(<AutoRun {...props} />);
 
 		const textarea = screen.getByRole('textbox');
-		fireEvent.change(textarea, { target: { value: 'Hello world' } });
+		await changeTextareaValue(textarea, 'Hello world');
 
 		expect(textarea).toHaveValue('Hello world');
 	});
@@ -2748,7 +3123,7 @@ describe('Template Autocomplete Integration', () => {
 		renderWithProvider(<AutoRun {...props} />);
 
 		const textarea = screen.getByRole('textbox');
-		fireEvent.change(textarea, { target: { value: '{{' } });
+		await changeTextareaValue(textarea, '{{');
 
 		// Content should update (autocomplete state is mocked)
 		expect(textarea).toHaveValue('{{');
@@ -2773,7 +3148,7 @@ describe('Template Autocomplete Integration', () => {
 		textarea.selectionEnd = 6;
 
 		// Type a character
-		fireEvent.change(textarea, { target: { value: 'Hello, World' } });
+		await changeTextareaValue(textarea, 'Hello, World');
 
 		expect(textarea).toHaveValue('Hello, World');
 	});
@@ -2785,13 +3160,13 @@ describe('Template Autocomplete Integration', () => {
 		const textarea = screen.getByRole('textbox');
 
 		// Multiple consecutive changes
-		fireEvent.change(textarea, { target: { value: 'First change' } });
+		await changeTextareaValue(textarea, 'First change');
 		expect(textarea).toHaveValue('First change');
 
-		fireEvent.change(textarea, { target: { value: 'Second change' } });
+		await changeTextareaValue(textarea, 'Second change');
 		expect(textarea).toHaveValue('Second change');
 
-		fireEvent.change(textarea, { target: { value: 'Third change' } });
+		await changeTextareaValue(textarea, 'Third change');
 		expect(textarea).toHaveValue('Third change');
 	});
 
@@ -2802,13 +3177,13 @@ describe('Template Autocomplete Integration', () => {
 		const textarea = screen.getByRole('textbox');
 
 		// Type partial template variable syntax
-		fireEvent.change(textarea, { target: { value: '{' } });
+		await changeTextareaValue(textarea, '{');
 		expect(textarea).toHaveValue('{');
 
-		fireEvent.change(textarea, { target: { value: '{{' } });
+		await changeTextareaValue(textarea, '{{');
 		expect(textarea).toHaveValue('{{');
 
-		fireEvent.change(textarea, { target: { value: '{{date' } });
+		await changeTextareaValue(textarea, '{{date');
 		expect(textarea).toHaveValue('{{date');
 	});
 
@@ -2818,7 +3193,7 @@ describe('Template Autocomplete Integration', () => {
 
 		const textarea = screen.getByRole('textbox');
 
-		fireEvent.change(textarea, { target: { value: '{{date}}' } });
+		await changeTextareaValue(textarea, '{{date}}');
 		expect(textarea).toHaveValue('{{date}}');
 	});
 
@@ -2829,7 +3204,7 @@ describe('Template Autocomplete Integration', () => {
 		const textarea = screen.getByRole('textbox');
 
 		// Regular typing without autocomplete trigger
-		fireEvent.change(textarea, { target: { value: 'This is a regular sentence.' } });
+		await changeTextareaValue(textarea, 'This is a regular sentence.');
 		expect(textarea).toHaveValue('This is a regular sentence.');
 	});
 

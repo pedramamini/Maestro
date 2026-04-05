@@ -64,6 +64,11 @@ vi.mock('../../../cli/services/skill-bus', () => ({
 	recordSkillBusRun: vi.fn(),
 }));
 
+vi.mock('../../../cli/services/task-sync', () => ({
+	validateProjectMemoryExecutionStart: vi.fn(),
+	heartbeatTask: vi.fn(),
+}));
+
 // Mock logger
 vi.mock('../../../main/utils/logger', () => ({
 	logger: {
@@ -89,6 +94,7 @@ import { addHistoryEntry, readGroups } from '../../../cli/services/storage';
 import { registerCliActivity, unregisterCliActivity } from '../../../shared/cli-activity';
 import { resolvePlaybookSkills, buildSkillPromptBlock } from '../../../cli/services/skill-resolver';
 import { recordSkillBusRun } from '../../../cli/services/skill-bus';
+import * as taskSyncService from '../../../cli/services/task-sync';
 
 describe('batch-processor', () => {
 	// Helper to create mock session
@@ -141,6 +147,16 @@ describe('batch-processor', () => {
 		vi.mocked(resolvePlaybookSkills).mockReturnValue({ resolved: [], missing: [] });
 		vi.mocked(buildSkillPromptBlock).mockReturnValue('');
 		vi.mocked(uncheckAllTasks).mockImplementation((content) => content.replace(/\[x\]/gi, '[ ]'));
+		vi.mocked(taskSyncService.validateProjectMemoryExecutionStart).mockReturnValue({
+			ok: true,
+			skipped: false,
+			taskId: 'PM-01',
+			executorId: 'codex-main',
+			reason: null,
+			bindingMode: 'shared-branch-serialized',
+			expectedBranch: 'main',
+			currentBranch: 'main',
+		});
 	});
 
 	afterEach(() => {
@@ -178,6 +194,103 @@ describe('batch-processor', () => {
 					playbookName: playbook.name,
 				})
 			);
+		});
+	});
+
+	describe('runPlaybook - project memory fail-closed startup', () => {
+		it('should emit a machine-readable error and stop before start when project memory validation fails', async () => {
+			const session = mockSession({ toolType: 'codex', cwd: '/repo' });
+			const playbook = mockPlaybook({
+				projectMemoryExecution: {
+					repoRoot: '/repo',
+					taskId: 'PM-01',
+					executorId: 'codex-main',
+				},
+			});
+			vi.mocked(taskSyncService.validateProjectMemoryExecutionStart).mockReturnValue({
+				ok: false,
+				skipped: false,
+				taskId: 'PM-01',
+				executorId: 'codex-main',
+				reason: 'Task lock owner mismatch: expected codex-main, found other-executor',
+				bindingMode: 'shared-branch-serialized',
+				expectedBranch: 'main',
+				currentBranch: 'main',
+			});
+
+			const events = await collectEvents(runPlaybook(session, playbook, '/playbooks'));
+
+			expect(events).toEqual([
+				expect.objectContaining({
+					type: 'error',
+					code: 'PROJECT_MEMORY_EXECUTION_BLOCKED',
+					message: 'Task lock owner mismatch: expected codex-main, found other-executor',
+				}),
+			]);
+			expect(registerCliActivity).not.toHaveBeenCalled();
+			expect(taskSyncService.validateProjectMemoryExecutionStart).toHaveBeenCalledWith(
+				expect.objectContaining({
+					repoRoot: '/repo',
+					taskId: 'PM-01',
+					executorId: 'codex-main',
+					currentBranch: 'main',
+				})
+			);
+		});
+	});
+
+	describe('runPlaybook - project memory heartbeat', () => {
+		it('should refresh project memory heartbeat while an agent task is still running', async () => {
+			const session = mockSession({ toolType: 'codex', cwd: '/repo', projectRoot: '/repo' });
+			const playbook = mockPlaybook({
+				projectMemoryExecution: {
+					repoRoot: '/repo',
+					taskId: 'PM-01',
+					executorId: 'codex-main',
+				},
+			});
+			let readCount = 0;
+			vi.mocked(readDocAndCountTasks).mockImplementation(() => {
+				readCount += 1;
+				return readCount <= 2
+					? { content: '- [ ] active task', taskCount: 1, checkedCount: 0 }
+					: { content: '- [x] active task', taskCount: 0, checkedCount: 1 };
+			});
+
+			const intervalCallbacks: Array<() => void> = [];
+			const setIntervalSpy = vi.spyOn(globalThis, 'setInterval').mockImplementation(((
+				callback: TimerHandler
+			) => {
+				intervalCallbacks.push(callback as () => void);
+				return 1 as unknown as ReturnType<typeof setInterval>;
+			}) as typeof setInterval);
+			const clearIntervalSpy = vi
+				.spyOn(globalThis, 'clearInterval')
+				.mockImplementation(() => undefined);
+
+			try {
+				vi.mocked(spawnAgent).mockImplementation(async () => {
+					expect(intervalCallbacks).toHaveLength(1);
+					intervalCallbacks[0]?.();
+					return {
+						success: true,
+						response: 'Task completed',
+						agentSessionId: 'codex-session-1',
+					};
+				});
+
+				const events = await collectEvents(runPlaybook(session, playbook, '/playbooks'));
+				expect(setIntervalSpy).toHaveBeenCalledWith(expect.any(Function), 60_000);
+				expect(vi.mocked(taskSyncService.heartbeatTask)).toHaveBeenCalledWith(
+					{ repoRoot: '/repo', executorId: 'codex-main' },
+					'PM-01'
+				);
+				expect(events.some((event) => event.type === 'complete')).toBe(true);
+				expect(clearIntervalSpy).toHaveBeenCalled();
+			} finally {
+				setIntervalSpy.mockRestore();
+				clearIntervalSpy.mockRestore();
+			}
 		});
 	});
 
@@ -316,6 +429,41 @@ describe('batch-processor', () => {
 			const taskPreviewEvents = events.filter((e) => e.type === 'task_preview');
 			expect(taskPreviewEvents.length).toBe(2);
 			expect(taskPreviewEvents.every((e) => e.document === 'tasks')).toBe(true);
+		});
+
+		it('should follow DAG ready ordering in dry run mode', async () => {
+			vi.mocked(readDocAndCountTasks).mockReturnValue({ content: '- [ ] Task', taskCount: 1 });
+			vi.mocked(readDocAndGetTasks).mockImplementation((_folderPath, filename) => ({
+				content: `- [ ] ${filename}`,
+				tasks: [`Task for ${filename}`],
+			}));
+
+			const session = mockSession();
+			const playbook = mockPlaybook({
+				documents: [
+					{ filename: 'root', resetOnCompletion: false },
+					{ filename: 'right', resetOnCompletion: false },
+					{ filename: 'left', resetOnCompletion: false },
+				],
+				maxParallelism: 2,
+				taskGraph: {
+					nodes: [
+						{ id: 'root', documentIndex: 0, dependsOn: [] },
+						{ id: 'right', documentIndex: 1, dependsOn: ['root'] },
+						{ id: 'left', documentIndex: 2, dependsOn: ['root'] },
+					],
+				},
+			});
+
+			const events = await collectEvents(
+				runPlaybook(session, playbook, '/playbooks', { dryRun: true })
+			);
+
+			const documentOrder = events
+				.filter((event) => event.type === 'document_start')
+				.map((event) => event.document);
+
+			expect(documentOrder).toEqual(['root', 'right', 'left']);
 		});
 	});
 
@@ -505,6 +653,29 @@ Reduce context.
 			expect(promptArg).toContain('## Goal');
 			expect(promptArg).toContain('- [ ] Current task');
 			expect(promptArg).toContain('- [ ] Next task');
+		});
+
+		it('should not append .md twice when playbook documents already include extension', async () => {
+			let callCount = 0;
+			vi.mocked(readDocAndCountTasks).mockImplementation(() => {
+				callCount++;
+				if (callCount <= 3) {
+					return { content: '- [ ] Current task', taskCount: 1 };
+				}
+				return { content: '', taskCount: 0 };
+			});
+
+			const session = mockSession();
+			const playbook = mockPlaybook({
+				prompt: 'Custom prompt for processing',
+				documents: [{ filename: 'tasks.md', resetOnCompletion: false }],
+			});
+
+			await collectEvents(runPlaybook(session, playbook, '/playbooks'));
+
+			const promptArg = vi.mocked(spawnAgent).mock.calls[0][2];
+			expect(promptArg).toContain('# Current Document: /playbooks/tasks.md');
+			expect(promptArg).not.toContain('/playbooks/tasks.md.md');
 		});
 
 		it('should inject resolved skill instructions into the prompt', async () => {
@@ -730,6 +901,8 @@ Reduce context.
 			expect(vi.mocked(spawnAgent).mock.calls[2][2]).toContain('You are the verification step');
 			expect(vi.mocked(spawnAgent).mock.calls[2][2]).toContain('## Definition of Done');
 			expect(vi.mocked(spawnAgent).mock.calls[2][2]).toContain('- Relevant tests pass');
+			expect(vi.mocked(spawnAgent).mock.calls[2][2]).toContain('## Executor Output');
+			expect(vi.mocked(spawnAgent).mock.calls[2][2]).toContain('Task executed');
 
 			const taskCompleteEvent = events.find((e) => e.type === 'task_complete');
 			expect(taskCompleteEvent?.success).toBe(true);
@@ -1521,6 +1694,931 @@ Reduce context.
 					e.type === 'debug' && e.message?.includes('ALL documents have resetOnCompletion=true')
 			);
 			expect(exitDebug).toBeDefined();
+		});
+	});
+
+	describe('runPlaybook - scheduler telemetry', () => {
+		it('keeps shared-checkout fan-out branches sequential in execution mode even when maxParallelism is greater than one', async () => {
+			const docState: Record<string, boolean> = {
+				root: false,
+				left: false,
+				right: false,
+			};
+
+			vi.mocked(readDocAndCountTasks).mockImplementation((_folderPath, filename) => ({
+				content: docState[filename] ? `- [x] ${filename}` : `- [ ] ${filename}`,
+				taskCount: docState[filename] ? 0 : 1,
+			}));
+
+			vi.mocked(spawnAgent).mockImplementation(async (_toolType, _cwd, prompt) => {
+				if (prompt.includes('/root.md')) {
+					docState.root = true;
+					return {
+						success: true,
+						response: 'Root finished',
+						agentSessionId: 'root-session',
+					};
+				}
+
+				if (prompt.includes('/left.md')) {
+					docState.left = true;
+					return {
+						success: true,
+						response: 'Left finished',
+						agentSessionId: 'left-session',
+					};
+				}
+
+				if (prompt.includes('/right.md')) {
+					docState.right = true;
+					return {
+						success: true,
+						response: 'Right finished',
+						agentSessionId: 'right-session',
+					};
+				}
+
+				return {
+					success: true,
+					response: 'Fallback finished',
+					agentSessionId: 'fallback-session',
+				};
+			});
+
+			const session = mockSession();
+			const playbook = mockPlaybook({
+				documents: [
+					{ filename: 'root', resetOnCompletion: false },
+					{ filename: 'left', resetOnCompletion: false },
+					{ filename: 'right', resetOnCompletion: false },
+				],
+				maxParallelism: 2,
+				taskGraph: {
+					nodes: [
+						{ id: 'root', documentIndex: 0, dependsOn: [] },
+						{ id: 'left', documentIndex: 1, dependsOn: ['root'] },
+						{ id: 'right', documentIndex: 2, dependsOn: ['root'] },
+					],
+				},
+			});
+
+			const events = await collectEvents(runPlaybook(session, playbook, '/playbooks'));
+			const documentOrder = events
+				.filter((event) => event.type === 'document_start')
+				.map((event) => event.document);
+			expect(documentOrder).toEqual(['root', 'left', 'right']);
+			expect(spawnAgent).toHaveBeenCalledTimes(3);
+			expect(vi.mocked(spawnAgent).mock.calls[0]?.[2]).toContain('/root.md');
+			expect(vi.mocked(spawnAgent).mock.calls[1]?.[2]).toContain('/left.md');
+			expect(vi.mocked(spawnAgent).mock.calls[2]?.[2]).toContain('/right.md');
+		});
+
+		it('executes isolated-worktree fan-out branches concurrently and waits for join readiness', async () => {
+			const docState: Record<string, boolean> = {
+				root: false,
+				left: false,
+				right: false,
+				join: false,
+			};
+
+			vi.mocked(readDocAndCountTasks).mockImplementation((_folderPath, filename) => ({
+				content: docState[filename] ? `- [x] ${filename}` : `- [ ] ${filename}`,
+				taskCount: docState[filename] ? 0 : 1,
+				checkedCount: docState[filename] ? 1 : 0,
+			}));
+
+			let resolveLeft:
+				| ((value: { success: boolean; response?: string; agentSessionId?: string }) => void)
+				| undefined;
+			let resolveRight:
+				| ((value: { success: boolean; response?: string; agentSessionId?: string }) => void)
+				| undefined;
+			const leftPromise = new Promise<{
+				success: boolean;
+				response?: string;
+				agentSessionId?: string;
+			}>((resolve) => {
+				resolveLeft = resolve;
+			});
+			const rightPromise = new Promise<{
+				success: boolean;
+				response?: string;
+				agentSessionId?: string;
+			}>((resolve) => {
+				resolveRight = resolve;
+			});
+
+			vi.mocked(spawnAgent).mockImplementation(async (_toolType, cwd, prompt) => {
+				if (prompt.includes('/root.md')) {
+					docState.root = true;
+					return {
+						success: true,
+						response: 'Root finished',
+						agentSessionId: 'root-session',
+					};
+				}
+
+				if (prompt.includes('/left.md')) {
+					expect(cwd).toBe('/tmp/worktrees/left');
+					return leftPromise;
+				}
+
+				if (prompt.includes('/right.md')) {
+					expect(cwd).toBe('/tmp/worktrees/right');
+					return rightPromise;
+				}
+
+				if (prompt.includes('/join.md')) {
+					docState.join = true;
+					return {
+						success: true,
+						response: 'Join finished',
+						agentSessionId: 'join-session',
+					};
+				}
+
+				return {
+					success: true,
+					response: 'Fallback finished',
+					agentSessionId: 'fallback-session',
+				};
+			});
+
+			const session = mockSession();
+			const playbook = mockPlaybook({
+				documents: [
+					{ filename: 'root', resetOnCompletion: false },
+					{ filename: 'left', resetOnCompletion: false },
+					{ filename: 'right', resetOnCompletion: false },
+					{ filename: 'join', resetOnCompletion: false },
+				],
+				maxParallelism: 3,
+				isolatedWorktreeTargets: [
+					{ sessionId: 'left-target', cwd: '/tmp/worktrees/left' },
+					{ sessionId: 'right-target', cwd: '/tmp/worktrees/right' },
+				],
+				taskGraph: {
+					nodes: [
+						{ id: 'root', documentIndex: 0, dependsOn: [] },
+						{
+							id: 'left',
+							documentIndex: 1,
+							dependsOn: ['root'],
+							isolationMode: 'isolated-worktree',
+						},
+						{
+							id: 'right',
+							documentIndex: 2,
+							dependsOn: ['root'],
+							isolationMode: 'isolated-worktree',
+						},
+						{ id: 'join', documentIndex: 3, dependsOn: ['left', 'right'] },
+					],
+				},
+			});
+
+			const runPromise = collectEvents(runPlaybook(session, playbook, '/playbooks'));
+
+			await vi.waitFor(() => {
+				expect(spawnAgent).toHaveBeenCalledTimes(3);
+			});
+
+			expect(vi.mocked(spawnAgent).mock.calls[0]?.[1]).toBe(session.cwd);
+			expect(vi.mocked(spawnAgent).mock.calls[0]?.[2]).toContain('/root.md');
+			expect(vi.mocked(spawnAgent).mock.calls[1]?.[2]).toContain('/left.md');
+			expect(vi.mocked(spawnAgent).mock.calls[2]?.[2]).toContain('/right.md');
+			expect(spawnAgent).not.toHaveBeenCalledWith(
+				expect.anything(),
+				expect.anything(),
+				expect.stringContaining('/join.md'),
+				expect.anything(),
+				expect.anything()
+			);
+
+			docState.left = true;
+			resolveLeft?.({
+				success: true,
+				response: 'Left finished',
+				agentSessionId: 'left-session',
+			});
+
+			await new Promise((resolve) => setTimeout(resolve, 0));
+			expect(spawnAgent).toHaveBeenCalledTimes(3);
+
+			docState.right = true;
+			resolveRight?.({
+				success: true,
+				response: 'Right finished',
+				agentSessionId: 'right-session',
+			});
+
+			const events = await runPromise;
+			expect(spawnAgent).toHaveBeenCalledTimes(4);
+			expect(vi.mocked(spawnAgent).mock.calls[3]?.[2]).toContain('/join.md');
+
+			const documentOrder = events
+				.filter((event) => event.type === 'document_start')
+				.map((event) => event.document);
+			expect(documentOrder).toEqual(['root', 'left', 'right', 'join']);
+
+			const completeEvent = events.find((event) => event.type === 'complete') as JsonlEvent & {
+				scheduler: {
+					mode: string;
+					configuredMode: string;
+					nodes: Array<{ id: string; state: string }>;
+				};
+			};
+			expect(completeEvent.scheduler.mode).toBe('dag');
+			expect(completeEvent.scheduler.configuredMode).toBe('dag');
+			expect(completeEvent.scheduler.nodes).toEqual(
+				expect.arrayContaining([
+					expect.objectContaining({ id: 'root', state: 'completed' }),
+					expect.objectContaining({ id: 'left', state: 'completed' }),
+					expect.objectContaining({ id: 'right', state: 'completed' }),
+					expect.objectContaining({ id: 'join', state: 'completed' }),
+				])
+			);
+		});
+
+		it('runs one shared-checkout branch alongside one isolated-worktree sibling and waits for join readiness', async () => {
+			const docState: Record<string, boolean> = {
+				root: false,
+				shared: false,
+				isolated: false,
+				join: false,
+			};
+
+			vi.mocked(readDocAndCountTasks).mockImplementation((_folderPath, filename) => ({
+				content: docState[filename] ? `- [x] ${filename}` : `- [ ] ${filename}`,
+				taskCount: docState[filename] ? 0 : 1,
+				checkedCount: docState[filename] ? 1 : 0,
+			}));
+
+			let resolveShared:
+				| ((value: { success: boolean; response?: string; agentSessionId?: string }) => void)
+				| undefined;
+			let resolveIsolated:
+				| ((value: { success: boolean; response?: string; agentSessionId?: string }) => void)
+				| undefined;
+			const sharedPromise = new Promise<{
+				success: boolean;
+				response?: string;
+				agentSessionId?: string;
+			}>((resolve) => {
+				resolveShared = resolve;
+			});
+			const isolatedPromise = new Promise<{
+				success: boolean;
+				response?: string;
+				agentSessionId?: string;
+			}>((resolve) => {
+				resolveIsolated = resolve;
+			});
+
+			vi.mocked(spawnAgent).mockImplementation(async (_toolType, cwd, prompt) => {
+				if (prompt.includes('/root.md')) {
+					docState.root = true;
+					return {
+						success: true,
+						response: 'Root finished',
+						agentSessionId: 'root-session',
+					};
+				}
+
+				if (prompt.includes('/shared.md')) {
+					expect(cwd).toBe('/repo/main');
+					return sharedPromise;
+				}
+
+				if (prompt.includes('/isolated.md')) {
+					expect(cwd).toBe('/tmp/worktrees/isolated');
+					return isolatedPromise;
+				}
+
+				if (prompt.includes('/join.md')) {
+					docState.join = true;
+					return {
+						success: true,
+						response: 'Join finished',
+						agentSessionId: 'join-session',
+					};
+				}
+
+				return {
+					success: true,
+					response: 'Fallback finished',
+					agentSessionId: 'fallback-session',
+				};
+			});
+
+			const session = mockSession({ cwd: '/repo/main' });
+			const playbook = mockPlaybook({
+				documents: [
+					{ filename: 'root', resetOnCompletion: false },
+					{ filename: 'shared', resetOnCompletion: false },
+					{ filename: 'isolated', resetOnCompletion: false },
+					{ filename: 'join', resetOnCompletion: false },
+				],
+				maxParallelism: 3,
+				isolatedWorktreeTargets: [{ sessionId: 'isolated-target', cwd: '/tmp/worktrees/isolated' }],
+				taskGraph: {
+					nodes: [
+						{ id: 'root', documentIndex: 0, dependsOn: [] },
+						{ id: 'shared', documentIndex: 1, dependsOn: ['root'] },
+						{
+							id: 'isolated',
+							documentIndex: 2,
+							dependsOn: ['root'],
+							isolationMode: 'isolated-worktree',
+						},
+						{ id: 'join', documentIndex: 3, dependsOn: ['shared', 'isolated'] },
+					],
+				},
+			});
+
+			const runPromise = collectEvents(runPlaybook(session, playbook, '/playbooks'));
+
+			await vi.waitFor(() => {
+				expect(spawnAgent).toHaveBeenCalledTimes(3);
+			});
+
+			expect(vi.mocked(spawnAgent).mock.calls[0]?.[2]).toContain('/root.md');
+			expect(vi.mocked(spawnAgent).mock.calls[1]?.[2]).toContain('/shared.md');
+			expect(vi.mocked(spawnAgent).mock.calls[2]?.[2]).toContain('/isolated.md');
+			expect(spawnAgent).not.toHaveBeenCalledWith(
+				expect.anything(),
+				expect.anything(),
+				expect.stringContaining('/join.md'),
+				expect.anything(),
+				expect.anything()
+			);
+
+			docState.shared = true;
+			docState.isolated = true;
+			resolveShared?.({
+				success: true,
+				response: 'Shared finished',
+				agentSessionId: 'shared-session',
+			});
+			resolveIsolated?.({
+				success: true,
+				response: 'Isolated finished',
+				agentSessionId: 'isolated-session',
+			});
+
+			const events = await runPromise;
+			expect(spawnAgent).toHaveBeenCalledTimes(4);
+			expect(vi.mocked(spawnAgent).mock.calls[3]?.[2]).toContain('/join.md');
+
+			const documentOrder = events
+				.filter((event) => event.type === 'document_start')
+				.map((event) => event.document);
+			expect(documentOrder).toEqual(['root', 'shared', 'isolated', 'join']);
+		});
+
+		it('falls back an isolated node onto the shared checkout lane when no safe isolated target exists', async () => {
+			const docState: Record<string, boolean> = {
+				left: false,
+				right: false,
+			};
+
+			vi.mocked(readDocAndCountTasks).mockImplementation((_folderPath, filename) => ({
+				content: docState[filename] ? `- [x] ${filename}` : `- [ ] ${filename}`,
+				taskCount: docState[filename] ? 0 : 1,
+				checkedCount: docState[filename] ? 1 : 0,
+			}));
+
+			let resolveLeft:
+				| ((value: { success: boolean; response?: string; agentSessionId?: string }) => void)
+				| undefined;
+			const leftPromise = new Promise<{
+				success: boolean;
+				response?: string;
+				agentSessionId?: string;
+			}>((resolve) => {
+				resolveLeft = resolve;
+			});
+
+			vi.mocked(spawnAgent).mockImplementation(async (_toolType, cwd, prompt) => {
+				if (prompt.includes('/left.md')) {
+					expect(cwd).toBe('/tmp/worktrees/left');
+					return leftPromise;
+				}
+
+				if (prompt.includes('/right.md')) {
+					expect(cwd).toBe('/repo');
+					docState.right = true;
+					return {
+						success: true,
+						response: 'Right finished on fallback checkout',
+						agentSessionId: 'right-session',
+					};
+				}
+
+				return {
+					success: true,
+					response: 'Fallback finished',
+					agentSessionId: 'fallback-session',
+				};
+			});
+
+			const session = mockSession({ cwd: '/repo', projectRoot: '/repo' });
+			const playbook = mockPlaybook({
+				documents: [
+					{ filename: 'left', resetOnCompletion: false },
+					{ filename: 'right', resetOnCompletion: false },
+				],
+				maxParallelism: 2,
+				isolatedWorktreeTargets: [
+					{ sessionId: 'unsafe-main', cwd: '/repo' },
+					{ sessionId: 'safe-left', cwd: '/tmp/worktrees/left' },
+				],
+				taskGraph: {
+					nodes: [
+						{
+							id: 'left',
+							documentIndex: 0,
+							dependsOn: [],
+							isolationMode: 'isolated-worktree',
+						},
+						{
+							id: 'right',
+							documentIndex: 1,
+							dependsOn: [],
+							isolationMode: 'isolated-worktree',
+						},
+					],
+				},
+			});
+
+			const runPromise = collectEvents(
+				runPlaybook(session, playbook, '/playbooks', { debug: true })
+			);
+
+			await vi.waitFor(() => {
+				expect(spawnAgent).toHaveBeenCalledTimes(2);
+			});
+
+			expect(vi.mocked(spawnAgent).mock.calls[0]?.[1]).toBe('/tmp/worktrees/left');
+			expect(vi.mocked(spawnAgent).mock.calls[1]?.[1]).toBe('/repo');
+
+			docState.left = true;
+			resolveLeft?.({
+				success: true,
+				response: 'Left finished',
+				agentSessionId: 'left-session',
+			});
+
+			const events = await runPromise;
+			expect(events).toEqual(
+				expect.arrayContaining([
+					expect.objectContaining({
+						type: 'debug',
+						category: 'scheduler',
+						message: expect.stringMatching(/falling back to shared checkout/i),
+					}),
+				])
+			);
+		});
+
+		it('should emit DAG scheduler snapshots for live document and complete events', async () => {
+			const callCounts = new Map<string, number>();
+			vi.mocked(readDocAndCountTasks).mockImplementation((_folderPath, filename) => {
+				const nextCount = (callCounts.get(filename) ?? 0) + 1;
+				callCounts.set(filename, nextCount);
+
+				if (filename === 'root') {
+					if (nextCount <= 3) {
+						return { content: '- [ ] Root task', taskCount: 1 };
+					}
+					return { content: '', taskCount: 0 };
+				}
+
+				if (filename === 'child') {
+					if (nextCount <= 3) {
+						return { content: '- [ ] Child task', taskCount: 1 };
+					}
+					return { content: '', taskCount: 0 };
+				}
+
+				return { content: '', taskCount: 0 };
+			});
+
+			const session = mockSession();
+			const playbook = mockPlaybook({
+				documents: [
+					{ filename: 'root', resetOnCompletion: false },
+					{ filename: 'child', resetOnCompletion: false },
+				],
+				maxParallelism: 2,
+				taskGraph: {
+					nodes: [
+						{ id: 'root', documentIndex: 0, dependsOn: [] },
+						{ id: 'child', documentIndex: 1, dependsOn: ['root'] },
+					],
+				},
+			});
+
+			const events = await collectEvents(runPlaybook(session, playbook, '/playbooks'));
+
+			const documentCompleteEvents = events.filter((event) => event.type === 'document_complete');
+			expect(documentCompleteEvents).toHaveLength(2);
+
+			const rootCompleteEvent = documentCompleteEvents[0] as JsonlEvent & {
+				document: string;
+				scheduler: {
+					mode: string;
+					configuredMode: string;
+					readyNodeIds: string[];
+					nodes: Array<{ id: string; state: string }>;
+				};
+			};
+			expect(rootCompleteEvent.document).toBe('root');
+			expect(rootCompleteEvent.scheduler.mode).toBe('sequential');
+			expect(rootCompleteEvent.scheduler.configuredMode).toBe('dag');
+			expect(rootCompleteEvent.scheduler.readyNodeIds).toEqual(['child']);
+			expect(rootCompleteEvent.scheduler.nodes).toEqual(
+				expect.arrayContaining([
+					expect.objectContaining({ id: 'root', state: 'completed' }),
+					expect.objectContaining({ id: 'child', state: 'ready' }),
+				])
+			);
+
+			const completeEvent = events.find((event) => event.type === 'complete') as JsonlEvent & {
+				scheduler: {
+					mode: string;
+					configuredMode: string;
+					readyNodeIds: string[];
+					nodes: Array<{ id: string; state: string }>;
+				};
+			};
+			expect(completeEvent.scheduler.mode).toBe('sequential');
+			expect(completeEvent.scheduler.configuredMode).toBe('dag');
+			expect(completeEvent.scheduler.readyNodeIds).toEqual([]);
+			expect(completeEvent.scheduler.nodes).toEqual(
+				expect.arrayContaining([
+					expect.objectContaining({ id: 'root', state: 'completed' }),
+					expect.objectContaining({ id: 'child', state: 'completed' }),
+				])
+			);
+		});
+
+		it('should emit sequential scheduler snapshots for legacy playbooks', async () => {
+			const callCounts = new Map<string, number>();
+			vi.mocked(readDocAndCountTasks).mockImplementation((_folderPath, filename) => {
+				const nextCount = (callCounts.get(filename) ?? 0) + 1;
+				callCounts.set(filename, nextCount);
+
+				if (filename === 'first') {
+					if (nextCount <= 3) {
+						return { content: '- [ ] First task', taskCount: 1 };
+					}
+					return { content: '', taskCount: 0 };
+				}
+
+				if (filename === 'second') {
+					if (nextCount <= 3) {
+						return { content: '- [ ] Second task', taskCount: 1 };
+					}
+					return { content: '', taskCount: 0 };
+				}
+
+				return { content: '', taskCount: 0 };
+			});
+
+			const session = mockSession();
+			const playbook = mockPlaybook({
+				documents: [
+					{ filename: 'first', resetOnCompletion: false },
+					{ filename: 'second', resetOnCompletion: false },
+				],
+			});
+
+			const events = await collectEvents(runPlaybook(session, playbook, '/playbooks'));
+
+			const documentOrder = events
+				.filter((event) => event.type === 'document_start')
+				.map((event) => event.document);
+			expect(documentOrder).toEqual(['first', 'second']);
+
+			const completeEvent = events.find((event) => event.type === 'complete') as JsonlEvent & {
+				scheduler: {
+					mode: string;
+					nodes: Array<{ id: string; state: string }>;
+				};
+			};
+			expect(completeEvent.scheduler.mode).toBe('sequential');
+			expect(completeEvent.scheduler.nodes).toEqual(
+				expect.arrayContaining([
+					expect.objectContaining({ id: 'first', state: 'completed' }),
+					expect.objectContaining({ id: 'second', state: 'completed' }),
+				])
+			);
+		});
+
+		it('should mark dependent DAG nodes as skipped when verifier fails', async () => {
+			const callCounts = new Map<string, number>();
+			vi.mocked(readDocAndCountTasks).mockImplementation((_folderPath, filename) => {
+				const nextCount = (callCounts.get(filename) ?? 0) + 1;
+				callCounts.set(filename, nextCount);
+
+				if (filename === 'root') {
+					if (nextCount <= 3) {
+						return { content: '- [ ] Root task', taskCount: 1 };
+					}
+					if (nextCount === 4) {
+						return { content: '- [x] Root task', taskCount: 0 };
+					}
+					return { content: '- [ ] Root task', taskCount: 1 };
+				}
+
+				if (filename === 'child') {
+					return { content: '- [ ] Child task', taskCount: 1 };
+				}
+
+				return { content: '', taskCount: 0 };
+			});
+
+			vi.mocked(spawnAgent)
+				.mockResolvedValueOnce({
+					success: true,
+					response: '1. Inspect code\n2. Apply patch',
+					agentSessionId: 'planner-session',
+				})
+				.mockResolvedValueOnce({
+					success: true,
+					response: 'Root executed',
+					agentSessionId: 'executor-session',
+				})
+				.mockResolvedValueOnce({
+					success: true,
+					response: 'FAIL\nVerification failed.',
+				});
+
+			const session = mockSession();
+			const playbook = mockPlaybook({
+				documents: [
+					{ filename: 'root', resetOnCompletion: false },
+					{ filename: 'child', resetOnCompletion: false },
+				],
+				agentStrategy: 'plan-execute-verify',
+				maxParallelism: 2,
+				taskGraph: {
+					nodes: [
+						{ id: 'root', documentIndex: 0, dependsOn: [] },
+						{ id: 'child', documentIndex: 1, dependsOn: ['root'] },
+					],
+				},
+			});
+
+			const events = await collectEvents(runPlaybook(session, playbook, '/playbooks'));
+			const completeEvent = events.find((event) => event.type === 'complete') as JsonlEvent & {
+				scheduler: {
+					mode: string;
+					configuredMode: string;
+					nodes: Array<{ id: string; state: string }>;
+				};
+			};
+
+			expect(completeEvent.scheduler.mode).toBe('sequential');
+			expect(completeEvent.scheduler.configuredMode).toBe('dag');
+			expect(completeEvent.scheduler.nodes).toEqual(
+				expect.arrayContaining([
+					expect.objectContaining({ id: 'root', state: 'failed' }),
+					expect.objectContaining({ id: 'child', state: 'skipped' }),
+				])
+			);
+		});
+
+		it('should mark dependent DAG nodes as skipped when a task times out without progress', async () => {
+			const callCounts = new Map<string, number>();
+			vi.mocked(readDocAndCountTasks).mockImplementation((_folderPath, filename) => {
+				const nextCount = (callCounts.get(filename) ?? 0) + 1;
+				callCounts.set(filename, nextCount);
+
+				if (filename === 'root') {
+					return { content: '- [ ] Root task', taskCount: 1 };
+				}
+
+				if (filename === 'child') {
+					return { content: '- [ ] Child task', taskCount: 1 };
+				}
+
+				return { content: '', taskCount: 0 };
+			});
+
+			vi.mocked(spawnAgent).mockResolvedValue({
+				success: false,
+				timedOut: true,
+				error: 'Timed out after 5000ms',
+			});
+
+			const session = mockSession({ toolType: 'codex' });
+			const playbook = mockPlaybook({
+				documents: [
+					{ filename: 'root', resetOnCompletion: false },
+					{ filename: 'child', resetOnCompletion: false },
+				],
+				maxParallelism: 2,
+				taskGraph: {
+					nodes: [
+						{ id: 'root', documentIndex: 0, dependsOn: [] },
+						{ id: 'child', documentIndex: 1, dependsOn: ['root'] },
+					],
+				},
+				taskTimeoutMs: 5000,
+			});
+
+			const events = await collectEvents(runPlaybook(session, playbook, '/playbooks'));
+			const completeEvent = events.find((event) => event.type === 'complete') as JsonlEvent & {
+				scheduler: {
+					mode: string;
+					configuredMode: string;
+					nodes: Array<{ id: string; state: string }>;
+				};
+			};
+
+			expect(completeEvent.scheduler.mode).toBe('sequential');
+			expect(completeEvent.scheduler.configuredMode).toBe('dag');
+			expect(completeEvent.scheduler.nodes).toEqual(
+				expect.arrayContaining([
+					expect.objectContaining({ id: 'root', state: 'failed' }),
+					expect.objectContaining({ id: 'child', state: 'skipped' }),
+				])
+			);
+		});
+
+		it('should inject predecessor outputs into join node prompts in dependency order', async () => {
+			const callCounts = new Map<string, number>();
+			vi.mocked(readDocAndCountTasks).mockImplementation((_folderPath, filename) => {
+				const nextCount = (callCounts.get(filename) ?? 0) + 1;
+				callCounts.set(filename, nextCount);
+
+				if (filename === 'root-a' || filename === 'root-b' || filename === 'join') {
+					if (nextCount <= 3) {
+						return { content: `- [ ] ${filename} task`, taskCount: 1 };
+					}
+					return { content: '', taskCount: 0 };
+				}
+
+				return { content: '', taskCount: 0 };
+			});
+
+			vi.mocked(spawnAgent)
+				.mockResolvedValueOnce({
+					success: true,
+					response: '**Summary:** Implemented branch A',
+					agentSessionId: 'session-a',
+				})
+				.mockResolvedValueOnce({
+					success: true,
+					response: '**Summary:** Implemented branch B',
+					agentSessionId: 'session-b',
+				})
+				.mockResolvedValueOnce({
+					success: true,
+					response: '**Summary:** Joined the branch results',
+					agentSessionId: 'session-join',
+				});
+
+			const session = mockSession();
+			const playbook = mockPlaybook({
+				documents: [
+					{ filename: 'root-a', resetOnCompletion: false },
+					{ filename: 'root-b', resetOnCompletion: false },
+					{ filename: 'join', resetOnCompletion: false },
+				],
+				maxParallelism: 2,
+				taskGraph: {
+					nodes: [
+						{ id: 'root-a', documentIndex: 0, dependsOn: [] },
+						{ id: 'root-b', documentIndex: 1, dependsOn: [] },
+						{ id: 'join', documentIndex: 2, dependsOn: ['root-b', 'root-a'] },
+					],
+				},
+			});
+
+			await collectEvents(runPlaybook(session, playbook, '/playbooks'));
+
+			const joinPrompt = vi.mocked(spawnAgent).mock.calls[2]?.[2] ?? '';
+			expect(joinPrompt).toContain('## Predecessor Outputs');
+			expect(joinPrompt).toContain('### root-b [PASS]');
+			expect(joinPrompt).toContain('- Implemented branch B');
+			expect(joinPrompt).toContain('### root-a [PASS]');
+			expect(joinPrompt).toContain('- Implemented branch A');
+			expect(joinPrompt.indexOf('### root-b [PASS]')).toBeLessThan(
+				joinPrompt.indexOf('### root-a [PASS]')
+			);
+		});
+
+		it('should keep seeded sequential analytics observable from day one', async () => {
+			let callCount = 0;
+			vi.mocked(readDocAndCountTasks).mockImplementation(() => {
+				callCount++;
+				if (callCount <= 2) return { content: '- [ ] Sequential task', taskCount: 1 };
+				return { content: '', taskCount: 0 };
+			});
+
+			const events = await collectEvents(
+				runPlaybook(mockSession(), mockPlaybook(), '/playbooks', { writeHistory: true })
+			);
+
+			const completeEvent = events.find((event) => event.type === 'complete') as JsonlEvent & {
+				scheduler: { mode: string };
+			};
+			const historyCalls = vi.mocked(addHistoryEntry).mock.calls.map((call) => call[0]);
+			const taskEntry = historyCalls.at(0);
+
+			expect(completeEvent.scheduler.mode).toBe('sequential');
+			expect(taskEntry).toMatchObject({
+				type: 'AUTO',
+				success: true,
+			});
+		});
+
+		it('should keep seeded DAG analytics observable with verifier outcomes and timeout signals', async () => {
+			const callCounts = new Map<string, number>();
+			vi.mocked(readDocAndCountTasks).mockImplementation((_folderPath, filename) => {
+				const nextCount = (callCounts.get(filename) ?? 0) + 1;
+				callCounts.set(filename, nextCount);
+
+				if (filename === 'root') {
+					if (nextCount <= 3) return { content: '- [ ] Root task', taskCount: 1 };
+					return { content: '', taskCount: 0 };
+				}
+
+				if (filename === 'child') {
+					return { content: '- [ ] Child task', taskCount: 1 };
+				}
+
+				return { content: '', taskCount: 0 };
+			});
+
+			vi.mocked(spawnAgent)
+				.mockResolvedValueOnce({
+					success: true,
+					response: 'Plan the root task',
+					agentSessionId: 'planner-session',
+				})
+				.mockResolvedValueOnce({
+					success: true,
+					response: 'Implemented root task',
+					agentSessionId: 'executor-session',
+					timedOut: true,
+				})
+				.mockResolvedValueOnce({
+					success: true,
+					response: 'WARN\nVerification completed with warnings.',
+					agentSessionId: 'verifier-session',
+				});
+
+			const events = await collectEvents(
+				runPlaybook(
+					mockSession({ toolType: 'codex' }),
+					mockPlaybook({
+						agentStrategy: 'plan-execute-verify',
+						promptProfile: 'compact-code',
+						documents: [
+							{ filename: 'root', resetOnCompletion: false },
+							{ filename: 'child', resetOnCompletion: false },
+						],
+						maxParallelism: 2,
+						taskGraph: {
+							nodes: [
+								{ id: 'root', documentIndex: 0, dependsOn: [] },
+								{ id: 'child', documentIndex: 1, dependsOn: ['root'] },
+							],
+						},
+					}),
+					'/playbooks',
+					{ writeHistory: true }
+				)
+			);
+
+			const completeEvent = events.find((event) => event.type === 'complete') as JsonlEvent & {
+				scheduler: {
+					mode: string;
+					configuredMode: string;
+					nodes: Array<{ id: string; state: string }>;
+				};
+			};
+			const historyCalls = vi.mocked(addHistoryEntry).mock.calls.map((call) => call[0]);
+			const taskEntry = historyCalls.find((entry) => entry.verifierVerdict === 'WARN');
+
+			expect(completeEvent).toBeDefined();
+			expect(completeEvent.scheduler.mode).toBe('sequential');
+			expect(completeEvent.scheduler.configuredMode).toBe('dag');
+			expect(completeEvent.scheduler.nodes).toEqual(
+				expect.arrayContaining([
+					expect.objectContaining({ id: 'root', state: 'completed' }),
+					expect.objectContaining({ id: 'child', state: 'failed' }),
+				])
+			);
+			expect(taskEntry).toMatchObject({
+				type: 'AUTO',
+				success: true,
+				verifierVerdict: 'WARN',
+			});
 		});
 	});
 

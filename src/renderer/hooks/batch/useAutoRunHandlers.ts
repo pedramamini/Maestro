@@ -10,7 +10,8 @@ import {
 	clearRecentlyCreatedWorktreePath,
 } from '../../utils/worktreeDedup';
 import { captureException } from '../../utils/sentry';
-import { validatePlaybookDag } from '../../../shared/playbookDag';
+import { resolvePlaybookTaskGraph, validatePlaybookDag } from '../../../shared/playbookDag';
+import { ensureMarkdownFilename } from '../../../shared/markdownFilenames';
 
 /**
  * Tree node structure for Auto Run document tree
@@ -98,7 +99,7 @@ function getSshRemoteId(session: Session | null): string | undefined {
 async function spawnWorktreeAgentAndDispatch(
 	parentSession: Session,
 	config: BatchRunConfig
-): Promise<string | null> {
+): Promise<{ sessionId: string; cwd: string; branchName: string } | null> {
 	const sshRemoteId = getSshRemoteId(parentSession);
 	const target = config.worktreeTarget!;
 	let worktreePath: string;
@@ -189,7 +190,11 @@ async function spawnWorktreeAgentAndDispatch(
 		};
 	}
 
-	return newSession.id;
+	return {
+		sessionId: newSession.id,
+		cwd: worktreePath,
+		branchName,
+	};
 }
 
 /**
@@ -244,7 +249,7 @@ export function useAutoRunHandlers(
 				if (firstFile) {
 					const contentResult = await window.maestro.autorun.readDoc(
 						folderPath,
-						firstFile + '.md',
+						ensureMarkdownFilename(firstFile),
 						sshRemoteId
 					);
 					if (contentResult.success) {
@@ -337,6 +342,10 @@ export function useAutoRunHandlers(
 				});
 				return;
 			}
+			const resolvedTaskGraph = resolvePlaybookTaskGraph(config.documents, config.taskGraph);
+			const hasIsolatedWorktreeNodes = resolvedTaskGraph.nodes.some(
+				(node) => node.isolationMode === 'isolated-worktree'
+			);
 
 			// Determine target session ID — may differ from activeSession when running in a worktree
 			let targetSessionId = activeSession.id;
@@ -373,7 +382,18 @@ export function useAutoRunHandlers(
 					});
 					return;
 				} else {
-					targetSessionId = config.worktreeTarget.sessionId;
+					const targetBranchName =
+						targetSession.worktreeBranch || targetSession.cwd.split('/').pop() || 'worktree';
+					if (hasIsolatedWorktreeNodes) {
+						config.isolatedWorktreeTarget = {
+							sessionId: targetSession.id,
+							cwd: targetSession.cwd,
+							branchName: targetBranchName,
+						};
+						targetSessionId = activeSession.id;
+					} else {
+						targetSessionId = config.worktreeTarget.sessionId;
+					}
 
 					// Populate config.worktree for PR creation when using existing-open worktree.
 					// spawnWorktreeAgentAndDispatch does this for create-new/existing-closed,
@@ -382,8 +402,7 @@ export function useAutoRunHandlers(
 						config.worktree = {
 							enabled: true,
 							path: targetSession.cwd,
-							branchName:
-								targetSession.worktreeBranch || targetSession.cwd.split('/').pop() || 'worktree',
+							branchName: targetBranchName,
 							createPROnCompletion: true,
 							prTargetBranch: config.worktreeTarget.baseBranch || 'main',
 						};
@@ -393,11 +412,17 @@ export function useAutoRunHandlers(
 				config.worktreeTarget?.mode === 'create-new' ||
 				config.worktreeTarget?.mode === 'existing-closed'
 			) {
-				// Spawn a worktree agent and dispatch to it
+				// Spawn a worktree agent. Mixed-isolation runs keep the parent session as the batch owner
+				// and use the prepared worktree session only for isolated nodes.
 				try {
-					const newSessionId = await spawnWorktreeAgentAndDispatch(activeSession, config);
-					if (!newSessionId) return; // Error already shown via toast
-					targetSessionId = newSessionId;
+					const worktreeTarget = await spawnWorktreeAgentAndDispatch(activeSession, config);
+					if (!worktreeTarget) return; // Error already shown via toast
+					if (hasIsolatedWorktreeNodes) {
+						config.isolatedWorktreeTarget = worktreeTarget;
+						targetSessionId = activeSession.id;
+					} else {
+						targetSessionId = worktreeTarget.sessionId;
+					}
 				} catch (err) {
 					window.maestro.logger.log(
 						'error',
@@ -432,7 +457,7 @@ export function useAutoRunHandlers(
 			const sshRemoteId = getSshRemoteId(activeSession);
 			const result = await window.maestro.autorun.readDoc(
 				activeSession.autoRunFolderPath,
-				filename + '.md',
+				ensureMarkdownFilename(filename),
 				sshRemoteId
 			);
 			if (!result.success || !result.content) return 0;
@@ -507,7 +532,7 @@ export function useAutoRunHandlers(
 			// Load new document content
 			const result = await window.maestro.autorun.readDoc(
 				activeSession.autoRunFolderPath,
-				filename + '.md',
+				ensureMarkdownFilename(filename),
 				sshRemoteId
 			);
 			const newContent = result.success ? result.content || '' : '';
@@ -613,7 +638,7 @@ export function useAutoRunHandlers(
 				// Create the document with empty content so placeholder hint shows
 				const result = await window.maestro.autorun.writeDoc(
 					activeSession.autoRunFolderPath,
-					filename + '.md',
+					ensureMarkdownFilename(filename),
 					'',
 					sshRemoteId
 				);

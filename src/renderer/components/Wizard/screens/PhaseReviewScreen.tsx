@@ -14,11 +14,14 @@
  * - Keyboard navigation support
  */
 
-import { useEffect, useCallback, useRef, useState } from 'react';
+import { useEffect, useCallback, useMemo, useRef, useState } from 'react';
 import { Loader2, Rocket, Compass, X } from 'lucide-react';
 import type { Theme } from '../../../types';
+import type { ProjectMemoryTaskDetail } from '../../../../shared/projectMemory';
 import { useWizard } from '../WizardContext';
 import { AUTO_RUN_FOLDER_NAME } from '../services/phaseGenerator';
+import { buildWizardExecutionGraphPreview } from '../../../services/wizardPlaybookConfig';
+import { projectMemoryService } from '../../../services/projectMemory';
 import { ScreenReaderAnnouncement } from '../ScreenReaderAnnouncement';
 import { DocumentEditor } from '../shared/DocumentEditor';
 import { formatShortcutKeys } from '../../../utils/shortcutFormatter';
@@ -85,6 +88,18 @@ function DocumentReview({
 	const [launchError, setLaunchError] = useState<string | null>(null);
 	// Document dropdown open state - controlled to handle Escape key priority
 	const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+	const [projectMemoryExecution, setProjectMemoryExecution] = useState<{
+		taskId: string;
+		executorId: string;
+		repoRoot: string;
+	} | null>(null);
+	const [projectMemoryDiagnostic, setProjectMemoryDiagnostic] = useState<string | null>(null);
+	const [projectMemoryDetailExpanded, setProjectMemoryDetailExpanded] = useState(false);
+	const [projectMemoryDetailLoading, setProjectMemoryDetailLoading] = useState(false);
+	const [projectMemoryDetail, setProjectMemoryDetail] = useState<ProjectMemoryTaskDetail | null>(
+		null
+	);
+	const [projectMemoryDetailError, setProjectMemoryDetailError] = useState<string | null>(null);
 
 	// Refs for button focus and editor content
 	const readyButtonRef = useRef<HTMLButtonElement>(null);
@@ -383,6 +398,131 @@ function DocumentReview({
 	// Task count
 	const taskCount = countTasks(localContent);
 	const totalTasks = generatedDocuments.reduce((sum, doc) => sum + doc.taskCount, 0);
+	const executionGraphPreview = useMemo(
+		() => buildWizardExecutionGraphPreview(folderPath, generatedDocuments),
+		[folderPath, generatedDocuments]
+	);
+
+	useEffect(() => {
+		let cancelled = false;
+
+		const inferProjectMemoryExecution = async () => {
+			if (!state.selectedAgent || !directoryPath) {
+				setProjectMemoryExecution(null);
+				setProjectMemoryDiagnostic(null);
+				return;
+			}
+
+			if (state.selectedAgent !== 'codex') {
+				setProjectMemoryExecution(null);
+				setProjectMemoryDiagnostic(null);
+				return;
+			}
+
+			try {
+				const [snapshot, validationReport] = await Promise.all([
+					projectMemoryService.getSnapshot(directoryPath),
+					projectMemoryService.validateState(directoryPath),
+				]);
+				let inferredExecution: {
+					taskId: string;
+					executorId: string;
+					repoRoot: string;
+				} | null = null;
+				let diagnostic: string | null = null;
+
+				if (!snapshot) {
+					diagnostic =
+						'PM Binding is unavailable because project memory snapshot could not be loaded.';
+				} else if (!validationReport?.ok) {
+					diagnostic = 'PM Binding is unavailable because project memory is unhealthy.';
+				} else {
+					const normalizedRepoRoot = directoryPath
+						.replace(/\\/g, '/')
+						.replace(/\/+/g, '/')
+						.replace(/\/$/, '');
+					const candidates = snapshot.tasks.filter(
+						(task) =>
+							task.status === 'in_progress' &&
+							task.executorId === 'codex-main' &&
+							task.executorState === 'running' &&
+							typeof task.worktreePath === 'string' &&
+							task.worktreePath.replace(/\\/g, '/').replace(/\/+/g, '/').replace(/\/$/, '') ===
+								normalizedRepoRoot
+					);
+
+					if (candidates.length === 1) {
+						inferredExecution = {
+							repoRoot: directoryPath,
+							taskId: candidates[0].id,
+							executorId: 'codex-main',
+						};
+					} else if (candidates.length === 0) {
+						diagnostic =
+							'PM Binding is not attached because no in-progress Codex task matches this repo root.';
+					} else {
+						diagnostic =
+							'PM Binding is not attached because multiple in-progress Codex tasks match this repo root.';
+					}
+				}
+
+				if (!cancelled) {
+					setProjectMemoryExecution(inferredExecution);
+					setProjectMemoryDiagnostic(inferredExecution ? null : diagnostic);
+					setProjectMemoryDetailExpanded(false);
+					setProjectMemoryDetail(null);
+					setProjectMemoryDetailError(null);
+				}
+			} catch {
+				if (!cancelled) {
+					setProjectMemoryExecution(null);
+					setProjectMemoryDiagnostic(
+						'PM Binding is unavailable because project memory diagnostics could not be loaded.'
+					);
+					setProjectMemoryDetailExpanded(false);
+					setProjectMemoryDetail(null);
+					setProjectMemoryDetailError(null);
+				}
+			}
+		};
+
+		void inferProjectMemoryExecution();
+
+		return () => {
+			cancelled = true;
+		};
+	}, [directoryPath, state.selectedAgent]);
+
+	const handleToggleProjectMemoryDetail = useCallback(async () => {
+		if (!projectMemoryExecution) {
+			return;
+		}
+
+		if (projectMemoryDetailExpanded) {
+			setProjectMemoryDetailExpanded(false);
+			return;
+		}
+
+		setProjectMemoryDetailExpanded(true);
+		setProjectMemoryDetailLoading(true);
+		setProjectMemoryDetailError(null);
+
+		try {
+			const detail = await projectMemoryService.getTaskDetail(
+				projectMemoryExecution.repoRoot,
+				projectMemoryExecution.taskId
+			);
+			setProjectMemoryDetail(detail);
+			if (!detail) {
+				setProjectMemoryDetailError('Project memory task detail could not be loaded.');
+			}
+		} catch {
+			setProjectMemoryDetail(null);
+			setProjectMemoryDetailError('Project memory task detail could not be loaded.');
+		} finally {
+			setProjectMemoryDetailLoading(false);
+		}
+	}, [projectMemoryDetailExpanded, projectMemoryExecution]);
 
 	if (!currentDoc) {
 		return (
@@ -406,7 +546,7 @@ function DocumentReview({
 			onKeyDown={handleKeyDown}
 		>
 			{/* Document editor - flex to fill available space */}
-			<div className="flex-1 min-h-0 flex flex-col px-6 py-4">
+			<div className="flex-1 min-h-0 flex flex-col px-4 py-4">
 				<DocumentEditor
 					content={localContent}
 					onContentChange={handleContentChange}
@@ -429,6 +569,248 @@ function DocumentReview({
 					isDropdownOpen={isDropdownOpen}
 					onDropdownOpenChange={setIsDropdownOpen}
 				/>
+			</div>
+
+			<div
+				className="mx-6 mb-4 rounded-xl border px-4 py-3"
+				style={{
+					borderColor: theme.colors.border,
+					backgroundColor: theme.colors.bgActivity,
+				}}
+			>
+				<div className="flex flex-wrap items-center gap-2">
+					<h3 className="text-sm font-semibold" style={{ color: theme.colors.textMain }}>
+						Execution Graph Preview
+					</h3>
+					<span
+						className="rounded-full px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide"
+						style={{
+							backgroundColor: `${theme.colors.accent}20`,
+							color: theme.colors.accent,
+						}}
+					>
+						{executionGraphPreview.mode === 'parallel-final-join'
+							? 'Parallel + Final Join'
+							: 'Sequential'}
+					</span>
+					<span
+						className="rounded-full px-2 py-0.5 text-[11px] font-medium"
+						style={{
+							backgroundColor: theme.colors.bgMain,
+							color: theme.colors.textDim,
+							border: `1px solid ${theme.colors.border}`,
+						}}
+					>
+						Max parallelism {executionGraphPreview.maxParallelism}
+					</span>
+				</div>
+				<p className="mt-2 text-sm" style={{ color: theme.colors.textMain }}>
+					{executionGraphPreview.summary}
+				</p>
+				<p className="mt-1 text-xs leading-5" style={{ color: theme.colors.textDim }}>
+					{executionGraphPreview.reason}
+				</p>
+				{projectMemoryExecution && (
+					<div
+						className="mt-3 rounded-lg border px-3 py-2"
+						style={{
+							borderColor: `${theme.colors.accent}33`,
+							backgroundColor: `${theme.colors.accent}12`,
+						}}
+					>
+						<p
+							className="text-[11px] font-semibold uppercase tracking-wide"
+							style={{ color: theme.colors.textDim }}
+						>
+							Project Memory Binding
+						</p>
+						<p className="mt-1 text-xs leading-5" style={{ color: theme.colors.textMain }}>
+							PM Binding: {projectMemoryExecution.taskId} · {projectMemoryExecution.executorId}
+						</p>
+						<p className="mt-1 text-[10px] break-all" style={{ color: theme.colors.textDim }}>
+							Repo Root: {projectMemoryExecution.repoRoot}
+						</p>
+						<button
+							onClick={handleToggleProjectMemoryDetail}
+							className="mt-2 px-2 py-1 rounded text-[10px] font-semibold transition-colors hover:bg-white/10"
+							style={{
+								color: theme.colors.textDim,
+								border: `1px solid ${theme.colors.border}`,
+							}}
+							title={
+								projectMemoryDetailExpanded
+									? 'Hide project memory task detail'
+									: 'Show project memory task detail'
+							}
+						>
+							{projectMemoryDetailExpanded ? 'Hide Detail' : 'View Detail'}
+						</button>
+						{projectMemoryDetailExpanded && (
+							<div
+								className="mt-3 rounded-md border p-3 text-xs space-y-2"
+								style={{
+									backgroundColor: theme.colors.bgMain,
+									borderColor: theme.colors.border,
+									color: theme.colors.textDim,
+								}}
+							>
+								{projectMemoryDetailLoading ? (
+									<div>Loading active task detail…</div>
+								) : projectMemoryDetailError ? (
+									<div style={{ color: theme.colors.error }}>{projectMemoryDetailError}</div>
+								) : projectMemoryDetail ? (
+									<>
+										<div>
+											<span style={{ color: theme.colors.textMain }}>Task:</span>{' '}
+											{String(
+												(projectMemoryDetail.task as { id?: string; title?: string } | null)?.id ??
+													'unknown'
+											)}
+											{' · '}
+											{String(
+												(projectMemoryDetail.task as { title?: string } | null)?.title ??
+													'Untitled task'
+											)}
+										</div>
+										<div>
+											<span style={{ color: theme.colors.textMain }}>Binding:</span>{' '}
+											{String(
+												(
+													projectMemoryDetail.binding as {
+														binding_mode?: string;
+														branch_name?: string;
+														worktree_path?: string;
+													} | null
+												)?.binding_mode ?? 'none'
+											)}
+											{(
+												projectMemoryDetail.binding as {
+													branch_name?: string;
+													worktree_path?: string;
+												} | null
+											)?.branch_name
+												? ` · ${String((projectMemoryDetail.binding as { branch_name?: string }).branch_name)}`
+												: ''}
+										</div>
+										<div>
+											<span style={{ color: theme.colors.textMain }}>Worktree:</span>{' '}
+											{String(
+												(
+													projectMemoryDetail.worktree as {
+														worktree_id?: string;
+														worktree_path?: string;
+													} | null
+												)?.worktree_id ??
+													(projectMemoryDetail.binding as { worktree_path?: string } | null)
+														?.worktree_path ??
+													'none'
+											)}
+										</div>
+										<div>
+											<span style={{ color: theme.colors.textMain }}>Runtime:</span>{' '}
+											{String(
+												(
+													projectMemoryDetail.runtime as {
+														executor_state?: string;
+														executor_id?: string;
+													} | null
+												)?.executor_state ?? 'unknown'
+											)}
+											{(projectMemoryDetail.runtime as { executor_id?: string } | null)?.executor_id
+												? ` · ${String((projectMemoryDetail.runtime as { executor_id?: string }).executor_id)}`
+												: ''}
+										</div>
+										<div>
+											<span style={{ color: theme.colors.textMain }}>Locks:</span> task=
+											{String(
+												(projectMemoryDetail.taskLock as { owner?: string } | null)?.owner ?? 'none'
+											)}
+											{' · '}worktree=
+											{String(
+												(projectMemoryDetail.worktreeLock as { owner?: string } | null)?.owner ??
+													'none'
+											)}
+										</div>
+									</>
+								) : null}
+							</div>
+						)}
+					</div>
+				)}
+				{!projectMemoryExecution && projectMemoryDiagnostic && (
+					<p className="mt-3 text-xs leading-5" style={{ color: theme.colors.textDim }}>
+						{projectMemoryDiagnostic}
+					</p>
+				)}
+				{executionGraphPreview.parallelismWarning && (
+					<div
+						className="mt-3 rounded-lg border px-3 py-2"
+						style={{
+							borderColor: `${theme.colors.warning}66`,
+							backgroundColor: `${theme.colors.warning}14`,
+						}}
+					>
+						<p
+							className="text-[11px] font-semibold uppercase tracking-wide"
+							style={{ color: theme.colors.warning }}
+						>
+							Parallelism Guardrail
+						</p>
+						<p className="mt-1 text-xs leading-5" style={{ color: theme.colors.textMain }}>
+							{executionGraphPreview.parallelismWarning}
+						</p>
+					</div>
+				)}
+				<div className="mt-3 grid gap-2">
+					{executionGraphPreview.nodes.map((node) => (
+						<div
+							key={node.id}
+							className="rounded-lg border px-3 py-2"
+							style={{
+								borderColor: theme.colors.border,
+								backgroundColor: theme.colors.bgMain,
+							}}
+						>
+							<div className="flex flex-wrap items-center gap-2">
+								<span
+									className="rounded px-1.5 py-0.5 text-[11px] font-semibold"
+									style={{
+										backgroundColor: theme.colors.border,
+										color: theme.colors.textMain,
+									}}
+								>
+									{node.id}
+								</span>
+								<span className="text-sm font-medium" style={{ color: theme.colors.textMain }}>
+									{node.label}
+								</span>
+							</div>
+							<p className="mt-1 text-xs" style={{ color: theme.colors.textDim }}>
+								{node.dependsOn.length > 0
+									? `Waits for: ${node.dependsOn.join(', ')}`
+									: 'Ready immediately'}
+							</p>
+						</div>
+					))}
+				</div>
+
+				{executionGraphPreview.dependencyDescriptions.length > 0 && (
+					<div className="mt-3">
+						<p
+							className="text-[11px] font-semibold uppercase tracking-wide"
+							style={{ color: theme.colors.textDim }}
+						>
+							Dependencies
+						</p>
+						<div className="mt-1 grid gap-1">
+							{executionGraphPreview.dependencyDescriptions.map((description) => (
+								<p key={description} className="text-xs" style={{ color: theme.colors.textDim }}>
+									{description}
+								</p>
+							))}
+						</div>
+					</div>
+				)}
 			</div>
 
 			{/* Error message */}
@@ -473,7 +855,7 @@ function DocumentReview({
 
 			{/* Action buttons */}
 			<div
-				className="px-6 py-4 border-t"
+				className="px-4 py-4 border-t"
 				style={{
 					borderColor: theme.colors.border,
 					backgroundColor: theme.colors.bgSidebar,
@@ -485,7 +867,7 @@ function DocumentReview({
 						ref={readyButtonRef}
 						onClick={() => handleLaunch(false)}
 						disabled={launchingButton !== null}
-						className={`flex-1 flex items-center justify-center gap-2 px-6 py-3.5 rounded-lg font-semibold text-base transition-all focus:outline-none focus:ring-2 focus:ring-offset-2 ${
+						className={`flex-1 flex items-center justify-center gap-2 px-4 py-3.5 rounded-lg font-semibold text-base transition-all focus:outline-none focus:ring-2 focus:ring-offset-2 ${
 							launchingButton !== null ? 'opacity-70 cursor-not-allowed' : 'hover:scale-[1.02]'
 						}`}
 						style={{
@@ -509,7 +891,7 @@ function DocumentReview({
 						ref={tourButtonRef}
 						onClick={() => handleLaunch(true)}
 						disabled={launchingButton !== null}
-						className={`flex-1 flex items-center justify-center gap-2 px-6 py-3.5 rounded-lg font-medium text-base transition-all focus:outline-none focus:ring-2 focus:ring-offset-2 ${
+						className={`flex-1 flex items-center justify-center gap-2 px-4 py-3.5 rounded-lg font-medium text-base transition-all focus:outline-none focus:ring-2 focus:ring-offset-2 ${
 							launchingButton !== null ? 'opacity-70 cursor-not-allowed' : 'hover:scale-[1.02]'
 						}`}
 						style={{
@@ -530,7 +912,7 @@ function DocumentReview({
 				</div>
 
 				{/* Keyboard hints */}
-				<div className="mt-4 flex justify-center gap-6 flex-wrap">
+				<div className="mt-4 flex justify-center gap-4 flex-wrap">
 					<span className="text-xs flex items-center gap-1" style={{ color: theme.colors.textDim }}>
 						<kbd
 							className="px-1.5 py-0.5 rounded text-xs"

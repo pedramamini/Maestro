@@ -3,6 +3,7 @@
 
 import { readPlaybooks, listAllPlaybooks } from '../services/playbooks';
 import { getSessionById, resolveAgentId, readSessions } from '../services/storage';
+import { ensureMarkdownFilename } from '../../shared/markdownFilenames';
 import {
 	formatPlaybooks,
 	formatPlaybooksByAgent,
@@ -14,11 +15,6 @@ import {
 interface ListPlaybooksOptions {
 	agent?: string;
 	json?: boolean;
-}
-
-// Ensure filename has .md extension
-function normalizeFilename(filename: string): string {
-	return filename.endsWith('.md') ? filename : `${filename}.md`;
 }
 
 export function listPlaybooks(options: ListPlaybooksOptions): void {
@@ -42,7 +38,7 @@ export function listPlaybooks(options: ListPlaybooksOptions): void {
 					loopEnabled: p.loopEnabled,
 					maxLoops: p.maxLoops,
 					documents: p.documents.map((d) => ({
-						filename: normalizeFilename(d.filename),
+						filename: ensureMarkdownFilename(d.filename),
 						resetOnCompletion: d.resetOnCompletion,
 					})),
 				}));
@@ -53,7 +49,7 @@ export function listPlaybooks(options: ListPlaybooksOptions): void {
 					name: p.name,
 					sessionId: agentId,
 					documents: p.documents.map((d) => ({
-						filename: normalizeFilename(d.filename),
+						filename: ensureMarkdownFilename(d.filename),
 						resetOnCompletion: d.resetOnCompletion,
 					})),
 					loopEnabled: p.loopEnabled,
@@ -79,7 +75,7 @@ export function listPlaybooks(options: ListPlaybooksOptions): void {
 						loopEnabled: p.loopEnabled,
 						maxLoops: p.maxLoops,
 						documents: p.documents.map((d) => ({
-							filename: normalizeFilename(d.filename),
+							filename: ensureMarkdownFilename(d.filename),
 							resetOnCompletion: d.resetOnCompletion,
 						})),
 					};
@@ -105,7 +101,7 @@ export function listPlaybooks(options: ListPlaybooksOptions): void {
 						name: playbook.name,
 						sessionId: playbook.sessionId,
 						documents: playbook.documents.map((d) => ({
-							filename: normalizeFilename(d.filename),
+							filename: ensureMarkdownFilename(d.filename),
 							resetOnCompletion: d.resetOnCompletion,
 						})),
 						loopEnabled: playbook.loopEnabled,

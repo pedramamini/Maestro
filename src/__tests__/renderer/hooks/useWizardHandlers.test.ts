@@ -279,6 +279,35 @@ const setupMaestroMocks = () => {
 		stats: {
 			recordSessionCreated: vi.fn(),
 		},
+		playbooks: {
+			create: vi.fn().mockImplementation(async (_sessionId: string, playbookDraft: any) => ({
+				success: true,
+				playbook: {
+					id: 'playbook-1',
+					createdAt: Date.now(),
+					updatedAt: Date.now(),
+					...playbookDraft,
+				},
+			})),
+		},
+		projectMemory: {
+			getSnapshot: vi.fn().mockResolvedValue({ success: true, snapshot: null }),
+			validateState: vi.fn().mockResolvedValue({
+				success: true,
+				report: {
+					ok: true,
+					projectId: 'maestro',
+					taskCount: 0,
+					bindingCount: 0,
+					runtimeCount: 0,
+					taskLockCount: 0,
+					worktreeLockCount: 0,
+					expiredTaskLockCount: 0,
+					expiredWorktreeLockCount: 0,
+					issues: [],
+				},
+			}),
+		},
 	};
 };
 
@@ -1829,9 +1858,17 @@ describe('useWizardHandlers', () => {
 					projectPath: '/projects/my-app',
 				})
 			);
+
+			expect((window as any).maestro.playbooks.create).toHaveBeenCalledWith(
+				newSession.id,
+				expect.objectContaining({
+					name: 'My Project',
+					documents: [expect.objectContaining({ filename: 'phase-1.md' })],
+				})
+			);
 		});
 
-		it('auto-starts batch run with first document that has tasks', async () => {
+		it('auto-starts the saved onboarding playbook when creation succeeds', async () => {
 			useSessionStore.setState({ sessions: [], activeSessionId: null });
 
 			const deps = createMockDeps({
@@ -1882,9 +1919,436 @@ describe('useWizardHandlers', () => {
 			expect(deps.startBatchRun).toHaveBeenCalledWith(
 				expect.any(String),
 				expect.objectContaining({
+					playbookId: 'playbook-1',
+					playbookName: 'Test',
 					documents: expect.arrayContaining([expect.objectContaining({ filename: 'phase-1' })]),
+					prompt: 'Run each task sequentially.',
+					loopEnabled: false,
 				}),
 				expect.stringContaining('Auto Run Docs')
+			);
+		});
+
+		it('uses savedPath-relative filenames for onboarding playbook and saved-playbook auto-starts', async () => {
+			useSessionStore.setState({ sessions: [], activeSessionId: null });
+
+			const deps = createMockDeps({
+				wizardContext: {
+					state: {
+						currentStep: 'review' as any,
+						isOpen: true,
+						selectedAgent: 'claude-code',
+						availableAgents: [],
+						agentName: 'Initiation Project',
+						directoryPath: '/projects/test',
+						isGitRepo: false,
+						detectedAgentPath: null,
+						directoryError: null,
+						hasExistingAutoRunDocs: false,
+						existingDocsCount: 0,
+						existingDocsChoice: null,
+						conversationHistory: [],
+						confidenceLevel: 90,
+						isReadyToProceed: true,
+						isConversationLoading: false,
+						conversationError: null,
+						generatedDocuments: [
+							{
+								filename: 'Phase-01-Setup.md',
+								content: '# Phase 1',
+								taskCount: 2,
+								savedPath: '/projects/test/Auto Run Docs/Initiation/Phase-01-Setup.md',
+							},
+						],
+						currentDocumentIndex: 0,
+						isGeneratingDocuments: false,
+						generationError: null,
+						editedPhase1Content: null,
+						wantsTour: false,
+						isComplete: false,
+						createdSessionId: null,
+					} as any,
+					completeWizard: vi.fn(),
+					clearResumeState: vi.fn(),
+				},
+			});
+
+			const { result } = renderHook(() => useWizardHandlers(deps));
+
+			await act(async () => {
+				await result.current.handleWizardLaunchSession(false);
+			});
+
+			const newSession = useSessionStore.getState().sessions[0];
+			expect(newSession.autoRunSelectedFile).toBe('Initiation/Phase-01-Setup');
+
+			await act(async () => {
+				await new Promise((r) => setTimeout(r, 600));
+			});
+
+			expect((window as any).maestro.playbooks.create).toHaveBeenCalledWith(
+				newSession.id,
+				expect.objectContaining({
+					documents: [expect.objectContaining({ filename: 'Initiation/Phase-01-Setup.md' })],
+				})
+			);
+
+			expect(deps.startBatchRun).toHaveBeenCalledWith(
+				newSession.id,
+				expect.objectContaining({
+					playbookId: 'playbook-1',
+					documents: [expect.objectContaining({ filename: 'Initiation/Phase-01-Setup' })],
+				}),
+				'/projects/test/Auto Run Docs'
+			);
+		});
+
+		it('creates inferred onboarding DAG playbooks when documents imply a final join', async () => {
+			useSessionStore.setState({ sessions: [], activeSessionId: null });
+
+			const deps = createMockDeps({
+				wizardContext: {
+					state: {
+						currentStep: 'review' as any,
+						isOpen: true,
+						selectedAgent: 'claude-code',
+						availableAgents: [],
+						agentName: 'Sequential Project',
+						directoryPath: '/projects/test',
+						isGitRepo: false,
+						detectedAgentPath: null,
+						directoryError: null,
+						hasExistingAutoRunDocs: false,
+						existingDocsCount: 0,
+						existingDocsChoice: null,
+						conversationHistory: [],
+						confidenceLevel: 90,
+						isReadyToProceed: true,
+						isConversationLoading: false,
+						conversationError: null,
+						generatedDocuments: [
+							{
+								filename: 'Phase-01-Backend.md',
+								content: '# Backend',
+								taskCount: 2,
+							},
+							{
+								filename: 'Phase-02-Frontend.md',
+								content: '# Frontend',
+								taskCount: 2,
+							},
+							{
+								filename: 'Phase-03-Integration-Review.md',
+								content: '# Review',
+								taskCount: 1,
+							},
+						],
+						currentDocumentIndex: 0,
+						isGeneratingDocuments: false,
+						generationError: null,
+						editedPhase1Content: null,
+						wantsTour: false,
+						isComplete: false,
+						createdSessionId: null,
+					} as any,
+					completeWizard: vi.fn(),
+					clearResumeState: vi.fn(),
+				},
+			});
+
+			const { result } = renderHook(() => useWizardHandlers(deps));
+
+			await act(async () => {
+				await result.current.handleWizardLaunchSession(false);
+			});
+
+			expect((window as any).maestro.playbooks.create).toHaveBeenCalledWith(
+				expect.any(String),
+				expect.objectContaining({
+					maxParallelism: 2,
+					taskGraph: expect.objectContaining({
+						nodes: expect.arrayContaining([
+							expect.objectContaining({
+								id: 'phase-03-integration-review',
+								dependsOn: ['phase-01-backend', 'phase-02-frontend'],
+							}),
+						]),
+					}),
+				})
+			);
+		});
+
+		it('saves the inferred DAG playbook and auto-starts the saved playbook config', async () => {
+			useSessionStore.setState({ sessions: [], activeSessionId: null });
+
+			const deps = createMockDeps({
+				wizardContext: {
+					state: {
+						currentStep: 'review' as any,
+						isOpen: true,
+						selectedAgent: 'claude-code',
+						availableAgents: [],
+						agentName: 'Parallel Project',
+						directoryPath: '/projects/test',
+						isGitRepo: false,
+						detectedAgentPath: null,
+						directoryError: null,
+						hasExistingAutoRunDocs: false,
+						existingDocsCount: 0,
+						existingDocsChoice: null,
+						conversationHistory: [],
+						confidenceLevel: 90,
+						isReadyToProceed: true,
+						isConversationLoading: false,
+						conversationError: null,
+						generatedDocuments: [
+							{
+								filename: 'Phase-01-Backend.md',
+								content: '# Backend',
+								taskCount: 2,
+							},
+							{
+								filename: 'Phase-02-Frontend.md',
+								content: '# Frontend',
+								taskCount: 2,
+							},
+							{
+								filename: 'Phase-03-Integration-Review.md',
+								content: '# Review',
+								taskCount: 1,
+							},
+						],
+						currentDocumentIndex: 0,
+						isGeneratingDocuments: false,
+						generationError: null,
+						editedPhase1Content: null,
+						wantsTour: false,
+						isComplete: false,
+						createdSessionId: null,
+					} as any,
+					completeWizard: vi.fn(),
+					clearResumeState: vi.fn(),
+				},
+			});
+
+			const { result } = renderHook(() => useWizardHandlers(deps));
+
+			await act(async () => {
+				await result.current.handleWizardLaunchSession(false);
+			});
+
+			await act(async () => {
+				await new Promise((r) => setTimeout(r, 600));
+			});
+
+			expect((window as any).maestro.playbooks.create).toHaveBeenCalledWith(
+				expect.any(String),
+				expect.objectContaining({
+					documents: [
+						expect.objectContaining({ filename: 'Phase-01-Backend.md' }),
+						expect.objectContaining({ filename: 'Phase-02-Frontend.md' }),
+						expect.objectContaining({ filename: 'Phase-03-Integration-Review.md' }),
+					],
+					maxParallelism: 2,
+					taskGraph: expect.any(Object),
+				})
+			);
+
+			expect(deps.startBatchRun).toHaveBeenCalledWith(
+				expect.any(String),
+				expect.objectContaining({
+					playbookId: 'playbook-1',
+					playbookName: 'Parallel Project',
+					maxParallelism: 2,
+					taskGraph: expect.any(Object),
+					documents: expect.arrayContaining([
+						expect.objectContaining({ filename: 'Phase-01-Backend' }),
+						expect.objectContaining({ filename: 'Phase-02-Frontend' }),
+						expect.objectContaining({ filename: 'Phase-03-Integration-Review' }),
+					]),
+					prompt: 'Run each task sequentially.',
+					loopEnabled: false,
+				}),
+				'/projects/test/Auto Run Docs'
+			);
+		});
+
+		it('attaches project memory execution context for codex when one active task matches', async () => {
+			useSessionStore.setState({ sessions: [], activeSessionId: null });
+			(window as any).maestro.agents.get.mockResolvedValue({ id: 'codex', name: 'Codex' });
+			(window as any).maestro.projectMemory.getSnapshot.mockResolvedValue({
+				success: true,
+				snapshot: {
+					projectId: 'maestro',
+					version: '2026-04-04',
+					taskCount: 1,
+					generatedAt: 'now',
+					tasks: [
+						{
+							id: 'PM-01',
+							title: 'Bound task',
+							status: 'in_progress',
+							dependsOn: [],
+							executionMode: 'shared-serialized',
+							bindingMode: 'shared-branch-serialized',
+							worktreePath: '/projects/test',
+							executorState: 'running',
+							executorId: 'codex-main',
+						},
+					],
+				},
+			});
+			(window as any).maestro.projectMemory.validateState.mockResolvedValue({
+				success: true,
+				report: {
+					ok: true,
+					projectId: 'maestro',
+					taskCount: 1,
+					bindingCount: 1,
+					runtimeCount: 1,
+					taskLockCount: 1,
+					worktreeLockCount: 1,
+					expiredTaskLockCount: 0,
+					expiredWorktreeLockCount: 0,
+					issues: [],
+				},
+			});
+
+			const deps = createMockDeps({
+				wizardContext: {
+					state: {
+						currentStep: 'review' as any,
+						isOpen: true,
+						selectedAgent: 'codex',
+						availableAgents: [],
+						agentName: 'Codex Bound Project',
+						directoryPath: '/projects/test',
+						isGitRepo: false,
+						detectedAgentPath: null,
+						directoryError: null,
+						hasExistingAutoRunDocs: false,
+						existingDocsCount: 0,
+						existingDocsChoice: null,
+						conversationHistory: [],
+						confidenceLevel: 90,
+						isReadyToProceed: true,
+						isConversationLoading: false,
+						conversationError: null,
+						generatedDocuments: [{ filename: 'phase-1.md', content: '# Phase 1', taskCount: 2 }],
+						currentDocumentIndex: 0,
+						isGeneratingDocuments: false,
+						generationError: null,
+						editedPhase1Content: null,
+						wantsTour: false,
+						isComplete: false,
+						createdSessionId: null,
+					} as any,
+					completeWizard: vi.fn(),
+					clearResumeState: vi.fn(),
+				},
+			});
+
+			const { result } = renderHook(() => useWizardHandlers(deps));
+
+			await act(async () => {
+				await result.current.handleWizardLaunchSession(false);
+			});
+
+			await act(async () => {
+				await new Promise((r) => setTimeout(r, 600));
+			});
+
+			expect((window as any).maestro.playbooks.create).toHaveBeenCalledWith(
+				expect.any(String),
+				expect.objectContaining({
+					projectMemoryExecution: {
+						repoRoot: '/projects/test',
+						taskId: 'PM-01',
+						executorId: 'codex-main',
+					},
+					projectMemoryBindingIntent: {
+						policyVersion: '2026-04-04',
+						repoRoot: '/projects/test',
+						sourceBranch: 'main',
+						bindingPreference: 'shared-branch-serialized',
+						sharedCheckoutAllowed: true,
+						reuseExistingBinding: true,
+						allowRebindIfStale: true,
+					},
+				})
+			);
+			expect(deps.startBatchRun).toHaveBeenCalledWith(
+				expect.any(String),
+				expect.objectContaining({
+					projectMemoryExecution: {
+						repoRoot: '/projects/test',
+						taskId: 'PM-01',
+						executorId: 'codex-main',
+					},
+				}),
+				'/projects/test/Auto Run Docs'
+			);
+		});
+
+		it('falls back to first-document auto-start when onboarding playbook creation fails', async () => {
+			useSessionStore.setState({ sessions: [], activeSessionId: null });
+			(window as any).maestro.playbooks.create.mockRejectedValueOnce(new Error('save failed'));
+
+			const deps = createMockDeps({
+				wizardContext: {
+					state: {
+						currentStep: 'review' as any,
+						isOpen: true,
+						selectedAgent: 'claude-code',
+						availableAgents: [],
+						agentName: 'Fallback Project',
+						directoryPath: '/projects/test',
+						isGitRepo: false,
+						detectedAgentPath: null,
+						directoryError: null,
+						hasExistingAutoRunDocs: false,
+						existingDocsCount: 0,
+						existingDocsChoice: null,
+						conversationHistory: [],
+						confidenceLevel: 90,
+						isReadyToProceed: true,
+						isConversationLoading: false,
+						conversationError: null,
+						generatedDocuments: [
+							{ filename: 'Phase-01-Backend.md', content: '# Backend', taskCount: 2 },
+							{ filename: 'Phase-02-Frontend.md', content: '# Frontend', taskCount: 2 },
+						],
+						currentDocumentIndex: 0,
+						isGeneratingDocuments: false,
+						generationError: null,
+						editedPhase1Content: null,
+						wantsTour: false,
+						isComplete: false,
+						createdSessionId: null,
+					} as any,
+					completeWizard: vi.fn(),
+					clearResumeState: vi.fn(),
+				},
+			});
+
+			const { result } = renderHook(() => useWizardHandlers(deps));
+
+			await act(async () => {
+				await result.current.handleWizardLaunchSession(false);
+			});
+
+			await act(async () => {
+				await new Promise((r) => setTimeout(r, 600));
+			});
+
+			expect(deps.startBatchRun).toHaveBeenCalledWith(
+				expect.any(String),
+				expect.objectContaining({
+					documents: [expect.objectContaining({ filename: 'Phase-01-Backend' })],
+					prompt: 'Run each task sequentially.',
+					loopEnabled: false,
+				}),
+				'/projects/test/Auto Run Docs'
 			);
 		});
 

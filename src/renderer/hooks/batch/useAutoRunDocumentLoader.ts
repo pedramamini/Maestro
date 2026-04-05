@@ -13,6 +13,7 @@
 import { useEffect, useCallback } from 'react';
 import { useSessionStore, selectActiveSession } from '../../stores/sessionStore';
 import { useBatchStore } from '../../stores/batchStore';
+import { ensureMarkdownFilename } from '../../../shared/markdownFilenames';
 
 // ============================================================================
 // Return type
@@ -70,7 +71,7 @@ export function useAutoRunDocumentLoader(): UseAutoRunDocumentLoaderReturn {
 					try {
 						const result = await window.maestro.autorun.readDoc(
 							folderPath,
-							docPath + '.md',
+							ensureMarkdownFilename(docPath),
 							sshRemoteId
 						);
 						if (result.success && result.content) {
@@ -127,7 +128,7 @@ export function useAutoRunDocumentLoader(): UseAutoRunDocumentLoaderReturn {
 			if (activeSession.autoRunSelectedFile) {
 				const contentResult = await window.maestro.autorun.readDoc(
 					activeSession.autoRunFolderPath,
-					activeSession.autoRunSelectedFile + '.md',
+					ensureMarkdownFilename(activeSession.autoRunSelectedFile),
 					sshRemoteId
 				);
 				const newContent = contentResult.success ? contentResult.content || '' : '';
@@ -196,7 +197,7 @@ export function useAutoRunDocumentLoader(): UseAutoRunDocumentLoaderReturn {
 			if (selectedFile && data.filename === selectedFile) {
 				const contentResult = await window.maestro.autorun.readDoc(
 					folderPath,
-					selectedFile + '.md',
+					ensureMarkdownFilename(selectedFile),
 					sshRemoteId
 				);
 				if (contentResult.success) {

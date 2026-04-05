@@ -44,6 +44,7 @@ import { MermaidRenderer } from './MermaidRenderer';
 import { AutoRunDocumentSelector, DocumentTaskCount } from './AutoRunDocumentSelector';
 import { AutoRunLightbox } from './AutoRunLightbox';
 import { AutoRunSearchBar } from './AutoRunSearchBar';
+import { ProjectMemoryStatusCard } from './ProjectMemoryStatusCard';
 import {
 	useTemplateAutocomplete,
 	useAutoRunUndo,
@@ -58,6 +59,12 @@ import {
 } from '../utils/markdownConfig';
 import { formatShortcutKeys } from '../utils/shortcutFormatter';
 import { remarkFileLinks, buildFileTreeIndices } from '../utils/remarkFileLinks';
+import { projectMemoryService } from '../services/projectMemory';
+import type {
+	ProjectMemorySnapshot,
+	ProjectMemoryStateValidationReport,
+	ProjectMemoryTaskDetail,
+} from '../../shared/projectMemory';
 
 interface AutoRunProps {
 	theme: Theme;
@@ -65,6 +72,7 @@ interface AutoRunProps {
 
 	// SSH Remote context (for remote sessions)
 	sshRemoteId?: string; // SSH remote config ID - when set, all fs/autorun operations use SSH
+	projectMemoryRepoRoot?: string | null;
 
 	// Folder & document state
 	folderPath: string | null;
@@ -459,6 +467,7 @@ const AutoRunInner = forwardRef<AutoRunHandle, AutoRunProps>(function AutoRunInn
 		theme,
 		sessionId,
 		sshRemoteId,
+		projectMemoryRepoRoot,
 		folderPath,
 		selectedFile,
 		documentList,
@@ -518,6 +527,82 @@ const AutoRunInner = forwardRef<AutoRunHandle, AutoRunProps>(function AutoRunInn
 		batchRunState?.errorDocumentIndex !== undefined
 			? batchRunState.documents[batchRunState.errorDocumentIndex]
 			: undefined;
+	const activeDocumentName =
+		batchRunState &&
+		batchRunState.documents.length > 0 &&
+		batchRunState.currentDocumentIndex >= 0 &&
+		batchRunState.currentDocumentIndex < batchRunState.documents.length
+			? batchRunState.documents[batchRunState.currentDocumentIndex]
+			: selectedFile;
+	const schedulerStatusCounts = useMemo(() => {
+		const counts = {
+			ready: 0,
+			blocked: 0,
+			running: 0,
+			completed: 0,
+			failed: 0,
+			skipped: 0,
+		};
+
+		for (const node of batchRunState?.scheduler?.nodes || []) {
+			counts[node.state] += 1;
+		}
+
+		return counts;
+	}, [batchRunState?.scheduler]);
+	const schedulerNodeDetails = useMemo(() => {
+		if (batchRunState?.scheduler?.mode !== 'dag') {
+			return [];
+		}
+
+		const schedulerNodes = batchRunState.scheduler.nodes || [];
+		const nodesById = new Map(schedulerNodes.map((node) => [node.id, node]));
+		const documents = batchRunState.documents || [];
+
+		return schedulerNodes.map((node) => {
+			const documentName = documents[node.documentIndex] || node.id;
+			const dependencyNodes = node.dependsOn
+				.map((dependencyId) => nodesById.get(dependencyId))
+				.filter((dependencyNode): dependencyNode is NonNullable<typeof dependencyNode> =>
+					Boolean(dependencyNode)
+				);
+			const dependencyNames = node.dependsOn
+				.map((dependencyId) => {
+					const dependencyNode = nodesById.get(dependencyId);
+					if (!dependencyNode) {
+						return dependencyId;
+					}
+
+					return documents[dependencyNode.documentIndex] || dependencyId;
+				})
+				.filter(Boolean);
+			const pendingDependencyNames = dependencyNodes
+				.filter((dependencyNode) => dependencyNode.state !== 'completed')
+				.map((dependencyNode) => documents[dependencyNode.documentIndex] || dependencyNode.id);
+			const failedDependencyNames = dependencyNodes
+				.filter(
+					(dependencyNode) =>
+						dependencyNode.state === 'failed' || dependencyNode.state === 'skipped'
+				)
+				.map((dependencyNode) => documents[dependencyNode.documentIndex] || dependencyNode.id);
+
+			let detail = '';
+			if (node.state === 'blocked' && pendingDependencyNames.length > 0) {
+				detail = `Waiting for: ${pendingDependencyNames.join(', ')}`;
+			} else if (node.state === 'skipped' && failedDependencyNames.length > 0) {
+				detail = `Skipped after dependency failure: ${failedDependencyNames.join(', ')}`;
+			} else if (dependencyNames.length > 0) {
+				detail = `Depends on: ${dependencyNames.join(', ')}`;
+			}
+
+			return {
+				id: node.id,
+				documentName,
+				state: node.state,
+				detail,
+			};
+		});
+	}, [batchRunState?.documents, batchRunState?.scheduler]);
 
 	// Use external mode if provided, otherwise use local state
 	const [localMode, setLocalMode] = useState<'edit' | 'preview'>(externalMode || 'edit');
@@ -672,8 +757,116 @@ const AutoRunInner = forwardRef<AutoRunHandle, AutoRunProps>(function AutoRunInn
 	const matchElementsRef = useRef<HTMLElement[]>([]);
 	// Refresh animation state for empty state button
 	const [isRefreshingEmpty, setIsRefreshingEmpty] = useState(false);
+	const [projectMemorySnapshot, setProjectMemorySnapshot] = useState<ProjectMemorySnapshot | null>(
+		null
+	);
+	const [projectMemoryValidationReport, setProjectMemoryValidationReport] =
+		useState<ProjectMemoryStateValidationReport | null>(null);
+	const [projectMemoryLoading, setProjectMemoryLoading] = useState(false);
+	const [projectMemoryDetailExpanded, setProjectMemoryDetailExpanded] = useState(false);
+	const [projectMemoryActiveTaskDetail, setProjectMemoryActiveTaskDetail] =
+		useState<ProjectMemoryTaskDetail | null>(null);
+	const [projectMemoryDetailLoading, setProjectMemoryDetailLoading] = useState(false);
+	const [projectMemoryDetailError, setProjectMemoryDetailError] = useState<string | null>(null);
+	const totalMatchesRef = useRef(totalMatches);
+	const currentMatchIndexRef = useRef(currentMatchIndex);
+
+	const loadProjectMemoryTaskDetail = useCallback(
+		async (taskId: string): Promise<boolean> => {
+			if (!projectMemoryRepoRoot) {
+				return false;
+			}
+			setProjectMemoryDetailLoading(true);
+			setProjectMemoryDetailError(null);
+			try {
+				const detail = await projectMemoryService.getTaskDetail(projectMemoryRepoRoot, taskId);
+				if (!detail) {
+					throw new Error('Task detail was unavailable.');
+				}
+				setProjectMemoryActiveTaskDetail(detail);
+				return true;
+			} catch (_error) {
+				setProjectMemoryDetailError('Failed to load active task detail.');
+				setProjectMemoryActiveTaskDetail(null);
+				setProjectMemoryDetailExpanded(false);
+				return false;
+			} finally {
+				setProjectMemoryDetailLoading(false);
+			}
+		},
+		[projectMemoryRepoRoot]
+	);
+
+	const refreshProjectMemorySnapshot = useCallback(async () => {
+		if (!projectMemoryRepoRoot) {
+			setProjectMemorySnapshot(null);
+			setProjectMemoryValidationReport(null);
+			setProjectMemoryDetailExpanded(false);
+			setProjectMemoryActiveTaskDetail(null);
+			setProjectMemoryDetailError(null);
+			return;
+		}
+		setProjectMemoryLoading(true);
+		try {
+			const [snapshot, validationReport] = await Promise.all([
+				projectMemoryService.getSnapshot(projectMemoryRepoRoot),
+				projectMemoryService.validateState(projectMemoryRepoRoot),
+			]);
+			setProjectMemorySnapshot(snapshot);
+			setProjectMemoryValidationReport(validationReport);
+			const activeTask = snapshot?.tasks.find((task) => task.status === 'in_progress') ?? null;
+			if (!activeTask) {
+				setProjectMemoryDetailExpanded(false);
+				setProjectMemoryActiveTaskDetail(null);
+				setProjectMemoryDetailError(null);
+				return;
+			}
+			if (projectMemoryDetailExpanded) {
+				await loadProjectMemoryTaskDetail(activeTask.id);
+			}
+		} finally {
+			setProjectMemoryLoading(false);
+		}
+	}, [loadProjectMemoryTaskDetail, projectMemoryDetailExpanded, projectMemoryRepoRoot]);
+
+	const loadProjectMemoryActiveTaskDetail = useCallback(async () => {
+		if (!projectMemoryRepoRoot || !projectMemorySnapshot) {
+			return;
+		}
+		const activeTask =
+			projectMemorySnapshot.tasks.find((task) => task.status === 'in_progress') ?? null;
+		if (!activeTask) {
+			setProjectMemoryDetailExpanded(false);
+			setProjectMemoryActiveTaskDetail(null);
+			setProjectMemoryDetailError(null);
+			return;
+		}
+		await loadProjectMemoryTaskDetail(activeTask.id);
+	}, [loadProjectMemoryTaskDetail, projectMemoryRepoRoot, projectMemorySnapshot]);
+
+	const handleToggleProjectMemoryDetail = useCallback(async () => {
+		if (projectMemoryDetailExpanded) {
+			setProjectMemoryDetailExpanded(false);
+			return;
+		}
+		setProjectMemoryDetailExpanded(true);
+		await loadProjectMemoryActiveTaskDetail();
+	}, [projectMemoryDetailExpanded, loadProjectMemoryActiveTaskDetail]);
+
+	useEffect(() => {
+		if (!folderPath || !projectMemoryRepoRoot) {
+			setProjectMemorySnapshot(null);
+			return;
+		}
+		void refreshProjectMemorySnapshot();
+		const interval = setInterval(() => {
+			void refreshProjectMemorySnapshot();
+		}, 15000);
+		return () => clearInterval(interval);
+	}, [folderPath, projectMemoryRepoRoot, refreshProjectMemorySnapshot]);
 	// Compact mode for responsive bottom panel (icons only when narrow)
 	const [isCompact, setIsCompact] = useState(false);
+	const isCompactRef = useRef(isCompact);
 	const bottomPanelRef = useRef<HTMLDivElement>(null);
 	const textareaRef = useRef<HTMLTextAreaElement>(null);
 	const previewRef = useRef<HTMLDivElement>(null);
@@ -1008,13 +1201,20 @@ const AutoRunInner = forwardRef<AutoRunHandle, AutoRunProps>(function AutoRunInn
 	// ResizeObserver to detect when bottom panel is narrow (compact mode)
 	// Threshold: 350px - below this, use icons only for save/revert and hide "completed"
 	useEffect(() => {
+		isCompactRef.current = isCompact;
+	}, [isCompact]);
+
+	useEffect(() => {
 		if (!bottomPanelRef.current) return;
 
 		const observer = new ResizeObserver((entries) => {
 			for (const entry of entries) {
 				const width = entry.contentRect.width;
-				// Use compact mode when width is below 350px
-				setIsCompact(width < 350);
+				const nextIsCompact = width < 350;
+				if (nextIsCompact !== isCompactRef.current) {
+					isCompactRef.current = nextIsCompact;
+					setIsCompact(nextIsCompact);
+				}
 			}
 		});
 
@@ -1057,6 +1257,11 @@ const AutoRunInner = forwardRef<AutoRunHandle, AutoRunProps>(function AutoRunInn
 	// Debounced search match counting - prevent expensive regex on every keystroke
 	const searchCountTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 	useEffect(() => {
+		totalMatchesRef.current = totalMatches;
+		currentMatchIndexRef.current = currentMatchIndex;
+	}, [currentMatchIndex, totalMatches]);
+
+	useEffect(() => {
 		// Clear any pending count
 		if (searchCountTimeoutRef.current) {
 			clearTimeout(searchCountTimeoutRef.current);
@@ -1069,14 +1274,24 @@ const AutoRunInner = forwardRef<AutoRunHandle, AutoRunProps>(function AutoRunInn
 				const regex = new RegExp(escapedQuery, 'gi');
 				const matches = localContent.match(regex);
 				const count = matches ? matches.length : 0;
-				setTotalMatches(count);
-				if (count > 0 && currentMatchIndex >= count) {
+				if (count !== totalMatchesRef.current) {
+					totalMatchesRef.current = count;
+					setTotalMatches(count);
+				}
+				if (count > 0 && currentMatchIndexRef.current >= count) {
+					currentMatchIndexRef.current = 0;
 					setCurrentMatchIndex(0);
 				}
 			}, 150); // Short delay for search responsiveness
 		} else {
-			setTotalMatches(0);
-			setCurrentMatchIndex(0);
+			if (totalMatchesRef.current !== 0) {
+				totalMatchesRef.current = 0;
+				setTotalMatches(0);
+			}
+			if (currentMatchIndexRef.current !== 0) {
+				currentMatchIndexRef.current = 0;
+				setCurrentMatchIndex(0);
+			}
 		}
 
 		return () => {
@@ -1818,6 +2033,245 @@ const AutoRunInner = forwardRef<AutoRunHandle, AutoRunProps>(function AutoRunInn
 				</div>
 			)}
 
+			{folderPath && projectMemoryRepoRoot && (
+				<ProjectMemoryStatusCard
+					theme={theme}
+					snapshot={projectMemorySnapshot}
+					validationReport={projectMemoryValidationReport}
+					loading={projectMemoryLoading}
+					detailExpanded={projectMemoryDetailExpanded}
+					detailLoading={projectMemoryDetailLoading}
+					detailError={projectMemoryDetailError}
+					activeTaskDetail={projectMemoryActiveTaskDetail}
+					onToggleDetail={() => {
+						void handleToggleProjectMemoryDetail();
+					}}
+					onRefresh={() => {
+						void refreshProjectMemorySnapshot();
+					}}
+				/>
+			)}
+
+			{folderPath && isAutoRunActive && batchRunState && (
+				<div
+					className="mx-2 mb-2 p-3 rounded-lg border"
+					style={{
+						backgroundColor: `${theme.colors.accent}10`,
+						borderColor: `${theme.colors.accent}30`,
+					}}
+					data-testid="autorun-live-status"
+				>
+					<div className="flex items-start justify-between gap-3 flex-wrap">
+						<div className="min-w-0">
+							<div
+								className="text-[10px] font-semibold uppercase tracking-wide mb-1"
+								style={{ color: theme.colors.accent }}
+							>
+								Auto Run Live
+							</div>
+							<div
+								className="text-sm font-semibold truncate"
+								style={{ color: theme.colors.textMain }}
+							>
+								{activeDocumentName || 'Preparing document'}
+							</div>
+							<div className="text-xs mt-1" style={{ color: theme.colors.textDim }}>
+								{batchRunState.loopEnabled
+									? `Loop ${batchRunState.loopIteration + 1}`
+									: 'Single pass'}
+								{' · '}
+								{batchRunState.currentDocTasksCompleted} / {batchRunState.currentDocTasksTotal}{' '}
+								tasks
+							</div>
+							{batchRunState.projectMemoryExecution && (
+								<div className="text-xs mt-1" style={{ color: theme.colors.textDim }}>
+									{projectMemoryRepoRoot ? (
+										<button
+											onClick={() => {
+												void handleToggleProjectMemoryDetail();
+											}}
+											className="inline-flex items-center gap-1 rounded px-1 py-0.5 hover:bg-white/10 transition-colors"
+											style={{ color: theme.colors.textDim }}
+											title="Open project memory task detail"
+										>
+											<span>PM Binding:</span>
+											<span style={{ color: theme.colors.textMain }}>
+												{batchRunState.projectMemoryExecution.taskId}
+											</span>
+											<span>·</span>
+											<span>{batchRunState.projectMemoryExecution.executorId}</span>
+										</button>
+									) : (
+										<>
+											PM Binding:{' '}
+											<span style={{ color: theme.colors.textMain }}>
+												{batchRunState.projectMemoryExecution.taskId}
+											</span>
+											{' · '}
+											{batchRunState.projectMemoryExecution.executorId}
+										</>
+									)}
+								</div>
+							)}
+						</div>
+						<div className="flex items-center gap-2 flex-wrap">
+							<span
+								className="px-2 py-0.5 rounded-full text-[10px] font-semibold"
+								style={{
+									backgroundColor: theme.colors.bgMain,
+									color: isStopping ? theme.colors.warning : theme.colors.accent,
+									border: `1px solid ${isStopping ? theme.colors.warning : `${theme.colors.accent}40`}`,
+								}}
+							>
+								{isStopping ? 'STOPPING' : 'RUNNING'}
+							</span>
+							{batchRunState.scheduler?.mode === 'dag' && (
+								<>
+									{schedulerStatusCounts.running > 0 && (
+										<span
+											className="px-2 py-0.5 rounded-full text-[10px] font-semibold"
+											style={{
+												backgroundColor: `${theme.colors.warning}15`,
+												color: theme.colors.warning,
+												border: `1px solid ${theme.colors.warning}40`,
+											}}
+										>
+											RUN {schedulerStatusCounts.running}
+										</span>
+									)}
+									{schedulerStatusCounts.ready > 0 && (
+										<span
+											className="px-2 py-0.5 rounded-full text-[10px] font-semibold"
+											style={{
+												backgroundColor: `${theme.colors.accent}15`,
+												color: theme.colors.accent,
+												border: `1px solid ${theme.colors.accent}40`,
+											}}
+										>
+											READY {schedulerStatusCounts.ready}
+										</span>
+									)}
+									{schedulerStatusCounts.blocked > 0 && (
+										<span
+											className="px-2 py-0.5 rounded-full text-[10px] font-semibold"
+											style={{
+												backgroundColor: theme.colors.bgMain,
+												color: theme.colors.textDim,
+												border: `1px solid ${theme.colors.border}`,
+											}}
+										>
+											BLOCKED {schedulerStatusCounts.blocked}
+										</span>
+									)}
+									{schedulerStatusCounts.failed > 0 && (
+										<span
+											className="px-2 py-0.5 rounded-full text-[10px] font-semibold"
+											style={{
+												backgroundColor: `${theme.colors.error}15`,
+												color: theme.colors.error,
+												border: `1px solid ${theme.colors.error}40`,
+											}}
+										>
+											FAIL {schedulerStatusCounts.failed}
+										</span>
+									)}
+									{schedulerStatusCounts.skipped > 0 && (
+										<span
+											className="px-2 py-0.5 rounded-full text-[10px] font-semibold"
+											style={{
+												backgroundColor: theme.colors.bgMain,
+												color: theme.colors.textDim,
+												border: `1px solid ${theme.colors.border}`,
+											}}
+										>
+											SKIP {schedulerStatusCounts.skipped}
+										</span>
+									)}
+								</>
+							)}
+						</div>
+					</div>
+					{schedulerNodeDetails.length > 0 && (
+						<div
+							className="mt-3 pt-3 border-t space-y-2"
+							style={{ borderColor: `${theme.colors.accent}20` }}
+							data-testid="autorun-dag-node-list"
+						>
+							<div
+								className="text-[10px] font-semibold uppercase tracking-wide"
+								style={{ color: theme.colors.textDim }}
+							>
+								DAG Nodes
+							</div>
+							<div className="space-y-2">
+								{schedulerNodeDetails.map((node) => (
+									<div
+										key={node.id}
+										className="rounded-md px-2 py-1.5 border"
+										style={{
+											backgroundColor: theme.colors.bgMain,
+											borderColor: theme.colors.border,
+										}}
+									>
+										<div className="flex items-center justify-between gap-3">
+											<div
+												className="text-xs font-medium truncate"
+												style={{ color: theme.colors.textMain }}
+											>
+												{node.documentName}
+											</div>
+											<span
+												className="px-2 py-0.5 rounded-full text-[10px] font-semibold uppercase"
+												style={{
+													backgroundColor:
+														node.state === 'running'
+															? `${theme.colors.warning}15`
+															: node.state === 'ready'
+																? `${theme.colors.accent}15`
+																: node.state === 'completed'
+																	? `${theme.colors.success}15`
+																	: node.state === 'failed'
+																		? `${theme.colors.error}15`
+																		: theme.colors.bgActivity,
+													color:
+														node.state === 'running'
+															? theme.colors.warning
+															: node.state === 'ready'
+																? theme.colors.accent
+																: node.state === 'completed'
+																	? theme.colors.success
+																	: node.state === 'failed'
+																		? theme.colors.error
+																		: theme.colors.textDim,
+													border: `1px solid ${
+														node.state === 'running'
+															? `${theme.colors.warning}40`
+															: node.state === 'ready'
+																? `${theme.colors.accent}40`
+																: node.state === 'completed'
+																	? `${theme.colors.success}40`
+																	: node.state === 'failed'
+																		? `${theme.colors.error}40`
+																		: theme.colors.border
+													}`,
+												}}
+											>
+												{node.state}
+											</span>
+										</div>
+										{node.detail && (
+											<div className="text-[11px] mt-1" style={{ color: theme.colors.textDim }}>
+												{node.detail}
+											</div>
+										)}
+									</div>
+								))}
+							</div>
+						</div>
+					)}
+				</div>
+			)}
+
 			{/* Error Banner (Phase 5.10) - shown when batch is paused due to agent error */}
 			{isErrorPaused && batchError && (
 				<div
@@ -1946,7 +2400,7 @@ const AutoRunInner = forwardRef<AutoRunHandle, AutoRunProps>(function AutoRunInn
 					{/* Empty folder state - show when folder is configured but has no documents */}
 					{documentList.length === 0 && !isLoadingDocuments ? (
 						<div
-							className="h-full flex flex-col items-center justify-center text-center px-6"
+							className="h-full flex flex-col items-center justify-center text-center px-4"
 							style={{ color: theme.colors.textDim }}
 						>
 							<div
@@ -2223,6 +2677,14 @@ export const AutoRun = memo(AutoRunInner, (prevProps, nextProps) => {
 		prevProps.batchRunState?.isStopping === nextProps.batchRunState?.isStopping &&
 		prevProps.batchRunState?.currentTaskIndex === nextProps.batchRunState?.currentTaskIndex &&
 		prevProps.batchRunState?.totalTasks === nextProps.batchRunState?.totalTasks &&
+		prevProps.batchRunState?.currentDocumentIndex ===
+			nextProps.batchRunState?.currentDocumentIndex &&
+		prevProps.batchRunState?.currentDocTasksTotal ===
+			nextProps.batchRunState?.currentDocTasksTotal &&
+		prevProps.batchRunState?.currentDocTasksCompleted ===
+			nextProps.batchRunState?.currentDocTasksCompleted &&
+		prevProps.batchRunState?.loopIteration === nextProps.batchRunState?.loopIteration &&
+		prevProps.batchRunState?.scheduler === nextProps.batchRunState?.scheduler &&
 		// Error state (Phase 5.10)
 		prevProps.batchRunState?.errorPaused === nextProps.batchRunState?.errorPaused &&
 		prevProps.batchRunState?.error?.type === nextProps.batchRunState?.error?.type &&

@@ -12,7 +12,34 @@ import {
 	DEFAULT_BATCH_STATE,
 	type BatchState,
 } from '../../../../renderer/hooks/batch/batchReducer';
-import type { AgentError } from '../../../../renderer/types';
+import type { AgentError, AutoRunSchedulerSnapshot } from '../../../../renderer/types';
+
+function createSchedulerSnapshot(
+	overrides: Partial<AutoRunSchedulerSnapshot> = {}
+): AutoRunSchedulerSnapshot {
+	return {
+		mode: 'dag',
+		maxParallelism: 2,
+		readyNodeIds: ['root'],
+		nodes: [
+			{
+				id: 'root',
+				documentIndex: 0,
+				dependsOn: [],
+				isolationMode: 'shared-checkout',
+				state: 'ready',
+			},
+			{
+				id: 'leaf',
+				documentIndex: 1,
+				dependsOn: ['root'],
+				isolationMode: 'shared-checkout',
+				state: 'blocked',
+			},
+		],
+		...overrides,
+	};
+}
 
 describe('batchReducer', () => {
 	// ============================================================================
@@ -22,6 +49,7 @@ describe('batchReducer', () => {
 	describe('START_BATCH', () => {
 		it('should initialize batch state for a new session', () => {
 			const initialState: BatchState = {};
+			const scheduler = createSchedulerSnapshot();
 
 			const result = batchReducer(initialState, {
 				type: 'START_BATCH',
@@ -36,6 +64,7 @@ describe('batchReducer', () => {
 					worktreeActive: false,
 					worktreePath: undefined,
 					worktreeBranch: undefined,
+					scheduler,
 					startTime: 1000,
 					cumulativeTaskTimeMs: 0,
 					accumulatedElapsedMs: 0,
@@ -49,6 +78,7 @@ describe('batchReducer', () => {
 			expect(result['session-1'].documents).toEqual(['doc1.md', 'doc2.md']);
 			expect(result['session-1'].totalTasksAcrossAllDocs).toBe(10);
 			expect(result['session-1'].completedTasksAcrossAllDocs).toBe(0);
+			expect(result['session-1'].scheduler).toEqual(scheduler);
 			expect(result['session-1'].processingState).toBe('INITIALIZING');
 		});
 
@@ -204,6 +234,25 @@ describe('batchReducer', () => {
 		});
 
 		it('should update all provided fields in a single update', () => {
+			const scheduler = createSchedulerSnapshot({
+				readyNodeIds: ['leaf'],
+				nodes: [
+					{
+						id: 'root',
+						documentIndex: 0,
+						dependsOn: [],
+						isolationMode: 'shared-checkout',
+						state: 'completed',
+					},
+					{
+						id: 'leaf',
+						documentIndex: 1,
+						dependsOn: ['root'],
+						isolationMode: 'shared-checkout',
+						state: 'ready',
+					},
+				],
+			});
 			const initialState: BatchState = {
 				'session-1': {
 					...DEFAULT_BATCH_STATE,
@@ -224,6 +273,7 @@ describe('batchReducer', () => {
 					currentDocTasksCompleted: 3,
 					currentTaskIndex: 3,
 					completedTasks: 3,
+					scheduler,
 				},
 			});
 
@@ -231,6 +281,7 @@ describe('batchReducer', () => {
 			expect(result['session-1'].currentDocTasksCompleted).toBe(3);
 			expect(result['session-1'].currentTaskIndex).toBe(3);
 			expect(result['session-1'].completedTasks).toBe(3);
+			expect(result['session-1'].scheduler).toEqual(scheduler);
 		});
 	});
 

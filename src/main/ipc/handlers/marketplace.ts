@@ -31,6 +31,7 @@ import type {
 	MarketplacePlaybook,
 } from '../../../shared/marketplace-types';
 import { MarketplaceFetchError, MarketplaceImportError } from '../../../shared/marketplace-types';
+import { ensureMarkdownFilename } from '../../../shared/markdownFilenames';
 import type { Playbook, PlaybookDraft, SshRemoteConfig } from '../../../shared/types';
 import { writeFileRemote, mkdirRemote } from '../../utils/remote-fs';
 import type { MaestroSettings } from './persistence';
@@ -570,10 +571,12 @@ async function fetchDocument(playbookPath: string, filename: string): Promise<st
 		throw new MarketplaceFetchError('Invalid filename');
 	}
 
+	const fullFilename = ensureMarkdownFilename(filename);
+
 	// Check if this is a local path
 	if (isLocalPath(playbookPath)) {
 		const resolvedPath = resolveTildePath(playbookPath);
-		const docPath = validateSafePath(resolvedPath, `${filename}.md`);
+		const docPath = validateSafePath(resolvedPath, fullFilename);
 		logger.debug(`Reading local document: ${docPath}`, LOG_CONTEXT);
 
 		try {
@@ -591,7 +594,7 @@ async function fetchDocument(playbookPath: string, filename: string): Promise<st
 	}
 
 	// GitHub path - fetch from remote
-	const url = `${GITHUB_RAW_BASE}/${playbookPath}/${filename}.md`;
+	const url = `${GITHUB_RAW_BASE}/${playbookPath}/${fullFilename}`;
 	logger.debug(`Fetching document from GitHub: ${url}`, LOG_CONTEXT);
 
 	try {
@@ -1031,9 +1034,10 @@ export function registerMarketplaceHandlers(deps: MarketplaceHandlerDependencies
 				for (const doc of marketplacePlaybook.documents) {
 					try {
 						const content = await fetchDocument(marketplacePlaybook.path, doc.filename);
+						const fullFilename = ensureMarkdownFilename(doc.filename);
 						const docPath = isRemote
-							? `${targetPath}/${doc.filename}.md`
-							: path.join(targetPath, `${doc.filename}.md`);
+							? `${targetPath}/${fullFilename}`
+							: path.join(targetPath, fullFilename);
 
 						if (isRemote) {
 							const writeResult = await writeFileRemote(docPath, content, sshConfig!);

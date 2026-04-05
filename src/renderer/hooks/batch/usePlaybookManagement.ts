@@ -387,6 +387,8 @@ export function usePlaybookManagement(
 					documentContextMode: loadedPlaybook?.documentContextMode ?? 'active-task-only',
 					skillPromptMode: loadedPlaybook?.skillPromptMode ?? 'brief',
 					agentStrategy,
+					projectMemoryExecution: loadedPlaybook?.projectMemoryExecution ?? null,
+					projectMemoryBindingIntent: loadedPlaybook?.projectMemoryBindingIntent ?? null,
 				};
 
 				const result = await window.maestro.playbooks.create(sessionId, playbookData);

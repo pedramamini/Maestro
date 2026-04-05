@@ -16,8 +16,36 @@ import {
 	formatTimeRemaining,
 } from '../../constants/conductorBadges';
 import { formatElapsedTime } from '../../../shared/formatters';
-import type { AutoRunSchedulerMode, AutoRunWorktreeMode } from '../../../shared/types';
+import type {
+	AutoRunSchedulerMode,
+	AutoRunSchedulerNodeSnapshot,
+	AutoRunWorktreeMode,
+	Playbook,
+} from '../../../shared/types';
+import {
+	buildAutoRunAggregateUsageStats,
+	buildAutoRunLoopSummaryEntry,
+	buildAutoRunTotalSummaryDetails,
+	mergeAutoRunVerifierVerdict,
+	type AutoRunCompletedNodeContext,
+} from '../../../shared/autorunExecutionModel';
+import {
+	createAutoRunSchedulerSnapshot,
+	getAutoRunRecordedSchedulerMode,
+	summarizeAutoRunObservedExecution,
+} from '../../../shared/autorunScheduler';
+import {
+	type AutoRunDispatchReadyNode,
+	type AutoRunDispatchFinalizeResult,
+	executeAutoRunDispatchClaims,
+	type FinalizeAutoRunDispatchNodeOptions,
+	finalizeAutoRunDispatchNodes,
+	runAutoRunDispatchBatches,
+} from '../../../shared/autorunDispatch';
+import { buildParallelDispatchPlan } from '../../../shared/playbookParallelism';
+import { ensureMarkdownFilename } from '../../../shared/markdownFilenames';
 import { gitService } from '../../services/git';
+import { projectMemoryService } from '../../services/projectMemory';
 // Extracted batch processing modules
 import { countUnfinishedTasks, uncheckAllTasks } from './batchUtils';
 import { useSessionDebounce } from './useSessionDebounce';
@@ -59,6 +87,29 @@ export interface PRResultInfo {
 	success: boolean;
 	prUrl?: string;
 	error?: string;
+}
+
+function formatAutoRunNarrationDocumentLabel(filename: string): string {
+	return filename.replace(/\.md$/i, '');
+}
+
+function buildAutoRunDocumentStartNarration(filename: string, remainingTasks: number): string {
+	const documentLabel = formatAutoRunNarrationDocumentLabel(filename);
+	const taskLabel = remainingTasks === 1 ? '1 タスク' : `${remainingTasks} タスク`;
+	return `${documentLabel} を開始するのだ。残り ${taskLabel}なのだ。`;
+}
+
+function buildAutoRunLoopCompleteNarration(
+	completedLoopNumber: number,
+	completedLoopTasks: number,
+	newTotalTasks: number
+): string {
+	const completedLabel = completedLoopTasks === 1 ? '1 タスク' : `${completedLoopTasks} タスク`;
+	if (newTotalTasks <= 0) {
+		return `${completedLoopNumber} ループ完了なのだ。${completedLabel}完了したのだ。`;
+	}
+	const nextLabel = newTotalTasks === 1 ? '1 タスク' : `${newTotalTasks} タスク`;
+	return `${completedLoopNumber} ループ完了なのだ。${completedLabel}完了、次は ${nextLabel}なのだ。`;
 }
 
 interface UseBatchProcessorProps {
@@ -155,78 +206,6 @@ interface ErrorResolutionEntry {
 	resolve: (action: ErrorResolutionAction) => void;
 }
 
-/**
- * Create a loop summary history entry
- */
-interface LoopSummaryParams {
-	loopIteration: number;
-	loopTasksCompleted: number;
-	loopStartTime: number;
-	loopTotalInputTokens: number;
-	loopTotalOutputTokens: number;
-	loopTotalCost: number;
-	sessionCwd: string;
-	sessionId: string;
-	isFinal: boolean;
-	exitReason?: string;
-}
-
-function createLoopSummaryEntry(params: LoopSummaryParams): Omit<HistoryEntry, 'id'> {
-	const {
-		loopIteration,
-		loopTasksCompleted,
-		loopStartTime,
-		loopTotalInputTokens,
-		loopTotalOutputTokens,
-		loopTotalCost,
-		sessionCwd,
-		sessionId,
-		isFinal,
-		exitReason,
-	} = params;
-
-	const loopElapsedMs = Date.now() - loopStartTime;
-	const loopNumber = loopIteration + 1;
-	const summaryPrefix = isFinal ? `Loop ${loopNumber} (final)` : `Loop ${loopNumber}`;
-	const loopSummary = `${summaryPrefix} completed: ${loopTasksCompleted} task${loopTasksCompleted !== 1 ? 's' : ''} accomplished`;
-
-	const loopDetails = [
-		`**${summaryPrefix} Summary**`,
-		'',
-		`- **Tasks Accomplished:** ${loopTasksCompleted}`,
-		`- **Duration:** ${formatElapsedTime(loopElapsedMs)}`,
-		loopTotalInputTokens > 0 || loopTotalOutputTokens > 0
-			? `- **Tokens:** ${(loopTotalInputTokens + loopTotalOutputTokens).toLocaleString()} (${loopTotalInputTokens.toLocaleString()} in / ${loopTotalOutputTokens.toLocaleString()} out)`
-			: '',
-		loopTotalCost > 0 ? `- **Cost:** $${loopTotalCost.toFixed(4)}` : '',
-		exitReason ? `- **Exit Reason:** ${exitReason}` : '',
-	]
-		.filter((line) => line !== '')
-		.join('\n');
-
-	return {
-		type: 'AUTO',
-		timestamp: Date.now(),
-		summary: loopSummary,
-		fullResponse: loopDetails,
-		projectPath: sessionCwd,
-		sessionId: sessionId,
-		success: true,
-		elapsedTimeMs: loopElapsedMs,
-		usageStats:
-			loopTotalInputTokens > 0 || loopTotalOutputTokens > 0
-				? {
-						inputTokens: loopTotalInputTokens,
-						outputTokens: loopTotalOutputTokens,
-						cacheReadInputTokens: 0,
-						cacheCreationInputTokens: 0,
-						totalCostUsd: loopTotalCost,
-						contextWindow: 0,
-					}
-				: undefined,
-	};
-}
-
 function resolveWorktreeMode(
 	worktreeTarget: BatchRunConfig['worktreeTarget'],
 	worktreeActive: boolean
@@ -238,27 +217,24 @@ function resolveWorktreeMode(
 	return worktreeActive ? 'managed' : 'disabled';
 }
 
-function resolveSchedulerMode(config: BatchRunConfig): AutoRunSchedulerMode {
-	if ((config.maxParallelism ?? 1) > 1) {
-		return 'dag';
-	}
+function dedupeIsolatedWorktreeTargets(
+	targets: Array<BatchRunConfig['isolatedWorktreeTarget'] | undefined | null>
+): NonNullable<BatchRunConfig['isolatedWorktreeTarget']>[] {
+	const seenPaths = new Set<string>();
+	const deduped: NonNullable<BatchRunConfig['isolatedWorktreeTarget']>[] = [];
 
-	const nodes = config.taskGraph?.nodes ?? [];
-	for (const [index, node] of nodes.entries()) {
-		const previousNode = index > 0 ? nodes[index - 1] : undefined;
-		const expectedDependsOn = previousNode ? [previousNode.id] : [];
-		const actualDependsOn = Array.isArray(node.dependsOn) ? node.dependsOn : [];
-		if (
-			actualDependsOn.length !== expectedDependsOn.length ||
-			actualDependsOn.some(
-				(dependency, dependencyIndex) => dependency !== expectedDependsOn[dependencyIndex]
-			)
-		) {
-			return 'dag';
+	for (const target of targets) {
+		if (!target?.cwd) {
+			continue;
 		}
+		if (seenPaths.has(target.cwd)) {
+			continue;
+		}
+		seenPaths.add(target.cwd);
+		deduped.push(target);
 	}
 
-	return 'sequential';
+	return deduped;
 }
 
 // Re-export utility functions for backwards compatibility
@@ -334,6 +310,15 @@ export function useBatchProcessor({
 	audioFeedbackEnabledRef.current = audioFeedbackEnabled;
 	const audioFeedbackCommandRef = useRef(audioFeedbackCommand);
 	audioFeedbackCommandRef.current = audioFeedbackCommand;
+	const speakAutoRunNarration = useCallback((text: string) => {
+		if (!audioFeedbackEnabledRef.current || !audioFeedbackCommandRef.current || !text) {
+			return;
+		}
+
+		window.maestro.notification.speak(text, audioFeedbackCommandRef.current).catch((err) => {
+			console.error('[BatchProcessor] Failed to speak Auto Run narration:', err);
+		});
+	}, []);
 
 	// Ref to track latest updateBatchStateAndBroadcast for async callbacks (fixes HMR stale closure)
 	const updateBatchStateAndBroadcastRef = useRef<typeof updateBatchStateAndBroadcast | null>(null);
@@ -447,6 +432,10 @@ export function useBatchProcessor({
 										newStateForSession.currentDocTasksCompleted !==
 										prevSessionState.currentDocTasksCompleted
 											? newStateForSession.currentDocTasksCompleted
+											: undefined,
+									scheduler:
+										newStateForSession.scheduler !== prevSessionState.scheduler
+											? newStateForSession.scheduler
 											: undefined,
 									totalTasksAcrossAllDocs:
 										newStateForSession.totalTasksAcrossAllDocs !==
@@ -611,6 +600,10 @@ export function useBatchProcessor({
 							prevSessionState.currentDocTasksCompleted
 								? newStateForSession.currentDocTasksCompleted
 								: undefined,
+						scheduler:
+							newStateForSession.scheduler !== prevSessionState.scheduler
+								? newStateForSession.scheduler
+								: undefined,
 						totalTasksAcrossAllDocs:
 							newStateForSession.totalTasksAcrossAllDocs !==
 							prevSessionState.totalTasksAcrossAllDocs
@@ -755,8 +748,34 @@ export function useBatchProcessor({
 			let worktreeActive: boolean;
 			let worktreePath: string | undefined;
 			let worktreeBranch: string | undefined;
+			const initialScheduler = createAutoRunSchedulerSnapshot(
+				documents,
+				config.taskGraph,
+				config.maxParallelism
+			);
+			const hasIsolatedWorktreeNodes = initialScheduler.nodes.some(
+				(node) => node.isolationMode === 'isolated-worktree'
+			);
+			let isolatedWorktreeTargets = dedupeIsolatedWorktreeTargets([
+				...(config.isolatedWorktreeTargets || []),
+				config.isolatedWorktreeTarget,
+				...sessionsRef.current
+					.filter(
+						(candidate) =>
+							candidate.parentSessionId === session.id &&
+							Boolean(candidate.cwd) &&
+							candidate.state !== 'busy' &&
+							candidate.state !== 'connecting'
+					)
+					.map((candidate) => ({
+						sessionId: candidate.id,
+						cwd: candidate.cwd,
+						branchName: candidate.worktreeBranch,
+					})),
+			]);
+			let isolatedWorktreeTarget = isolatedWorktreeTargets[0];
 
-			if (config.worktreeTarget) {
+			if (config.worktreeTarget && !isolatedWorktreeTarget) {
 				// Worktree dispatch was already handled by useAutoRunHandlers
 				// (spawnWorktreeAgentAndDispatch created the worktree and session).
 				// Skip setupWorktree — calling it again would fail because the session's
@@ -766,6 +785,11 @@ export function useBatchProcessor({
 				worktreeActive = true;
 				worktreePath = session.cwd;
 				worktreeBranch = session.worktreeBranch || config.worktree?.branchName;
+			} else if (isolatedWorktreeTarget) {
+				effectiveCwd = session.cwd;
+				worktreeActive = true;
+				worktreePath = isolatedWorktreeTarget.cwd;
+				worktreeBranch = isolatedWorktreeTarget.branchName || config.worktree?.branchName;
 			} else {
 				// Normal path: set up worktree from scratch if config.worktree is enabled
 				const worktreeWithSsh = worktree ? { ...worktree, sshRemoteId } : undefined;
@@ -781,19 +805,147 @@ export function useBatchProcessor({
 				worktreeActive = worktreeResult.worktreeActive;
 				worktreePath = worktreeResult.worktreePath;
 				worktreeBranch = worktreeResult.worktreeBranch;
+				if (
+					hasIsolatedWorktreeNodes &&
+					worktreeResult.worktreeActive &&
+					worktreeResult.effectiveCwd !== session.cwd
+				) {
+					isolatedWorktreeTargets = dedupeIsolatedWorktreeTargets([
+						{
+							sessionId: session.id,
+							cwd: worktreeResult.effectiveCwd,
+							branchName: worktreeResult.worktreeBranch,
+						},
+						...isolatedWorktreeTargets,
+					]);
+					isolatedWorktreeTarget = isolatedWorktreeTargets[0];
+					effectiveCwd = session.cwd;
+				}
 			}
 
 			const worktreeMode = resolveWorktreeMode(config.worktreeTarget, worktreeActive);
-			const schedulerMode = resolveSchedulerMode(config);
 
-			// Get git branch for template variable substitution
+			let inferredProjectMemoryExecution =
+				config.projectMemoryExecution ||
+				(await projectMemoryService.inferExecutionContext(
+					session.projectRoot || session.cwd,
+					session.toolType
+				));
+			if (
+				session.toolType === 'codex' &&
+				!inferredProjectMemoryExecution &&
+				config.projectMemoryBindingIntent
+			) {
+				const repoRoot = config.projectMemoryBindingIntent.repoRoot;
+				const validationReport = await projectMemoryService.validateState(repoRoot);
+				const isMissingTaskStore = validationReport?.issues.some((issue) =>
+					issue.includes('tasks.json not found')
+				);
+
+				if (isMissingTaskStore) {
+					const bootstrapPlaybook: Playbook = {
+						id: config.playbookId ?? 'autorun-bootstrap',
+						name: config.playbookName ?? 'Auto Run Playbook',
+						createdAt: Date.now(),
+						updatedAt: Date.now(),
+						documents: documents.map((doc) => ({
+							filename: ensureMarkdownFilename(doc.filename),
+							resetOnCompletion: Boolean(doc.resetOnCompletion),
+						})),
+						loopEnabled,
+						maxLoops,
+						taskTimeoutMs: config.taskTimeoutMs ?? null,
+						prompt: prompt !== '' ? prompt : null,
+						skills: config.skills ?? [],
+						definitionOfDone: config.definitionOfDone ?? [],
+						verificationSteps: config.verificationSteps ?? [],
+						promptProfile: config.promptProfile ?? 'compact-code',
+						documentContextMode: config.documentContextMode ?? 'active-task-only',
+						skillPromptMode: config.skillPromptMode ?? 'brief',
+						agentStrategy: config.agentStrategy ?? 'single',
+						maxParallelism: config.maxParallelism ?? null,
+						taskGraph: config.taskGraph,
+						projectMemoryExecution: null,
+						projectMemoryBindingIntent: config.projectMemoryBindingIntent,
+					};
+					const emissionResult = await projectMemoryService.emitWizardTasks(bootstrapPlaybook, {
+						force: false,
+					});
+
+					if (!emissionResult.success) {
+						notifyToast({
+							title: 'Project Memory bootstrap failed',
+							message: emissionResult.error,
+							type: 'warning',
+						});
+						return;
+					}
+				}
+
+				inferredProjectMemoryExecution =
+					(await projectMemoryService.inferExecutionContext(repoRoot, session.toolType)) ||
+					(await projectMemoryService.claimNextExecutionContext(repoRoot, session.toolType));
+			}
+			if (session.toolType === 'codex' && !inferredProjectMemoryExecution) {
+				const reason = 'Codex Auto Run requires an active Project Memory binding for this repo.';
+				window.maestro.logger.log(
+					'warn',
+					'Project Memory binding required for Codex Auto Run start',
+					'BatchProcessor',
+					{
+						sessionId,
+						repoRoot: session.projectRoot || session.cwd,
+						toolType: session.toolType,
+						hasExplicitProjectMemoryExecution: Boolean(config.projectMemoryExecution),
+					}
+				);
+				notifyToast({
+					title: 'Project Memory blocked Auto Run',
+					message: `Project Memory blocked Auto Run start: ${reason}`,
+					type: 'warning',
+				});
+				return;
+			}
+			const validationRepoRoot = inferredProjectMemoryExecution?.repoRoot || effectiveCwd;
+
+			// Get git branch for template variable substitution and project-memory validation
 			let gitBranch: string | undefined;
 			if (session.isGitRepo) {
 				try {
-					const status = await gitService.getStatus(effectiveCwd);
+					const status = await gitService.getStatus(validationRepoRoot);
 					gitBranch = status.branch;
 				} catch {
 					// Ignore git errors - branch will be empty string
+				}
+			}
+
+			if (inferredProjectMemoryExecution) {
+				const validation = await projectMemoryService.validateExecutionStart(
+					inferredProjectMemoryExecution,
+					gitBranch ?? null
+				);
+				if (!validation.ok) {
+					const reason = validation.reason ?? 'Project Memory validation blocked this Auto Run.';
+					window.maestro.logger.log(
+						'warn',
+						'Project Memory execution validation blocked Auto Run start',
+						'BatchProcessor',
+						{
+							sessionId,
+							taskId: validation.taskId,
+							executorId: validation.executorId,
+							expectedBranch: validation.expectedBranch,
+							currentBranch: validation.currentBranch,
+							bindingMode: validation.bindingMode,
+							reason,
+						}
+					);
+					notifyToast({
+						title: 'Project Memory blocked Auto Run',
+						message: `Project Memory blocked Auto Run start: ${reason}`,
+						type: 'warning',
+					});
+					return;
 				}
 			}
 
@@ -834,6 +986,8 @@ export function useBatchProcessor({
 					worktreeActive,
 					worktreePath,
 					worktreeBranch,
+					projectMemoryExecution: inferredProjectMemoryExecution ?? null,
+					scheduler: initialScheduler,
 					customPrompt: prompt !== '' ? prompt : undefined,
 					startTime: batchStartTime,
 					// Time tracking
@@ -860,6 +1014,8 @@ export function useBatchProcessor({
 				worktreeActive,
 				worktreePath,
 				worktreeBranch,
+				projectMemoryExecution: config.projectMemoryExecution ?? null,
+				scheduler: initialScheduler,
 				totalTasks: initialTotalTasks,
 				completedTasks: 0,
 				currentTaskIndex: 0,
@@ -939,7 +1095,8 @@ export function useBatchProcessor({
 					promptProfile,
 					agentStrategy,
 					worktreeMode,
-					schedulerMode,
+					schedulerMode: getAutoRunRecordedSchedulerMode(initialScheduler),
+					configuredSchedulerMode: initialScheduler.configuredMode,
 					maxParallelism: config.maxParallelism ?? undefined,
 				});
 			} catch (statsError) {
@@ -952,6 +1109,7 @@ export function useBatchProcessor({
 			let totalCompletedTasks = 0;
 			let totalTaskAttempts = 0;
 			let loopIteration = 0;
+			let schedulerSnapshot = initialScheduler;
 
 			// Per-loop tracking for loop summary
 			let loopStartTime = Date.now();
@@ -964,12 +1122,12 @@ export function useBatchProcessor({
 			let totalInputTokens = 0;
 			let totalOutputTokens = 0;
 			let totalCost = 0;
-
-			// Track consecutive runs where document content didn't change to detect stalling
-			// If the document hash is identical before/after a run (and no tasks checked), the LLM is stuck
-			// Note: This counter is reset per-document, so stalling one document doesn't affect others
-			let consecutiveNoChangeCount = 0;
-			const MAX_CONSECUTIVE_NO_CHANGES = 2; // Skip document after 2 consecutive runs with no changes
+			let autoRunVerifierVerdict: 'PASS' | 'WARN' | 'FAIL' | null = null;
+			const autoRunTimedOut = false;
+			const totalQueueWaitMs = 0;
+			const totalRetryCount = 0;
+			let sharedCheckoutFallbackCount = 0;
+			let anyTasksProcessedThisIteration = false;
 
 			// Track stalled documents (document filename -> stall reason)
 			const stalledDocuments: Map<string, string> = new Map();
@@ -988,150 +1146,456 @@ export function useBatchProcessor({
 				});
 
 				if (loopEnabled && (loopTasksCompleted > 0 || loopIteration > 0)) {
+					const observedExecution = summarizeAutoRunObservedExecution(schedulerSnapshot, {
+						sharedCheckoutFallbackCount,
+					});
 					onAddHistoryEntry(
-						createLoopSummaryEntry({
+						buildAutoRunLoopSummaryEntry({
+							timestamp: Date.now(),
 							loopIteration,
 							loopTasksCompleted,
-							loopStartTime,
+							loopElapsedMs: Date.now() - loopStartTime,
 							loopTotalInputTokens,
 							loopTotalOutputTokens,
 							loopTotalCost,
-							sessionCwd: session.cwd,
+							projectPath: session.cwd,
 							sessionId,
 							isFinal: true,
 							exitReason,
+							playbookId,
+							playbookName,
+							promptProfile,
+							agentStrategy,
+							worktreeMode,
+							schedulerMode: observedExecution.observedSchedulerMode,
+							configuredSchedulerMode: observedExecution.configuredSchedulerMode,
+							actualParallelNodeCount: observedExecution.actualParallelNodeCount,
+							sharedCheckoutFallbackCount: observedExecution.sharedCheckoutFallbackCount,
+							blockedNodeCount: observedExecution.blockedNodeCount,
+							skippedNodeCount: observedExecution.skippedNodeCount,
+							schedulerOutcome:
+								exitReason === 'All tasks completed' ||
+								(maxLoops !== null &&
+									maxLoops !== undefined &&
+									exitReason === `Reached max loop limit (${maxLoops})`)
+									? 'completed'
+									: 'failed',
 						})
+					);
+					speakAutoRunNarration(
+						buildAutoRunLoopCompleteNarration(loopIteration + 1, loopTasksCompleted, 0)
 					);
 				}
 			};
 
-			// Main processing loop (handles loop mode)
-			while (true) {
-				// Check for stop request
-				if (stopRequestedRefs.current[sessionId]) {
-					addFinalLoopSummary('Stopped by user');
-					break;
+			const processDispatchClaim = async (
+				claim: AutoRunDispatchReadyNode,
+				batchSchedulerSnapshot: typeof schedulerSnapshot,
+				isolatedTargetForClaim?: NonNullable<BatchRunConfig['isolatedWorktreeTarget']> | null
+			): Promise<AutoRunDispatchFinalizeResult | null> => {
+				const MAX_CONSECUTIVE_NO_CHANGES = 2;
+				let consecutiveNoChangeCount = 0;
+				const schedulerNodeId = claim.nodeId;
+				const schedulerNode = claim.node;
+				const isolatedExecutionSession =
+					schedulerNode.isolationMode === 'isolated-worktree' && isolatedTargetForClaim
+						? sessionsRef.current.find(
+								(candidate) => candidate.id === isolatedTargetForClaim.sessionId
+							) || null
+						: null;
+				const executionSession =
+					schedulerNode.isolationMode === 'isolated-worktree' && isolatedExecutionSession
+						? isolatedExecutionSession
+						: session;
+				const taskEffectiveCwd =
+					schedulerNode.isolationMode === 'isolated-worktree' && isolatedTargetForClaim
+						? isolatedTargetForClaim.cwd
+						: effectiveCwd;
+				const taskSshRemoteId =
+					executionSession.sshRemoteId ||
+					executionSession.sessionSshRemoteConfig?.remoteId ||
+					undefined;
+				const docIndex = schedulerNode.documentIndex;
+				const docEntry = documents[docIndex];
+				const predecessorContext = claim.predecessorContext;
+
+				let {
+					taskCount: remainingTasks,
+					content: docContent,
+					checkedCount: docCheckedCount,
+				} = await readDocAndCountTasks(folderPath, docEntry.filename, sshRemoteId);
+				let docTasksTotal = remainingTasks;
+
+				if (remainingTasks === 0) {
+					if (docEntry.resetOnCompletion && loopEnabled && docCheckedCount > 0) {
+						const resetContent = uncheckAllTasks(docContent);
+						await window.maestro.autorun.writeDoc(
+							folderPath,
+							ensureMarkdownFilename(docEntry.filename),
+							resetContent,
+							sshRemoteId
+						);
+						const resetTaskCount = countUnfinishedTasks(resetContent);
+						updateBatchStateAndBroadcastRef.current!(sessionId, (prev) => ({
+							...prev,
+							[sessionId]: {
+								...prev[sessionId],
+								totalTasksAcrossAllDocs: prev[sessionId].totalTasksAcrossAllDocs + resetTaskCount,
+								totalTasks: prev[sessionId].totalTasks + resetTaskCount,
+							},
+						}));
+					}
+
+					return {
+						finalizeOptions: {
+							nodeId: schedulerNodeId,
+							documentName: docEntry.filename,
+							state: 'completed',
+							summaries: [`No unchecked tasks remained in ${docEntry.filename}.`],
+							success: true,
+						},
+					};
 				}
 
-				// Track if any tasks were processed in this iteration
-				let anyTasksProcessedThisIteration = false;
+				let effectiveFilename = docEntry.filename;
+				if (docEntry.resetOnCompletion) {
+					try {
+						const { workingCopyPath } = await window.maestro.autorun.createWorkingCopy(
+							folderPath,
+							docEntry.filename,
+							loopIteration + 1,
+							sshRemoteId
+						);
+						workingCopies.set(docEntry.filename, workingCopyPath);
+						effectiveFilename = workingCopyPath;
 
-				// Process each document in order
-				for (let docIndex = 0; docIndex < documents.length; docIndex++) {
-					// Check for stop request before each document
+						const workingCopyResult = await readDocAndCountTasks(
+							folderPath,
+							effectiveFilename,
+							sshRemoteId
+						);
+						remainingTasks = workingCopyResult.taskCount;
+						docContent = workingCopyResult.content;
+						docCheckedCount = workingCopyResult.checkedCount;
+						docTasksTotal = remainingTasks;
+					} catch (err) {
+						console.error(
+							`[BatchProcessor] Failed to create working copy for ${docEntry.filename}:`,
+							err
+						);
+					}
+				}
+
+				window.maestro.logger.autorun(`Processing document: ${docEntry.filename}`, session.name, {
+					document: docEntry.filename,
+					tasksRemaining: remainingTasks,
+					loopNumber: loopIteration + 1,
+				});
+				updateBatchStateAndBroadcastRef.current!(sessionId, (prev) => ({
+					...prev,
+					[sessionId]: {
+						...prev[sessionId],
+						currentDocumentIndex: docIndex,
+						currentDocTasksTotal: docTasksTotal,
+						currentDocTasksCompleted: 0,
+						scheduler: batchSchedulerSnapshot,
+					},
+				}));
+				speakAutoRunNarration(
+					buildAutoRunDocumentStartNarration(docEntry.filename, remainingTasks)
+				);
+
+				let docTasksCompleted = 0;
+				let skipCurrentDocumentAfterError = false;
+				const documentTaskSummaries: string[] = [];
+				let documentVerifierVerdict: 'PASS' | 'WARN' | 'FAIL' | null = null;
+				let documentSucceeded = true;
+
+				while (remainingTasks > 0) {
 					if (stopRequestedRefs.current[sessionId]) {
 						break;
 					}
 
-					const docEntry = documents[docIndex];
+					const errorResolution = errorResolutionRefs.current[sessionId];
+					if (errorResolution) {
+						const action = await errorResolution.promise;
+						delete errorResolutionRefs.current[sessionId];
 
-					// Read document and count tasks
-					let {
-						taskCount: remainingTasks,
-						content: docContent,
-						checkedCount: docCheckedCount,
-					} = await readDocAndCountTasks(folderPath, docEntry.filename, sshRemoteId);
-					let docTasksTotal = remainingTasks;
-
-					// Handle documents with no unchecked tasks
-					if (remainingTasks === 0) {
-						// For reset-on-completion documents, check if there are checked tasks that need resetting
-						if (docEntry.resetOnCompletion && loopEnabled) {
-							// Use docCheckedCount from readDocAndCountTasks instead of calling countCheckedTasks again
-							if (docCheckedCount > 0) {
-								const resetContent = uncheckAllTasks(docContent);
-								await window.maestro.autorun.writeDoc(
-									folderPath,
-									docEntry.filename + '.md',
-									resetContent,
-									sshRemoteId
-								);
-								// Update task count in state
-								const resetTaskCount = countUnfinishedTasks(resetContent);
-								updateBatchStateAndBroadcastRef.current!(sessionId, (prev) => ({
-									...prev,
-									[sessionId]: {
-										...prev[sessionId],
-										totalTasksAcrossAllDocs:
-											prev[sessionId].totalTasksAcrossAllDocs + resetTaskCount,
-										totalTasks: prev[sessionId].totalTasks + resetTaskCount,
-									},
-								}));
-							}
-						}
-						continue;
-					}
-
-					// Reset stall detection counter for each new document
-					consecutiveNoChangeCount = 0;
-
-					// The actual filename to process (may be working copy for reset-on-completion docs)
-					let effectiveFilename = docEntry.filename;
-
-					// Create working copy for reset-on-completion documents
-					// Working copies are stored in /Runs/ and the original is never modified
-					if (docEntry.resetOnCompletion) {
-						try {
-							const { workingCopyPath } = await window.maestro.autorun.createWorkingCopy(
-								folderPath,
-								docEntry.filename,
-								loopIteration + 1, // 1-indexed loop number
-								sshRemoteId
-							);
-							workingCopies.set(docEntry.filename, workingCopyPath);
-							effectiveFilename = workingCopyPath;
-
-							// Re-read the working copy for task counting
-							const workingCopyResult = await readDocAndCountTasks(
-								folderPath,
-								effectiveFilename,
-								sshRemoteId
-							);
-							remainingTasks = workingCopyResult.taskCount;
-							docContent = workingCopyResult.content;
-							docCheckedCount = workingCopyResult.checkedCount;
-							docTasksTotal = remainingTasks;
-						} catch (err) {
-							console.error(
-								`[BatchProcessor] Failed to create working copy for ${docEntry.filename}:`,
-								err
-							);
-							// Continue with original document as fallback
-						}
-					}
-
-					// AUTORUN LOG: Document processing
-					window.maestro.logger.autorun(`Processing document: ${docEntry.filename}`, session.name, {
-						document: docEntry.filename,
-						tasksRemaining: remainingTasks,
-						loopNumber: loopIteration + 1,
-					});
-
-					// Update state to show current document
-					updateBatchStateAndBroadcastRef.current!(sessionId, (prev) => ({
-						...prev,
-						[sessionId]: {
-							...prev[sessionId],
-							currentDocumentIndex: docIndex,
-							currentDocTasksTotal: docTasksTotal,
-							currentDocTasksCompleted: 0,
-						},
-					}));
-
-					let docTasksCompleted = 0;
-					let skipCurrentDocumentAfterError = false;
-
-					// Process tasks in this document until none remain
-					while (remainingTasks > 0) {
-						// Check for stop request before each task
-						if (stopRequestedRefs.current[sessionId]) {
+						if (action === 'abort') {
+							stopRequestedRefs.current[sessionId] = true;
 							break;
 						}
 
-						// Pause processing until the user resolves the error state
-						const errorResolution = errorResolutionRefs.current[sessionId];
-						if (errorResolution) {
-							const action = await errorResolution.promise;
+						if (action === 'skip-document') {
+							skipCurrentDocumentAfterError = true;
+							break;
+						}
+					}
+
+					try {
+						const taskResult = await documentProcessor.processTask(
+							{
+								folderPath,
+								session: executionSession,
+								gitBranch,
+								groupName,
+								loopIteration: loopIteration + 1,
+								effectiveCwd: taskEffectiveCwd,
+								customPrompt: prompt,
+								skills,
+								predecessorContext,
+								promptProfile,
+								documentContextMode,
+								skillPromptMode,
+								agentStrategy,
+								definitionOfDone,
+								verificationSteps,
+								sshRemoteId: taskSshRemoteId,
+							},
+							effectiveFilename,
+							docCheckedCount,
+							remainingTasks,
+							docContent,
+							{
+								onSpawnAgent,
+								onSpawnBackgroundSynopsis,
+							}
+						);
+
+						if (taskResult.agentSessionId) {
+							agentSessionIds.push(taskResult.agentSessionId);
+						}
+
+						anyTasksProcessedThisIteration = true;
+						const {
+							tasksCompletedThisRun,
+							addedUncheckedTasks,
+							newRemainingTasks,
+							documentChanged,
+							newCheckedCount,
+							shortSummary,
+							fullSynopsis,
+							usageStats,
+							elapsedTimeMs,
+							agentSessionId,
+							success,
+						} = taskResult;
+						const countedCompletedTasks = success ? tasksCompletedThisRun : 0;
+						documentSucceeded = documentSucceeded && success;
+						documentVerifierVerdict = mergeAutoRunVerifierVerdict(
+							documentVerifierVerdict,
+							taskResult.verifierVerdict ?? null
+						);
+						autoRunVerifierVerdict = mergeAutoRunVerifierVerdict(
+							autoRunVerifierVerdict,
+							taskResult.verifierVerdict ?? null
+						);
+						if (shortSummary) {
+							documentTaskSummaries.push(shortSummary);
+						}
+
+						if (!documentChanged && tasksCompletedThisRun === 0) {
+							consecutiveNoChangeCount++;
+						} else {
+							consecutiveNoChangeCount = 0;
+						}
+
+						docTasksCompleted += countedCompletedTasks;
+						totalCompletedTasks += countedCompletedTasks;
+						loopTasksCompleted += countedCompletedTasks;
+						totalTaskAttempts++;
+
+						if (statsAutoRunId) {
+							try {
+								await window.maestro.stats.recordAutoTask({
+									autoRunSessionId: statsAutoRunId,
+									sessionId: executionSession.id,
+									agentType: executionSession.toolType,
+									taskIndex: totalTaskAttempts - 1,
+									taskContent: shortSummary || undefined,
+									documentPath: `${folderPath}/${ensureMarkdownFilename(docEntry.filename)}`,
+									startTime: Date.now() - elapsedTimeMs,
+									duration: elapsedTimeMs,
+									success: success,
+									verifierVerdict: taskResult.verifierVerdict ?? undefined,
+									promptProfile,
+									agentStrategy,
+									worktreeMode,
+									schedulerOutcome: success ? 'completed' : 'failed',
+									queueWaitMs: 0,
+									retryCount: 0,
+									timedOut: false,
+								});
+							} catch (statsError) {
+								console.warn('[BatchProcessor] Failed to record task stats:', statsError);
+							}
+						}
+
+						if (usageStats) {
+							loopTotalInputTokens += usageStats.inputTokens || 0;
+							loopTotalOutputTokens += usageStats.outputTokens || 0;
+							loopTotalCost += usageStats.totalCostUsd || 0;
+							totalInputTokens += usageStats.inputTokens || 0;
+							totalOutputTokens += usageStats.outputTokens || 0;
+							totalCost += usageStats.totalCostUsd || 0;
+						}
+
+						if (session.symphonyMetadata?.isSymphonySession) {
+							window.maestro.symphony
+								.updateStatus({
+									contributionId: session.symphonyMetadata.contributionId,
+									progress: {
+										totalDocuments: documents.length,
+										completedDocuments: docIndex,
+										totalTasks: initialTotalTasks,
+										completedTasks: totalCompletedTasks,
+										currentDocument: docEntry.filename,
+									},
+									tokenUsage: {
+										inputTokens: totalInputTokens,
+										outputTokens: totalOutputTokens,
+										estimatedCost: totalCost,
+									},
+									timeSpent: timeTracking.getElapsedTime(sessionId),
+								})
+								.catch((err: unknown) => {
+									console.warn('[BatchProcessor] Failed to update Symphony progress:', err);
+								});
+						}
+
+						void (!docEntry.resetOnCompletion ? tasksCompletedThisRun : 0);
+
+						if (addedUncheckedTasks > 0) {
+							docTasksTotal += addedUncheckedTasks;
+						}
+
+						let recountedTotal = 0;
+						for (const doc of documents) {
+							const { taskCount, checkedCount } = await readDocAndCountTasks(
+								folderPath,
+								doc.filename,
+								sshRemoteId
+							);
+							recountedTotal += taskCount + checkedCount;
+						}
+
+						updateBatchStateAndBroadcastRef.current!(sessionId, (prev) => {
+							const prevState = prev[sessionId] || DEFAULT_BATCH_STATE;
+							const nextTotalAcrossAllDocs = Math.max(0, recountedTotal);
+							const nextTotalTasks = Math.max(0, recountedTotal);
+
+							return {
+								...prev,
+								[sessionId]: {
+									...prevState,
+									currentDocTasksCompleted: docTasksCompleted,
+									currentDocTasksTotal: docTasksTotal,
+									completedTasksAcrossAllDocs: totalCompletedTasks,
+									totalTasksAcrossAllDocs: nextTotalAcrossAllDocs,
+									cumulativeTaskTimeMs: (prevState.cumulativeTaskTimeMs || 0) + elapsedTimeMs,
+									completedTasks: totalCompletedTasks,
+									totalTasks: nextTotalTasks,
+									currentTaskIndex: totalCompletedTasks,
+									sessionIds: [...(prevState?.sessionIds || []), agentSessionId || ''],
+								},
+							};
+						});
+
+						onAddHistoryEntry({
+							type: 'AUTO',
+							timestamp: Date.now(),
+							summary: shortSummary,
+							fullResponse: fullSynopsis,
+							agentSessionId,
+							projectPath: taskEffectiveCwd,
+							sessionId: sessionId,
+							success,
+							usageStats,
+							contextDisplayUsageStats: taskResult.contextDisplayUsageStats,
+							usageBreakdown: taskResult.usageBreakdown,
+							elapsedTimeMs,
+							verifierVerdict: taskResult.verifierVerdict ?? undefined,
+							playbookId,
+							playbookName,
+							promptProfile,
+							agentStrategy,
+							worktreeMode,
+							schedulerMode: getAutoRunRecordedSchedulerMode(batchSchedulerSnapshot),
+							configuredSchedulerMode: batchSchedulerSnapshot.configuredMode,
+							schedulerOutcome: success ? 'completed' : 'failed',
+						});
+
+						if (
+							audioFeedbackEnabledRef.current &&
+							audioFeedbackCommandRef.current &&
+							shortSummary
+						) {
+							window.maestro.notification
+								.speak(shortSummary, audioFeedbackCommandRef.current)
+								.catch((err) => {
+									console.error('[BatchProcessor] Failed to speak synopsis:', err);
+								});
+						}
+
+						if (consecutiveNoChangeCount >= MAX_CONSECUTIVE_NO_CHANGES) {
+							const stallReason = `${consecutiveNoChangeCount} consecutive runs with no progress`;
+							stalledDocuments.set(docEntry.filename, stallReason);
+							window.maestro.logger.autorun(
+								`Document stalled: ${docEntry.filename}`,
+								session.name,
+								{
+									document: docEntry.filename,
+									reason: stallReason,
+									remainingTasks: newRemainingTasks,
+									loopNumber: loopIteration + 1,
+								}
+							);
+
+							const stallExplanation = [
+								`**Document Stalled: ${docEntry.filename}**`,
+								'',
+								`The AI agent ran ${consecutiveNoChangeCount} times on this document but made no progress:`,
+								`- No tasks were checked off`,
+								`- No changes were made to the document content`,
+								'',
+								`**What this means:**`,
+								`The remaining tasks in this document may be:`,
+								`- Already complete (but not checked off)`,
+								`- Unclear or ambiguous for the AI to act on`,
+								`- Dependent on external factors or manual intervention`,
+								`- Outside the scope of what the AI can accomplish`,
+								'',
+								`**Remaining unchecked tasks:** ${newRemainingTasks}`,
+								'',
+								documents.length > 1
+									? `Skipping to the next document in the playbook...`
+									: `No more documents to process.`,
+							].join('\n');
+
+							onAddHistoryEntry({
+								type: 'AUTO',
+								timestamp: Date.now(),
+								summary: `Document stalled: ${docEntry.filename} (${newRemainingTasks} tasks remaining)`,
+								fullResponse: stallExplanation,
+								projectPath: taskEffectiveCwd,
+								sessionId: sessionId,
+								success: false,
+							});
+							break;
+						}
+
+						docCheckedCount = newCheckedCount;
+						remainingTasks = newRemainingTasks;
+						docContent = taskResult.contentAfterTask;
+					} catch (error) {
+						console.error(
+							`[BatchProcessor] Error running task in ${docEntry.filename} for session ${sessionId}:`,
+							error
+						);
+
+						const postTaskErrorResolution = errorResolutionRefs.current[sessionId];
+						if (postTaskErrorResolution) {
+							const action = await postTaskErrorResolution.promise;
 							delete errorResolutionRefs.current[sessionId];
 
 							if (action === 'abort') {
@@ -1143,387 +1607,223 @@ export function useBatchProcessor({
 								skipCurrentDocumentAfterError = true;
 								break;
 							}
-						}
 
-						// Use extracted document processor hook for task processing
-						// This handles: template substitution, document expansion, agent spawning,
-						// session registration, re-reading document, and synopsis generation
-						try {
-							const taskResult = await documentProcessor.processTask(
-								{
-									folderPath,
-									session,
-									gitBranch,
-									groupName,
-									loopIteration: loopIteration + 1, // 1-indexed
-									effectiveCwd,
-									customPrompt: prompt,
-									skills,
-									promptProfile,
-									documentContextMode,
-									skillPromptMode,
-									agentStrategy,
-									definitionOfDone,
-									verificationSteps,
-									sshRemoteId,
-								},
-								effectiveFilename, // Use working copy path for reset-on-completion docs
-								docCheckedCount,
-								remainingTasks,
-								docContent,
-								{
-									onSpawnAgent,
-									onSpawnBackgroundSynopsis,
-								}
-							);
-
-							// Track agent session IDs
-							if (taskResult.agentSessionId) {
-								agentSessionIds.push(taskResult.agentSessionId);
-							}
-
-							anyTasksProcessedThisIteration = true;
-
-							// Extract results from processTask
 							const {
-								tasksCompletedThisRun,
-								addedUncheckedTasks,
-								newRemainingTasks,
-								documentChanged,
-								newCheckedCount,
-								shortSummary,
-								fullSynopsis,
-								usageStats,
-								elapsedTimeMs,
-								agentSessionId,
-								success,
-							} = taskResult;
-							const countedCompletedTasks = success ? tasksCompletedThisRun : 0;
-
-							// Detect stalling: if document content is unchanged and no tasks were checked off
-							if (!documentChanged && tasksCompletedThisRun === 0) {
-								consecutiveNoChangeCount++;
-							} else {
-								// Reset counter on any document change or task completion
-								consecutiveNoChangeCount = 0;
-							}
-
-							// Update counters
-							docTasksCompleted += countedCompletedTasks;
-							totalCompletedTasks += countedCompletedTasks;
-							loopTasksCompleted += countedCompletedTasks;
-
-							// Record this task attempt in stats database (if stats tracking is active)
-							totalTaskAttempts++;
-							if (statsAutoRunId) {
-								try {
-									await window.maestro.stats.recordAutoTask({
-										autoRunSessionId: statsAutoRunId,
-										sessionId: sessionId,
-										agentType: session.toolType,
-										taskIndex: totalTaskAttempts - 1,
-										taskContent: shortSummary || undefined,
-										documentPath: `${folderPath}/${docEntry.filename}.md`,
-										startTime: Date.now() - elapsedTimeMs,
-										duration: elapsedTimeMs,
-										success: success,
-										verifierVerdict: taskResult.verifierVerdict ?? undefined,
-										promptProfile,
-										agentStrategy,
-										worktreeMode,
-										schedulerOutcome: success ? 'completed' : 'failed',
-										queueWaitMs: 0,
-										retryCount: 0,
-										timedOut: false,
-									});
-								} catch (statsError) {
-									// Don't fail the batch if stats tracking fails
-									console.warn('[BatchProcessor] Failed to record task stats:', statsError);
-								}
-							}
-
-							// Track token usage for loop summary and cumulative totals
-							if (usageStats) {
-								loopTotalInputTokens += usageStats.inputTokens || 0;
-								loopTotalOutputTokens += usageStats.outputTokens || 0;
-								loopTotalCost += usageStats.totalCostUsd || 0;
-								// Also track cumulative totals for final summary
-								totalInputTokens += usageStats.inputTokens || 0;
-								totalOutputTokens += usageStats.outputTokens || 0;
-								totalCost += usageStats.totalCostUsd || 0;
-							}
-
-							// Update Symphony contribution with real-time progress
-							if (session.symphonyMetadata?.isSymphonySession) {
-								window.maestro.symphony
-									.updateStatus({
-										contributionId: session.symphonyMetadata.contributionId,
-										progress: {
-											totalDocuments: documents.length,
-											completedDocuments: docIndex,
-											totalTasks: initialTotalTasks,
-											completedTasks: totalCompletedTasks,
-											currentDocument: docEntry.filename,
-										},
-										tokenUsage: {
-											inputTokens: totalInputTokens,
-											outputTokens: totalOutputTokens,
-											estimatedCost: totalCost,
-										},
-										timeSpent: timeTracking.getElapsedTime(sessionId),
-									})
-									.catch((err: unknown) => {
-										console.warn('[BatchProcessor] Failed to update Symphony progress:', err);
-									});
-							}
-
-							// Track non-reset document completions for loop exit logic
-							// (This tracking is intentionally a no-op for now - kept for future loop mode enhancements)
-							void (!docEntry.resetOnCompletion ? tasksCompletedThisRun : 0);
-
-							// Update progress state for current document
-							if (addedUncheckedTasks > 0) {
-								docTasksTotal += addedUncheckedTasks;
-							}
-
-							// Recount all documents to get accurate total
-							// Tasks in one document can create tasks in other documents,
-							// so delta-based tracking on just the current doc is insufficient
-							let recountedTotal = 0;
-							for (const doc of documents) {
-								const { taskCount, checkedCount } = await readDocAndCountTasks(
-									folderPath,
-									doc.filename,
-									sshRemoteId
-								);
-								recountedTotal += taskCount + checkedCount;
-							}
-
-							updateBatchStateAndBroadcastRef.current!(sessionId, (prev) => {
-								const prevState = prev[sessionId] || DEFAULT_BATCH_STATE;
-								const nextTotalAcrossAllDocs = Math.max(0, recountedTotal);
-								const nextTotalTasks = Math.max(0, recountedTotal);
-
-								return {
-									...prev,
-									[sessionId]: {
-										...prevState,
-										currentDocTasksCompleted: docTasksCompleted,
-										currentDocTasksTotal: docTasksTotal,
-										completedTasksAcrossAllDocs: totalCompletedTasks,
-										totalTasksAcrossAllDocs: nextTotalAcrossAllDocs,
-										// Accumulate actual task duration (most accurate work time tracking)
-										cumulativeTaskTimeMs: (prevState.cumulativeTaskTimeMs || 0) + elapsedTimeMs,
-										// Legacy fields
-										completedTasks: totalCompletedTasks,
-										totalTasks: nextTotalTasks,
-										currentTaskIndex: totalCompletedTasks,
-										sessionIds: [...(prevState?.sessionIds || []), agentSessionId || ''],
-									},
-								};
-							});
-
-							// Add history entry
-							// Use effectiveCwd for projectPath so clicking the session link looks in the right place
-							onAddHistoryEntry({
-								type: 'AUTO',
-								timestamp: Date.now(),
-								summary: shortSummary,
-								fullResponse: fullSynopsis,
-								agentSessionId,
-								projectPath: effectiveCwd,
-								sessionId: sessionId,
-								success,
-								usageStats,
-								contextDisplayUsageStats: taskResult.contextDisplayUsageStats,
-								usageBreakdown: taskResult.usageBreakdown,
-								elapsedTimeMs,
-								verifierVerdict: taskResult.verifierVerdict ?? undefined,
-								playbookId,
-								playbookName,
-								promptProfile,
-								agentStrategy,
-								worktreeMode,
-								schedulerMode,
-								schedulerOutcome: success ? 'completed' : 'failed',
-							});
-
-							// Speak the synopsis via TTS if audio feedback is enabled
-							// Use refs to get latest setting values (user may toggle mid-run)
-							if (
-								audioFeedbackEnabledRef.current &&
-								audioFeedbackCommandRef.current &&
-								shortSummary
-							) {
-								window.maestro.notification
-									.speak(shortSummary, audioFeedbackCommandRef.current)
-									.catch((err) => {
-										console.error('[BatchProcessor] Failed to speak synopsis:', err);
-									});
-							}
-
-							// Check if we've hit the stalling threshold for this document
-							if (consecutiveNoChangeCount >= MAX_CONSECUTIVE_NO_CHANGES) {
-								const stallReason = `${consecutiveNoChangeCount} consecutive runs with no progress`;
-
-								// Track this document as stalled
-								stalledDocuments.set(docEntry.filename, stallReason);
-
-								// AUTORUN LOG: Document stalled
-								window.maestro.logger.autorun(
-									`Document stalled: ${docEntry.filename}`,
-									session.name,
-									{
-										document: docEntry.filename,
-										reason: stallReason,
-										remainingTasks: newRemainingTasks,
-										loopNumber: loopIteration + 1,
-									}
-								);
-
-								// Add a history entry specifically for this stalled document
-								const stallExplanation = [
-									`**Document Stalled: ${docEntry.filename}**`,
-									'',
-									`The AI agent ran ${consecutiveNoChangeCount} times on this document but made no progress:`,
-									`- No tasks were checked off`,
-									`- No changes were made to the document content`,
-									'',
-									`**What this means:**`,
-									`The remaining tasks in this document may be:`,
-									`- Already complete (but not checked off)`,
-									`- Unclear or ambiguous for the AI to act on`,
-									`- Dependent on external factors or manual intervention`,
-									`- Outside the scope of what the AI can accomplish`,
-									'',
-									`**Remaining unchecked tasks:** ${newRemainingTasks}`,
-									'',
-									documents.length > 1
-										? `Skipping to the next document in the playbook...`
-										: `No more documents to process.`,
-								].join('\n');
-
-								onAddHistoryEntry({
-									type: 'AUTO',
-									timestamp: Date.now(),
-									summary: `Document stalled: ${docEntry.filename} (${newRemainingTasks} tasks remaining)`,
-									fullResponse: stallExplanation,
-									projectPath: effectiveCwd,
-									sessionId: sessionId,
-									success: false, // Mark as unsuccessful since we couldn't complete
-								});
-
-								// Skip to the next document instead of breaking the entire batch
-								break; // Break out of the inner while loop for this document
-							}
-
-							docCheckedCount = newCheckedCount;
-							remainingTasks = newRemainingTasks;
-							docContent = taskResult.contentAfterTask;
-						} catch (error) {
-							console.error(
-								`[BatchProcessor] Error running task in ${docEntry.filename} for session ${sessionId}:`,
-								error
-							);
-
-							// Check if an error resolution promise was created (e.g., by onAgentError → pauseBatchOnError)
-							// This handles the case where the agent error (e.g., context limit) triggered a pause,
-							// but processTask threw before the next loop iteration could check for it.
-							const postTaskErrorResolution = errorResolutionRefs.current[sessionId];
-							if (postTaskErrorResolution) {
-								const action = await postTaskErrorResolution.promise;
-								delete errorResolutionRefs.current[sessionId];
-
-								if (action === 'abort') {
-									stopRequestedRefs.current[sessionId] = true;
-									break;
-								}
-
-								if (action === 'skip-document') {
-									skipCurrentDocumentAfterError = true;
-									break;
-								}
-
-								// 'resume' — re-read document to get accurate task count before continuing
-								const {
-									taskCount,
-									checkedCount,
-									content: freshContent,
-								} = await readDocAndCountTasks(folderPath, effectiveFilename, sshRemoteId);
-								remainingTasks = taskCount;
-								docCheckedCount = checkedCount;
-								docContent = freshContent;
-								continue;
-							}
-
-							// No error resolution pending — continue to next task on error
-							remainingTasks--;
+								taskCount,
+								checkedCount,
+								content: freshContent,
+							} = await readDocAndCountTasks(folderPath, effectiveFilename, sshRemoteId);
+							remainingTasks = taskCount;
+							docCheckedCount = checkedCount;
+							docContent = freshContent;
+							continue;
 						}
-					}
 
-					// Check for stop request before moving to next document
-					if (stopRequestedRefs.current[sessionId]) {
-						break;
+						remainingTasks--;
 					}
+				}
 
-					// Skip document handling if this document stalled (it didn't complete normally)
-					if (stalledDocuments.has(docEntry.filename)) {
-						// Working copy approach: stalled working copy stays in /Runs/ as audit log
-						// Original document is untouched, so nothing to restore
-						workingCopies.delete(docEntry.filename);
-						// Reset consecutive no-change counter for next document
-						consecutiveNoChangeCount = 0;
-						continue;
-					}
+				if (stopRequestedRefs.current[sessionId]) {
+					return null;
+				}
 
-					if (skipCurrentDocumentAfterError) {
-						// Working copy approach: errored working copy stays in /Runs/ as audit log
-						// Original document is untouched, so nothing to restore
-						workingCopies.delete(docEntry.filename);
-						continue;
-					}
+				if (stalledDocuments.has(docEntry.filename)) {
+					workingCopies.delete(docEntry.filename);
+					return {
+						finalizeOptions: {
+							nodeId: schedulerNodeId,
+							documentName: docEntry.filename,
+							state: 'failed',
+							summaries: documentTaskSummaries.length
+								? documentTaskSummaries
+								: [`Document stalled: ${docEntry.filename}`],
+							success: false,
+							verifierVerdict: documentVerifierVerdict,
+						},
+					};
+				}
 
-					// Document complete - for reset-on-completion docs, original is untouched
-					// Working copy in /Runs/ serves as the audit log of this loop's work
-					if (docEntry.resetOnCompletion && docTasksCompleted > 0) {
-						// AUTORUN LOG: Document loop completed
-						window.maestro.logger.autorun(
-							`Document loop completed: ${docEntry.filename}`,
-							session.name,
-							{
-								document: docEntry.filename,
-								workingCopy: workingCopies.get(docEntry.filename),
-								tasksCompleted: docTasksCompleted,
-								loopNumber: loopIteration + 1,
-							}
+				if (skipCurrentDocumentAfterError) {
+					workingCopies.delete(docEntry.filename);
+					return {
+						finalizeOptions: {
+							nodeId: schedulerNodeId,
+							documentName: docEntry.filename,
+							state: 'failed',
+							summaries: documentTaskSummaries.length
+								? documentTaskSummaries
+								: [`Document skipped after manual review: ${docEntry.filename}`],
+							success: false,
+							verifierVerdict: documentVerifierVerdict,
+						},
+					};
+				}
+
+				if (docEntry.resetOnCompletion && docTasksCompleted > 0) {
+					window.maestro.logger.autorun(
+						`Document loop completed: ${docEntry.filename}`,
+						session.name,
+						{
+							document: docEntry.filename,
+							workingCopy: workingCopies.get(docEntry.filename),
+							tasksCompleted: docTasksCompleted,
+							loopNumber: loopIteration + 1,
+						}
+					);
+
+					if (loopEnabled) {
+						const { taskCount: resetTaskCount } = await readDocAndCountTasks(
+							folderPath,
+							docEntry.filename,
+							sshRemoteId
 						);
+						updateBatchStateAndBroadcastRef.current!(sessionId, (prev) => ({
+							...prev,
+							[sessionId]: {
+								...prev[sessionId],
+								totalTasksAcrossAllDocs: prev[sessionId].totalTasksAcrossAllDocs + resetTaskCount,
+								totalTasks: prev[sessionId].totalTasks + resetTaskCount,
+							},
+						}));
+					}
 
-						// For loop mode, re-count tasks in the original document for next iteration
-						// (original is unchanged, so it still has all unchecked tasks)
-						if (loopEnabled) {
-							const { taskCount: resetTaskCount } = await readDocAndCountTasks(
-								folderPath,
-								docEntry.filename,
-								sshRemoteId
+					workingCopies.delete(docEntry.filename);
+				} else if (docEntry.resetOnCompletion) {
+					workingCopies.delete(docEntry.filename);
+				}
+
+				return {
+					finalizeOptions: {
+						nodeId: schedulerNodeId,
+						documentName: docEntry.filename,
+						state: remainingTasks === 0 ? 'completed' : 'failed',
+						summaries: documentTaskSummaries,
+						success: documentSucceeded && remainingTasks === 0,
+						verifierVerdict: documentVerifierVerdict,
+					},
+				};
+			};
+
+			// Main processing loop (handles loop mode)
+			while (true) {
+				schedulerSnapshot = createAutoRunSchedulerSnapshot(
+					documents,
+					config.taskGraph,
+					config.maxParallelism
+				);
+				let completedNodeContexts: ReadonlyMap<string, AutoRunCompletedNodeContext> = new Map();
+
+				// Check for stop request
+				if (stopRequestedRefs.current[sessionId]) {
+					addFinalLoopSummary('Stopped by user');
+					break;
+				}
+
+				// Track if any tasks were processed in this iteration
+				anyTasksProcessedThisIteration = false;
+
+				// Process scheduler-ready documents in deterministic order
+				const dispatchState = await runAutoRunDispatchBatches(
+					{
+						scheduler: schedulerSnapshot,
+						completedNodeContexts,
+					},
+					{
+						maxClaims: (state) => {
+							const readyNodes = state.scheduler.readyNodeIds
+								.map((nodeId) => state.scheduler.nodes.find((node) => node.id === nodeId))
+								.filter((node): node is AutoRunSchedulerNodeSnapshot => Boolean(node));
+							return buildParallelDispatchPlan(
+								readyNodes,
+								Math.max(1, state.scheduler.maxParallelism || 1),
+								isolatedWorktreeTargets,
+								effectiveCwd
+							).selectedNodeIds.length;
+						},
+						selectNodeIds: (readyNodes, maxClaims) =>
+							buildParallelDispatchPlan(
+								readyNodes,
+								maxClaims,
+								isolatedWorktreeTargets,
+								effectiveCwd
+							).selectedNodeIds,
+						canContinue: () => !stopRequestedRefs.current[sessionId],
+						dispatchBatch: async (claimResult) => {
+							schedulerSnapshot = claimResult.scheduler;
+							completedNodeContexts = claimResult.completedNodeContexts;
+
+							if (claimResult.claims.length === 0) {
+								return claimResult;
+							}
+
+							const dispatchPlan = buildParallelDispatchPlan(
+								claimResult.claims.map((claim) => claim.node),
+								claimResult.claims.length,
+								isolatedWorktreeTargets,
+								effectiveCwd
 							);
+							sharedCheckoutFallbackCount += dispatchPlan.warnings.length;
+							for (const warning of dispatchPlan.warnings) {
+								window.maestro.logger.log('warn', warning, 'BatchProcessor', {
+									sessionId,
+									playbookId,
+								});
+							}
+							const executionBatch = await executeAutoRunDispatchClaims(
+								{
+									scheduler: claimResult.scheduler,
+									completedNodeContexts: claimResult.completedNodeContexts,
+								},
+								claimResult.claims,
+								(claim) => {
+									const targetForClaim =
+										claim.node.isolationMode === 'isolated-worktree'
+											? (dispatchPlan.isolatedTargetsByNodeId[claim.nodeId] ?? null)
+											: null;
+									return processDispatchClaim(claim, claimResult.scheduler, targetForClaim).then(
+										(result) => ({
+											finalizeOptions: result?.finalizeOptions ?? {
+												nodeId: claim.nodeId,
+												documentName: documents[claim.node.documentIndex]?.filename ?? claim.nodeId,
+												state: 'failed',
+												summaries: [],
+												success: false,
+											},
+											events: [],
+											tasksCompleted: 0,
+											inputTokens: 0,
+											outputTokens: 0,
+											totalCost: 0,
+											countedCompletedTasks: 0,
+											anyTasksProcessed: false,
+										})
+									);
+								}
+							);
+
+							if (stopRequestedRefs.current[sessionId]) {
+								return {
+									scheduler: schedulerSnapshot,
+									completedNodeContexts,
+								};
+							}
+
+							schedulerSnapshot = executionBatch.state.scheduler;
+							completedNodeContexts = executionBatch.state.completedNodeContexts;
 							updateBatchStateAndBroadcastRef.current!(sessionId, (prev) => ({
 								...prev,
 								[sessionId]: {
 									...prev[sessionId],
-									totalTasksAcrossAllDocs: prev[sessionId].totalTasksAcrossAllDocs + resetTaskCount,
-									totalTasks: prev[sessionId].totalTasks + resetTaskCount,
+									scheduler: schedulerSnapshot,
 								},
 							}));
-						}
 
-						// Clear tracking - working copy stays in /Runs/ as audit log
-						workingCopies.delete(docEntry.filename);
-					} else if (docEntry.resetOnCompletion) {
-						// Document had reset enabled but no tasks were completed
-						// Working copy still serves as record of the attempt
-						workingCopies.delete(docEntry.filename);
+							return executionBatch.state;
+						},
 					}
-				}
+				);
+				schedulerSnapshot = dispatchState.scheduler;
+				completedNodeContexts = dispatchState.completedNodeContexts;
 
 				// Note: We no longer break immediately when a document stalls.
 				// Individual documents that stall are skipped, and we continue processing other documents.
@@ -1597,43 +1897,39 @@ export function useBatchProcessor({
 				// Calculate loop elapsed time
 				const loopElapsedMs = Date.now() - loopStartTime;
 
-				// Add loop summary history entry
-				const loopSummary = `Loop ${completedLoopNumber} completed: ${completedLoopTasks} task${completedLoopTasks !== 1 ? 's' : ''} accomplished`;
-				const loopDetails = [
-					`**Loop ${completedLoopNumber} Summary**`,
-					'',
-					`- **Tasks Accomplished:** ${completedLoopTasks}`,
-					`- **Duration:** ${formatElapsedTime(loopElapsedMs)}`,
-					loopTotalInputTokens > 0 || loopTotalOutputTokens > 0
-						? `- **Tokens:** ${(loopTotalInputTokens + loopTotalOutputTokens).toLocaleString()} (${loopTotalInputTokens.toLocaleString()} in / ${loopTotalOutputTokens.toLocaleString()} out)`
-						: '',
-					loopTotalCost > 0 ? `- **Cost:** $${loopTotalCost.toFixed(4)}` : '',
-					`- **Tasks Discovered for Next Loop:** ${newTotalTasks}`,
-				]
-					.filter((line) => line !== '')
-					.join('\n');
-
-				onAddHistoryEntry({
-					type: 'AUTO',
-					timestamp: Date.now(),
-					summary: loopSummary,
-					fullResponse: loopDetails,
-					projectPath: session.cwd,
-					sessionId: sessionId,
-					success: true,
-					elapsedTimeMs: loopElapsedMs,
-					usageStats:
-						loopTotalInputTokens > 0 || loopTotalOutputTokens > 0
-							? {
-									inputTokens: loopTotalInputTokens,
-									outputTokens: loopTotalOutputTokens,
-									cacheReadInputTokens: 0,
-									cacheCreationInputTokens: 0,
-									totalCostUsd: loopTotalCost,
-									contextWindow: 0,
-								}
-							: undefined,
+				const observedExecution = summarizeAutoRunObservedExecution(schedulerSnapshot, {
+					sharedCheckoutFallbackCount,
 				});
+				onAddHistoryEntry(
+					buildAutoRunLoopSummaryEntry({
+						timestamp: Date.now(),
+						loopIteration,
+						loopTasksCompleted: completedLoopTasks,
+						loopElapsedMs,
+						loopTotalInputTokens,
+						loopTotalOutputTokens,
+						loopTotalCost,
+						projectPath: session.cwd,
+						sessionId,
+						isFinal: false,
+						tasksDiscoveredForNextLoop: newTotalTasks,
+						playbookId,
+						playbookName,
+						promptProfile,
+						agentStrategy,
+						worktreeMode,
+						schedulerMode: observedExecution.observedSchedulerMode,
+						configuredSchedulerMode: observedExecution.configuredSchedulerMode,
+						actualParallelNodeCount: observedExecution.actualParallelNodeCount,
+						sharedCheckoutFallbackCount: observedExecution.sharedCheckoutFallbackCount,
+						blockedNodeCount: observedExecution.blockedNodeCount,
+						skippedNodeCount: observedExecution.skippedNodeCount,
+						schedulerOutcome: 'completed',
+					})
+				);
+				speakAutoRunNarration(
+					buildAutoRunLoopCompleteNarration(completedLoopNumber, completedLoopTasks, newTotalTasks)
+				);
 
 				// Reset per-loop tracking for next iteration
 				loopStartTime = Date.now();
@@ -1781,26 +2077,31 @@ export function useBatchProcessor({
 				);
 			}
 
-			const finalDetails = [
-				`**Auto Run Summary**`,
-				'',
-				`- **Status:** ${statusMessage}`,
-				`- **Tasks Completed:** ${totalCompletedTasks}`,
-				`- **Total Duration:** ${formatElapsedTime(totalElapsedMs)}`,
-				loopEnabled ? `- **Loops Completed:** ${loopsCompleted}` : '',
-				totalInputTokens > 0 || totalOutputTokens > 0
-					? `- **Total Tokens:** ${(totalInputTokens + totalOutputTokens).toLocaleString()} (${totalInputTokens.toLocaleString()} in / ${totalOutputTokens.toLocaleString()} out)`
-					: '',
-				totalCost > 0 ? `- **Total Cost:** $${totalCost.toFixed(4)}` : '',
-				'',
-				`- **Documents:** ${documents.map((d) => d.filename).join(', ')}`,
-				...stalledDocsSection,
-				'',
-				`**Achievement Progress**`,
-				`- ${levelProgressText}`,
-			]
-				.filter((line) => line !== '')
-				.join('\n');
+			const observedExecution = summarizeAutoRunObservedExecution(schedulerSnapshot, {
+				sharedCheckoutFallbackCount,
+			});
+			const finalDetails = buildAutoRunTotalSummaryDetails({
+				totalCompletedTasks,
+				totalElapsedMs,
+				loopsCompleted: loopEnabled ? loopsCompleted : undefined,
+				totalInputTokens,
+				totalOutputTokens,
+				totalCost,
+				statusMessage,
+				observedSchedulerMode: observedExecution.observedSchedulerMode,
+				configuredSchedulerMode: observedExecution.configuredSchedulerMode,
+				actualParallelNodeCount: observedExecution.actualParallelNodeCount,
+				sharedCheckoutFallbackCount: observedExecution.sharedCheckoutFallbackCount,
+				blockedNodeCount: observedExecution.blockedNodeCount,
+				skippedNodeCount: observedExecution.skippedNodeCount,
+				documentsLine: `- **Documents:** ${documents.map((d) => d.filename).join(', ')}`,
+				extraSections: [
+					...stalledDocsSection,
+					'',
+					`**Achievement Progress**`,
+					`- ${levelProgressText}`,
+				],
+			});
 
 			// Success is true if not stopped and at least some documents completed without stalling
 			const isSuccess = !wasStopped && !allDocsStalled;
@@ -1815,17 +2116,26 @@ export function useBatchProcessor({
 					sessionId, // Include sessionId so the summary appears in session's history
 					success: isSuccess,
 					elapsedTimeMs: totalElapsedMs,
-					usageStats:
-						totalInputTokens > 0 || totalOutputTokens > 0
-							? {
-									inputTokens: totalInputTokens,
-									outputTokens: totalOutputTokens,
-									cacheReadInputTokens: 0,
-									cacheCreationInputTokens: 0,
-									totalCostUsd: totalCost,
-									contextWindow: 0,
-								}
-							: undefined,
+					usageStats: buildAutoRunAggregateUsageStats(
+						totalInputTokens,
+						totalOutputTokens,
+						totalCost
+					),
+					playbookId,
+					playbookName,
+					promptProfile,
+					agentStrategy,
+					worktreeMode,
+					schedulerMode: observedExecution.observedSchedulerMode,
+					configuredSchedulerMode: observedExecution.configuredSchedulerMode,
+					actualParallelNodeCount: observedExecution.actualParallelNodeCount,
+					sharedCheckoutFallbackCount: observedExecution.sharedCheckoutFallbackCount,
+					blockedNodeCount: observedExecution.blockedNodeCount,
+					skippedNodeCount: observedExecution.skippedNodeCount,
+					schedulerOutcome: isSuccess ? 'completed' : 'failed',
+					queueWaitMs: totalQueueWaitMs,
+					retryCount: totalRetryCount,
+					timedOut: autoRunTimedOut,
 					achievementAction: 'openAbout', // Enable clickable link to achievements panel
 				});
 			} catch {
@@ -1835,10 +2145,25 @@ export function useBatchProcessor({
 			// End stats tracking for this Auto Run session
 			if (statsAutoRunId) {
 				try {
+					const sessionSchedulerOutcome =
+						!wasStopped && !allDocsStalled ? 'completed' : autoRunTimedOut ? 'timed_out' : 'failed';
 					await window.maestro.stats.endAutoRun(
 						statsAutoRunId,
 						totalElapsedMs,
-						totalCompletedTasks
+						totalCompletedTasks,
+						{
+							verifierVerdict: autoRunVerifierVerdict ?? undefined,
+							schedulerMode: observedExecution.observedSchedulerMode,
+							configuredSchedulerMode: observedExecution.configuredSchedulerMode,
+							actualParallelNodeCount: observedExecution.actualParallelNodeCount,
+							sharedCheckoutFallbackCount: observedExecution.sharedCheckoutFallbackCount,
+							blockedNodeCount: observedExecution.blockedNodeCount,
+							skippedNodeCount: observedExecution.skippedNodeCount,
+							schedulerOutcome: sessionSchedulerOutcome,
+							queueWaitMs: totalQueueWaitMs,
+							retryCount: totalRetryCount,
+							timedOut: autoRunTimedOut,
+						}
 					);
 				} catch (statsError) {
 					// Don't fail cleanup if stats tracking fails
@@ -1913,6 +2238,7 @@ export function useBatchProcessor({
 			timeTracking,
 			onProcessQueueAfterCompletion,
 			flushDebouncedUpdate,
+			speakAutoRunNarration,
 		]
 	);
 

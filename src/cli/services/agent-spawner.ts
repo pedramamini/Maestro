@@ -16,10 +16,12 @@ import { ZaiOutputParser } from '../../main/parsers/zai-output-parser';
 import { aggregateModelUsage } from '../../main/parsers/usage-aggregator';
 import { getAgentDefinition } from '../../main/agents/definitions';
 import { hasCapability } from '../../main/agents/capabilities';
-import { getAgentCustomPath } from './storage';
+import { getAgentCustomPath, readAgentConfigs } from './storage';
 import { generateUUID } from '../../shared/uuid';
 import { buildExpandedPath, buildExpandedEnv } from '../../shared/pathUtils';
 import { isWindows, getWhichCommand } from '../../shared/platformDetection';
+import { buildAutoRunDocumentTaskState } from '../../shared/autorunExecutionModel';
+import { buildMarkdownFilePath } from '../../shared/markdownFilenames';
 
 // Claude Code arguments for batch mode (stream-json format)
 const CLAUDE_ARGS = [
@@ -30,6 +32,7 @@ const CLAUDE_ARGS = [
 	'--dangerously-skip-permissions',
 ];
 const CODEX_BATCH_STRIP_ENV_KEYS = [
+	'CODEX_HOME',
 	'CODEX_THREAD_ID',
 	'MCP_SERVER_HOST',
 	'MCP_SERVER_PORT',
@@ -104,6 +107,37 @@ function ensureCodexBatchHome(env: NodeJS.ProcessEnv): string | undefined {
 			}`
 		);
 		return undefined;
+	}
+}
+
+function applyCliAgentConfigOverrides(
+	toolType: ToolType,
+	args: string[],
+	env: NodeJS.ProcessEnv
+): void {
+	const def = getAgentDefinition(toolType);
+	if (!def?.configOptions?.length) {
+		return;
+	}
+
+	const config = readAgentConfigs()[toolType];
+	if (!config) {
+		return;
+	}
+
+	for (const option of def.configOptions) {
+		const value = config[option.key];
+		if (value === undefined || value === null || value === '') {
+			continue;
+		}
+
+		if (option.argBuilder) {
+			args.push(...option.argBuilder(value as never));
+		}
+
+		if (option.envBuilder) {
+			Object.assign(env, option.envBuilder(value as never));
+		}
 	}
 }
 
@@ -478,6 +512,7 @@ async function spawnJsonLineAgent(
 		if (def?.batchModePrefix) args.push(...def.batchModePrefix);
 		if (def?.batchModeArgs) args.push(...def.batchModeArgs);
 		if (def?.jsonOutputArgs) args.push(...def.jsonOutputArgs);
+		applyCliAgentConfigOverrides(toolType, args, env);
 
 		// Codex requires explicit working directory arg before any resume subcommand
 		if (toolType === 'codex' && def?.workingDirArgs) {
@@ -492,13 +527,18 @@ async function spawnJsonLineAgent(
 			args.push('--ephemeral', '-c', 'web_search="disabled"');
 		}
 
-		// Add prompt (with or without '--' separator depending on agent)
-		if (!def?.noPromptSeparator) {
-			args.push('--');
-		}
+		// Add prompt (flag-based for agents like OpenClaw, stdin for Codex, positional otherwise)
 		if (toolType === 'codex') {
+			if (!def?.noPromptSeparator) {
+				args.push('--');
+			}
 			args.push('-');
+		} else if (def?.promptArgs) {
+			args.push(...def.promptArgs(prompt));
 		} else {
+			if (!def?.noPromptSeparator) {
+				args.push('--');
+			}
 			args.push(prompt);
 		}
 
@@ -676,18 +716,14 @@ export async function spawnAgent(
 export function readDocAndCountTasks(
 	folderPath: string,
 	filename: string
-): { content: string; taskCount: number } {
-	const filePath = `${folderPath}/${filename}.md`;
+): { content: string; taskCount: number; checkedCount: number } {
+	const filePath = buildMarkdownFilePath(folderPath, filename);
 
 	try {
 		const content = fs.readFileSync(filePath, 'utf-8');
-		const matches = content.match(/^[\s]*-\s*\[\s*\]\s*.+$/gm);
-		return {
-			content,
-			taskCount: matches ? matches.length : 0,
-		};
+		return buildAutoRunDocumentTaskState(content);
 	} catch {
-		return { content: '', taskCount: 0 };
+		return { content: '', taskCount: 0, checkedCount: 0 };
 	}
 }
 
@@ -698,7 +734,7 @@ export function readDocAndGetTasks(
 	folderPath: string,
 	filename: string
 ): { content: string; tasks: string[] } {
-	const filePath = `${folderPath}/${filename}.md`;
+	const filePath = buildMarkdownFilePath(folderPath, filename);
 
 	try {
 		const content = fs.readFileSync(filePath, 'utf-8');

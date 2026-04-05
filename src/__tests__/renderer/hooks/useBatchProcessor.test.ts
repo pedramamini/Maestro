@@ -622,6 +622,11 @@ describe('useBatchProcessor hook', () => {
 	let mockWorktreeCheckout: ReturnType<typeof vi.fn>;
 	let mockGetDefaultBranch: ReturnType<typeof vi.fn>;
 	let mockCreatePR: ReturnType<typeof vi.fn>;
+	let mockValidateExecutionStart: ReturnType<typeof vi.fn>;
+	let mockGetProjectMemorySnapshot: ReturnType<typeof vi.fn>;
+	let mockValidateProjectMemoryState: ReturnType<typeof vi.fn>;
+	let mockClaimNextExecution: ReturnType<typeof vi.fn>;
+	let mockEmitWizardTasks: ReturnType<typeof vi.fn>;
 
 	beforeEach(() => {
 		// Reset mocks
@@ -659,6 +664,47 @@ describe('useBatchProcessor hook', () => {
 		mockCreatePR = vi
 			.fn()
 			.mockResolvedValue({ success: true, prUrl: 'https://github.com/test/test/pull/1' });
+		mockValidateExecutionStart = vi.fn().mockResolvedValue({
+			success: true,
+			validation: {
+				ok: true,
+				skipped: false,
+				taskId: 'PM-01',
+				executorId: 'codex-main',
+				reason: null,
+				bindingMode: 'shared-branch-serialized',
+				expectedBranch: 'main',
+				currentBranch: 'main',
+			},
+		});
+		mockGetProjectMemorySnapshot = vi.fn().mockResolvedValue({ success: true, snapshot: null });
+		mockValidateProjectMemoryState = vi.fn().mockResolvedValue({
+			success: true,
+			report: {
+				ok: true,
+				issues: [],
+				taskCount: 0,
+				activeTaskId: null,
+				activeExecutorId: null,
+				activeBindingMode: null,
+				generatedAt: new Date().toISOString(),
+			},
+		});
+		mockClaimNextExecution = vi.fn().mockResolvedValue({
+			success: true,
+			execution: null,
+		});
+		mockEmitWizardTasks = vi.fn().mockResolvedValue({
+			success: true,
+			emittedTaskIds: ['PM-01'],
+			tasksFilePath: '/repo/project_memory/tasks/tasks.json',
+			diagnostics: {
+				taskCount: 1,
+				repoRoot: '/repo',
+				sourceBranch: 'main',
+				bindingPreference: 'shared-branch-serialized',
+			},
+		});
 
 		// Configure window.maestro
 		window.maestro = {
@@ -687,6 +733,14 @@ describe('useBatchProcessor hook', () => {
 			agentSessions: {
 				...window.maestro.agentSessions,
 				registerSessionOrigin: mockRegisterSessionOrigin,
+			},
+			projectMemory: {
+				...window.maestro.projectMemory,
+				getSnapshot: mockGetProjectMemorySnapshot,
+				validateState: mockValidateProjectMemoryState,
+				validateExecutionStart: mockValidateExecutionStart,
+				claimNextExecution: mockClaimNextExecution,
+				emitWizardTasks: mockEmitWizardTasks,
 			},
 			power: {
 				addReason: vi.fn(),
@@ -1001,6 +1055,318 @@ describe('useBatchProcessor hook', () => {
 			});
 
 			expect(mockOnSpawnAgent).not.toHaveBeenCalled();
+		});
+
+		it('should block start when project memory validation fails', async () => {
+			const sessions = [createMockSession({ isGitRepo: true })];
+			const groups = [createMockGroup()];
+			mockValidateExecutionStart.mockResolvedValue({
+				success: true,
+				validation: {
+					ok: false,
+					skipped: false,
+					taskId: 'PM-01',
+					executorId: 'codex-main',
+					reason: 'Task lock owner mismatch: expected codex-main, found other-executor',
+					bindingMode: 'shared-branch-serialized',
+					expectedBranch: 'main',
+					currentBranch: 'main',
+				},
+			});
+
+			const { result } = renderHook(() =>
+				useBatchProcessor({
+					sessions,
+					groups,
+					onUpdateSession: mockOnUpdateSession,
+					onSpawnAgent: mockOnSpawnAgent,
+					onAddHistoryEntry: mockOnAddHistoryEntry,
+				})
+			);
+
+			await act(async () => {
+				await result.current.startBatchRun(
+					'test-session-id',
+					{
+						documents: [{ filename: 'tasks', resetOnCompletion: false }],
+						prompt: 'Test prompt',
+						loopEnabled: false,
+						projectMemoryExecution: {
+							repoRoot: '/repo',
+							taskId: 'PM-01',
+							executorId: 'codex-main',
+						},
+					},
+					'/test/folder'
+				);
+			});
+
+			expect(mockValidateExecutionStart).toHaveBeenCalledWith(
+				'/repo',
+				'PM-01',
+				'codex-main',
+				'main'
+			);
+			expect(mockNotifyToast).toHaveBeenCalledWith(
+				expect.objectContaining({
+					type: 'warning',
+					message: expect.stringContaining('Project Memory blocked Auto Run start'),
+				})
+			);
+			expect(mockReadDoc).not.toHaveBeenCalled();
+			expect(mockOnSpawnAgent).not.toHaveBeenCalled();
+		});
+
+		it('should infer project memory execution context for codex manual starts', async () => {
+			const sessions = [
+				createMockSession({
+					isGitRepo: true,
+					toolType: 'codex' as any,
+					projectRoot: '/repo',
+					cwd: '/repo',
+				}),
+			];
+			const groups = [createMockGroup()];
+			mockGetProjectMemorySnapshot.mockResolvedValue({
+				success: true,
+				snapshot: {
+					projectId: 'maestro',
+					version: '2026-04-04',
+					taskCount: 1,
+					generatedAt: 'now',
+					tasks: [
+						{
+							id: 'PM-01',
+							title: 'Bound task',
+							status: 'in_progress',
+							dependsOn: [],
+							executionMode: 'shared-serialized',
+							bindingMode: 'shared-branch-serialized',
+							worktreePath: '/repo',
+							executorState: 'running',
+							executorId: 'codex-main',
+						},
+					],
+				},
+			});
+
+			const { result } = renderHook(() =>
+				useBatchProcessor({
+					sessions,
+					groups,
+					onUpdateSession: mockOnUpdateSession,
+					onSpawnAgent: mockOnSpawnAgent,
+					onAddHistoryEntry: mockOnAddHistoryEntry,
+				})
+			);
+
+			await act(async () => {
+				await result.current.startBatchRun(
+					'test-session-id',
+					{
+						documents: [{ filename: 'tasks', resetOnCompletion: false }],
+						prompt: 'Test prompt',
+						loopEnabled: false,
+					},
+					'/test/folder'
+				);
+			});
+
+			expect(mockGetProjectMemorySnapshot).toHaveBeenCalledWith('/repo');
+			expect(mockValidateExecutionStart).toHaveBeenCalledWith(
+				'/repo',
+				'PM-01',
+				'codex-main',
+				'main'
+			);
+		});
+
+		it('should block codex manual starts when no project memory binding can be inferred', async () => {
+			const sessions = [
+				createMockSession({
+					isGitRepo: true,
+					toolType: 'codex' as any,
+					projectRoot: '/repo',
+					cwd: '/repo',
+				}),
+			];
+			const groups = [createMockGroup()];
+			mockGetProjectMemorySnapshot.mockResolvedValue({
+				success: true,
+				snapshot: {
+					projectId: 'maestro',
+					version: '2026-04-04',
+					taskCount: 0,
+					generatedAt: 'now',
+					tasks: [],
+				},
+			});
+
+			const { result } = renderHook(() =>
+				useBatchProcessor({
+					sessions,
+					groups,
+					onUpdateSession: mockOnUpdateSession,
+					onSpawnAgent: mockOnSpawnAgent,
+					onAddHistoryEntry: mockOnAddHistoryEntry,
+				})
+			);
+
+			await act(async () => {
+				await result.current.startBatchRun(
+					'test-session-id',
+					{
+						documents: [{ filename: 'tasks', resetOnCompletion: false }],
+						prompt: 'Test prompt',
+						loopEnabled: false,
+					},
+					'/test/folder'
+				);
+			});
+
+			expect(mockGetProjectMemorySnapshot).toHaveBeenCalledWith('/repo');
+			expect(mockValidateExecutionStart).not.toHaveBeenCalled();
+			expect(mockNotifyToast).toHaveBeenCalledWith(
+				expect.objectContaining({
+					type: 'warning',
+					message: expect.stringContaining(
+						'Codex Auto Run requires an active Project Memory binding for this repo.'
+					),
+				})
+			);
+			expect(mockReadDoc).not.toHaveBeenCalled();
+			expect(mockOnSpawnAgent).not.toHaveBeenCalled();
+		});
+
+		it('should bootstrap project memory from binding intent for codex starts', async () => {
+			const sessions = [
+				createMockSession({
+					isGitRepo: true,
+					toolType: 'codex' as any,
+					projectRoot: '/repo',
+					cwd: '/repo',
+				}),
+			];
+			const groups = [createMockGroup()];
+			mockGetProjectMemorySnapshot.mockResolvedValue({ success: true, snapshot: null });
+			mockValidateProjectMemoryState
+				.mockResolvedValueOnce({
+					success: true,
+					report: {
+						ok: false,
+						projectId: null,
+						taskCount: 0,
+						bindingCount: 0,
+						runtimeCount: 0,
+						taskLockCount: 0,
+						worktreeLockCount: 0,
+						expiredTaskLockCount: 0,
+						expiredWorktreeLockCount: 0,
+						issues: ['tasks.json not found: /repo/project_memory/tasks/tasks.json'],
+					},
+				})
+				.mockResolvedValue({
+					success: true,
+					report: {
+						ok: true,
+						projectId: 'repo',
+						taskCount: 1,
+						bindingCount: 1,
+						runtimeCount: 1,
+						taskLockCount: 1,
+						worktreeLockCount: 1,
+						expiredTaskLockCount: 0,
+						expiredWorktreeLockCount: 0,
+						issues: [],
+					},
+				});
+			mockClaimNextExecution.mockResolvedValue({
+				success: true,
+				execution: {
+					repoRoot: '/repo',
+					taskId: 'PM-01',
+					executorId: 'codex-main',
+				},
+			});
+
+			const { result } = renderHook(() =>
+				useBatchProcessor({
+					sessions,
+					groups,
+					onUpdateSession: mockOnUpdateSession,
+					onSpawnAgent: mockOnSpawnAgent,
+					onAddHistoryEntry: mockOnAddHistoryEntry,
+				})
+			);
+
+			await act(async () => {
+				await result.current.startBatchRun(
+					'test-session-id',
+					{
+						documents: [{ filename: 'tasks', resetOnCompletion: false }],
+						prompt: 'Process the first unchecked markdown task - [ ] only.',
+						loopEnabled: false,
+						projectMemoryBindingIntent: {
+							policyVersion: '2026-04-04',
+							repoRoot: '/repo',
+							sourceBranch: 'main',
+							bindingPreference: 'shared-branch-serialized',
+							sharedCheckoutAllowed: true,
+							reuseExistingBinding: true,
+							allowRebindIfStale: true,
+						},
+						playbookId: 'pb-1',
+						playbookName: 'PM Playbook',
+					},
+					'/test/folder'
+				);
+			});
+
+			expect(mockEmitWizardTasks).toHaveBeenCalled();
+			expect(mockClaimNextExecution).toHaveBeenCalledWith('/repo', 'codex-main');
+			expect(mockValidateExecutionStart).toHaveBeenCalledWith(
+				'/repo',
+				'PM-01',
+				'codex-main',
+				'main'
+			);
+			expect(mockOnSpawnAgent).toHaveBeenCalled();
+		});
+
+		it('should not infer project memory execution context for non-codex manual starts', async () => {
+			const sessions = [
+				createMockSession({
+					isGitRepo: true,
+					toolType: 'claude-code' as any,
+					projectRoot: '/repo',
+					cwd: '/repo',
+				}),
+			];
+			const groups = [createMockGroup()];
+
+			const { result } = renderHook(() =>
+				useBatchProcessor({
+					sessions,
+					groups,
+					onUpdateSession: mockOnUpdateSession,
+					onSpawnAgent: mockOnSpawnAgent,
+					onAddHistoryEntry: mockOnAddHistoryEntry,
+				})
+			);
+
+			await act(async () => {
+				await result.current.startBatchRun(
+					'test-session-id',
+					{
+						documents: [{ filename: 'tasks', resetOnCompletion: false }],
+						prompt: 'Test prompt',
+						loopEnabled: false,
+					},
+					'/test/folder'
+				);
+			});
+
+			expect(mockGetProjectMemorySnapshot).not.toHaveBeenCalled();
 		});
 
 		it('should start batch run and process tasks', async () => {
@@ -1979,10 +2345,10 @@ describe('useBatchProcessor hook', () => {
 				);
 			});
 
-			// Should use first sentence as summary (full paragraph if no sentence break found within 150 chars)
+			// Shared synopsis extraction now normalizes plain text to the first sentence.
 			expect(mockOnAddHistoryEntry).toHaveBeenCalledWith(
 				expect.objectContaining({
-					summary: 'Just a plain text response\nWith multiple lines.',
+					summary: 'Just a plain text response',
 				})
 			);
 		});
@@ -2177,6 +2543,47 @@ describe('useBatchProcessor hook', () => {
 			});
 
 			expect(mockOnSpawnAgent).toHaveBeenCalled();
+		});
+
+		it('should resolve git branch for project memory validation from projectMemoryExecution.repoRoot', async () => {
+			const sessions = [createMockSession({ cwd: '/session-cwd', projectRoot: '/session-cwd' })];
+			const groups = [createMockGroup()];
+
+			const { result } = renderHook(() =>
+				useBatchProcessor({
+					sessions,
+					groups,
+					onUpdateSession: mockOnUpdateSession,
+					onSpawnAgent: mockOnSpawnAgent,
+					onAddHistoryEntry: mockOnAddHistoryEntry,
+				})
+			);
+
+			await act(async () => {
+				await result.current.startBatchRun(
+					'test-session-id',
+					{
+						documents: [{ filename: 'tasks', resetOnCompletion: false }],
+						prompt: 'Test prompt',
+						loopEnabled: false,
+						projectMemoryExecution: {
+							repoRoot: '/repo-from-project-memory',
+							taskId: 'PM-01',
+							executorId: 'codex-main',
+						},
+					},
+					'/test/folder'
+				);
+			});
+
+			expect(mockStatus).toHaveBeenCalledWith('/repo-from-project-memory', undefined);
+			expect(mockBranch).toHaveBeenCalledWith('/repo-from-project-memory', undefined);
+			expect(mockValidateExecutionStart).toHaveBeenCalledWith(
+				'/repo-from-project-memory',
+				'PM-01',
+				'codex-main',
+				'main'
+			);
 		});
 
 		it('should handle document read failure gracefully (no expansion if read fails)', async () => {
@@ -2804,7 +3211,7 @@ describe('useBatchProcessor hook', () => {
 	});
 
 	describe('skip-document across multi-doc boundary', () => {
-		it('should skip errored document and continue processing next document', async () => {
+		it('should skip errored document and stop the next implicit dependent document', async () => {
 			const sessions = [createMockSession()];
 			const groups = [createMockGroup()];
 
@@ -2898,8 +3305,125 @@ describe('useBatchProcessor hook', () => {
 
 			// Batch should have completed
 			expect(result.current.getBatchState('test-session-id').isRunning).toBe(false);
-			// Should have spawned agent for both documents (1 failed + 1 succeeded)
+			// Implicit linear graphs treat doc2 as dependent on doc1, so it should not run
+			expect(mockOnSpawnAgent).toHaveBeenCalledTimes(1);
+		});
+
+		it('should not run dependent documents after skip-document, but should continue independent work', async () => {
+			const sessions = [createMockSession()];
+			const groups = [createMockGroup()];
+
+			const docState: Record<string, string> = {
+				'doc1.md': '- [ ] Task A',
+				'doc2.md': '- [ ] Task B',
+				'doc3.md': '- [ ] Task C',
+			};
+
+			mockReadDoc.mockImplementation(async (_folder: string, filename: string) => ({
+				success: true,
+				content: docState[filename] ?? '',
+			}));
+
+			let pauseHandler:
+				| ((
+						sessionId: string,
+						error: AgentError,
+						documentIndex: number,
+						taskDescription?: string
+				  ) => void)
+				| null = null;
+
+			mockOnSpawnAgent.mockImplementation(async (_targetSessionId: string, prompt: string) => {
+				if (prompt.includes('/doc1.md') && pauseHandler) {
+					pauseHandler(
+						'test-session-id',
+						{
+							type: 'token_exhaustion',
+							message: 'Context limit',
+							recoverable: true,
+							timestamp: Date.now(),
+						},
+						0,
+						'Task A'
+					);
+					pauseHandler = null;
+					throw new Error('Agent exited with error');
+				}
+
+				if (prompt.includes('/doc3.md')) {
+					docState['doc3.md'] = '- [x] Task C';
+				}
+
+				return { success: true, agentSessionId: 'session-doc3' };
+			});
+
+			const { result } = renderHook(() =>
+				useBatchProcessor({
+					sessions,
+					groups,
+					onUpdateSession: mockOnUpdateSession,
+					onSpawnAgent: mockOnSpawnAgent,
+					onAddHistoryEntry: mockOnAddHistoryEntry,
+					onComplete: mockOnComplete,
+				})
+			);
+
+			pauseHandler = result.current.pauseBatchOnError;
+
+			let startPromise: Promise<void>;
+			act(() => {
+				startPromise = result.current.startBatchRun(
+					'test-session-id',
+					{
+						documents: [
+							{ filename: 'doc1', resetOnCompletion: false },
+							{ filename: 'doc2', resetOnCompletion: false },
+							{ filename: 'doc3', resetOnCompletion: false },
+						],
+						prompt: 'Test DAG skip behavior',
+						loopEnabled: false,
+						maxParallelism: 2,
+						taskGraph: {
+							nodes: [
+								{ id: 'doc1', documentIndex: 0, dependsOn: [] },
+								{ id: 'doc2', documentIndex: 1, dependsOn: ['doc1'] },
+								{ id: 'doc3', documentIndex: 2, dependsOn: [] },
+							],
+						},
+					},
+					'/test/folder'
+				);
+			});
+
+			await waitFor(() =>
+				expect(result.current.getBatchState('test-session-id').errorPaused).toBe(true)
+			);
+
+			act(() => {
+				result.current.skipCurrentDocument('test-session-id');
+			});
+
+			await startPromise;
+
+			expect(result.current.getBatchState('test-session-id').isRunning).toBe(false);
 			expect(mockOnSpawnAgent).toHaveBeenCalledTimes(2);
+			expect(mockOnSpawnAgent).toHaveBeenNthCalledWith(
+				1,
+				'test-session-id',
+				expect.stringContaining('/doc1.md'),
+				undefined
+			);
+			expect(mockOnSpawnAgent).toHaveBeenNthCalledWith(
+				2,
+				'test-session-id',
+				expect.stringContaining('/doc3.md'),
+				undefined
+			);
+			expect(mockOnSpawnAgent).not.toHaveBeenCalledWith(
+				'test-session-id',
+				expect.stringContaining('/doc2.md'),
+				undefined
+			);
 		});
 	});
 
@@ -4066,8 +4590,68 @@ describe('useBatchProcessor hook', () => {
 				);
 			});
 
-			// Should have called speak with the synopsis
-			expect(mockSpeak).toHaveBeenCalledWith('Fixed the bug', 'say');
+			expect(mockSpeak).toHaveBeenNthCalledWith(
+				1,
+				'tasks を開始するのだ。残り 1 タスクなのだ。',
+				'say'
+			);
+			expect(mockSpeak).toHaveBeenNthCalledWith(2, 'Fixed the bug', 'say');
+		});
+
+		it('should speak loop completion commentary in loop mode', async () => {
+			const sessions = [createMockSession()];
+			const groups = [createMockGroup()];
+
+			let callCount = 0;
+			mockReadDoc.mockImplementation(async () => {
+				callCount++;
+				if (callCount <= 3) return { success: true, content: '- [ ] Task' };
+				return { success: true, content: '- [x] Task' };
+			});
+
+			mockOnSpawnAgent.mockResolvedValue({
+				success: true,
+				agentSessionId: 'test-session',
+				usageStats: {
+					inputTokens: 100,
+					outputTokens: 200,
+					totalCostUsd: 0.01,
+					cacheReadInputTokens: 0,
+					cacheCreationInputTokens: 0,
+					contextWindow: 0,
+				},
+				response: '**Summary:** Fixed the bug\n\n**Details:** Updated the function.',
+			});
+
+			const mockSpeak = vi.fn().mockResolvedValue(undefined);
+			window.maestro.notification.speak = mockSpeak;
+
+			const { result } = renderHook(() =>
+				useBatchProcessor({
+					sessions,
+					groups,
+					onUpdateSession: mockOnUpdateSession,
+					onSpawnAgent: mockOnSpawnAgent,
+					onAddHistoryEntry: mockOnAddHistoryEntry,
+					onComplete: mockOnComplete,
+					audioFeedbackEnabled: true,
+					audioFeedbackCommand: 'say',
+				})
+			);
+
+			await act(async () => {
+				await result.current.startBatchRun(
+					'test-session-id',
+					{
+						documents: [{ filename: 'tasks', resetOnCompletion: false }],
+						prompt: 'Test',
+						loopEnabled: true,
+					},
+					'/test/folder'
+				);
+			});
+
+			expect(mockSpeak).toHaveBeenCalledWith('1 ループ完了なのだ。1 タスク完了したのだ。', 'say');
 		});
 	});
 
@@ -5416,6 +6000,1170 @@ describe('useBatchProcessor hook', () => {
 	});
 
 	describe('worktree-dispatched PR creation', () => {
+		it('routes isolated DAG nodes through the prepared worktree target while keeping shared nodes on the parent session', async () => {
+			const parentSession = createMockSession({
+				id: 'parent-session-id',
+				name: 'Parent Agent',
+				cwd: '/main/repo',
+			});
+			const worktreeSession = createMockSession({
+				id: 'isolated-session-id',
+				name: 'Isolated Worktree Agent',
+				cwd: '/main/repo/worktrees/feature-isolated',
+				parentSessionId: 'parent-session-id',
+				worktreeBranch: 'feature-isolated',
+			});
+			const sessions = [parentSession, worktreeSession];
+			const groups = [createMockGroup()];
+
+			const docState: Record<string, string> = {
+				'shared.md': '- [ ] Shared task',
+				'isolated.md': '- [ ] Isolated task',
+			};
+			mockReadDoc.mockImplementation(async (_folder: string, filename: string) => ({
+				success: true,
+				content: docState[filename] ?? '',
+			}));
+			mockOnSpawnAgent.mockImplementation(
+				async (targetSessionId: string, prompt: string, cwd?: string) => {
+					if (prompt.includes('/shared.md')) {
+						docState['shared.md'] = '- [x] Shared task';
+					}
+					if (prompt.includes('/isolated.md')) {
+						docState['isolated.md'] = '- [x] Isolated task';
+					}
+					return {
+						success: true,
+						agentSessionId: `agent-${targetSessionId}`,
+						usageStats: {
+							inputTokens: 10,
+							outputTokens: 5,
+							totalCostUsd: 0.001,
+							cacheReadInputTokens: 0,
+							cacheCreationInputTokens: 0,
+							contextWindow: 0,
+						},
+						response: `completed from ${cwd || 'main'}`,
+					};
+				}
+			);
+
+			const { result } = renderHook(() =>
+				useBatchProcessor({
+					sessions,
+					groups,
+					onUpdateSession: mockOnUpdateSession,
+					onSpawnAgent: mockOnSpawnAgent,
+					onAddHistoryEntry: mockOnAddHistoryEntry,
+					onComplete: mockOnComplete,
+					onPRResult: mockOnPRResult,
+				})
+			);
+
+			await act(async () => {
+				await result.current.startBatchRun(
+					'parent-session-id',
+					{
+						documents: [
+							{ filename: 'shared', resetOnCompletion: false },
+							{ filename: 'isolated', resetOnCompletion: false },
+						],
+						prompt: 'Test',
+						loopEnabled: false,
+						taskGraph: {
+							nodes: [
+								{
+									id: 'shared',
+									documentIndex: 0,
+									dependsOn: [],
+									isolationMode: 'shared-checkout',
+								},
+								{
+									id: 'isolated',
+									documentIndex: 1,
+									dependsOn: ['shared'],
+									isolationMode: 'isolated-worktree',
+								},
+							],
+						},
+						isolatedWorktreeTarget: {
+							sessionId: 'isolated-session-id',
+							cwd: '/main/repo/worktrees/feature-isolated',
+							branchName: 'feature-isolated',
+						},
+					},
+					'/test/folder'
+				);
+			});
+
+			expect(mockOnSpawnAgent).toHaveBeenNthCalledWith(
+				1,
+				'parent-session-id',
+				expect.stringContaining('/shared.md'),
+				undefined
+			);
+			expect(mockOnSpawnAgent).toHaveBeenNthCalledWith(
+				2,
+				'isolated-session-id',
+				expect.stringContaining('/isolated.md'),
+				undefined
+			);
+		});
+
+		it('runs a DAG smoke path with shared fan-out, isolated dispatch, and join aggregation without trampling the main checkout', async () => {
+			const parentSession = createMockSession({
+				id: 'parent-session-id',
+				name: 'Parent Agent',
+				cwd: '/main/repo',
+			});
+			const isolatedSession = createMockSession({
+				id: 'isolated-session-id',
+				name: 'Isolated Agent',
+				cwd: '/main/repo/worktrees/feature-isolated',
+				parentSessionId: 'parent-session-id',
+				worktreeBranch: 'feature-isolated',
+			});
+			const sessions = [parentSession, isolatedSession];
+			const groups = [createMockGroup()];
+
+			const docState: Record<string, string> = {
+				'root.md': '- [ ] Root task',
+				'shared-child.md': '- [ ] Shared child task',
+				'isolated-child.md': '- [ ] Isolated child task',
+				'join.md': '- [ ] Join task',
+			};
+
+			mockReadDoc.mockImplementation(async (_folderPath: string, filename: string) => ({
+				success: true,
+				content: docState[filename] ?? '',
+			}));
+
+			mockOnSpawnAgent.mockImplementation(
+				async (targetSessionId: string, prompt: string, cwd?: string) => {
+					if (prompt.includes('/root.md')) {
+						docState['root.md'] = '- [x] Root task';
+						return {
+							success: true,
+							agentSessionId: `agent-${targetSessionId}`,
+							usageStats: {
+								inputTokens: 10,
+								outputTokens: 5,
+								totalCostUsd: 0.001,
+								cacheReadInputTokens: 0,
+								cacheCreationInputTokens: 0,
+								contextWindow: 0,
+							},
+							response: '**Summary:** Root branch prepared',
+						};
+					}
+
+					if (prompt.includes('/shared-child.md')) {
+						docState['shared-child.md'] = '- [x] Shared child task';
+						return {
+							success: true,
+							agentSessionId: `agent-${targetSessionId}`,
+							usageStats: {
+								inputTokens: 10,
+								outputTokens: 5,
+								totalCostUsd: 0.001,
+								cacheReadInputTokens: 0,
+								cacheCreationInputTokens: 0,
+								contextWindow: 0,
+							},
+							response: '**Summary:** Shared branch applied safely',
+						};
+					}
+
+					if (prompt.includes('/isolated-child.md')) {
+						docState['isolated-child.md'] = '- [x] Isolated child task';
+						return {
+							success: true,
+							agentSessionId: `agent-${targetSessionId}`,
+							usageStats: {
+								inputTokens: 10,
+								outputTokens: 5,
+								totalCostUsd: 0.001,
+								cacheReadInputTokens: 0,
+								cacheCreationInputTokens: 0,
+								contextWindow: 0,
+							},
+							response:
+								'**Summary:** Isolated branch applied in /main/repo/worktrees/feature-isolated',
+						};
+					}
+
+					if (prompt.includes('/join.md')) {
+						docState['join.md'] = '- [x] Join task';
+						return {
+							success: true,
+							agentSessionId: `agent-${targetSessionId}`,
+							usageStats: {
+								inputTokens: 10,
+								outputTokens: 5,
+								totalCostUsd: 0.001,
+								cacheReadInputTokens: 0,
+								cacheCreationInputTokens: 0,
+								contextWindow: 0,
+							},
+							response: '**Summary:** Joined shared and isolated outputs',
+						};
+					}
+
+					return {
+						success: true,
+						agentSessionId: `agent-${targetSessionId}`,
+						usageStats: {
+							inputTokens: 10,
+							outputTokens: 5,
+							totalCostUsd: 0.001,
+							cacheReadInputTokens: 0,
+							cacheCreationInputTokens: 0,
+							contextWindow: 0,
+						},
+						response: `**Summary:** Fallback from ${cwd || 'main'}`,
+					};
+				}
+			);
+
+			const { result } = renderHook(() =>
+				useBatchProcessor({
+					sessions,
+					groups,
+					onUpdateSession: mockOnUpdateSession,
+					onSpawnAgent: mockOnSpawnAgent,
+					onAddHistoryEntry: mockOnAddHistoryEntry,
+					onComplete: mockOnComplete,
+					onPRResult: mockOnPRResult,
+				})
+			);
+
+			await act(async () => {
+				await result.current.startBatchRun(
+					'parent-session-id',
+					{
+						documents: [
+							{ filename: 'root', resetOnCompletion: false },
+							{ filename: 'shared-child', resetOnCompletion: false },
+							{ filename: 'isolated-child', resetOnCompletion: false },
+							{ filename: 'join', resetOnCompletion: false },
+						],
+						prompt: 'Test join smoke',
+						loopEnabled: false,
+						taskGraph: {
+							nodes: [
+								{ id: 'root', documentIndex: 0, dependsOn: [], isolationMode: 'shared-checkout' },
+								{
+									id: 'shared-child',
+									documentIndex: 1,
+									dependsOn: ['root'],
+									isolationMode: 'shared-checkout',
+								},
+								{
+									id: 'isolated-child',
+									documentIndex: 2,
+									dependsOn: ['root'],
+									isolationMode: 'isolated-worktree',
+								},
+								{
+									id: 'join',
+									documentIndex: 3,
+									dependsOn: ['shared-child', 'isolated-child'],
+									isolationMode: 'shared-checkout',
+								},
+							],
+						},
+						isolatedWorktreeTarget: {
+							sessionId: 'isolated-session-id',
+							cwd: '/main/repo/worktrees/feature-isolated',
+							branchName: 'feature-isolated',
+						},
+					},
+					'/test/folder'
+				);
+			});
+
+			expect(mockOnSpawnAgent).toHaveBeenNthCalledWith(
+				1,
+				'parent-session-id',
+				expect.stringContaining('/root.md'),
+				undefined
+			);
+			expect(mockOnSpawnAgent).toHaveBeenNthCalledWith(
+				2,
+				'parent-session-id',
+				expect.stringContaining('/shared-child.md'),
+				undefined
+			);
+			expect(mockOnSpawnAgent).toHaveBeenNthCalledWith(
+				3,
+				'isolated-session-id',
+				expect.stringContaining('/isolated-child.md'),
+				undefined
+			);
+			expect(mockOnSpawnAgent).toHaveBeenNthCalledWith(
+				4,
+				'parent-session-id',
+				expect.stringContaining('/join.md'),
+				undefined
+			);
+
+			const joinPrompt = mockOnSpawnAgent.mock.calls[3]?.[1] ?? '';
+			expect(joinPrompt).toContain('## Predecessor Outputs');
+			expect(joinPrompt).toContain('### shared-child [PASS]');
+			expect(joinPrompt).toContain('- Shared branch applied safely');
+			expect(joinPrompt).toContain('### isolated-child [PASS]');
+			expect(joinPrompt).toContain(
+				'- Isolated branch applied in /main/repo/worktrees/feature-isolated'
+			);
+
+			const completionCall = mockOnComplete.mock.calls.at(-1)?.[0];
+			expect(completionCall?.completedTasks).toBe(4);
+		});
+
+		it('dequeues only the first ready fan-out node until it finishes even when maxParallelism is two', async () => {
+			const sessions = [createMockSession()];
+			const groups = [createMockGroup()];
+			const docState: Record<string, string> = {
+				'root.md': '- [ ] Root task',
+				'left.md': '- [ ] Left task',
+				'right.md': '- [ ] Right task',
+			};
+
+			mockReadDoc.mockImplementation(async (_folder: string, filename: string) => ({
+				success: true,
+				content: docState[filename] ?? '',
+			}));
+
+			let resolveLeftBranch:
+				| ((value: {
+						success: boolean;
+						agentSessionId?: string;
+						response?: string;
+						usageStats?: UsageStats;
+				  }) => void)
+				| null = null;
+			const leftBranchPromise = new Promise<{
+				success: boolean;
+				agentSessionId?: string;
+				response?: string;
+				usageStats?: UsageStats;
+			}>((resolve) => {
+				resolveLeftBranch = resolve;
+			});
+
+			mockOnSpawnAgent.mockImplementation(async (_targetSessionId: string, prompt: string) => {
+				if (prompt.includes('/root.md')) {
+					docState['root.md'] = '- [x] Root task';
+					return {
+						success: true,
+						agentSessionId: 'root-session',
+						response: 'Root finished',
+					};
+				}
+
+				if (prompt.includes('/left.md')) {
+					return leftBranchPromise;
+				}
+
+				if (prompt.includes('/right.md')) {
+					docState['right.md'] = '- [x] Right task';
+					return {
+						success: true,
+						agentSessionId: 'right-session',
+						response: 'Right finished',
+					};
+				}
+
+				return {
+					success: true,
+					agentSessionId: 'fallback-session',
+					response: 'Fallback finished',
+				};
+			});
+
+			const { result } = renderHook(() =>
+				useBatchProcessor({
+					sessions,
+					groups,
+					onUpdateSession: mockOnUpdateSession,
+					onSpawnAgent: mockOnSpawnAgent,
+					onAddHistoryEntry: mockOnAddHistoryEntry,
+					onComplete: mockOnComplete,
+				})
+			);
+
+			let startPromise: Promise<void>;
+			act(() => {
+				startPromise = result.current.startBatchRun(
+					'test-session-id',
+					{
+						documents: [
+							{ filename: 'root', resetOnCompletion: false },
+							{ filename: 'left', resetOnCompletion: false },
+							{ filename: 'right', resetOnCompletion: false },
+						],
+						prompt: 'Sequential DAG proof',
+						loopEnabled: false,
+						maxParallelism: 2,
+						taskGraph: {
+							nodes: [
+								{ id: 'root', documentIndex: 0, dependsOn: [] },
+								{ id: 'left', documentIndex: 1, dependsOn: ['root'] },
+								{ id: 'right', documentIndex: 2, dependsOn: ['root'] },
+							],
+						},
+					},
+					'/test/folder'
+				);
+			});
+
+			await waitFor(() => {
+				expect(mockOnSpawnAgent).toHaveBeenCalledTimes(2);
+			});
+
+			await waitFor(() => {
+				const batchState = result.current.getBatchState('test-session-id');
+				expect(batchState.scheduler?.mode).toBe('sequential');
+				expect(batchState.scheduler?.configuredMode).toBe('dag');
+				expect(batchState.scheduler?.readyNodeIds).toEqual(['right']);
+			});
+
+			expect(mockOnSpawnAgent).toHaveBeenNthCalledWith(
+				1,
+				'test-session-id',
+				expect.stringContaining('/root.md'),
+				undefined
+			);
+			expect(mockOnSpawnAgent).toHaveBeenNthCalledWith(
+				2,
+				'test-session-id',
+				expect.stringContaining('/left.md'),
+				undefined
+			);
+
+			await new Promise((resolve) => setTimeout(resolve, 25));
+			expect(mockOnSpawnAgent).toHaveBeenCalledTimes(2);
+
+			docState['left.md'] = '- [x] Left task';
+			resolveLeftBranch?.({
+				success: true,
+				agentSessionId: 'left-session',
+				response: 'Left finished',
+			});
+
+			await waitFor(() => {
+				expect(mockOnSpawnAgent).toHaveBeenCalledTimes(3);
+			});
+
+			expect(mockOnSpawnAgent).toHaveBeenNthCalledWith(
+				3,
+				'test-session-id',
+				expect.stringContaining('/right.md'),
+				undefined
+			);
+
+			await startPromise;
+
+			expect(result.current.getBatchState('test-session-id').isRunning).toBe(false);
+			expect(mockOnAddHistoryEntry).toHaveBeenCalledWith(
+				expect.objectContaining({
+					type: 'AUTO',
+					schedulerMode: 'sequential',
+					configuredSchedulerMode: 'dag',
+				})
+			);
+		});
+
+		it('falls back to an implicit sequential graph for legacy playbooks without taskGraph metadata', async () => {
+			const sessions = [createMockSession()];
+			const groups = [createMockGroup()];
+			const docState: Record<string, string> = {
+				'phase-01.md': '- [ ] Phase 01 task',
+				'phase-02.md': '- [ ] Phase 02 task',
+			};
+
+			mockReadDoc.mockImplementation(async (_folder: string, filename: string) => ({
+				success: true,
+				content: docState[filename] ?? '',
+			}));
+
+			mockOnSpawnAgent.mockImplementation(async (_targetSessionId: string, prompt: string) => {
+				if (prompt.includes('/phase-01.md')) {
+					docState['phase-01.md'] = '- [x] Phase 01 task';
+					return {
+						success: true,
+						agentSessionId: 'phase-01-session',
+						response: 'Phase 01 finished',
+					};
+				}
+
+				if (prompt.includes('/phase-02.md')) {
+					docState['phase-02.md'] = '- [x] Phase 02 task';
+					return {
+						success: true,
+						agentSessionId: 'phase-02-session',
+						response: 'Phase 02 finished',
+					};
+				}
+
+				return {
+					success: true,
+					agentSessionId: 'fallback-session',
+					response: 'Fallback finished',
+				};
+			});
+
+			const { result } = renderHook(() =>
+				useBatchProcessor({
+					sessions,
+					groups,
+					onUpdateSession: mockOnUpdateSession,
+					onSpawnAgent: mockOnSpawnAgent,
+					onAddHistoryEntry: mockOnAddHistoryEntry,
+					onComplete: mockOnComplete,
+				})
+			);
+
+			await act(async () => {
+				await result.current.startBatchRun(
+					'test-session-id',
+					{
+						documents: [
+							{ filename: 'phase-01', resetOnCompletion: false },
+							{ filename: 'phase-02', resetOnCompletion: false },
+						],
+						prompt: 'Legacy sequential proof',
+						loopEnabled: false,
+					},
+					'/test/folder'
+				);
+			});
+
+			expect(mockOnSpawnAgent).toHaveBeenNthCalledWith(
+				1,
+				'test-session-id',
+				expect.stringContaining('/phase-01.md'),
+				undefined
+			);
+			expect(mockOnSpawnAgent).toHaveBeenNthCalledWith(
+				2,
+				'test-session-id',
+				expect.stringContaining('/phase-02.md'),
+				undefined
+			);
+			expect(mockOnAddHistoryEntry).toHaveBeenCalledWith(
+				expect.objectContaining({
+					type: 'AUTO',
+					schedulerMode: 'sequential',
+					configuredSchedulerMode: 'sequential',
+				})
+			);
+		});
+
+		it('launches multiple isolated-worktree fan-out nodes concurrently when safe targets exist', async () => {
+			const sessions = [
+				createMockSession({
+					id: 'parent-session-id',
+					cwd: '/main/repo',
+				}),
+				createMockSession({
+					id: 'isolated-a',
+					cwd: '/main/repo/worktrees/feature-a',
+					parentSessionId: 'parent-session-id',
+					worktreeBranch: 'feature-a',
+				}),
+				createMockSession({
+					id: 'isolated-b',
+					cwd: '/main/repo/worktrees/feature-b',
+					parentSessionId: 'parent-session-id',
+					worktreeBranch: 'feature-b',
+				}),
+			];
+			const groups = [createMockGroup()];
+			const docState: Record<string, string> = {
+				'root.md': '- [ ] Root task',
+				'left.md': '- [ ] Left isolated task',
+				'right.md': '- [ ] Right isolated task',
+			};
+
+			mockReadDoc.mockImplementation(async (_folder: string, filename: string) => ({
+				success: true,
+				content: docState[filename] ?? '',
+			}));
+
+			let resolveLeft:
+				| ((value: {
+						success: boolean;
+						agentSessionId?: string;
+						response?: string;
+						usageStats?: UsageStats;
+				  }) => void)
+				| null = null;
+			let resolveRight:
+				| ((value: {
+						success: boolean;
+						agentSessionId?: string;
+						response?: string;
+						usageStats?: UsageStats;
+				  }) => void)
+				| null = null;
+
+			const leftPromise = new Promise<{
+				success: boolean;
+				agentSessionId?: string;
+				response?: string;
+				usageStats?: UsageStats;
+			}>((resolve) => {
+				resolveLeft = resolve;
+			});
+			const rightPromise = new Promise<{
+				success: boolean;
+				agentSessionId?: string;
+				response?: string;
+				usageStats?: UsageStats;
+			}>((resolve) => {
+				resolveRight = resolve;
+			});
+
+			mockOnSpawnAgent.mockImplementation(async (targetSessionId: string, prompt: string) => {
+				if (prompt.includes('/root.md')) {
+					docState['root.md'] = '- [x] Root task';
+					return {
+						success: true,
+						agentSessionId: 'root-session',
+						response: 'Root finished',
+					};
+				}
+
+				if (prompt.includes('/left.md')) {
+					return leftPromise;
+				}
+
+				if (prompt.includes('/right.md')) {
+					return rightPromise;
+				}
+
+				return {
+					success: true,
+					agentSessionId: 'fallback-session',
+					response: 'Fallback finished',
+				};
+			});
+
+			const { result } = renderHook(() =>
+				useBatchProcessor({
+					sessions,
+					groups,
+					onUpdateSession: mockOnUpdateSession,
+					onSpawnAgent: mockOnSpawnAgent,
+					onAddHistoryEntry: mockOnAddHistoryEntry,
+					onComplete: mockOnComplete,
+				})
+			);
+
+			let startPromise: Promise<void>;
+			act(() => {
+				startPromise = result.current.startBatchRun(
+					'parent-session-id',
+					{
+						documents: [
+							{ filename: 'root', resetOnCompletion: false },
+							{ filename: 'left', resetOnCompletion: false },
+							{ filename: 'right', resetOnCompletion: false },
+						],
+						prompt: 'Parallel isolated DAG proof',
+						loopEnabled: false,
+						maxParallelism: 2,
+						taskGraph: {
+							nodes: [
+								{ id: 'root', documentIndex: 0, dependsOn: [] },
+								{
+									id: 'left',
+									documentIndex: 1,
+									dependsOn: ['root'],
+									isolationMode: 'isolated-worktree',
+								},
+								{
+									id: 'right',
+									documentIndex: 2,
+									dependsOn: ['root'],
+									isolationMode: 'isolated-worktree',
+								},
+							],
+						},
+						isolatedWorktreeTargets: [
+							{
+								sessionId: 'isolated-a',
+								cwd: '/main/repo/worktrees/feature-a',
+								branchName: 'feature-a',
+							},
+							{
+								sessionId: 'isolated-b',
+								cwd: '/main/repo/worktrees/feature-b',
+								branchName: 'feature-b',
+							},
+						],
+					},
+					'/test/folder'
+				);
+			});
+
+			await waitFor(() => {
+				expect(mockOnSpawnAgent).toHaveBeenCalledTimes(3);
+			});
+
+			expect(mockOnSpawnAgent).toHaveBeenNthCalledWith(
+				1,
+				'parent-session-id',
+				expect.stringContaining('/root.md'),
+				undefined
+			);
+			expect(mockOnSpawnAgent).toHaveBeenNthCalledWith(
+				2,
+				'isolated-a',
+				expect.stringContaining('/left.md'),
+				undefined
+			);
+			expect(mockOnSpawnAgent).toHaveBeenNthCalledWith(
+				3,
+				'isolated-b',
+				expect.stringContaining('/right.md'),
+				undefined
+			);
+
+			docState['left.md'] = '- [x] Left isolated task';
+			docState['right.md'] = '- [x] Right isolated task';
+			resolveLeft?.({
+				success: true,
+				agentSessionId: 'left-session',
+				response: 'Left finished',
+			});
+			resolveRight?.({
+				success: true,
+				agentSessionId: 'right-session',
+				response: 'Right finished',
+			});
+
+			await startPromise;
+
+			expect(result.current.getBatchState('parent-session-id').isRunning).toBe(false);
+		});
+
+		it('runs one shared-checkout branch alongside one isolated-worktree sibling and waits for join readiness', async () => {
+			const sessions = [
+				createMockSession({
+					id: 'parent-session-id',
+					cwd: '/main/repo',
+				}),
+				createMockSession({
+					id: 'isolated-a',
+					cwd: '/main/repo/worktrees/feature-a',
+					parentSessionId: 'parent-session-id',
+					worktreeBranch: 'feature-a',
+				}),
+			];
+			const groups = [createMockGroup()];
+			const docState: Record<string, string> = {
+				'root.md': '- [ ] Root task',
+				'shared.md': '- [ ] Shared checkout task',
+				'isolated.md': '- [ ] Isolated worktree task',
+				'join.md': '- [ ] Join task',
+			};
+
+			mockReadDoc.mockImplementation(async (_folder: string, filename: string) => ({
+				success: true,
+				content: docState[filename] ?? '',
+			}));
+
+			let resolveShared:
+				| ((value: {
+						success: boolean;
+						agentSessionId?: string;
+						response?: string;
+						usageStats?: UsageStats;
+				  }) => void)
+				| null = null;
+			let resolveIsolated:
+				| ((value: {
+						success: boolean;
+						agentSessionId?: string;
+						response?: string;
+						usageStats?: UsageStats;
+				  }) => void)
+				| null = null;
+
+			const sharedPromise = new Promise<{
+				success: boolean;
+				agentSessionId?: string;
+				response?: string;
+				usageStats?: UsageStats;
+			}>((resolve) => {
+				resolveShared = resolve;
+			});
+			const isolatedPromise = new Promise<{
+				success: boolean;
+				agentSessionId?: string;
+				response?: string;
+				usageStats?: UsageStats;
+			}>((resolve) => {
+				resolveIsolated = resolve;
+			});
+
+			mockOnSpawnAgent.mockImplementation(async (targetSessionId: string, prompt: string) => {
+				if (prompt.includes('/root.md')) {
+					docState['root.md'] = '- [x] Root task';
+					return {
+						success: true,
+						agentSessionId: 'root-session',
+						response: 'Root finished',
+					};
+				}
+
+				if (prompt.includes('/shared.md')) {
+					expect(targetSessionId).toBe('parent-session-id');
+					return sharedPromise;
+				}
+
+				if (prompt.includes('/isolated.md')) {
+					expect(targetSessionId).toBe('isolated-a');
+					return isolatedPromise;
+				}
+
+				if (prompt.includes('/join.md')) {
+					docState['join.md'] = '- [x] Join task';
+					return {
+						success: true,
+						agentSessionId: 'join-session',
+						response: 'Join finished',
+					};
+				}
+
+				return {
+					success: true,
+					agentSessionId: 'fallback-session',
+					response: 'Fallback finished',
+				};
+			});
+
+			const { result } = renderHook(() =>
+				useBatchProcessor({
+					sessions,
+					groups,
+					onUpdateSession: mockOnUpdateSession,
+					onSpawnAgent: mockOnSpawnAgent,
+					onAddHistoryEntry: mockOnAddHistoryEntry,
+					onComplete: mockOnComplete,
+				})
+			);
+
+			let startPromise: Promise<void>;
+			act(() => {
+				startPromise = result.current.startBatchRun(
+					'parent-session-id',
+					{
+						documents: [
+							{ filename: 'root', resetOnCompletion: false },
+							{ filename: 'shared', resetOnCompletion: false },
+							{ filename: 'isolated', resetOnCompletion: false },
+							{ filename: 'join', resetOnCompletion: false },
+						],
+						prompt: 'Mixed DAG proof',
+						loopEnabled: false,
+						maxParallelism: 3,
+						taskGraph: {
+							nodes: [
+								{ id: 'root', documentIndex: 0, dependsOn: [] },
+								{ id: 'shared', documentIndex: 1, dependsOn: ['root'] },
+								{
+									id: 'isolated',
+									documentIndex: 2,
+									dependsOn: ['root'],
+									isolationMode: 'isolated-worktree',
+								},
+								{ id: 'join', documentIndex: 3, dependsOn: ['shared', 'isolated'] },
+							],
+						},
+						isolatedWorktreeTargets: [
+							{
+								sessionId: 'isolated-a',
+								cwd: '/main/repo/worktrees/feature-a',
+								branchName: 'feature-a',
+							},
+						],
+					},
+					'/test/folder'
+				);
+			});
+
+			await waitFor(() => {
+				expect(mockOnSpawnAgent).toHaveBeenCalledTimes(3);
+			});
+
+			expect(mockOnSpawnAgent).toHaveBeenNthCalledWith(
+				1,
+				'parent-session-id',
+				expect.stringContaining('/root.md'),
+				undefined
+			);
+			expect(mockOnSpawnAgent).toHaveBeenNthCalledWith(
+				2,
+				'parent-session-id',
+				expect.stringContaining('/shared.md'),
+				undefined
+			);
+			expect(mockOnSpawnAgent).toHaveBeenNthCalledWith(
+				3,
+				'isolated-a',
+				expect.stringContaining('/isolated.md'),
+				undefined
+			);
+
+			docState['shared.md'] = '- [x] Shared checkout task';
+			docState['isolated.md'] = '- [x] Isolated worktree task';
+			resolveShared?.({
+				success: true,
+				agentSessionId: 'shared-session',
+				response: 'Shared finished',
+			});
+			resolveIsolated?.({
+				success: true,
+				agentSessionId: 'isolated-session',
+				response: 'Isolated finished',
+			});
+
+			await startPromise;
+
+			expect(mockOnSpawnAgent).toHaveBeenNthCalledWith(
+				4,
+				'parent-session-id',
+				expect.stringContaining('/join.md'),
+				undefined
+			);
+			expect(result.current.getBatchState('parent-session-id').isRunning).toBe(false);
+		});
+
+		it('falls back one isolated node to the shared checkout lane when a safe target is unavailable', async () => {
+			const sessions = [
+				createMockSession({
+					id: 'parent-session-id',
+					cwd: '/main/repo',
+				}),
+				createMockSession({
+					id: 'isolated-a',
+					cwd: '/main/repo/worktrees/feature-a',
+					parentSessionId: 'parent-session-id',
+					worktreeBranch: 'feature-a',
+				}),
+			];
+			const groups = [createMockGroup()];
+			const docState: Record<string, string> = {
+				'left.md': '- [ ] Left isolated task',
+				'right.md': '- [ ] Right isolated task',
+			};
+
+			mockReadDoc.mockImplementation(async (_folder: string, filename: string) => ({
+				success: true,
+				content: docState[filename] ?? '',
+			}));
+
+			let resolveLeft:
+				| ((value: {
+						success: boolean;
+						agentSessionId?: string;
+						response?: string;
+						usageStats?: UsageStats;
+				  }) => void)
+				| null = null;
+
+			const leftPromise = new Promise<{
+				success: boolean;
+				agentSessionId?: string;
+				response?: string;
+				usageStats?: UsageStats;
+			}>((resolve) => {
+				resolveLeft = resolve;
+			});
+
+			mockOnSpawnAgent.mockImplementation(async (targetSessionId: string, prompt: string) => {
+				if (prompt.includes('/left.md')) {
+					return leftPromise;
+				}
+
+				if (prompt.includes('/right.md')) {
+					docState['right.md'] = '- [x] Right isolated task';
+					return {
+						success: true,
+						agentSessionId: `agent-${targetSessionId}`,
+						response: 'Right finished on fallback checkout',
+					};
+				}
+
+				return {
+					success: true,
+					agentSessionId: `agent-${targetSessionId}`,
+					response: 'Fallback finished',
+				};
+			});
+
+			const { result } = renderHook(() =>
+				useBatchProcessor({
+					sessions,
+					groups,
+					onUpdateSession: mockOnUpdateSession,
+					onSpawnAgent: mockOnSpawnAgent,
+					onAddHistoryEntry: mockOnAddHistoryEntry,
+					onComplete: mockOnComplete,
+				})
+			);
+
+			let startPromise: Promise<void>;
+			act(() => {
+				startPromise = result.current.startBatchRun(
+					'parent-session-id',
+					{
+						documents: [
+							{ filename: 'left', resetOnCompletion: false },
+							{ filename: 'right', resetOnCompletion: false },
+						],
+						prompt: 'Fallback isolated DAG proof',
+						loopEnabled: false,
+						maxParallelism: 2,
+						taskGraph: {
+							nodes: [
+								{
+									id: 'left',
+									documentIndex: 0,
+									dependsOn: [],
+									isolationMode: 'isolated-worktree',
+								},
+								{
+									id: 'right',
+									documentIndex: 1,
+									dependsOn: [],
+									isolationMode: 'isolated-worktree',
+								},
+							],
+						},
+						isolatedWorktreeTargets: [
+							{
+								sessionId: 'unsafe-main',
+								cwd: '/main/repo',
+								branchName: 'main',
+							},
+							{
+								sessionId: 'isolated-a',
+								cwd: '/main/repo/worktrees/feature-a',
+								branchName: 'feature-a',
+							},
+						],
+					},
+					'/test/folder'
+				);
+			});
+
+			await waitFor(() => {
+				expect(mockOnSpawnAgent).toHaveBeenCalledTimes(2);
+			});
+
+			expect(mockOnSpawnAgent).toHaveBeenNthCalledWith(
+				1,
+				'isolated-a',
+				expect.stringContaining('/left.md'),
+				undefined
+			);
+			expect(mockOnSpawnAgent).toHaveBeenNthCalledWith(
+				2,
+				'parent-session-id',
+				expect.stringContaining('/right.md'),
+				undefined
+			);
+
+			docState['left.md'] = '- [x] Left isolated task';
+			resolveLeft?.({
+				success: true,
+				agentSessionId: 'agent-isolated-a',
+				response: 'Left finished',
+			});
+
+			await startPromise;
+
+			expect(result.current.getBatchState('parent-session-id').isRunning).toBe(false);
+		});
+
+		it('records sequential scheduler truth for legacy playbooks in renderer history', async () => {
+			const sessions = [createMockSession()];
+			const groups = [createMockGroup()];
+			const docState: Record<string, string> = {
+				'first.md': '- [ ] First task',
+				'second.md': '- [ ] Second task',
+			};
+
+			mockReadDoc.mockImplementation(async (_folder: string, filename: string) => ({
+				success: true,
+				content: docState[filename] ?? '',
+			}));
+
+			mockOnSpawnAgent.mockImplementation(async (_targetSessionId: string, prompt: string) => {
+				if (prompt.includes('/first.md')) {
+					docState['first.md'] = '- [x] First task';
+					return {
+						success: true,
+						agentSessionId: 'first-session',
+						response: 'First finished',
+					};
+				}
+
+				if (prompt.includes('/second.md')) {
+					docState['second.md'] = '- [x] Second task';
+					return {
+						success: true,
+						agentSessionId: 'second-session',
+						response: 'Second finished',
+					};
+				}
+
+				return {
+					success: true,
+					agentSessionId: 'fallback-session',
+					response: 'Fallback finished',
+				};
+			});
+
+			const { result } = renderHook(() =>
+				useBatchProcessor({
+					sessions,
+					groups,
+					onUpdateSession: mockOnUpdateSession,
+					onSpawnAgent: mockOnSpawnAgent,
+					onAddHistoryEntry: mockOnAddHistoryEntry,
+					onComplete: mockOnComplete,
+				})
+			);
+
+			await act(async () => {
+				await result.current.startBatchRun(
+					'test-session-id',
+					{
+						documents: [
+							{ filename: 'first', resetOnCompletion: false },
+							{ filename: 'second', resetOnCompletion: false },
+						],
+						prompt: 'Legacy sequential proof',
+						loopEnabled: false,
+					},
+					'/test/folder'
+				);
+			});
+
+			expect(mockOnAddHistoryEntry).toHaveBeenCalledWith(
+				expect.objectContaining({
+					type: 'AUTO',
+					schedulerMode: 'sequential',
+					configuredSchedulerMode: 'sequential',
+				})
+			);
+		});
+
 		it('should create PR when worktreeTarget is set with createPROnCompletion', async () => {
 			// Create a worktree agent session with a parent
 			const parentSession = createMockSession({

@@ -1,7 +1,11 @@
 // JSONL output helper for CLI
 // Outputs machine-parseable JSON lines to stdout
 
-import type { PlaybookBaselineMetadata, UsageStats } from '../../shared/types';
+import type {
+	AutoRunSchedulerSnapshot,
+	PlaybookBaselineMetadata,
+	UsageStats,
+} from '../../shared/types';
 
 // Base event interface - all events have a type and timestamp
 export interface JsonlEvent {
@@ -29,6 +33,7 @@ export interface DocumentStartEvent extends JsonlEvent {
 	document: string;
 	index: number;
 	taskCount: number;
+	scheduler?: AutoRunSchedulerSnapshot;
 }
 
 export interface TaskStartEvent extends JsonlEvent {
@@ -48,12 +53,14 @@ export interface TaskCompleteEvent extends JsonlEvent {
 	elapsedMs: number;
 	usageStats?: UsageStats;
 	agentSessionId?: string;
+	scheduler?: AutoRunSchedulerSnapshot;
 }
 
 export interface DocumentCompleteEvent extends JsonlEvent {
 	type: 'document_complete';
 	document: string;
 	tasksCompleted: number;
+	scheduler?: AutoRunSchedulerSnapshot;
 }
 
 export interface LoopCompleteEvent extends JsonlEvent {
@@ -70,6 +77,7 @@ export interface CompleteEvent extends JsonlEvent {
 	totalTasksCompleted: number;
 	totalElapsedMs: number;
 	totalCost?: number;
+	scheduler?: AutoRunSchedulerSnapshot;
 }
 
 export interface ErrorEvent extends JsonlEvent {

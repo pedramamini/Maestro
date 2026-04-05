@@ -155,6 +155,24 @@ describe('storage service', () => {
 
 			expect(result).toBe(path.join('/home/testuser', '.config', 'Maestro'));
 		});
+
+		it('should prefer MAESTRO_USER_DATA_PATH when provided', () => {
+			process.env.MAESTRO_USER_DATA_PATH = '/tmp/custom-maestro-data';
+
+			const result = getConfigDirectory();
+
+			expect(result).toBe(path.resolve('/tmp/custom-maestro-data'));
+		});
+
+		it('should resolve the dev data store when MAESTRO_USE_DEV_DATA is enabled', () => {
+			process.env.MAESTRO_USE_DEV_DATA = '1';
+
+			const result = getConfigDirectory();
+
+			expect(result).toBe(
+				path.join('/Users/testuser', 'Library', 'Application Support', 'maestro-dev')
+			);
+		});
 	});
 
 	describe('readSessions', () => {

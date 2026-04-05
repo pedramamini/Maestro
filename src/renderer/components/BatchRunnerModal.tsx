@@ -34,7 +34,10 @@ import {
 } from '../hooks';
 import { generateId } from '../utils/ids';
 import { formatMetaKey } from '../utils/shortcutFormatter';
+import { projectMemoryService } from '../services/projectMemory';
 import { normalizePlaybookSkills, resolvePlaybookTaskGraph } from '../../shared/playbookDag';
+import { getPlaybookParallelismWarning } from '../../shared/playbookParallelism';
+import type { ProjectMemoryTaskDetail } from '../../shared/projectMemory';
 
 // Re-export for external consumers
 export { DEFAULT_BATCH_PROMPT, validateAgentPromptHasTaskReference } from '../hooks';
@@ -163,6 +166,15 @@ export function BatchRunnerModal(props: BatchRunnerModalProps) {
 	const [savedPrompt, setSavedPrompt] = useState(initialPrompt || '');
 	const [promptComposerOpen, setPromptComposerOpen] = useState(false);
 	const textareaRef = useRef<HTMLTextAreaElement>(null);
+	const [projectMemoryExecution, setProjectMemoryExecution] =
+		useState<BatchRunConfig['projectMemoryExecution']>(null);
+	const [projectMemoryDiagnostic, setProjectMemoryDiagnostic] = useState<string | null>(null);
+	const [projectMemoryDetailExpanded, setProjectMemoryDetailExpanded] = useState(false);
+	const [projectMemoryDetailLoading, setProjectMemoryDetailLoading] = useState(false);
+	const [projectMemoryDetail, setProjectMemoryDetail] = useState<ProjectMemoryTaskDetail | null>(
+		null
+	);
+	const [projectMemoryDetailError, setProjectMemoryDetailError] = useState<string | null>(null);
 
 	// Track initial prompt for dirty checking
 	const initialPromptRef = useRef(initialPrompt || DEFAULT_BATCH_PROMPT);
@@ -327,6 +339,13 @@ export function BatchRunnerModal(props: BatchRunnerModalProps) {
 	// Validate agent prompt has task references
 	const hasValidPrompt = validateAgentPromptHasTaskReference(prompt);
 	const isPromptEmpty = !prompt || !prompt.trim();
+	const requiresProjectMemoryBinding = activeSession?.toolType === 'codex';
+	const canBootstrapProjectMemory =
+		requiresProjectMemoryBinding && Boolean(loadedPlaybook?.projectMemoryBindingIntent);
+	const isProjectMemoryChecking =
+		requiresProjectMemoryBinding && !projectMemoryExecution && !projectMemoryDiagnostic;
+	const isProjectMemoryBlocked =
+		requiresProjectMemoryBinding && !projectMemoryExecution && !canBootstrapProjectMemory;
 
 	// Register layer on mount
 	useEffect(() => {
@@ -388,6 +407,99 @@ export function BatchRunnerModal(props: BatchRunnerModalProps) {
 		setTimeout(() => textareaRef.current?.focus(), 100);
 	}, []);
 
+	useEffect(() => {
+		let cancelled = false;
+
+		const inferProjectMemoryExecution = async () => {
+			if (!activeSession?.toolType) {
+				setProjectMemoryExecution(null);
+				setProjectMemoryDiagnostic(null);
+				return;
+			}
+
+			const repoRoot = activeSession.projectRoot || activeSession.cwd || folderPath;
+			if (!repoRoot) {
+				setProjectMemoryExecution(null);
+				setProjectMemoryDiagnostic(null);
+				return;
+			}
+
+			if (activeSession.toolType !== 'codex') {
+				setProjectMemoryExecution(null);
+				setProjectMemoryDiagnostic('PM Binding is only inferred automatically for Codex sessions.');
+				return;
+			}
+
+			try {
+				const [snapshot, validationReport] = await Promise.all([
+					projectMemoryService.getSnapshot(repoRoot),
+					projectMemoryService.validateState(repoRoot),
+				]);
+				let inferredExecution: BatchRunConfig['projectMemoryExecution'] = null;
+				let diagnostic: string | null = null;
+
+				if (!snapshot) {
+					diagnostic =
+						'PM Binding is unavailable because project memory snapshot could not be loaded.';
+				} else if (!validationReport?.ok) {
+					diagnostic = 'PM Binding is unavailable because project memory is unhealthy.';
+				} else {
+					const normalizedRepoRoot = repoRoot
+						.replace(/\\/g, '/')
+						.replace(/\/+/g, '/')
+						.replace(/\/$/, '');
+					const candidates = snapshot.tasks.filter(
+						(task) =>
+							task.status === 'in_progress' &&
+							task.executorId === 'codex-main' &&
+							task.executorState === 'running' &&
+							typeof task.worktreePath === 'string' &&
+							task.worktreePath.replace(/\\/g, '/').replace(/\/+/g, '/').replace(/\/$/, '') ===
+								normalizedRepoRoot
+					);
+
+					if (candidates.length === 1) {
+						inferredExecution = {
+							repoRoot,
+							taskId: candidates[0].id,
+							executorId: 'codex-main',
+						};
+					} else if (candidates.length === 0) {
+						diagnostic =
+							'PM Binding is not attached because no in-progress Codex task matches this repo root.';
+					} else {
+						diagnostic =
+							'PM Binding is not attached because multiple in-progress Codex tasks match this repo root.';
+					}
+				}
+
+				if (!cancelled) {
+					setProjectMemoryExecution(inferredExecution);
+					setProjectMemoryDiagnostic(inferredExecution ? null : diagnostic);
+					setProjectMemoryDetailExpanded(false);
+					setProjectMemoryDetail(null);
+					setProjectMemoryDetailError(null);
+				}
+			} catch {
+				if (!cancelled) {
+					setProjectMemoryExecution(null);
+					setProjectMemoryDiagnostic(
+						'PM Binding is unavailable because project memory diagnostics could not be loaded.'
+					);
+					setProjectMemoryDetailExpanded(false);
+					setProjectMemoryDetail(null);
+					setProjectMemoryDetailError(null);
+				}
+			}
+		};
+
+		void inferProjectMemoryExecution();
+
+		return () => {
+			cancelled = true;
+		};
+	}, [activeSession?.cwd, activeSession?.projectRoot, activeSession?.toolType, folderPath]);
+
 	const handleReset = () => {
 		showConfirmation('Reset the prompt to the default? Your customizations will be lost.', () => {
 			setPrompt(DEFAULT_BATCH_PROMPT);
@@ -400,6 +512,37 @@ export function BatchRunnerModal(props: BatchRunnerModalProps) {
 		// Update initial ref so hasUnsavedConfigChanges doesn't flag a saved prompt as dirty
 		initialPromptRef.current = prompt;
 	};
+
+	const handleToggleProjectMemoryDetail = useCallback(async () => {
+		if (!projectMemoryExecution) {
+			return;
+		}
+
+		if (projectMemoryDetailExpanded) {
+			setProjectMemoryDetailExpanded(false);
+			return;
+		}
+
+		setProjectMemoryDetailExpanded(true);
+		setProjectMemoryDetailLoading(true);
+		setProjectMemoryDetailError(null);
+
+		try {
+			const detail = await projectMemoryService.getTaskDetail(
+				projectMemoryExecution.repoRoot,
+				projectMemoryExecution.taskId
+			);
+			setProjectMemoryDetail(detail);
+			if (!detail) {
+				setProjectMemoryDetailError('Project memory task detail could not be loaded.');
+			}
+		} catch {
+			setProjectMemoryDetail(null);
+			setProjectMemoryDetailError('Project memory task detail could not be loaded.');
+		} finally {
+			setProjectMemoryDetailLoading(false);
+		}
+	}, [projectMemoryDetailExpanded, projectMemoryExecution]);
 
 	const handleGo = async () => {
 		// Also save when running
@@ -433,6 +576,8 @@ export function BatchRunnerModal(props: BatchRunnerModalProps) {
 				.split('\n')
 				.map((item) => item.trim())
 				.filter(Boolean),
+			projectMemoryExecution,
+			projectMemoryBindingIntent: loadedPlaybook?.projectMemoryBindingIntent ?? null,
 			...(worktreeTarget && { worktreeTarget }),
 		};
 
@@ -463,6 +608,10 @@ export function BatchRunnerModal(props: BatchRunnerModalProps) {
 
 	const isModified = prompt !== DEFAULT_BATCH_PROMPT;
 	const hasUnsavedChanges = prompt !== savedPrompt && prompt !== DEFAULT_BATCH_PROMPT;
+	const parallelismWarning = useMemo(() => {
+		const taskGraph = resolvePlaybookTaskGraph(documents, loadedPlaybook?.taskGraph);
+		return getPlaybookParallelismWarning(taskGraph, loadedPlaybook?.maxParallelism);
+	}, [documents, loadedPlaybook]);
 
 	return (
 		<div
@@ -515,7 +664,7 @@ export function BatchRunnerModal(props: BatchRunnerModalProps) {
 				</div>
 
 				{/* Content */}
-				<div className="flex-1 overflow-y-auto p-6">
+				<div className="flex-1 overflow-y-auto p-4">
 					{/* Playbook Section */}
 					<div className="mb-6 flex items-center justify-between">
 						{/* Left side: Load Playbook and Playbook Exchange buttons */}
@@ -675,6 +824,26 @@ export function BatchRunnerModal(props: BatchRunnerModalProps) {
 						</div>
 					</div>
 
+					{parallelismWarning && (
+						<div
+							className="mb-6 rounded-lg border px-4 py-3"
+							style={{
+								borderColor: `${theme.colors.warning}66`,
+								backgroundColor: `${theme.colors.warning}14`,
+							}}
+						>
+							<p
+								className="text-xs font-semibold uppercase"
+								style={{ color: theme.colors.warning }}
+							>
+								Parallelism Guardrail
+							</p>
+							<p className="mt-1 text-sm" style={{ color: theme.colors.textMain }}>
+								{parallelismWarning.message}
+							</p>
+						</div>
+					)}
+
 					{/* Documents Section */}
 					<DocumentsPanel
 						theme={theme}
@@ -766,6 +935,142 @@ export function BatchRunnerModal(props: BatchRunnerModalProps) {
 							execution is not enabled yet.
 						</div>
 					</div>
+
+					{projectMemoryExecution && (
+						<div
+							className="mt-4 rounded-lg border px-3 py-2"
+							style={{
+								borderColor: `${theme.colors.accent}33`,
+								backgroundColor: `${theme.colors.accent}12`,
+							}}
+						>
+							<div className="text-xs font-bold uppercase" style={{ color: theme.colors.textDim }}>
+								Project Memory Binding
+							</div>
+							<div className="mt-1 text-sm" style={{ color: theme.colors.textMain }}>
+								PM Binding: {projectMemoryExecution.taskId} · {projectMemoryExecution.executorId}
+							</div>
+							<div className="text-[10px] mt-1 break-all" style={{ color: theme.colors.textDim }}>
+								Repo Root: {projectMemoryExecution.repoRoot}
+							</div>
+							<button
+								onClick={handleToggleProjectMemoryDetail}
+								className="mt-2 px-2 py-1 rounded text-[10px] font-semibold transition-colors hover:bg-white/10"
+								style={{
+									color: theme.colors.textDim,
+									border: `1px solid ${theme.colors.border}`,
+								}}
+								title={
+									projectMemoryDetailExpanded
+										? 'Hide project memory task detail'
+										: 'Show project memory task detail'
+								}
+							>
+								{projectMemoryDetailExpanded ? 'Hide Detail' : 'View Detail'}
+							</button>
+							<div className="text-[10px] mt-1" style={{ color: theme.colors.textDim }}>
+								This run will validate the active task lock before Auto Run starts.
+							</div>
+							{projectMemoryDetailExpanded && (
+								<div
+									className="mt-3 rounded-md border p-3 text-xs space-y-2"
+									style={{
+										backgroundColor: theme.colors.bgMain,
+										borderColor: theme.colors.border,
+										color: theme.colors.textDim,
+									}}
+								>
+									{projectMemoryDetailLoading ? (
+										<div>Loading active task detail…</div>
+									) : projectMemoryDetailError ? (
+										<div style={{ color: theme.colors.error }}>{projectMemoryDetailError}</div>
+									) : projectMemoryDetail ? (
+										<>
+											<div>
+												<span style={{ color: theme.colors.textMain }}>Task:</span>{' '}
+												{String(
+													(projectMemoryDetail.task as { id?: string; title?: string } | null)
+														?.id ?? 'unknown'
+												)}
+												{' · '}
+												{String(
+													(projectMemoryDetail.task as { title?: string } | null)?.title ??
+														'Untitled task'
+												)}
+											</div>
+											<div>
+												<span style={{ color: theme.colors.textMain }}>Binding:</span>{' '}
+												{String(
+													(
+														projectMemoryDetail.binding as {
+															binding_mode?: string;
+															branch_name?: string;
+															worktree_path?: string;
+														} | null
+													)?.binding_mode ?? 'none'
+												)}
+												{(
+													projectMemoryDetail.binding as {
+														branch_name?: string;
+														worktree_path?: string;
+													} | null
+												)?.branch_name
+													? ` · ${String((projectMemoryDetail.binding as { branch_name?: string }).branch_name)}`
+													: ''}
+											</div>
+											<div>
+												<span style={{ color: theme.colors.textMain }}>Worktree:</span>{' '}
+												{String(
+													(
+														projectMemoryDetail.worktree as {
+															worktree_id?: string;
+															worktree_path?: string;
+														} | null
+													)?.worktree_id ??
+														(projectMemoryDetail.binding as { worktree_path?: string } | null)
+															?.worktree_path ??
+														'none'
+												)}
+											</div>
+											<div>
+												<span style={{ color: theme.colors.textMain }}>Runtime:</span>{' '}
+												{String(
+													(
+														projectMemoryDetail.runtime as {
+															executor_state?: string;
+															executor_id?: string;
+														} | null
+													)?.executor_state ?? 'unknown'
+												)}
+												{(projectMemoryDetail.runtime as { executor_id?: string } | null)
+													?.executor_id
+													? ` · ${String((projectMemoryDetail.runtime as { executor_id?: string }).executor_id)}`
+													: ''}
+											</div>
+											<div>
+												<span style={{ color: theme.colors.textMain }}>Locks:</span> task=
+												{String(
+													(projectMemoryDetail.taskLock as { owner?: string } | null)?.owner ??
+														'none'
+												)}
+												{' · '}worktree=
+												{String(
+													(projectMemoryDetail.worktreeLock as { owner?: string } | null)?.owner ??
+														'none'
+												)}
+											</div>
+										</>
+									) : null}
+								</div>
+							)}
+						</div>
+					)}
+
+					{!projectMemoryExecution && (projectMemoryDiagnostic || isProjectMemoryChecking) && (
+						<div className="mt-4 text-[10px]" style={{ color: theme.colors.textDim }}>
+							{projectMemoryDiagnostic || 'Checking Project Memory binding for this Codex session.'}
+						</div>
+					)}
 
 					<div className="mt-6 flex flex-col gap-2">
 						<label
@@ -1040,6 +1345,7 @@ export function BatchRunnerModal(props: BatchRunnerModalProps) {
 								hasNoTasks ||
 								documents.length === 0 ||
 								documents.length === missingDocCount ||
+								isProjectMemoryBlocked ||
 								isPromptEmpty ||
 								!hasValidPrompt
 							}
@@ -1050,6 +1356,7 @@ export function BatchRunnerModal(props: BatchRunnerModalProps) {
 									hasNoTasks ||
 									documents.length === 0 ||
 									documents.length === missingDocCount ||
+									isProjectMemoryBlocked ||
 									isPromptEmpty ||
 									!hasValidPrompt
 										? theme.colors.textDim
@@ -1058,17 +1365,24 @@ export function BatchRunnerModal(props: BatchRunnerModalProps) {
 							title={
 								isPreparingWorktree
 									? 'Preparing worktree...'
-									: isPromptEmpty
-										? 'Agent prompt cannot be empty'
-										: !hasValidPrompt
-											? 'Agent prompt must reference Markdown tasks (e.g., checkbox syntax "- [ ]")'
-											: documents.length === 0
-												? 'No documents selected'
-												: documents.length === missingDocCount
-													? 'All selected documents are missing'
-													: hasNoTasks
-														? 'No unchecked tasks in documents'
-														: 'Start auto-run'
+									: isProjectMemoryChecking
+										? 'Checking Project Memory binding...'
+										: isProjectMemoryBlocked
+											? projectMemoryDiagnostic ||
+												'Codex Auto Run requires an active Project Memory binding for this repo.'
+											: canBootstrapProjectMemory && !projectMemoryExecution
+												? 'Project Memory will be initialized when the run starts.'
+												: isPromptEmpty
+													? 'Agent prompt cannot be empty'
+													: !hasValidPrompt
+														? 'Agent prompt must reference Markdown tasks (e.g., checkbox syntax "- [ ]")'
+														: documents.length === 0
+															? 'No documents selected'
+															: documents.length === missingDocCount
+																? 'All selected documents are missing'
+																: hasNoTasks
+																	? 'No unchecked tasks in documents'
+																	: 'Start auto-run'
 							}
 						>
 							{isPreparingWorktree ? (

@@ -23,6 +23,7 @@ import type { TaskCountEntry } from '../../../renderer/stores/batchStore';
 import type { AutoRunTreeNode } from '../../../renderer/hooks/batch/useAutoRunHandlers';
 import { DEFAULT_BATCH_STATE } from '../../../renderer/hooks/batch/batchReducer';
 import type { StartBatchPayload } from '../../../renderer/hooks/batch/batchReducer';
+import type { AutoRunSchedulerSnapshot } from '../../../renderer/types';
 
 // ============================================================================
 // Helpers
@@ -49,6 +50,33 @@ function createStartBatchPayload(overrides: Partial<StartBatchPayload> = {}): St
 		cumulativeTaskTimeMs: 0,
 		accumulatedElapsedMs: 0,
 		lastActiveTimestamp: Date.now(),
+		...overrides,
+	};
+}
+
+function createSchedulerSnapshot(
+	overrides: Partial<AutoRunSchedulerSnapshot> = {}
+): AutoRunSchedulerSnapshot {
+	return {
+		mode: 'dag',
+		maxParallelism: 2,
+		readyNodeIds: ['root'],
+		nodes: [
+			{
+				id: 'root',
+				documentIndex: 0,
+				dependsOn: [],
+				isolationMode: 'shared-checkout',
+				state: 'ready',
+			},
+			{
+				id: 'leaf',
+				documentIndex: 1,
+				dependsOn: ['root'],
+				isolationMode: 'shared-checkout',
+				state: 'blocked',
+			},
+		],
 		...overrides,
 	};
 }
@@ -719,6 +747,20 @@ describe('batchStore', () => {
 	// ==========================================================================
 
 	describe('START_BATCH payload details', () => {
+		it('initializes scheduler snapshot from payload', () => {
+			const scheduler = createSchedulerSnapshot();
+			useBatchStore.getState().dispatchBatch({
+				type: 'START_BATCH',
+				sessionId: 'sess-1',
+				payload: createStartBatchPayload({
+					scheduler,
+				}),
+			});
+
+			const state = useBatchStore.getState().batchRunStates['sess-1'];
+			expect(state.scheduler).toEqual(scheduler);
+		});
+
 		it('initializes worktree fields from payload', () => {
 			useBatchStore.getState().dispatchBatch({
 				type: 'START_BATCH',

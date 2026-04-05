@@ -28,6 +28,15 @@ vi.mock('os', () => ({
 	homedir: vi.fn(() => '/Users/test'),
 }));
 
+vi.mock('child_process', async (importOriginal) => {
+	const actual = await importOriginal<typeof import('child_process')>();
+	return {
+		default: actual,
+		...actual,
+		execFileSync: vi.fn(() => 'main\n'),
+	};
+});
+
 // Mock the storage service
 vi.mock('../../../cli/services/storage', () => ({
 	getSessionById: vi.fn(),
@@ -41,6 +50,20 @@ vi.mock('../../../cli/services/playbooks', () => ({
 // Mock the batch-processor service
 vi.mock('../../../cli/services/batch-processor', () => ({
 	runPlaybook: vi.fn(),
+}));
+
+vi.mock('../../../cli/services/task-sync', () => ({
+	validateProjectMemoryExecutionStart: vi.fn(),
+	readProjectMemorySnapshot: vi.fn(() => null),
+	lockTask: vi.fn(() => null),
+}));
+
+vi.mock('../../../main/wizard-task-emitter', () => ({
+	emitWizardTasks: vi.fn(() => ({
+		success: true,
+		emittedTaskIds: ['PM-01'],
+		tasksFilePath: '/repo/project_memory/tasks/tasks.json',
+	})),
 }));
 
 // Mock the agent-spawner service
@@ -84,11 +107,14 @@ vi.mock('../../../shared/cli-activity', () => ({
 
 import * as fs from 'fs';
 import * as os from 'os';
+import { execFileSync } from 'child_process';
 import { runPlaybook } from '../../../cli/commands/run-playbook';
 import { getSessionById } from '../../../cli/services/storage';
 import { findPlaybookById } from '../../../cli/services/playbooks';
 import { runPlaybook as executePlaybook } from '../../../cli/services/batch-processor';
+import * as taskSyncService from '../../../cli/services/task-sync';
 import { detectAgent } from '../../../cli/services/agent-spawner';
+import { emitWizardTasks } from '../../../main/wizard-task-emitter';
 import { emitError } from '../../../cli/output/jsonl';
 import {
 	formatRunEvent,
@@ -150,10 +176,23 @@ describe('run-playbook command', () => {
 
 		// Default: No sessions in sessions file (agent not busy in desktop)
 		vi.mocked(fs.readFileSync).mockReturnValue(JSON.stringify({ sessions: [] }));
+		vi.mocked(taskSyncService.validateProjectMemoryExecutionStart).mockReturnValue({
+			ok: true,
+			skipped: false,
+			taskId: 'PM-01',
+			executorId: 'codex-main',
+			reason: null,
+			bindingMode: 'shared-branch-serialized',
+			expectedBranch: 'main',
+			currentBranch: 'main',
+		});
+		vi.mocked(taskSyncService.readProjectMemorySnapshot).mockReturnValue(null);
+		vi.mocked(taskSyncService.lockTask).mockReturnValue(null as any);
 
 		// Default: platform is darwin
 		vi.mocked(os.platform).mockReturnValue('darwin');
 		vi.mocked(os.homedir).mockReturnValue('/Users/test');
+		vi.mocked(execFileSync).mockReturnValue('main\n' as never);
 	});
 
 	afterEach(() => {
@@ -189,7 +228,14 @@ describe('run-playbook command', () => {
 					maxParallelism: 1,
 					skills: DEFAULT_AUTORUN_SKILLS,
 					taskGraph: {
-						nodes: [{ id: 'doc1', documentIndex: 0, dependsOn: [] }],
+						nodes: [
+							{
+								id: 'doc1',
+								documentIndex: 0,
+								dependsOn: [],
+								isolationMode: 'shared-checkout',
+							},
+						],
 					},
 				}),
 				'/path/to/playbooks',
@@ -254,7 +300,14 @@ describe('run-playbook command', () => {
 					id: playbook.id,
 					maxParallelism: 1,
 					taskGraph: {
-						nodes: [{ id: 'doc1', documentIndex: 0, dependsOn: [] }],
+						nodes: [
+							{
+								id: 'doc1',
+								documentIndex: 0,
+								dependsOn: [],
+								isolationMode: 'shared-checkout',
+							},
+						],
 					},
 				}),
 				'/path/to/playbooks',
@@ -283,13 +336,23 @@ describe('run-playbook command', () => {
 				expect.objectContaining({
 					id: playbook.id,
 					taskGraph: {
-						nodes: [{ id: 'doc1', documentIndex: 0, dependsOn: [] }],
+						nodes: [
+							{
+								id: 'doc1',
+								documentIndex: 0,
+								dependsOn: [],
+								isolationMode: 'shared-checkout',
+							},
+						],
 					},
 				}),
 				'/path/to/playbooks',
-				expect.objectContaining({
+				{
+					dryRun: undefined,
 					writeHistory: false,
-				})
+					debug: undefined,
+					verbose: undefined,
+				}
 			);
 		});
 
@@ -308,13 +371,23 @@ describe('run-playbook command', () => {
 				expect.objectContaining({
 					id: playbook.id,
 					taskGraph: {
-						nodes: [{ id: 'doc1', documentIndex: 0, dependsOn: [] }],
+						nodes: [
+							{
+								id: 'doc1',
+								documentIndex: 0,
+								dependsOn: [],
+								isolationMode: 'shared-checkout',
+							},
+						],
 					},
 				}),
 				'/path/to/playbooks',
-				expect.objectContaining({
+				{
+					dryRun: undefined,
+					writeHistory: true,
 					debug: true,
-				})
+					verbose: undefined,
+				}
 			);
 		});
 
@@ -333,13 +406,23 @@ describe('run-playbook command', () => {
 				expect.objectContaining({
 					id: playbook.id,
 					taskGraph: {
-						nodes: [{ id: 'doc1', documentIndex: 0, dependsOn: [] }],
+						nodes: [
+							{
+								id: 'doc1',
+								documentIndex: 0,
+								dependsOn: [],
+								isolationMode: 'shared-checkout',
+							},
+						],
 					},
 				}),
 				'/path/to/playbooks',
-				expect.objectContaining({
+				{
+					dryRun: undefined,
+					writeHistory: true,
+					debug: undefined,
 					verbose: true,
-				})
+				}
 			);
 		});
 
@@ -367,6 +450,43 @@ describe('run-playbook command', () => {
 			await runPlaybook('pb-123', {});
 
 			expect(formatInfo).toHaveBeenCalledWith('Loop: enabled (∞)');
+		});
+
+		it('should warn when shared-checkout playbooks request parallel execution', async () => {
+			const playbook = mockPlaybook({
+				documents: [
+					{ filename: 'doc1.md', resetOnCompletion: false },
+					{ filename: 'doc2.md', resetOnCompletion: false },
+				],
+				maxParallelism: 2,
+				taskGraph: {
+					nodes: [
+						{
+							id: 'doc1',
+							documentIndex: 0,
+							dependsOn: [],
+							isolationMode: 'shared-checkout',
+						},
+						{
+							id: 'doc2',
+							documentIndex: 1,
+							dependsOn: ['doc1'],
+							isolationMode: 'shared-checkout',
+						},
+					],
+				},
+			});
+			const agent = mockSession();
+
+			vi.mocked(findPlaybookById).mockReturnValue({ playbook, agentId: 'agent-1' });
+			vi.mocked(getSessionById).mockReturnValue(agent);
+			vi.mocked(executePlaybook).mockReturnValue(mockEventGenerator([]));
+
+			await runPlaybook('pb-123', {});
+
+			expect(formatWarning).toHaveBeenCalledWith(
+				expect.stringContaining('falls back to sequential execution')
+			);
 		});
 	});
 
@@ -619,6 +739,48 @@ describe('run-playbook command', () => {
 				vi.useRealTimers();
 			}
 		});
+
+		it('should fail with AGENT_WAIT_TIMEOUT when wait exceeds maxWaitMs', async () => {
+			vi.useFakeTimers();
+			try {
+				const playbook = mockPlaybook();
+				const agent = mockSession();
+
+				vi.mocked(findPlaybookById).mockReturnValue({ playbook, agentId: 'agent-1' });
+				vi.mocked(getSessionById).mockReturnValue(agent);
+				vi.mocked(isSessionBusyWithCli).mockReturnValue(true);
+				vi.mocked(getCliActivityForSession).mockReturnValue({
+					sessionId: 'agent-1',
+					playbookId: 'pb-other',
+					playbookName: 'Other Playbook',
+					startedAt: Date.now(),
+					pid: 12345,
+				});
+
+				const runPromise = runPlaybook('pb-123', {
+					wait: true,
+					json: true,
+					maxWaitMs: 5000,
+				});
+				const settledPromise = runPromise.then(
+					() => null,
+					(error) => error
+				);
+
+				await vi.advanceTimersByTimeAsync(5000);
+
+				const error = await settledPromise;
+				expect(error).toBeInstanceOf(Error);
+				expect((error as Error).message).toBe('process.exit(1)');
+				expect(emitError).toHaveBeenCalledWith(
+					expect.stringContaining('Timed out after waiting'),
+					'AGENT_WAIT_TIMEOUT'
+				);
+				expect(executePlaybook).not.toHaveBeenCalled();
+			} finally {
+				vi.useRealTimers();
+			}
+		});
 	});
 
 	describe('no Auto Run folder', () => {
@@ -701,6 +863,310 @@ describe('run-playbook command', () => {
 			expect(emitError).toHaveBeenCalledWith(
 				expect.stringContaining('Playbook DAG validation failed:'),
 				'PLAYBOOK_DAG_INVALID'
+			);
+		});
+	});
+
+	describe('project memory execution validation', () => {
+		it('should block Codex execution before invoking batch processor when project memory metadata is missing', async () => {
+			const playbook = mockPlaybook();
+			const agent = mockSession({ toolType: 'codex' });
+
+			vi.mocked(findPlaybookById).mockReturnValue({ playbook, agentId: 'agent-1' });
+			vi.mocked(getSessionById).mockReturnValue(agent);
+			vi.mocked(executePlaybook).mockReturnValue(mockEventGenerator([]));
+
+			await expect(runPlaybook('pb-123', {})).rejects.toThrow('process.exit(1)');
+
+			expect(executePlaybook).not.toHaveBeenCalled();
+			expect(taskSyncService.validateProjectMemoryExecutionStart).not.toHaveBeenCalled();
+			expect(formatError).toHaveBeenCalledWith(
+				'Codex Auto Run requires an active Project Memory binding for this repo.'
+			);
+		});
+
+		it('should bootstrap project memory from binding intent before invoking batch processor', async () => {
+			const playbook = mockPlaybook({
+				projectMemoryBindingIntent: {
+					policyVersion: '2026-04-04',
+					repoRoot: '/repo',
+					sourceBranch: 'main',
+					bindingPreference: 'shared-branch-serialized',
+					sharedCheckoutAllowed: true,
+					reuseExistingBinding: true,
+					allowRebindIfStale: true,
+				},
+				taskGraph: {
+					nodes: [{ id: 'PM-01', documentIndex: 0, dependsOn: [] }],
+				},
+			});
+			const agent = mockSession({ toolType: 'codex', cwd: '/repo' });
+
+			vi.mocked(findPlaybookById).mockReturnValue({ playbook, agentId: 'agent-1' });
+			vi.mocked(getSessionById).mockReturnValue(agent);
+			vi.mocked(taskSyncService.lockTask).mockReturnValue({
+				task: { id: 'PM-01' },
+			} as any);
+			vi.mocked(executePlaybook).mockReturnValue(mockEventGenerator([]));
+
+			await runPlaybook('pb-123', {});
+
+			expect(emitWizardTasks).toHaveBeenCalledTimes(1);
+			expect(taskSyncService.lockTask).toHaveBeenCalledWith(
+				{
+					repoRoot: '/repo',
+					executorId: 'codex-main',
+				},
+				'PM-01'
+			);
+			expect(executePlaybook).toHaveBeenCalledWith(
+				agent,
+				expect.objectContaining({
+					projectMemoryExecution: {
+						repoRoot: '/repo',
+						taskId: 'PM-01',
+						executorId: 'codex-main',
+					},
+				}),
+				'/path/to/playbooks',
+				expect.any(Object)
+			);
+		});
+
+		it('should reuse existing task store when binding intent exists and snapshot is present', async () => {
+			const playbook = mockPlaybook({
+				projectMemoryBindingIntent: {
+					policyVersion: '2026-04-04',
+					repoRoot: '/repo',
+					sourceBranch: 'main',
+					bindingPreference: 'shared-branch-serialized',
+					sharedCheckoutAllowed: true,
+					reuseExistingBinding: true,
+					allowRebindIfStale: true,
+				},
+				documents: [
+					{ filename: 'phase-1.md', resetOnCompletion: false },
+					{ filename: 'phase-2.md', resetOnCompletion: false },
+				],
+				taskGraph: {
+					nodes: [
+						{ id: 'PM-01', documentIndex: 0, dependsOn: [] },
+						{ id: 'PM-02', documentIndex: 1, dependsOn: [] },
+					],
+				},
+			});
+			const agent = mockSession({ toolType: 'codex', cwd: '/repo' });
+
+			vi.mocked(findPlaybookById).mockReturnValue({ playbook, agentId: 'agent-1' });
+			vi.mocked(getSessionById).mockReturnValue(agent);
+			vi.mocked(taskSyncService.readProjectMemorySnapshot).mockReturnValue({
+				projectId: 'repo',
+				version: '1',
+				taskCount: 1,
+				tasks: [],
+				generatedAt: new Date().toISOString(),
+			});
+			vi.mocked(emitWizardTasks).mockReturnValue({
+				success: false,
+				partialSuccess: false,
+				emittedTaskIds: [],
+				skippedTaskIds: ['PM-01', 'PM-02'],
+				tasksFilePath: '/repo/project_memory/tasks/tasks.json',
+				error: 'All 2 task(s) already exist in task store',
+			});
+			vi.mocked(taskSyncService.lockTask)
+				.mockImplementationOnce(() => {
+					throw new Error('Task dependencies are not complete: PM-01');
+				})
+				.mockReturnValueOnce({
+					task: { id: 'PM-02' },
+				} as any);
+			vi.mocked(executePlaybook).mockReturnValue(mockEventGenerator([]));
+
+			await runPlaybook('pb-123', {});
+
+			expect(emitWizardTasks).toHaveBeenCalledTimes(1);
+			expect(taskSyncService.lockTask).toHaveBeenNthCalledWith(
+				1,
+				{
+					repoRoot: '/repo',
+					executorId: 'codex-main',
+				},
+				'PM-01'
+			);
+			expect(taskSyncService.lockTask).toHaveBeenNthCalledWith(
+				2,
+				{
+					repoRoot: '/repo',
+					executorId: 'codex-main',
+				},
+				'PM-02'
+			);
+			expect(executePlaybook).toHaveBeenCalledWith(
+				agent,
+				expect.objectContaining({
+					projectMemoryExecution: {
+						repoRoot: '/repo',
+						taskId: 'PM-02',
+						executorId: 'codex-main',
+					},
+				}),
+				'/path/to/playbooks',
+				expect.any(Object)
+			);
+		});
+
+		it('should report playbook-specific task claim failures through the JSON error path', async () => {
+			const playbook = mockPlaybook({
+				projectMemoryBindingIntent: {
+					policyVersion: '2026-04-04',
+					repoRoot: '/repo',
+					sourceBranch: 'main',
+					bindingPreference: 'shared-branch-serialized',
+					sharedCheckoutAllowed: true,
+					reuseExistingBinding: true,
+					allowRebindIfStale: true,
+				},
+				documents: [
+					{ filename: 'phase-1.md', resetOnCompletion: false },
+					{ filename: 'phase-2.md', resetOnCompletion: false },
+				],
+				taskGraph: {
+					nodes: [
+						{ id: 'PM-01', documentIndex: 0, dependsOn: [] },
+						{ id: 'PM-02', documentIndex: 1, dependsOn: [] },
+					],
+				},
+			});
+			const agent = mockSession({ toolType: 'codex', cwd: '/repo' });
+
+			vi.mocked(findPlaybookById).mockReturnValue({ playbook, agentId: 'agent-1' });
+			vi.mocked(getSessionById).mockReturnValue(agent);
+			vi.mocked(taskSyncService.lockTask)
+				.mockImplementationOnce(() => {
+					throw new Error('Task is already completed: PM-01');
+				})
+				.mockImplementationOnce(() => {
+					throw new Error('Task lock owner mismatch: PM-02');
+				});
+			vi.mocked(executePlaybook).mockReturnValue(mockEventGenerator([]));
+
+			await expect(runPlaybook('pb-123', { json: true })).rejects.toThrow('process.exit(1)');
+
+			expect(executePlaybook).not.toHaveBeenCalled();
+			expect(emitError).toHaveBeenCalledWith(
+				'Failed to run playbook: Project Memory bootstrap did not find a runnable task for this playbook. (PM-01: Task is already completed: PM-01; PM-02: Task lock owner mismatch: PM-02)',
+				'EXECUTION_ERROR'
+			);
+		});
+
+		it('should report missing Codex project memory metadata through the JSON error path', async () => {
+			const playbook = mockPlaybook();
+			const agent = mockSession({ toolType: 'codex' });
+
+			vi.mocked(findPlaybookById).mockReturnValue({ playbook, agentId: 'agent-1' });
+			vi.mocked(getSessionById).mockReturnValue(agent);
+			vi.mocked(executePlaybook).mockReturnValue(mockEventGenerator([]));
+
+			await expect(runPlaybook('pb-123', { json: true })).rejects.toThrow('process.exit(1)');
+
+			expect(executePlaybook).not.toHaveBeenCalled();
+			expect(emitError).toHaveBeenCalledWith(
+				'Codex Auto Run requires an active Project Memory binding for this repo.',
+				'PROJECT_MEMORY_EXECUTION_REQUIRED'
+			);
+		});
+
+		it('should report bootstrap failures through the JSON error path', async () => {
+			const playbook = mockPlaybook({
+				projectMemoryBindingIntent: {
+					policyVersion: '2026-04-04',
+					repoRoot: '/repo',
+					sourceBranch: 'main',
+					bindingPreference: 'shared-branch-serialized',
+					sharedCheckoutAllowed: true,
+					reuseExistingBinding: true,
+					allowRebindIfStale: true,
+				},
+			});
+			const agent = mockSession({ toolType: 'codex', cwd: '/repo' });
+
+			vi.mocked(findPlaybookById).mockReturnValue({ playbook, agentId: 'agent-1' });
+			vi.mocked(getSessionById).mockReturnValue(agent);
+			vi.mocked(emitWizardTasks).mockReturnValue({
+				success: false,
+				error: 'tasks.json write failed',
+				emittedTaskIds: [],
+				tasksFilePath: '/repo/project_memory/tasks/tasks.json',
+			});
+			vi.mocked(executePlaybook).mockReturnValue(mockEventGenerator([]));
+
+			await expect(runPlaybook('pb-123', { json: true })).rejects.toThrow('process.exit(1)');
+
+			expect(executePlaybook).not.toHaveBeenCalled();
+			expect(emitError).toHaveBeenCalledWith(
+				'Failed to run playbook: tasks.json write failed',
+				'EXECUTION_ERROR'
+			);
+		});
+
+		it('should block execution before invoking batch processor when project memory validation fails', async () => {
+			const playbook = mockPlaybook({
+				projectMemoryExecution: {
+					repoRoot: '/repo',
+					taskId: 'PM-01',
+					executorId: 'codex-main',
+				},
+			});
+			const agent = mockSession({ cwd: '/repo' });
+
+			vi.mocked(findPlaybookById).mockReturnValue({ playbook, agentId: 'agent-1' });
+			vi.mocked(getSessionById).mockReturnValue(agent);
+			vi.mocked(executePlaybook).mockReturnValue(mockEventGenerator([]));
+			vi.mocked(taskSyncService.validateProjectMemoryExecutionStart).mockReturnValue({
+				ok: false,
+				skipped: false,
+				taskId: 'PM-01',
+				executorId: 'codex-main',
+				reason: 'Task lock owner mismatch: expected codex-main, found other-executor',
+				bindingMode: 'shared-branch-serialized',
+				expectedBranch: 'main',
+				currentBranch: 'main',
+			});
+
+			await expect(runPlaybook('pb-123', {})).rejects.toThrow('process.exit(1)');
+
+			expect(executePlaybook).not.toHaveBeenCalled();
+			expect(formatError).toHaveBeenCalledWith(
+				'Task lock owner mismatch: expected codex-main, found other-executor'
+			);
+		});
+
+		it('should use project memory repoRoot as validation input when provided', async () => {
+			const projectMemoryRepoRoot = process.cwd();
+			const playbook = mockPlaybook({
+				projectMemoryExecution: {
+					repoRoot: projectMemoryRepoRoot,
+					taskId: 'PM-01',
+					executorId: 'codex-main',
+				},
+			});
+			const agent = mockSession({ cwd: '/agent-cwd' });
+
+			vi.mocked(findPlaybookById).mockReturnValue({ playbook, agentId: 'agent-1' });
+			vi.mocked(getSessionById).mockReturnValue(agent);
+			vi.mocked(executePlaybook).mockReturnValue(mockEventGenerator([]));
+
+			await runPlaybook('pb-123', {});
+
+			const validationCall = vi.mocked(taskSyncService.validateProjectMemoryExecutionStart).mock
+				.calls[0]?.[0];
+			expect(validationCall).toEqual(
+				expect.objectContaining({
+					repoRoot: projectMemoryRepoRoot,
+					taskId: 'PM-01',
+					executorId: 'codex-main',
+				})
 			);
 		});
 	});

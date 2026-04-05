@@ -3,6 +3,9 @@
 
 import { execFileSync } from 'child_process';
 import type {
+	AutoRunSchedulerNodeSnapshot,
+	BatchRunConfig,
+	BatchRunIsolatedWorktreeTarget,
 	HistoryEntry,
 	HistoryUsageBreakdown,
 	Playbook,
@@ -23,33 +26,126 @@ import { addHistoryEntry, readGroups } from './storage';
 import { substituteTemplateVariables, TemplateContext } from '../../shared/templateVariables';
 import { registerCliActivity, unregisterCliActivity } from '../../shared/cli-activity';
 import { logger } from '../../main/utils/logger';
-import { parseSynopsis } from '../../shared/synopsis';
 import { generateUUID } from '../../shared/uuid';
-import { estimateTokenCount, formatElapsedTime } from '../../shared/formatters';
-import {
-	buildActiveTaskDocumentContext,
-	revertNewlyCheckedTasks,
-} from '../../shared/markdownTaskUtils';
+import { estimateTokenCount } from '../../shared/formatters';
+import { buildActiveTaskDocumentContext } from '../../shared/markdownTaskUtils';
 import { getPlaybookPromptForExecution } from '../../shared/playbookPromptUtils';
 import { resolvePlaybookSkills, buildSkillPromptBlock } from './skill-resolver';
 import { recordSkillBusRun } from './skill-bus';
 import { validatePlaybookDag } from '../../shared/playbookDag';
+import {
+	createAutoRunSchedulerSnapshot,
+	finalizeAutoRunSchedulerNode,
+	summarizeAutoRunObservedExecution,
+} from '../../shared/autorunScheduler';
+import {
+	type AutoRunDispatchExecutionResult,
+	claimReadyAutoRunDispatchWork,
+	claimReadyAutoRunNodes,
+	executeAutoRunDispatchClaims,
+	finalizeAutoRunDispatchNode,
+	finalizeAutoRunDispatchNodes,
+} from '../../shared/autorunDispatch';
+import { buildParallelDispatchPlan } from '../../shared/playbookParallelism';
 import { buildAutoRunSkillBusPayload } from '../../shared/skillBus';
 import {
-	applyVerifierVerdictToSummary,
-	buildDefinitionOfDoneSection,
-	buildVerificationStepsSection,
+	buildAutoRunAggregateUsageStats,
+	buildAutoRunDocumentTaskState,
+	buildAutoRunDocumentPromptSection,
+	buildAutoRunLoopSummaryEntry,
+	buildAutoRunStagePrompt,
+	buildAutoRunVerifierNote,
+	buildAutoRunTotalSummaryDetails,
+	finalizeAutoRunTaskExecution,
+	finalizePlanExecuteVerifyResult,
 	getVerifierVerdict,
+	mergeAutoRunVerifierVerdict,
 	mergeUsageStats,
-	pickContextDisplayUsageStats,
-	shouldIncludeSharedSkillGuidance,
+	type AutoRunCompletedNodeContext,
 } from '../../shared/autorunExecutionModel';
+import { ensureMarkdownFilename } from '../../shared/markdownFilenames';
 import type {
 	PlaybookAgentStrategy,
 	PlaybookDocumentContextMode,
 	PlaybookPromptProfile,
 	PlaybookSkillPromptMode,
 } from '../../shared/types';
+import * as taskSyncService from './task-sync';
+import type { TaskExecutionStatus, TaskExecutionMetadata } from './task-sync';
+
+/**
+ * Update project memory task status if project memory execution is configured
+ */
+function updateProjectMemoryTaskStatus(
+	playbook: {
+		projectMemoryExecution?: {
+			repoRoot?: string | null;
+			taskId?: string | null;
+			executorId?: string | null;
+		} | null;
+	},
+	status: TaskExecutionStatus,
+	metadata?: TaskExecutionMetadata
+): void {
+	if (!playbook.projectMemoryExecution) {
+		return;
+	}
+	const { repoRoot, taskId, executorId } = playbook.projectMemoryExecution;
+	if (!repoRoot || !taskId || !executorId) {
+		return;
+	}
+	try {
+		taskSyncService.updateTaskStatusFromExecutor(
+			{ repoRoot, executorId },
+			taskId,
+			status,
+			metadata
+		);
+	} catch (error) {
+		// Log but don't fail execution - status updates are best-effort
+		logger.autorun(`Failed to update project memory task status: ${error}`, 'batch-processor', {
+			taskId,
+			status,
+			error: String(error),
+		});
+	}
+}
+
+const PROJECT_MEMORY_HEARTBEAT_INTERVAL_MS = 60 * 1000;
+
+function startProjectMemoryHeartbeat(playbook: {
+	projectMemoryExecution?: {
+		repoRoot?: string | null;
+		taskId?: string | null;
+		executorId?: string | null;
+	} | null;
+}): () => void {
+	if (!playbook.projectMemoryExecution) {
+		return () => {};
+	}
+	const { repoRoot, taskId, executorId } = playbook.projectMemoryExecution;
+	if (!repoRoot || !taskId || !executorId) {
+		return () => {};
+	}
+
+	const interval = setInterval(() => {
+		try {
+			taskSyncService.heartbeatTask({ repoRoot, executorId }, taskId);
+		} catch (error) {
+			logger.autorun(`Failed to heartbeat project memory task: ${error}`, 'batch-processor', {
+				taskId,
+				error: String(error),
+			});
+		}
+	}, PROJECT_MEMORY_HEARTBEAT_INTERVAL_MS);
+	if (typeof interval.unref === 'function') {
+		interval.unref();
+	}
+
+	return () => {
+		clearInterval(interval);
+	};
+}
 
 const DEFAULT_TASK_TIMEOUT_MS = 60000;
 const DEFAULT_CODEX_TASK_TIMEOUT_MS = 300000;
@@ -84,9 +180,32 @@ const AUTORUN_CONTEXT_AND_IMPACT_INSTRUCTION = `Before making any non-trivial co
 - use GitNexus/impact to check upstream blast radius
 - if GitNexus misses the symbol, state that and fall back to focused local code search before editing`;
 
+const AUTORUN_STAGE_INSTRUCTIONS = {
+	planner: PLAN_STEP_INSTRUCTION,
+	executor: EXECUTE_STEP_INSTRUCTION,
+	verifier: VERIFY_STEP_INSTRUCTION,
+} as const;
+
 function formatUsageDebug(usage: UsageStats | undefined): string {
 	if (!usage) return 'none';
 	return `in=${usage.inputTokens || 0}, out=${usage.outputTokens || 0}, cacheRead=${usage.cacheReadInputTokens || 0}, context=${usage.contextWindow || 0}, reasoning=${usage.reasoningTokens || 0}, cost=${usage.totalCostUsd || 0}`;
+}
+
+function dedupeIsolatedWorktreeTargets(
+	targets: Array<BatchRunIsolatedWorktreeTarget | undefined | null>
+): BatchRunIsolatedWorktreeTarget[] {
+	const seenPaths = new Set<string>();
+	const deduped: BatchRunIsolatedWorktreeTarget[] = [];
+
+	for (const target of targets) {
+		if (!target?.cwd || seenPaths.has(target.cwd)) {
+			continue;
+		}
+		seenPaths.add(target.cwd);
+		deduped.push(target);
+	}
+
+	return deduped;
 }
 
 function resolveEffectiveTaskTimeoutMs(
@@ -127,89 +246,49 @@ function resolveEffectiveStageTimeoutMs(
 	return baseTimeoutMs;
 }
 
-function getDocumentPromptSection(
-	docFilePath: string,
-	content: string,
-	mode: PlaybookDocumentContextMode = 'active-task-only'
-): string {
-	const modeNote =
-		mode === 'full'
-			? 'The full document is inlined below.'
-			: 'Only the active unchecked task and minimal nearby context are inlined below; open the document on disk if you need anything else.';
-
-	return `---\n\n# Current Document: ${docFilePath}\n\nProcess tasks from this document and save changes back to the file above.\n${modeNote}\n\n${content}`;
-}
-
-function buildStrategyPrompt(
-	stage: 'planner' | 'executor' | 'verifier',
-	agentStrategy: PlaybookAgentStrategy,
-	basePrompt: string,
-	documentPrompt: string,
-	skillPromptBlock: string,
-	plannerSummary?: string,
-	definitionOfDone: string[] = [],
-	verificationSteps: string[] = []
-): string {
-	const sections: string[] = [];
-	const includeSharedSkillGuidance = shouldIncludeSharedSkillGuidance(stage, agentStrategy);
-
-	if (stage === 'planner') {
-		sections.push(PLAN_STEP_INSTRUCTION);
-	} else if (stage === 'executor') {
-		sections.push(EXECUTE_STEP_INSTRUCTION);
-		if (plannerSummary) {
-			sections.push(`## Planner Output\n\n${plannerSummary}`);
-		}
-	} else {
-		sections.push(VERIFY_STEP_INSTRUCTION);
+function validateProjectMemoryStartup(
+	session: SessionInfo,
+	playbook: {
+		projectMemoryExecution?: {
+			repoRoot?: string | null;
+			taskId?: string | null;
+			executorId?: string | null;
+		} | null;
+	}
+): { ok: true } | { ok: false; code: string; reason: string } {
+	if (!playbook.projectMemoryExecution) {
+		return { ok: true };
 	}
 
-	if (includeSharedSkillGuidance) {
-		sections.push(AUTORUN_CONTEXT_AND_IMPACT_INSTRUCTION);
-	}
-	sections.push(basePrompt);
-	if (includeSharedSkillGuidance && skillPromptBlock) {
-		sections.push(skillPromptBlock);
-	}
-	if (stage === 'verifier' && verificationSteps.length > 0) {
-		sections.push(buildVerificationStepsSection(verificationSteps));
-	}
-	if (stage === 'verifier' && definitionOfDone.length > 0) {
-		sections.push(buildDefinitionOfDoneSection(definitionOfDone));
-	}
-	sections.push(documentPrompt);
-	return sections.join('\n\n');
-}
-
-function buildSynopsisFromTaskResponse(
-	response: string | undefined,
-	error: string | undefined,
-	defaultLabel: string
-): { shortSummary: string; fullSynopsis: string } {
-	const text = response?.trim();
-	if (!text) {
-		const fallback = error || defaultLabel;
-		return { shortSummary: fallback, fullSynopsis: fallback };
-	}
-
-	const parsed = parseSynopsis(text);
-	if (parsed.nothingToReport) {
+	const { taskId, executorId } = playbook.projectMemoryExecution;
+	if (!taskId || !executorId) {
 		return {
-			shortSummary: defaultLabel,
-			fullSynopsis: defaultLabel,
+			ok: false,
+			code: 'PROJECT_MEMORY_EXECUTION_BLOCKED',
+			reason:
+				'Project Memory execution metadata is incomplete: taskId and executorId are required.',
 		};
 	}
 
-	return {
-		shortSummary: parsed.shortSummary || defaultLabel,
-		fullSynopsis: parsed.fullSynopsis || text,
-	};
-}
+	const validationRepoRoot = playbook.projectMemoryExecution.repoRoot || session.cwd;
+	const currentBranch = getGitBranch(validationRepoRoot);
+	const validation = taskSyncService.validateProjectMemoryExecutionStart({
+		...playbook.projectMemoryExecution,
+		repoRoot: validationRepoRoot,
+		taskId,
+		executorId,
+		currentBranch: currentBranch ?? null,
+	});
 
-function buildVerifierNote(response?: string, error?: string): string | undefined {
-	const text = response?.trim() || error?.trim();
-	if (!text) return undefined;
-	return text;
+	if (!validation.ok) {
+		return {
+			ok: false,
+			code: 'PROJECT_MEMORY_EXECUTION_BLOCKED',
+			reason: validation.reason ?? 'Project Memory execution validation blocked playbook start.',
+		};
+	}
+
+	return { ok: true };
 }
 
 /**
@@ -249,7 +328,8 @@ function isGitRepo(cwd: string): boolean {
  */
 export async function* runPlaybook(
 	session: SessionInfo,
-	playbook: Playbook,
+	playbook: Playbook &
+		Partial<Pick<BatchRunConfig, 'isolatedWorktreeTarget' | 'isolatedWorktreeTargets'>>,
 	folderPath: string,
 	options: {
 		dryRun?: boolean;
@@ -270,9 +350,20 @@ export async function* runPlaybook(
 		throw new Error(`Playbook DAG validation failed: ${dagValidation.errors.join(' ')}`);
 	}
 
+	const projectMemoryValidation = validateProjectMemoryStartup(session, playbook);
+	if (!projectMemoryValidation.ok) {
+		yield {
+			type: 'error',
+			timestamp: Date.now(),
+			message: projectMemoryValidation.reason,
+			code: projectMemoryValidation.code,
+		};
+		return;
+	}
+
 	// Get git branch and group name for template variable substitution
-	const gitBranch = getGitBranch(session.cwd);
-	const isGit = isGitRepo(session.cwd);
+	const defaultGitBranch = getGitBranch(session.cwd);
+	const defaultIsGit = isGitRepo(session.cwd);
 	const groups = readGroups();
 	const sessionGroup = groups.find((g) => g.id === session.groupId);
 	const groupName = sessionGroup?.name;
@@ -285,6 +376,10 @@ export async function* runPlaybook(
 	const definitionOfDone = playbook.definitionOfDone ?? [];
 	const taskTimeoutMs = resolveEffectiveTaskTimeoutMs(session.toolType, playbook.taskTimeoutMs);
 	const skillPromptBlock = buildSkillPromptBlock(resolvedSkills.resolved, skillPromptMode);
+	const isolatedWorktreeTargets = dedupeIsolatedWorktreeTargets([
+		playbook.isolatedWorktreeTarget,
+		...(playbook.isolatedWorktreeTargets ?? []),
+	]);
 
 	// Register CLI activity so desktop app knows this session is busy
 	registerCliActivity({
@@ -302,6 +397,11 @@ export async function* runPlaybook(
 		playbook: { id: playbook.id, name: playbook.name },
 		session: { id: session.id, name: session.name, cwd: session.cwd },
 	};
+
+	// Update project memory task status to 'running' at execution start
+	updateProjectMemoryTaskStatus(playbook, 'running', {
+		agentType: session.toolType,
+	});
 
 	// AUTORUN LOG: Start
 	logger.autorun(`Auto Run started`, session.name, {
@@ -391,25 +491,39 @@ export async function* runPlaybook(
 
 	if (dryRun) {
 		// Dry run - show detailed breakdown of what would be executed
-		for (let docIndex = 0; docIndex < playbook.documents.length; docIndex++) {
-			const docEntry = playbook.documents[docIndex];
+		let scheduler = createAutoRunSchedulerSnapshot(
+			playbook.documents,
+			playbook.taskGraph,
+			playbook.maxParallelism
+		);
+		while (scheduler.readyNodeIds.length > 0) {
+			const claimResult = claimReadyAutoRunNodes(scheduler, 1);
+			scheduler = claimResult.snapshot;
+			const claim = claimResult.claims[0];
+			if (!claim) {
+				break;
+			}
+			const nodeId = claim.nodeId;
+			const node = claim.node;
+
+			const docEntry = playbook.documents[node.documentIndex];
 			const { tasks } = readDocAndGetTasks(folderPath, docEntry.filename);
 
 			if (tasks.length === 0) {
+				scheduler = finalizeAutoRunSchedulerNode(scheduler, nodeId, 'completed');
 				continue;
 			}
 
-			// Emit document start event
 			yield {
 				type: 'document_start',
 				timestamp: Date.now(),
 				document: docEntry.filename,
-				index: docIndex,
+				index: node.documentIndex,
 				taskCount: tasks.length,
 				dryRun: true,
+				scheduler,
 			};
 
-			// Emit each task that would be processed
 			for (let taskIndex = 0; taskIndex < tasks.length; taskIndex++) {
 				yield {
 					type: 'task_preview',
@@ -420,13 +534,14 @@ export async function* runPlaybook(
 				};
 			}
 
-			// Emit document complete event
+			scheduler = finalizeAutoRunSchedulerNode(scheduler, nodeId, 'completed');
 			yield {
 				type: 'document_complete',
 				timestamp: Date.now(),
 				document: docEntry.filename,
 				tasksCompleted: tasks.length,
 				dryRun: true,
+				scheduler,
 			};
 		}
 
@@ -439,6 +554,7 @@ export async function* runPlaybook(
 			totalElapsedMs: 0,
 			dryRun: true,
 			wouldProcess: initialTotalTasks,
+			scheduler,
 		};
 		return;
 	}
@@ -458,6 +574,12 @@ export async function* runPlaybook(
 	// Total tracking across all loops
 	let totalInputTokens = 0;
 	let totalOutputTokens = 0;
+	let sharedCheckoutFallbackCount = 0;
+	let finalScheduler = createAutoRunSchedulerSnapshot(
+		playbook.documents,
+		playbook.taskGraph,
+		playbook.maxParallelism
+	);
 
 	// Helper to create final loop entry with exit reason
 	const createFinalLoopEntry = (exitReason: string): void => {
@@ -474,46 +596,39 @@ export async function* runPlaybook(
 		if (loopTasksCompleted === 0 && loopIteration === 0) return;
 
 		const loopElapsedMs = Date.now() - loopStartTime;
-		const loopNumber = loopIteration + 1;
-		const loopSummary = `Loop ${loopNumber} (final) completed: ${loopTasksCompleted} task${loopTasksCompleted !== 1 ? 's' : ''} accomplished`;
-
-		const loopUsageStats: UsageStats | undefined =
-			loopTotalInputTokens > 0 || loopTotalOutputTokens > 0
-				? {
-						inputTokens: loopTotalInputTokens,
-						outputTokens: loopTotalOutputTokens,
-						cacheReadInputTokens: 0,
-						cacheCreationInputTokens: 0,
-						totalCostUsd: loopTotalCost,
-						contextWindow: 0, // Set to 0 for summaries - these are cumulative totals, not per-task context
-					}
-				: undefined;
-
-		const loopDetails = [
-			`**Loop ${loopNumber} (final) Summary**`,
-			'',
-			`- **Tasks Accomplished:** ${loopTasksCompleted}`,
-			`- **Duration:** ${formatElapsedTime(loopElapsedMs)}`,
-			loopTotalInputTokens > 0 || loopTotalOutputTokens > 0
-				? `- **Tokens:** ${(loopTotalInputTokens + loopTotalOutputTokens).toLocaleString()} (${loopTotalInputTokens.toLocaleString()} in / ${loopTotalOutputTokens.toLocaleString()} out)`
-				: '',
-			loopTotalCost > 0 ? `- **Cost:** $${loopTotalCost.toFixed(4)}` : '',
-			`- **Exit Reason:** ${exitReason}`,
-		]
-			.filter((line) => line !== '')
-			.join('\n');
-
+		const observedExecution = summarizeAutoRunObservedExecution(finalScheduler, {
+			sharedCheckoutFallbackCount,
+		});
 		const historyEntry: HistoryEntry = {
 			id: generateUUID(),
-			type: 'AUTO',
-			timestamp: Date.now(),
-			summary: loopSummary,
-			fullResponse: loopDetails,
-			projectPath: session.cwd,
-			sessionId: session.id,
-			success: true,
-			elapsedTimeMs: loopElapsedMs,
-			usageStats: loopUsageStats,
+			...buildAutoRunLoopSummaryEntry({
+				timestamp: Date.now(),
+				loopIteration,
+				loopTasksCompleted,
+				loopElapsedMs,
+				loopTotalInputTokens,
+				loopTotalOutputTokens,
+				loopTotalCost,
+				projectPath: session.cwd,
+				sessionId: session.id,
+				isFinal: true,
+				exitReason,
+				playbookId: playbook.id,
+				playbookName: playbook.name,
+				promptProfile,
+				agentStrategy,
+				schedulerMode: observedExecution.observedSchedulerMode,
+				configuredSchedulerMode: observedExecution.configuredSchedulerMode,
+				actualParallelNodeCount: observedExecution.actualParallelNodeCount,
+				sharedCheckoutFallbackCount: observedExecution.sharedCheckoutFallbackCount,
+				blockedNodeCount: observedExecution.blockedNodeCount,
+				skippedNodeCount: observedExecution.skippedNodeCount,
+				schedulerOutcome:
+					exitReason === 'All tasks completed' ||
+					exitReason === `Reached max loop limit (${playbook.maxLoops})`
+						? 'completed'
+						: 'failed',
+			}),
 		};
 		addHistoryEntry(historyEntry);
 	};
@@ -528,31 +643,29 @@ export async function* runPlaybook(
 		const loopsCompleted = loopIteration + 1;
 		const summary = `Auto Run completed: ${totalCompletedTasks} tasks in ${loopsCompleted} loop${loopsCompleted !== 1 ? 's' : ''}`;
 
-		const totalUsageStats: UsageStats | undefined =
-			totalInputTokens > 0 || totalOutputTokens > 0
-				? {
-						inputTokens: totalInputTokens,
-						outputTokens: totalOutputTokens,
-						cacheReadInputTokens: 0,
-						cacheCreationInputTokens: 0,
-						totalCostUsd: totalCost,
-						contextWindow: 0, // Set to 0 for summaries - these are cumulative totals, not per-task context
-					}
-				: undefined;
+		const totalUsageStats = buildAutoRunAggregateUsageStats(
+			totalInputTokens,
+			totalOutputTokens,
+			totalCost
+		);
 
-		const details = [
-			`**Auto Run Summary**`,
-			'',
-			`- **Total Tasks Completed:** ${totalCompletedTasks}`,
-			`- **Loops Completed:** ${loopsCompleted}`,
-			`- **Total Duration:** ${formatElapsedTime(totalElapsedMs)}`,
-			totalInputTokens > 0 || totalOutputTokens > 0
-				? `- **Total Tokens:** ${(totalInputTokens + totalOutputTokens).toLocaleString()} (${totalInputTokens.toLocaleString()} in / ${totalOutputTokens.toLocaleString()} out)`
-				: '',
-			totalCost > 0 ? `- **Total Cost:** $${totalCost.toFixed(4)}` : '',
-		]
-			.filter((line) => line !== '')
-			.join('\n');
+		const observedExecution = summarizeAutoRunObservedExecution(finalScheduler, {
+			sharedCheckoutFallbackCount,
+		});
+		const details = buildAutoRunTotalSummaryDetails({
+			totalCompletedTasks,
+			totalElapsedMs,
+			loopsCompleted,
+			totalInputTokens,
+			totalOutputTokens,
+			totalCost,
+			observedSchedulerMode: observedExecution.observedSchedulerMode,
+			configuredSchedulerMode: observedExecution.configuredSchedulerMode,
+			actualParallelNodeCount: observedExecution.actualParallelNodeCount,
+			sharedCheckoutFallbackCount: observedExecution.sharedCheckoutFallbackCount,
+			blockedNodeCount: observedExecution.blockedNodeCount,
+			skippedNodeCount: observedExecution.skippedNodeCount,
+		});
 
 		const historyEntry: HistoryEntry = {
 			id: generateUUID(),
@@ -565,658 +678,876 @@ export async function* runPlaybook(
 			success: true,
 			elapsedTimeMs: totalElapsedMs,
 			usageStats: totalUsageStats,
+			playbookId: playbook.id,
+			playbookName: playbook.name,
+			promptProfile,
+			agentStrategy,
+			schedulerMode: observedExecution.observedSchedulerMode,
+			configuredSchedulerMode: observedExecution.configuredSchedulerMode,
+			actualParallelNodeCount: observedExecution.actualParallelNodeCount,
+			sharedCheckoutFallbackCount: observedExecution.sharedCheckoutFallbackCount,
+			blockedNodeCount: observedExecution.blockedNodeCount,
+			skippedNodeCount: observedExecution.skippedNodeCount,
+			schedulerOutcome: finalScheduler.nodes.some(
+				(node) => node.state === 'failed' || node.state === 'skipped'
+			)
+				? 'failed'
+				: 'completed',
 		};
 		addHistoryEntry(historyEntry);
 	};
 
-	// Main processing loop
-	while (true) {
-		let anyTasksProcessedThisIteration = false;
+	// Main processing loop with crash handling for project memory status
+	let executionError: Error | null = null;
+	try {
+		while (true) {
+			let anyTasksProcessedThisIteration = false;
+			let scheduler = createAutoRunSchedulerSnapshot(
+				playbook.documents,
+				playbook.taskGraph,
+				playbook.maxParallelism
+			);
+			let completedNodeContexts: ReadonlyMap<string, AutoRunCompletedNodeContext> = new Map();
+			finalScheduler = scheduler;
 
-		// Process each document in order
-		for (let docIndex = 0; docIndex < playbook.documents.length; docIndex++) {
-			const docEntry = playbook.documents[docIndex];
+			const processDispatchClaim = async (
+				claim: ReturnType<typeof claimReadyAutoRunDispatchWork>['claims'][number],
+				batchScheduler: typeof scheduler,
+				targetCwd: string | undefined,
+				initialRemainingTasks: number
+			): Promise<AutoRunDispatchExecutionResult<JsonlEvent>> => {
+				const nodeId = claim.nodeId;
+				const schedulerNode = claim.node;
+				const predecessorContext = claim.predecessorContext;
+				const docIndex = schedulerNode.documentIndex;
+				const docEntry = playbook.documents[docIndex];
+				let remainingTasks = initialRemainingTasks;
+				let docTasksCompleted = 0;
+				let taskIndex = 0;
+				const documentTaskSummaries: string[] = [];
+				let documentVerifierVerdict: 'PASS' | 'WARN' | 'FAIL' | null = null;
+				let documentSucceeded = true;
+				let documentTimedOut = false;
+				let countedCompletedTasks = 0;
+				let anyTasksProcessed = false;
+				let inputTokens = 0;
+				let outputTokens = 0;
+				let documentTotalCost = 0;
+				const events: JsonlEvent[] = [];
+				const executionCwd = targetCwd ?? session.cwd;
 
-			// Read document and count tasks
-			let { taskCount: remainingTasks } = readDocAndCountTasks(folderPath, docEntry.filename);
-
-			// Skip documents with no tasks
-			if (remainingTasks === 0) {
-				continue;
-			}
-
-			// Emit document start event
-			yield {
-				type: 'document_start',
-				timestamp: Date.now(),
-				document: docEntry.filename,
-				index: docIndex,
-				taskCount: remainingTasks,
-			};
-
-			// AUTORUN LOG: Document processing
-			logger.autorun(`Processing document: ${docEntry.filename}`, session.name, {
-				document: docEntry.filename,
-				tasksRemaining: remainingTasks,
-				loopNumber: loopIteration + 1,
-			});
-
-			let docTasksCompleted = 0;
-			let taskIndex = 0;
-
-			// Process tasks in this document
-			while (remainingTasks > 0) {
-				// Emit task start
-				yield {
-					type: 'task_start',
-					timestamp: Date.now(),
-					document: docEntry.filename,
-					taskIndex,
-				};
-
-				const taskStartTime = Date.now();
-
-				const docFilePath = `${folderPath}/${docEntry.filename}.md`;
-
-				// Build template context for this task
-				const templateContext: TemplateContext = {
-					session: {
-						...session,
-						isGitRepo: isGit,
-					},
-					gitBranch,
-					groupName,
-					autoRunFolder: folderPath,
-					loopNumber: loopIteration + 1, // 1-indexed
-					documentName: docEntry.filename,
-					documentPath: docFilePath,
-				};
-
-				// Substitute template variables in the prompt
-				// Use default Auto Run prompt if playbook.prompt is empty/null
-				// Marketplace playbooks with prompt: null will use the default
-				const basePrompt = substituteTemplateVariables(
-					getPlaybookPromptForExecution(playbook.prompt, promptProfile),
-					templateContext
-				);
-
-				// Read document content and expand template variables in it
-				const { content: docContent } = readDocAndCountTasks(folderPath, docEntry.filename);
-				const expandedDocContent = docContent
-					? substituteTemplateVariables(docContent, templateContext)
-					: '';
-				const promptDocContent =
-					documentContextMode === 'full'
-						? expandedDocContent
-						: buildActiveTaskDocumentContext(expandedDocContent);
-
-				// Write expanded content back to document (so agent edits have correct paths)
-				if (expandedDocContent && expandedDocContent !== docContent) {
-					writeDoc(folderPath, `${docEntry.filename}.md`, expandedDocContent);
-				}
-
-				// Combine prompt with document content - agent works on what it's given
-				// Include explicit file path so agent knows where to save changes
-				const documentPromptSection = getDocumentPromptSection(
-					docFilePath,
-					promptDocContent,
-					documentContextMode
-				);
-				const finalPrompt = buildStrategyPrompt(
-					'executor',
-					'single',
-					basePrompt,
-					documentPromptSection,
-					skillPromptBlock
-				);
-				const estimatedPromptTokens = estimateTokenCount(finalPrompt);
-				const promptMetrics = {
-					basePromptChars: basePrompt.length,
-					skillPromptChars: skillPromptBlock.length,
-					documentChars: promptDocContent.length,
-					finalPromptChars: finalPrompt.length,
-					estimatedPromptTokens,
-				};
-
-				if (debug) {
-					yield {
-						type: 'debug',
+				while (remainingTasks > 0) {
+					events.push({
+						type: 'task_start',
 						timestamp: Date.now(),
-						category: 'budget',
-						message: `Prompt sizing for ${docEntry.filename}#${taskIndex}: base=${promptMetrics.basePromptChars} chars, skills=${promptMetrics.skillPromptChars} chars, document=${promptMetrics.documentChars} chars, final=${promptMetrics.finalPromptChars} chars (~${promptMetrics.estimatedPromptTokens} tokens)`,
-					};
-				}
-
-				// Emit verbose event with full prompt
-				if (verbose) {
-					yield {
-						type: 'verbose',
-						timestamp: Date.now(),
-						category: 'prompt',
 						document: docEntry.filename,
 						taskIndex,
-						prompt: finalPrompt,
-						...promptMetrics,
-					};
-				}
-
-				let result: AgentResult;
-				let plannerSummary: string | undefined;
-				let plannerSessionId: string | undefined;
-				let verifierNote: string | undefined;
-				let verifierVerdict: 'PASS' | 'WARN' | 'FAIL' | null = null;
-				const usageBreakdown: HistoryUsageBreakdown = {};
-
-				if (agentStrategy === 'plan-execute-verify') {
-					const plannerTimeoutMs = resolveEffectiveStageTimeoutMs(
-						session.toolType,
-						playbook.taskTimeoutMs,
-						'planner',
-						agentStrategy
-					);
-					const plannerPrompt = buildStrategyPrompt(
-						'planner',
-						agentStrategy,
-						basePrompt,
-						documentPromptSection,
-						skillPromptBlock
-					);
-					const plannerResult = await spawnAgent(
-						session.toolType,
-						session.cwd,
-						plannerPrompt,
-						undefined,
-						{
-							timeoutMs: plannerTimeoutMs > 0 ? plannerTimeoutMs : undefined,
-						}
-					);
-					usageBreakdown.planner = plannerResult.usageStats;
-					plannerSummary = plannerResult.response?.trim();
-					plannerSessionId = plannerResult.agentSessionId;
-
-					if (debug) {
-						yield {
-							type: 'debug',
-							timestamp: Date.now(),
-							category: 'strategy',
-							message: `Planner ${plannerResult.success ? 'completed' : 'failed'} for ${docEntry.filename}#${taskIndex}`,
-						};
-						yield {
-							type: 'debug',
-							timestamp: Date.now(),
-							category: 'strategy',
-							message: `Planner usage for ${docEntry.filename}#${taskIndex}: ${formatUsageDebug(plannerResult.usageStats)}`,
-						};
-					}
-
-					const executorPrompt = buildStrategyPrompt(
-						'executor',
-						agentStrategy,
-						basePrompt,
-						documentPromptSection,
-						skillPromptBlock,
-						plannerSummary
-					);
-					const executorResumeSessionId =
-						session.toolType === 'codex' ? undefined : plannerSessionId;
-					const executorTimeoutMs = resolveEffectiveStageTimeoutMs(
-						session.toolType,
-						playbook.taskTimeoutMs,
-						'executor',
-						agentStrategy
-					);
-					result = await spawnAgent(
-						session.toolType,
-						session.cwd,
-						executorPrompt,
-						executorResumeSessionId,
-						{
-							timeoutMs: executorTimeoutMs > 0 ? executorTimeoutMs : undefined,
-						}
-					);
-					usageBreakdown.executor = result.usageStats;
-					result.usageStats = mergeUsageStats(plannerResult.usageStats, result.usageStats);
-
-					if (debug) {
-						yield {
-							type: 'debug',
-							timestamp: Date.now(),
-							category: 'strategy',
-							message: `Executor usage for ${docEntry.filename}#${taskIndex}: ${formatUsageDebug(usageBreakdown.executor)}`,
-						};
-					}
-
-					const verifierPrompt = buildStrategyPrompt(
-						'verifier',
-						agentStrategy,
-						basePrompt,
-						documentPromptSection,
-						skillPromptBlock,
-						undefined,
-						definitionOfDone,
-						playbook.verificationSteps ?? []
-					);
-					const verifierTimeoutMs = resolveEffectiveStageTimeoutMs(
-						session.toolType,
-						playbook.taskTimeoutMs,
-						'verifier',
-						agentStrategy
-					);
-					const verifierResult = await spawnAgent(
-						session.toolType,
-						session.cwd,
-						verifierPrompt,
-						undefined,
-						{
-							timeoutMs: verifierTimeoutMs > 0 ? verifierTimeoutMs : undefined,
-						}
-					);
-					usageBreakdown.verifier = verifierResult.usageStats;
-					verifierNote = buildVerifierNote(verifierResult.response, verifierResult.error);
-					verifierVerdict = getVerifierVerdict(verifierResult.response);
-					if (!verifierResult.success || verifierVerdict === 'FAIL') {
-						result.success = false;
-						if (!result.error && verifierVerdict === 'FAIL') {
-							result.error = verifierNote || 'Verifier returned FAIL';
-						}
-					}
-					result.usageStats = mergeUsageStats(result.usageStats, verifierResult.usageStats);
-
-					if (debug) {
-						yield {
-							type: 'debug',
-							timestamp: Date.now(),
-							category: 'strategy',
-							message: `Verifier ${verifierResult.success ? 'completed' : 'failed'} for ${docEntry.filename}#${taskIndex}`,
-						};
-						yield {
-							type: 'debug',
-							timestamp: Date.now(),
-							category: 'strategy',
-							message: `Verifier usage for ${docEntry.filename}#${taskIndex}: ${formatUsageDebug(verifierResult.usageStats)}`,
-						};
-					}
-				} else {
-					// Spawn agent with combined prompt + document
-					const singleStageTimeoutMs = resolveEffectiveStageTimeoutMs(
-						session.toolType,
-						playbook.taskTimeoutMs,
-						'single',
-						agentStrategy
-					);
-					result = await spawnAgent(session.toolType, session.cwd, finalPrompt, undefined, {
-						timeoutMs: singleStageTimeoutMs > 0 ? singleStageTimeoutMs : undefined,
 					});
-					usageBreakdown.executor = result.usageStats;
-				}
 
-				const elapsedMs = Date.now() - taskStartTime;
+					const taskStartTime = Date.now();
+					const docFilePath = `${folderPath}/${ensureMarkdownFilename(docEntry.filename)}`;
+					const templateContext: TemplateContext = {
+						session: {
+							...session,
+							cwd: executionCwd,
+							projectRoot: executionCwd,
+							isGitRepo: executionCwd === session.cwd ? defaultIsGit : isGitRepo(executionCwd),
+						},
+						gitBranch: executionCwd === session.cwd ? defaultGitBranch : getGitBranch(executionCwd),
+						groupName,
+						autoRunFolder: folderPath,
+						loopNumber: loopIteration + 1,
+						documentName: docEntry.filename,
+						documentPath: docFilePath,
+					};
 
-				// Re-read document to get new task count
-				let { taskCount: newRemainingTasks, content: contentAfterTask } = readDocAndCountTasks(
-					folderPath,
-					docEntry.filename
-				);
-				let tasksCompletedThisRun = remainingTasks - newRemainingTasks;
-
-				const completedAfterTimeout = Boolean(result.timedOut && tasksCompletedThisRun > 0);
-				const taskSucceeded = result.success || completedAfterTimeout;
-
-				if (!taskSucceeded && tasksCompletedThisRun > 0) {
-					const revertedContent = revertNewlyCheckedTasks(expandedDocContent, contentAfterTask);
-					if (revertedContent !== contentAfterTask) {
-						writeDoc(folderPath, `${docEntry.filename}.md`, revertedContent);
-						const revertedState = readDocAndCountTasks(folderPath, docEntry.filename);
-						newRemainingTasks = revertedState.taskCount;
-						contentAfterTask = revertedState.content;
-						tasksCompletedThisRun = remainingTasks - newRemainingTasks;
-					}
-				}
-				const countedCompletedTasks = taskSucceeded ? tasksCompletedThisRun : 0;
-
-				// Update counters only when the run actually completed verified work
-				docTasksCompleted += countedCompletedTasks;
-				totalCompletedTasks += countedCompletedTasks;
-				loopTasksCompleted += countedCompletedTasks;
-				if (countedCompletedTasks > 0) {
-					anyTasksProcessedThisIteration = true;
-				}
-
-				// Track usage
-				if (result.usageStats) {
-					loopTotalInputTokens += result.usageStats.inputTokens || 0;
-					loopTotalOutputTokens += result.usageStats.outputTokens || 0;
-					loopTotalCost += result.usageStats.totalCostUsd || 0;
-					totalCost += result.usageStats.totalCostUsd || 0;
-					totalInputTokens += result.usageStats.inputTokens || 0;
-					totalOutputTokens += result.usageStats.outputTokens || 0;
-				}
-
-				// Generate synopsis
-				let shortSummary = `[${docEntry.filename}] Task completed`;
-				let fullSynopsis = shortSummary;
-				const contextDisplayUsageStats = pickContextDisplayUsageStats(
-					session.toolType,
-					usageBreakdown,
-					result.usageStats
-				);
-
-				if (completedAfterTimeout) {
-					shortSummary = `[${docEntry.filename}] Task completed before timeout`;
-					fullSynopsis = result.response || result.error || shortSummary;
-				} else if (result.success) {
-					const parsedSynopsis = buildSynopsisFromTaskResponse(
-						result.response,
-						result.error,
-						shortSummary
+					const basePrompt = substituteTemplateVariables(
+						getPlaybookPromptForExecution(playbook.prompt, promptProfile),
+						templateContext
 					);
-					shortSummary = parsedSynopsis.shortSummary;
-					fullSynopsis = parsedSynopsis.fullSynopsis;
-				} else if (!taskSucceeded) {
-					shortSummary = `[${docEntry.filename}] Task failed`;
-					fullSynopsis = result.error || shortSummary;
-				}
+					const { content: docContent } = readDocAndCountTasks(folderPath, docEntry.filename);
+					const expandedDocContent = docContent
+						? substituteTemplateVariables(docContent, templateContext)
+						: '';
+					const promptDocContent =
+						documentContextMode === 'full'
+							? expandedDocContent
+							: buildActiveTaskDocumentContext(expandedDocContent);
 
-				if (plannerSummary && verbose) {
-					yield {
-						type: 'verbose',
+					if (expandedDocContent && expandedDocContent !== docContent) {
+						writeDoc(folderPath, ensureMarkdownFilename(docEntry.filename), expandedDocContent);
+					}
+
+					const documentPromptSection = buildAutoRunDocumentPromptSection(
+						docFilePath,
+						promptDocContent,
+						documentContextMode
+					);
+					const finalPrompt = buildAutoRunStagePrompt({
+						stage: 'executor',
+						agentStrategy: 'single',
+						instructions: AUTORUN_STAGE_INSTRUCTIONS,
+						sharedGuidance: AUTORUN_CONTEXT_AND_IMPACT_INSTRUCTION,
+						basePrompt,
+						documentPrompt: documentPromptSection,
+						skillPromptBlock,
+						predecessorContext,
+					});
+					const estimatedPromptTokens = estimateTokenCount(finalPrompt);
+					const promptMetrics = {
+						basePromptChars: basePrompt.length,
+						skillPromptChars: skillPromptBlock.length,
+						documentChars: promptDocContent.length,
+						finalPromptChars: finalPrompt.length,
+						estimatedPromptTokens,
+					};
+
+					if (debug) {
+						events.push({
+							type: 'debug',
+							timestamp: Date.now(),
+							category: 'budget',
+							message: `Prompt sizing for ${docEntry.filename}#${taskIndex}: base=${promptMetrics.basePromptChars} chars, skills=${promptMetrics.skillPromptChars} chars, document=${promptMetrics.documentChars} chars, final=${promptMetrics.finalPromptChars} chars (~${promptMetrics.estimatedPromptTokens} tokens)`,
+						});
+					}
+
+					if (verbose) {
+						events.push({
+							type: 'verbose',
+							timestamp: Date.now(),
+							category: 'prompt',
+							document: docEntry.filename,
+							taskIndex,
+							prompt: finalPrompt,
+							...promptMetrics,
+						});
+					}
+
+					let result: AgentResult;
+					let plannerSummary: string | undefined;
+					let plannerSessionId: string | undefined;
+					let verifierNote: string | undefined;
+					let verifierVerdict: 'PASS' | 'WARN' | 'FAIL' | null = null;
+					const usageBreakdown: HistoryUsageBreakdown = {};
+					const stopProjectMemoryHeartbeat = startProjectMemoryHeartbeat(playbook);
+
+					try {
+						if (agentStrategy === 'plan-execute-verify') {
+							const plannerTimeoutMs = resolveEffectiveStageTimeoutMs(
+								session.toolType,
+								playbook.taskTimeoutMs,
+								'planner',
+								agentStrategy
+							);
+							const plannerPrompt = buildAutoRunStagePrompt({
+								stage: 'planner',
+								agentStrategy,
+								instructions: AUTORUN_STAGE_INSTRUCTIONS,
+								sharedGuidance: AUTORUN_CONTEXT_AND_IMPACT_INSTRUCTION,
+								basePrompt,
+								documentPrompt: documentPromptSection,
+								skillPromptBlock,
+								predecessorContext,
+							});
+							const plannerResult = await spawnAgent(
+								session.toolType,
+								executionCwd,
+								plannerPrompt,
+								undefined,
+								{
+									timeoutMs: plannerTimeoutMs > 0 ? plannerTimeoutMs : undefined,
+								}
+							);
+							usageBreakdown.planner = plannerResult.usageStats;
+							plannerSummary = plannerResult.response?.trim();
+							plannerSessionId = plannerResult.agentSessionId;
+
+							if (debug) {
+								events.push({
+									type: 'debug',
+									timestamp: Date.now(),
+									category: 'strategy',
+									message: `Planner ${plannerResult.success ? 'completed' : 'failed'} for ${docEntry.filename}#${taskIndex}`,
+								});
+								events.push({
+									type: 'debug',
+									timestamp: Date.now(),
+									category: 'strategy',
+									message: `Planner usage for ${docEntry.filename}#${taskIndex}: ${formatUsageDebug(plannerResult.usageStats)}`,
+								});
+							}
+
+							const executorPrompt = buildAutoRunStagePrompt({
+								stage: 'executor',
+								agentStrategy,
+								instructions: AUTORUN_STAGE_INSTRUCTIONS,
+								sharedGuidance: AUTORUN_CONTEXT_AND_IMPACT_INSTRUCTION,
+								basePrompt,
+								documentPrompt: documentPromptSection,
+								skillPromptBlock,
+								predecessorContext,
+								plannerSummary,
+							});
+							const executorResumeSessionId =
+								session.toolType === 'codex' ? undefined : plannerSessionId;
+							const executorTimeoutMs = resolveEffectiveStageTimeoutMs(
+								session.toolType,
+								playbook.taskTimeoutMs,
+								'executor',
+								agentStrategy
+							);
+							result = await spawnAgent(
+								session.toolType,
+								executionCwd,
+								executorPrompt,
+								executorResumeSessionId,
+								{
+									timeoutMs: executorTimeoutMs > 0 ? executorTimeoutMs : undefined,
+								}
+							);
+							usageBreakdown.executor = result.usageStats;
+							result.usageStats = mergeUsageStats(plannerResult.usageStats, result.usageStats);
+
+							if (debug) {
+								events.push({
+									type: 'debug',
+									timestamp: Date.now(),
+									category: 'strategy',
+									message: `Executor usage for ${docEntry.filename}#${taskIndex}: ${formatUsageDebug(usageBreakdown.executor)}`,
+								});
+							}
+
+							const verifierPrompt = buildAutoRunStagePrompt({
+								stage: 'verifier',
+								agentStrategy,
+								instructions: AUTORUN_STAGE_INSTRUCTIONS,
+								sharedGuidance: AUTORUN_CONTEXT_AND_IMPACT_INSTRUCTION,
+								basePrompt,
+								documentPrompt: documentPromptSection,
+								skillPromptBlock,
+								predecessorContext,
+								plannerSummary,
+								executorOutput: result.response?.trim(),
+								definitionOfDone,
+								verificationSteps: playbook.verificationSteps ?? [],
+							});
+							const verifierTimeoutMs = resolveEffectiveStageTimeoutMs(
+								session.toolType,
+								playbook.taskTimeoutMs,
+								'verifier',
+								agentStrategy
+							);
+							const verifierResult = await spawnAgent(
+								session.toolType,
+								executionCwd,
+								verifierPrompt,
+								undefined,
+								{
+									timeoutMs: verifierTimeoutMs > 0 ? verifierTimeoutMs : undefined,
+								}
+							);
+							usageBreakdown.verifier = verifierResult.usageStats;
+							verifierNote = buildAutoRunVerifierNote(
+								verifierResult.response,
+								verifierResult.error
+							);
+							verifierVerdict = getVerifierVerdict(verifierResult.response);
+							result = finalizePlanExecuteVerifyResult({
+								executorResult: result,
+								verifierResult,
+								mergedUsageStats: mergeUsageStats(result.usageStats, verifierResult.usageStats),
+								verifierVerdict,
+								verifierNote,
+							});
+
+							if (debug) {
+								events.push({
+									type: 'debug',
+									timestamp: Date.now(),
+									category: 'strategy',
+									message: `Verifier ${verifierResult.success ? 'completed' : 'failed'} for ${docEntry.filename}#${taskIndex}`,
+								});
+								events.push({
+									type: 'debug',
+									timestamp: Date.now(),
+									category: 'strategy',
+									message: `Verifier usage for ${docEntry.filename}#${taskIndex}: ${formatUsageDebug(verifierResult.usageStats)}`,
+								});
+							}
+						} else {
+							const singleStageTimeoutMs = resolveEffectiveStageTimeoutMs(
+								session.toolType,
+								playbook.taskTimeoutMs,
+								'single',
+								agentStrategy
+							);
+							result = await spawnAgent(session.toolType, executionCwd, finalPrompt, undefined, {
+								timeoutMs: singleStageTimeoutMs > 0 ? singleStageTimeoutMs : undefined,
+							});
+							usageBreakdown.executor = result.usageStats;
+						}
+					} finally {
+						stopProjectMemoryHeartbeat();
+					}
+
+					const elapsedMs = Date.now() - taskStartTime;
+					const previousTaskState = {
+						...buildAutoRunDocumentTaskState(expandedDocContent),
+						taskCount: remainingTasks,
+					};
+					const rawNextTaskState = readDocAndCountTasks(folderPath, docEntry.filename);
+					const nextTaskState = {
+						content: rawNextTaskState.content,
+						taskCount: rawNextTaskState.taskCount,
+						checkedCount: rawNextTaskState.checkedCount,
+					};
+					const finalizedTask = finalizeAutoRunTaskExecution({
+						documentName: docEntry.filename,
+						toolType: session.toolType,
+						result,
+						previousTaskState,
+						nextTaskState,
+						usageBreakdown,
+						verifierVerdict,
+						verifierNote,
+					});
+					const taskSucceeded = finalizedTask.success;
+					documentSucceeded = documentSucceeded && taskSucceeded;
+					documentTimedOut = documentTimedOut || Boolean(result.timedOut);
+					documentVerifierVerdict = mergeAutoRunVerifierVerdict(
+						documentVerifierVerdict,
+						verifierVerdict
+					);
+					if (finalizedTask.shouldPersistTaskState) {
+						writeDoc(
+							folderPath,
+							ensureMarkdownFilename(docEntry.filename),
+							finalizedTask.finalTaskState.content
+						);
+					}
+
+					docTasksCompleted += finalizedTask.countedCompletedTasks;
+					countedCompletedTasks += finalizedTask.countedCompletedTasks;
+					if (finalizedTask.countedCompletedTasks > 0) {
+						anyTasksProcessed = true;
+					}
+
+					if (result.usageStats) {
+						inputTokens += result.usageStats.inputTokens || 0;
+						outputTokens += result.usageStats.outputTokens || 0;
+						documentTotalCost += result.usageStats.totalCostUsd || 0;
+					}
+
+					if (plannerSummary && verbose) {
+						events.push({
+							type: 'verbose',
+							timestamp: Date.now(),
+							category: 'strategy',
+							document: docEntry.filename,
+							taskIndex,
+							prompt: plannerSummary,
+						});
+					}
+
+					const taskRecord = finalizedTask.taskRecord;
+					if (taskRecord.summary) {
+						documentTaskSummaries.push(taskRecord.summary);
+					}
+
+					if (result.timedOut && debug) {
+						events.push({
+							type: 'debug',
+							timestamp: Date.now(),
+							category: 'timeout',
+							message: `Task ${docEntry.filename}#${taskIndex} timed out after ${taskTimeoutMs}ms`,
+						});
+					}
+
+					events.push({
+						type: 'task_complete',
 						timestamp: Date.now(),
-						category: 'strategy',
 						document: docEntry.filename,
 						taskIndex,
-						prompt: plannerSummary,
-					};
-				}
-
-				if (verifierNote) {
-					fullSynopsis = `${fullSynopsis}\n\nVerifier:\n${verifierNote}`;
-				}
-				shortSummary = applyVerifierVerdictToSummary(shortSummary, verifierVerdict);
-
-				if (result.timedOut && debug) {
-					yield {
-						type: 'debug',
-						timestamp: Date.now(),
-						category: 'timeout',
-						message: `Task ${docEntry.filename}#${taskIndex} timed out after ${taskTimeoutMs}ms`,
-					};
-				}
-
-				// Emit task complete event
-				yield {
-					type: 'task_complete',
-					timestamp: Date.now(),
-					document: docEntry.filename,
-					taskIndex,
-					success: taskSucceeded,
-					summary: shortSummary,
-					fullResponse: fullSynopsis,
-					elapsedMs,
-					usageStats: result.usageStats,
-					agentSessionId: result.agentSessionId,
-					verifierVerdict: verifierVerdict ?? undefined,
-				};
-
-				// Add history entry if enabled
-				if (writeHistory) {
-					const historyEntry: HistoryEntry = {
-						id: generateUUID(),
-						type: 'AUTO',
-						timestamp: Date.now(),
-						summary: shortSummary,
-						fullResponse: fullSynopsis,
-						agentSessionId: result.agentSessionId,
-						projectPath: session.cwd,
-						sessionId: session.id,
 						success: taskSucceeded,
-						usageStats: result.usageStats,
-						contextDisplayUsageStats,
-						usageBreakdown,
-						elapsedTimeMs: elapsedMs,
-						verifierVerdict: verifierVerdict ?? undefined,
-					};
-					addHistoryEntry(historyEntry);
-					const skillBusPayload = buildAutoRunSkillBusPayload(historyEntry, 'cli');
-					if (skillBusPayload) {
-						await recordSkillBusRun(skillBusPayload);
+						summary: taskRecord.summary,
+						fullResponse: taskRecord.fullResponse,
+						elapsedMs,
+						usageStats: taskRecord.usageStats,
+						agentSessionId: result.agentSessionId,
+						verifierVerdict: taskRecord.verifierVerdict,
+						scheduler: batchScheduler,
+					});
+
+					// Update project memory task status based on task result
+					if (taskSucceeded) {
+						updateProjectMemoryTaskStatus(playbook, 'completed', {
+							agentType: session.toolType,
+							resultSummary: taskRecord.summary ?? undefined,
+						});
+					} else if (result.timedOut) {
+						updateProjectMemoryTaskStatus(playbook, 'timeout', {
+							agentType: session.toolType,
+							resultSummary: taskRecord.summary ?? undefined,
+							willRetry: false,
+						});
+					} else {
+						updateProjectMemoryTaskStatus(playbook, 'failed', {
+							agentType: session.toolType,
+							errorMessage: result.error ?? undefined,
+							willRetry: false,
+						});
 					}
-					if (debug) {
-						yield {
-							type: 'history_write',
+
+					if (writeHistory) {
+						const historyEntry: HistoryEntry = {
+							id: generateUUID(),
+							type: 'AUTO',
 							timestamp: Date.now(),
-							entryId: historyEntry.id,
+							summary: taskRecord.summary,
+							fullResponse: taskRecord.fullResponse,
+							agentSessionId: result.agentSessionId,
+							projectPath: executionCwd,
+							sessionId: session.id,
+							success: taskSucceeded,
+							usageStats: taskRecord.usageStats,
+							contextDisplayUsageStats: taskRecord.contextDisplayUsageStats,
+							usageBreakdown: taskRecord.usageBreakdown,
+							elapsedTimeMs: elapsedMs,
+							verifierVerdict: taskRecord.verifierVerdict,
 						};
+						addHistoryEntry(historyEntry);
+						const skillBusPayload = buildAutoRunSkillBusPayload(historyEntry, 'cli');
+						if (skillBusPayload) {
+							await recordSkillBusRun(skillBusPayload);
+						}
+						if (debug) {
+							events.push({
+								type: 'history_write',
+								timestamp: Date.now(),
+								entryId: historyEntry.id,
+							});
+						}
+					}
+
+					if (finalizedTask.tasksCompletedThisRun === 0) {
+						if (debug) {
+							events.push({
+								type: 'debug',
+								timestamp: Date.now(),
+								category: 'task',
+								message: `Stopping ${docEntry.filename}: no task state changed for taskIndex=${taskIndex}`,
+							});
+						}
+						break;
+					}
+
+					remainingTasks = finalizedTask.finalTaskState.taskCount;
+					taskIndex++;
+				}
+
+				if (docEntry.resetOnCompletion && docTasksCompleted > 0) {
+					logger.autorun(`Resetting document: ${docEntry.filename}`, session.name, {
+						document: docEntry.filename,
+						tasksCompleted: docTasksCompleted,
+						loopNumber: loopIteration + 1,
+					});
+
+					const { content: currentContent } = readDocAndCountTasks(folderPath, docEntry.filename);
+					const resetContent = uncheckAllTasks(currentContent);
+					writeDoc(folderPath, ensureMarkdownFilename(docEntry.filename), resetContent);
+					if (debug) {
+						const { taskCount: newTaskCount } = readDocAndCountTasks(folderPath, docEntry.filename);
+						events.push({
+							type: 'debug',
+							timestamp: Date.now(),
+							category: 'reset',
+							message: `Reset ${docEntry.filename}: unchecked all tasks (${newTaskCount} tasks now open)`,
+						});
 					}
 				}
 
-				if (tasksCompletedThisRun === 0) {
+				return {
+					finalizeOptions: {
+						nodeId,
+						documentName: docEntry.filename,
+						state: remainingTasks === 0 ? 'completed' : 'failed',
+						summaries: documentTaskSummaries,
+						success: documentSucceeded && remainingTasks === 0,
+						timedOut: documentTimedOut,
+						verifierVerdict: documentVerifierVerdict,
+					},
+					events,
+					tasksCompleted: docTasksCompleted,
+					inputTokens,
+					outputTokens,
+					totalCost: documentTotalCost,
+					countedCompletedTasks,
+					anyTasksProcessed,
+				};
+			};
+
+			while (scheduler.readyNodeIds.length > 0) {
+				const readyNodes = scheduler.readyNodeIds
+					.map((nodeId) => scheduler.nodes.find((node) => node.id === nodeId))
+					.filter((node): node is AutoRunSchedulerNodeSnapshot => Boolean(node));
+				const dispatchPlan = buildParallelDispatchPlan(
+					readyNodes,
+					Math.max(1, scheduler.maxParallelism || 1),
+					isolatedWorktreeTargets,
+					session.cwd
+				);
+				sharedCheckoutFallbackCount += dispatchPlan.warnings.length;
+				const claimResult = claimReadyAutoRunDispatchWork(
+					{
+						scheduler,
+						completedNodeContexts,
+					},
+					{
+						maxClaims: dispatchPlan.selectedNodeIds.length,
+						selectNodeIds: () => dispatchPlan.selectedNodeIds,
+					}
+				);
+				scheduler = claimResult.scheduler;
+				if (claimResult.claims.length === 0) {
+					break;
+				}
+				for (const warning of dispatchPlan.warnings) {
 					if (debug) {
 						yield {
 							type: 'debug',
 							timestamp: Date.now(),
-							category: 'task',
-							message: `Stopping ${docEntry.filename}: no task state changed for taskIndex=${taskIndex}`,
+							category: 'scheduler',
+							message: warning,
 						};
 					}
-					break;
 				}
 
-				remainingTasks = newRemainingTasks;
-				taskIndex++;
-			}
+				const activeClaims: Array<{
+					claim: (typeof claimResult.claims)[number];
+					remainingTasks: number;
+				}> = [];
+				for (const claim of claimResult.claims) {
+					const docEntry = playbook.documents[claim.node.documentIndex];
+					const { taskCount: remainingTasks } = readDocAndCountTasks(folderPath, docEntry.filename);
+					if (remainingTasks === 0) {
+						const finalizedDispatch = finalizeAutoRunDispatchNode(
+							{
+								scheduler,
+								completedNodeContexts,
+							},
+							{
+								nodeId: claim.nodeId,
+								documentName: docEntry.filename,
+								state: 'completed',
+								summaries: [`No unchecked tasks remained in ${docEntry.filename}.`],
+								success: true,
+							}
+						);
+						scheduler = finalizedDispatch.scheduler;
+						completedNodeContexts = finalizedDispatch.completedNodeContexts;
+						finalScheduler = scheduler;
+						continue;
+					}
 
-			// Document complete - handle reset-on-completion
-			if (docEntry.resetOnCompletion && docTasksCompleted > 0) {
-				// AUTORUN LOG: Document reset
-				logger.autorun(`Resetting document: ${docEntry.filename}`, session.name, {
-					document: docEntry.filename,
-					tasksCompleted: docTasksCompleted,
-					loopNumber: loopIteration + 1,
-				});
-
-				const { content: currentContent } = readDocAndCountTasks(folderPath, docEntry.filename);
-				const resetContent = uncheckAllTasks(currentContent);
-				writeDoc(folderPath, docEntry.filename + '.md', resetContent);
-				if (debug) {
-					const { taskCount: newTaskCount } = readDocAndCountTasks(folderPath, docEntry.filename);
 					yield {
-						type: 'debug',
+						type: 'document_start',
 						timestamp: Date.now(),
-						category: 'reset',
-						message: `Reset ${docEntry.filename}: unchecked all tasks (${newTaskCount} tasks now open)`,
+						document: docEntry.filename,
+						index: claim.node.documentIndex,
+						taskCount: remainingTasks,
+						scheduler,
+					};
+					logger.autorun(`Processing document: ${docEntry.filename}`, session.name, {
+						document: docEntry.filename,
+						tasksRemaining: remainingTasks,
+						loopNumber: loopIteration + 1,
+					});
+					activeClaims.push({ claim, remainingTasks });
+				}
+
+				if (activeClaims.length === 0) {
+					continue;
+				}
+
+				const activeDispatchPlan = buildParallelDispatchPlan(
+					activeClaims.map(({ claim }) => claim.node),
+					activeClaims.length,
+					isolatedWorktreeTargets,
+					session.cwd
+				);
+				const claimExecutions = await executeAutoRunDispatchClaims(
+					{
+						scheduler: claimResult.scheduler,
+						completedNodeContexts: claimResult.completedNodeContexts,
+					},
+					activeClaims.map(({ claim }) => claim),
+					(claim) => {
+						const activeClaim = activeClaims.find((entry) => entry.claim.nodeId === claim.nodeId);
+						const targetCwd =
+							claim.node.isolationMode === 'isolated-worktree'
+								? activeDispatchPlan.isolatedTargetsByNodeId[claim.nodeId]?.cwd
+								: undefined;
+						return processDispatchClaim(
+							claim,
+							claimResult.scheduler,
+							targetCwd,
+							activeClaim?.remainingTasks ?? 0
+						);
+					}
+				);
+
+				let eventDispatchState = {
+					scheduler,
+					completedNodeContexts,
+				};
+				for (const [index, execution] of claimExecutions.results.entries()) {
+					totalCompletedTasks += execution.countedCompletedTasks;
+					loopTasksCompleted += execution.countedCompletedTasks;
+					anyTasksProcessedThisIteration =
+						anyTasksProcessedThisIteration || execution.anyTasksProcessed;
+					loopTotalInputTokens += execution.inputTokens;
+					loopTotalOutputTokens += execution.outputTokens;
+					loopTotalCost += execution.totalCost;
+					totalCost += execution.totalCost;
+					totalInputTokens += execution.inputTokens;
+					totalOutputTokens += execution.outputTokens;
+
+					for (const event of execution.events) {
+						yield event;
+					}
+					eventDispatchState = finalizeAutoRunDispatchNodes(eventDispatchState, [
+						execution.finalizeOptions,
+					]);
+					yield {
+						type: 'document_complete',
+						timestamp: Date.now(),
+						document: activeClaims[index]?.claim.node
+							? playbook.documents[activeClaims[index]!.claim.node.documentIndex].filename
+							: execution.finalizeOptions.documentName,
+						tasksCompleted: execution.tasksCompleted,
+						scheduler: eventDispatchState.scheduler,
 					};
 				}
+				scheduler = claimExecutions.state.scheduler;
+				completedNodeContexts = claimExecutions.state.completedNodeContexts;
+				finalScheduler = scheduler;
 			}
 
-			// Emit document complete event
-			yield {
-				type: 'document_complete',
-				timestamp: Date.now(),
-				document: docEntry.filename,
-				tasksCompleted: docTasksCompleted,
-			};
-		}
-
-		// Check if we should continue looping
-		if (!playbook.loopEnabled) {
-			if (debug) {
-				yield {
-					type: 'debug',
-					timestamp: Date.now(),
-					category: 'loop',
-					message: 'Exiting: loopEnabled is false',
-				};
-			}
-			createFinalLoopEntry('Looping disabled');
-			break;
-		}
-
-		// Check max loop limit
-		if (
-			playbook.maxLoops !== null &&
-			playbook.maxLoops !== undefined &&
-			loopIteration + 1 >= playbook.maxLoops
-		) {
-			if (debug) {
-				yield {
-					type: 'debug',
-					timestamp: Date.now(),
-					category: 'loop',
-					message: `Exiting: reached max loops (${playbook.maxLoops})`,
-				};
-			}
-			createFinalLoopEntry(`Reached max loop limit (${playbook.maxLoops})`);
-			break;
-		}
-
-		// Check if any non-reset documents have remaining tasks
-		const hasAnyNonResetDocs = playbook.documents.some((doc) => !doc.resetOnCompletion);
-		if (debug) {
-			const nonResetDocs = playbook.documents
-				.filter((d) => !d.resetOnCompletion)
-				.map((d) => d.filename);
-			const resetDocs = playbook.documents
-				.filter((d) => d.resetOnCompletion)
-				.map((d) => d.filename);
-			yield {
-				type: 'debug',
-				timestamp: Date.now(),
-				category: 'loop',
-				message: `Checking loop condition: ${nonResetDocs.length} non-reset docs [${nonResetDocs.join(', ')}], ${resetDocs.length} reset docs [${resetDocs.join(', ')}]`,
-			};
-		}
-
-		if (hasAnyNonResetDocs) {
-			let anyNonResetDocsHaveTasks = false;
-			for (const doc of playbook.documents) {
-				if (doc.resetOnCompletion) continue;
-				const { taskCount } = readDocAndCountTasks(folderPath, doc.filename);
+			// Check if we should continue looping
+			if (!playbook.loopEnabled) {
 				if (debug) {
 					yield {
 						type: 'debug',
 						timestamp: Date.now(),
 						category: 'loop',
-						message: `Non-reset doc ${doc.filename}: ${taskCount} unchecked task${taskCount !== 1 ? 's' : ''}`,
+						message: 'Exiting: loopEnabled is false',
 					};
 				}
-				if (taskCount > 0) {
-					anyNonResetDocsHaveTasks = true;
-					break;
-				}
-			}
-			if (!anyNonResetDocsHaveTasks) {
-				if (debug) {
-					yield {
-						type: 'debug',
-						timestamp: Date.now(),
-						category: 'loop',
-						message: 'Exiting: all non-reset documents have 0 remaining tasks',
-					};
-				}
-				createFinalLoopEntry('All tasks completed');
+				createFinalLoopEntry('Looping disabled');
 				break;
 			}
-		} else {
-			// All documents are reset docs - exit after one pass
+
+			// Check max loop limit
+			if (
+				playbook.maxLoops !== null &&
+				playbook.maxLoops !== undefined &&
+				loopIteration + 1 >= playbook.maxLoops
+			) {
+				if (debug) {
+					yield {
+						type: 'debug',
+						timestamp: Date.now(),
+						category: 'loop',
+						message: `Exiting: reached max loops (${playbook.maxLoops})`,
+					};
+				}
+				createFinalLoopEntry(`Reached max loop limit (${playbook.maxLoops})`);
+				break;
+			}
+
+			// Check if any non-reset documents have remaining tasks
+			const hasAnyNonResetDocs = playbook.documents.some((doc) => !doc.resetOnCompletion);
 			if (debug) {
+				const nonResetDocs = playbook.documents
+					.filter((d) => !d.resetOnCompletion)
+					.map((d) => d.filename);
+				const resetDocs = playbook.documents
+					.filter((d) => d.resetOnCompletion)
+					.map((d) => d.filename);
 				yield {
 					type: 'debug',
 					timestamp: Date.now(),
 					category: 'loop',
-					message:
-						'Exiting: ALL documents have resetOnCompletion=true (loop requires at least one non-reset doc to drive iterations)',
+					message: `Checking loop condition: ${nonResetDocs.length} non-reset docs [${nonResetDocs.join(', ')}], ${resetDocs.length} reset docs [${resetDocs.join(', ')}]`,
 				};
 			}
-			createFinalLoopEntry('All documents have reset-on-completion');
-			break;
-		}
 
-		// Safety check
-		if (!anyTasksProcessedThisIteration) {
-			if (debug) {
-				yield {
-					type: 'debug',
-					timestamp: Date.now(),
-					category: 'loop',
-					message: 'Exiting: no tasks were processed this iteration (safety check)',
-				};
-			}
-			createFinalLoopEntry('No tasks processed this iteration');
-			break;
-		}
-
-		if (debug) {
-			yield {
-				type: 'debug',
-				timestamp: Date.now(),
-				category: 'loop',
-				message: `Continuing to next loop iteration (current: ${loopIteration + 1})`,
-			};
-		}
-
-		// Emit loop complete event
-		const loopElapsedMs = Date.now() - loopStartTime;
-		const loopUsageStats: UsageStats | undefined =
-			loopTotalInputTokens > 0 || loopTotalOutputTokens > 0
-				? {
-						inputTokens: loopTotalInputTokens,
-						outputTokens: loopTotalOutputTokens,
-						cacheReadInputTokens: 0,
-						cacheCreationInputTokens: 0,
-						totalCostUsd: loopTotalCost,
-						contextWindow: 0, // Set to 0 for summaries - these are cumulative totals, not per-task context
+			if (hasAnyNonResetDocs) {
+				let anyNonResetDocsHaveTasks = false;
+				for (const doc of playbook.documents) {
+					if (doc.resetOnCompletion) continue;
+					const { taskCount } = readDocAndCountTasks(folderPath, doc.filename);
+					if (debug) {
+						yield {
+							type: 'debug',
+							timestamp: Date.now(),
+							category: 'loop',
+							message: `Non-reset doc ${doc.filename}: ${taskCount} unchecked task${taskCount !== 1 ? 's' : ''}`,
+						};
 					}
-				: undefined;
+					if (taskCount > 0) {
+						anyNonResetDocsHaveTasks = true;
+						break;
+					}
+				}
+				if (!anyNonResetDocsHaveTasks) {
+					if (debug) {
+						yield {
+							type: 'debug',
+							timestamp: Date.now(),
+							category: 'loop',
+							message: 'Exiting: all non-reset documents have 0 remaining tasks',
+						};
+					}
+					createFinalLoopEntry('All tasks completed');
+					break;
+				}
+			} else {
+				// All documents are reset docs - exit after one pass
+				if (debug) {
+					yield {
+						type: 'debug',
+						timestamp: Date.now(),
+						category: 'loop',
+						message:
+							'Exiting: ALL documents have resetOnCompletion=true (loop requires at least one non-reset doc to drive iterations)',
+					};
+				}
+				createFinalLoopEntry('All documents have reset-on-completion');
+				break;
+			}
 
-		yield {
-			type: 'loop_complete',
-			timestamp: Date.now(),
-			iteration: loopIteration + 1,
-			tasksCompleted: loopTasksCompleted,
-			elapsedMs: loopElapsedMs,
-			usageStats: loopUsageStats,
-		};
+			// Safety check
+			if (!anyTasksProcessedThisIteration) {
+				if (debug) {
+					yield {
+						type: 'debug',
+						timestamp: Date.now(),
+						category: 'loop',
+						message: 'Exiting: no tasks were processed this iteration (safety check)',
+					};
+				}
+				createFinalLoopEntry('No tasks processed this iteration');
+				break;
+			}
 
-		// AUTORUN LOG: Loop completion
-		logger.autorun(`Loop ${loopIteration + 1} completed`, session.name, {
-			loopNumber: loopIteration + 1,
-			tasksCompleted: loopTasksCompleted,
-		});
+			if (debug) {
+				yield {
+					type: 'debug',
+					timestamp: Date.now(),
+					category: 'loop',
+					message: `Continuing to next loop iteration (current: ${loopIteration + 1})`,
+				};
+			}
 
-		// Add loop summary history entry
-		if (writeHistory) {
-			const loopSummary = `Loop ${loopIteration + 1} completed: ${loopTasksCompleted} tasks accomplished`;
-			const historyEntry: HistoryEntry = {
-				id: generateUUID(),
-				type: 'AUTO',
+			// Emit loop complete event
+			const loopElapsedMs = Date.now() - loopStartTime;
+			const loopUsageStats: UsageStats | undefined =
+				loopTotalInputTokens > 0 || loopTotalOutputTokens > 0
+					? {
+							inputTokens: loopTotalInputTokens,
+							outputTokens: loopTotalOutputTokens,
+							cacheReadInputTokens: 0,
+							cacheCreationInputTokens: 0,
+							totalCostUsd: loopTotalCost,
+							contextWindow: 0, // Set to 0 for summaries - these are cumulative totals, not per-task context
+						}
+					: undefined;
+
+			yield {
+				type: 'loop_complete',
 				timestamp: Date.now(),
-				summary: loopSummary,
-				projectPath: session.cwd,
-				sessionId: session.id,
-				success: true,
-				elapsedTimeMs: loopElapsedMs,
+				iteration: loopIteration + 1,
+				tasksCompleted: loopTasksCompleted,
+				elapsedMs: loopElapsedMs,
 				usageStats: loopUsageStats,
+				scheduler,
 			};
-			addHistoryEntry(historyEntry);
+
+			// AUTORUN LOG: Loop completion
+			logger.autorun(`Loop ${loopIteration + 1} completed`, session.name, {
+				loopNumber: loopIteration + 1,
+				tasksCompleted: loopTasksCompleted,
+			});
+
+			// Add loop summary history entry
+			if (writeHistory) {
+				const observedExecution = summarizeAutoRunObservedExecution(scheduler, {
+					sharedCheckoutFallbackCount,
+				});
+				const historyEntry: HistoryEntry = {
+					id: generateUUID(),
+					...buildAutoRunLoopSummaryEntry({
+						timestamp: Date.now(),
+						loopIteration,
+						loopTasksCompleted,
+						loopElapsedMs,
+						loopTotalInputTokens,
+						loopTotalOutputTokens,
+						loopTotalCost,
+						projectPath: session.cwd,
+						sessionId: session.id,
+						isFinal: false,
+						playbookId: playbook.id,
+						playbookName: playbook.name,
+						promptProfile,
+						agentStrategy,
+						schedulerMode: observedExecution.observedSchedulerMode,
+						configuredSchedulerMode: observedExecution.configuredSchedulerMode,
+						actualParallelNodeCount: observedExecution.actualParallelNodeCount,
+						sharedCheckoutFallbackCount: observedExecution.sharedCheckoutFallbackCount,
+						blockedNodeCount: observedExecution.blockedNodeCount,
+						skippedNodeCount: observedExecution.skippedNodeCount,
+						schedulerOutcome: 'completed',
+					}),
+				};
+				addHistoryEntry(historyEntry);
+			}
+
+			// Reset per-loop tracking
+			loopStartTime = Date.now();
+			loopTasksCompleted = 0;
+			loopTotalInputTokens = 0;
+			loopTotalOutputTokens = 0;
+			loopTotalCost = 0;
+
+			loopIteration++;
 		}
-
-		// Reset per-loop tracking
-		loopStartTime = Date.now();
-		loopTasksCompleted = 0;
-		loopTotalInputTokens = 0;
-		loopTotalOutputTokens = 0;
-		loopTotalCost = 0;
-
-		loopIteration++;
+	} catch (error) {
+		executionError = error instanceof Error ? error : new Error(String(error));
+		// Update project memory task status on crash
+		updateProjectMemoryTaskStatus(playbook, 'failed', {
+			agentType: session.toolType,
+			errorMessage: executionError.message,
+			errorStack: executionError.stack,
+		});
+		// Emit error event before re-throwing
+		yield {
+			type: 'error',
+			timestamp: Date.now(),
+			message: executionError.message,
+			code: 'EXECUTOR_CRASH',
+		};
+		throw executionError;
+	} finally {
+		// Unregister CLI activity - session is no longer busy
+		unregisterCliActivity(session.id);
 	}
-
-	// Unregister CLI activity - session is no longer busy
-	unregisterCliActivity(session.id);
 
 	// Add total Auto Run summary (only if looping was used)
 	createAutoRunSummary();
 
-	// Emit complete event
+	// Emit complete event (only reached if no error)
 	yield {
 		type: 'complete',
 		timestamp: Date.now(),
@@ -1224,5 +1555,6 @@ export async function* runPlaybook(
 		totalTasksCompleted: totalCompletedTasks,
 		totalElapsedMs: Date.now() - batchStartTime,
 		totalCost,
+		scheduler: finalScheduler,
 	};
 }

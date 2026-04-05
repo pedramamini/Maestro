@@ -26,6 +26,27 @@ function getPlaybooksFilePath(sessionId: string): string {
 }
 
 /**
+ * Get the playbooks file path for a session (exported for CLI commands)
+ */
+export function resolvePlaybooksFilePath(sessionId: string): string {
+	return getPlaybooksFilePath(sessionId);
+}
+
+/**
+ * Write playbooks for a session
+ */
+export function writePlaybooks(sessionId: string, playbooks: Playbook[]): void {
+	const filePath = getPlaybooksFilePath(sessionId);
+	const dir = path.dirname(filePath);
+
+	if (!fs.existsSync(dir)) {
+		fs.mkdirSync(dir, { recursive: true });
+	}
+
+	fs.writeFileSync(filePath, JSON.stringify({ playbooks }, null, 2), 'utf-8');
+}
+
+/**
  * Read playbooks for a session
  * Returns empty array if no playbooks file exists
  */

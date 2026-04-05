@@ -54,6 +54,7 @@ import {
 	registerAgentErrorHandlers,
 	registerDirectorNotesHandlers,
 	registerWakatimeHandlers,
+	registerProjectMemoryHandlers,
 	setupLoggerEventForwarding,
 	cleanupAllGroomingSessions,
 	getActiveGroomingSessionCount,
@@ -490,6 +491,8 @@ function setupIpcHandlers() {
 		getMainWindow: () => mainWindow,
 		app,
 	});
+
+	registerProjectMemoryHandlers();
 
 	// History operations - extracted to src/main/ipc/handlers/history.ts
 	// Uses HistoryManager singleton for per-session storage

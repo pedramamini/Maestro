@@ -230,10 +230,61 @@ describe('playbooks IPC handlers', () => {
 			expect(result.playbook.maxParallelism).toBe(1);
 			expect(result.playbook.skills).toEqual([...DEFAULT_AUTORUN_SKILLS]);
 			expect(result.playbook.taskGraph).toEqual({
-				nodes: [{ id: 'doc1', documentIndex: 0, dependsOn: [] }],
+				nodes: [
+					{
+						id: 'doc1',
+						documentIndex: 0,
+						dependsOn: [],
+						isolationMode: 'shared-checkout',
+					},
+				],
 			});
 			expect(result.playbook.createdAt).toBeDefined();
 			expect(result.playbook.updatedAt).toBeDefined();
+		});
+
+		it('should preserve project memory metadata when creating a playbook', async () => {
+			vi.mocked(fs.readFile).mockRejectedValue(new Error('ENOENT'));
+			vi.mocked(fs.mkdir).mockResolvedValue(undefined);
+			vi.mocked(fs.writeFile).mockResolvedValue(undefined);
+
+			const handler = handlers.get('playbooks:create');
+			const result = await handler!({} as any, 'session-123', {
+				name: 'PM Playbook',
+				documents: [{ filename: 'doc1.md', resetOnCompletion: false }],
+				loopEnabled: false,
+				prompt: 'Use markdown tasks',
+				projectMemoryBindingIntent: {
+					policyVersion: '2026-04-04',
+					repoRoot: '/repo',
+					sourceBranch: 'main',
+					bindingPreference: 'shared-branch-serialized',
+					sharedCheckoutAllowed: true,
+					reuseExistingBinding: true,
+					allowRebindIfStale: true,
+				},
+				projectMemoryExecution: {
+					repoRoot: '/repo',
+					taskId: 'PM-01',
+					executorId: 'codex-main',
+				},
+			});
+
+			expect(result.success).toBe(true);
+			expect(result.playbook.projectMemoryBindingIntent).toEqual({
+				policyVersion: '2026-04-04',
+				repoRoot: '/repo',
+				sourceBranch: 'main',
+				bindingPreference: 'shared-branch-serialized',
+				sharedCheckoutAllowed: true,
+				reuseExistingBinding: true,
+				allowRebindIfStale: true,
+			});
+			expect(result.playbook.projectMemoryExecution).toEqual({
+				repoRoot: '/repo',
+				taskId: 'PM-01',
+				executorId: 'codex-main',
+			});
 		});
 
 		it('should preserve an explicit DAG when creating and saving a playbook', async () => {
@@ -253,7 +304,12 @@ describe('playbooks IPC handlers', () => {
 				maxParallelism: 2,
 				taskGraph: {
 					nodes: [
-						{ id: 'phase-2', documentIndex: 1, dependsOn: [] },
+						{
+							id: 'phase-2',
+							documentIndex: 1,
+							dependsOn: [],
+							isolationMode: 'isolated-worktree',
+						},
 						{ id: 'phase-1', documentIndex: 0, dependsOn: [] },
 					],
 				},
@@ -263,8 +319,18 @@ describe('playbooks IPC handlers', () => {
 			expect(result.playbook.maxParallelism).toBe(2);
 			expect(result.playbook.taskGraph).toEqual({
 				nodes: [
-					{ id: 'phase-2', documentIndex: 1, dependsOn: [] },
-					{ id: 'phase-1', documentIndex: 0, dependsOn: [] },
+					{
+						id: 'phase-2',
+						documentIndex: 1,
+						dependsOn: [],
+						isolationMode: 'isolated-worktree',
+					},
+					{
+						id: 'phase-1',
+						documentIndex: 0,
+						dependsOn: [],
+						isolationMode: 'shared-checkout',
+					},
 				],
 			});
 
@@ -273,8 +339,18 @@ describe('playbooks IPC handlers', () => {
 			expect(written.playbooks[0].maxParallelism).toBe(2);
 			expect(written.playbooks[0].taskGraph).toEqual({
 				nodes: [
-					{ id: 'phase-2', documentIndex: 1, dependsOn: [] },
-					{ id: 'phase-1', documentIndex: 0, dependsOn: [] },
+					{
+						id: 'phase-2',
+						documentIndex: 1,
+						dependsOn: [],
+						isolationMode: 'isolated-worktree',
+					},
+					{
+						id: 'phase-1',
+						documentIndex: 0,
+						dependsOn: [],
+						isolationMode: 'shared-checkout',
+					},
 				],
 			});
 		});
@@ -466,8 +542,18 @@ describe('playbooks IPC handlers', () => {
 			expect(result.playbook.maxParallelism).toBe(2);
 			expect(result.playbook.taskGraph).toEqual({
 				nodes: [
-					{ id: 'phase-2', documentIndex: 1, dependsOn: [] },
-					{ id: 'phase-1', documentIndex: 0, dependsOn: ['phase-2'] },
+					{
+						id: 'phase-2',
+						documentIndex: 1,
+						dependsOn: [],
+						isolationMode: 'shared-checkout',
+					},
+					{
+						id: 'phase-1',
+						documentIndex: 0,
+						dependsOn: ['phase-2'],
+						isolationMode: 'shared-checkout',
+					},
 				],
 			});
 			expect(result.playbook.skills).toEqual([...DEFAULT_AUTORUN_SKILLS, 'code-review']);
@@ -791,7 +877,14 @@ describe('playbooks IPC handlers', () => {
 			expect(manifest.taskTimeoutMs).toBe(45000);
 			expect(manifest.maxParallelism).toBe(2);
 			expect(manifest.taskGraph).toEqual({
-				nodes: [{ id: 'doc1', documentIndex: 0, dependsOn: [] }],
+				nodes: [
+					{
+						id: 'doc1',
+						documentIndex: 0,
+						dependsOn: [],
+						isolationMode: 'shared-checkout',
+					},
+				],
 			});
 			expect(manifest.definitionOfDone).toEqual(['Relevant tests pass']);
 			expect(manifest.verificationSteps).toEqual(['Confirm the task changed on disk']);
@@ -848,8 +941,18 @@ describe('playbooks IPC handlers', () => {
 			expect(manifest.maxParallelism).toBe(1);
 			expect(manifest.taskGraph).toEqual({
 				nodes: [
-					{ id: 'phase-1', documentIndex: 0, dependsOn: [] },
-					{ id: 'phase-2', documentIndex: 1, dependsOn: ['phase-1'] },
+					{
+						id: 'phase-1',
+						documentIndex: 0,
+						dependsOn: [],
+						isolationMode: 'shared-checkout',
+					},
+					{
+						id: 'phase-2',
+						documentIndex: 1,
+						dependsOn: ['phase-1'],
+						isolationMode: 'shared-checkout',
+					},
 				],
 			});
 		});
@@ -903,7 +1006,14 @@ describe('playbooks IPC handlers', () => {
 			expect(result.playbook.id).toBe('test-uuid-123');
 			expect(result.playbook.maxParallelism).toBe(2);
 			expect(result.playbook.taskGraph).toEqual({
-				nodes: [{ id: 'doc1', documentIndex: 0, dependsOn: [] }],
+				nodes: [
+					{
+						id: 'doc1',
+						documentIndex: 0,
+						dependsOn: [],
+						isolationMode: 'shared-checkout',
+					},
+				],
 			});
 			expect(result.playbook.skills).toEqual([...DEFAULT_AUTORUN_SKILLS]);
 			expect(result.importedDocs).toEqual(['doc1']);
@@ -956,8 +1066,18 @@ describe('playbooks IPC handlers', () => {
 			expect(result.playbook.maxParallelism).toBe(1);
 			expect(result.playbook.taskGraph).toEqual({
 				nodes: [
-					{ id: 'phase-1', documentIndex: 0, dependsOn: [] },
-					{ id: 'phase-2', documentIndex: 1, dependsOn: ['phase-1'] },
+					{
+						id: 'phase-1',
+						documentIndex: 0,
+						dependsOn: [],
+						isolationMode: 'shared-checkout',
+					},
+					{
+						id: 'phase-2',
+						documentIndex: 1,
+						dependsOn: ['phase-1'],
+						isolationMode: 'shared-checkout',
+					},
 				],
 			});
 		});

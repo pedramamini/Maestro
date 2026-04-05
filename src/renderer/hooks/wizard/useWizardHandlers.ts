@@ -39,8 +39,14 @@ import { autorunSynopsisPrompt } from '../../../prompts';
 import { parseSynopsis } from '../../../shared/synopsis';
 import { formatRelativeTime } from '../../../shared/formatters';
 import { gitService } from '../../services/git';
+import { projectMemoryService } from '../../services/projectMemory';
 import { AUTO_RUN_FOLDER_NAME } from '../../components/Wizard';
 import { DEFAULT_BATCH_PROMPT } from '../../components/BatchRunnerModal';
+import {
+	buildWizardPlaybookDraft,
+	buildWizardPlaybookPackDrafts,
+	getWizardDocumentRelativePath,
+} from '../../services/wizardPlaybookConfig';
 import type { PreviousUIState, UseInlineWizardReturn } from '../batch/useInlineWizard';
 import type { WizardState } from '../../components/Wizard/WizardContext';
 import type { HistoryEntryInput } from '../agent/useAgentSessionManagement';
@@ -1122,7 +1128,9 @@ export function useWizardHandlers(deps: UseWizardHandlersDeps): UseWizardHandler
 
 			const autoRunFolderPath = `${directoryPath}/${AUTO_RUN_FOLDER_NAME}`;
 			const firstDoc = generatedDocuments[0];
-			const autoRunSelectedFile = firstDoc ? firstDoc.filename.replace(/\.md$/, '') : undefined;
+			const autoRunSelectedFile = firstDoc
+				? getWizardDocumentRelativePath(autoRunFolderPath, firstDoc).replace(/\.md$/, '')
+				: undefined;
 
 			const newSession: Session = {
 				id: newId,
@@ -1187,6 +1195,71 @@ export function useWizardHandlers(deps: UseWizardHandlersDeps): UseWizardHandler
 				isRemote: !!sessionSshRemoteConfig?.enabled,
 			});
 
+			let createdOnboardingPlaybook: Awaited<
+				ReturnType<typeof window.maestro.playbooks.create>
+			>['playbook'];
+			if ((window as any).maestro.playbooks?.create && generatedDocuments.length > 0) {
+				try {
+					const projectMemoryExecution = await projectMemoryService.inferExecutionContext(
+						directoryPath,
+						selectedAgent as ToolType
+					);
+					const projectMemoryBindingIntent =
+						selectedAgent === 'codex'
+							? {
+									policyVersion: '2026-04-04',
+									repoRoot: directoryPath,
+									sourceBranch: 'main',
+									bindingPreference: 'shared-branch-serialized' as const,
+									sharedCheckoutAllowed: true,
+									reuseExistingBinding: true,
+									allowRebindIfStale: true,
+								}
+							: null;
+					const availableSessions = useSessionStore
+						.getState()
+						.sessions.map((session) => ({ id: session.id, name: session.name }));
+					const packDrafts = buildWizardPlaybookPackDrafts(
+						sessionName,
+						autoRunFolderPath,
+						generatedDocuments,
+						availableSessions,
+						undefined,
+						projectMemoryExecution,
+						projectMemoryBindingIntent
+					);
+					if (packDrafts && packDrafts.length > 0) {
+						for (const packDraft of packDrafts) {
+							const result = await (window as any).maestro.playbooks.create(
+								packDraft.sessionId,
+								packDraft.draft
+							);
+							if (result?.success && result.playbook && packDraft.sessionId === newId) {
+								createdOnboardingPlaybook = result.playbook;
+							}
+						}
+					} else {
+						const wizardPlaybookDraft = buildWizardPlaybookDraft(
+							sessionName,
+							autoRunFolderPath,
+							generatedDocuments,
+							undefined,
+							projectMemoryExecution,
+							projectMemoryBindingIntent
+						);
+						const result = await (window as any).maestro.playbooks.create(
+							newId,
+							wizardPlaybookDraft
+						);
+						if (result?.success && result.playbook) {
+							createdOnboardingPlaybook = result.playbook;
+						}
+					}
+				} catch (error) {
+					console.error('[Wizard] Failed to create onboarding playbook:', error);
+				}
+			}
+
 			clearResumeState();
 			completeWizard(newId);
 			setActiveRightTab('autorun');
@@ -1202,24 +1275,57 @@ export function useWizardHandlers(deps: UseWizardHandlersDeps): UseWizardHandler
 			setTimeout(() => inputRef.current?.focus(), 100);
 
 			const firstDocWithTasks = generatedDocuments.find((doc) => doc.taskCount > 0);
-			if (firstDocWithTasks && autoRunFolderPath) {
-				const batchConfig: BatchRunConfig = {
-					documents: [
-						{
-							id: generateId(),
-							filename: firstDocWithTasks.filename.replace(/\.md$/, ''),
-							resetOnCompletion: false,
-							isDuplicate: false,
-						},
-					],
-					prompt: DEFAULT_BATCH_PROMPT,
-					loopEnabled: false,
-				};
+			if (autoRunFolderPath && (createdOnboardingPlaybook || firstDocWithTasks)) {
+				const batchConfig: BatchRunConfig = createdOnboardingPlaybook
+					? {
+							documents: createdOnboardingPlaybook.documents.map((document) => ({
+								id: generateId(),
+								filename: document.filename.replace(/\.md$/i, ''),
+								resetOnCompletion: document.resetOnCompletion,
+								isDuplicate: false,
+							})),
+							prompt:
+								createdOnboardingPlaybook.prompt && createdOnboardingPlaybook.prompt.trim()
+									? createdOnboardingPlaybook.prompt
+									: DEFAULT_BATCH_PROMPT,
+							loopEnabled: createdOnboardingPlaybook.loopEnabled,
+							maxLoops: createdOnboardingPlaybook.maxLoops,
+							playbookId: createdOnboardingPlaybook.id,
+							playbookName: createdOnboardingPlaybook.name,
+							taskTimeoutMs: createdOnboardingPlaybook.taskTimeoutMs,
+							skills: createdOnboardingPlaybook.skills,
+							agentStrategy: createdOnboardingPlaybook.agentStrategy,
+							definitionOfDone: createdOnboardingPlaybook.definitionOfDone,
+							verificationSteps: createdOnboardingPlaybook.verificationSteps,
+							promptProfile: createdOnboardingPlaybook.promptProfile,
+							documentContextMode: createdOnboardingPlaybook.documentContextMode,
+							skillPromptMode: createdOnboardingPlaybook.skillPromptMode,
+							maxParallelism: createdOnboardingPlaybook.maxParallelism,
+							taskGraph: createdOnboardingPlaybook.taskGraph,
+							projectMemoryExecution: createdOnboardingPlaybook.projectMemoryExecution,
+						}
+					: {
+							documents: [
+								{
+									id: generateId(),
+									filename: getWizardDocumentRelativePath(
+										autoRunFolderPath,
+										firstDocWithTasks!
+									).replace(/\.md$/, ''),
+									resetOnCompletion: false,
+									isDuplicate: false,
+								},
+							],
+							prompt: DEFAULT_BATCH_PROMPT,
+							loopEnabled: false,
+						};
 
 				setTimeout(() => {
 					console.log(
-						'[Wizard] Auto-starting batch run with first document:',
-						firstDocWithTasks.filename
+						createdOnboardingPlaybook
+							? '[Wizard] Auto-starting saved onboarding playbook:'
+							: '[Wizard] Auto-starting batch run with first document:',
+						createdOnboardingPlaybook?.name ?? firstDocWithTasks?.filename
 					);
 					startBatchRun(newId, batchConfig, autoRunFolderPath);
 				}, 500);

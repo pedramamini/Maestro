@@ -1,0 +1,97 @@
+{
+	"$schema": "https://json-schema.org/draft/2020-12/schema",
+	"$id": "https://runmaestro.local/project-memory/schema.worktree-lock.json",
+	"title": "Maestro Worktree Lock Record",
+	"type": "object",
+	"additionalProperties": false,
+	"required": [
+		"taskId",
+		"repoId",
+		"worktreeId",
+		"path",
+		"baseRepoPath",
+		"allocationMode",
+		"lockScope",
+		"ownerAgent",
+		"leaseToken",
+		"leaseExpiresAt",
+		"state",
+		"createdAt",
+		"updatedAt"
+	],
+	"properties": {
+		"taskId": {
+			"type": "string",
+			"minLength": 1
+		},
+		"repoId": {
+			"type": "string",
+			"minLength": 1
+		},
+		"worktreeId": {
+			"type": "string",
+			"minLength": 1
+		},
+		"path": {
+			"type": "string",
+			"minLength": 1
+		},
+		"baseRepoPath": {
+			"type": "string",
+			"minLength": 1
+		},
+		"baseBranch": {
+			"type": "string"
+		},
+		"headBranch": {
+			"type": "string"
+		},
+		"allocationMode": {
+			"type": "string",
+			"enum": ["shared-checkout", "reuse-existing", "create-new"]
+		},
+		"lockScope": {
+			"type": "object",
+			"additionalProperties": false,
+			"required": ["scopeType"],
+			"properties": {
+				"scopeType": {
+					"type": "string",
+					"enum": ["task", "file-set", "repo"]
+				},
+				"files": {
+					"type": "array",
+					"items": {
+						"type": "string",
+						"minLength": 1
+					},
+					"uniqueItems": true
+				}
+			}
+		},
+		"ownerAgent": {
+			"type": "string",
+			"minLength": 1
+		},
+		"leaseToken": {
+			"type": "string",
+			"minLength": 1
+		},
+		"leaseExpiresAt": {
+			"type": "string",
+			"format": "date-time"
+		},
+		"state": {
+			"type": "string",
+			"enum": ["assigned", "active", "released", "stale"]
+		},
+		"createdAt": {
+			"type": "string",
+			"format": "date-time"
+		},
+		"updatedAt": {
+			"type": "string",
+			"format": "date-time"
+		}
+	}
+}

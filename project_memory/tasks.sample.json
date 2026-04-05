@@ -1,0 +1,84 @@
+[
+	{
+		"task_id": "maestro-bootstrap-000",
+		"repo_id": "maestro",
+		"title": "Seed shared-checkout lock sample",
+		"status": "done",
+		"depends_on": [],
+		"allocation_mode": "shared-checkout",
+		"worktree_policy": {
+			"preferred_mode": "shared-checkout",
+			"reason": "Seed task used to keep the bootstrap lock sample consistent."
+		},
+		"lock_scope": {
+			"scope_type": "task"
+		},
+		"notes": "Seed task for shared-checkout lock sample only."
+	},
+	{
+		"task_id": "maestro-bootstrap-001",
+		"repo_id": "maestro",
+		"title": "Bootstrap project_memory scaffolding",
+		"status": "done",
+		"depends_on": [],
+		"allocation_mode": "shared-checkout",
+		"worktree_policy": {
+			"preferred_mode": "shared-checkout",
+			"reason": "Bootstrap work should stay on the main checkout until explicit locks exist."
+		},
+		"lock_scope": {
+			"scope_type": "task"
+		},
+		"notes": "Non-authoritative sample task record for AGENT/task-sync.sh bootstrap."
+	},
+	{
+		"task_id": "maestro-bootstrap-003",
+		"repo_id": "maestro",
+		"title": "Hold schema file-set lock sample",
+		"status": "in_progress",
+		"depends_on": ["maestro-bootstrap-001"],
+		"allocation_mode": "shared-checkout",
+		"worktree_policy": {
+			"preferred_mode": "shared-checkout",
+			"reason": "Shared-checkout lock sample should block overlapping schema work."
+		},
+		"lock_scope": {
+			"scope_type": "file-set",
+			"files": ["project_memory/schema.task.json", "project_memory/schema.worktree-lock.json"]
+		},
+		"notes": "In-progress sample task used to demonstrate lock filtering."
+	},
+	{
+		"task_id": "maestro-bootstrap-002",
+		"repo_id": "maestro",
+		"title": "Freeze worktree lock schemas",
+		"status": "pending",
+		"depends_on": ["maestro-bootstrap-001"],
+		"allocation_mode": "shared-checkout",
+		"worktree_policy": {
+			"preferred_mode": "shared-checkout",
+			"reason": "Schema definition should default to shared checkout before isolation is justified."
+		},
+		"lock_scope": {
+			"scope_type": "file-set",
+			"files": ["project_memory/schema.task.json", "project_memory/schema.worktree-lock.json"]
+		},
+		"notes": "Non-authoritative sample dependency chain."
+	},
+	{
+		"task_id": "maestro-bootstrap-004",
+		"repo_id": "maestro",
+		"title": "Document bootstrap shared-checkout status",
+		"status": "pending",
+		"depends_on": ["maestro-bootstrap-001"],
+		"allocation_mode": "shared-checkout",
+		"worktree_policy": {
+			"preferred_mode": "shared-checkout",
+			"reason": "Non-conflicting documentation work should remain selectable on the main checkout."
+		},
+		"lock_scope": {
+			"scope_type": "task"
+		},
+		"notes": "Sample task that should remain selectable while schema file-set lock is active."
+	}
+]

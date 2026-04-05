@@ -16,8 +16,7 @@ import {
 	sortEntriesByTimestamp,
 } from '../../shared/history';
 
-// Get the Maestro config directory path
-function getConfigDir(): string {
+function getDefaultConfigDir(): string {
 	const platform = os.platform();
 	const home = os.homedir();
 
@@ -29,6 +28,24 @@ function getConfigDir(): string {
 		// Linux and others
 		return path.join(process.env.XDG_CONFIG_HOME || path.join(home, '.config'), 'Maestro');
 	}
+}
+
+// Get the Maestro config directory path
+function getConfigDir(): string {
+	const explicitPath = process.env.MAESTRO_USER_DATA_PATH?.trim();
+	if (explicitPath) {
+		return path.resolve(explicitPath);
+	}
+
+	const defaultConfigDir = getDefaultConfigDir();
+	const useDevData = ['1', 'true', 'yes'].includes(
+		process.env.MAESTRO_USE_DEV_DATA?.toLowerCase() ?? ''
+	);
+	if (useDevData) {
+		return path.join(defaultConfigDir, '..', 'maestro-dev');
+	}
+
+	return defaultConfigDir;
 }
 
 /**

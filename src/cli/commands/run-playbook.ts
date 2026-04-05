@@ -16,6 +16,12 @@ import {
 } from '../output/formatter';
 import { isSessionBusyWithCli, getCliActivityForSession } from '../../shared/cli-activity';
 import { normalizePersistedPlaybook, validatePlaybookDag } from '../../shared/playbookDag';
+import { getPlaybookParallelismWarning } from '../../shared/playbookParallelism';
+import type { ProjectMemoryBindingIntent } from '../../shared/projectMemory';
+import type { Playbook, SessionInfo } from '../../shared/types';
+import { emitWizardTasks } from '../../main/wizard-task-emitter';
+import * as taskSyncService from '../services/task-sync';
+import { execFileSync } from 'child_process';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
@@ -71,7 +77,10 @@ interface RunPlaybookOptions {
 	debug?: boolean;
 	verbose?: boolean;
 	wait?: boolean;
+	maxWaitMs?: number | string;
 }
+
+const DEFAULT_WAIT_TIMEOUT_MS = 10 * 60 * 1000;
 
 /**
  * Format wait duration in human-readable format.
@@ -97,6 +106,134 @@ function formatWaitDuration(ms: number): string {
  */
 function sleep(ms: number): Promise<void> {
 	return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function resolveMaxWaitMs(
+	value: number | string | undefined
+): { ok: true; value: number | null } | { ok: false; reason: string } {
+	if (value === undefined || value === null || value === '') {
+		return { ok: true, value: DEFAULT_WAIT_TIMEOUT_MS };
+	}
+
+	const parsed = typeof value === 'number' ? value : Number(value);
+	if (!Number.isFinite(parsed) || parsed < 0) {
+		return { ok: false, reason: 'maxWaitMs must be a non-negative number.' };
+	}
+
+	if (parsed === 0) {
+		return { ok: true, value: null };
+	}
+
+	return { ok: true, value: parsed };
+}
+
+function getCurrentGitBranch(cwd: string): string | undefined {
+	try {
+		const branch = execFileSync('git', ['rev-parse', '--abbrev-ref', 'HEAD'], {
+			cwd,
+			encoding: 'utf-8',
+			stdio: ['pipe', 'pipe', 'pipe'],
+		}).trim();
+		return branch || undefined;
+	} catch {
+		return undefined;
+	}
+}
+
+function getCodexExecutorId(): string {
+	return process.env.MAESTRO_TASK_EXECUTOR ?? 'codex-main';
+}
+
+function normalizeRepoRoot(repoRoot: string): string {
+	try {
+		return fs.realpathSync(repoRoot);
+	} catch {
+		return path.resolve(repoRoot);
+	}
+}
+
+function bootstrapProjectMemoryExecution(
+	playbook: Playbook,
+	agent: SessionInfo
+): { playbook: Playbook; bootstrapped: boolean; message?: string } {
+	if (
+		agent.toolType !== 'codex' ||
+		playbook.projectMemoryExecution ||
+		!playbook.projectMemoryBindingIntent
+	) {
+		return { playbook, bootstrapped: false };
+	}
+
+	const bindingIntent: ProjectMemoryBindingIntent = {
+		...playbook.projectMemoryBindingIntent,
+		repoRoot: normalizeRepoRoot(playbook.projectMemoryBindingIntent.repoRoot || agent.cwd),
+	};
+	const candidateTaskIds = playbook.taskGraph?.nodes?.map((node) => node.id) ?? [];
+	if (candidateTaskIds.length === 0) {
+		throw new Error(
+			'Project Memory bootstrap could not find any taskGraph nodes for this playbook.'
+		);
+	}
+
+	const emissionResult = emitWizardTasks(
+		{
+			...playbook,
+			projectMemoryBindingIntent: bindingIntent,
+		},
+		{ force: false }
+	);
+	const duplicateOnlyEmission =
+		!emissionResult.success &&
+		(emissionResult.skippedTaskIds?.length ?? 0) > 0 &&
+		(emissionResult.invalidTaskIds?.length ?? 0) === 0 &&
+		(emissionResult.skippedTaskIds?.length ?? 0) === candidateTaskIds.length;
+	if (!emissionResult.success && !duplicateOnlyEmission) {
+		throw new Error(
+			emissionResult.error ??
+				'Project Memory bootstrap failed while emitting repo-local tasks for this playbook.'
+		);
+	}
+
+	const executorId = getCodexExecutorId();
+
+	let selection: ReturnType<typeof taskSyncService.lockTask> | null = null;
+	const claimFailures: string[] = [];
+	for (const taskId of candidateTaskIds) {
+		try {
+			selection = taskSyncService.lockTask(
+				{
+					repoRoot: bindingIntent.repoRoot,
+					executorId,
+				},
+				taskId
+			);
+			break;
+		} catch (error) {
+			const reason = error instanceof Error ? error.message : 'Unknown lockTask failure';
+			claimFailures.push(`${taskId}: ${reason}`);
+		}
+	}
+
+	if (!selection) {
+		const details = claimFailures.length > 0 ? ` (${claimFailures.join('; ')})` : '';
+		throw new Error(
+			`Project Memory bootstrap did not find a runnable task for this playbook.${details}`
+		);
+	}
+
+	return {
+		playbook: {
+			...playbook,
+			projectMemoryBindingIntent: bindingIntent,
+			projectMemoryExecution: {
+				repoRoot: bindingIntent.repoRoot,
+				taskId: selection.task.id,
+				executorId,
+			},
+		},
+		bootstrapped: true,
+		message: `Bootstrapped Project Memory execution: ${selection.task.id}`,
+	};
 }
 
 /**
@@ -125,12 +262,76 @@ function checkAgentBusy(agentId: string, _agentName: string): { busy: boolean; r
 	return { busy: false };
 }
 
+function validateProjectMemoryStartup(
+	agent: { cwd: string; toolType: string },
+	playbook: {
+		projectMemoryExecution?: {
+			repoRoot?: string | null;
+			taskId?: string | null;
+			executorId?: string | null;
+		} | null;
+	}
+): { ok: true } | { ok: false; code: string; reason: string } {
+	if (agent.toolType === 'codex' && !playbook.projectMemoryExecution) {
+		return {
+			ok: false,
+			code: 'PROJECT_MEMORY_EXECUTION_REQUIRED',
+			reason: 'Codex Auto Run requires an active Project Memory binding for this repo.',
+		};
+	}
+
+	if (!playbook.projectMemoryExecution) {
+		return { ok: true };
+	}
+
+	const { taskId, executorId } = playbook.projectMemoryExecution;
+	if (!taskId || !executorId) {
+		return {
+			ok: false,
+			code: 'PROJECT_MEMORY_EXECUTION_BLOCKED',
+			reason:
+				'Project Memory execution metadata is incomplete: taskId and executorId are required.',
+		};
+	}
+
+	const validationRepoRoot = playbook.projectMemoryExecution.repoRoot || agent.cwd;
+	const currentGitBranch = getCurrentGitBranch(validationRepoRoot);
+	const validation = taskSyncService.validateProjectMemoryExecutionStart({
+		...playbook.projectMemoryExecution,
+		repoRoot: validationRepoRoot,
+		taskId,
+		executorId,
+		currentBranch: currentGitBranch ?? null,
+	});
+
+	if (!validation.ok) {
+		return {
+			ok: false,
+			code: 'PROJECT_MEMORY_EXECUTION_BLOCKED',
+			reason: validation.reason ?? 'Project Memory execution validation blocked playbook start.',
+		};
+	}
+
+	return { ok: true };
+}
+
 export async function runPlaybook(playbookId: string, options: RunPlaybookOptions): Promise<void> {
 	const useJson = options.json;
 
 	try {
+		const maxWaitValidation = resolveMaxWaitMs(options.maxWaitMs);
+		if (!maxWaitValidation.ok) {
+			if (useJson) {
+				emitError(maxWaitValidation.reason, 'INVALID_MAX_WAIT_MS');
+			} else {
+				console.error(formatError(maxWaitValidation.reason));
+			}
+			process.exit(1);
+		}
+
+		const maxWaitMs = maxWaitValidation.value;
 		let agentId: string;
-		let playbook;
+		let playbook: Playbook;
 
 		// Find playbook across all agents
 		try {
@@ -148,6 +349,18 @@ export async function runPlaybook(playbookId: string, options: RunPlaybookOption
 		}
 
 		const agent = getSessionById(agentId)!;
+		const bootstrapResult = bootstrapProjectMemoryExecution(playbook, agent);
+		playbook = bootstrapResult.playbook;
+
+		const projectMemoryValidation = validateProjectMemoryStartup(agent, playbook);
+		if (!projectMemoryValidation.ok) {
+			if (useJson) {
+				emitError(projectMemoryValidation.reason, projectMemoryValidation.code);
+			} else {
+				console.error(formatError(projectMemoryValidation.reason));
+			}
+			process.exit(1);
+		}
 
 		// Check if agent CLI is available
 		const def = getAgentDefinition(agent.toolType);
@@ -191,6 +404,16 @@ export async function runPlaybook(playbookId: string, options: RunPlaybookOption
 				while (busyCheck.busy) {
 					await sleep(pollIntervalMs);
 					busyCheck = checkAgentBusy(agent.id, agent.name);
+					const waitedMs = Date.now() - waitStartTime;
+					if (busyCheck.busy && maxWaitMs !== null && waitedMs >= maxWaitMs) {
+						const timeoutMessage = `Timed out after waiting ${formatWaitDuration(waitedMs)} for agent "${agent.name}" to become available.`;
+						if (useJson) {
+							emitError(timeoutMessage, 'AGENT_WAIT_TIMEOUT');
+						} else {
+							console.error(formatError(timeoutMessage));
+						}
+						process.exit(1);
+					}
 
 					// Log if reason changed (e.g., different playbook now running)
 					if (busyCheck.busy && busyCheck.reason !== lastReason && !useJson) {
@@ -253,11 +476,22 @@ export async function runPlaybook(playbookId: string, options: RunPlaybookOption
 			process.exit(1);
 		}
 
+		const parallelismWarning = getPlaybookParallelismWarning(
+			playbook.taskGraph,
+			playbook.maxParallelism
+		);
+
 		// Show startup info in human-readable mode
 		if (!useJson) {
 			console.log(formatInfo(`Running playbook: ${playbook.name}`));
 			console.log(formatInfo(`Agent: ${agent.name}`));
 			console.log(formatInfo(`Documents: ${playbook.documents.length}`));
+			if (bootstrapResult.bootstrapped && bootstrapResult.message) {
+				console.log(formatInfo(bootstrapResult.message));
+			}
+			if (parallelismWarning) {
+				console.log(formatWarning(parallelismWarning.message));
+			}
 			// Show loop configuration
 			if (playbook.loopEnabled) {
 				const loopInfo = playbook.maxLoops ? `max ${playbook.maxLoops}` : '∞';

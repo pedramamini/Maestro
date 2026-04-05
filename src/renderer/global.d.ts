@@ -3,6 +3,13 @@
  * This file makes the window.maestro API available throughout the renderer.
  */
 
+import type {
+	ProjectMemoryExecutionValidationResult,
+	ProjectMemoryStateValidationReport,
+	ProjectMemorySnapshot,
+	ProjectMemoryTaskDetail,
+} from '../shared/projectMemory';
+
 // Vite raw imports for .md files
 declare module '*.md?raw' {
 	const content: string;
@@ -2075,10 +2082,37 @@ interface MaestroAPI {
 			agentStrategy?: 'single' | 'plan-execute-verify';
 			worktreeMode?: 'disabled' | 'managed' | 'existing-open' | 'existing-closed' | 'create-new';
 			schedulerMode?: 'sequential' | 'dag';
+			configuredSchedulerMode?: 'sequential' | 'dag';
 			maxParallelism?: number;
+			actualParallelNodeCount?: number;
+			sharedCheckoutFallbackCount?: number;
+			blockedNodeCount?: number;
+			skippedNodeCount?: number;
+			verifierVerdict?: 'PASS' | 'WARN' | 'FAIL';
+			schedulerOutcome?: 'completed' | 'failed' | 'timed_out';
+			queueWaitMs?: number;
+			retryCount?: number;
+			timedOut?: boolean;
 		}) => Promise<string>;
 		// End an Auto Run session (update duration and completed count)
-		endAutoRun: (id: string, duration: number, tasksCompleted: number) => Promise<boolean>;
+		endAutoRun: (
+			id: string,
+			duration: number,
+			tasksCompleted: number,
+			updates?: {
+				verifierVerdict?: 'PASS' | 'WARN' | 'FAIL';
+				schedulerMode?: 'sequential' | 'dag';
+				configuredSchedulerMode?: 'sequential' | 'dag';
+				actualParallelNodeCount?: number;
+				sharedCheckoutFallbackCount?: number;
+				blockedNodeCount?: number;
+				skippedNodeCount?: number;
+				schedulerOutcome?: 'completed' | 'failed' | 'timed_out';
+				queueWaitMs?: number;
+				retryCount?: number;
+				timedOut?: boolean;
+			}
+		) => Promise<boolean>;
 		// Record an Auto Run task completion
 		recordAutoTask: (task: {
 			autoRunSessionId: string;
@@ -2138,7 +2172,17 @@ interface MaestroAPI {
 				agentStrategy?: 'single' | 'plan-execute-verify';
 				worktreeMode?: 'disabled' | 'managed' | 'existing-open' | 'existing-closed' | 'create-new';
 				schedulerMode?: 'sequential' | 'dag';
+				configuredSchedulerMode?: 'sequential' | 'dag';
 				maxParallelism?: number;
+				actualParallelNodeCount?: number;
+				sharedCheckoutFallbackCount?: number;
+				blockedNodeCount?: number;
+				skippedNodeCount?: number;
+				verifierVerdict?: 'PASS' | 'WARN' | 'FAIL';
+				schedulerOutcome?: 'completed' | 'failed' | 'timed_out';
+				queueWaitMs?: number;
+				retryCount?: number;
+				timedOut?: boolean;
 			}>
 		>;
 		// Get tasks for a specific Auto Run session
@@ -2683,6 +2727,55 @@ interface MaestroAPI {
 	wakatime: {
 		checkCli: () => Promise<{ available: boolean; version?: string }>;
 		validateApiKey: (key: string) => Promise<{ valid: boolean }>;
+	};
+	projectMemory: {
+		getSnapshot: (
+			repoRoot: string
+		) => Promise<
+			{ success: true; snapshot: ProjectMemorySnapshot | null } | { success: false; error: string }
+		>;
+		getTaskDetail: (
+			repoRoot: string,
+			taskId: string
+		) => Promise<
+			{ success: true; detail: ProjectMemoryTaskDetail | null } | { success: false; error: string }
+		>;
+		validateState: (
+			repoRoot: string
+		) => Promise<
+			| { success: true; report: ProjectMemoryStateValidationReport }
+			| { success: false; error: string }
+		>;
+		validateExecutionStart: (
+			repoRoot: string,
+			taskId: string,
+			executorId: string,
+			currentBranch?: string | null
+		) => Promise<
+			| { success: true; validation: ProjectMemoryExecutionValidationResult }
+			| { success: false; error: string }
+		>;
+		emitWizardTasks: (
+			playbook: import('../shared/types').Playbook,
+			options?: { force?: boolean; dryRun?: boolean }
+		) => Promise<
+			| {
+					success: true;
+					emittedTaskIds: string[];
+					tasksFilePath: string;
+					partialSuccess?: boolean;
+					skippedTaskIds?: string[];
+					invalidTaskIds?: string[];
+					validationErrors?: import('../main/wizard-task-emitter').WizardTaskEmissionError[];
+					diagnostics: {
+						taskCount: number;
+						repoRoot: string;
+						sourceBranch: string;
+						bindingPreference: string;
+					};
+			  }
+			| { success: false; error: string }
+		>;
 	};
 }
 

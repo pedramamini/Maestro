@@ -168,6 +168,44 @@ const mockMaestro = {
 	sessions: {
 		getAll: vi.fn().mockResolvedValue([]),
 	},
+	projectMemory: {
+		getSnapshot: vi.fn().mockResolvedValue({
+			success: true,
+			snapshot: {
+				repoRoot: '/test/path',
+				tasks: [],
+				updatedAt: new Date().toISOString(),
+			},
+		}),
+		validateState: vi.fn().mockResolvedValue({
+			success: true,
+			report: {
+				ok: true,
+				issues: [],
+				taskCount: 0,
+				activeTaskId: null,
+				activeExecutorId: null,
+				activeBindingMode: null,
+				generatedAt: new Date().toISOString(),
+			},
+		}),
+		getTaskDetail: vi.fn().mockResolvedValue({
+			success: true,
+			detail: {
+				task: { id: 'PM-01', title: 'Layout' },
+				binding: {
+					binding_mode: 'shared-branch-serialized',
+					branch_name: 'main',
+					worktree_path: '/test/path',
+				},
+				runtime: { executor_state: 'running', executor_id: 'codex-main' },
+				taskLock: { owner: 'codex-main' },
+				worktreeLock: { owner: 'codex-main' },
+				worktree: { worktree_id: 'shared-main' },
+			},
+		}),
+		validateExecutionStart: vi.fn(),
+	},
 };
 
 // Mock theme
@@ -368,7 +406,7 @@ describe('Wizard Keyboard Navigation', () => {
 			expect(claudeTile).toHaveAttribute('aria-pressed', 'true');
 		});
 
-		it('should not allow selecting an unavailable supported agent', async () => {
+		it('should not allow selecting a coming-soon agent', async () => {
 			renderWithProviders(<AgentSelectionScreen theme={mockTheme} />);
 
 			await waitFor(() => {
@@ -376,7 +414,7 @@ describe('Wizard Keyboard Navigation', () => {
 			});
 
 			const claudeTile = screen.getByRole('button', { name: /claude code/i });
-			const geminiTile = screen.getByRole('button', { name: /gemini cli \(not installed\)/i });
+			const geminiTile = screen.getByRole('button', { name: /gemini cli \(coming soon\)/i });
 
 			expect(geminiTile).toHaveAttribute('aria-disabled', 'true');
 
@@ -387,7 +425,23 @@ describe('Wizard Keyboard Navigation', () => {
 			expect(screen.getByRole('button', { name: 'Configure Agent' })).toBeDisabled();
 		});
 
-		it('should not auto-select an unavailable agent from Customize', async () => {
+		it('should render gemini and zai as coming soon even if detected elsewhere', async () => {
+			renderWithProviders(<AgentSelectionScreen theme={mockTheme} />);
+
+			await waitFor(() => {
+				expect(screen.queryByText('Detecting available agents...')).not.toBeInTheDocument();
+			});
+
+			expect(screen.getByRole('button', { name: /gemini cli \(coming soon\)/i })).toHaveAttribute(
+				'aria-disabled',
+				'true'
+			);
+			expect(
+				screen.getByRole('button', { name: /z\.ai \(glm\) \(coming soon\)/i })
+			).toHaveAttribute('aria-disabled', 'true');
+		});
+
+		it('should not expose customize for coming-soon agents', async () => {
 			renderWithProviders(<AgentSelectionScreen theme={mockTheme} />);
 
 			await waitFor(() => {
@@ -395,13 +449,11 @@ describe('Wizard Keyboard Navigation', () => {
 			});
 
 			const claudeTile = screen.getByRole('button', { name: /claude code/i });
-			const geminiTile = screen.getByRole('button', { name: /gemini cli \(not installed\)/i });
-			const customizeButton = within(geminiTile).getByRole('button', { name: /customize/i });
-
-			fireEvent.click(customizeButton);
+			const geminiTile = screen.getByRole('button', { name: /gemini cli \(coming soon\)/i });
 
 			expect(claudeTile).toHaveAttribute('aria-pressed', 'true');
 			expect(geminiTile).toHaveAttribute('aria-pressed', 'false');
+			expect(within(geminiTile).queryByRole('button', { name: /customize/i })).toBeNull();
 			expect(screen.queryByText('Selected: Gemini CLI')).not.toBeInTheDocument();
 		});
 	});
@@ -839,30 +891,131 @@ describe('Wizard Keyboard Navigation', () => {
 		// Mock generated documents for testing
 		const mockGeneratedDocuments = [
 			{
-				filename: 'Phase-01-Test.md',
+				filename: 'Phase-01-Backend.md',
 				content: '# Phase 1\n\n- [ ] Task 1\n- [ ] Task 2',
 				taskCount: 2,
 			},
 			{
-				filename: 'Phase-02-Test.md',
+				filename: 'Phase-02-Frontend.md',
 				content: '# Phase 2\n\n- [ ] Task 3',
+				taskCount: 1,
+			},
+			{
+				filename: 'Phase-03-Integration-Review.md',
+				content: '# Phase 3\n\n- [ ] Final review and integration',
 				taskCount: 1,
 			},
 		];
 
 		// Test wrapper that renders PhaseReviewScreen in wizard context
-		function PhaseReviewScreenWrapper({ theme }: { theme: Theme }) {
+		function PhaseReviewScreenWrapper({
+			theme,
+			selectedAgent = 'claude-code',
+		}: {
+			theme: Theme;
+			selectedAgent?: 'claude-code' | 'codex';
+		}) {
 			const { goToStep, setSelectedAgent, setDirectoryPath, setGeneratedDocuments } = useWizard();
 
 			React.useEffect(() => {
-				setSelectedAgent('claude-code');
+				setSelectedAgent(selectedAgent);
 				setDirectoryPath('/test/path');
 				setGeneratedDocuments(mockGeneratedDocuments);
 				goToStep('phase-review');
-			}, [goToStep, setSelectedAgent, setDirectoryPath, setGeneratedDocuments]);
+			}, [goToStep, selectedAgent, setSelectedAgent, setDirectoryPath, setGeneratedDocuments]);
 
 			return <PhaseReviewScreen theme={theme} onLaunchSession={async () => {}} />;
 		}
+
+		it('shows PM binding preview for Codex when project memory inference matches', async () => {
+			mockMaestro.projectMemory.getSnapshot.mockResolvedValue({
+				success: true,
+				snapshot: {
+					repoRoot: '/test/path',
+					tasks: [
+						{
+							id: 'PM-01',
+							status: 'in_progress',
+							executorId: 'codex-main',
+							executorState: 'running',
+							worktreePath: '/test/path',
+						},
+					],
+					updatedAt: new Date().toISOString(),
+				},
+			});
+
+			renderWithProviders(<PhaseReviewScreenWrapper theme={mockTheme} selectedAgent="codex" />);
+
+			await waitFor(() => {
+				expect(screen.getByText('Project Memory Binding')).toBeInTheDocument();
+				expect(screen.getByText('PM Binding: PM-01 · codex-main')).toBeInTheDocument();
+				expect(screen.getByText('Repo Root: /test/path')).toBeInTheDocument();
+			});
+		});
+
+		it('opens PM binding detail from Wizard review', async () => {
+			mockMaestro.projectMemory.getSnapshot.mockResolvedValue({
+				success: true,
+				snapshot: {
+					repoRoot: '/test/path',
+					tasks: [
+						{
+							id: 'PM-01',
+							status: 'in_progress',
+							executorId: 'codex-main',
+							executorState: 'running',
+							worktreePath: '/test/path',
+						},
+					],
+					updatedAt: new Date().toISOString(),
+				},
+			});
+
+			renderWithProviders(<PhaseReviewScreenWrapper theme={mockTheme} selectedAgent="codex" />);
+
+			await waitFor(() => {
+				expect(screen.getByRole('button', { name: 'View Detail' })).toBeInTheDocument();
+			});
+
+			fireEvent.click(screen.getByRole('button', { name: 'View Detail' }));
+
+			await waitFor(() => {
+				expect(mockMaestro.projectMemory.getTaskDetail).toHaveBeenCalledWith('/test/path', 'PM-01');
+			});
+			expect(await screen.findByText(/Task:/)).toBeInTheDocument();
+			expect(screen.getByText(/shared-branch-serialized/)).toBeInTheDocument();
+			expect(screen.getByText(/shared-main/)).toBeInTheDocument();
+		});
+
+		it('shows PM binding diagnostics for Codex when no matching task exists', async () => {
+			mockMaestro.projectMemory.getSnapshot.mockResolvedValue({
+				success: true,
+				snapshot: {
+					repoRoot: '/test/path',
+					tasks: [
+						{
+							id: 'PM-02',
+							status: 'in_progress',
+							executorId: 'codex-main',
+							executorState: 'running',
+							worktreePath: '/other/path',
+						},
+					],
+					updatedAt: new Date().toISOString(),
+				},
+			});
+
+			renderWithProviders(<PhaseReviewScreenWrapper theme={mockTheme} selectedAgent="codex" />);
+
+			await waitFor(() => {
+				expect(
+					screen.getByText(
+						'PM Binding is not attached because no in-progress Codex task matches this repo root.'
+					)
+				).toBeInTheDocument();
+			});
+		});
 
 		it('should toggle between edit and preview mode with Cmd+E', async () => {
 			renderWithProviders(<PhaseReviewScreenWrapper theme={mockTheme} />);
@@ -960,6 +1113,36 @@ describe('Wizard Keyboard Navigation', () => {
 			expect(screen.getByText('Tab')).toBeInTheDocument();
 			expect(screen.getByText('Enter')).toBeInTheDocument();
 			expect(screen.getByText('Esc')).toBeInTheDocument();
+		});
+
+		it('should show inferred execution graph preview', async () => {
+			renderWithProviders(<PhaseReviewScreenWrapper theme={mockTheme} />);
+
+			await waitFor(() => {
+				expect(screen.getByText('Execution Graph Preview')).toBeInTheDocument();
+			});
+
+			expect(screen.getByText('Parallel + Final Join')).toBeInTheDocument();
+			expect(screen.getByText(/AI inferred 2 parallel setup documents/i)).toBeInTheDocument();
+			expect(screen.getByText('Phase-03-Integration-Review')).toBeInTheDocument();
+			expect(
+				screen.getByText(/Waits for: Phase-01-Backend, Phase-02-Frontend/i)
+			).toBeInTheDocument();
+		});
+
+		it('should not expose a manual execution-mode toggle', async () => {
+			renderWithProviders(<PhaseReviewScreenWrapper theme={mockTheme} />);
+
+			await waitFor(() => {
+				expect(screen.getByText('Execution Graph Preview')).toBeInTheDocument();
+			});
+
+			expect(
+				screen.queryByRole('button', { name: /Review in Sequential Order/i })
+			).not.toBeInTheDocument();
+			expect(
+				screen.queryByRole('button', { name: /Use AI-Inferred Graph/i })
+			).not.toBeInTheDocument();
 		});
 	});
 

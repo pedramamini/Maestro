@@ -6,6 +6,7 @@ import { getSessionById } from '../services/storage';
 import { readDocAndGetTasks } from '../services/agent-spawner';
 import { formatPlaybookDetail, formatError, type PlaybookDetailDisplay } from '../output/formatter';
 import { normalizePersistedPlaybook } from '../../shared/playbookDag';
+import { ensureMarkdownFilename } from '../../shared/markdownFilenames';
 
 interface ShowPlaybookOptions {
 	json?: boolean;
@@ -32,7 +33,7 @@ export function showPlaybook(playbookId: string, options: ShowPlaybookOptions): 
 				tasks = result.tasks;
 			}
 			return {
-				filename: doc.filename.endsWith('.md') ? doc.filename : `${doc.filename}.md`,
+				filename: ensureMarkdownFilename(doc.filename),
 				resetOnCompletion: doc.resetOnCompletion,
 				taskCount: tasks.length,
 				tasks,

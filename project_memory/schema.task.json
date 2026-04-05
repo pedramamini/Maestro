@@ -1,0 +1,86 @@
+{
+	"$schema": "https://json-schema.org/draft/2020-12/schema",
+	"$id": "https://runmaestro.local/project-memory/schema.task.json",
+	"title": "Maestro Project Memory Task Record",
+	"type": "object",
+	"additionalProperties": false,
+	"required": [
+		"task_id",
+		"repo_id",
+		"title",
+		"status",
+		"depends_on",
+		"allocation_mode",
+		"lock_scope"
+	],
+	"properties": {
+		"task_id": {
+			"type": "string",
+			"minLength": 1
+		},
+		"repo_id": {
+			"type": "string",
+			"minLength": 1
+		},
+		"title": {
+			"type": "string",
+			"minLength": 1
+		},
+		"status": {
+			"type": "string",
+			"enum": ["pending", "in_progress", "blocked", "done"]
+		},
+		"depends_on": {
+			"type": "array",
+			"items": {
+				"type": "string",
+				"minLength": 1
+			},
+			"uniqueItems": true
+		},
+		"allocation_mode": {
+			"type": "string",
+			"enum": ["shared-checkout", "reuse-existing", "create-new"]
+		},
+		"worktree_policy": {
+			"type": "object",
+			"additionalProperties": false,
+			"required": ["preferred_mode", "reason"],
+			"properties": {
+				"preferred_mode": {
+					"type": "string",
+					"enum": ["shared-checkout", "reuse-existing", "create-new"]
+				},
+				"reason": {
+					"type": "string",
+					"minLength": 1
+				},
+				"reuse_key": {
+					"type": "string"
+				}
+			}
+		},
+		"lock_scope": {
+			"type": "object",
+			"additionalProperties": false,
+			"required": ["scope_type"],
+			"properties": {
+				"scope_type": {
+					"type": "string",
+					"enum": ["task", "file-set", "repo"]
+				},
+				"files": {
+					"type": "array",
+					"items": {
+						"type": "string",
+						"minLength": 1
+					},
+					"uniqueItems": true
+				}
+			}
+		},
+		"notes": {
+			"type": "string"
+		}
+	}
+}
