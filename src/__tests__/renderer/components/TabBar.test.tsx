@@ -112,6 +112,11 @@ vi.mock('lucide-react', () => ({
 			✉
 		</span>
 	),
+	Clock: ({ className, style }: { className?: string; style?: React.CSSProperties }) => (
+		<span data-testid="clock-icon" className={className} style={style}>
+			🕐
+		</span>
+	),
 }));
 
 // Mock react-dom createPortal
