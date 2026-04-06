@@ -1,5 +1,5 @@
 import React, { useState, useRef, useCallback, useEffect, memo, useMemo } from 'react';
-import { Search, Bell } from 'lucide-react';
+import { Bell } from 'lucide-react';
 import type { AITab } from '../../types';
 import { hasDraft } from '../../utils/tabHelpers';
 import { formatShortcutKeys } from '../../utils/shortcutFormatter';
@@ -8,6 +8,7 @@ import { AITab as AITabComponent } from './AITab';
 import { FileTab } from './FileTab';
 import { TerminalTabItem } from './TerminalTabItem';
 import { NewTabPopover } from './NewTabPopover';
+import { SearchPopover } from './SearchPopover';
 import { isUnifiedTabActive, getShortcutHint } from './tabBarUtils';
 import type { TabBarProps } from './types';
 
@@ -42,6 +43,7 @@ function TabBarInner({
 	showUnreadOnly: showUnreadOnlyProp,
 	onToggleUnreadFilter,
 	onOpenTabSearch,
+	onOpenOutputSearch,
 	onCloseAllTabs,
 	onCloseOtherTabs,
 	onCloseTabsLeft,
@@ -359,14 +361,13 @@ function TabBarInner({
 				style={{ backgroundColor: theme.colors.bgSidebar, zIndex: 5 }}
 			>
 				{onOpenTabSearch && (
-					<button
-						onClick={onOpenTabSearch}
-						className="flex items-center justify-center w-6 h-6 rounded hover:bg-white/10 transition-colors"
-						style={{ color: theme.colors.textDim }}
-						title={`Search tabs (${formatShortcutKeys(tabShortcuts.tabSwitcher?.keys ?? ['Alt', 'Meta', 't'])})`}
-					>
-						<Search className="w-4 h-4" />
-					</button>
+					<SearchPopover
+						theme={theme}
+						onSearchTabs={onOpenTabSearch}
+						onSearchMessages={onOpenOutputSearch ?? onOpenTabSearch}
+						tabSwitcherKeys={tabShortcuts.tabSwitcher?.keys ?? ['Alt', 'Meta', 't']}
+						searchOutputKeys={shortcuts.searchOutput?.keys ?? ['Meta', 'f']}
+					/>
 				)}
 				<button
 					onClick={toggleUnreadFilter}

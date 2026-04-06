@@ -240,7 +240,7 @@ describe('TabBar', () => {
 			expect(screen.getByTitle(/Filter unread tabs/)).toBeInTheDocument();
 		});
 
-		it('renders tab search button when onOpenTabSearch provided', () => {
+		it('renders search popover button when onOpenTabSearch provided', () => {
 			render(
 				<TabBar
 					tabs={[createTab()]}
@@ -253,12 +253,10 @@ describe('TabBar', () => {
 				/>
 			);
 
-			expect(
-				screen.getByTitle(`Search tabs (${formatShortcutKeys(['Alt', 'Meta', 't'])})`)
-			).toBeInTheDocument();
+			expect(screen.getByTitle('Search…')).toBeInTheDocument();
 		});
 
-		it('does not render tab search button when onOpenTabSearch not provided', () => {
+		it('does not render search popover button when onOpenTabSearch not provided', () => {
 			render(
 				<TabBar
 					tabs={[createTab()]}
@@ -270,9 +268,7 @@ describe('TabBar', () => {
 				/>
 			);
 
-			expect(
-				screen.queryByTitle(`Search tabs (${formatShortcutKeys(['Alt', 'Meta', 't'])})`)
-			).not.toBeInTheDocument();
+			expect(screen.queryByTitle('Search…')).not.toBeInTheDocument();
 		});
 	});
 
@@ -836,7 +832,7 @@ describe('TabBar', () => {
 	});
 
 	describe('tab search', () => {
-		it('calls onOpenTabSearch when search button clicked', () => {
+		it('opens search popover and calls onOpenTabSearch when Search Tabs clicked', () => {
 			render(
 				<TabBar
 					tabs={[createTab()]}
@@ -849,10 +845,33 @@ describe('TabBar', () => {
 				/>
 			);
 
-			fireEvent.click(
-				screen.getByTitle(`Search tabs (${formatShortcutKeys(['Alt', 'Meta', 't'])})`)
-			);
+			// Click the search button to open the popover
+			fireEvent.click(screen.getByTitle('Search…'));
+			// Click "Search Tabs" in the popover
+			fireEvent.click(screen.getByText('Search Tabs'));
 			expect(mockOnOpenTabSearch).toHaveBeenCalled();
+		});
+
+		it('opens search popover and calls onOpenOutputSearch when Search Message History clicked', () => {
+			const mockOnOpenOutputSearch = vi.fn();
+			render(
+				<TabBar
+					tabs={[createTab()]}
+					activeTabId="tab-1"
+					theme={mockTheme}
+					onTabSelect={mockOnTabSelect}
+					onTabClose={mockOnTabClose}
+					onNewTab={mockOnNewTab}
+					onOpenTabSearch={mockOnOpenTabSearch}
+					onOpenOutputSearch={mockOnOpenOutputSearch}
+				/>
+			);
+
+			// Click the search button to open the popover
+			fireEvent.click(screen.getByTitle('Search…'));
+			// Click "Search Message History" in the popover
+			fireEvent.click(screen.getByText('Search Message History'));
+			expect(mockOnOpenOutputSearch).toHaveBeenCalled();
 		});
 	});
 

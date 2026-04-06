@@ -33,9 +33,10 @@ export const NudgeMessageField = React.memo(function NudgeMessageField({
 					maxLength={maxLength}
 				/>
 				<div
-					className="absolute bottom-2 right-2 text-xs"
+					className="absolute bottom-2 right-2 text-xs px-1 rounded"
 					style={{
 						color: value.length > maxLength * 0.9 ? theme.colors.warning : theme.colors.textDim,
+						backgroundColor: theme.colors.bgActivity,
 					}}
 				>
 					{value.length}/{maxLength}

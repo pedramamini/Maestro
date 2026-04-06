@@ -2063,6 +2063,10 @@ function MaestroConsoleInner() {
 		]
 	);
 
+	const handleOpenOutputSearch = useCallback(() => {
+		useUIStore.getState().setOutputSearchOpen(true);
+	}, []);
+
 	const mainPanelProps = useMainPanelProps({
 		// Core state
 		logViewerOpen,
@@ -2188,6 +2192,7 @@ function MaestroConsoleInner() {
 		handleToggleTabShowThinking,
 		toggleUnreadFilter,
 		handleOpenTabSearch,
+		handleOpenOutputSearch,
 		handleCloseAllTabs,
 		handleCloseOtherTabs,
 		handleCloseTabsLeft,

@@ -14,8 +14,10 @@ import {
 	Trophy,
 	Trash2,
 	Bot,
+	Search,
 } from 'lucide-react';
 import type { Session, Group, Theme } from '../../types';
+import { formatShortcutKeys } from '../../utils/shortcutFormatter';
 import { getBadgeForTime } from '../../constants/conductorBadges';
 import { SessionItem } from '../SessionItem';
 import { GroupChatList } from '../GroupChatList';
@@ -810,36 +812,47 @@ function SessionListInner(props: SessionListProps) {
 								)}
 							</div>
 						</div>
-						{/* Hamburger Menu */}
-						<div className="relative z-10" ref={menuRef} data-tour="hamburger-menu">
+						<div className="flex items-center">
+							{/* Search Agents */}
 							<button
-								onClick={() => setMenuOpen(!menuOpen)}
+								onClick={() => setSessionFilterOpen(!sessionFilterOpen)}
 								className="p-2 rounded hover:bg-white/10 transition-colors"
 								style={{ color: theme.colors.textDim }}
-								title="Menu"
+								title={`Search Agents (${formatShortcutKeys(shortcuts.filterSessions?.keys ?? ['Meta', 'f'])})`}
 							>
-								<Menu className="w-4 h-4" />
+								<Search className="w-4 h-4" />
 							</button>
-							{/* Menu Overlay */}
-							{menuOpen && (
-								<div
-									className="absolute top-full left-0 mt-2 w-72 rounded-lg shadow-2xl z-50 overflow-y-auto scrollbar-thin"
-									data-tour="hamburger-menu-contents"
-									style={{
-										backgroundColor: theme.colors.bgSidebar,
-										border: `1px solid ${theme.colors.border}`,
-										maxHeight: 'calc(100vh - 120px)',
-									}}
+							{/* Hamburger Menu */}
+							<div className="relative z-10" ref={menuRef} data-tour="hamburger-menu">
+								<button
+									onClick={() => setMenuOpen(!menuOpen)}
+									className="p-2 rounded hover:bg-white/10 transition-colors"
+									style={{ color: theme.colors.textDim }}
+									title="Menu"
 								>
-									<HamburgerMenuContent
-										theme={theme}
-										onNewAgentSession={onNewAgentSession}
-										openWizard={openWizard}
-										startTour={startTour}
-										setMenuOpen={setMenuOpen}
-									/>
-								</div>
-							)}
+									<Menu className="w-4 h-4" />
+								</button>
+								{/* Menu Overlay */}
+								{menuOpen && (
+									<div
+										className="absolute top-full left-0 mt-2 w-72 rounded-lg shadow-2xl z-50 overflow-y-auto scrollbar-thin"
+										data-tour="hamburger-menu-contents"
+										style={{
+											backgroundColor: theme.colors.bgSidebar,
+											border: `1px solid ${theme.colors.border}`,
+											maxHeight: 'calc(100vh - 120px)',
+										}}
+									>
+										<HamburgerMenuContent
+											theme={theme}
+											onNewAgentSession={onNewAgentSession}
+											openWizard={openWizard}
+											startTour={startTour}
+											setMenuOpen={setMenuOpen}
+										/>
+									</div>
+								)}
+							</div>
 						</div>
 					</>
 				) : (

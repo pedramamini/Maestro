@@ -48,7 +48,6 @@ export function DirectorNotesModal({
 	const [activeTab, setActiveTab] = useState<TabId>(directorNotesData?.initialTab ?? 'history');
 	const [overviewReady, setOverviewReady] = useState(cached);
 	const [overviewGenerating, setOverviewGenerating] = useState(false);
-	const [overviewProgress, setOverviewProgress] = useState(0);
 
 	// Layer stack registration for Escape handling
 	const { registerLayer, unregisterLayer } = useLayerStack();
@@ -116,12 +115,6 @@ export function DirectorNotesModal({
 	const handleSynopsisReady = useCallback(() => {
 		setOverviewGenerating(false);
 		setOverviewReady(true);
-		setOverviewProgress(0);
-	}, []);
-
-	// Handle progress updates from AIOverviewTab
-	const handleProgressChange = useCallback((percent: number) => {
-		setOverviewProgress(percent);
 	}, []);
 
 	// Start generating indicator when modal opens (skip if cached)
@@ -132,13 +125,13 @@ export function DirectorNotesModal({
 	}, []);
 
 	// Check if a tab can be navigated to
-	// Allow navigating to AI Overview during generation so user can see the progress bar
+	// AI Overview is only clickable once generation is complete
 	const isTabEnabled = useCallback(
 		(tabId: TabId) => {
-			if (tabId === 'ai-overview') return overviewReady || overviewGenerating;
+			if (tabId === 'ai-overview') return overviewReady;
 			return true;
 		},
-		[overviewReady, overviewGenerating]
+		[overviewReady]
 	);
 
 	// Navigate to adjacent tab
@@ -252,11 +245,7 @@ export function DirectorNotesModal({
 									<Icon className="w-4 h-4" />
 								)}
 								{tab.label}
-								{showGenerating && (
-									<span className="text-[10px] font-normal tabular-nums">
-										{overviewProgress > 0 ? `${overviewProgress}%` : 'starting…'}
-									</span>
-								)}
+								{showGenerating && <span className="text-[10px] font-normal">generating…</span>}
 							</button>
 						);
 					})}
@@ -291,11 +280,7 @@ export function DirectorNotesModal({
 							tabIndex={0}
 							className={`h-full outline-none ${activeTab === 'ai-overview' ? '' : 'hidden'}`}
 						>
-							<AIOverviewTab
-								theme={theme}
-								onSynopsisReady={handleSynopsisReady}
-								onProgressChange={handleProgressChange}
-							/>
+							<AIOverviewTab theme={theme} onSynopsisReady={handleSynopsisReady} />
 						</div>
 					</Suspense>
 				</div>

@@ -143,6 +143,8 @@ export interface MainPanelProps {
 	onToggleTabShowThinking?: () => void;
 	onToggleUnreadFilter?: () => void;
 	onOpenTabSearch?: () => void;
+	/** Handler to open output/message search (Cmd+F) */
+	onOpenOutputSearch?: () => void;
 	// Bulk tab close operations
 	onCloseAllTabs?: () => void;
 	onCloseOtherTabs?: () => void;

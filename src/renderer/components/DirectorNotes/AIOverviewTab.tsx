@@ -16,7 +16,6 @@ type SynopsisStats = NonNullable<
 interface AIOverviewTabProps {
 	theme: Theme;
 	onSynopsisReady?: () => void;
-	onProgressChange?: (percent: number) => void;
 }
 
 // Module-level cache so synopsis survives tab switches (unmount/remount)
@@ -57,11 +56,7 @@ function fireSynopsisReadyToast() {
 	});
 }
 
-// Heuristic: expected chunk count for a typical synopsis generation.
-// Progress uses an asymptotic curve so the bar never stalls at 100% before completion.
-const EXPECTED_CHUNKS = 60;
-
-export function AIOverviewTab({ theme, onSynopsisReady, onProgressChange }: AIOverviewTabProps) {
+export function AIOverviewTab({ theme, onSynopsisReady }: AIOverviewTabProps) {
 	const { directorNotesSettings } = useSettings();
 	const [lookbackDays, setLookbackDays] = useState(directorNotesSettings.defaultLookbackDays);
 	const [synopsis, setSynopsis] = useState<string>(cachedSynopsis?.content ?? '');
@@ -69,7 +64,6 @@ export function AIOverviewTab({ theme, onSynopsisReady, onProgressChange }: AIOv
 		cachedSynopsis?.generatedAt ?? null
 	);
 	const [isGenerating, setIsGenerating] = useState(false);
-	const [progress, setProgress] = useState({ phase: 'idle', message: '', percent: 0 });
 	const [showSaveModal, setShowSaveModal] = useState(false);
 	const [copied, setCopied] = useState(false);
 	const [error, setError] = useState<string | null>(null);
@@ -111,37 +105,12 @@ export function AIOverviewTab({ theme, onSynopsisReady, onProgressChange }: AIOv
 		}
 	}, [synopsis]);
 
-	// Stable ref for onProgressChange to avoid re-subscribing
-	const onProgressChangeRef = useRef(onProgressChange);
-	onProgressChangeRef.current = onProgressChange;
-
-	// Subscribe to progress updates from main process
-	useEffect(() => {
-		const cleanup = window.maestro.directorNotes.onSynopsisProgress((update) => {
-			if (!isGeneratingRef.current) return;
-			// Asymptotic progress: approaches 95% but never reaches it before completion
-			const ratio = update.chunkCount / EXPECTED_CHUNKS;
-			const percent = Math.min(5 + 90 * (1 - Math.exp(-2 * ratio)), 95);
-			const rounded = Math.round(percent);
-			const elapsedSec = Math.floor(update.elapsedMs / 1000);
-			const kbReceived = (update.bytesReceived / 1024).toFixed(1);
-			setProgress({
-				phase: 'generating',
-				message: `${rounded}% · ${kbReceived} KB · ${elapsedSec}s`,
-				percent: rounded,
-			});
-			onProgressChangeRef.current?.(rounded);
-		});
-		return cleanup;
-	}, []);
-
 	// Generate synopsis — the handler reads history files directly via file paths,
 	// so the renderer only needs to make a single IPC call.
 	const generateSynopsis = useCallback(async () => {
 		setIsGenerating(true);
 		isGeneratingRef.current = true;
 		setError(null);
-		setProgress({ phase: 'generating', message: 'Starting...', percent: 2 });
 
 		const ipcPromise = window.maestro.directorNotes.generateSynopsis({
 			lookbackDays,
@@ -179,7 +148,6 @@ export function AIOverviewTab({ theme, onSynopsisReady, onProgressChange }: AIOv
 				setSynopsis(result.synopsis);
 				setGeneratedAt(ts);
 				setStats(result.stats ?? null);
-				setProgress({ phase: 'complete', message: 'Synopsis complete', percent: 100 });
 				onSynopsisReady?.();
 			} else {
 				setError(result.error || 'Failed to generate synopsis');
@@ -213,7 +181,6 @@ export function AIOverviewTab({ theme, onSynopsisReady, onProgressChange }: AIOv
 			// Attach to it instead of starting a duplicate.
 			setIsGenerating(true);
 			isGeneratingRef.current = true;
-			setProgress({ phase: 'generating', message: 'Resuming...', percent: 2 });
 
 			const existingPromise = activeGenerationPromise;
 			existingPromise
@@ -225,7 +192,6 @@ export function AIOverviewTab({ theme, onSynopsisReady, onProgressChange }: AIOv
 						setGeneratedAt(ts);
 						setStats(result.stats ?? null);
 						if (cachedSynopsis) setLookbackDays(cachedSynopsis.lookbackDays);
-						setProgress({ phase: 'complete', message: 'Synopsis complete', percent: 100 });
 						onSynopsisReady?.();
 					} else {
 						setError(result.error || 'Failed to generate synopsis');
@@ -334,29 +300,6 @@ export function AIOverviewTab({ theme, onSynopsisReady, onProgressChange }: AIOv
 				</button>
 			</div>
 
-			{/* Progress bar — shown during any generation (initial or regeneration) */}
-			{isGenerating && (
-				<div className="shrink-0 px-4 py-2" style={{ backgroundColor: theme.colors.bgActivity }}>
-					<div className="flex items-center gap-3">
-						<div
-							className="flex-1 h-2 rounded-full overflow-hidden"
-							style={{ backgroundColor: theme.colors.border }}
-						>
-							<div
-								className="h-full transition-all duration-500 ease-out"
-								style={{
-									width: `${progress.percent}%`,
-									backgroundColor: theme.colors.accent,
-								}}
-							/>
-						</div>
-						<span className="text-xs whitespace-nowrap" style={{ color: theme.colors.textDim }}>
-							{progress.message}
-						</span>
-					</div>
-				</div>
-			)}
-
 			{/* Stats bar — stays visible during regeneration */}
 			{stats && synopsis && (
 				<div
@@ -422,25 +365,10 @@ export function AIOverviewTab({ theme, onSynopsisReady, onProgressChange }: AIOv
 					</div>
 				) : isGenerating ? (
 					<div className="flex items-center justify-center h-full">
-						<div className="text-center w-64">
-							<Loader2
-								className="w-8 h-8 animate-spin mx-auto mb-3"
-								style={{ color: theme.colors.accent }}
-							/>
-							<div
-								className="h-2 rounded-full overflow-hidden mb-2"
-								style={{ backgroundColor: theme.colors.border }}
-							>
-								<div
-									className="h-full transition-all duration-500 ease-out"
-									style={{
-										width: `${progress.percent}%`,
-										backgroundColor: theme.colors.accent,
-									}}
-								/>
-							</div>
+						<div className="flex items-center gap-3">
+							<Loader2 className="w-6 h-6 animate-spin" style={{ color: theme.colors.accent }} />
 							<p className="text-sm" style={{ color: theme.colors.textDim }}>
-								{progress.message || 'Starting...'}
+								Generating…
 							</p>
 						</div>
 					</div>

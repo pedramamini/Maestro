@@ -155,6 +155,12 @@ textarea::placeholder {
 	scrollbar-width: none;
 }
 
+/* Hide xterm scrollbar when terminal container is not visible — prevents
+   the xterm-viewport scrollbar from bleeding through behind the AI tab */
+.terminal-hidden .xterm-viewport {
+	overflow-y: hidden !important;
+}
+
 /* xterm.js viewport scrollbar — match Maestro's thin scrollbar style */
 .xterm-viewport::-webkit-scrollbar {
 	width: 6px;
