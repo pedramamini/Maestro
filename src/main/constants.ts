@@ -15,12 +15,39 @@ import * as os from 'node:os';
 // of times per second. Pre-compiling them avoids repeated regex compilation overhead.
 
 // Group chat session ID patterns
-export const REGEX_MODERATOR_SESSION = /^group-chat-(.+)-moderator-/;
-export const REGEX_MODERATOR_SESSION_TIMESTAMP = /^group-chat-(.+)-moderator-\d+$/;
-export const REGEX_PARTICIPANT_UUID =
-	/^group-chat-(.+)-participant-(.+)-([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})$/i;
-export const REGEX_PARTICIPANT_TIMESTAMP = /^group-chat-(.+)-participant-(.+)-(\d{13,})$/;
-export const REGEX_PARTICIPANT_FALLBACK = /^group-chat-(.+)-participant-([^-]+)-/;
+//
+// groupChatId is ALWAYS a uuidv4() (see group-chat-storage.ts:createGroupChat()),
+// so we anchor the group-chat-id capture on the UUID format instead of a greedy
+// (.+). This matters because participant display names are user-supplied and may
+// contain literal "-participant-" substrings; the old greedy capture would
+// backtrack to the LAST occurrence and parse to the wrong (groupChatId,
+// participantName) pair, which could cause output chunks buffered in
+// group-chat/output-buffer.ts to be flushed against the wrong owner — the
+// suspected root cause for group-chat content leaking into Cue pipeline output.
+const UUID_PATTERN = '[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}';
+
+export const REGEX_MODERATOR_SESSION = new RegExp(`^group-chat-(${UUID_PATTERN})-moderator-`, 'i');
+export const REGEX_MODERATOR_SESSION_TIMESTAMP = new RegExp(
+	`^group-chat-(${UUID_PATTERN})-moderator-\\d+$`,
+	'i'
+);
+// Participant name capture is lazy ((.+?)) so the UUID/timestamp tail anchor
+// determines the split rather than greedy backtracking.
+export const REGEX_PARTICIPANT_UUID = new RegExp(
+	`^group-chat-(${UUID_PATTERN})-participant-(.+?)-(${UUID_PATTERN})$`,
+	'i'
+);
+export const REGEX_PARTICIPANT_TIMESTAMP = new RegExp(
+	`^group-chat-(${UUID_PATTERN})-participant-(.+?)-(\\d{13,})$`,
+	'i'
+);
+// Fallback only kicks in when neither UUID nor timestamp tail matches. It still
+// requires a UUID groupChatId so we never silently parse a non-group-chat
+// sessionId as one.
+export const REGEX_PARTICIPANT_FALLBACK = new RegExp(
+	`^group-chat-(${UUID_PATTERN})-participant-([^-]+)-`,
+	'i'
+);
 
 // Web broadcast session ID patterns
 // Tab IDs may contain dashes (e.g., UUIDs), so we match everything after the -ai- delimiter

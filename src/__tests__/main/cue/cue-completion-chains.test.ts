@@ -170,6 +170,68 @@ describe('CueEngine completion chains', () => {
 
 			engine.stop();
 		});
+
+		// Regression: the exit-listener production path calls
+		// notifyAgentCompleted with ONLY { status, exitCode } — no stdout.
+		// sourceOutput MUST become the empty string in that case. Any fallback
+		// that pulls from a session-level output store or group-chat buffer
+		// would leak whatever that buffer happens to contain into the
+		// downstream {{CUE_SOURCE_OUTPUT}} template, which is the suspected
+		// root cause of the "group chat bled into cue pipeline output" bug.
+		// Do not add a stdout fallback without updating this test.
+		it('produces empty sourceOutput when completionData has no stdout (exit-listener path)', () => {
+			const config = createMockConfig({
+				subscriptions: [
+					{
+						name: 'on-done',
+						event: 'agent.completed',
+						enabled: true,
+						prompt: 'follow up',
+						source_session: 'agent-a',
+					},
+				],
+			});
+			mockLoadCueConfig.mockReturnValue(config);
+			const deps = createMockDeps();
+			const engine = new CueEngine(deps);
+			engine.start();
+
+			vi.clearAllMocks();
+			// Exit-listener shape: only status + exitCode, no stdout.
+			engine.notifyAgentCompleted('agent-a', { status: 'completed', exitCode: 0 });
+
+			const request = (deps.onCueRun as ReturnType<typeof vi.fn>).mock.calls[0][0];
+			const event = request.event as CueEvent;
+			expect(event.payload.sourceOutput).toBe('');
+			expect(event.payload.outputTruncated).toBe(false);
+
+			engine.stop();
+		});
+
+		it('produces empty sourceOutput when completionData is omitted entirely', () => {
+			const config = createMockConfig({
+				subscriptions: [
+					{
+						name: 'on-done',
+						event: 'agent.completed',
+						enabled: true,
+						prompt: 'follow up',
+						source_session: 'agent-a',
+					},
+				],
+			});
+			mockLoadCueConfig.mockReturnValue(config);
+			const deps = createMockDeps();
+			const engine = new CueEngine(deps);
+			engine.start();
+
+			vi.clearAllMocks();
+			engine.notifyAgentCompleted('agent-a');
+
+			const request = (deps.onCueRun as ReturnType<typeof vi.fn>).mock.calls[0][0];
+			const event = request.event as CueEvent;
+			expect(event.payload.sourceOutput).toBe('');
+		});
 	});
 
 	describe('session name matching', () => {
@@ -497,6 +559,57 @@ describe('CueEngine completion chains', () => {
 			expect(deps.onLog).toHaveBeenCalledWith(
 				'cue',
 				expect.stringContaining('waiting for 2 more session(s)')
+			);
+
+			engine.stop();
+		});
+
+		// Regression: the user's yaml can list the same session under both its
+		// name and its ID ("Agent A" + "agent-a"). Pre-fix, sources.length would
+		// count 2 but the tracker (keyed by sessionId) would only hold 1 entry,
+		// so fan-in would wait forever for a "second" source that is really the
+		// same session. The dedupe pass in cue-fan-in-tracker resolves both
+		// strings to the same canonical sessionId and only counts it once.
+		it('dedupes fan-in sources when the same session is referenced by both name and ID', () => {
+			const sessions = [
+				createMockSession({ id: 'session-1', name: 'Owner', projectRoot: '/proj' }),
+				createMockSession({ id: 'agent-a', name: 'Agent A' }),
+				createMockSession({ id: 'agent-b', name: 'Agent B' }),
+			];
+			const config = createMockConfig({
+				subscriptions: [
+					{
+						name: 'all-done',
+						event: 'agent.completed',
+						enabled: true,
+						prompt: 'aggregate',
+						// "Agent A" (name) and "agent-a" (id) resolve to the same session.
+						source_session: ['Agent A', 'agent-a', 'Agent B'],
+					},
+				],
+			});
+			mockLoadCueConfig.mockImplementation((root) => (root === '/proj' ? config : null));
+			const deps = createMockDeps({ getSessions: vi.fn(() => sessions) });
+			const engine = new CueEngine(deps);
+			engine.start();
+
+			vi.clearAllMocks();
+
+			// Only two distinct session completions — but the YAML lists three
+			// entries. Fan-in must fire once the two unique sources are in.
+			engine.notifyAgentCompleted('agent-a', { sessionName: 'Agent A', stdout: 'output-a' });
+			engine.notifyAgentCompleted('agent-b', { sessionName: 'Agent B', stdout: 'output-b' });
+
+			expect(deps.onCueRun).toHaveBeenCalledTimes(1);
+			expect(deps.onCueRun).toHaveBeenCalledWith(
+				expect.objectContaining({
+					prompt: 'aggregate',
+					event: expect.objectContaining({
+						payload: expect.objectContaining({
+							sourceOutput: expect.stringContaining('output-a'),
+						}),
+					}),
+				})
 			);
 
 			engine.stop();

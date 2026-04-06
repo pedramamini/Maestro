@@ -460,6 +460,22 @@ export function setupExitListener(
 			return;
 		}
 
+		// CRITICAL: group-chat domain containment. If we got here with a sessionId
+		// that starts with GROUP_CHAT_PREFIX, it means neither the moderator
+		// branch nor the participant branch recognized it (they both `return`
+		// after handling). Dropping here prevents group-chat exits from leaking
+		// into:
+		//   - the regular renderer channel via process:exit
+		//   - the web broadcast path (which would misroute to session clients)
+		//   - Cue's agent.completed subscriptions (which would fire spuriously
+		//     on every group-chat turn, since group-chat agents are driven by
+		//     the router, not the user's pipeline)
+		// We do not rely on early-return ordering of the branches above — this
+		// guard is load-bearing and must stay here.
+		if (isGroupChatSession) {
+			return;
+		}
+
 		safeSend('process:exit', sessionId, code);
 
 		// Broadcast exit to web clients
