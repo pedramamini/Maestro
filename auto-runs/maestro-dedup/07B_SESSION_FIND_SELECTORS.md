@@ -105,20 +105,91 @@ All 274 targeted tests pass. Lint passes.
 
 ### 4. Migrate specific-ID lookups (43 calls)
 
-- [ ] Replace `sessions.find(s => s.id === someId)` with `getSessionById(someId)` in each file
-- [ ] Run targeted tests: `CI=1 rtk vitest run <relevant-test>`
+- [x] Replace `sessions.find(s => s.id === someId)` with `getSessionById(someId)` in each file
+- [x] Run targeted tests: `CI=1 rtk vitest run <relevant-test>`
+
+**Findings (Task 4):**
+Migrated 6 `sessions.find(s => s.id === someId)` calls across 4 renderer files to use `selectSessionById`:
+
+| File | Change | Calls replaced |
+|------|--------|---------------|
+| `agentStore.ts` | `getSession()` helper body: `useSessionStore.getState().sessions.find(...)` replaced with `selectSessionById(sessionId)(useSessionStore.getState())` | 1 |
+| `useSessionCrud.ts` | `deleteSession` callback and `finishRenamingSession` callback: `.sessions.find(...)` replaced with `selectSessionById(id)(useSessionStore.getState())` | 2 |
+| `BatchRunnerModal.tsx` | Inline zustand selector `(state) => state.sessions.find(...)` replaced with `selectSessionById(sessionId)` | 1 |
+| `useModalHandlers.ts` | Removed `sessions` reactive subscription (only used for errorSession lookup) + `useMemo` block; replaced with direct `useSessionStore(selectSessionById(...))` selector. Also removed unused `useMemo` import. | 1 (+ eliminated unnecessary full-sessions subscription) |
+
+**Not migrated (by design):**
+- `useCycleSession.ts:183`: `sessions` is already subscribed to and needed for 6+ other operations (filtering, mapping) in the same callback; the `.find` is inside a `.filter()` loop where calling the selector repeatedly offers no benefit over the already-available array.
+- CLI files (`storage.ts`, `run-playbook.ts`, `list-sessions.ts`, `list-playbooks.ts`): No zustand store access; use local `sessions` arrays passed as parameters.
+- Main process files (`web-server-factory.ts`): No zustand store access; use local `sessions` arrays.
+- Web/mobile files (`App.tsx`, `AllSessionsView.tsx`, `ContextManagementSheet.tsx`, `SessionPillBar.tsx`, `useSessions.ts`, `useMobileSessionManagement.ts`): Different state management, no zustand.
+
+All 335 targeted tests pass.
 
 ### 5. Fix wizard re-lookups (8 wasteful re-finds)
 
-- [ ] Identify the 8 instances in wizard code where `activeSession` is re-found despite already being in scope
-- [ ] Remove redundant lookups and use the existing variable
-- [ ] Run wizard tests: `CI=1 rtk vitest run` (filter for wizard test files)
+- [x] Identify the 8 instances in wizard code where `activeSession` is re-found despite already being in scope
+- [x] Remove redundant lookups and use the existing variable
+- [x] Run wizard tests: `CI=1 rtk vitest run` (filter for wizard test files)
+
+**Findings (Task 5):**
+Found 9 `sessions.find(s => s.id === activeSession?.id)` re-lookups in `useWizardHandlers.ts` (1 more than the estimated 8). All were redundant since `activeSession` is already reactively subscribed via `useSessionStore(selectActiveSession)` at line 157.
+
+| Location | Handler | Replacement |
+|----------|---------|-------------|
+| `useEffect` (slash command discovery) | Effect body | Used `activeSession` directly (reactive value is fresh for the current render) |
+| `sendWizardMessageWithThinking` | useCallback | `selectActiveSession(useSessionStore.getState())` |
+| `handleHistoryCommand` | useCallback | `selectActiveSession(useSessionStore.getState())` |
+| `handleSkillsCommand` | useCallback | `selectActiveSession(useSessionStore.getState())` |
+| `handleWizardCommand` | useCallback | `selectActiveSession(useSessionStore.getState())` |
+| `handleLaunchWizardTab` | useCallback | `selectActiveSession(useSessionStore.getState())` |
+| `handleWizardComplete` | useCallback | `selectActiveSession(useSessionStore.getState())` |
+| `handleWizardLetsGo` | useCallback | `selectActiveSession(useSessionStore.getState())` |
+| `handleToggleWizardShowThinking` | useCallback | `selectActiveSession(useSessionStore.getState())` |
+
+Strategy: For the `useEffect`, used `activeSession` directly since the effect re-runs when the reactive value changes. For `useCallback` bodies, used `selectActiveSession(useSessionStore.getState())` to get fresh state at callback execution time (closures may be stale).
+
+All 246 wizard-related tests pass (67 useWizardHandlers + 179 other wizard tests).
 
 ### 6. Fix useTabHandlers.ts (13 identical finds)
 
-- [ ] Read `useTabHandlers.ts` to find all 13 `sessions.find` calls
-- [ ] Hoist a single lookup to the top of each function/handler and reuse throughout
-- [ ] Run tab handler tests: `CI=1 rtk vitest run` (filter for tab handler test files)
+- [x] Read `useTabHandlers.ts` to find all 13 `sessions.find` calls
+- [x] Hoist a single lookup to the top of each function/handler and reuse throughout
+- [x] Run tab handler tests: `CI=1 rtk vitest run` (filter for tab handler test files)
+
+**Findings (Task 6):**
+Found 21 `sessions.find(s => s.id === activeSessionId)` calls (not the estimated 13) across 21 callbacks in `useTabHandlers.ts`. All were the identical pattern of destructuring `{ sessions, activeSessionId }` from `useSessionStore.getState()` and then doing `sessions.find(s => s.id === activeSessionId)`.
+
+Replaced all 21 with `selectActiveSession(useSessionStore.getState())`, which was already imported at line 27. Where callbacks also used `activeSessionId` for `updateAiTab()`, `updateSessionWith()`, or `setSessions` updater guards, replaced with `session.id` (safe after the null guard).
+
+| Handler | Calls replaced |
+|---------|---------------|
+| `handleCloseFileTab` | 1 |
+| `handleReloadFileTab` | 1 |
+| `handleSelectFileTab` | 1 (also replaced `activeSessionId` in setSessions updater with `currentSession.id`) |
+| `handleTabClose` | 1 |
+| `handleCloseAllTabs` | 1 |
+| `handleCloseOtherTabs` | 1 |
+| `handleCloseTabsLeft` | 1 |
+| `handleCloseTabsRight` | 1 |
+| `handleCloseCurrentTab` | 1 (also replaced `activeSessionId` in setSessions updater with `session.id`) |
+| `handleDeleteLog` | 1 |
+| `handleRequestTabRename` | 1 (also replaced `activeSessionId` in `updateAiTab` with `session.id`) |
+| `handleTabStar` | 1 (also replaced `activeSessionId` in `updateSessionWith` with `session.id`) |
+| `handleToggleTabReadOnlyMode` | 1 (also replaced `activeSessionId` in `updateAiTab` with `session.id`) |
+| `handleToggleTabSaveToHistory` | 1 (also replaced `activeSessionId` in `updateAiTab` with `session.id`) |
+| `handleToggleTabShowThinking` | 1 (also replaced `activeSessionId` in `updateAiTab` with `session.id`) |
+| `handleScrollPositionChange` | 1 (also replaced `activeSessionId` in `updateAiTab`/`updateSessionWith` with `session.id`) |
+| `handleAtBottomChange` | 1 (also replaced `activeSessionId` in `updateAiTab` with `session.id`) |
+| `handleClearFilePreviewHistory` | 1 |
+| `handleFileTabNavigateBack` | 1 |
+| `handleFileTabNavigateForward` | 1 |
+| `handleFileTabNavigateToIndex` | 1 |
+| **Total** | **21** |
+
+**Not changed:** Callbacks that use `activeSessionId` only within `setSessions` updater functions (e.g., `handleTabSelect`, `forceCloseFileTab`, `performCloseAllTabs`, etc.) - these don't do a `sessions.find` and correctly reference `activeSessionId` at the time the updater runs.
+
+All 86 useTabHandlers tests pass. 2 pre-existing failures in unrelated files (useInputMode, useLayerStack).
 
 ### 7. Consolidate getSshRemoteById (6 definitions, 5 redundant)
 
