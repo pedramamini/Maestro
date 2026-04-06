@@ -116,6 +116,8 @@ import {
 	useInputMode,
 	// Live mode management (Tier 3B)
 	useLiveMode,
+	// Session switching callbacks (navigate to session/tab from various UI surfaces)
+	useSessionSwitchCallbacks,
 } from './hooks';
 import { useMainPanelProps, useSessionListProps, useRightPanelProps } from './hooks/props';
 import { useAgentListeners } from './hooks/agent/useAgentListeners';
@@ -679,33 +681,7 @@ function MaestroConsoleInner() {
 		setIsLoadingDocuments: setAutoRunIsLoadingDocuments,
 	} = useBatchStore.getState();
 
-	// ProcessMonitor navigation handlers
-	const handleProcessMonitorNavigateToSession = useCallback(
-		(sessionId: string, tabId?: string, processType?: string) => {
-			setActiveSessionId(sessionId);
-			if (processType === 'terminal') {
-				// Switch to the terminal tab and set terminal mode
-				setSessions((prev) =>
-					prev.map((s) =>
-						s.id === sessionId
-							? {
-									...s,
-									inputMode: 'terminal' as const,
-									activeFileTabId: null,
-									...(tabId && { activeTerminalTabId: tabId }),
-								}
-							: s
-					)
-				);
-			} else if (tabId) {
-				// Switch to the specific AI tab within the session
-				setSessions((prev) =>
-					prev.map((s) => (s.id === sessionId ? { ...s, activeTabId: tabId } : s))
-				);
-			}
-		},
-		[setActiveSessionId]
-	);
+	// handleProcessMonitorNavigateToSession - now in useSessionSwitchCallbacks hook
 
 	// Startup effects (splash, GitHub CLI, Windows warning, gist URLs, beta updates,
 	// update check, leaderboard sync, SpecKit/OpenSpec/BMAD loading, SSH configs, stats DB check,
@@ -1280,6 +1256,19 @@ function MaestroConsoleInner() {
 	// Bridge: keep handleResumeSessionRef in sync for useModalHandlers
 	handleResumeSessionRef.current = handleResumeSession;
 
+	// --- SESSION SWITCH CALLBACKS (navigate to session/tab from various UI surfaces) ---
+	const {
+		handleProcessMonitorNavigateToSession,
+		handleToastSessionClick,
+		handleNamedSessionSelect,
+		handleUtilityTabSelect,
+		handleUtilityFileTabSelect,
+	} = useSessionSwitchCallbacks({
+		setActiveSessionId,
+		handleResumeSession,
+		inputRef,
+	});
+
 	// --- BATCH HANDLERS (Auto Run processing, quit confirmation, error handling) ---
 	const {
 		startBatchRun,
@@ -1541,58 +1530,7 @@ function MaestroConsoleInner() {
 		[activeSession]
 	);
 
-	// Handler for toast navigation - switches to session and optionally to a specific tab
-	const handleToastSessionClick = useCallback(
-		(sessionId: string, tabId?: string) => {
-			// Switch to the session
-			setActiveSessionId(sessionId);
-			// Clear file preview and switch to AI tab (with specific tab if provided)
-			// This ensures clicking a toast always shows the AI terminal, not a file preview
-			updateSessionWith(sessionId, (s) => {
-				// If a specific tab ID is provided, check if it exists
-				if (tabId && !s.aiTabs?.some((t) => t.id === tabId)) {
-					// Tab doesn't exist, just clear file preview
-					return { ...s, activeFileTabId: null, inputMode: 'ai' };
-				}
-				return {
-					...s,
-					...(tabId && { activeTabId: tabId }),
-					activeFileTabId: null,
-					inputMode: 'ai',
-				};
-			});
-		},
-		[setActiveSessionId]
-	);
-
-	// Deep link navigation handler — processes maestro:// URLs from OS notifications,
-	// external apps, and CLI commands
-	useEffect(() => {
-		const unsubscribe = window.maestro.app.onDeepLink((deepLink) => {
-			if (deepLink.action === 'focus') {
-				// Window already brought to foreground by main process
-				return;
-			}
-			if (deepLink.action === 'session' && deepLink.sessionId) {
-				const targetExists = sessionsRef.current.some((s) => s.id === deepLink.sessionId);
-				if (!targetExists) return;
-				handleToastSessionClick(deepLink.sessionId, deepLink.tabId);
-				return;
-			}
-			if (deepLink.action === 'group' && deepLink.groupId) {
-				// Find first session in group and navigate to it
-				const groupSession = sessionsRef.current.find((s) => s.groupId === deepLink.groupId);
-				if (groupSession) {
-					handleToastSessionClick(groupSession.id);
-				}
-				// Expand the group if it's collapsed
-				setGroups((prev) =>
-					prev.map((g) => (g.id === deepLink.groupId ? { ...g, collapsed: false } : g))
-				);
-			}
-		});
-		return unsubscribe;
-	}, [handleToastSessionClick, setGroups]);
+	// handleToastSessionClick, deep link navigation - now in useSessionSwitchCallbacks hook
 
 	// --- SESSION SORTING ---
 	// Extracted hook for sorted and visible session lists (ignores leading emojis for alphabetization)
@@ -1866,45 +1804,8 @@ function MaestroConsoleInner() {
 		},
 		[activeSession]
 	);
-	const handleUtilityTabSelect = useCallback(
-		(tabId: string) => {
-			if (!activeSession) return;
-			// Clear activeFileTabId and activeTerminalTabId when selecting an AI tab.
-			// Also reset inputMode to 'ai' in case we're coming from terminal mode.
-			updateSessionWith(activeSession.id, (s) => ({
-				...s,
-				activeTabId: tabId,
-				activeFileTabId: null,
-				activeTerminalTabId: null,
-				inputMode: 'ai',
-			}));
-		},
-		[activeSession]
-	);
-	const handleUtilityFileTabSelect = useCallback(
-		(tabId: string) => {
-			if (!activeSession) return;
-			// Set activeFileTabId, keep activeTabId as-is (for when returning to AI tabs).
-			// Also reset inputMode to 'ai' and clear activeTerminalTabId in case we're coming from terminal mode.
-			updateSessionWith(activeSession.id, (s) => ({
-				...s,
-				activeFileTabId: tabId,
-				activeTerminalTabId: null,
-				inputMode: 'ai',
-			}));
-		},
-		[activeSession]
-	);
-	const handleNamedSessionSelect = useCallback(
-		(agentSessionId: string, _projectPath: string, sessionName: string, starred?: boolean) => {
-			// Open a closed named session as a new tab - use handleResumeSession to properly load messages
-			handleResumeSession(agentSessionId, [], sessionName, starred);
-			// Focus input so user can start interacting immediately
-			setActiveFocus('main');
-			setTimeout(() => inputRef.current?.focus(), 50);
-		},
-		[handleResumeSession, setActiveFocus]
-	);
+	// handleUtilityTabSelect, handleUtilityFileTabSelect, handleNamedSessionSelect
+	// - now in useSessionSwitchCallbacks hook
 	const handleFileSearchSelect = useCallback(
 		(file: FlatFileItem) => {
 			// Preview the file directly (handleFileClick expects relative path)

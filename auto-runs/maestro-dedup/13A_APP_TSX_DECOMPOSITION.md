@@ -106,10 +106,12 @@ Break down `App.tsx` from 4,034 lines into focused modules. This is the single l
 
 ### 5. Extract session management effects
 
-- [ ] Create `src/renderer/hooks/useSessionLifecycle.ts`
-- [ ] Move effects that manage session lifecycle (creation, deletion, status updates) from App.tsx
-- [ ] Import and call from App.tsx
-- [ ] Run lint and tests: `rtk npm run lint && CI=1 rtk vitest run`
+- [x] Create `src/renderer/hooks/useSessionLifecycle.ts`
+- [x] Move effects that manage session lifecycle (creation, deletion, status updates) from App.tsx
+- [x] Import and call from App.tsx
+- [x] Run lint and tests: `rtk npm run lint && CI=1 rtk vitest run`
+
+**Result:** The core `useSessionLifecycle` hook already existed at `src/renderer/hooks/session/useSessionLifecycle.ts` (640 lines, created in Phase 2H) containing: `handleSaveEditAgent`, `handleRenameTab`, `handleAutoNameTab`, `performDeleteSession`, `showConfirmation`, `toggleTabStar`, `toggleTabUnread`, `toggleUnreadFilter`, plus effects for groups persistence and navigation history tracking. Additionally, `useSessionCrud` (also previously extracted) handles session creation, deletion confirmation, rename, bookmark, and drag-drop operations. To further reduce App.tsx, created new `useSessionSwitchCallbacks` hook (229 lines) at `src/renderer/hooks/session/useSessionSwitchCallbacks.ts` extracting 5 session navigation callbacks and the deep link effect: `handleProcessMonitorNavigateToSession`, `handleToastSessionClick`, `handleNamedSessionSelect`, `handleUtilityTabSelect`, `handleUtilityFileTabSelect`, plus the `maestro://` deep link `useEffect`. The hook self-sources from sessionStore and uiStore, taking only 3 external deps (setActiveSessionId wrapper, handleResumeSession, inputRef). App.tsx reduced from 3,137 to 3,038 lines (-99 lines). Lint passes (0 new errors; 21 pre-existing errors in App.tsx/MainPanel.tsx/SpecCommandsPanel.tsx from broken `updateSessionWith`/`updateAiTab` imports and missing `setSessions` in hook dep interfaces). Tests match baseline (24,537 passed, 42 pre-existing failures, 107 pending).
 
 ### 6. Extract auto-run / batch processing coordination
 
