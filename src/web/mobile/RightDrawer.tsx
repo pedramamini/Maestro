@@ -730,6 +730,7 @@ function AutoRunTabContent({
 	);
 
 	const isRunning = autoRunState?.isRunning ?? false;
+	const isStopped = isStopping || autoRunState?.isStopping;
 	const totalTasks = autoRunState?.totalTasks;
 	const completedTasks = autoRunState?.completedTasks ?? 0;
 	const currentTaskIndex = autoRunState?.currentTaskIndex ?? 0;
@@ -808,8 +809,7 @@ function AutoRunTabContent({
 			{isRunning && (
 				<div
 					style={{
-						backgroundColor:
-							isStopping || autoRunState?.isStopping ? colors.warning : colors.accent,
+						backgroundColor: isStopped ? colors.warning : colors.accent,
 						padding: '10px 14px',
 						borderRadius: '10px',
 						display: 'flex',
@@ -822,7 +822,7 @@ function AutoRunTabContent({
 						style={{
 							fontSize: '13px',
 							fontWeight: 700,
-							color: isStopping || autoRunState?.isStopping ? colors.warning : colors.accent,
+							color: isStopped ? colors.warning : colors.accent,
 							backgroundColor: 'white',
 							padding: '4px 10px',
 							borderRadius: '12px',
@@ -879,26 +879,23 @@ function AutoRunTabContent({
 					{/* Stop button */}
 					<button
 						onClick={handleStop}
-						disabled={isStopping || autoRunState?.isStopping}
+						disabled={isStopped}
 						style={{
 							padding: '6px 12px',
 							borderRadius: '8px',
-							backgroundColor:
-								isStopping || autoRunState?.isStopping ? `${colors.error}60` : colors.error,
+							backgroundColor: isStopped ? `${colors.error}60` : colors.error,
 							border: 'none',
 							color: 'white',
 							fontSize: '12px',
 							fontWeight: 600,
-							cursor: isStopping || autoRunState?.isStopping ? 'not-allowed' : 'pointer',
+							cursor: isStopped ? 'not-allowed' : 'pointer',
 							touchAction: 'manipulation',
 							WebkitTapHighlightColor: 'transparent',
 							flexShrink: 0,
 						}}
-						aria-label={
-							isStopping || autoRunState?.isStopping ? 'Stopping Auto Run' : 'Stop Auto Run'
-						}
+						aria-label={isStopped ? 'Stopping Auto Run' : 'Stop Auto Run'}
 					>
-						{isStopping || autoRunState?.isStopping ? 'Stopping...' : 'Stop'}
+						{isStopped ? 'Stopping...' : 'Stop'}
 					</button>
 				</div>
 			)}

@@ -115,5 +115,3 @@ export function DocumentCard({ document, onTap }: DocumentCardProps) {
 		</button>
 	);
 }
-
-export default DocumentCard;
