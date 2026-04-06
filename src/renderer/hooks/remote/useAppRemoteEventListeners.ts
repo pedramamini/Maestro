@@ -10,7 +10,7 @@
 import React from 'react';
 import { useEventListener } from '../utils/useEventListener';
 import { generateId } from '../../utils/ids';
-import { updateSessionWith, useSessionStore } from '../../stores/sessionStore';
+import { useSessionStore } from '../../stores/sessionStore';
 import { useSettingsStore } from '../../stores/settingsStore';
 import { PLAYBOOKS_DIR } from '../../../shared/maestro-paths';
 import type { Session, AITab, ToolType, Group, BatchRunConfig } from '../../types';
@@ -423,7 +423,7 @@ export function useAppRemoteEventListeners(deps: UseAppRemoteEventListenersDeps)
 				autoRunFolderPath: `${cwd}/${PLAYBOOKS_DIR}`,
 			};
 
-			setSessions((prev) => [...prev, newSession]);
+			setSessions((prev: Session[]) => [...prev, newSession]);
 			setActiveSessionId(newId);
 			(window as any).maestro.stats.recordSessionCreated({
 				sessionId: newId,
@@ -468,7 +468,7 @@ export function useAppRemoteEventListeners(deps: UseAppRemoteEventListenersDeps)
 		}
 
 		// Remove session
-		setSessions((prev) => {
+		setSessions((prev: Session[]) => {
 			const filtered = prev.filter((s) => s.id !== sessionId);
 			if (filtered.length > 0 && useSessionStore.getState().activeSessionId === sessionId) {
 				setActiveSessionId(filtered[0].id);
@@ -486,7 +486,7 @@ export function useAppRemoteEventListeners(deps: UseAppRemoteEventListenersDeps)
 			return;
 		}
 
-		setSessions((prev) => {
+		setSessions((prev: Session[]) => {
 			const updated = prev.map((s) => (s.id === sessionId ? { ...s, name: newName } : s));
 			const sess = updated.find((s) => s.id === sessionId);
 			// Persist name to agent storage
@@ -523,9 +523,14 @@ export function useAppRemoteEventListeners(deps: UseAppRemoteEventListenersDeps)
 			return;
 		}
 		const newGroupId = `group-${generateId()}`;
-		setGroups((prev) => [
+		setGroups((prev: Group[]) => [
 			...prev,
-			{ id: newGroupId, name: trimmed.toUpperCase(), emoji: emoji || '\u{1F4C2}', collapsed: false },
+			{
+				id: newGroupId,
+				name: trimmed.toUpperCase(),
+				emoji: emoji || '\u{1F4C2}',
+				collapsed: false,
+			},
 		]);
 		window.maestro.process.sendRemoteCreateGroupResponse(responseChannel, { id: newGroupId });
 	});
@@ -538,7 +543,7 @@ export function useAppRemoteEventListeners(deps: UseAppRemoteEventListenersDeps)
 			window.maestro.process.sendRemoteRenameGroupResponse(responseChannel, false);
 			return;
 		}
-		setGroups((prev) =>
+		setGroups((prev: Group[]) =>
 			prev.map((g) => (g.id === groupId ? { ...g, name: trimmed.toUpperCase() } : g))
 		);
 		window.maestro.process.sendRemoteRenameGroupResponse(responseChannel, true);
@@ -548,11 +553,11 @@ export function useAppRemoteEventListeners(deps: UseAppRemoteEventListenersDeps)
 	useEventListener('maestro:remoteDeleteGroup', (e: Event) => {
 		const { groupId } = (e as CustomEvent).detail;
 		// Ungroup sessions in this group
-		setSessions((prev) =>
+		setSessions((prev: Session[]) =>
 			prev.map((s) => (s.groupId === groupId ? { ...s, groupId: undefined } : s))
 		);
 		// Remove the group
-		setGroups((prev) => prev.filter((g) => g.id !== groupId));
+		setGroups((prev: Group[]) => prev.filter((g) => g.id !== groupId));
 	});
 
 	// Handle remote move session to group from web interface
@@ -563,7 +568,9 @@ export function useAppRemoteEventListeners(deps: UseAppRemoteEventListenersDeps)
 			window.maestro.process.sendRemoteMoveSessionToGroupResponse(responseChannel, false);
 			return;
 		}
-		updateSessionWith(sessionId, (s) => ({ ...s, groupId: groupId || undefined }));
+		setSessions((prev: Session[]) =>
+			prev.map((s) => (s.id === sessionId ? { ...s, groupId: groupId || undefined } : s))
+		);
 		window.maestro.process.sendRemoteMoveSessionToGroupResponse(responseChannel, true);
 	});
 }
