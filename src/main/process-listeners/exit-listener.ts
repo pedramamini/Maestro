@@ -473,6 +473,11 @@ export function setupExitListener(
 		// We do not rely on early-return ordering of the branches above — this
 		// guard is load-bearing and must stay here.
 		if (isGroupChatSession) {
+			logger.warn(
+				'[GroupChat] Dropping unrecognized group-chat session exit (containment guard)',
+				'ProcessListener',
+				{ sessionId, exitCode: code }
+			);
 			return;
 		}
 

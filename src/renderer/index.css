@@ -72,7 +72,7 @@ textarea::placeholder {
 }
 
 *::-webkit-scrollbar-track {
-	background: transparent;
+	background-color: var(--scrollbar-track, transparent);
 }
 
 *::-webkit-scrollbar-thumb {
@@ -91,12 +91,13 @@ textarea::placeholder {
 }
 
 *::-webkit-scrollbar-corner {
-	background: transparent;
+	background-color: var(--scrollbar-track, transparent);
 }
 
 /* Firefox / non-WebKit fallback */
 * {
-	scrollbar-color: var(--scrollbar-thumb, rgba(255, 255, 255, 0.15)) transparent;
+	scrollbar-color: var(--scrollbar-thumb, rgba(255, 255, 255, 0.15))
+		var(--scrollbar-track, transparent);
 	scrollbar-width: thin;
 }
 
@@ -107,7 +108,7 @@ textarea::placeholder {
 }
 
 .scrollbar-thin::-webkit-scrollbar-track {
-	background: transparent;
+	background-color: var(--scrollbar-track, transparent);
 }
 
 .scrollbar-thin::-webkit-scrollbar-thumb {

@@ -32,6 +32,7 @@ import {
 	AlertTriangle,
 } from 'lucide-react';
 import { useSettings } from '../../../hooks';
+import { captureException } from '../../../utils/sentry';
 import type { Theme, ShellInfo } from '../../../types';
 import {
 	formatMetaKey,
@@ -162,6 +163,11 @@ export function GeneralTab({ theme, isOpen }: GeneralTabProps) {
 			.catch((err) => {
 				console.error('Failed to load sync settings:', err);
 				setSyncError('Failed to load storage settings');
+				// Report to Sentry so production failures surface in dashboards
+				// rather than only being visible in the user's console.
+				captureException(err instanceof Error ? err : new Error(String(err)), {
+					extra: { context: 'GeneralTab: failed to load sync/storage settings' },
+				});
 			});
 	}, [isOpen]);
 

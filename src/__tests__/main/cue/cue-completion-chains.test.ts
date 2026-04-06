@@ -231,6 +231,9 @@ describe('CueEngine completion chains', () => {
 			const request = (deps.onCueRun as ReturnType<typeof vi.fn>).mock.calls[0][0];
 			const event = request.event as CueEvent;
 			expect(event.payload.sourceOutput).toBe('');
+			expect(event.payload.outputTruncated).toBe(false);
+
+			engine.stop();
 		});
 	});
 

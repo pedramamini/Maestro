@@ -81,13 +81,18 @@ describe('group-chat/session-parser', () => {
 				expect(result!.participantName).toBe('Claude');
 			});
 
-			it('should strip -recovery suffix from participant name', () => {
+			it('does NOT strip -recovery in the UUID branch (recovery is timestamp-only in production)', () => {
+				// Production never combines a UUID suffix with -recovery (see
+				// group-chat-router.respawnParticipantWithRecovery, which uses
+				// Date.now()). The UUID branch must therefore take the participant
+				// name verbatim — stripping -recovery here would silently truncate
+				// a legitimate name that happens to end with "-recovery".
 				const result = parseParticipantSessionId(
 					`group-chat-${GC_ID}-participant-Claude-recovery-${GC_ID_2}`
 				);
 				expect(result).not.toBeNull();
 				expect(result!.groupChatId).toBe(GC_ID);
-				expect(result!.participantName).toBe('Claude');
+				expect(result!.participantName).toBe('Claude-recovery');
 			});
 		});
 

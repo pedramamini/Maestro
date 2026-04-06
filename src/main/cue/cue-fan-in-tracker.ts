@@ -102,6 +102,14 @@ export function createCueFanInTracker(deps: CueFanInDeps): CueFanInTracker {
 			}
 		}
 
+		// Total counted against the deduped resolved-ID set, not the raw
+		// `sources` array. The user's yaml may list the same session by both
+		// name and id ('Agent A' + 'agent-a'); the dedupe pass collapses those
+		// to a single entry, and the log totals must reflect the deduped count
+		// or they'll show misleading "1/2 completed" messages when the fan-in
+		// is actually waiting for 0 more sources.
+		const totalSources = resolvedSourceIds.size;
+
 		if ((sub.fan_in_timeout_on_fail ?? settings.timeout_on_fail) === 'continue') {
 			// Fire with partial data
 			const completions = [...tracker.values()];
@@ -119,7 +127,7 @@ export function createCueFanInTracker(deps: CueFanInDeps): CueFanInTracker {
 				completions.length > 0 ? Math.max(...completions.map((c) => c.chainDepth)) : 0;
 			deps.onLog(
 				'cue',
-				`[CUE] Fan-in "${sub.name}" timed out (continue mode) — firing with ${completedNames.length}/${sources.length} sources`
+				`[CUE] Fan-in "${sub.name}" timed out (continue mode) — firing with ${completedNames.length}/${totalSources} sources`
 			);
 			deps.dispatchSubscription(
 				ownerSessionId,
@@ -133,7 +141,7 @@ export function createCueFanInTracker(deps: CueFanInDeps): CueFanInTracker {
 			fanInTrackers.delete(key);
 			deps.onLog(
 				'cue',
-				`[CUE] Fan-in "${sub.name}" timed out (break mode) — ${completedNames.length}/${sources.length} completed, waiting for: ${timedOutSources.join(', ')}`
+				`[CUE] Fan-in "${sub.name}" timed out (break mode) — ${completedNames.length}/${totalSources} completed, waiting for: ${timedOutSources.join(', ')}`
 			);
 		}
 	}

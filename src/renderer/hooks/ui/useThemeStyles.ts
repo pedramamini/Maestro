@@ -134,7 +134,13 @@ export function useThemeStyles(deps: UseThemeStylesDeps): UseThemeStylesReturn {
 		};
 
 		const handleScroll = (e: Event) => {
-			const target = e.target as Element;
+			// Scroll events can fire on Document and Window in addition to
+			// Elements (e.g. body scrolling), neither of which has classList.
+			// Guard with instanceof so non-Element targets are safely ignored
+			// instead of crashing the listener with `Cannot read properties of
+			// undefined (reading 'contains')`.
+			const target = e.target;
+			if (!(target instanceof Element)) return;
 			if (!target.classList.contains('scrollbar-thin')) return;
 
 			// Batch updates via requestAnimationFrame to avoid blocking scroll
