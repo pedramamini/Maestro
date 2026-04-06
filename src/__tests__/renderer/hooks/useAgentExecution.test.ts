@@ -3,24 +3,19 @@ import { renderHook, act, waitFor } from '@testing-library/react';
 import { useAgentExecution } from '../../../renderer/hooks';
 import type { Session, AITab, UsageStats, QueuedItem } from '../../../renderer/types';
 import { createMockSession as _createMockSession } from '../../helpers/mockSession';
+import { createMockAITab } from '../../helpers/mockTab';
+import { updateSessionWith } from '../../../renderer/stores/sessionStore';
 
-const createMockTab = (overrides: Partial<AITab> = {}): AITab => ({
-	id: 'tab-1',
-	agentSessionId: null,
-	name: null,
-	starred: false,
-	logs: [],
-	inputValue: '',
-	stagedImages: [],
-	createdAt: 1700000000000,
-	state: 'idle',
-	saveToHistory: true,
-	...overrides,
+vi.mock('../../../renderer/stores/sessionStore', async () => {
+	const actual = await vi.importActual('../../../renderer/stores/sessionStore');
+	return { ...actual, updateSessionWith: vi.fn() };
 });
+
+const mockUpdateSessionWith = vi.mocked(updateSessionWith);
 
 // Wrapper: old factory had isGitRepo: true and a pre-populated AI tab
 const createMockSession = (overrides: Partial<Session> = {}): Session => {
-	const baseTab = createMockTab();
+	const baseTab = createMockAITab();
 	return _createMockSession({
 		isGitRepo: true,
 		aiTabs: [baseTab],
@@ -98,17 +93,15 @@ describe('useAgentExecution', () => {
 	it('spawns a batch agent and returns aggregated results', async () => {
 		const session = createMockSession({
 			state: 'busy',
-			aiTabs: [createMockTab({ state: 'busy' })],
+			aiTabs: [createMockAITab({ state: 'busy' })],
 		});
 		const sessionsRef = { current: [session] };
-		const setSessions = vi.fn();
 		const processQueuedItemRef = { current: null };
 
 		const { result } = renderHook(() =>
 			useAgentExecution({
 				activeSession: session,
 				sessionsRef,
-				setSessions,
 				processQueuedItemRef,
 				setFlashNotification: vi.fn(),
 				setSuccessFlashNotification: vi.fn(),
@@ -152,9 +145,10 @@ describe('useAgentExecution', () => {
 			},
 		});
 
-		expect(setSessions).toHaveBeenCalledOnce();
-		const updateFn = setSessions.mock.calls[0][0];
-		const [updatedSession] = updateFn([session]);
+		expect(mockUpdateSessionWith).toHaveBeenCalledOnce();
+		expect(mockUpdateSessionWith).toHaveBeenCalledWith(session.id, expect.any(Function));
+		const updaterFn = mockUpdateSessionWith.mock.calls[0][1];
+		const updatedSession = updaterFn(session);
 
 		expect(updatedSession.state).toBe('idle');
 		expect(updatedSession.aiTabs[0].state).toBe('idle');
@@ -165,7 +159,6 @@ describe('useAgentExecution', () => {
 		(window as any).maestro.platform = 'win32';
 		const session = createMockSession({ toolType: 'codex' });
 		const sessionsRef = { current: [session] };
-		const setSessions = vi.fn();
 		const processQueuedItemRef = { current: null };
 
 		vi.mocked(window.maestro.agents.get).mockResolvedValueOnce({
@@ -179,7 +172,6 @@ describe('useAgentExecution', () => {
 			useAgentExecution({
 				activeSession: session,
 				sessionsRef,
-				setSessions,
 				processQueuedItemRef,
 				setFlashNotification: vi.fn(),
 				setSuccessFlashNotification: vi.fn(),
@@ -211,7 +203,6 @@ describe('useAgentExecution', () => {
 			sessionSshRemoteConfig: { enabled: true, remoteId: 'remote-1' },
 		});
 		const sessionsRef = { current: [session] };
-		const setSessions = vi.fn();
 		const processQueuedItemRef = { current: null };
 
 		vi.mocked(window.maestro.agents.get).mockResolvedValueOnce({
@@ -225,7 +216,6 @@ describe('useAgentExecution', () => {
 			useAgentExecution({
 				activeSession: session,
 				sessionsRef,
-				setSessions,
 				processQueuedItemRef,
 				setFlashNotification: vi.fn(),
 				setSuccessFlashNotification: vi.fn(),
@@ -262,14 +252,12 @@ describe('useAgentExecution', () => {
 			executionQueue: [queuedItem],
 		});
 		const sessionsRef = { current: [session] };
-		const setSessions = vi.fn();
 		const processQueuedItemRef = { current: vi.fn().mockResolvedValue(undefined) };
 
 		const { result } = renderHook(() =>
 			useAgentExecution({
 				activeSession: session,
 				sessionsRef,
-				setSessions,
 				processQueuedItemRef,
 				setFlashNotification: vi.fn(),
 				setSuccessFlashNotification: vi.fn(),
@@ -297,8 +285,8 @@ describe('useAgentExecution', () => {
 		await spawnPromise;
 		vi.runAllTimers();
 
-		const updateFn = setSessions.mock.calls[0][0];
-		const [updatedSession] = updateFn([session]);
+		const updaterFn = mockUpdateSessionWith.mock.calls[0][1];
+		const updatedSession = updaterFn(session);
 
 		expect(updatedSession.state).toBe('busy');
 		expect(updatedSession.executionQueue).toHaveLength(0);
@@ -309,14 +297,12 @@ describe('useAgentExecution', () => {
 	it('spawns a background synopsis session with resume ID', async () => {
 		const session = createMockSession();
 		const sessionsRef = { current: [session] };
-		const setSessions = vi.fn();
 		const processQueuedItemRef = { current: null };
 
 		const { result } = renderHook(() =>
 			useAgentExecution({
 				activeSession: session,
 				sessionsRef,
-				setSessions,
 				processQueuedItemRef,
 				setFlashNotification: vi.fn(),
 				setSuccessFlashNotification: vi.fn(),
@@ -381,7 +367,6 @@ describe('useAgentExecution', () => {
 			useAgentExecution({
 				activeSession: session,
 				sessionsRef,
-				setSessions: vi.fn(),
 				processQueuedItemRef: { current: null },
 				setFlashNotification,
 				setSuccessFlashNotification,
@@ -410,13 +395,11 @@ describe('useAgentExecution', () => {
 
 		const session = createMockSession();
 		const sessionsRef = { current: [session] };
-		const setSessions = vi.fn();
 
 		const { result } = renderHook(() =>
 			useAgentExecution({
 				activeSession: session,
 				sessionsRef,
-				setSessions,
 				processQueuedItemRef: { current: null },
 				setFlashNotification: vi.fn(),
 				setSuccessFlashNotification: vi.fn(),
@@ -466,7 +449,6 @@ describe('useAgentExecution', () => {
 			useAgentExecution({
 				activeSession: session,
 				sessionsRef,
-				setSessions: vi.fn(),
 				processQueuedItemRef: { current: null },
 				setFlashNotification: vi.fn(),
 				setSuccessFlashNotification: vi.fn(),

@@ -82,13 +82,13 @@ updateAiTab(sessionId, tabId, (tab) => ({ ...tab, someField: newValue }));
 
 ### 5. Eliminate setSessions prop-drilling (14+ sites)
 
-- [ ] Convert `useTabHandlers.ts` (68 setSessions calls) to use store directly
-- [ ] Convert `useWizardHandlers.ts` (25 calls) to use store directly
-- [ ] Convert `App.tsx` (22 calls) to use store directly
-- [ ] Convert `useInputProcessing.ts` (18 calls) to use store directly
-- [ ] Convert `useFileTreeManagement.ts` (18 calls) to use store directly
-- [ ] Convert `useRemoteIntegration.ts` (17 calls) to use store directly
-- [ ] Convert remaining prop-drilling sites to import helpers from `sessionStore` directly
+- [x] Convert `useTabHandlers.ts` (68 setSessions calls) to use store directly - Already used `useSessionStore.getState().setSessions` directly (no prop-drilling)
+- [x] Convert `useWizardHandlers.ts` (25 calls) to use store directly - Already used `useMemo(() => useSessionStore.getState(), [])` directly (no prop-drilling)
+- [x] Convert `App.tsx` (22 calls) to use store directly - Removed `setSessions` from 10 hook call arguments (useRemoteIntegration, useCliActivityMonitoring, useAgentExecution, useAgentSessionManagement, useAutoRunHandlers, useFileTreeManagement, plus keyboardHandlerRef). App.tsx retains its own `setSessions` for 4 inline useEffects.
+- [x] Convert `useInputProcessing.ts` (18 calls) to use store directly - Removed from deps interface; all `setSessions` calls replaced with `updateSessionWith`/`updateAiTab`
+- [x] Convert `useFileTreeManagement.ts` (18 calls) to use store directly - Already used `updateSessionWith`; removed dead `setSessions` from deps and 4 dependency arrays
+- [x] Convert `useRemoteIntegration.ts` (17 calls) to use store directly - Already used `updateSessionWith`; removed dead `setSessions` from deps and 4 dependency arrays
+- [x] Convert remaining prop-drilling sites to import helpers from `sessionStore` directly - Converted 25+ files total: useInputSync, useCliActivityMonitoring, useSessionNavigation, useGroupManagement, useActivityTracker, useAppHandlers (removed dead handler params), useAgentExecution, useAgentSessionManagement, useSendToAgent, useMergeSession, useAutoRunHandlers, FileExplorerPanel, QuickActionsModal, RenameSessionModal, RightPanel, AppModals (AppUtilityModals, AppSessionModals), useRightPanelProps, useFileExplorerEffects, useMergeTransferHandlers. Also removed `setSessions` parameter from `toggleFolder`/`expandAllFolders`/`collapseAllFolders` handler signatures. Updated 6 test files (375 tests, all passing). `rtk npm run lint` passes.
 
 ### 6. Remove setSessions from component prop interfaces
 

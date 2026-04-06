@@ -284,7 +284,6 @@ describe('FileExplorerPanel', () => {
 			collapseAllFolders: vi.fn(),
 			updateSessionWorkingDirectory: vi.fn().mockResolvedValue(undefined),
 			refreshFileTree: vi.fn().mockResolvedValue({ totalChanges: 0 }),
-			setSessions: vi.fn(),
 			onAutoRefreshChange: vi.fn(),
 			onShowFlash: vi.fn(),
 			showHiddenFiles: false,
@@ -432,21 +431,14 @@ describe('FileExplorerPanel', () => {
 			render(<FileExplorerPanel {...defaultProps} />);
 			const expandButton = screen.getByTitle('Expand all folders');
 			fireEvent.click(expandButton);
-			expect(defaultProps.expandAllFolders).toHaveBeenCalledWith(
-				'session-1',
-				expect.any(Object),
-				expect.any(Function)
-			);
+			expect(defaultProps.expandAllFolders).toHaveBeenCalledWith('session-1', expect.any(Object));
 		});
 
 		it('calls collapseAllFolders when collapse button is clicked', () => {
 			render(<FileExplorerPanel {...defaultProps} />);
 			const collapseButton = screen.getByTitle('Collapse all folders');
 			fireEvent.click(collapseButton);
-			expect(defaultProps.collapseAllFolders).toHaveBeenCalledWith(
-				'session-1',
-				expect.any(Function)
-			);
+			expect(defaultProps.collapseAllFolders).toHaveBeenCalledWith('session-1');
 		});
 	});
 
@@ -975,11 +967,7 @@ describe('FileExplorerPanel', () => {
 			const srcFolder = screen.getByText('src');
 			fireEvent.click(srcFolder);
 
-			expect(defaultProps.toggleFolder).toHaveBeenCalledWith(
-				'src',
-				'session-1',
-				expect.any(Function)
-			);
+			expect(defaultProps.toggleFolder).toHaveBeenCalledWith('src', 'session-1');
 		});
 
 		it('sets selectedFileIndex and activeFocus when clicking a file', () => {
@@ -1385,11 +1373,7 @@ describe('FileExplorerPanel', () => {
 			const srcFolder = screen.getByText('src');
 			fireEvent.click(srcFolder);
 
-			expect(defaultProps.toggleFolder).toHaveBeenCalledWith(
-				'src',
-				'session-1',
-				expect.any(Function)
-			);
+			expect(defaultProps.toggleFolder).toHaveBeenCalledWith('src', 'session-1');
 		});
 
 		it('builds correct path for nested folders', () => {
@@ -1399,11 +1383,7 @@ describe('FileExplorerPanel', () => {
 			const utilsFolder = screen.getByText('utils');
 			fireEvent.click(utilsFolder);
 
-			expect(defaultProps.toggleFolder).toHaveBeenCalledWith(
-				'src/utils',
-				'session-1',
-				expect.any(Function)
-			);
+			expect(defaultProps.toggleFolder).toHaveBeenCalledWith('src/utils', 'session-1');
 		});
 	});
 

@@ -34,8 +34,6 @@ export interface HistoryEntryInput {
 export interface UseAgentSessionManagementDeps {
 	/** Current active session (null if none selected) */
 	activeSession: Session | null;
-	/** Session state setter */
-	setSessions: React.Dispatch<React.SetStateAction<Session[]>>;
 	/** Agent session ID setter */
 	setActiveAgentSessionId: (id: string | null) => void;
 	/** Agent sessions browser open state setter */
@@ -84,7 +82,6 @@ export function useAgentSessionManagement(
 ): UseAgentSessionManagementReturn {
 	const {
 		activeSession,
-		setSessions,
 		setActiveAgentSessionId,
 		setAgentSessionsOpen,
 		rightPanelRef,
@@ -274,25 +271,21 @@ export function useAgentSessionManagement(
 
 				// Update the session and switch to AI mode
 				// IMPORTANT: Use functional update to get fresh session state and avoid race conditions
-				setSessions((prev) =>
-					prev.map((s) => {
-						if (s.id !== activeSession.id) return s;
+				updateSessionWith(activeSession.id, (s) => {
+					// Create tab from the CURRENT session state (not stale closure value)
+					const result = createTab(s, {
+						agentSessionId,
+						logs: messages,
+						name,
+						starred: isStarred,
+						usageStats: finalUsageStats,
+						saveToHistory: defaultSaveToHistory,
+						showThinking: defaultShowThinking,
+					});
+					if (!result) return s;
 
-						// Create tab from the CURRENT session state (not stale closure value)
-						const result = createTab(s, {
-							agentSessionId,
-							logs: messages,
-							name,
-							starred: isStarred,
-							usageStats: finalUsageStats,
-							saveToHistory: defaultSaveToHistory,
-							showThinking: defaultShowThinking,
-						});
-						if (!result) return s;
-
-						return { ...result.session, activeFileTabId: null, inputMode: 'ai' };
-					})
-				);
+					return { ...result.session, activeFileTabId: null, inputMode: 'ai' };
+				});
 				setActiveAgentSessionId(agentSessionId);
 			} catch (error) {
 				console.error('Failed to resume session:', error);
@@ -303,7 +296,6 @@ export function useAgentSessionManagement(
 			activeSession?.id,
 			activeSession?.aiTabs,
 			activeSession?.toolType,
-			setSessions,
 			setActiveAgentSessionId,
 			defaultSaveToHistory,
 			defaultShowThinking,

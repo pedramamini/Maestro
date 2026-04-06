@@ -399,7 +399,6 @@ export const AppModals = memo(function AppModals(props: AppModalsProps) {
 	const sessions = useSessionStore((s) => s.sessions);
 	const activeSessionId = useSessionStore((s) => s.activeSessionId);
 	const groups = useSessionStore((s) => s.groups);
-	const setSessions = useSessionStore((s) => s.setSessions);
 	const setGroups = useSessionStore((s) => s.setGroups);
 	const activeSession = useMemo(
 		() => sessions.find((s) => s.id === activeSessionId) ?? null,
@@ -803,7 +802,6 @@ export const AppModals = memo(function AppModals(props: AppModalsProps) {
 				renameSessionValue={renameSessionValue}
 				setRenameSessionValue={setRenameSessionValue}
 				onCloseRenameSessionModal={onCloseRenameSessionModal}
-				setSessions={setSessions}
 				renameSessionTargetId={renameSessionTargetId}
 				onAfterRename={onAfterRename}
 				renameTabModalOpen={renameTabModalOpen}
@@ -863,7 +861,6 @@ export const AppModals = memo(function AppModals(props: AppModalsProps) {
 			<AppUtilityModals
 				theme={theme}
 				sessions={sessions}
-				setSessions={setSessions}
 				activeSessionId={activeSessionId}
 				activeSession={activeSession}
 				groups={groups}

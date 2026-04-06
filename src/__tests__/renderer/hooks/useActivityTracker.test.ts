@@ -2,53 +2,43 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
 import { useActivityTracker, UseActivityTrackerReturn } from '../../../renderer/hooks';
 import type { Session } from '../../../renderer/types';
+import { updateSessionWith } from '../../../renderer/stores/sessionStore';
+
+vi.mock('../../../renderer/stores/sessionStore', () => ({
+	updateSessionWith: vi.fn(),
+}));
+
+const mockUpdateSessionWith = vi.mocked(updateSessionWith);
 
 // Constants matching the source file
 const ACTIVITY_TIMEOUT_MS = 60000; // 1 minute of inactivity = idle
 const TICK_INTERVAL_MS = 1000; // Update every second
 const BATCH_UPDATE_INTERVAL_MS = 30000; // Batch updates every 30 seconds
 
-describe('useActivityTracker', () => {
-	let mockSetSessions: ReturnType<typeof vi.fn>;
-	let mockSessions: Session[];
+// Helper to create a mock session for updater testing
+const createMockSessionData = (overrides: Partial<Session> = {}): Session =>
+	({
+		id: 'session-1',
+		name: 'Test Session 1',
+		activeTimeMs: 0,
+		toolType: 'claude-code',
+		state: 'idle',
+		inputMode: 'ai',
+		cwd: '/test',
+		projectRoot: '/test',
+		isGitRepo: false,
+		fileTree: [],
+		fileExplorerExpanded: [],
+		aiLogs: [],
+		shellLogs: [],
+		messageQueue: [],
+		...overrides,
+	}) as Session;
 
+describe('useActivityTracker', () => {
 	beforeEach(() => {
 		vi.useFakeTimers();
-		mockSetSessions = vi.fn();
-		mockSessions = [
-			{
-				id: 'session-1',
-				name: 'Test Session 1',
-				activeTimeMs: 0,
-				toolType: 'claude-code',
-				state: 'idle',
-				inputMode: 'ai',
-				cwd: '/test',
-				projectRoot: '/test',
-				isGitRepo: false,
-				fileTree: [],
-				fileExplorerExpanded: [],
-				aiLogs: [],
-				shellLogs: [],
-				messageQueue: [],
-			} as Session,
-			{
-				id: 'session-2',
-				name: 'Test Session 2',
-				activeTimeMs: 5000,
-				toolType: 'claude-code',
-				state: 'idle',
-				inputMode: 'ai',
-				cwd: '/test2',
-				projectRoot: '/test2',
-				isGitRepo: false,
-				fileTree: [],
-				fileExplorerExpanded: [],
-				aiLogs: [],
-				shellLogs: [],
-				messageQueue: [],
-			} as Session,
-		];
+		mockUpdateSessionWith.mockClear();
 	});
 
 	afterEach(() => {
@@ -58,26 +48,25 @@ describe('useActivityTracker', () => {
 
 	describe('initial state', () => {
 		it('returns onActivity callback', () => {
-			const { result } = renderHook(() => useActivityTracker('session-1', mockSetSessions));
+			const { result } = renderHook(() => useActivityTracker('session-1'));
 
 			expect(result.current).toBeDefined();
 			expect(result.current.onActivity).toBeDefined();
 			expect(typeof result.current.onActivity).toBe('function');
 		});
 
-		it('does not call setSessions on mount', () => {
-			renderHook(() => useActivityTracker('session-1', mockSetSessions));
+		it('does not call updateSessionWith on mount', () => {
+			renderHook(() => useActivityTracker('session-1'));
 
-			expect(mockSetSessions).not.toHaveBeenCalled();
+			expect(mockUpdateSessionWith).not.toHaveBeenCalled();
 		});
 	});
 
 	describe('onActivity callback', () => {
 		it('onActivity is stable (same reference across renders)', () => {
-			const { result, rerender } = renderHook(
-				({ sessionId }) => useActivityTracker(sessionId, mockSetSessions),
-				{ initialProps: { sessionId: 'session-1' } }
-			);
+			const { result, rerender } = renderHook(({ sessionId }) => useActivityTracker(sessionId), {
+				initialProps: { sessionId: 'session-1' },
+			});
 
 			const firstOnActivity = result.current.onActivity;
 			rerender({ sessionId: 'session-1' });
@@ -86,7 +75,7 @@ describe('useActivityTracker', () => {
 		});
 
 		it('onActivity marks user as active', () => {
-			const { result } = renderHook(() => useActivityTracker('session-1', mockSetSessions));
+			const { result } = renderHook(() => useActivityTracker('session-1'));
 
 			// Call onActivity
 			act(() => {
@@ -98,14 +87,14 @@ describe('useActivityTracker', () => {
 				vi.advanceTimersByTime(BATCH_UPDATE_INTERVAL_MS);
 			});
 
-			// Should have called setSessions with accumulated time
-			expect(mockSetSessions).toHaveBeenCalled();
+			// Should have called updateSessionWith with accumulated time
+			expect(mockUpdateSessionWith).toHaveBeenCalled();
 		});
 	});
 
 	describe('time accumulation', () => {
 		it('accumulates time every second when active', () => {
-			const { result } = renderHook(() => useActivityTracker('session-1', mockSetSessions));
+			const { result } = renderHook(() => useActivityTracker('session-1'));
 
 			// Mark as active
 			act(() => {
@@ -118,17 +107,18 @@ describe('useActivityTracker', () => {
 			});
 
 			// Should have accumulated ~30 seconds
-			expect(mockSetSessions).toHaveBeenCalled();
-			const updateFn = mockSetSessions.mock.calls[0][0];
-			const result2 = updateFn(mockSessions);
+			expect(mockUpdateSessionWith).toHaveBeenCalled();
+			expect(mockUpdateSessionWith).toHaveBeenCalledWith('session-1', expect.any(Function));
+			const updaterFn = mockUpdateSessionWith.mock.calls[0][1];
+			const mockSession = createMockSessionData({ id: 'session-1', activeTimeMs: 0 });
+			const updatedSession = updaterFn(mockSession);
 
 			// Session 1 should have accumulated time
-			const session1 = result2.find((s: Session) => s.id === 'session-1');
-			expect(session1.activeTimeMs).toBe(BATCH_UPDATE_INTERVAL_MS);
+			expect(updatedSession.activeTimeMs).toBe(BATCH_UPDATE_INTERVAL_MS);
 		});
 
 		it('does not update state before batch interval', () => {
-			const { result } = renderHook(() => useActivityTracker('session-1', mockSetSessions));
+			const { result } = renderHook(() => useActivityTracker('session-1'));
 
 			// Mark as active
 			act(() => {
@@ -140,12 +130,12 @@ describe('useActivityTracker', () => {
 				vi.advanceTimersByTime(BATCH_UPDATE_INTERVAL_MS - 1000);
 			});
 
-			// Should not have called setSessions yet
-			expect(mockSetSessions).not.toHaveBeenCalled();
+			// Should not have called updateSessionWith yet
+			expect(mockUpdateSessionWith).not.toHaveBeenCalled();
 		});
 
 		it('does batch update at correct interval', () => {
-			const { result } = renderHook(() => useActivityTracker('session-1', mockSetSessions));
+			const { result } = renderHook(() => useActivityTracker('session-1'));
 
 			// Mark as active
 			act(() => {
@@ -157,11 +147,11 @@ describe('useActivityTracker', () => {
 				vi.advanceTimersByTime(BATCH_UPDATE_INTERVAL_MS);
 			});
 
-			expect(mockSetSessions).toHaveBeenCalledTimes(1);
+			expect(mockUpdateSessionWith).toHaveBeenCalledTimes(1);
 		});
 
 		it('accumulates time correctly over multiple batch intervals', () => {
-			const { result } = renderHook(() => useActivityTracker('session-1', mockSetSessions));
+			const { result } = renderHook(() => useActivityTracker('session-1'));
 
 			// Mark as active
 			act(() => {
@@ -173,7 +163,7 @@ describe('useActivityTracker', () => {
 				vi.advanceTimersByTime(BATCH_UPDATE_INTERVAL_MS);
 			});
 
-			expect(mockSetSessions).toHaveBeenCalledTimes(1);
+			expect(mockUpdateSessionWith).toHaveBeenCalledTimes(1);
 
 			// Keep activity alive
 			act(() => {
@@ -185,11 +175,11 @@ describe('useActivityTracker', () => {
 				vi.advanceTimersByTime(BATCH_UPDATE_INTERVAL_MS);
 			});
 
-			expect(mockSetSessions).toHaveBeenCalledTimes(2);
+			expect(mockUpdateSessionWith).toHaveBeenCalledTimes(2);
 		});
 
 		it('only updates the active session', () => {
-			const { result } = renderHook(() => useActivityTracker('session-1', mockSetSessions));
+			const { result } = renderHook(() => useActivityTracker('session-1'));
 
 			// Mark as active
 			act(() => {
@@ -201,20 +191,18 @@ describe('useActivityTracker', () => {
 				vi.advanceTimersByTime(BATCH_UPDATE_INTERVAL_MS);
 			});
 
-			const updateFn = mockSetSessions.mock.calls[0][0];
-			const updatedSessions = updateFn(mockSessions);
+			// updateSessionWith is called with the active session ID only
+			expect(mockUpdateSessionWith).toHaveBeenCalledWith('session-1', expect.any(Function));
+			const updaterFn = mockUpdateSessionWith.mock.calls[0][1];
+			const mockSession = createMockSessionData({ id: 'session-1', activeTimeMs: 0 });
+			const updatedSession = updaterFn(mockSession);
 
 			// Session 1 should be updated
-			expect(updatedSessions[0].activeTimeMs).toBe(BATCH_UPDATE_INTERVAL_MS);
-			// Session 2 should remain unchanged
-			expect(updatedSessions[1].activeTimeMs).toBe(5000);
+			expect(updatedSession.activeTimeMs).toBe(BATCH_UPDATE_INTERVAL_MS);
 		});
 
 		it('preserves existing activeTimeMs when updating', () => {
-			// Session with existing time
-			const sessionsWithTime = [{ ...mockSessions[0], activeTimeMs: 10000 }, mockSessions[1]];
-
-			const { result } = renderHook(() => useActivityTracker('session-1', mockSetSessions));
+			const { result } = renderHook(() => useActivityTracker('session-1'));
 
 			// Mark as active
 			act(() => {
@@ -226,20 +214,17 @@ describe('useActivityTracker', () => {
 				vi.advanceTimersByTime(BATCH_UPDATE_INTERVAL_MS);
 			});
 
-			const updateFn = mockSetSessions.mock.calls[0][0];
-			const updatedSessions = updateFn(sessionsWithTime);
+			const updaterFn = mockUpdateSessionWith.mock.calls[0][1];
+			// Session with existing time
+			const sessionWithTime = createMockSessionData({ id: 'session-1', activeTimeMs: 10000 });
+			const updatedSession = updaterFn(sessionWithTime);
 
 			// Should add to existing time
-			expect(updatedSessions[0].activeTimeMs).toBe(10000 + BATCH_UPDATE_INTERVAL_MS);
+			expect(updatedSession.activeTimeMs).toBe(10000 + BATCH_UPDATE_INTERVAL_MS);
 		});
 
 		it('handles undefined activeTimeMs gracefully', () => {
-			const sessionsWithUndefined = [
-				{ ...mockSessions[0], activeTimeMs: undefined },
-				mockSessions[1],
-			];
-
-			const { result } = renderHook(() => useActivityTracker('session-1', mockSetSessions));
+			const { result } = renderHook(() => useActivityTracker('session-1'));
 
 			act(() => {
 				result.current.onActivity();
@@ -249,17 +234,21 @@ describe('useActivityTracker', () => {
 				vi.advanceTimersByTime(BATCH_UPDATE_INTERVAL_MS);
 			});
 
-			const updateFn = mockSetSessions.mock.calls[0][0];
-			const updatedSessions = updateFn(sessionsWithUndefined);
+			const updaterFn = mockUpdateSessionWith.mock.calls[0][1];
+			const sessionWithUndefined = createMockSessionData({
+				id: 'session-1',
+				activeTimeMs: undefined as any,
+			});
+			const updatedSession = updaterFn(sessionWithUndefined);
 
 			// Should treat undefined as 0
-			expect(updatedSessions[0].activeTimeMs).toBe(BATCH_UPDATE_INTERVAL_MS);
+			expect(updatedSession.activeTimeMs).toBe(BATCH_UPDATE_INTERVAL_MS);
 		});
 	});
 
 	describe('activity timeout', () => {
 		it('stops accumulating time after inactivity timeout', () => {
-			const { result } = renderHook(() => useActivityTracker('session-1', mockSetSessions));
+			const { result } = renderHook(() => useActivityTracker('session-1'));
 
 			// Mark as active
 			act(() => {
@@ -271,19 +260,19 @@ describe('useActivityTracker', () => {
 				vi.advanceTimersByTime(ACTIVITY_TIMEOUT_MS + 1000);
 			});
 
-			mockSetSessions.mockClear();
+			mockUpdateSessionWith.mockClear();
 
 			// Advance another batch interval without new activity
 			act(() => {
 				vi.advanceTimersByTime(BATCH_UPDATE_INTERVAL_MS);
 			});
 
-			// Should not have called setSessions (user is idle)
-			expect(mockSetSessions).not.toHaveBeenCalled();
+			// Should not have called updateSessionWith (user is idle)
+			expect(mockUpdateSessionWith).not.toHaveBeenCalled();
 		});
 
 		it('resumes tracking after new activity', () => {
-			const { result } = renderHook(() => useActivityTracker('session-1', mockSetSessions));
+			const { result } = renderHook(() => useActivityTracker('session-1'));
 
 			// Mark as active
 			act(() => {
@@ -295,7 +284,7 @@ describe('useActivityTracker', () => {
 				vi.advanceTimersByTime(ACTIVITY_TIMEOUT_MS + 1000);
 			});
 
-			mockSetSessions.mockClear();
+			mockUpdateSessionWith.mockClear();
 
 			// New activity
 			act(() => {
@@ -308,28 +297,27 @@ describe('useActivityTracker', () => {
 			});
 
 			// Should have resumed tracking
-			expect(mockSetSessions).toHaveBeenCalled();
+			expect(mockUpdateSessionWith).toHaveBeenCalled();
 		});
 
 		it('does not accumulate time when user is initially idle', () => {
-			renderHook(() => useActivityTracker('session-1', mockSetSessions));
+			renderHook(() => useActivityTracker('session-1'));
 
 			// Advance time without any activity
 			act(() => {
 				vi.advanceTimersByTime(BATCH_UPDATE_INTERVAL_MS * 2);
 			});
 
-			// Should not have called setSessions
-			expect(mockSetSessions).not.toHaveBeenCalled();
+			// Should not have called updateSessionWith
+			expect(mockUpdateSessionWith).not.toHaveBeenCalled();
 		});
 	});
 
 	describe('session changes', () => {
 		it('flushes accumulated time on session change', () => {
-			const { result, rerender } = renderHook(
-				({ sessionId }) => useActivityTracker(sessionId, mockSetSessions),
-				{ initialProps: { sessionId: 'session-1' as string | null } }
-			);
+			const { result, rerender } = renderHook(({ sessionId }) => useActivityTracker(sessionId), {
+				initialProps: { sessionId: 'session-1' as string | null },
+			});
 
 			// Mark as active and accumulate some time
 			act(() => {
@@ -345,33 +333,33 @@ describe('useActivityTracker', () => {
 			rerender({ sessionId: 'session-2' });
 
 			// Should flush accumulated time for session-1
-			expect(mockSetSessions).toHaveBeenCalled();
-			const updateFn = mockSetSessions.mock.calls[0][0];
-			const updatedSessions = updateFn(mockSessions);
+			expect(mockUpdateSessionWith).toHaveBeenCalled();
+			expect(mockUpdateSessionWith).toHaveBeenCalledWith('session-1', expect.any(Function));
+			const updaterFn = mockUpdateSessionWith.mock.calls[0][1];
+			const mockSession = createMockSessionData({ id: 'session-1', activeTimeMs: 0 });
+			const updatedSession = updaterFn(mockSession);
 
 			// Session 1 should have the flushed accumulated time
-			expect(updatedSessions[0].activeTimeMs).toBeGreaterThan(0);
-			expect(updatedSessions[0].activeTimeMs).toBeLessThanOrEqual(15000);
+			expect(updatedSession.activeTimeMs).toBeGreaterThan(0);
+			expect(updatedSession.activeTimeMs).toBeLessThanOrEqual(15000);
 		});
 
 		it('does not flush when no time accumulated', () => {
-			const { rerender } = renderHook(
-				({ sessionId }) => useActivityTracker(sessionId, mockSetSessions),
-				{ initialProps: { sessionId: 'session-1' as string | null } }
-			);
+			const { rerender } = renderHook(({ sessionId }) => useActivityTracker(sessionId), {
+				initialProps: { sessionId: 'session-1' as string | null },
+			});
 
 			// No activity, change session
 			rerender({ sessionId: 'session-2' });
 
-			// Should not have called setSessions
-			expect(mockSetSessions).not.toHaveBeenCalled();
+			// Should not have called updateSessionWith
+			expect(mockUpdateSessionWith).not.toHaveBeenCalled();
 		});
 
 		it('handles null session ID', () => {
-			const { result, rerender } = renderHook(
-				({ sessionId }) => useActivityTracker(sessionId, mockSetSessions),
-				{ initialProps: { sessionId: null as string | null } }
-			);
+			const { result, rerender } = renderHook(({ sessionId }) => useActivityTracker(sessionId), {
+				initialProps: { sessionId: null as string | null },
+			});
 
 			// Mark as active
 			act(() => {
@@ -383,15 +371,14 @@ describe('useActivityTracker', () => {
 				vi.advanceTimersByTime(BATCH_UPDATE_INTERVAL_MS);
 			});
 
-			// Should not call setSessions when sessionId is null
-			expect(mockSetSessions).not.toHaveBeenCalled();
+			// Should not call updateSessionWith when sessionId is null
+			expect(mockUpdateSessionWith).not.toHaveBeenCalled();
 		});
 
 		it('does not flush on unmount when sessionId is null', () => {
-			const { result, unmount } = renderHook(
-				({ sessionId }) => useActivityTracker(sessionId, mockSetSessions),
-				{ initialProps: { sessionId: null as string | null } }
-			);
+			const { result, unmount } = renderHook(({ sessionId }) => useActivityTracker(sessionId), {
+				initialProps: { sessionId: null as string | null },
+			});
 
 			// Mark as active and accumulate time
 			act(() => {
@@ -405,16 +392,14 @@ describe('useActivityTracker', () => {
 			// Unmount
 			unmount();
 
-			// Should not call setSessions
-			expect(mockSetSessions).not.toHaveBeenCalled();
+			// Should not call updateSessionWith
+			expect(mockUpdateSessionWith).not.toHaveBeenCalled();
 		});
 	});
 
 	describe('cleanup on unmount', () => {
 		it('flushes accumulated time on unmount', () => {
-			const { result, unmount } = renderHook(() =>
-				useActivityTracker('session-1', mockSetSessions)
-			);
+			const { result, unmount } = renderHook(() => useActivityTracker('session-1'));
 
 			// Mark as active and accumulate time
 			act(() => {
@@ -429,15 +414,13 @@ describe('useActivityTracker', () => {
 			unmount();
 
 			// Should flush accumulated time
-			expect(mockSetSessions).toHaveBeenCalled();
+			expect(mockUpdateSessionWith).toHaveBeenCalled();
 		});
 
 		it('clears interval on unmount', () => {
 			const clearIntervalSpy = vi.spyOn(global, 'clearInterval');
 
-			const { result, unmount } = renderHook(() =>
-				useActivityTracker('session-1', mockSetSessions)
-			);
+			const { result, unmount } = renderHook(() => useActivityTracker('session-1'));
 
 			// Trigger activity to start the interval
 			act(() => {
@@ -454,7 +437,7 @@ describe('useActivityTracker', () => {
 		it('registers passive activity listeners on mount', () => {
 			const addEventListenerSpy = vi.spyOn(window, 'addEventListener');
 
-			renderHook(() => useActivityTracker('session-1', mockSetSessions));
+			renderHook(() => useActivityTracker('session-1'));
 
 			// Activity listeners are registered through the shared activity bus
 			// with passive option (they never call preventDefault, so browser can optimize)
@@ -479,7 +462,7 @@ describe('useActivityTracker', () => {
 		it('removes activity listeners on unmount', () => {
 			const removeEventListenerSpy = vi.spyOn(window, 'removeEventListener');
 
-			const { unmount } = renderHook(() => useActivityTracker('session-1', mockSetSessions));
+			const { unmount } = renderHook(() => useActivityTracker('session-1'));
 
 			unmount();
 
@@ -492,7 +475,7 @@ describe('useActivityTracker', () => {
 		});
 
 		it('responds to keydown events', () => {
-			renderHook(() => useActivityTracker('session-1', mockSetSessions));
+			renderHook(() => useActivityTracker('session-1'));
 
 			// Simulate keydown
 			act(() => {
@@ -504,11 +487,11 @@ describe('useActivityTracker', () => {
 				vi.advanceTimersByTime(BATCH_UPDATE_INTERVAL_MS);
 			});
 
-			expect(mockSetSessions).toHaveBeenCalled();
+			expect(mockUpdateSessionWith).toHaveBeenCalled();
 		});
 
 		it('responds to mousedown events', () => {
-			renderHook(() => useActivityTracker('session-1', mockSetSessions));
+			renderHook(() => useActivityTracker('session-1'));
 
 			act(() => {
 				window.dispatchEvent(new MouseEvent('mousedown'));
@@ -518,14 +501,14 @@ describe('useActivityTracker', () => {
 				vi.advanceTimersByTime(BATCH_UPDATE_INTERVAL_MS);
 			});
 
-			expect(mockSetSessions).toHaveBeenCalled();
+			expect(mockUpdateSessionWith).toHaveBeenCalled();
 		});
 
 		// Note: mousemove is intentionally NOT listened to for CPU performance
 		// (it fires hundreds of times per second during cursor movement)
 
 		it('responds to wheel events', () => {
-			renderHook(() => useActivityTracker('session-1', mockSetSessions));
+			renderHook(() => useActivityTracker('session-1'));
 
 			act(() => {
 				window.dispatchEvent(new WheelEvent('wheel'));
@@ -535,11 +518,11 @@ describe('useActivityTracker', () => {
 				vi.advanceTimersByTime(BATCH_UPDATE_INTERVAL_MS);
 			});
 
-			expect(mockSetSessions).toHaveBeenCalled();
+			expect(mockUpdateSessionWith).toHaveBeenCalled();
 		});
 
 		it('responds to touchstart events', () => {
-			renderHook(() => useActivityTracker('session-1', mockSetSessions));
+			renderHook(() => useActivityTracker('session-1'));
 
 			act(() => {
 				window.dispatchEvent(new TouchEvent('touchstart'));
@@ -549,11 +532,11 @@ describe('useActivityTracker', () => {
 				vi.advanceTimersByTime(BATCH_UPDATE_INTERVAL_MS);
 			});
 
-			expect(mockSetSessions).toHaveBeenCalled();
+			expect(mockUpdateSessionWith).toHaveBeenCalled();
 		});
 
 		it('multiple event types all mark activity', () => {
-			renderHook(() => useActivityTracker('session-1', mockSetSessions));
+			renderHook(() => useActivityTracker('session-1'));
 
 			// Fire different events
 			act(() => {
@@ -582,16 +565,15 @@ describe('useActivityTracker', () => {
 			});
 
 			// Should trigger batch update
-			expect(mockSetSessions).toHaveBeenCalled();
+			expect(mockUpdateSessionWith).toHaveBeenCalled();
 		});
 	});
 
 	describe('edge cases', () => {
 		it('handles rapid session switches', () => {
-			const { result, rerender } = renderHook(
-				({ sessionId }) => useActivityTracker(sessionId, mockSetSessions),
-				{ initialProps: { sessionId: 'session-1' as string | null } }
-			);
+			const { result, rerender } = renderHook(({ sessionId }) => useActivityTracker(sessionId), {
+				initialProps: { sessionId: 'session-1' as string | null },
+			});
 
 			act(() => {
 				result.current.onActivity();
@@ -603,14 +585,13 @@ describe('useActivityTracker', () => {
 			rerender({ sessionId: 'session-2' });
 
 			// Should handle without errors
-			expect(mockSetSessions).toBeDefined();
+			expect(mockUpdateSessionWith).toBeDefined();
 		});
 
 		it('handles session ID changing from null to valid', () => {
-			const { result, rerender } = renderHook(
-				({ sessionId }) => useActivityTracker(sessionId, mockSetSessions),
-				{ initialProps: { sessionId: null as string | null } }
-			);
+			const { result, rerender } = renderHook(({ sessionId }) => useActivityTracker(sessionId), {
+				initialProps: { sessionId: null as string | null },
+			});
 
 			// Change to valid session
 			rerender({ sessionId: 'session-1' });
@@ -626,14 +607,13 @@ describe('useActivityTracker', () => {
 			});
 
 			// Should track for the new session
-			expect(mockSetSessions).toHaveBeenCalled();
+			expect(mockUpdateSessionWith).toHaveBeenCalled();
 		});
 
 		it('handles session ID changing from valid to null', () => {
-			const { result, rerender } = renderHook(
-				({ sessionId }) => useActivityTracker(sessionId, mockSetSessions),
-				{ initialProps: { sessionId: 'session-1' as string | null } }
-			);
+			const { result, rerender } = renderHook(({ sessionId }) => useActivityTracker(sessionId), {
+				initialProps: { sessionId: 'session-1' as string | null },
+			});
 
 			act(() => {
 				result.current.onActivity();
@@ -647,11 +627,11 @@ describe('useActivityTracker', () => {
 			rerender({ sessionId: null });
 
 			// Should have flushed accumulated time
-			expect(mockSetSessions).toHaveBeenCalled();
+			expect(mockUpdateSessionWith).toHaveBeenCalled();
 		});
 
-		it('handles setSessions being called with current state', () => {
-			const { result } = renderHook(() => useActivityTracker('session-1', mockSetSessions));
+		it('handles updateSessionWith being called with current state', () => {
+			const { result } = renderHook(() => useActivityTracker('session-1'));
 
 			act(() => {
 				result.current.onActivity();
@@ -661,40 +641,39 @@ describe('useActivityTracker', () => {
 				vi.advanceTimersByTime(BATCH_UPDATE_INTERVAL_MS);
 			});
 
-			// Verify the update function works correctly
-			expect(mockSetSessions).toHaveBeenCalled();
-			const updateFn = mockSetSessions.mock.calls[0][0];
-			expect(typeof updateFn).toBe('function');
+			// Verify updateSessionWith was called with sessionId and updater
+			expect(mockUpdateSessionWith).toHaveBeenCalled();
+			expect(mockUpdateSessionWith).toHaveBeenCalledWith('session-1', expect.any(Function));
+			const updaterFn = mockUpdateSessionWith.mock.calls[0][1];
+			expect(typeof updaterFn).toBe('function');
 
-			// Test with empty sessions array
-			const emptyResult = updateFn([]);
-			expect(emptyResult).toEqual([]);
+			// Test updater with a session
+			const mockSession = createMockSessionData({ id: 'session-1', activeTimeMs: 0 });
+			const updatedSession = updaterFn(mockSession);
+			expect(updatedSession.activeTimeMs).toBe(BATCH_UPDATE_INTERVAL_MS);
 		});
 
-		it('handles session not found in array', () => {
-			const { result } = renderHook(() =>
-				useActivityTracker('non-existent-session', mockSetSessions)
+		it('calls updateSessionWith with the correct session ID', () => {
+			const { result } = renderHook(() => useActivityTracker('non-existent-session'));
+
+			act(() => {
+				result.current.onActivity();
+			});
+
+			act(() => {
+				vi.advanceTimersByTime(BATCH_UPDATE_INTERVAL_MS);
+			});
+
+			expect(mockUpdateSessionWith).toHaveBeenCalled();
+			// updateSessionWith is called with the session ID passed to the hook
+			expect(mockUpdateSessionWith).toHaveBeenCalledWith(
+				'non-existent-session',
+				expect.any(Function)
 			);
-
-			act(() => {
-				result.current.onActivity();
-			});
-
-			act(() => {
-				vi.advanceTimersByTime(BATCH_UPDATE_INTERVAL_MS);
-			});
-
-			expect(mockSetSessions).toHaveBeenCalled();
-			const updateFn = mockSetSessions.mock.calls[0][0];
-			const updatedSessions = updateFn(mockSessions);
-
-			// Sessions should be unchanged (no matching session)
-			expect(updatedSessions[0].activeTimeMs).toBe(0);
-			expect(updatedSessions[1].activeTimeMs).toBe(5000);
 		});
 
 		it('handles very long activity periods', () => {
-			const { result } = renderHook(() => useActivityTracker('session-1', mockSetSessions));
+			const { result } = renderHook(() => useActivityTracker('session-1'));
 
 			// Keep activity going for a long time with periodic refreshes
 			for (let i = 0; i < 10; i++) {
@@ -707,12 +686,12 @@ describe('useActivityTracker', () => {
 				});
 			}
 
-			// Should have called setSessions 10 times
-			expect(mockSetSessions).toHaveBeenCalledTimes(10);
+			// Should have called updateSessionWith 10 times
+			expect(mockUpdateSessionWith).toHaveBeenCalledTimes(10);
 		});
 
 		it('handles continuous activity without gaps', () => {
-			const { result } = renderHook(() => useActivityTracker('session-1', mockSetSessions));
+			const { result } = renderHook(() => useActivityTracker('session-1'));
 
 			// Activity every second for 60 seconds
 			for (let i = 0; i < 60; i++) {
@@ -723,13 +702,13 @@ describe('useActivityTracker', () => {
 			}
 
 			// Should have 2 batch updates (at 30s and 60s)
-			expect(mockSetSessions).toHaveBeenCalledTimes(2);
+			expect(mockUpdateSessionWith).toHaveBeenCalledTimes(2);
 		});
 	});
 
 	describe('return type', () => {
 		it('matches UseActivityTrackerReturn interface', () => {
-			const { result } = renderHook(() => useActivityTracker('session-1', mockSetSessions));
+			const { result } = renderHook(() => useActivityTracker('session-1'));
 
 			const returnValue: UseActivityTrackerReturn = result.current;
 
@@ -742,7 +721,7 @@ describe('useActivityTracker', () => {
 		it('tick interval is 1 second', () => {
 			const setIntervalSpy = vi.spyOn(global, 'setInterval');
 
-			const { result } = renderHook(() => useActivityTracker('session-1', mockSetSessions));
+			const { result } = renderHook(() => useActivityTracker('session-1'));
 
 			// Interval only starts on activity (CPU optimization)
 			act(() => {
@@ -753,7 +732,7 @@ describe('useActivityTracker', () => {
 		});
 
 		it('accumulates exactly TICK_INTERVAL_MS per tick', () => {
-			const { result } = renderHook(() => useActivityTracker('session-1', mockSetSessions));
+			const { result } = renderHook(() => useActivityTracker('session-1'));
 
 			act(() => {
 				result.current.onActivity();
@@ -764,16 +743,17 @@ describe('useActivityTracker', () => {
 				vi.advanceTimersByTime(TICK_INTERVAL_MS * 30);
 			});
 
-			expect(mockSetSessions).toHaveBeenCalled();
-			const updateFn = mockSetSessions.mock.calls[0][0];
-			const updatedSessions = updateFn(mockSessions);
+			expect(mockUpdateSessionWith).toHaveBeenCalled();
+			const updaterFn = mockUpdateSessionWith.mock.calls[0][1];
+			const mockSession = createMockSessionData({ id: 'session-1', activeTimeMs: 0 });
+			const updatedSession = updaterFn(mockSession);
 
 			// Should have accumulated exactly 30 seconds
-			expect(updatedSessions[0].activeTimeMs).toBe(TICK_INTERVAL_MS * 30);
+			expect(updatedSession.activeTimeMs).toBe(TICK_INTERVAL_MS * 30);
 		});
 
 		it('resets accumulated time after batch update', () => {
-			const { result } = renderHook(() => useActivityTracker('session-1', mockSetSessions));
+			const { result } = renderHook(() => useActivityTracker('session-1'));
 
 			act(() => {
 				result.current.onActivity();
@@ -784,9 +764,10 @@ describe('useActivityTracker', () => {
 				vi.advanceTimersByTime(BATCH_UPDATE_INTERVAL_MS);
 			});
 
-			const firstUpdateFn = mockSetSessions.mock.calls[0][0];
-			const firstResult = firstUpdateFn(mockSessions);
-			expect(firstResult[0].activeTimeMs).toBe(BATCH_UPDATE_INTERVAL_MS);
+			const firstUpdaterFn = mockUpdateSessionWith.mock.calls[0][1];
+			const mockSession = createMockSessionData({ id: 'session-1', activeTimeMs: 0 });
+			const firstResult = firstUpdaterFn(mockSession);
+			expect(firstResult.activeTimeMs).toBe(BATCH_UPDATE_INTERVAL_MS);
 
 			// Keep active
 			act(() => {
@@ -798,18 +779,18 @@ describe('useActivityTracker', () => {
 				vi.advanceTimersByTime(BATCH_UPDATE_INTERVAL_MS);
 			});
 
-			const secondUpdateFn = mockSetSessions.mock.calls[1][0];
-			// Use updated sessions from first call
-			const secondResult = secondUpdateFn(firstResult);
+			const secondUpdaterFn = mockUpdateSessionWith.mock.calls[1][1];
+			// Use updated session from first call
+			const secondResult = secondUpdaterFn(firstResult);
 
 			// Should have added another 30 seconds
-			expect(secondResult[0].activeTimeMs).toBe(BATCH_UPDATE_INTERVAL_MS * 2);
+			expect(secondResult.activeTimeMs).toBe(BATCH_UPDATE_INTERVAL_MS * 2);
 		});
 	});
 
 	describe('activity detection edge cases', () => {
 		it('marks activity on exact timeout boundary', () => {
-			const { result } = renderHook(() => useActivityTracker('session-1', mockSetSessions));
+			const { result } = renderHook(() => useActivityTracker('session-1'));
 
 			act(() => {
 				result.current.onActivity();
@@ -821,10 +802,10 @@ describe('useActivityTracker', () => {
 			});
 
 			// Should have accumulated time
-			expect(mockSetSessions).toHaveBeenCalled();
+			expect(mockUpdateSessionWith).toHaveBeenCalled();
 
 			// Clear and test at boundary
-			mockSetSessions.mockClear();
+			mockUpdateSessionWith.mockClear();
 
 			// New activity just before timeout expires
 			act(() => {
@@ -841,11 +822,11 @@ describe('useActivityTracker', () => {
 			});
 
 			// Should still be tracking
-			expect(mockSetSessions).toHaveBeenCalled();
+			expect(mockUpdateSessionWith).toHaveBeenCalled();
 		});
 
 		it('becomes idle exactly at timeout', () => {
-			const { result } = renderHook(() => useActivityTracker('session-1', mockSetSessions));
+			const { result } = renderHook(() => useActivityTracker('session-1'));
 
 			act(() => {
 				result.current.onActivity();
@@ -856,7 +837,7 @@ describe('useActivityTracker', () => {
 				vi.advanceTimersByTime(BATCH_UPDATE_INTERVAL_MS);
 			});
 
-			mockSetSessions.mockClear();
+			mockUpdateSessionWith.mockClear();
 
 			// Advance to exactly at timeout (no new activity)
 			act(() => {
@@ -868,8 +849,8 @@ describe('useActivityTracker', () => {
 				vi.advanceTimersByTime(BATCH_UPDATE_INTERVAL_MS);
 			});
 
-			// Should not call setSessions when idle
-			expect(mockSetSessions).not.toHaveBeenCalled();
+			// Should not call updateSessionWith when idle
+			expect(mockUpdateSessionWith).not.toHaveBeenCalled();
 		});
 	});
 });

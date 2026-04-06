@@ -1,4 +1,4 @@
-import React, { useRef } from 'react';
+import { useRef } from 'react';
 import type { Theme, Session } from '../types';
 import { updateSessionWith } from '../stores/sessionStore';
 import { MODAL_PRIORITIES } from '../constants/modalPriorities';
@@ -11,7 +11,6 @@ interface RenameSessionModalProps {
 	setValue: (value: string) => void;
 	onClose: () => void;
 	sessions: Session[];
-	setSessions: React.Dispatch<React.SetStateAction<Session[]>>;
 	activeSessionId: string;
 	/** Optional: specific session ID to rename (overrides activeSessionId) */
 	targetSessionId?: string;
@@ -26,7 +25,6 @@ export function RenameSessionModal(props: RenameSessionModalProps) {
 		setValue,
 		onClose,
 		sessions,
-		setSessions,
 		activeSessionId,
 		targetSessionId,
 		onAfterRename,

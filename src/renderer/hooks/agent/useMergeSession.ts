@@ -29,7 +29,9 @@ import { ContextGroomingService, contextGroomingService } from '../../services/c
 import { extractTabContext } from '../../utils/contextExtractor';
 import { createMergedSession, getActiveTab } from '../../utils/tabHelpers';
 import { generateId } from '../../utils/ids';
+import { updateAiTab, useSessionStore } from '../../stores/sessionStore';
 import { useOperationStore, selectIsAnyMerging } from '../../stores/operationStore';
+import { estimateTokensFromLogs } from '../../../shared/formatters';
 import type { MergeState, TabMergeState } from '../../stores/operationStore';
 
 // Re-export types from the canonical store location
@@ -40,15 +42,6 @@ export type { MergeState, TabMergeState } from '../../stores/operationStore';
  * Default: 100,000 tokens (safe for most models)
  */
 const MAX_CONTEXT_TOKENS_WARNING = 100000;
-
-/**
- * Estimate token count from log entries
- * Uses a simple heuristic: ~4 characters per token (average for English text)
- */
-function estimateTokensFromLogs(logs: { text: string }[]): number {
-	const totalChars = logs.reduce((sum, log) => sum + (log.text?.length || 0), 0);
-	return Math.round(totalChars / 4);
-}
 
 /**
  * Request to merge two sessions/tabs
@@ -548,8 +541,6 @@ export interface MergeSessionCreatedInfo {
 export interface UseMergeSessionWithSessionsDeps {
 	/** All sessions in the app */
 	sessions: Session[];
-	/** Session setter for updating app state */
-	setSessions: React.Dispatch<React.SetStateAction<Session[]>>;
 	/** Active tab ID for per-tab state tracking */
 	activeTabId?: string;
 	/** Callback after merge creates a new session. Receives session info for notification purposes. */
@@ -591,14 +582,13 @@ export interface UseMergeSessionWithSessionsResult extends UseMergeSessionResult
  *   cancelMerge,
  * } = useMergeSessionWithSessions({
  *   sessions,
- *   setSessions,
  *   onSessionCreated: (id) => setActiveSessionId(id),
  * });
  */
 export function useMergeSessionWithSessions(
 	deps: UseMergeSessionWithSessionsDeps
 ): UseMergeSessionWithSessionsResult {
-	const { sessions, setSessions, activeTabId, onSessionCreated, onMergeComplete } = deps;
+	const { sessions, activeTabId, onSessionCreated, onMergeComplete } = deps;
 	const baseHook = useMergeSession(activeTabId);
 
 	/**
@@ -675,7 +665,7 @@ export function useMergeSessionWithSessions(
 						});
 
 						// Add new session to state
-						setSessions((prev) => [...prev, newSession]);
+						useSessionStore.getState().setSessions((prev) => [...prev, newSession]);
 
 						// Log merge operation to history
 						const sourceNames = [
@@ -752,28 +742,15 @@ export function useMergeSessionWithSessions(
 					// Prepare an introductory message to send with the merged context
 					const introMessage = `I'm merging context from another session ("${sourceName}") into this conversation. Please review the context below and let me know you're ready to continue.`;
 
-					setSessions((prev) =>
-						prev.map((session) => {
-							if (session.id !== result.targetSessionId) return session;
-
-							return {
-								...session,
-								aiTabs: session.aiTabs.map((tab) => {
-									if (tab.id !== result.targetTabId) return tab;
-
-									// Add a visible log entry, set pendingMergedContext to inject into the AI message,
-									// and set autoSendOnActivate to immediately send the context to the agent
-									return {
-										...tab,
-										logs: [...tab.logs, mergeLogEntry],
-										pendingMergedContext: formattedMergedContext,
-										inputValue: introMessage,
-										autoSendOnActivate: true,
-									};
-								}),
-							};
-						})
-					);
+					updateAiTab(result.targetSessionId!, result.targetTabId!, (tab) => ({
+						// Add a visible log entry, set pendingMergedContext to inject into the AI message,
+						// and set autoSendOnActivate to immediately send the context to the agent
+						...tab,
+						logs: [...tab.logs, mergeLogEntry],
+						pendingMergedContext: formattedMergedContext,
+						inputValue: introMessage,
+						autoSendOnActivate: true,
+					}));
 
 					// Log merge operation to history
 					try {
@@ -805,7 +782,7 @@ export function useMergeSessionWithSessions(
 
 			return result;
 		},
-		[sessions, setSessions, onSessionCreated, onMergeComplete, baseHook]
+		[sessions, onSessionCreated, onMergeComplete, baseHook]
 	);
 
 	return {

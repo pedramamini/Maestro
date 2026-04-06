@@ -42,7 +42,6 @@ const GitLogViewer = lazy(() =>
 export interface AppUtilityModalsProps {
 	theme: Theme;
 	sessions: Session[];
-	setSessions: React.Dispatch<React.SetStateAction<Session[]>>;
 	activeSessionId: string;
 	activeSession: Session | null;
 	groups: Group[];
@@ -262,7 +261,6 @@ export interface AppUtilityModalsProps {
 export const AppUtilityModals = memo(function AppUtilityModals({
 	theme,
 	sessions,
-	setSessions,
 	activeSessionId,
 	activeSession,
 	groups,
@@ -433,7 +431,6 @@ export const AppUtilityModals = memo(function AppUtilityModals({
 				<QuickActionsModal
 					theme={theme}
 					sessions={sessions}
-					setSessions={setSessions}
 					activeSessionId={activeSessionId}
 					groups={groups}
 					setGroups={setGroups}

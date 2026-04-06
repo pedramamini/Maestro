@@ -68,7 +68,6 @@ export interface AppSessionModalsProps {
 	renameSessionValue: string;
 	setRenameSessionValue: (value: string) => void;
 	onCloseRenameSessionModal: () => void;
-	setSessions: React.Dispatch<React.SetStateAction<Session[]>>;
 	renameSessionTargetId: string | null;
 	onAfterRename?: () => void;
 
@@ -115,7 +114,6 @@ export const AppSessionModals = memo(function AppSessionModals({
 	renameSessionValue,
 	setRenameSessionValue,
 	onCloseRenameSessionModal,
-	setSessions,
 	renameSessionTargetId,
 	onAfterRename,
 	// RenameTabModal
@@ -184,7 +182,6 @@ export const AppSessionModals = memo(function AppSessionModals({
 					setValue={setRenameSessionValue}
 					onClose={onCloseRenameSessionModal}
 					sessions={sessions}
-					setSessions={setSessions}
 					activeSessionId={activeSessionId}
 					targetSessionId={renameSessionTargetId || undefined}
 					onAfterRename={onAfterRename}

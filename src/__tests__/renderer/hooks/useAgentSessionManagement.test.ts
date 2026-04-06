@@ -56,7 +56,6 @@ describe('useAgentSessionManagement', () => {
 		const { result } = renderHook(() =>
 			useAgentSessionManagement({
 				activeSession,
-				setSessions: vi.fn(),
 				setActiveAgentSessionId: vi.fn(),
 				setAgentSessionsOpen: vi.fn(),
 				rightPanelRef,
@@ -108,7 +107,6 @@ describe('useAgentSessionManagement', () => {
 		const { result } = renderHook(() =>
 			useAgentSessionManagement({
 				activeSession,
-				setSessions: vi.fn(),
 				setActiveAgentSessionId: vi.fn(),
 				setAgentSessionsOpen: vi.fn(),
 				rightPanelRef,
@@ -145,13 +143,11 @@ describe('useAgentSessionManagement', () => {
 			activeTabId: 'tab-1',
 			projectRoot: '/test/project',
 		});
-		const setSessions = vi.fn();
 		const setActiveAgentSessionId = vi.fn();
 
 		const { result } = renderHook(() =>
 			useAgentSessionManagement({
 				activeSession,
-				setSessions,
 				setActiveAgentSessionId,
 				setAgentSessionsOpen: vi.fn(),
 				rightPanelRef: createRightPanelRef(),
@@ -191,7 +187,6 @@ describe('useAgentSessionManagement', () => {
 		const { result } = renderHook(() =>
 			useAgentSessionManagement({
 				activeSession,
-				setSessions: vi.fn(),
 				setActiveAgentSessionId: vi.fn(),
 				setAgentSessionsOpen: vi.fn(),
 				rightPanelRef: createRightPanelRef(),
@@ -220,8 +215,6 @@ describe('useAgentSessionManagement', () => {
 			activeFileTabId: 'file-tab-1',
 			projectRoot: '/test/project',
 		});
-		const setSessions = vi.fn();
-
 		window.maestro.agentSessions.read = vi.fn().mockResolvedValue({
 			messages: [
 				{ type: 'user', content: 'Hello', timestamp: '2024-01-01T00:00:00.000Z', uuid: 'msg-1' },
@@ -233,7 +226,6 @@ describe('useAgentSessionManagement', () => {
 		const { result } = renderHook(() =>
 			useAgentSessionManagement({
 				activeSession,
-				setSessions,
 				setActiveAgentSessionId: vi.fn(),
 				setAgentSessionsOpen: vi.fn(),
 				rightPanelRef: createRightPanelRef(),
@@ -245,8 +237,13 @@ describe('useAgentSessionManagement', () => {
 			await result.current.handleResumeSession('agent-new');
 		});
 
-		const updateFn = setSessions.mock.calls[0][0];
-		const [updatedSession] = updateFn([activeSession]);
+		// updateSessionWith calls useSessionStore.setState internally
+		const setStateCalls = vi.mocked(useSessionStore.setState).mock.calls;
+		const lastSetStateFn = setStateCalls[setStateCalls.length - 1][0] as (state: {
+			sessions: Session[];
+		}) => { sessions: Session[] };
+		const updatedState = lastSetStateFn({ sessions: [activeSession] });
+		const updatedSession = updatedState.sessions[0];
 
 		expect(updatedSession.activeFileTabId).toBeNull();
 		expect(updatedSession.inputMode).toBe('ai');
@@ -256,7 +253,6 @@ describe('useAgentSessionManagement', () => {
 		const activeSession = createMockSession({
 			projectRoot: '/test/project',
 		});
-		const setSessions = vi.fn();
 		const setActiveAgentSessionId = vi.fn();
 
 		const messages = [
@@ -282,7 +278,6 @@ describe('useAgentSessionManagement', () => {
 		const { result } = renderHook(() =>
 			useAgentSessionManagement({
 				activeSession,
-				setSessions,
 				setActiveAgentSessionId,
 				setAgentSessionsOpen: vi.fn(),
 				rightPanelRef: createRightPanelRef(),
@@ -303,8 +298,13 @@ describe('useAgentSessionManagement', () => {
 		expect(window.maestro.claude.getSessionOrigins).toHaveBeenCalledOnce();
 		expect(setActiveAgentSessionId).toHaveBeenCalledWith('agent-456');
 
-		const updateFn = setSessions.mock.calls[0][0];
-		const [updatedSession] = updateFn([activeSession]);
+		// updateSessionWith calls useSessionStore.setState internally
+		const setStateCalls = vi.mocked(useSessionStore.setState).mock.calls;
+		const lastSetStateFn = setStateCalls[setStateCalls.length - 1][0] as (state: {
+			sessions: Session[];
+		}) => { sessions: Session[] };
+		const updatedState = lastSetStateFn({ sessions: [activeSession] });
+		const updatedSession = updatedState.sessions[0];
 		const resumedTab = updatedSession.aiTabs.find((tab) => tab.agentSessionId === 'agent-456');
 
 		expect(resumedTab).toBeTruthy();
@@ -330,12 +330,10 @@ describe('useAgentSessionManagement', () => {
 
 	it('skips message fetch when messages are already provided', async () => {
 		const activeSession = createMockSession({ projectRoot: '/test/project' });
-		const setSessions = vi.fn();
 
 		const { result } = renderHook(() =>
 			useAgentSessionManagement({
 				activeSession,
-				setSessions,
 				setActiveAgentSessionId: vi.fn(),
 				setAgentSessionsOpen: vi.fn(),
 				rightPanelRef: createRightPanelRef(),

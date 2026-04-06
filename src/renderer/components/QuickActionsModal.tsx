@@ -14,7 +14,7 @@ import { useListNavigation } from '../hooks';
 import { useUIStore } from '../stores/uiStore';
 import { useSettingsStore } from '../stores/settingsStore';
 import { useFileExplorerStore } from '../stores/fileExplorerStore';
-import { updateSessionWith } from '../stores/sessionStore';
+import { useSessionStore, updateSessionWith } from '../stores/sessionStore';
 import { buildMaestroUrl } from '../utils/buildMaestroUrl';
 
 interface QuickAction {
@@ -28,7 +28,6 @@ interface QuickAction {
 interface QuickActionsModalProps {
 	theme: Theme;
 	sessions: Session[];
-	setSessions: React.Dispatch<React.SetStateAction<Session[]>>;
 	activeSessionId: string;
 	groups: Group[];
 	setGroups: React.Dispatch<React.SetStateAction<Group[]>>;
@@ -137,7 +136,6 @@ export const QuickActionsModal = memo(function QuickActionsModal(props: QuickAct
 	const {
 		theme,
 		sessions,
-		setSessions,
 		activeSessionId,
 		groups,
 		setGroups,
@@ -304,17 +302,13 @@ export const QuickActionsModal = memo(function QuickActionsModal(props: QuickAct
 
 	const handleRenameSession = () => {
 		if (renameValue.trim()) {
-			const updatedSessions = sessions.map((s) =>
-				s.id === activeSessionId ? { ...s, name: renameValue.trim() } : s
-			);
-			setSessions(updatedSessions);
+			updateSessionWith(activeSessionId, (s) => ({ ...s, name: renameValue.trim() }));
 			setQuickActionOpen(false);
 		}
 	};
 
 	const handleMoveToGroup = (groupId: string) => {
-		const updatedSessions = sessions.map((s) => (s.id === activeSessionId ? { ...s, groupId } : s));
-		setSessions(updatedSessions);
+		updateSessionWith(activeSessionId, (s) => ({ ...s, groupId }));
 		setQuickActionOpen(false);
 	};
 
@@ -1296,7 +1290,7 @@ export const QuickActionsModal = memo(function QuickActionsModal(props: QuickAct
 			subtext: 'Clear stuck thinking/busy state for all sessions',
 			action: () => {
 				// Reset all sessions and tabs to idle state
-				setSessions((prev) =>
+				useSessionStore.getState().setSessions((prev) =>
 					prev.map((s) => ({
 						...s,
 						state: 'idle' as const,

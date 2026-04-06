@@ -3,6 +3,7 @@ import type { Session, FocusArea } from '../../types';
 import { shouldOpenExternally, getAllFolderPaths } from '../../utils/fileExplorer';
 import { useModalStore } from '../../stores/modalStore';
 import { useFileExplorerStore } from '../../stores/fileExplorerStore';
+import { updateSessionWith } from '../../stores/sessionStore';
 
 /** Loading state for file preview (shown while fetching remote files) */
 export interface FilePreviewLoading {
@@ -26,8 +27,6 @@ export interface UseAppHandlersDeps {
 	activeSession: Session | null;
 	/** ID of the currently active session */
 	activeSessionId: string | null;
-	/** Session state setter */
-	setSessions: React.Dispatch<React.SetStateAction<Session[]>>;
 	/** Focus area setter */
 	setActiveFocus: React.Dispatch<React.SetStateAction<FocusArea>>;
 	/** Confirmation modal message setter */
@@ -69,22 +68,11 @@ export interface UseAppHandlersReturn {
 
 	// Folder handlers
 	/** Toggle folder expansion in file explorer */
-	toggleFolder: (
-		path: string,
-		sessionId: string,
-		setSessions: React.Dispatch<React.SetStateAction<Session[]>>
-	) => void;
+	toggleFolder: (path: string, sessionId: string) => void;
 	/** Expand all folders in file tree */
-	expandAllFolders: (
-		sessionId: string,
-		session: Session,
-		setSessions: React.Dispatch<React.SetStateAction<Session[]>>
-	) => void;
+	expandAllFolders: (sessionId: string, session: Session) => void;
 	/** Collapse all folders in file tree */
-	collapseAllFolders: (
-		sessionId: string,
-		setSessions: React.Dispatch<React.SetStateAction<Session[]>>
-	) => void;
+	collapseAllFolders: (sessionId: string) => void;
 }
 
 /**
@@ -103,7 +91,6 @@ export function useAppHandlers(deps: UseAppHandlersDeps): UseAppHandlersReturn {
 	const {
 		activeSession,
 		activeSessionId,
-		setSessions,
 		setActiveFocus,
 		setConfirmModalMessage,
 		setConfirmModalOnConfirm,
@@ -252,84 +239,52 @@ export function useAppHandlers(deps: UseAppHandlersDeps): UseAppHandlersReturn {
 	const updateSessionWorkingDirectory = useCallback(async () => {
 		const newPath = await window.maestro.dialog.selectFolder();
 		if (!newPath) return;
+		if (!activeSessionId) return;
 
-		setSessions((prev) =>
-			prev.map((s) => {
-				if (s.id !== activeSessionId) return s;
-				return {
-					...s,
-					cwd: newPath,
-					fullPath: newPath,
-					projectRoot: newPath, // Also update projectRoot so Files tab header stays in sync
-					fileTree: [],
-					fileTreeError: undefined,
-					// Clear ALL runtime SSH state when selecting a new local directory
-					sshRemote: undefined,
-					sshRemoteId: undefined,
-					remoteCwd: undefined,
-					// EXPLICITLY disable SSH for this session
-					// Setting to { enabled: false, remoteId: null } overrides any agent-level SSH config
-					// (undefined would fall back to agent-level config, which might have SSH enabled)
-					sessionSshRemoteConfig: { enabled: false, remoteId: null },
-				};
-			})
-		);
-	}, [activeSessionId, setSessions]);
+		updateSessionWith(activeSessionId, (s) => ({
+			...s,
+			cwd: newPath,
+			fullPath: newPath,
+			projectRoot: newPath, // Also update projectRoot so Files tab header stays in sync
+			fileTree: [],
+			fileTreeError: undefined,
+			// Clear ALL runtime SSH state when selecting a new local directory
+			sshRemote: undefined,
+			sshRemoteId: undefined,
+			remoteCwd: undefined,
+			// EXPLICITLY disable SSH for this session
+			// Setting to { enabled: false, remoteId: null } overrides any agent-level SSH config
+			// (undefined would fall back to agent-level config, which might have SSH enabled)
+			sessionSshRemoteConfig: { enabled: false, remoteId: null },
+		}));
+	}, [activeSessionId]);
 
 	// --- FOLDER HANDLERS ---
 
-	const toggleFolder = useCallback(
-		(
-			path: string,
-			sessionId: string,
-			setSessionsFn: React.Dispatch<React.SetStateAction<Session[]>>
-		) => {
-			setSessionsFn((prev) =>
-				prev.map((s) => {
-					if (s.id !== sessionId) return s;
-					if (!s.fileExplorerExpanded) return s;
-					const expanded = new Set(s.fileExplorerExpanded);
-					if (expanded.has(path)) {
-						expanded.delete(path);
-					} else {
-						expanded.add(path);
-					}
-					return { ...s, fileExplorerExpanded: Array.from(expanded) };
-				})
-			);
-		},
-		[]
-	);
+	const toggleFolder = useCallback((path: string, sessionId: string) => {
+		updateSessionWith(sessionId, (s) => {
+			if (!s.fileExplorerExpanded) return s;
+			const expanded = new Set(s.fileExplorerExpanded);
+			if (expanded.has(path)) {
+				expanded.delete(path);
+			} else {
+				expanded.add(path);
+			}
+			return { ...s, fileExplorerExpanded: Array.from(expanded) };
+		});
+	}, []);
 
-	const expandAllFolders = useCallback(
-		(
-			sessionId: string,
-			_session: Session,
-			setSessionsFn: React.Dispatch<React.SetStateAction<Session[]>>
-		) => {
-			setSessionsFn((prev) =>
-				prev.map((s) => {
-					if (s.id !== sessionId) return s;
-					if (!s.fileTree) return s;
-					const allFolderPaths = getAllFolderPaths(s.fileTree);
-					return { ...s, fileExplorerExpanded: allFolderPaths };
-				})
-			);
-		},
-		[]
-	);
+	const expandAllFolders = useCallback((sessionId: string, _session: Session) => {
+		updateSessionWith(sessionId, (s) => {
+			if (!s.fileTree) return s;
+			const allFolderPaths = getAllFolderPaths(s.fileTree);
+			return { ...s, fileExplorerExpanded: allFolderPaths };
+		});
+	}, []);
 
-	const collapseAllFolders = useCallback(
-		(sessionId: string, setSessionsFn: React.Dispatch<React.SetStateAction<Session[]>>) => {
-			setSessionsFn((prev) =>
-				prev.map((s) => {
-					if (s.id !== sessionId) return s;
-					return { ...s, fileExplorerExpanded: [] };
-				})
-			);
-		},
-		[]
-	);
+	const collapseAllFolders = useCallback((sessionId: string) => {
+		updateSessionWith(sessionId, (s) => ({ ...s, fileExplorerExpanded: [] }));
+	}, []);
 
 	return {
 		// Drag handlers

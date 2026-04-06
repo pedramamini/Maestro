@@ -54,25 +54,11 @@ interface RightPanelProps {
 	fileTreeFilterInputRef: React.RefObject<HTMLInputElement>;
 
 	// File explorer handlers
-	toggleFolder: (
-		path: string,
-		activeSessionId: string,
-		setSessions: React.Dispatch<React.SetStateAction<Session[]>>
-	) => void;
+	toggleFolder: (path: string, activeSessionId: string) => void;
 	handleFileClick: (node: any, path: string, activeSession: Session) => Promise<void>;
-	expandAllFolders: (
-		activeSessionId: string,
-		activeSession: Session,
-		setSessions: React.Dispatch<React.SetStateAction<Session[]>>
-	) => void;
-	collapseAllFolders: (
-		activeSessionId: string,
-		setSessions: React.Dispatch<React.SetStateAction<Session[]>>
-	) => void;
-	updateSessionWorkingDirectory: (
-		activeSessionId: string,
-		setSessions: React.Dispatch<React.SetStateAction<Session[]>>
-	) => Promise<void>;
+	expandAllFolders: (activeSessionId: string, activeSession: Session) => void;
+	collapseAllFolders: (activeSessionId: string) => void;
+	updateSessionWorkingDirectory: () => Promise<void>;
 	refreshFileTree: (sessionId: string) => Promise<FileTreeChanges | undefined>;
 	onAutoRefreshChange?: (interval: number) => void;
 	onShowFlash?: (message: string) => void;
@@ -120,8 +106,6 @@ export const RightPanel = memo(
 		const session = useSessionStore(
 			(s) => s.sessions.find((x) => x.id === s.activeSessionId) ?? null
 		);
-		const setSessions = useSessionStore((s) => s.setSessions);
-
 		const rightPanelOpen = useUIStore((s) => s.rightPanelOpen);
 		const activeRightTab = useUIStore((s) => s.activeRightTab);
 		const activeFocus = useUIStore((s) => s.activeFocus);
@@ -491,7 +475,6 @@ export const RightPanel = memo(
 							collapseAllFolders={collapseAllFolders}
 							updateSessionWorkingDirectory={updateSessionWorkingDirectory}
 							refreshFileTree={refreshFileTree}
-							setSessions={setSessions}
 							onAutoRefreshChange={onAutoRefreshChange}
 							onShowFlash={onShowFlash}
 							showHiddenFiles={showHiddenFiles}

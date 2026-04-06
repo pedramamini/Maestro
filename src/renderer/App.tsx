@@ -160,7 +160,12 @@ import { InputProvider, useInputContext } from './contexts/InputContext';
 import { useGroupChatStore } from './stores/groupChatStore';
 import { useBatchStore } from './stores/batchStore';
 // All session state is read directly from useSessionStore in MaestroConsoleInner.
-import { useSessionStore, selectActiveSession } from './stores/sessionStore';
+import {
+	useSessionStore,
+	selectActiveSession,
+	updateSessionWith,
+	updateAiTab,
+} from './stores/sessionStore';
 // useAgentStore moved to useQueueProcessing hook
 import { InlineWizardProvider, useInlineWizardContext } from './contexts/InlineWizardContext';
 import { ToastContainer } from './components/Toast';
@@ -731,12 +736,10 @@ function MaestroConsoleInner() {
 			setActiveSessionId(sessionId);
 			if (tabId) {
 				// Switch to the specific tab within the session
-				setSessions((prev) =>
-					prev.map((s) => (s.id === sessionId ? { ...s, activeTabId: tabId } : s))
-				);
+				updateSessionWith(sessionId, (s) => ({ ...s, activeTabId: tabId }));
 			}
 		},
-		[setActiveSessionId, setSessions]
+		[setActiveSessionId]
 	);
 
 	// Startup effects (splash, GitHub CLI, Windows warning, gist URLs, beta updates,
@@ -1032,7 +1035,6 @@ function MaestroConsoleInner() {
 	} = useAppHandlers({
 		activeSession,
 		activeSessionId,
-		setSessions,
 		setActiveFocus,
 		setConfirmModalMessage,
 		setConfirmModalOnConfirm,
@@ -1093,7 +1095,6 @@ function MaestroConsoleInner() {
 		isLiveMode,
 		sessionsRef,
 		activeSessionIdRef,
-		setSessions,
 		setActiveSessionId,
 		defaultSaveToHistory,
 		defaultShowThinking,
@@ -1105,9 +1106,7 @@ function MaestroConsoleInner() {
 	});
 
 	// CLI activity monitoring hook - tracks CLI playbook runs and updates session states
-	useCliActivityMonitoring({
-		setSessions,
-	});
+	useCliActivityMonitoring({});
 
 	// Note: Quit confirmation effect moved into useBatchHandlers hook
 
@@ -1254,7 +1253,6 @@ function MaestroConsoleInner() {
 		navigateBack,
 		navigateForward,
 		setActiveSessionId, // Uses the wrapper that also dismisses active group chat
-		setSessions,
 		cyclePositionRef,
 		onNavigateToGroupChat: handleOpenGroupChat,
 	});
@@ -1297,7 +1295,6 @@ function MaestroConsoleInner() {
 	} = useAgentExecution({
 		activeSession,
 		sessionsRef,
-		setSessions,
 		processQueuedItemRef,
 		setFlashNotification,
 		setSuccessFlashNotification,
@@ -1308,7 +1305,6 @@ function MaestroConsoleInner() {
 	const { addHistoryEntry, addHistoryEntryRef, handleJumpToAgentSession, handleResumeSession } =
 		useAgentSessionManagement({
 			activeSession,
-			setSessions,
 			setActiveAgentSessionId,
 			setAgentSessionsOpen,
 			rightPanelRef,
@@ -1359,15 +1355,10 @@ function MaestroConsoleInner() {
 	});
 
 	const handleRemoveQueuedItem = useCallback((itemId: string) => {
-		setSessions((prev) =>
-			prev.map((s) => {
-				if (s.id !== activeSessionIdRef.current) return s;
-				return {
-					...s,
-					executionQueue: s.executionQueue.filter((item) => item.id !== itemId),
-				};
-			})
-		);
+		updateSessionWith(activeSessionIdRef.current, (s) => ({
+			...s,
+			executionQueue: s.executionQueue.filter((item) => item.id !== itemId),
+		}));
 	}, []);
 
 	// toggleBookmark — provided by useSessionCrud hook
@@ -1487,17 +1478,7 @@ function MaestroConsoleInner() {
 		const targetTabId = activeTab.id;
 
 		// Clear the flag first to prevent multiple sends
-		setSessions((prev) =>
-			prev.map((s) => {
-				if (s.id !== targetSessionId) return s;
-				return {
-					...s,
-					aiTabs: s.aiTabs.map((tab) =>
-						tab.id === targetTabId ? { ...tab, autoSendOnActivate: false } : tab
-					),
-				};
-			})
-		);
+		updateAiTab(targetSessionId, targetTabId, (tab) => ({ ...tab, autoSendOnActivate: false }));
 
 		// Trigger the send after a short delay to ensure state is settled
 		// The inputValue and pendingMergedContext are already set on the tab
@@ -1517,7 +1498,7 @@ function MaestroConsoleInner() {
 	}, [activeSession?.id, activeSession?.activeTabId]);
 
 	// Initialize activity tracker for per-session time tracking
-	useActivityTracker(activeSessionId, setSessions);
+	useActivityTracker(activeSessionId);
 
 	// Initialize global hands-on time tracker (persists to settings)
 	// Tracks total time user spends actively using Maestro (5-minute idle timeout)
@@ -1554,7 +1535,6 @@ function MaestroConsoleInner() {
 		handleAutoRunOpenSetup,
 		handleAutoRunCreateDocument,
 	} = useAutoRunHandlers(activeSession, {
-		setSessions,
 		setAutoRunDocumentList,
 		setAutoRunDocumentTree,
 		setAutoRunIsLoadingDocuments,
@@ -1592,11 +1572,7 @@ function MaestroConsoleInner() {
 	const handleAutoRefreshChange = useCallback(
 		(interval: number) => {
 			if (!activeSession) return;
-			setSessions((prev) =>
-				prev.map((s) =>
-					s.id === activeSession.id ? { ...s, fileTreeAutoRefreshInterval: interval } : s
-				)
-			);
+			updateSessionWith(activeSession.id, (s) => ({ ...s, fileTreeAutoRefreshInterval: interval }));
 		},
 		[activeSession]
 	);
@@ -1608,22 +1584,19 @@ function MaestroConsoleInner() {
 			setActiveSessionId(sessionId);
 			// Clear file preview and switch to AI tab (with specific tab if provided)
 			// This ensures clicking a toast always shows the AI terminal, not a file preview
-			setSessions((prev) =>
-				prev.map((s) => {
-					if (s.id !== sessionId) return s;
-					// If a specific tab ID is provided, check if it exists
-					if (tabId && !s.aiTabs?.some((t) => t.id === tabId)) {
-						// Tab doesn't exist, just clear file preview
-						return { ...s, activeFileTabId: null, inputMode: 'ai' };
-					}
-					return {
-						...s,
-						...(tabId && { activeTabId: tabId }),
-						activeFileTabId: null,
-						inputMode: 'ai',
-					};
-				})
-			);
+			updateSessionWith(sessionId, (s) => {
+				// If a specific tab ID is provided, check if it exists
+				if (tabId && !s.aiTabs?.some((t) => t.id === tabId)) {
+					// Tab doesn't exist, just clear file preview
+					return { ...s, activeFileTabId: null, inputMode: 'ai' };
+				}
+				return {
+					...s,
+					...(tabId && { activeTabId: tabId }),
+					activeFileTabId: null,
+					inputMode: 'ai',
+				};
+			});
 		},
 		[setActiveSessionId]
 	);
@@ -1794,7 +1767,6 @@ function MaestroConsoleInner() {
 	const { refreshFileTree, refreshGitFileState, filteredFileTree } = useFileTreeManagement({
 		sessions,
 		sessionsRef,
-		setSessions,
 		activeSessionId,
 		activeSession,
 		rightPanelRef,
@@ -2366,14 +2338,12 @@ function MaestroConsoleInner() {
 				window.maestro.process.sendRemoteMoveSessionToGroupResponse(responseChannel, false);
 				return;
 			}
-			setSessions((prev) =>
-				prev.map((s) => (s.id === sessionId ? { ...s, groupId: groupId || undefined } : s))
-			);
+			updateSessionWith(sessionId, (s) => ({ ...s, groupId: groupId || undefined }));
 			window.maestro.process.sendRemoteMoveSessionToGroupResponse(responseChannel, true);
 		};
 		window.addEventListener('maestro:remoteMoveSessionToGroup', handler);
 		return () => window.removeEventListener('maestro:remoteMoveSessionToGroup', handler);
-	}, [sessionsRef, setSessions]);
+	}, [sessionsRef]);
 
 	// --- GROUP MANAGEMENT ---
 	// Extracted hook for group CRUD operations (toggle, rename, create, drag-drop)
@@ -2388,7 +2358,6 @@ function MaestroConsoleInner() {
 	} = useGroupManagement({
 		groups,
 		setGroups,
-		setSessions,
 		draggingSessionId,
 		setDraggingSessionId,
 		editingGroupId,
@@ -2464,17 +2433,11 @@ function MaestroConsoleInner() {
 		(prompt: string) => {
 			if (!activeSession) return;
 			// Save the custom prompt and modification timestamp to the session (persisted across restarts)
-			setSessions((prev) =>
-				prev.map((s) =>
-					s.id === activeSession.id
-						? {
-								...s,
-								batchRunnerPrompt: prompt,
-								batchRunnerPromptModifiedAt: Date.now(),
-							}
-						: s
-				)
-			);
+			updateSessionWith(activeSession.id, (s) => ({
+				...s,
+				batchRunnerPrompt: prompt,
+				batchRunnerPromptModifiedAt: Date.now(),
+			}));
 		},
 		[activeSession]
 	);
@@ -2483,19 +2446,13 @@ function MaestroConsoleInner() {
 			if (!activeSession) return;
 			// Clear activeFileTabId and activeTerminalTabId when selecting an AI tab.
 			// Also reset inputMode to 'ai' in case we're coming from terminal mode.
-			setSessions((prev) =>
-				prev.map((s) =>
-					s.id === activeSession.id
-						? {
-								...s,
-								activeTabId: tabId,
-								activeFileTabId: null,
-								activeTerminalTabId: null,
-								inputMode: 'ai',
-							}
-						: s
-				)
-			);
+			updateSessionWith(activeSession.id, (s) => ({
+				...s,
+				activeTabId: tabId,
+				activeFileTabId: null,
+				activeTerminalTabId: null,
+				inputMode: 'ai',
+			}));
 		},
 		[activeSession]
 	);
@@ -2504,13 +2461,12 @@ function MaestroConsoleInner() {
 			if (!activeSession) return;
 			// Set activeFileTabId, keep activeTabId as-is (for when returning to AI tabs).
 			// Also reset inputMode to 'ai' and clear activeTerminalTabId in case we're coming from terminal mode.
-			setSessions((prev) =>
-				prev.map((s) =>
-					s.id === activeSession.id
-						? { ...s, activeFileTabId: tabId, activeTerminalTabId: null, inputMode: 'ai' }
-						: s
-				)
-			);
+			updateSessionWith(activeSession.id, (s) => ({
+				...s,
+				activeFileTabId: tabId,
+				activeTerminalTabId: null,
+				inputMode: 'ai',
+			}));
 		},
 		[activeSession]
 	);
@@ -2643,7 +2599,6 @@ function MaestroConsoleInner() {
 		inputRef,
 		terminalOutputRef,
 		sidebarContainerRef,
-		setSessions,
 		createTab,
 		closeTab,
 		reopenUnifiedClosedTab,
@@ -3709,11 +3664,10 @@ function MaestroConsoleInner() {
 							onLayoutTypeChange={(type) => {
 								// Persist to the active session for per-agent recall
 								if (activeSession) {
-									setSessions((prev) =>
-										prev.map((s) =>
-											s.id === activeSession.id ? { ...s, documentGraphLayout: type } : s
-										)
-									);
+									updateSessionWith(activeSession.id, (s) => ({
+										...s,
+										documentGraphLayout: type,
+									}));
 								}
 								// Also update the global default for new agents
 								settings.setDocumentGraphLayoutType(type);

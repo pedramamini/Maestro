@@ -10,6 +10,7 @@ import type {
 import { getActiveTab } from '../../utils/tabHelpers';
 import { getStdinFlags } from '../../utils/spawnHelpers';
 import { generateId } from '../../utils/ids';
+import { updateSessionWith } from '../../stores/sessionStore';
 
 /**
  * Result from agent spawn operations.
@@ -29,8 +30,6 @@ export interface UseAgentExecutionDeps {
 	activeSession: Session | null;
 	/** Ref to sessions for accessing latest state without re-renders */
 	sessionsRef: React.MutableRefObject<Session[]>;
-	/** Session state setter */
-	setSessions: React.Dispatch<React.SetStateAction<Session[]>>;
 	/** Ref to processQueuedItem function for processing queue after agent exit */
 	processQueuedItemRef: React.MutableRefObject<
 		((sessionId: string, item: QueuedItem) => Promise<void>) | null
@@ -124,7 +123,6 @@ export function useAgentExecution(deps: UseAgentExecutionDeps): UseAgentExecutio
 	const {
 		activeSession,
 		sessionsRef,
-		setSessions,
 		processQueuedItemRef,
 		setFlashNotification,
 		setSuccessFlashNotification,
@@ -271,50 +269,18 @@ export function useAgentExecution(deps: UseAgentExecutionDeps): UseAgentExecutio
 								}
 
 								// Update state - if there are queued items, keep busy and process next
-								setSessions((prev) =>
-									prev.map((s) => {
-										if (s.id !== sessionId) return s;
+								updateSessionWith(sessionId, (s) => {
+									if (s.executionQueue.length > 0) {
+										const [nextItem, ...remainingQueue] = s.executionQueue;
+										const targetTab =
+											s.aiTabs.find((tab) => tab.id === nextItem.tabId) || getActiveTab(s);
 
-										if (s.executionQueue.length > 0) {
-											const [nextItem, ...remainingQueue] = s.executionQueue;
-											const targetTab =
-												s.aiTabs.find((tab) => tab.id === nextItem.tabId) || getActiveTab(s);
-
-											if (!targetTab) {
-												// Fallback: no tabs exist
-												return {
-													...s,
-													state: 'busy' as SessionState,
-													busySource: 'ai',
-													executionQueue: remainingQueue,
-													thinkingStartTime: Date.now(),
-													currentCycleTokens: 0,
-													currentCycleBytes: 0,
-													pendingAICommandForSynopsis: undefined,
-												};
-											}
-
-											// For message items, add a log entry to the target tab
-											let updatedAiTabs = s.aiTabs;
-											if (nextItem.type === 'message' && nextItem.text) {
-												const logEntry: LogEntry = {
-													id: generateId(),
-													timestamp: Date.now(),
-													source: 'user',
-													text: nextItem.text,
-													images: nextItem.images,
-												};
-												updatedAiTabs = s.aiTabs.map((tab) =>
-													tab.id === targetTab.id ? { ...tab, logs: [...tab.logs, logEntry] } : tab
-												);
-											}
-
+										if (!targetTab) {
+											// Fallback: no tabs exist
 											return {
 												...s,
 												state: 'busy' as SessionState,
 												busySource: 'ai',
-												aiTabs: updatedAiTabs,
-												activeTabId: targetTab.id,
 												executionQueue: remainingQueue,
 												thinkingStartTime: Date.now(),
 												currentCycleTokens: 0,
@@ -323,27 +289,55 @@ export function useAgentExecution(deps: UseAgentExecutionDeps): UseAgentExecutio
 											};
 										}
 
-										// No queued items - set to idle
-										// Set ALL busy tabs to 'idle' for write-mode tracking
-										const updatedAiTabs =
-											s.aiTabs?.length > 0
-												? s.aiTabs.map((tab) =>
-														tab.state === 'busy'
-															? { ...tab, state: 'idle' as const, thinkingStartTime: undefined }
-															: tab
-													)
-												: s.aiTabs;
+										// For message items, add a log entry to the target tab
+										let updatedAiTabs = s.aiTabs;
+										if (nextItem.type === 'message' && nextItem.text) {
+											const logEntry: LogEntry = {
+												id: generateId(),
+												timestamp: Date.now(),
+												source: 'user',
+												text: nextItem.text,
+												images: nextItem.images,
+											};
+											updatedAiTabs = s.aiTabs.map((tab) =>
+												tab.id === targetTab.id ? { ...tab, logs: [...tab.logs, logEntry] } : tab
+											);
+										}
 
 										return {
 											...s,
-											state: 'idle' as SessionState,
-											busySource: undefined,
-											thinkingStartTime: undefined,
-											pendingAICommandForSynopsis: undefined,
+											state: 'busy' as SessionState,
+											busySource: 'ai',
 											aiTabs: updatedAiTabs,
+											activeTabId: targetTab.id,
+											executionQueue: remainingQueue,
+											thinkingStartTime: Date.now(),
+											currentCycleTokens: 0,
+											currentCycleBytes: 0,
+											pendingAICommandForSynopsis: undefined,
 										};
-									})
-								);
+									}
+
+									// No queued items - set to idle
+									// Set ALL busy tabs to 'idle' for write-mode tracking
+									const updatedAiTabs =
+										s.aiTabs?.length > 0
+											? s.aiTabs.map((tab) =>
+													tab.state === 'busy'
+														? { ...tab, state: 'idle' as const, thinkingStartTime: undefined }
+														: tab
+												)
+											: s.aiTabs;
+
+									return {
+										...s,
+										state: 'idle' as SessionState,
+										busySource: undefined,
+										thinkingStartTime: undefined,
+										pendingAICommandForSynopsis: undefined,
+										aiTabs: updatedAiTabs,
+									};
+								});
 
 								// Process queued item AFTER state update
 								if (queuedItemToProcess && processQueuedItemRef.current) {
@@ -436,7 +430,7 @@ export function useAgentExecution(deps: UseAgentExecutionDeps): UseAgentExecutio
 				return { success: false };
 			}
 		},
-		[accumulateUsageStats, processQueuedItemRef, sessionsRef, setSessions]
+		[accumulateUsageStats, processQueuedItemRef, sessionsRef]
 	); // Uses sessionsRef for latest sessions
 
 	/**

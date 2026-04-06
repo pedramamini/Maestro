@@ -1,13 +1,10 @@
 import { useEffect } from 'react';
-import { Session } from '../../types';
+import { useSessionStore } from '../../stores/sessionStore';
 
 /**
  * Dependencies for the useCliActivityMonitoring hook.
  */
-export interface UseCliActivityMonitoringDeps {
-	/** Function to update sessions state */
-	setSessions: React.Dispatch<React.SetStateAction<Session[]>>;
-}
+export interface UseCliActivityMonitoringDeps {}
 
 /**
  * Return type for useCliActivityMonitoring hook.
@@ -33,8 +30,6 @@ export interface UseCliActivityMonitoringReturn {
 export function useCliActivityMonitoring(
 	deps: UseCliActivityMonitoringDeps
 ): UseCliActivityMonitoringReturn {
-	const { setSessions } = deps;
-
 	// Listen for CLI activity changes (when CLI is running playbooks)
 	// Update session states to show busy when CLI is active
 	useEffect(() => {
@@ -47,7 +42,7 @@ export function useCliActivityMonitoring(
 			try {
 				const activities = await window.maestro.cli.getActivity();
 				if (!Array.isArray(activities)) return;
-				setSessions((prev) =>
+				useSessionStore.getState().setSessions((prev) =>
 					prev.map((session) => {
 						const cliActivity = activities.find((a) => a.sessionId === session.id);
 						if (cliActivity) {
@@ -90,7 +85,7 @@ export function useCliActivityMonitoring(
 			checkCliActivity();
 		});
 		return unsubscribe;
-	}, [setSessions]);
+	}, []);
 
 	return {};
 }

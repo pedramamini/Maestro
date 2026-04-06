@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 import type { Session, SessionState, ThinkingMode } from '../../types';
 import { createTab, closeTab } from '../../utils/tabHelpers';
+import { updateSessionWith } from '../../stores/sessionStore';
 
 /**
  * Dependencies for the useRemoteIntegration hook.
@@ -15,8 +16,6 @@ export interface UseRemoteIntegrationDeps {
 	sessionsRef: React.MutableRefObject<Session[]>;
 	/** Ref to current active session ID (avoids stale closures) */
 	activeSessionIdRef: React.MutableRefObject<string>;
-	/** Session state setter */
-	setSessions: React.Dispatch<React.SetStateAction<Session[]>>;
 	/** Active session ID setter */
 	setActiveSessionId: (id: string) => void;
 	/** Default value for saveToHistory on new tabs */
@@ -56,7 +55,6 @@ export function useRemoteIntegration(deps: UseRemoteIntegrationDeps): UseRemoteI
 		isLiveMode,
 		sessionsRef,
 		activeSessionIdRef,
-		setSessions,
 		setActiveSessionId,
 		defaultSaveToHistory,
 		defaultShowThinking,
@@ -107,17 +105,11 @@ export function useRemoteIntegration(deps: UseRemoteIntegrationDeps): UseRemoteI
 				// If web provided an inputMode, sync the session state before executing
 				// This ensures the renderer uses the same mode the web intended
 				if (inputMode && targetSession.inputMode !== inputMode) {
-					setSessions((prev) =>
-						prev.map((s) =>
-							s.id === sessionId
-								? {
-										...s,
-										inputMode,
-										...(inputMode === 'terminal' && { activeFileTabId: null }),
-									}
-								: s
-						)
-					);
+					updateSessionWith(sessionId, (s) => ({
+						...s,
+						inputMode,
+						...(inputMode === 'terminal' && { activeFileTabId: null }),
+					}));
 				}
 
 				// Switch to the target session (for visual feedback)
@@ -144,7 +136,7 @@ export function useRemoteIntegration(deps: UseRemoteIntegrationDeps): UseRemoteI
 		return () => {
 			unsubscribeRemote();
 		};
-	}, [sessionsRef, setSessions, setActiveSessionId]);
+	}, [sessionsRef, setActiveSessionId]);
 
 	// Handle remote mode switches from web interface
 	// This allows web mode switches to go through the same code path as desktop
@@ -152,27 +144,16 @@ export function useRemoteIntegration(deps: UseRemoteIntegrationDeps): UseRemoteI
 		const unsubscribeSwitchMode = window.maestro.process.onRemoteSwitchMode(
 			(sessionId: string, mode: 'ai' | 'terminal') => {
 				// Find the session and update its mode
-				setSessions((prev) => {
-					const session = prev.find((s) => s.id === sessionId);
-					if (!session) {
-						return prev;
-					}
-
-					// Only switch if mode is different
-					if (session.inputMode === mode) {
-						return prev;
-					}
-
-					return prev.map((s) => {
-						if (s.id !== sessionId) return s;
-						// Clear activeFileTabId when switching to terminal mode to prevent
-						// orphaned file preview without tab bar
-						return {
-							...s,
-							inputMode: mode,
-							...(mode === 'terminal' && { activeFileTabId: null }),
-						};
-					});
+				// Only switch if mode is different (updateSessionWith is no-op if session not found)
+				updateSessionWith(sessionId, (s) => {
+					if (s.inputMode === mode) return s;
+					// Clear activeFileTabId when switching to terminal mode to prevent
+					// orphaned file preview without tab bar
+					return {
+						...s,
+						inputMode: mode,
+						...(mode === 'terminal' && { activeFileTabId: null }),
+					};
 				});
 			}
 		);
@@ -180,7 +161,7 @@ export function useRemoteIntegration(deps: UseRemoteIntegrationDeps): UseRemoteI
 		return () => {
 			unsubscribeSwitchMode();
 		};
-	}, [setSessions]);
+	}, []);
 
 	// Handle remote interrupts from web interface
 	// This allows web interrupts to go through the same code path as desktop (handleInterrupt)
@@ -203,17 +184,12 @@ export function useRemoteIntegration(deps: UseRemoteIntegrationDeps): UseRemoteI
 					await window.maestro.process.interrupt(targetSessionId);
 
 					// Set state to idle (same as handleInterrupt)
-					setSessions((prev) =>
-						prev.map((s) => {
-							if (s.id !== session.id) return s;
-							return {
-								...s,
-								state: 'idle' as SessionState,
-								busySource: undefined,
-								thinkingStartTime: undefined,
-							};
-						})
-					);
+					updateSessionWith(session.id, (s) => ({
+						...s,
+						state: 'idle' as SessionState,
+						busySource: undefined,
+						thinkingStartTime: undefined,
+					}));
 				} catch (error) {
 					console.error('[Remote] Failed to interrupt session:', error);
 				}
@@ -223,7 +199,7 @@ export function useRemoteIntegration(deps: UseRemoteIntegrationDeps): UseRemoteI
 		return () => {
 			unsubscribeInterrupt();
 		};
-	}, [sessionsRef, setSessions]);
+	}, [sessionsRef]);
 
 	// Handle remote session selection from web interface
 	// This allows web clients to switch the active session in the desktop app
@@ -242,22 +218,19 @@ export function useRemoteIntegration(deps: UseRemoteIntegrationDeps): UseRemoteI
 
 				// If tabId provided, also switch to that tab
 				if (tabId) {
-					setSessions((prev) =>
-						prev.map((s) => {
-							if (s.id !== sessionId) return s;
-							// Check if tab exists
-							if (!s.aiTabs.some((t) => t.id === tabId)) {
-								return s;
-							}
-							return {
-								...s,
-								activeTabId: tabId,
-								activeFileTabId: null,
-								activeTerminalTabId: null,
-								inputMode: 'ai' as const,
-							};
-						})
-					);
+					updateSessionWith(sessionId, (s) => {
+						// Check if tab exists
+						if (!s.aiTabs.some((t) => t.id === tabId)) {
+							return s;
+						}
+						return {
+							...s,
+							activeTabId: tabId,
+							activeFileTabId: null,
+							activeTerminalTabId: null,
+							inputMode: 'ai' as const,
+						};
+					});
 				}
 			}
 		);
@@ -273,22 +246,19 @@ export function useRemoteIntegration(deps: UseRemoteIntegrationDeps): UseRemoteI
 				}
 
 				// Then update the active tab within the session
-				setSessions((prev) =>
-					prev.map((s) => {
-						if (s.id !== sessionId) return s;
-						// Check if tab exists
-						if (!s.aiTabs.some((t) => t.id === tabId)) {
-							return s;
-						}
-						return {
-							...s,
-							activeTabId: tabId,
-							activeFileTabId: null,
-							activeTerminalTabId: null,
-							inputMode: 'ai' as const,
-						};
-					})
-				);
+				updateSessionWith(sessionId, (s) => {
+					// Check if tab exists
+					if (!s.aiTabs.some((t) => t.id === tabId)) {
+						return s;
+					}
+					return {
+						...s,
+						activeTabId: tabId,
+						activeFileTabId: null,
+						activeTerminalTabId: null,
+						inputMode: 'ai' as const,
+					};
+				});
 			}
 		);
 
@@ -297,20 +267,16 @@ export function useRemoteIntegration(deps: UseRemoteIntegrationDeps): UseRemoteI
 			(sessionId: string, responseChannel: string) => {
 				let newTabId: string | null = null;
 
-				setSessions((prev) =>
-					prev.map((s) => {
-						if (s.id !== sessionId) return s;
-
-						// Use createTab helper
-						const result = createTab(s, {
-							saveToHistory: defaultSaveToHistory,
-							showThinking: defaultShowThinking,
-						});
-						if (!result) return s;
-						newTabId = result.tab.id;
-						return result.session;
-					})
-				);
+				updateSessionWith(sessionId, (s) => {
+					// Use createTab helper
+					const result = createTab(s, {
+						saveToHistory: defaultSaveToHistory,
+						showThinking: defaultShowThinking,
+					});
+					if (!result) return s;
+					newTabId = result.tab.id;
+					return result.session;
+				});
 
 				// Send response back with the new tab ID
 				if (newTabId) {
@@ -324,114 +290,95 @@ export function useRemoteIntegration(deps: UseRemoteIntegrationDeps): UseRemoteI
 		// Handle remote close tab from web interface
 		const unsubscribeCloseTab = window.maestro.process.onRemoteCloseTab(
 			(sessionId: string, tabId: string) => {
-				setSessions((prev) =>
-					prev.map((s) => {
-						if (s.id !== sessionId) return s;
-
-						// Use closeTab helper (handles last tab by creating a fresh one)
-						const result = closeTab(s, tabId);
-						return result?.session ?? s;
-					})
-				);
+				updateSessionWith(sessionId, (s) => {
+					// Use closeTab helper (handles last tab by creating a fresh one)
+					const result = closeTab(s, tabId);
+					return result?.session ?? s;
+				});
 			}
 		);
 
 		// Handle remote rename tab from web interface
 		const unsubscribeRenameTab = window.maestro.process.onRemoteRenameTab(
 			(sessionId: string, tabId: string, newName: string) => {
-				setSessions((prev) =>
-					prev.map((s) => {
-						if (s.id !== sessionId) return s;
+				updateSessionWith(sessionId, (s) => {
+					// Find the tab to get its agentSessionId for persistence
+					const tab = s.aiTabs.find((t) => t.id === tabId);
+					if (!tab) {
+						return s;
+					}
 
-						// Find the tab to get its agentSessionId for persistence
-						const tab = s.aiTabs.find((t) => t.id === tabId);
-						if (!tab) {
-							return s;
+					// Persist name to agent session metadata (async, fire and forget)
+					// Use projectRoot (not cwd) for consistent session storage access
+					if (tab.agentSessionId) {
+						const agentId = s.toolType || 'claude-code';
+						if (agentId === 'claude-code') {
+							window.maestro.claude
+								.updateSessionName(s.projectRoot, tab.agentSessionId, newName || '')
+								.catch((err) => console.error('Failed to persist tab name:', err));
+						} else {
+							window.maestro.agentSessions
+								.setSessionName(agentId, s.projectRoot, tab.agentSessionId, newName || null)
+								.catch((err) => console.error('Failed to persist tab name:', err));
 						}
+						// Also update past history entries with this agentSessionId
+						window.maestro.history
+							.updateSessionName(tab.agentSessionId, newName || '')
+							.catch((err) => console.error('Failed to update history session names:', err));
+					}
 
-						// Persist name to agent session metadata (async, fire and forget)
-						// Use projectRoot (not cwd) for consistent session storage access
-						if (tab.agentSessionId) {
-							const agentId = s.toolType || 'claude-code';
-							if (agentId === 'claude-code') {
-								window.maestro.claude
-									.updateSessionName(s.projectRoot, tab.agentSessionId, newName || '')
-									.catch((err) => console.error('Failed to persist tab name:', err));
-							} else {
-								window.maestro.agentSessions
-									.setSessionName(agentId, s.projectRoot, tab.agentSessionId, newName || null)
-									.catch((err) => console.error('Failed to persist tab name:', err));
-							}
-							// Also update past history entries with this agentSessionId
-							window.maestro.history
-								.updateSessionName(tab.agentSessionId, newName || '')
-								.catch((err) => console.error('Failed to update history session names:', err));
-						}
-
-						return {
-							...s,
-							aiTabs: s.aiTabs.map((t) => (t.id === tabId ? { ...t, name: newName || null } : t)),
-						};
-					})
-				);
+					return {
+						...s,
+						aiTabs: s.aiTabs.map((t) => (t.id === tabId ? { ...t, name: newName || null } : t)),
+					};
+				});
 			}
 		);
 
 		// Handle remote star tab from web interface
 		const unsubscribeStarTab = window.maestro.process.onRemoteStarTab(
 			(sessionId: string, tabId: string, starred: boolean) => {
-				setSessions((prev) =>
-					prev.map((s) => {
-						if (s.id !== sessionId) return s;
+				updateSessionWith(sessionId, (s) => {
+					const tab = s.aiTabs.find((t) => t.id === tabId);
+					if (!tab?.agentSessionId) return s;
 
-						const tab = s.aiTabs.find((t) => t.id === tabId);
-						if (!tab?.agentSessionId) return s;
+					// Persist starred state (same logic as desktop handleTabStar)
+					const agentId = s.toolType || 'claude-code';
+					if (agentId === 'claude-code') {
+						window.maestro.claude
+							.updateSessionStarred(s.projectRoot, tab.agentSessionId, starred)
+							.catch((err) => console.error('Failed to persist tab starred:', err));
+					} else {
+						window.maestro.agentSessions
+							.setSessionStarred(agentId, s.projectRoot, tab.agentSessionId, starred)
+							.catch((err) => console.error('Failed to persist tab starred:', err));
+					}
 
-						// Persist starred state (same logic as desktop handleTabStar)
-						const agentId = s.toolType || 'claude-code';
-						if (agentId === 'claude-code') {
-							window.maestro.claude
-								.updateSessionStarred(s.projectRoot, tab.agentSessionId, starred)
-								.catch((err) => console.error('Failed to persist tab starred:', err));
-						} else {
-							window.maestro.agentSessions
-								.setSessionStarred(agentId, s.projectRoot, tab.agentSessionId, starred)
-								.catch((err) => console.error('Failed to persist tab starred:', err));
-						}
-
-						return {
-							...s,
-							aiTabs: s.aiTabs.map((t) => (t.id === tabId ? { ...t, starred } : t)),
-						};
-					})
-				);
+					return {
+						...s,
+						aiTabs: s.aiTabs.map((t) => (t.id === tabId ? { ...t, starred } : t)),
+					};
+				});
 			}
 		);
 
 		// Handle remote reorder tab from web interface
 		const unsubscribeReorderTab = window.maestro.process.onRemoteReorderTab(
 			(sessionId: string, fromIndex: number, toIndex: number) => {
-				setSessions((prev) =>
-					prev.map((s) => {
-						if (s.id !== sessionId || !s.aiTabs) return s;
-						const tabs = [...s.aiTabs];
-						const [movedTab] = tabs.splice(fromIndex, 1);
-						tabs.splice(toIndex, 0, movedTab);
-						return { ...s, aiTabs: tabs };
-					})
-				);
+				updateSessionWith(sessionId, (s) => {
+					if (!s.aiTabs) return s;
+					const tabs = [...s.aiTabs];
+					const [movedTab] = tabs.splice(fromIndex, 1);
+					tabs.splice(toIndex, 0, movedTab);
+					return { ...s, aiTabs: tabs };
+				});
 			}
 		);
 
 		// Handle remote bookmark toggle from web interface
 		const unsubscribeToggleBookmark = window.maestro.process.onRemoteToggleBookmark(
 			(sessionId: string) => {
-				setSessions((prev) =>
-					prev.map((s) => {
-						if (s.id !== sessionId) return s;
-						return { ...s, bookmarked: !s.bookmarked };
-					})
-				);
+				updateSessionWith(sessionId, (s) => ({ ...s, bookmarked: !s.bookmarked }));
 			}
 		);
 
@@ -445,7 +392,7 @@ export function useRemoteIntegration(deps: UseRemoteIntegrationDeps): UseRemoteI
 			unsubscribeReorderTab();
 			unsubscribeToggleBookmark();
 		};
-	}, [sessionsRef, activeSessionIdRef, setSessions, setActiveSessionId, defaultSaveToHistory]);
+	}, [sessionsRef, activeSessionIdRef, setActiveSessionId, defaultSaveToHistory]);
 
 	// Handle remote open file tab from web/CLI interface
 	// Dispatches a CustomEvent for App.tsx to handle (avoids hook ordering issues)

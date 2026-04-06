@@ -335,27 +335,12 @@ interface FileExplorerPanelProps {
 	setActiveFocus: (focus: FocusArea) => void;
 	fileTreeContainerRef?: React.RefObject<HTMLDivElement>;
 	fileTreeFilterInputRef?: React.RefObject<HTMLInputElement>;
-	toggleFolder: (
-		path: string,
-		activeSessionId: string,
-		setSessions: React.Dispatch<React.SetStateAction<Session[]>>
-	) => void;
+	toggleFolder: (path: string, activeSessionId: string) => void;
 	handleFileClick: (node: any, path: string, activeSession: Session) => Promise<void>;
-	expandAllFolders: (
-		activeSessionId: string,
-		activeSession: Session,
-		setSessions: React.Dispatch<React.SetStateAction<Session[]>>
-	) => void;
-	collapseAllFolders: (
-		activeSessionId: string,
-		setSessions: React.Dispatch<React.SetStateAction<Session[]>>
-	) => void;
-	updateSessionWorkingDirectory: (
-		activeSessionId: string,
-		setSessions: React.Dispatch<React.SetStateAction<Session[]>>
-	) => Promise<void>;
+	expandAllFolders: (activeSessionId: string, activeSession: Session) => void;
+	collapseAllFolders: (activeSessionId: string) => void;
+	updateSessionWorkingDirectory: () => Promise<void>;
 	refreshFileTree: (sessionId: string) => Promise<FileTreeChanges | undefined>;
-	setSessions: React.Dispatch<React.SetStateAction<Session[]>>;
 	onAutoRefreshChange?: (interval: number) => void;
 	onShowFlash?: (message: string) => void;
 	showHiddenFiles: boolean;
@@ -390,7 +375,6 @@ function FileExplorerPanelInner(props: FileExplorerPanelProps) {
 		collapseAllFolders,
 		updateSessionWorkingDirectory,
 		refreshFileTree,
-		setSessions,
 		onAutoRefreshChange,
 		onShowFlash,
 		showHiddenFiles,
@@ -975,7 +959,7 @@ function FileExplorerPanelInner(props: FileExplorerPanelProps) {
 					}}
 					onClick={() => {
 						if (isFolder) {
-							toggleFolder(fullPath, session.id, setSessions);
+							toggleFolder(fullPath, session.id);
 						} else {
 							setSelectedFileIndex(globalIndex);
 							// Only change focus if not filtering
@@ -1048,7 +1032,6 @@ function FileExplorerPanelInner(props: FileExplorerPanelProps) {
 			selectedFileIndex,
 			theme,
 			toggleFolder,
-			setSessions,
 			setSelectedFileIndex,
 			setActiveFocus,
 			handleFileClick,
@@ -1169,7 +1152,7 @@ function FileExplorerPanelInner(props: FileExplorerPanelProps) {
 						<RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin' : ''}`} />
 					</button>
 					<button
-						onClick={() => expandAllFolders(session.id, session, setSessions)}
+						onClick={() => expandAllFolders(session.id, session)}
 						className="p-1 rounded hover:bg-white/10 transition-colors"
 						title="Expand all folders"
 						style={{ color: theme.colors.textDim }}
@@ -1180,7 +1163,7 @@ function FileExplorerPanelInner(props: FileExplorerPanelProps) {
 						</div>
 					</button>
 					<button
-						onClick={() => collapseAllFolders(session.id, setSessions)}
+						onClick={() => collapseAllFolders(session.id)}
 						className="p-1 rounded hover:bg-white/10 transition-colors"
 						title="Collapse all folders"
 						style={{ color: theme.colors.textDim }}
@@ -1214,7 +1197,7 @@ function FileExplorerPanelInner(props: FileExplorerPanelProps) {
 							{/* Only show "Select New Directory" for terminal sessions, not agent sessions */}
 							{session.toolType === 'terminal' && (
 								<button
-									onClick={() => updateSessionWorkingDirectory(session.id, setSessions)}
+									onClick={() => updateSessionWorkingDirectory()}
 									className="flex items-center gap-2 px-3 py-2 rounded border hover:bg-white/5 transition-colors text-xs"
 									style={{ borderColor: theme.colors.border, color: theme.colors.textMain }}
 								>

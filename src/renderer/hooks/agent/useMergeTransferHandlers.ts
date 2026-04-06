@@ -18,7 +18,7 @@ import type { MergeOptions } from '../../components/MergeSessionModal';
 import type { SendToAgentOptions } from '../../components/SendToAgentModal';
 import type { MergeState } from '../../stores/operationStore';
 import type { TransferState } from '../../stores/operationStore';
-import { useSessionStore, selectActiveSession } from '../../stores/sessionStore';
+import { useSessionStore, selectActiveSession, updateSessionWith } from '../../stores/sessionStore';
 import { getModalActions } from '../../stores/modalStore';
 import { notifyToast } from '../../stores/notificationStore';
 import { substituteTemplateVariables } from '../../utils/templateVariables';
@@ -90,7 +90,6 @@ export function useMergeTransferHandlers(
 
 	// --- Store subscriptions ---
 	const sessions = useSessionStore((s) => s.sessions);
-	const setSessions = useSessionStore((s) => s.setSessions);
 	const activeSession = useSessionStore(selectActiveSession);
 
 	// --- Transfer agent tracking state ---
@@ -115,7 +114,6 @@ export function useMergeTransferHandlers(
 		reset: resetMerge,
 	} = useMergeSessionWithSessions({
 		sessions,
-		setSessions,
 		activeTabId: activeSession?.activeTabId,
 		onSessionCreated: (info) => {
 			// Navigate to the newly created merged session
@@ -172,18 +170,13 @@ export function useMergeTransferHandlers(
 				setActiveSessionId(result.targetSessionId);
 				if (result.targetTabId) {
 					const targetTabId = result.targetTabId; // Extract to satisfy TypeScript narrowing
-					setSessions((prev) =>
-						prev.map((s) => {
-							if (s.id !== result.targetSessionId) return s;
-							return {
-								...s,
-								activeTabId: targetTabId,
-								activeFileTabId: null,
-								activeTerminalTabId: null,
-								inputMode: 'ai' as const,
-							};
-						})
-					);
+					updateSessionWith(result.targetSessionId!, (s) => ({
+						...s,
+						activeTabId: targetTabId,
+						activeFileTabId: null,
+						activeTerminalTabId: null,
+						inputMode: 'ai' as const,
+					}));
 				}
 
 				notifyToast({
@@ -217,7 +210,6 @@ export function useMergeTransferHandlers(
 		reset: resetTransfer,
 	} = useSendToAgentWithSessions({
 		sessions,
-		setSessions,
 		onSessionCreated: (sessionId, sessionName) => {
 			// Navigate to the newly created transferred session
 			setActiveSessionId(sessionId);
@@ -401,28 +393,18 @@ You are taking over this conversation. Based on the context above, provide a bri
 			};
 
 			// Add the new tab to the target session and set it as active
-			setSessions((prev) =>
-				prev.map((s) => {
-					if (s.id === targetSessionId) {
-						return {
-							...s,
-							state: 'busy',
-							busySource: 'ai',
-							thinkingStartTime: Date.now(),
-							aiTabs: [...s.aiTabs, newTab],
-							activeTabId: newTabId,
-							activeFileTabId: null,
-							activeTerminalTabId: null,
-							inputMode: 'ai' as const,
-							unifiedTabOrder: [
-								...(s.unifiedTabOrder || []),
-								{ type: 'ai' as const, id: newTabId },
-							],
-						};
-					}
-					return s;
-				})
-			);
+			updateSessionWith(targetSessionId, (s) => ({
+				...s,
+				state: 'busy',
+				busySource: 'ai',
+				thinkingStartTime: Date.now(),
+				aiTabs: [...s.aiTabs, newTab],
+				activeTabId: newTabId,
+				activeFileTabId: null,
+				activeTerminalTabId: null,
+				inputMode: 'ai' as const,
+				unifiedTabOrder: [...(s.unifiedTabOrder || []), { type: 'ai' as const, id: newTabId }],
+			}));
 
 			// Navigate to the target session
 			setActiveSessionId(targetSessionId);
@@ -526,33 +508,28 @@ You are taking over this conversation. Based on the context above, provide a bri
 						source: 'system',
 						text: `Error: Failed to spawn agent - ${(error as Error).message}`,
 					};
-					setSessions((prev) =>
-						prev.map((s) => {
-							if (s.id !== targetSessionId) return s;
-							return {
-								...s,
-								state: 'idle',
-								busySource: undefined,
-								thinkingStartTime: undefined,
-								aiTabs: s.aiTabs.map((tab) =>
-									tab.id === newTabId
-										? {
-												...tab,
-												state: 'idle' as const,
-												thinkingStartTime: undefined,
-												logs: [...tab.logs, errorLog],
-											}
-										: tab
-								),
-							};
-						})
-					);
+					updateSessionWith(targetSessionId, (s) => ({
+						...s,
+						state: 'idle',
+						busySource: undefined,
+						thinkingStartTime: undefined,
+						aiTabs: s.aiTabs.map((tab) =>
+							tab.id === newTabId
+								? {
+										...tab,
+										state: 'idle' as const,
+										thinkingStartTime: undefined,
+										logs: [...tab.logs, errorLog],
+									}
+								: tab
+						),
+					}));
 				}
 			})();
 
 			return { success: true, newSessionId: targetSessionId, newTabId };
 		},
-		[activeSession, sessions, setSessions, setActiveSessionId, resetTransfer]
+		[activeSession, sessions, setActiveSessionId, resetTransfer]
 	);
 
 	// Tab context menu handlers — switch to tab then open modal
@@ -560,46 +537,34 @@ You are taking over this conversation. Based on the context above, provide a bri
 		(tabId: string) => {
 			const currentSession = sessionsRef.current.find((s) => s.id === activeSessionIdRef.current);
 			if (currentSession) {
-				setSessions((prev) =>
-					prev.map((s) =>
-						s.id === currentSession.id
-							? {
-									...s,
-									activeTabId: tabId,
-									activeFileTabId: null,
-									activeTerminalTabId: null,
-									inputMode: 'ai' as const,
-								}
-							: s
-					)
-				);
+				updateSessionWith(currentSession.id, (s) => ({
+					...s,
+					activeTabId: tabId,
+					activeFileTabId: null,
+					activeTerminalTabId: null,
+					inputMode: 'ai' as const,
+				}));
 			}
 			getModalActions().setMergeSessionModalOpen(true);
 		},
-		[sessionsRef, activeSessionIdRef, setSessions]
+		[sessionsRef, activeSessionIdRef]
 	);
 
 	const handleOpenSendToAgentModal = useCallback(
 		(tabId: string) => {
 			const currentSession = sessionsRef.current.find((s) => s.id === activeSessionIdRef.current);
 			if (currentSession) {
-				setSessions((prev) =>
-					prev.map((s) =>
-						s.id === currentSession.id
-							? {
-									...s,
-									activeTabId: tabId,
-									activeFileTabId: null,
-									activeTerminalTabId: null,
-									inputMode: 'ai' as const,
-								}
-							: s
-					)
-				);
+				updateSessionWith(currentSession.id, (s) => ({
+					...s,
+					activeTabId: tabId,
+					activeFileTabId: null,
+					activeTerminalTabId: null,
+					inputMode: 'ai' as const,
+				}));
 			}
 			getModalActions().setSendToAgentModalOpen(true);
 		},
-		[sessionsRef, activeSessionIdRef, setSessions]
+		[sessionsRef, activeSessionIdRef]
 	);
 
 	// ====================================================================

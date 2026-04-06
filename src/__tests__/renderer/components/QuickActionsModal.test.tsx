@@ -121,7 +121,6 @@ const createDefaultProps = (
 ) => ({
 	theme: mockTheme,
 	sessions: [createMockSession()],
-	setSessions: vi.fn(),
 	activeSessionId: 'session-1',
 	groups: [],
 	setGroups: vi.fn(),
@@ -155,9 +154,14 @@ const createDefaultProps = (
 });
 
 describe('QuickActionsModal', () => {
+	const storeSpy = {
+		setSessions: vi.fn(),
+	};
+
 	beforeEach(() => {
 		vi.clearAllMocks();
 		vi.spyOn(useSessionStore, 'setState');
+		vi.spyOn(useSessionStore.getState(), 'setSessions').mockImplementation(storeSpy.setSessions);
 		// Reset uiStore state used by search actions
 		useUIStore.setState({
 			sessionFilterOpen: false,
@@ -797,7 +801,7 @@ describe('QuickActionsModal', () => {
 			fireEvent.change(input, { target: { value: 'debug' } });
 			fireEvent.click(screen.getByText('Debug: Reset Busy State'));
 
-			expect(props.setSessions).toHaveBeenCalled();
+			expect(storeSpy.setSessions).toHaveBeenCalled();
 			expect(consoleSpy).toHaveBeenCalledWith('[Debug] Reset busy state for all sessions');
 			expect(props.setQuickActionOpen).toHaveBeenCalledWith(false);
 
@@ -1013,7 +1017,7 @@ describe('QuickActionsModal', () => {
 			fireEvent.click(screen.getByText('Move to Group...'));
 			fireEvent.click(screen.getByText('📁 Test Group'));
 
-			expect(props.setSessions).toHaveBeenCalled();
+			expect(useSessionStore.setState).toHaveBeenCalled();
 			expect(props.setQuickActionOpen).toHaveBeenCalledWith(false);
 		});
 
@@ -1024,7 +1028,7 @@ describe('QuickActionsModal', () => {
 			fireEvent.click(screen.getByText('Move to Group...'));
 			fireEvent.click(screen.getByText('📁 No Group (Root)'));
 
-			expect(props.setSessions).toHaveBeenCalled();
+			expect(useSessionStore.setState).toHaveBeenCalled();
 			expect(props.setQuickActionOpen).toHaveBeenCalledWith(false);
 		});
 

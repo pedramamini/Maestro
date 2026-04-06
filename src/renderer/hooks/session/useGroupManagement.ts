@@ -1,5 +1,6 @@
 import { useCallback, useState } from 'react';
-import type { Session, Group } from '../../types';
+import type { Group } from '../../types';
+import { updateSessionWith } from '../../stores/sessionStore';
 
 /**
  * State returned from useGroupManagement for modal management
@@ -19,8 +20,6 @@ export interface UseGroupManagementDeps {
 	groups: Group[];
 	/** Setter for groups */
 	setGroups: React.Dispatch<React.SetStateAction<Group[]>>;
-	/** Setter for sessions (for group assignment) */
-	setSessions: React.Dispatch<React.SetStateAction<Session[]>>;
 	/** Currently dragged session ID */
 	draggingSessionId: string | null;
 	/** Setter for dragging session ID */
@@ -67,7 +66,6 @@ export function useGroupManagement(deps: UseGroupManagementDeps): UseGroupManage
 	const {
 		groups: _groups,
 		setGroups,
-		setSessions,
 		draggingSessionId,
 		setDraggingSessionId,
 		setEditingGroupId,
@@ -129,13 +127,11 @@ export function useGroupManagement(deps: UseGroupManagementDeps): UseGroupManage
 	const handleDropOnGroup = useCallback(
 		(groupId: string) => {
 			if (draggingSessionId) {
-				setSessions((prev) =>
-					prev.map((s) => (s.id === draggingSessionId ? { ...s, groupId } : s))
-				);
+				updateSessionWith(draggingSessionId, (s) => ({ ...s, groupId }));
 				setDraggingSessionId(null);
 			}
 		},
-		[draggingSessionId, setSessions, setDraggingSessionId]
+		[draggingSessionId, setDraggingSessionId]
 	);
 
 	/**
@@ -143,12 +139,10 @@ export function useGroupManagement(deps: UseGroupManagementDeps): UseGroupManage
 	 */
 	const handleDropOnUngrouped = useCallback(() => {
 		if (draggingSessionId) {
-			setSessions((prev) =>
-				prev.map((s) => (s.id === draggingSessionId ? { ...s, groupId: undefined } : s))
-			);
+			updateSessionWith(draggingSessionId, (s) => ({ ...s, groupId: undefined }));
 			setDraggingSessionId(null);
 		}
-	}, [draggingSessionId, setSessions, setDraggingSessionId]);
+	}, [draggingSessionId, setDraggingSessionId]);
 
 	// Modal state bundle for external access
 	const modalState: GroupModalState = {

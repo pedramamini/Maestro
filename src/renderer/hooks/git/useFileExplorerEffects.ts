@@ -16,7 +16,7 @@
 import { useEffect, useMemo, useCallback } from 'react';
 import type { Session } from '../../types';
 import type { FileNode } from '../../types/fileTree';
-import { useSessionStore, selectActiveSession } from '../../stores/sessionStore';
+import { useSessionStore, selectActiveSession, updateSessionWith } from '../../stores/sessionStore';
 import { useSettingsStore } from '../../stores/settingsStore';
 import { useUIStore } from '../../stores/uiStore';
 import { useFileExplorerStore } from '../../stores/fileExplorerStore';
@@ -42,7 +42,7 @@ export interface UseFileExplorerEffectsDeps {
 	/** Whether tab completion dropdown is open */
 	tabCompletionOpen: boolean;
 	/** Toggle folder expand/collapse in file tree */
-	toggleFolder: (path: string, sessionId: string, setSessions: any) => void;
+	toggleFolder: (path: string, sessionId: string) => void;
 	/** Handle file click from file tree */
 	handleFileClick: (item: FlatTreeNode, fullPath: string) => void;
 	/** Open a file in a tab */
@@ -94,8 +94,6 @@ export function useFileExplorerEffects(
 	// --- Store subscriptions ---
 	const activeSessionId = useSessionStore((s) => s.activeSessionId);
 	const activeSession = useSessionStore(selectActiveSession);
-	const setSessions = useMemo(() => useSessionStore.getState().setSessions, []);
-
 	const activeFocus = useUIStore((s) => s.activeFocus);
 	const activeRightTab = useUIStore((s) => s.activeRightTab);
 	const setActiveFocus = useMemo(() => useUIStore.getState().setActiveFocus, []);
@@ -265,9 +263,7 @@ export function useFileExplorerEffects(
 		setSelectedFileIndex(targetIndex);
 
 		// Clear the pending jump path
-		setSessions((prev) =>
-			prev.map((s) => (s.id === activeSession.id ? { ...s, pendingJumpPath: undefined } : s))
-		);
+		updateSessionWith(activeSession.id, (s) => ({ ...s, pendingJumpPath: undefined }));
 	}, [activeSession?.pendingJumpPath, flatFileList, activeSession?.id]);
 
 	// ====================================================================
@@ -347,14 +343,14 @@ export function useFileExplorerEffects(
 				e.preventDefault();
 				const selectedItem = flatFileList[selectedFileIndex];
 				if (selectedItem?.isFolder && expandedFolders.has(selectedItem.fullPath)) {
-					toggleFolder(selectedItem.fullPath, activeSessionId, setSessions);
+					toggleFolder(selectedItem.fullPath, activeSessionId);
 				} else if (selectedItem) {
 					const parentPath = selectedItem.fullPath.substring(
 						0,
 						selectedItem.fullPath.lastIndexOf('/')
 					);
 					if (parentPath && expandedFolders.has(parentPath)) {
-						toggleFolder(parentPath, activeSessionId, setSessions);
+						toggleFolder(parentPath, activeSessionId);
 						const parentIndex = flatFileList.findIndex((item) => item.fullPath === parentPath);
 						if (parentIndex >= 0) {
 							fileTreeKeyboardNavRef.current = true;
@@ -366,14 +362,14 @@ export function useFileExplorerEffects(
 				e.preventDefault();
 				const selectedItem = flatFileList[selectedFileIndex];
 				if (selectedItem?.isFolder && !expandedFolders.has(selectedItem.fullPath)) {
-					toggleFolder(selectedItem.fullPath, activeSessionId, setSessions);
+					toggleFolder(selectedItem.fullPath, activeSessionId);
 				}
 			} else if (e.key === 'Enter') {
 				e.preventDefault();
 				const selectedItem = flatFileList[selectedFileIndex];
 				if (selectedItem) {
 					if (selectedItem.isFolder) {
-						toggleFolder(selectedItem.fullPath, activeSessionId, setSessions);
+						toggleFolder(selectedItem.fullPath, activeSessionId);
 					} else {
 						handleFileClick(selectedItem, selectedItem.fullPath);
 					}
@@ -390,7 +386,6 @@ export function useFileExplorerEffects(
 		selectedFileIndex,
 		activeSession?.fileExplorerExpanded,
 		activeSessionId,
-		setSessions,
 		toggleFolder,
 		handleFileClick,
 		hasOpenModal,

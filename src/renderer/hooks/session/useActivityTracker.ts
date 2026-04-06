@@ -1,6 +1,6 @@
 import { useEffect, useRef, useCallback } from 'react';
-import type { Session } from '../../types';
 import { subscribeToActivity } from '../../utils/activityBus';
+import { updateSessionWith } from '../../stores/sessionStore';
 
 const ACTIVITY_TIMEOUT_MS = 60000; // 1 minute of inactivity = idle
 const TICK_INTERVAL_MS = 1000; // Update every second
@@ -22,20 +22,15 @@ export interface UseActivityTrackerReturn {
  * CPU optimization: The interval stops after 60s of inactivity and restarts
  * when user activity is detected. This means zero CPU usage when truly idle.
  */
-export function useActivityTracker(
-	activeSessionId: string | null,
-	setSessions: React.Dispatch<React.SetStateAction<Session[]>>
-): UseActivityTrackerReturn {
+export function useActivityTracker(activeSessionId: string | null): UseActivityTrackerReturn {
 	const lastActivityRef = useRef<number>(Date.now());
 	const isActiveRef = useRef<boolean>(false);
 	const accumulatedTimeRef = useRef<number>(0);
 	const lastBatchUpdateRef = useRef<number>(Date.now());
 	const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-	const setSessionsRef = useRef(setSessions);
 	const activeSessionIdRef = useRef(activeSessionId);
 
 	// Keep refs in sync
-	setSessionsRef.current = setSessions;
 	activeSessionIdRef.current = activeSessionId;
 
 	const startInterval = useCallback(() => {
@@ -56,17 +51,10 @@ export function useActivityTracker(
 						accumulatedTimeRef.current = 0;
 						lastBatchUpdateRef.current = now;
 
-						setSessionsRef.current((prev) =>
-							prev.map((session) => {
-								if (session.id === activeSessionIdRef.current) {
-									return {
-										...session,
-										activeTimeMs: (session.activeTimeMs || 0) + accumulatedTime,
-									};
-								}
-								return session;
-							})
-						);
+						updateSessionWith(activeSessionIdRef.current, (session) => ({
+							...session,
+							activeTimeMs: (session.activeTimeMs || 0) + accumulatedTime,
+						}));
 					}
 				} else {
 					// Mark as inactive and stop the interval to save CPU
@@ -116,17 +104,10 @@ export function useActivityTracker(
 			if (accumulatedTimeRef.current > 0 && sessionIdAtMount) {
 				const accumulatedTime = accumulatedTimeRef.current;
 				accumulatedTimeRef.current = 0;
-				setSessionsRef.current((prev) =>
-					prev.map((session) => {
-						if (session.id === sessionIdAtMount) {
-							return {
-								...session,
-								activeTimeMs: (session.activeTimeMs || 0) + accumulatedTime,
-							};
-						}
-						return session;
-					})
-				);
+				updateSessionWith(sessionIdAtMount, (session) => ({
+					...session,
+					activeTimeMs: (session.activeTimeMs || 0) + accumulatedTime,
+				}));
 			}
 		};
 	}, [activeSessionId, stopInterval]);
