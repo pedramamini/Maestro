@@ -12,8 +12,8 @@ Replace 100+ instances of the ghost icon button pattern (`p-1 rounded hover:bg-w
 
 ## Pre-flight Checks
 
-- [ ] Phase 07 (session state) is complete
-- [ ] `rtk npm run lint` passes
+- [x] Phase 07 (session state) is complete
+- [x] `rtk npm run lint` passes
 
 ---
 
@@ -21,29 +21,36 @@ Replace 100+ instances of the ghost icon button pattern (`p-1 rounded hover:bg-w
 
 ### 1. Survey pattern variations
 
-- [ ] Run: `rtk grep "p-1 rounded hover:bg-white/10" src/renderer/ --glob "*.tsx"`
-- [ ] Run: `rtk grep "p-1.5 rounded hover:bg-white/10" src/renderer/ --glob "*.tsx"`
-- [ ] Run: `rtk grep "opacity-0 group-hover:opacity-100" src/renderer/ --glob "*.tsx"` (filter for p-1 variants)
-- [ ] Categorize variants: Standard (`p-1`), Larger (`p-1.5`), Fade-in (with `opacity-0 group-hover:opacity-100`), With tooltip
+- [x] Run: `rtk grep "p-1 rounded hover:bg-white/10" src/renderer/ --glob "*.tsx"` - **57 instances across ~30 files**
+- [x] Run: `rtk grep "p-1.5 rounded hover:bg-white/10" src/renderer/ --glob "*.tsx"` - **24 instances across ~12 files**
+- [x] Run: `rtk grep "opacity-0 group-hover:opacity-100" src/renderer/ --glob "*.tsx"` (filter for p-1 variants) - **~6 ghost button fade-in instances** (SessionListItem, ProcessMonitor x4, LogFilterControls, LogViewer); many others are tooltips/overlays, not ghost buttons
+- [x] Categorize variants: Standard (`p-1`), Larger (`p-1.5`), Fade-in (with `opacity-0 group-hover:opacity-100`), With tooltip
+  - **Standard (p-1):** 57 instances - base ghost icon button with `p-1 rounded hover:bg-white/10 transition-colors`
+  - **Larger (p-1.5):** 24 instances - larger padding variant
+  - **Fade-in:** ~6 instances combining ghost button styling with `opacity-0 group-hover:opacity-100`
+  - **With disabled:** ~8 instances include `disabled:opacity-50` or `disabled:opacity-30`
+  - **With layout extras:** Several include `shrink-0`, `flex-shrink-0`, `ml-auto`, `flex items-center gap-1`
+  - **Custom hover colors:** ~3 instances use `hover:bg-red-500/20` instead (SessionList, ExecutionQueueBrowser) - these may stay custom
+  - **Total migratable:** ~81 instances (p-1 + p-1.5 patterns with `hover:bg-white/10`)
 
 ### 2. Create the GhostIconButton component
 
-- [ ] Create `src/renderer/components/ui/GhostIconButton.tsx`
-- [ ] Define props interface: `icon`, `size` (`'sm' | 'md'`), `showOnHover`, `tooltip`, `className`, `children`, plus `ButtonHTMLAttributes`
-- [ ] Implement size mapping: `sm` = `p-1`, `md` = `p-1.5`
-- [ ] Implement `showOnHover` via `opacity-0 group-hover:opacity-100` class
-- [ ] Implement optional tooltip wrapper
-- [ ] Export from the component file
+- [x] Create `src/renderer/components/ui/GhostIconButton.tsx`
+- [x] Define props interface: `icon`, `size` (`'sm' | 'md'`), `showOnHover`, `tooltip`, `className`, `children`, plus `ButtonHTMLAttributes`
+- [x] Implement size mapping: `sm` = `p-1`, `md` = `p-1.5`
+- [x] Implement `showOnHover` via `opacity-0 group-hover:opacity-100` class
+- [x] Implement optional tooltip wrapper - uses native `title` attribute (consistent with existing codebase pattern)
+- [x] Export from the component file - added to `src/renderer/components/ui/index.ts` barrel export
 
 ### 3. Write tests for GhostIconButton
 
-- [ ] Create `src/__tests__/renderer/components/ui/GhostIconButton.test.tsx`
-- [ ] Test renders with default props
-- [ ] Test applies `p-1` for size `sm` and `p-1.5` for size `md`
-- [ ] Test applies `opacity-0 group-hover:opacity-100` when `showOnHover` is true
-- [ ] Test passes through button props (`onClick`, `disabled`, `aria-label`)
-- [ ] Test renders tooltip when `tooltip` prop provided
-- [ ] Run tests: `rtk vitest run src/__tests__/renderer/components/ui/GhostIconButton.test.tsx`
+- [x] Create `src/__tests__/renderer/components/ui/GhostIconButton.test.tsx`
+- [x] Test renders with default props
+- [x] Test applies `p-1` for size `sm` and `p-1.5` for size `md`
+- [x] Test applies `opacity-0 group-hover:opacity-100` when `showOnHover` is true
+- [x] Test passes through button props (`onClick`, `disabled`, `aria-label`)
+- [x] Test renders tooltip when `tooltip` prop provided
+- [x] Run tests: `CI=1 rtk vitest run src/__tests__/renderer/components/ui/GhostIconButton.test.tsx` - **14 tests pass**
 
 ### 4. Migrate high-frequency files first
 
@@ -51,7 +58,7 @@ Replace 100+ instances of the ghost icon button pattern (`p-1 rounded hover:bg-w
 - [ ] Migrate `SessionList.tsx`
 - [ ] Migrate `RightPanel.tsx`
 - [ ] Migrate `SymphonyModal.tsx`
-- [ ] For each file: run `rtk vitest run <relevant-test>` after migration
+- [ ] For each file: run `CI=1 rtk vitest run <relevant-test>` after migration
 
 ### 5. Migrate remaining 36+ files
 
@@ -69,7 +76,7 @@ Replace 100+ instances of the ghost icon button pattern (`p-1 rounded hover:bg-w
 ### 7. Verify full build
 
 - [ ] Run lint: `rtk npm run lint`
-- [ ] Run tests: `rtk vitest run`
+- [ ] Run tests: `CI=1 rtk vitest run`
 - [ ] Verify types: `rtk tsc -p tsconfig.main.json --noEmit && rtk tsc -p tsconfig.lint.json --noEmit`
 
 ### 8. Count remaining raw patterns
@@ -84,7 +91,7 @@ Replace 100+ instances of the ghost icon button pattern (`p-1 rounded hover:bg-w
 After completing changes, run targeted tests for the files you modified:
 
 ```bash
-rtk vitest run <path-to-relevant-test-files>
+CI=1 rtk vitest run <path-to-relevant-test-files>
 ```
 
 **Rule: Zero new test failures from your changes.** Pre-existing failures on the baseline are acceptable.

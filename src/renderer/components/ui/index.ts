@@ -16,3 +16,6 @@ export type { EmojiPickerFieldProps } from './EmojiPickerField';
 
 export { ToggleSwitch } from './ToggleSwitch';
 export type { ToggleSwitchProps } from './ToggleSwitch';
+
+export { GhostIconButton } from './GhostIconButton';
+export type { GhostIconButtonProps } from './GhostIconButton';
