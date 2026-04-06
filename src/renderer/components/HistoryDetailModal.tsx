@@ -30,6 +30,7 @@ import { calculateContextDisplay } from '../utils/contextUsage';
 import { getContextColor } from '../utils/theme';
 import { DoubleCheck } from './History';
 import { safeClipboardWrite } from '../utils/clipboard';
+import { GhostIconButton } from './ui/GhostIconButton';
 
 interface HistoryDetailModalProps {
 	theme: Theme;
@@ -213,12 +214,9 @@ export function HistoryDetailModal({
 					style={{ borderColor: theme.colors.border }}
 				>
 					{/* Close button - absolute top right */}
-					<button
-						onClick={onClose}
-						className="absolute top-4 right-4 p-1 rounded hover:bg-white/10 transition-colors"
-					>
+					<GhostIconButton onClick={onClose} className="absolute top-4 right-4">
 						<X className="w-5 h-5" style={{ color: theme.colors.textDim }} />
-					</button>
+					</GhostIconButton>
 
 					<div className="flex flex-col gap-3 pr-8">
 						{/* Agent Name - shown as prominent header when available (from Director's Notes) */}

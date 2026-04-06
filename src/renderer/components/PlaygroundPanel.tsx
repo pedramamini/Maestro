@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import type { Theme, AutoRunStats, ThemeMode } from '../types';
+import { GhostIconButton } from './ui/GhostIconButton';
 import { useLayerStack } from '../contexts/LayerStackContext';
 import { MODAL_PRIORITIES } from '../constants/modalPriorities';
 import { AchievementCard } from './AchievementCard';
@@ -595,13 +596,9 @@ ${staggerDelays.map((delay, i) => `svg.wand-sparkle-active path:nth-child(${i + 
 								Developer Playground
 							</h2>
 						</div>
-						<button
-							onClick={onClose}
-							className="p-1 rounded hover:bg-white/10 transition-colors"
-							style={{ color: theme.colors.textDim }}
-						>
+						<GhostIconButton onClick={onClose} style={{ color: theme.colors.textDim }}>
 							<X className="w-5 h-5" />
-						</button>
+						</GhostIconButton>
 					</div>
 
 					{/* Tabs */}

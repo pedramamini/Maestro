@@ -6,6 +6,7 @@ import { MODAL_PRIORITIES } from '../constants/modalPriorities';
 import { FIXED_SHORTCUTS } from '../constants/shortcuts';
 import { formatShortcutKeys } from '../utils/shortcutFormatter';
 import { Modal } from './ui/Modal';
+import { GhostIconButton } from './ui/GhostIconButton';
 import { KEYBOARD_MASTERY_LEVELS, getLevelForPercentage } from '../constants/keyboardMastery';
 
 interface ShortcutsHelpModalProps {
@@ -71,13 +72,9 @@ export function ShortcutsHelpModal({
 						{searchQuery ? `${filteredCount} / ${totalShortcuts}` : totalShortcuts}
 					</span>
 				</div>
-				<button
-					onClick={onClose}
-					className="p-1 rounded hover:bg-white/10 transition-colors"
-					style={{ color: theme.colors.textDim }}
-				>
+				<GhostIconButton onClick={onClose} style={{ color: theme.colors.textDim }}>
 					<X className="w-4 h-4" />
-				</button>
+				</GhostIconButton>
 			</div>
 
 			{hasNoAgents && (

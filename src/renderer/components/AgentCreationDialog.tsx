@@ -27,6 +27,7 @@ import type { Theme, AgentConfig } from '../types';
 import type { RegisteredRepository, SymphonyIssue } from '../../shared/symphony-types';
 import { useLayerStack } from '../contexts/LayerStackContext';
 import { MODAL_PRIORITIES } from '../constants/modalPriorities';
+import { GhostIconButton } from './ui/GhostIconButton';
 import { AgentConfigPanel } from './shared/AgentConfigPanel';
 import { useAgentConfiguration } from '../hooks/agent/useAgentConfiguration';
 import { isBetaAgent } from '../../shared/agentMetadata';
@@ -301,13 +302,13 @@ export function AgentCreationDialog({
 							Create Symphony Agent
 						</h2>
 					</div>
-					<button
+					<GhostIconButton
 						onClick={onClose}
-						className="p-1.5 rounded hover:bg-white/10 transition-colors"
-						title="Close (Esc)"
+						size="md"
+						tooltip="Close (Esc)"
 					>
 						<X className="w-4 h-4" style={{ color: theme.colors.textDim }} />
-					</button>
+					</GhostIconButton>
 				</div>
 
 				{/* Content - scrollable */}
@@ -410,19 +411,18 @@ export function AgentCreationDialog({
 													>
 														Available
 													</span>
-													<button
+													<GhostIconButton
 														onClick={(e) => {
 															e.stopPropagation();
 															handleRefreshAgent(agent.id);
 														}}
-														className="p-1 rounded hover:bg-white/10 transition-colors"
-														title="Refresh detection"
+														tooltip="Refresh detection"
 														style={{ color: theme.colors.textDim }}
 													>
 														<RefreshCw
 															className={`w-3 h-3 ${refreshingAgent === agent.id ? 'animate-spin' : ''}`}
 														/>
-													</button>
+													</GhostIconButton>
 												</div>
 											</div>
 

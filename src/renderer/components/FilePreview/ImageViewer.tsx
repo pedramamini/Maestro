@@ -1,5 +1,6 @@
 import React, { useState, useRef, useCallback, useEffect, memo } from 'react';
 import { ZoomIn, ZoomOut, Maximize2 } from 'lucide-react';
+import { GhostIconButton } from '../ui/GhostIconButton';
 
 interface ImageViewerProps {
 	src: string;
@@ -118,36 +119,29 @@ export const ImageViewer = memo(function ImageViewer({ src, alt, theme }: ImageV
 				className="flex items-center justify-center gap-2 py-1.5 shrink-0 border-b"
 				style={{ borderColor: theme.colors.border }}
 			>
-				<button
+				<GhostIconButton
 					onClick={zoomOut}
-					className="p-1 rounded hover:bg-white/10 transition-colors"
 					style={{ color: theme.colors.textDim }}
-					title="Zoom out"
+					tooltip="Zoom out"
 				>
 					<ZoomOut className="w-4 h-4" />
-				</button>
+				</GhostIconButton>
 				<span
 					className="text-xs font-mono w-12 text-center select-none"
 					style={{ color: theme.colors.textMain }}
 				>
 					{zoomPercent}%
 				</span>
-				<button
-					onClick={zoomIn}
-					className="p-1 rounded hover:bg-white/10 transition-colors"
-					style={{ color: theme.colors.textDim }}
-					title="Zoom in"
-				>
+				<GhostIconButton onClick={zoomIn} style={{ color: theme.colors.textDim }} tooltip="Zoom in">
 					<ZoomIn className="w-4 h-4" />
-				</button>
-				<button
+				</GhostIconButton>
+				<GhostIconButton
 					onClick={fitToView}
-					className="p-1 rounded hover:bg-white/10 transition-colors"
 					style={{ color: theme.colors.textDim }}
-					title="Fit to view"
+					tooltip="Fit to view"
 				>
 					<Maximize2 className="w-4 h-4" />
-				</button>
+				</GhostIconButton>
 				{naturalSize && (
 					<span className="text-[10px] ml-2" style={{ color: theme.colors.textDim }}>
 						{naturalSize.w} × {naturalSize.h}

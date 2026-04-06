@@ -3,6 +3,7 @@ import { X, GitBranch, FolderOpen, Plus, Loader2, AlertTriangle, Server } from '
 import type { Theme, Session, GhCliStatus } from '../types';
 import { useLayerStack } from '../contexts/LayerStackContext';
 import { MODAL_PRIORITIES } from '../constants/modalPriorities';
+import { GhostIconButton } from './ui/GhostIconButton';
 import { getParentDir } from '../../shared/formatters';
 
 interface WorktreeConfigModalProps {
@@ -203,9 +204,9 @@ export function WorktreeConfigModal({
 							Worktree Configuration
 						</h2>
 					</div>
-					<button onClick={onClose} className="p-1 rounded hover:bg-white/10 transition-colors">
+					<GhostIconButton onClick={onClose}>
 						<X className="w-4 h-4" style={{ color: theme.colors.textDim }} />
-					</button>
+					</GhostIconButton>
 				</div>
 
 				{/* Content */}

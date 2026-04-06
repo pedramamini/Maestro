@@ -62,10 +62,12 @@ Replace 100+ instances of the ghost icon button pattern (`p-1 rounded hover:bg-w
 
 ### 5. Migrate remaining 36+ files
 
-- [ ] Search for remaining pattern instances: `rtk grep "p-1 rounded hover:bg-white/10" src/renderer/ --glob "*.tsx"`
-- [ ] Replace each instance with `<GhostIconButton>` using appropriate props
-- [ ] Ensure the `icon` prop matches (most pass a lucide-react icon as child)
-- [ ] Run targeted tests after each batch
+- [x] Search for remaining pattern instances: `rtk grep "p-1 rounded hover:bg-white/10" src/renderer/ --glob "*.tsx"` - **56 p-1 instances + 20 p-1.5 instances across 36 files**
+- [x] Replace each instance with `<GhostIconButton>` using appropriate props - **77 total instances migrated across 42 files in 6 parallel batches**
+- [x] Ensure the `icon` prop matches (most pass a lucide-react icon as child) - all children preserved as-is
+- [x] Run targeted tests after each batch - **All GhostIconButton tests (14/14) and FileExplorerPanel tests pass; pre-existing failures in AgentSessionsBrowser/TransferProgressModal confirmed on baseline**
+- [x] Added `React.forwardRef` support to GhostIconButton to support `ref` prop usage (FileExplorerPanel, MarketplaceModal, SymphonyModal)
+- [x] Post-migration grep: only 1 match remains - the doc comment in GhostIconButton.tsx itself. Zero remaining `p-1.5` pattern instances.
 
 ### 6. Handle edge cases
 

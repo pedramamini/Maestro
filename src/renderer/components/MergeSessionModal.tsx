@@ -18,11 +18,13 @@ import React, { useState, useEffect, useRef, useMemo, useCallback, memo } from '
 import { Search, ChevronRight, ChevronDown, GitMerge, Clipboard, Check, X } from 'lucide-react';
 import type { Theme, Session, AITab } from '../types';
 import type { MergeResult } from '../types/contextMerge';
+import { GhostIconButton } from './ui/GhostIconButton';
 import { fuzzyMatchWithScore } from '../utils/search';
 import { useLayerStack } from '../contexts/LayerStackContext';
 import { useListNavigation } from '../hooks';
 import { MODAL_PRIORITIES } from '../constants/modalPriorities';
 import { formatTokensCompact } from '../utils/formatters';
+import { estimateTokensFromLogs } from '../../shared/formatters';
 import { ScreenReaderAnnouncement, useAnnouncement } from './Wizard/ScreenReaderAnnouncement';
 
 /**
@@ -73,15 +75,6 @@ export interface MergeSessionModalProps {
 		targetTabId: string | undefined,
 		options: MergeOptions
 	) => Promise<MergeResult>;
-}
-
-/**
- * Estimate token count from log entries
- * Uses a simple heuristic: ~4 characters per token (average for English text)
- */
-function estimateTokens(logs: { text: string }[]): number {
-	const totalChars = logs.reduce((sum, log) => sum + (log.text?.length || 0), 0);
-	return Math.round(totalChars / 4);
 }
 
 /**
@@ -247,7 +240,7 @@ export function MergeSessionModal({
 
 	const sourceTokens = useMemo(() => {
 		if (!sourceTab) return 0;
-		return estimateTokens(sourceTab.logs);
+		return estimateTokensFromLogs(sourceTab.logs);
 	}, [sourceTab]);
 
 	// Build flat list of sessions and tabs for navigation
@@ -283,7 +276,7 @@ export function MergeSessionModal({
 						sessionName: displayName,
 						tabName: getTabDisplayName(tab),
 						agentSessionId: tab.agentSessionId || undefined,
-						estimatedTokens: estimateTokens(tab.logs),
+						estimatedTokens: estimateTokensFromLogs(tab.logs),
 						lastActivity:
 							tab.logs.length > 0 ? Math.max(...tab.logs.map((l) => l.timestamp)) : tab.createdAt,
 					});
@@ -617,15 +610,13 @@ export function MergeSessionModal({
 							Merge "{sourceTab ? getTabDisplayName(sourceTab) : 'Context'}" Into
 						</h2>
 					</div>
-					<button
-						type="button"
+					<GhostIconButton
 						onClick={onClose}
-						className="p-1 rounded hover:bg-white/10 transition-colors"
 						style={{ color: theme.colors.textDim }}
 						aria-label="Close merge dialog"
 					>
 						<X className="w-4 h-4" aria-hidden="true" />
-					</button>
+					</GhostIconButton>
 				</div>
 
 				{/* Description for screen readers */}

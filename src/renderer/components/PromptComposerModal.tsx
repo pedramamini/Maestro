@@ -21,6 +21,7 @@ import {
 	formatEnterToSendTooltip,
 } from '../utils/shortcutFormatter';
 import { normalizeMentionName } from '../utils/participantColors';
+import { GhostIconButton } from './ui/GhostIconButton';
 
 const EMPTY_STAGED_IMAGES: string[] = [];
 
@@ -450,16 +451,16 @@ export function PromptComposerModal({
 						</span>
 					</div>
 					<div className="flex items-center gap-3">
-						<button
+						<GhostIconButton
+							size="md"
 							onClick={() => {
 								onSubmit(value);
 								onClose();
 							}}
-							className="p-1.5 rounded hover:bg-white/10 transition-colors"
-							title="Close (Escape)"
+							tooltip="Close (Escape)"
 						>
 							<X className="w-5 h-5" style={{ color: theme.colors.textDim }} />
-						</button>
+						</GhostIconButton>
 					</div>
 				</div>
 
@@ -592,13 +593,14 @@ export function PromptComposerModal({
 						{/* Image attachment button */}
 						{setStagedImages && (
 							<>
-								<button
+								<GhostIconButton
+									size="md"
 									onClick={() => fileInputRef.current?.click()}
-									className="p-1.5 rounded hover:bg-white/10 transition-colors opacity-60 hover:opacity-100"
-									title="Attach Image"
+									className="opacity-60 hover:opacity-100"
+									tooltip="Attach Image"
 								>
 									<ImageIcon className="w-4 h-4" style={{ color: theme.colors.textDim }} />
-								</button>
+								</GhostIconButton>
 								<input
 									ref={fileInputRef}
 									type="file"

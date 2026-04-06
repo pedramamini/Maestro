@@ -26,6 +26,7 @@ import { useLayerStack } from '../contexts/LayerStackContext';
 import { MODAL_PRIORITIES } from '../constants/modalPriorities';
 import { getAgentDisplayName } from '../services/contextGroomer';
 import { formatElapsedTime } from '../../shared/formatters';
+import { GhostIconButton } from './ui/GhostIconButton';
 
 /**
  * Progress stage definition for transfer display
@@ -368,15 +369,13 @@ export function TransferProgressModal({
 						{isComplete ? 'Transfer Complete' : 'Transferring Context...'}
 					</h2>
 					{isComplete && (
-						<button
-							type="button"
+						<GhostIconButton
 							onClick={() => onComplete?.() || onCancel()}
-							className="p-1 rounded hover:bg-white/10 transition-colors"
 							style={{ color: theme.colors.textDim }}
 							aria-label="Close modal"
 						>
 							<X className="w-4 h-4" />
-						</button>
+						</GhostIconButton>
 					)}
 				</div>
 

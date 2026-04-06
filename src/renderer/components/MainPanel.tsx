@@ -25,6 +25,7 @@ import {
 	Server,
 	Bookmark,
 } from 'lucide-react';
+import { GhostIconButton } from './ui/GhostIconButton';
 import { LogViewer } from './LogViewer';
 import { TerminalOutput } from './TerminalOutput';
 import {
@@ -59,11 +60,7 @@ import type {
 	ThinkingItem,
 	AgentError,
 } from '../types';
-
-interface SlashCommand {
-	command: string;
-	description: string;
-}
+import type { SlashCommand } from '../slashCommands';
 
 /**
  * Handle for MainPanel component to expose methods to parent.
@@ -470,7 +467,7 @@ export const MainPanel = React.memo(
 		const headerRef = useRef<HTMLDivElement>(null);
 		const filePreviewContainerRef = useRef<HTMLDivElement>(null);
 		const filePreviewRef = useRef<FilePreviewHandle>(null);
-		// Map of sessionId → TerminalViewHandle for each mounted terminal session.
+		// Map of sessionId â†’ TerminalViewHandle for each mounted terminal session.
 		// Using a Map instead of a single ref so we can keep terminals alive for all sessions,
 		// not just the currently active one.
 		const terminalViewRefs = useRef<Map<string, TerminalViewHandle>>(new Map());
@@ -501,7 +498,7 @@ export const MainPanel = React.memo(
 					return prev.includes(activeSession.id) ? prev : [...prev, activeSession.id];
 				});
 			} else if (mountedTerminalSessionsRef.current.has(activeSession.id)) {
-				// Last terminal tab was closed — remove from mounted set.
+				// Last terminal tab was closed â€” remove from mounted set.
 				mountedTerminalSessionsRef.current.delete(activeSession.id);
 				setMountedTerminalSessionIds((prev) => prev.filter((id) => id !== activeSession.id));
 			}
@@ -519,7 +516,7 @@ export const MainPanel = React.memo(
 						.forEach((id) => mountedTerminalSessionsRef.current.delete(id));
 					return filtered;
 				}
-				return prev; // Same reference → no re-render
+				return prev; // Same reference â†’ no re-render
 			});
 		}, [allSessionIds]);
 
@@ -1083,7 +1080,7 @@ export const MainPanel = React.memo(
 																				{gitInfo.behind}
 																			</span>
 																		)}
-																		<button
+																		<GhostIconButton
 																			onClick={(e) => {
 																				e.stopPropagation();
 																				copyToClipboard(
@@ -1091,14 +1088,13 @@ export const MainPanel = React.memo(
 																					`"${gitInfo.branch}" copied to clipboard`
 																				);
 																			}}
-																			className="p-1 rounded hover:bg-white/10 transition-colors"
-																			title="Copy branch name"
+																			tooltip="Copy branch name"
 																		>
 																			<Copy
 																				className="w-3 h-3"
 																				style={{ color: theme.colors.textDim }}
 																			/>
-																		</button>
+																		</GhostIconButton>
 																	</div>
 																</div>
 
@@ -1129,19 +1125,19 @@ export const MainPanel = React.memo(
 																				.replace(/^https?:\/\//, '')
 																				.replace(/\.git$/, '')}
 																		</button>
-																		<button
+																		<GhostIconButton
 																			onClick={(e) => {
 																				e.stopPropagation();
 																				copyToClipboard(gitInfo.remote);
 																			}}
-																			className="p-1 rounded hover:bg-white/10 transition-colors ml-auto shrink-0"
-																			title="Copy remote URL"
+																			className="ml-auto shrink-0"
+																			tooltip="Copy remote URL"
 																		>
 																			<Copy
 																				className="w-3 h-3"
 																				style={{ color: theme.colors.textDim }}
 																			/>
-																		</button>
+																		</GhostIconButton>
 																	</div>
 																)}
 
@@ -1637,13 +1633,12 @@ export const MainPanel = React.memo(
 										</button>
 									)}
 									{props.onClearAgentError && activeTabError.recoverable && (
-										<button
+										<GhostIconButton
 											onClick={props.onClearAgentError}
-											className="p-1 rounded hover:bg-white/10 transition-colors"
-											title="Dismiss error"
+											tooltip="Dismiss error"
 										>
 											<X className="w-4 h-4" style={{ color: theme.colors.error }} />
-										</button>
+										</GhostIconButton>
 									)}
 								</div>
 							</div>
@@ -1836,7 +1831,7 @@ export const MainPanel = React.memo(
 										)}
 									</div>
 
-									{/* Input Area (hidden in mobile landscape, during wizard doc generation, and in terminal mode — xterm.js handles its own input) */}
+									{/* Input Area (hidden in mobile landscape, during wizard doc generation, and in terminal mode â€” xterm.js handles its own input) */}
 									{!isMobileLandscape &&
 										!activeTab?.wizardState?.isGeneratingDocs &&
 										activeSession.inputMode !== 'terminal' && (

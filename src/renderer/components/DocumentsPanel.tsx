@@ -12,6 +12,7 @@ import {
 	Folder,
 	CheckSquare,
 } from 'lucide-react';
+import { GhostIconButton } from './ui/GhostIconButton';
 import type { Theme, BatchDocumentEntry } from '../types';
 import { generateId } from '../utils/ids';
 import { useLayerStack } from '../contexts/LayerStackContext';
@@ -475,22 +476,18 @@ function DocumentSelectorModal({
 							<CheckSquare className="w-3.5 h-3.5" />
 							{allSelected ? 'Deselect All' : 'Select All'}
 						</button>
-						<button
+						<GhostIconButton
 							onClick={handleRefresh}
 							disabled={refreshing}
-							className="p-1 rounded hover:bg-white/10 transition-colors disabled:opacity-50"
+							className="disabled:opacity-50"
 							style={{ color: theme.colors.textDim }}
-							title="Refresh document list"
+							tooltip="Refresh document list"
 						>
 							<RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />
-						</button>
-						<button
-							onClick={onClose}
-							className="p-1 rounded hover:bg-white/10 transition-colors"
-							style={{ color: theme.colors.textDim }}
-						>
+						</GhostIconButton>
+						<GhostIconButton onClick={onClose} style={{ color: theme.colors.textDim }}>
 							<X className="w-4 h-4" />
-						</button>
+						</GhostIconButton>
 					</div>
 				</div>
 
@@ -1079,14 +1076,14 @@ export function DocumentsPanel({
 
 											{/* Duplicate Button (invisible placeholder when not applicable) */}
 											{doc.resetOnCompletion && !doc.isMissing ? (
-												<button
+												<GhostIconButton
 													onClick={() => handleDuplicateDocument(doc.id)}
-													className="p-1 rounded hover:bg-white/10 transition-colors shrink-0"
+													className="shrink-0"
 													style={{ color: theme.colors.textDim }}
-													title="Duplicate document"
+													tooltip="Duplicate document"
 												>
 													<Plus className="w-3.5 h-3.5" />
-												</button>
+												</GhostIconButton>
 											) : (
 												<span className="p-1 shrink-0 invisible">
 													<Plus className="w-3.5 h-3.5" />
@@ -1094,16 +1091,16 @@ export function DocumentsPanel({
 											)}
 
 											{/* Remove Button */}
-											<button
+											<GhostIconButton
 												onClick={() => handleRemoveDocument(doc.id)}
-												className="p-1 rounded hover:bg-white/10 transition-colors shrink-0"
+												className="shrink-0"
 												style={{
 													color: doc.isMissing ? theme.colors.error : theme.colors.textDim,
 												}}
-												title={doc.isMissing ? 'Remove missing document' : 'Remove document'}
+												tooltip={doc.isMissing ? 'Remove missing document' : 'Remove document'}
 											>
 												<X className="w-3.5 h-3.5" />
-											</button>
+											</GhostIconButton>
 										</div>
 
 										{/* Drop Indicator Line - After (only for last item) */}

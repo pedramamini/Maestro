@@ -9,6 +9,7 @@ import { Modal, ModalFooter } from './ui/Modal';
 import { AgentConfigPanel } from './shared/AgentConfigPanel';
 import { SshRemoteSelector } from './shared/SshRemoteSelector';
 import { formatShortcutKeys } from '../utils/shortcutFormatter';
+import { GhostIconButton } from './ui/GhostIconButton';
 import { safeClipboardWrite } from '../utils/clipboard';
 import { isBetaAgent, getAgentDisplayName } from '../../shared/agentMetadata';
 import { buildMaestroUrl } from '../utils/buildMaestroUrl';
@@ -846,19 +847,18 @@ export function NewInstanceModal({
 																	Not Found
 																</span>
 															)}
-															<button
+															<GhostIconButton
 																onClick={(e) => {
 																	e.stopPropagation();
 																	handleRefreshAgent(agent.id);
 																}}
-																className="p-1 rounded hover:bg-white/10 transition-colors"
-																title="Refresh detection"
+																tooltip="Refresh detection"
 																style={{ color: theme.colors.textDim }}
 															>
 																<RefreshCw
 																	className={`w-3 h-3 ${refreshingAgent === agent.id ? 'animate-spin' : ''}`}
 																/>
-															</button>
+															</GhostIconButton>
 														</>
 													) : (
 														<span
@@ -1586,15 +1586,13 @@ export function EditAgentModal({
 								{copiedId ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
 								<span>{session.id.slice(0, 8)}</span>
 							</button>
-							<button
-								type="button"
+							<GhostIconButton
 								onClick={onClose}
-								className="p-1 rounded hover:bg-white/10 transition-colors"
 								style={{ color: theme.colors.textDim }}
 								aria-label="Close modal"
 							>
 								<X className="w-4 h-4" />
-							</button>
+							</GhostIconButton>
 						</div>
 					</div>
 				}

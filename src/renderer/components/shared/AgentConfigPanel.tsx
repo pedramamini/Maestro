@@ -16,6 +16,7 @@
 import { useState, useRef, useMemo, useEffect } from 'react';
 import { RefreshCw, Plus, Trash2, HelpCircle, ChevronDown } from 'lucide-react';
 import type { Theme, AgentConfig, AgentConfigOption } from '../../types';
+import { GhostIconButton } from '../ui/GhostIconButton';
 
 // Counter for generating stable IDs for env vars
 let envVarIdCounter = 0;
@@ -388,15 +389,15 @@ export function AgentConfigPanel({
 				>
 					<span>{isSshEnabled ? 'Remote Command' : 'Path'}</span>
 					{onRefreshAgent && !isSshEnabled && (
-						<button
+						<GhostIconButton
 							onClick={onRefreshAgent}
-							className="p-1 rounded hover:bg-white/10 transition-colors flex items-center gap-1"
-							title="Re-detect agent path"
+							className="flex items-center gap-1"
+							tooltip="Re-detect agent path"
 							style={{ color: theme.colors.textDim }}
 						>
 							<RefreshCw className={`w-3 h-3 ${refreshingAgent ? 'animate-spin' : ''}`} />
 							<span className="text-xs">Detect</span>
-						</button>
+						</GhostIconButton>
 					)}
 				</label>
 				<div className="flex gap-2">

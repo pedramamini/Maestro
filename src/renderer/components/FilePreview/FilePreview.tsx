@@ -19,6 +19,7 @@ import { useLayerStack } from '../../contexts/LayerStackContext';
 import { MODAL_PRIORITIES } from '../../constants/modalPriorities';
 import { useClickOutside } from '../../hooks/ui/useClickOutside';
 import { Modal, ModalFooter } from '../ui/Modal';
+import { GhostIconButton } from '../ui/GhostIconButton';
 import { MermaidRenderer } from '../MermaidRenderer';
 import { CsvTableRenderer } from '../CsvTableRenderer';
 import { getEncoder } from '../../utils/tokenCounter';
@@ -942,13 +943,9 @@ export const FilePreview = React.memo(
 							>
 								Reload
 							</button>
-							<button
-								onClick={() => setFileChangedOnDisk(false)}
-								className="p-1 rounded hover:bg-white/10 transition-colors"
-								title="Dismiss"
-							>
+							<GhostIconButton onClick={() => setFileChangedOnDisk(false)} tooltip="Dismiss">
 								<X className="w-3 h-3" style={{ color: theme.colors.textDim }} />
-							</button>
+							</GhostIconButton>
 						</div>
 					</div>
 				)}
@@ -1001,24 +998,26 @@ export const FilePreview = React.memo(
 										>
 											{totalMatches > 0 ? `${currentMatchIndex + 1}/${totalMatches}` : 'No matches'}
 										</span>
-										<button
+										<GhostIconButton
 											onClick={goToPrevMatch}
 											disabled={totalMatches === 0}
-											className="p-1.5 rounded hover:bg-white/10 transition-colors disabled:opacity-30"
+											size="md"
+											className="disabled:opacity-30"
 											style={{ color: theme.colors.textDim }}
-											title="Previous match (Shift+Enter)"
+											tooltip="Previous match (Shift+Enter)"
 										>
 											<ChevronUp className="w-4 h-4" />
-										</button>
-										<button
+										</GhostIconButton>
+										<GhostIconButton
 											onClick={goToNextMatch}
 											disabled={totalMatches === 0}
-											className="p-1.5 rounded hover:bg-white/10 transition-colors disabled:opacity-30"
+											size="md"
+											className="disabled:opacity-30"
 											style={{ color: theme.colors.textDim }}
-											title="Next match (Enter)"
+											tooltip="Next match (Enter)"
 										>
 											<ChevronDown className="w-4 h-4" />
-										</button>
+										</GhostIconButton>
 									</>
 								)}
 							</div>

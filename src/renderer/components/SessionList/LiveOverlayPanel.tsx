@@ -3,6 +3,7 @@ import { Copy, ExternalLink } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import type { Theme } from '../../types';
 import { safeClipboardWrite } from '../../utils/clipboard';
+import { GhostIconButton } from '../ui/GhostIconButton';
 
 import type { TunnelStatus } from '../../hooks/remote/useLiveOverlay';
 
@@ -373,8 +374,8 @@ export const LiveOverlayPanel = memo(function LiveOverlayPanel({
 								''
 							)}
 						</div>
-						<button
-							type="button"
+						<GhostIconButton
+							size="md"
 							onClick={() => {
 								const url = activeUrlTab === 'local' ? webInterfaceUrl : tunnelUrl;
 								if (url) {
@@ -384,22 +385,22 @@ export const LiveOverlayPanel = memo(function LiveOverlayPanel({
 									);
 								}
 							}}
-							className="p-1.5 rounded hover:bg-white/10 transition-colors shrink-0"
-							title="Copy URL"
+							className="shrink-0"
+							tooltip="Copy URL"
 						>
 							<Copy className="w-3 h-3" style={{ color: theme.colors.textDim }} />
-						</button>
-						<button
-							type="button"
+						</GhostIconButton>
+						<GhostIconButton
+							size="md"
 							onClick={() => {
 								const url = activeUrlTab === 'local' ? webInterfaceUrl : tunnelUrl;
 								if (url) window.maestro.shell.openExternal(url);
 							}}
-							className="p-1.5 rounded hover:bg-white/10 transition-colors shrink-0"
-							title="Open in Browser"
+							className="shrink-0"
+							tooltip="Open in Browser"
 						>
 							<ExternalLink className="w-3 h-3" style={{ color: theme.colors.textDim }} />
-						</button>
+						</GhostIconButton>
 					</div>
 
 					{/* QR Code with optional loading overlay */}

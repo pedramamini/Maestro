@@ -28,6 +28,7 @@ import {
 } from 'lucide-react';
 import type { Theme } from '../types';
 import { formatSize, formatRelativeTime } from '../utils/formatters';
+import { GhostIconButton } from './ui/GhostIconButton';
 import type { ClaudeSession } from '../hooks';
 
 /**
@@ -136,13 +137,14 @@ export function SessionListItem({
 			</button>
 
 			{/* Quick Resume button */}
-			<button
+			<GhostIconButton
 				onClick={(e) => onQuickResume(session, e)}
-				className="p-1 rounded hover:bg-white/10 transition-colors shrink-0 opacity-0 group-hover:opacity-100"
-				title="Resume session in new tab"
+				showOnHover
+				className="shrink-0"
+				tooltip="Resume session in new tab"
 			>
 				<Play className="w-4 h-4" style={{ color: theme.colors.success }} />
-			</button>
+			</GhostIconButton>
 
 			<div className="flex-1 min-w-0">
 				{/* Session name row - inline rename input or display */}

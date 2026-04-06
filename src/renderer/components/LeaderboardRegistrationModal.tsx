@@ -30,6 +30,7 @@ import { KEYBOARD_MASTERY_LEVELS } from '../constants/keyboardMastery';
 import { DEFAULT_SHORTCUTS, TAB_SHORTCUTS, FIXED_SHORTCUTS } from '../constants/shortcuts';
 import { generateId } from '../utils/ids';
 import { buildMaestroUrl } from '../utils/buildMaestroUrl';
+import { GhostIconButton } from './ui/GhostIconButton';
 
 // Total shortcuts for calculating mastery percentage
 const TOTAL_SHORTCUTS_COUNT =
@@ -796,13 +797,9 @@ export function LeaderboardRegistrationModal({
 								: 'Register for Leaderboard'}
 						</h2>
 					</div>
-					<button
-						onClick={onClose}
-						className="p-1 rounded hover:bg-white/10 transition-colors"
-						style={{ color: theme.colors.textDim }}
-					>
+					<GhostIconButton onClick={onClose} style={{ color: theme.colors.textDim }}>
 						<X className="w-4 h-4" />
-					</button>
+					</GhostIconButton>
 				</div>
 
 				{/* Content */}

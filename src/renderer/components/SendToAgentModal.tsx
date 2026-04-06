@@ -21,8 +21,10 @@ import { fuzzyMatchWithScore } from '../utils/search';
 import { useLayerStack } from '../contexts/LayerStackContext';
 import { MODAL_PRIORITIES } from '../constants/modalPriorities';
 import { formatTokensCompact } from '../utils/formatters';
+import { estimateTokensFromLogs } from '../../shared/formatters';
 import { getAgentIcon } from '../constants/agentIcons';
 import { ScreenReaderAnnouncement, useAnnouncement } from './Wizard/ScreenReaderAnnouncement';
+import { GhostIconButton } from './ui/GhostIconButton';
 
 /**
  * Session availability status for display in the selection list
@@ -104,15 +106,6 @@ function getStatusColor(status: SessionStatus, theme: Theme): string {
  */
 function getSessionDisplayName(session: Session): string {
 	return session.name || session.projectRoot.split('/').pop() || 'Unnamed Session';
-}
-
-/**
- * Estimate token count from log entries
- * Uses a simple heuristic: ~4 characters per token (average for English text)
- */
-function estimateTokens(logs: { text: string }[]): number {
-	const totalChars = logs.reduce((sum, log) => sum + (log.text?.length || 0), 0);
-	return Math.round(totalChars / 4);
 }
 
 /**
@@ -227,7 +220,7 @@ export function SendToAgentModal({
 
 	const sourceTokens = useMemo(() => {
 		if (!sourceTab) return 0;
-		return estimateTokens(sourceTab.logs);
+		return estimateTokensFromLogs(sourceTab.logs);
 	}, [sourceTab]);
 
 	// Build list of sessions with status (excluding the source session and terminal-only sessions)
@@ -470,15 +463,13 @@ export function SendToAgentModal({
 							Send Context to Agent
 						</h2>
 					</div>
-					<button
-						type="button"
+					<GhostIconButton
 						onClick={onClose}
-						className="p-1 rounded hover:bg-white/10 transition-colors"
 						style={{ color: theme.colors.textDim }}
 						aria-label="Close dialog"
 					>
 						<X className="w-4 h-4" aria-hidden="true" />
-					</button>
+					</GhostIconButton>
 				</div>
 
 				{/* Description for screen readers */}

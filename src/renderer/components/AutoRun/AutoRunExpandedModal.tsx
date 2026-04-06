@@ -21,6 +21,7 @@ import type { AutoRunHandle } from './types';
 import type { DocumentTaskCount } from './AutoRunDocumentSelector';
 import { ConfirmModal } from '../ConfirmModal';
 import { formatShortcutKeys } from '../../utils/shortcutFormatter';
+import { GhostIconButton } from '../ui/GhostIconButton';
 
 interface AutoRunExpandedModalProps {
 	theme: Theme;
@@ -431,13 +432,12 @@ export function AutoRunExpandedModal({
 							<Minimize2 className="w-4 h-4" />
 							Collapse
 						</button>
-						<button
+						<GhostIconButton
 							onClick={handleClose}
-							className="p-1 rounded hover:bg-white/10 transition-colors"
-							title="Close (Esc)"
+							tooltip="Close (Esc)"
 						>
 							<X className="w-5 h-5" style={{ color: theme.colors.textDim }} />
-						</button>
+						</GhostIconButton>
 					</div>
 				</div>
 

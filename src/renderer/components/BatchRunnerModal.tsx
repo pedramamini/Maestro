@@ -15,6 +15,7 @@ import {
 	LayoutGrid,
 	Loader2,
 } from 'lucide-react';
+import { GhostIconButton } from './ui/GhostIconButton';
 import type { Theme, BatchDocumentEntry, BatchRunConfig, WorktreeRunTarget } from '../types';
 import { useLayerStack } from '../contexts/LayerStackContext';
 import { MODAL_PRIORITIES } from '../constants/modalPriorities';
@@ -24,7 +25,7 @@ import { PlaybookNameModal } from './PlaybookNameModal';
 import { AgentPromptComposerModal } from './AgentPromptComposerModal';
 import { DocumentsPanel } from './DocumentsPanel';
 import { WorktreeRunSection } from './WorktreeRunSection';
-import { useSessionStore } from '../stores/sessionStore';
+import { useSessionStore, selectSessionById } from '../stores/sessionStore';
 import { useUIStore } from '../stores/uiStore';
 import { getModalActions } from '../stores/modalStore';
 import {
@@ -108,7 +109,7 @@ export function BatchRunnerModal(props: BatchRunnerModalProps) {
 	// Worktree run target state
 	const [worktreeTarget, setWorktreeTarget] = useState<WorktreeRunTarget | null>(null);
 	const [isPreparingWorktree, setIsPreparingWorktree] = useState(false);
-	const activeSession = useSessionStore((state) => state.sessions.find((s) => s.id === sessionId));
+	const activeSession = useSessionStore(selectSessionById(sessionId));
 	const sessions = useSessionStore((state) => state.sessions);
 	const worktreeChildren = useMemo(
 		() => sessions.filter((s) => s.parentSessionId === sessionId),
@@ -510,25 +511,25 @@ export function BatchRunnerModal(props: BatchRunnerModalProps) {
 														>
 															{pb.documents.length} doc{pb.documents.length !== 1 ? 's' : ''}
 														</span>
-														<button
+														<GhostIconButton
 															onClick={(e) => {
 																e.stopPropagation();
 																handleExportPlaybook(pb);
 															}}
-															className="p-1 rounded hover:bg-white/10 transition-colors shrink-0"
+															className="shrink-0"
 															style={{ color: theme.colors.textDim }}
-															title="Export playbook"
+															tooltip="Export playbook"
 														>
 															<Download className="w-3 h-3" />
-														</button>
-														<button
+														</GhostIconButton>
+														<GhostIconButton
 															onClick={(e) => handleDeletePlaybook(pb, e)}
-															className="p-1 rounded hover:bg-white/10 transition-colors shrink-0"
+															className="shrink-0"
 															style={{ color: theme.colors.textDim }}
-															title="Delete playbook"
+															tooltip="Delete playbook"
 														>
 															<X className="w-3 h-3" />
-														</button>
+														</GhostIconButton>
 													</div>
 												))}
 											</div>
@@ -775,14 +776,15 @@ export function BatchRunnerModal(props: BatchRunnerModalProps) {
 								}}
 								placeholder="Enter the system prompt for auto-run..."
 							/>
-							<button
+							<GhostIconButton
 								onClick={() => setPromptComposerOpen(true)}
-								className="absolute top-2 right-2 p-1.5 rounded hover:bg-white/10 transition-colors"
+								size="md"
+								className="absolute top-2 right-2"
 								style={{ color: theme.colors.textDim }}
-								title="Expand editor"
+								tooltip="Expand editor"
 							>
 								<Maximize2 className="w-4 h-4" />
-							</button>
+							</GhostIconButton>
 						</div>
 						{/* Prompt validation warning */}
 						{isPromptEmpty && (

@@ -40,6 +40,7 @@ import {
 	type ClaudeSession,
 } from '../hooks';
 import { formatShortcutKeys } from '../utils/shortcutFormatter';
+import { GhostIconButton } from './ui/GhostIconButton';
 
 type SearchMode = 'title' | 'user' | 'assistant' | 'all';
 
@@ -721,18 +722,18 @@ export function AgentSessionsBrowser({
 				<div className="flex items-center gap-4">
 					{viewingSession ? (
 						<>
-							<button
+							<GhostIconButton
+								size="md"
 								onClick={clearViewingSession}
-								className="p-1.5 rounded hover:bg-white/10 transition-colors"
 								style={{ color: theme.colors.textDim }}
 							>
 								<ChevronLeft className="w-5 h-5" />
-							</button>
+							</GhostIconButton>
 							{/* Star button for detail view */}
-							<button
+							<GhostIconButton
+								size="md"
 								onClick={(e) => toggleStar(viewingSession.sessionId, e)}
-								className="p-1.5 rounded hover:bg-white/10 transition-colors"
-								title={
+								tooltip={
 									starredSessions.has(viewingSession.sessionId)
 										? 'Remove from favorites'
 										: 'Add to favorites'
@@ -749,7 +750,7 @@ export function AgentSessionsBrowser({
 											: 'transparent',
 									}}
 								/>
-							</button>
+							</GhostIconButton>
 							<div className="flex flex-col min-w-0">
 								{/* Session name with edit button */}
 								{renamingSessionId === viewingSession.sessionId ? (
@@ -1129,11 +1130,11 @@ export function AgentSessionsBrowser({
 								className={`flex ${msg.type === 'user' ? 'justify-end' : 'justify-start'}`}
 							>
 								{/* Tool call messages - render with ToolCallCard */}
-								{msg.toolUse && msg.toolUse.length > 0 ? (
+								{Array.isArray(msg.toolUse) && msg.toolUse.length > 0 ? (
 									<div className="max-w-[85%]">
 										<ToolCallCard
 											theme={theme}
-											toolUse={msg.toolUse}
+											toolUse={msg.toolUse as any}
 											timestamp={formatRelativeTime(msg.timestamp)}
 											defaultExpanded={false}
 										/>
@@ -1270,7 +1271,8 @@ export function AgentSessionsBrowser({
 							style={{ backgroundColor: theme.colors.bgActivity }}
 						>
 							{/* Toggle button: Search icon when showing graph, BarChart icon when showing search */}
-							<button
+							<GhostIconButton
+								size="md"
 								onClick={() => {
 									setShowSearchPanel(!showSearchPanel);
 									if (!showSearchPanel) {
@@ -1281,9 +1283,9 @@ export function AgentSessionsBrowser({
 										handleSearchChange('');
 									}
 								}}
-								className="p-1.5 rounded hover:bg-white/10 transition-colors shrink-0"
+								className="shrink-0"
 								style={{ color: theme.colors.textDim }}
-								title={
+								tooltip={
 									showSearchPanel
 										? 'Show activity graph'
 										: `Search sessions (${formatShortcutKeys(['Meta', 'f'])})`
@@ -1294,7 +1296,7 @@ export function AgentSessionsBrowser({
 								) : (
 									<Search className="w-4 h-4" />
 								)}
-							</button>
+							</GhostIconButton>
 
 							{/* Conditional: Search input OR Activity Graph - fixed height container to prevent layout shift */}
 							<div className="flex-1 min-w-0 flex items-center" style={{ height: '38px' }}>

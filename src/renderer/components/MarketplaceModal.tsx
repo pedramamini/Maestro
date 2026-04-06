@@ -34,6 +34,7 @@ import {
 	createMarkdownComponents,
 } from '../utils/markdownConfig';
 import { formatShortcutKeys } from '../utils/shortcutFormatter';
+import { GhostIconButton } from './ui/GhostIconButton';
 
 // ============================================================================
 // Types
@@ -340,13 +341,9 @@ function PlaybookDetailView({
 				style={{ borderColor: theme.colors.border }}
 			>
 				{/* Back button */}
-				<button
-					onClick={onBack}
-					className="p-1.5 rounded hover:bg-white/10 transition-colors"
-					title="Back to list (Esc)"
-				>
+				<GhostIconButton onClick={onBack} size="md" tooltip="Back to list (Esc)">
 					<ArrowLeft className="w-5 h-5" style={{ color: theme.colors.textDim }} />
-				</button>
+				</GhostIconButton>
 
 				{/* Playbook title and category */}
 				<div className="flex-1 min-w-0">
@@ -1145,15 +1142,14 @@ export function MarketplaceModal({
 								</h2>
 								{/* Help button */}
 								<div className="relative">
-									<button
+									<GhostIconButton
 										ref={helpButtonRef}
 										onClick={() => setShowHelp(!showHelp)}
-										className="p-1 rounded hover:bg-white/10 transition-colors"
-										title="About the Playbook Exchange"
+										tooltip="About the Playbook Exchange"
 										aria-label="Help"
 									>
 										<HelpCircle className="w-4 h-4" style={{ color: theme.colors.textDim }} />
-									</button>
+									</GhostIconButton>
 									{showHelp && (
 										<div
 											className="absolute top-full left-0 mt-2 w-80 p-4 rounded-lg shadow-xl z-50"
@@ -1231,11 +1227,12 @@ export function MarketplaceModal({
 									{fromCache ? `Cached ${formatCacheAge(cacheAge)}` : 'Live'}
 								</span>
 								{/* Refresh button */}
-								<button
+								<GhostIconButton
 									onClick={() => refresh()}
 									disabled={isRefreshing}
-									className="p-1.5 rounded hover:bg-white/10 transition-colors disabled:opacity-50"
-									title="Refresh marketplace data"
+									size="md"
+									className="disabled:opacity-50"
+									tooltip="Refresh marketplace data"
 									aria-label="Refresh marketplace"
 									aria-busy={isRefreshing}
 								>
@@ -1243,16 +1240,16 @@ export function MarketplaceModal({
 										className={`w-4 h-4 ${isRefreshing ? 'animate-spin' : ''}`}
 										style={{ color: theme.colors.textDim }}
 									/>
-								</button>
+								</GhostIconButton>
 								{/* Close button */}
-								<button
+								<GhostIconButton
 									onClick={onClose}
-									className="p-1.5 rounded hover:bg-white/10 transition-colors"
-									title="Close (Esc)"
+									size="md"
+									tooltip="Close (Esc)"
 									aria-label="Close marketplace"
 								>
 									<X className="w-5 h-5" style={{ color: theme.colors.textDim }} />
-								</button>
+								</GhostIconButton>
 							</div>
 						</div>
 

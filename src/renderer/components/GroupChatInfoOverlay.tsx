@@ -22,6 +22,7 @@ import type { Theme, GroupChat, GroupChatMessage, GroupChatHistoryEntry } from '
 import { MODAL_PRIORITIES } from '../constants/modalPriorities';
 import { Modal } from './ui/Modal';
 import { downloadGroupChatExport } from '../utils/groupChatExport';
+import { GhostIconButton } from './ui/GhostIconButton';
 
 interface GroupChatInfoOverlayProps {
 	theme: Theme;
@@ -57,14 +58,14 @@ function InfoRow({ theme, label, value, onCopy }: InfoRowProps) {
 					{value}
 				</span>
 				{onCopy && (
-					<button
+					<GhostIconButton
 						onClick={onCopy}
-						className="p-1 rounded hover:bg-white/10 transition-colors shrink-0"
+						className="shrink-0"
 						style={{ color: theme.colors.textDim }}
-						title="Copy to clipboard"
+						tooltip="Copy to clipboard"
 					>
 						<Copy className="w-3 h-3" />
-					</button>
+					</GhostIconButton>
 				)}
 			</div>
 		</div>
@@ -268,14 +269,14 @@ export function GroupChatInfoOverlay({
 										<span className="truncate max-w-[280px]">{groupChat.moderatorSessionId}</span>
 										<ExternalLink className="w-3 h-3 shrink-0" />
 									</button>
-									<button
+									<GhostIconButton
 										onClick={() => copyToClipboard(groupChat.moderatorSessionId)}
-										className="p-1 rounded hover:bg-white/10 transition-colors shrink-0"
+										className="shrink-0"
 										style={{ color: theme.colors.textDim }}
-										title="Copy to clipboard"
+										tooltip="Copy to clipboard"
 									>
 										<Copy className="w-3 h-3" />
-									</button>
+									</GhostIconButton>
 								</>
 							) : (
 								<span

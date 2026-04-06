@@ -1756,15 +1756,14 @@ export function SymphonyModal({
 								</h2>
 								{/* Help button */}
 								<div className="relative">
-									<button
+									<GhostIconButton
 										ref={helpButtonRef}
 										onClick={() => setShowHelp(!showHelp)}
-										className="p-1 rounded hover:bg-white/10 transition-colors"
-										title="About Maestro Symphony"
+										tooltip="About Maestro Symphony"
 										aria-label="Help"
 									>
 										<HelpCircle className="w-4 h-4" style={{ color: theme.colors.textDim }} />
-									</button>
+									</GhostIconButton>
 									{showHelp && (
 										<div
 											className="absolute top-full left-0 mt-2 w-80 p-4 rounded-lg shadow-xl z-50"

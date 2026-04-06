@@ -17,6 +17,7 @@ import {
 import { captureException } from '../../utils/sentry';
 import { formatShortcutKeys } from '../../utils/shortcutFormatter';
 import { formatFileSize, formatDateTime } from './filePreviewUtils';
+import { GhostIconButton } from '../ui/GhostIconButton';
 import { formatTokenCount } from '../../utils/tokenCounter';
 
 interface FilePreviewHeaderProps {
@@ -308,15 +309,15 @@ export const FilePreviewHeader = React.memo(function FilePreviewHeader({
 									}, 150);
 								}}
 							>
-								<button
+								<GhostIconButton
 									onClick={onNavigateBack}
 									disabled={!canGoBack}
-									className="p-1 rounded hover:bg-white/10 transition-colors disabled:opacity-30 disabled:cursor-default"
+									className="disabled:opacity-30 disabled:cursor-default"
 									style={{ color: canGoBack ? theme.colors.textMain : theme.colors.textDim }}
-									title={`Go back (${formatShortcutKeys(['Meta', 'ArrowLeft'])})`}
+									tooltip={`Go back (${formatShortcutKeys(['Meta', 'ArrowLeft'])})`}
 								>
 									<ChevronLeft className="w-4 h-4" />
-								</button>
+								</GhostIconButton>
 								{/* Back history popup */}
 								{showBackPopup && backHistory && backHistory.length > 0 && (
 									<div
@@ -365,15 +366,15 @@ export const FilePreviewHeader = React.memo(function FilePreviewHeader({
 									}, 150);
 								}}
 							>
-								<button
+								<GhostIconButton
 									onClick={onNavigateForward}
 									disabled={!canGoForward}
-									className="p-1 rounded hover:bg-white/10 transition-colors disabled:opacity-30 disabled:cursor-default"
+									className="disabled:opacity-30 disabled:cursor-default"
 									style={{ color: canGoForward ? theme.colors.textMain : theme.colors.textDim }}
-									title={`Go forward (${formatShortcutKeys(['Meta', 'ArrowRight'])})`}
+									tooltip={`Go forward (${formatShortcutKeys(['Meta', 'ArrowRight'])})`}
 								>
 									<ChevronRight className="w-4 h-4" />
-								</button>
+								</GhostIconButton>
 								{/* Forward history popup */}
 								{showForwardPopup && forwardHistory && forwardHistory.length > 0 && (
 									<div

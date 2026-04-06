@@ -24,6 +24,7 @@ import {
 	AlertTriangle,
 	Loader2,
 } from 'lucide-react';
+import { GhostIconButton } from './ui/GhostIconButton';
 import { updateSessionWith } from '../stores/sessionStore';
 import type { Session, Theme, FocusArea } from '../types';
 import type { FileNode } from '../types/fileTree';
@@ -1100,46 +1101,42 @@ function FileExplorerPanelInner(props: FileExplorerPanelProps) {
 				<div className="flex items-center gap-1 flex-shrink-0">
 					{/* Open working directory in system file manager */}
 					{!session.sshRemote && (
-						<button
+						<GhostIconButton
 							onClick={() =>
 								window.maestro?.shell?.openPath(session.fullPath || session.projectRoot)
 							}
-							className="p-1 rounded hover:bg-white/10 transition-colors"
-							title={getOpenInLabel(window.maestro?.platform || 'darwin')}
+							tooltip={getOpenInLabel(window.maestro?.platform || 'darwin')}
 							style={{ color: theme.colors.textDim }}
 						>
 							<FolderOpen className="w-3.5 h-3.5" />
-						</button>
+						</GhostIconButton>
 					)}
 					{/* Last Document Graph indicator */}
 					{lastGraphFocusFile && onOpenLastDocumentGraph && (
-						<button
+						<GhostIconButton
 							onClick={onOpenLastDocumentGraph}
-							className="p-1 rounded hover:bg-white/10 transition-colors"
-							title="Open Last Document Graph"
+							tooltip="Open Last Document Graph"
 							style={{ color: theme.colors.accent }}
 						>
 							<GitBranch className="w-3.5 h-3.5" />
-						</button>
+						</GhostIconButton>
 					)}
-					<button
+					<GhostIconButton
 						onClick={() => setShowHiddenFiles(!showHiddenFiles)}
-						className="p-1 rounded hover:bg-white/10 transition-colors"
-						title={showHiddenFiles ? 'Hide dotfiles' : 'Show dotfiles'}
+						tooltip={showHiddenFiles ? 'Hide dotfiles' : 'Show dotfiles'}
 						style={{
 							color: showHiddenFiles ? theme.colors.accent : theme.colors.textDim,
 							backgroundColor: showHiddenFiles ? `${theme.colors.accent}20` : 'transparent',
 						}}
 					>
 						{showHiddenFiles ? <Eye className="w-3.5 h-3.5" /> : <EyeOff className="w-3.5 h-3.5" />}
-					</button>
-					<button
+					</GhostIconButton>
+					<GhostIconButton
 						ref={refreshButtonRef}
 						onClick={handleRefresh}
 						onMouseEnter={handleRefreshMouseEnter}
 						onMouseLeave={handleRefreshMouseLeave}
-						className="p-1 rounded hover:bg-white/10 transition-colors"
-						title={
+						tooltip={
 							autoRefreshInterval > 0
 								? `Auto-refresh every ${autoRefreshInterval}s`
 								: 'Refresh file tree'
@@ -1150,29 +1147,27 @@ function FileExplorerPanelInner(props: FileExplorerPanelProps) {
 						}}
 					>
 						<RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin' : ''}`} />
-					</button>
-					<button
+					</GhostIconButton>
+					<GhostIconButton
 						onClick={() => expandAllFolders(session.id, session)}
-						className="p-1 rounded hover:bg-white/10 transition-colors"
-						title="Expand all folders"
+						tooltip="Expand all folders"
 						style={{ color: theme.colors.textDim }}
 					>
 						<div className="flex flex-col items-center -space-y-1.5">
 							<ChevronUp className="w-3.5 h-3.5" />
 							<ChevronDown className="w-3.5 h-3.5" />
 						</div>
-					</button>
-					<button
+					</GhostIconButton>
+					<GhostIconButton
 						onClick={() => collapseAllFolders(session.id)}
-						className="p-1 rounded hover:bg-white/10 transition-colors"
-						title="Collapse all folders"
+						tooltip="Collapse all folders"
 						style={{ color: theme.colors.textDim }}
 					>
 						<div className="flex flex-col items-center -space-y-1.5">
 							<ChevronDown className="w-3.5 h-3.5" />
 							<ChevronUp className="w-3.5 h-3.5" />
 						</div>
-					</button>
+					</GhostIconButton>
 				</div>
 			</div>
 

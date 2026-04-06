@@ -13,6 +13,7 @@ import { Package, Check, Loader2, FolderOpen, AlertCircle, Copy } from 'lucide-r
 import type { Theme } from '../types';
 import { MODAL_PRIORITIES } from '../constants/modalPriorities';
 import { Modal, ModalFooter } from './ui/Modal';
+import { GhostIconButton } from './ui/GhostIconButton';
 import { notifyToast } from '../stores/notificationStore';
 
 interface DebugPackageModalProps {
@@ -264,15 +265,14 @@ export function DebugPackageModal({ theme, isOpen, onClose }: DebugPackageModalP
 							<p className="text-xs break-all" style={{ color: theme.colors.textDim }}>
 								{resultPath}
 							</p>
-							<button
-								type="button"
+							<GhostIconButton
 								onClick={handleCopyPath}
-								className="p-1 rounded hover:bg-white/10 transition-colors flex-shrink-0"
+								className="flex-shrink-0"
 								style={{ color: theme.colors.textDim }}
-								title="Copy file path to clipboard"
+								tooltip="Copy file path to clipboard"
 							>
 								<Copy className="w-3.5 h-3.5" />
-							</button>
+							</GhostIconButton>
 						</div>
 					</div>
 				</div>

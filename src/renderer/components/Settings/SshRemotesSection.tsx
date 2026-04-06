@@ -35,6 +35,7 @@ import type { Theme } from '../../types';
 import type { SshRemoteConfig } from '../../../shared/types';
 import { useSshRemotes } from '../../hooks';
 import { SshRemoteModal } from './SshRemoteModal';
+import { GhostIconButton } from '../ui/GhostIconButton';
 
 export interface SshRemotesSectionProps {
 	/** Theme object for styling */
@@ -261,13 +262,13 @@ export function SshRemotesSection({ theme }: SshRemotesSectionProps) {
 											{/* Actions */}
 											<div className="flex items-center gap-1">
 												{/* Test Connection */}
-												<button
-													type="button"
+												<GhostIconButton
+													size="md"
 													onClick={() => handleTestFromList(config)}
 													disabled={isTesting || !config.enabled}
-													className="p-1.5 rounded hover:bg-white/10 transition-colors disabled:opacity-50"
+													className="disabled:opacity-50"
 													style={{ color: theme.colors.textDim }}
-													title="Test connection"
+													tooltip="Test connection"
 												>
 													{isTesting ? (
 														<Loader2 className="w-4 h-4 animate-spin" />
@@ -276,7 +277,7 @@ export function SshRemotesSection({ theme }: SshRemotesSectionProps) {
 													) : (
 														<WifiOff className="w-4 h-4" />
 													)}
-												</button>
+												</GhostIconButton>
 
 												{/* Set as Default */}
 												<button
@@ -295,31 +296,30 @@ export function SshRemotesSection({ theme }: SshRemotesSectionProps) {
 												</button>
 
 												{/* Edit */}
-												<button
-													type="button"
+												<GhostIconButton
+													size="md"
 													onClick={() => handleEdit(config)}
-													className="p-1.5 rounded hover:bg-white/10 transition-colors"
 													style={{ color: theme.colors.textDim }}
-													title="Edit"
+													tooltip="Edit"
 												>
 													<Edit2 className="w-4 h-4" />
-												</button>
+												</GhostIconButton>
 
 												{/* Delete */}
-												<button
-													type="button"
+												<GhostIconButton
+													size="md"
 													onClick={() => handleDelete(config.id)}
 													disabled={isDeleting}
-													className="p-1.5 rounded hover:bg-white/10 transition-colors disabled:opacity-50"
+													className="disabled:opacity-50"
 													style={{ color: theme.colors.error }}
-													title="Delete"
+													tooltip="Delete"
 												>
 													{isDeleting ? (
 														<Loader2 className="w-4 h-4 animate-spin" />
 													) : (
 														<Trash2 className="w-4 h-4" />
 													)}
-												</button>
+												</GhostIconButton>
 											</div>
 										</div>
 									</div>

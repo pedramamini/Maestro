@@ -7,6 +7,7 @@ import { TEMPLATE_VARIABLES } from '../utils/templateVariables';
 import { useTemplateAutocomplete } from '../hooks';
 import { TemplateAutocompleteDropdown } from './TemplateAutocompleteDropdown';
 import { estimateTokenCount } from '../../shared/formatters';
+import { GhostIconButton } from './ui/GhostIconButton';
 
 interface AgentPromptComposerModalProps {
 	isOpen: boolean;
@@ -151,13 +152,9 @@ export function AgentPromptComposerModal({
 						</span>
 					</div>
 					<div className="flex items-center gap-3">
-						<button
-							onClick={handleDone}
-							className="p-1.5 rounded hover:bg-white/10 transition-colors"
-							title="Close (Escape)"
-						>
+						<GhostIconButton size="md" onClick={handleDone} tooltip="Close (Escape)">
 							<X className="w-5 h-5" style={{ color: theme.colors.textDim }} />
-						</button>
+						</GhostIconButton>
 					</div>
 				</div>
 

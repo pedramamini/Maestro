@@ -1,5 +1,6 @@
 import React, { useRef, useEffect, useCallback } from 'react';
 import { Search, ChevronUp, ChevronDown, X } from 'lucide-react';
+import { GhostIconButton } from '../ui/GhostIconButton';
 import type { Theme } from '../../types';
 import { useLayerStack } from '../../contexts/LayerStackContext';
 import { MODAL_PRIORITIES } from '../../constants/modalPriorities';
@@ -99,34 +100,33 @@ export function AutoRunSearchBar({
 					<span className="text-xs whitespace-nowrap" style={{ color: theme.colors.textDim }}>
 						{totalMatches > 0 ? `${currentMatchIndex + 1}/${totalMatches}` : 'No matches'}
 					</span>
-					<button
+					<GhostIconButton
 						onClick={onPrevMatch}
 						disabled={totalMatches === 0}
-						className="p-1 rounded hover:bg-white/10 transition-colors disabled:opacity-30"
+						className="disabled:opacity-30"
 						style={{ color: theme.colors.textDim }}
-						title="Previous match (Shift+Enter)"
+						tooltip="Previous match (Shift+Enter)"
 					>
 						<ChevronUp className="w-4 h-4" />
-					</button>
-					<button
+					</GhostIconButton>
+					<GhostIconButton
 						onClick={onNextMatch}
 						disabled={totalMatches === 0}
-						className="p-1 rounded hover:bg-white/10 transition-colors disabled:opacity-30"
+						className="disabled:opacity-30"
 						style={{ color: theme.colors.textDim }}
-						title="Next match (Enter)"
+						tooltip="Next match (Enter)"
 					>
 						<ChevronDown className="w-4 h-4" />
-					</button>
+					</GhostIconButton>
 				</>
 			)}
-			<button
+			<GhostIconButton
 				onClick={onClose}
-				className="p-1 rounded hover:bg-white/10 transition-colors"
 				style={{ color: theme.colors.textDim }}
-				title="Close search (Esc)"
+				tooltip="Close search (Esc)"
 			>
 				<X className="w-4 h-4" />
-			</button>
+			</GhostIconButton>
 		</div>
 	);
 }

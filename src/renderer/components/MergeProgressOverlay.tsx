@@ -18,6 +18,7 @@ import { X, Check, Loader2, AlertTriangle, GitMerge } from 'lucide-react';
 import type { Theme } from '../types';
 import type { GroomingProgress, MergeResult } from '../types/contextMerge';
 import { formatElapsedTime } from '../../shared/formatters';
+import { GhostIconButton } from './ui/GhostIconButton';
 
 /**
  * Progress stage definition for display
@@ -228,15 +229,13 @@ export const MergeProgressOverlay = memo(function MergeProgressOverlay({
 								)}
 							</div>
 							{!isComplete && (
-								<button
-									type="button"
+								<GhostIconButton
 									onClick={handleCancelClick}
-									className="p-1 rounded hover:bg-white/10 transition-colors"
 									style={{ color: theme.colors.textDim }}
-									title="Cancel"
+									tooltip="Cancel"
 								>
 									<X className="w-4 h-4" />
-								</button>
+								</GhostIconButton>
 							)}
 						</div>
 

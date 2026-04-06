@@ -13,6 +13,8 @@ import {
 	FlaskConical,
 } from 'lucide-react';
 import type { Theme } from '../types';
+import { GhostIconButton } from './ui/GhostIconButton';
+import type { UpdateStatus } from '../../shared/types';
 import { MODAL_PRIORITIES } from '../constants/modalPriorities';
 import ReactMarkdown from 'react-markdown';
 import { Modal } from './ui/Modal';
@@ -35,20 +37,6 @@ interface UpdateCheckResult {
 	releases: Release[];
 	releasesUrl: string;
 	assetsReady: boolean;
-	error?: string;
-}
-
-interface UpdateStatus {
-	status:
-		| 'idle'
-		| 'checking'
-		| 'available'
-		| 'not-available'
-		| 'downloading'
-		| 'downloaded'
-		| 'error';
-	info?: { version: string };
-	progress?: { percent: number; bytesPerSecond: number; total: number; transferred: number };
 	error?: string;
 }
 
@@ -179,24 +167,20 @@ export function UpdateCheckModal({ theme, onClose }: UpdateCheckModalProps) {
 				</h2>
 			</div>
 			<div className="flex items-center gap-2">
-				<button
+				<GhostIconButton
 					onClick={checkForUpdates}
 					disabled={loading || isDownloading}
-					className="p-1 rounded hover:bg-white/10 transition-colors disabled:opacity-50"
-					title="Refresh"
+					className="disabled:opacity-50"
+					tooltip="Refresh"
 				>
 					<RefreshCw
 						className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`}
 						style={{ color: theme.colors.textDim }}
 					/>
-				</button>
-				<button
-					onClick={onClose}
-					className="p-1 rounded hover:bg-white/10 transition-colors"
-					style={{ color: theme.colors.textDim }}
-				>
+				</GhostIconButton>
+				<GhostIconButton onClick={onClose} style={{ color: theme.colors.textDim }}>
 					<X className="w-4 h-4" />
-				</button>
+				</GhostIconButton>
 			</div>
 		</div>
 	);
