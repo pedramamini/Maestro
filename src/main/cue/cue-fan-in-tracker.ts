@@ -58,6 +58,25 @@ export function createCueFanInTracker(deps: CueFanInDeps): CueFanInTracker {
 	const fanInTrackers = new Map<string, Map<string, FanInSourceCompletion>>();
 	const fanInTimers = new Map<string, ReturnType<typeof setTimeout>>();
 
+	/**
+	 * Resolve a user-authored `sources` list (names or IDs, possibly mixed) to a
+	 * deduped set of canonical session IDs. This is the source of truth for
+	 * fan-in completion counting — the raw `sources.length` is NOT reliable
+	 * because (a) the same session may be referenced by both name and ID, and
+	 * (b) names may fail to resolve, in which case we fall back to treating the
+	 * raw string as an identity (same as the pre-refactor behavior) so a user's
+	 * config never silently hangs fan-in.
+	 */
+	function resolveSourcesToIds(sources: string[]): Set<string> {
+		const allSessions = deps.getSessions();
+		const resolved = new Set<string>();
+		for (const src of sources) {
+			const session = allSessions.find((s) => s.name === src || s.id === src);
+			resolved.add(session?.id ?? src);
+		}
+		return resolved;
+	}
+
 	function handleFanInTimeout(
 		key: string,
 		ownerSessionId: string,
@@ -70,15 +89,26 @@ export function createCueFanInTracker(deps: CueFanInDeps): CueFanInTracker {
 		if (!tracker) return;
 
 		const completedNames = [...tracker.values()].map((c) => c.sessionName);
-		const completedIds = [...tracker.keys()];
+		const completedIds = new Set([...tracker.keys()]);
 
-		// Determine which sources haven't completed yet
-		const allSessions = deps.getSessions();
-		const timedOutSources = sources.filter((src) => {
-			const session = allSessions.find((s) => s.name === src || s.id === src);
-			const sessionId = session?.id ?? src;
-			return !completedIds.includes(sessionId) && !completedIds.includes(src);
-		});
+		// Determine which sources haven't completed yet — using the canonical
+		// resolved-ID set so duplicate references (name + id for same session)
+		// don't get reported twice as timed out.
+		const resolvedSourceIds = resolveSourcesToIds(sources);
+		const timedOutSources: string[] = [];
+		for (const resolvedId of resolvedSourceIds) {
+			if (!completedIds.has(resolvedId)) {
+				timedOutSources.push(resolvedId);
+			}
+		}
+
+		// Total counted against the deduped resolved-ID set, not the raw
+		// `sources` array. The user's yaml may list the same session by both
+		// name and id ('Agent A' + 'agent-a'); the dedupe pass collapses those
+		// to a single entry, and the log totals must reflect the deduped count
+		// or they'll show misleading "1/2 completed" messages when the fan-in
+		// is actually waiting for 0 more sources.
+		const totalSources = resolvedSourceIds.size;
 
 		if ((sub.fan_in_timeout_on_fail ?? settings.timeout_on_fail) === 'continue') {
 			// Fire with partial data
@@ -97,7 +127,7 @@ export function createCueFanInTracker(deps: CueFanInDeps): CueFanInTracker {
 				completions.length > 0 ? Math.max(...completions.map((c) => c.chainDepth)) : 0;
 			deps.onLog(
 				'cue',
-				`[CUE] Fan-in "${sub.name}" timed out (continue mode) — firing with ${completedNames.length}/${sources.length} sources`
+				`[CUE] Fan-in "${sub.name}" timed out (continue mode) — firing with ${completedNames.length}/${totalSources} sources`
 			);
 			deps.dispatchSubscription(
 				ownerSessionId,
@@ -111,7 +141,7 @@ export function createCueFanInTracker(deps: CueFanInDeps): CueFanInTracker {
 			fanInTrackers.delete(key);
 			deps.onLog(
 				'cue',
-				`[CUE] Fan-in "${sub.name}" timed out (break mode) — ${completedNames.length}/${sources.length} completed, waiting for: ${timedOutSources.join(', ')}`
+				`[CUE] Fan-in "${sub.name}" timed out (break mode) — ${completedNames.length}/${totalSources} completed, waiting for: ${timedOutSources.join(', ')}`
 			);
 		}
 	}
@@ -151,9 +181,20 @@ export function createCueFanInTracker(deps: CueFanInDeps): CueFanInTracker {
 				fanInTimers.set(key, timer);
 			}
 
-			const remaining = sources.length - tracker.size;
-			if (remaining > 0) {
-				deps.onLog('cue', `[CUE] Fan-in "${sub.name}": waiting for ${remaining} more session(s)`);
+			// Use the deduped resolved-ID set as the completion target so fan-in
+			// does not hang when the same session is referenced by both name and
+			// ID in the user's yaml.
+			const resolvedSourceIds = resolveSourcesToIds(sources);
+			const remainingIds: string[] = [];
+			for (const resolvedId of resolvedSourceIds) {
+				if (!tracker.has(resolvedId)) remainingIds.push(resolvedId);
+			}
+
+			if (remainingIds.length > 0) {
+				deps.onLog(
+					'cue',
+					`[CUE] Fan-in "${sub.name}": waiting for ${remainingIds.length} more session(s)`
+				);
 				return;
 			}
 

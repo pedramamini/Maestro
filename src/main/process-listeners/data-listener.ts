@@ -111,6 +111,23 @@ export function setupDataListener(
 			return; // Don't send to regular process:data handler
 		}
 
+		// CRITICAL: group-chat domain containment. If we got here with a sessionId
+		// that starts with GROUP_CHAT_PREFIX but neither the moderator regex nor
+		// parseParticipantSessionId matched, it means something produced a
+		// group-chat-shaped sessionId we don't recognize. We MUST NOT fall through
+		// to safeSend('process:data', ...) or the web broadcast path below, or the
+		// group-chat output bytes will leak into the regular renderer channel
+		// (and, transitively, into anything that subscribes to process:data —
+		// including the session's stdout history that the UI displays). Drop the
+		// data and log loudly so the unknown shape can be investigated.
+		if (isGroupChatSession) {
+			debugLog(
+				'GroupChat:Debug',
+				`WARNING: unrecognized group-chat sessionId shape — dropping ${data.length} bytes to prevent cross-domain leak: ${sessionId}`
+			);
+			return;
+		}
+
 		safeSend('process:data', sessionId, data);
 
 		// Broadcast to web clients - extract base session ID (remove -ai or -terminal suffix)

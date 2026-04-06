@@ -522,15 +522,29 @@ export class CueEngine {
 				if (!sources.some((src) => src === sessionId || src === completingName)) continue;
 
 				if (sources.length === 1) {
-					// Single source — fire immediately
+					// Single source — fire immediately.
+					//
+					// INVARIANT: sourceOutput is built EXCLUSIVELY from
+					// completionData.stdout. There must NEVER be a fallback to any
+					// session-level output store, group-chat output buffer, or live
+					// process buffer. Adding such a fallback would leak whatever the
+					// caller's session buffer happens to contain (including group-chat
+					// transcripts when the source session is also a group-chat
+					// participant) into the downstream {{CUE_SOURCE_OUTPUT}} template.
+					// The exit-listener path (process-listeners/exit-listener.ts)
+					// passes only { status, exitCode } → sourceOutput = ''.
+					// The self-loop path (cue-engine.ts onRunCompleted) passes the
+					// cue-spawned run's own extractCleanStdout() result, which is the
+					// ONLY sanctioned way stdout reaches this field.
+					const rawStdout = completionData?.stdout ?? '';
 					const event = createCueEvent('agent.completed', sub.name, {
 						sourceSession: completingName,
 						sourceSessionId: sessionId,
 						status: completionData?.status ?? 'completed',
 						exitCode: completionData?.exitCode ?? null,
 						durationMs: completionData?.durationMs ?? 0,
-						sourceOutput: (completionData?.stdout ?? '').slice(-SOURCE_OUTPUT_MAX_CHARS),
-						outputTruncated: (completionData?.stdout ?? '').length > SOURCE_OUTPUT_MAX_CHARS,
+						sourceOutput: rawStdout.slice(-SOURCE_OUTPUT_MAX_CHARS),
+						outputTruncated: rawStdout.length > SOURCE_OUTPUT_MAX_CHARS,
 						triggeredBy: completionData?.triggeredBy,
 					});
 

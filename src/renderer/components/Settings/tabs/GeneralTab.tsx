@@ -29,10 +29,10 @@ import {
 	ArrowDownToLine,
 	ExternalLink,
 	Keyboard,
-	Trash2,
 	AlertTriangle,
 } from 'lucide-react';
 import { useSettings } from '../../../hooks';
+import { captureException } from '../../../utils/sentry';
 import type { Theme, ShellInfo } from '../../../types';
 import {
 	formatMetaKey,
@@ -95,18 +95,6 @@ export function GeneralTab({ theme, isOpen }: GeneralTabProps) {
 		setEnableBetaUpdates,
 		crashReportingEnabled,
 		setCrashReportingEnabled,
-		// Stats
-		statsCollectionEnabled,
-		setStatsCollectionEnabled,
-		defaultStatsTimeRange,
-		setDefaultStatsTimeRange,
-		// WakaTime
-		wakatimeEnabled,
-		setWakatimeEnabled,
-		wakatimeApiKey,
-		setWakatimeApiKey,
-		wakatimeDetailedTracking,
-		setWakatimeDetailedTracking,
 		// Forced Parallel Execution
 		forcedParallelExecution,
 		setForcedParallelExecution,
@@ -131,33 +119,6 @@ export function GeneralTab({ theme, isOpen }: GeneralTabProps) {
 	const [syncError, setSyncError] = useState<string | null>(null);
 	const [syncMigratedCount, setSyncMigratedCount] = useState<number | null>(null);
 
-	// Stats data management state
-	const [statsDbSize, setStatsDbSize] = useState<number | null>(null);
-	const [statsEarliestDate, setStatsEarliestDate] = useState<string | null>(null);
-	const [statsClearing, setStatsClearing] = useState(false);
-	const [statsClearResult, setStatsClearResult] = useState<{
-		success: boolean;
-		deletedQueryEvents: number;
-		deletedAutoRunSessions: number;
-		deletedAutoRunTasks: number;
-		error?: string;
-	} | null>(null);
-
-	// WakaTime CLI check and API key validation state
-	const [wakatimeCliStatus, setWakatimeCliStatus] = useState<{
-		available: boolean;
-		version?: string;
-	} | null>(null);
-	const [wakatimeKeyValid, setWakatimeKeyValid] = useState<boolean | null>(null);
-	const [wakatimeKeyValidating, setWakatimeKeyValidating] = useState(false);
-	const handleWakatimeApiKeyChange = useCallback(
-		(value: string) => {
-			setWakatimeApiKey(value);
-			setWakatimeKeyValid(null);
-		},
-		[setWakatimeApiKey]
-	);
-
 	// Forced Parallel Execution modal state
 	const [showForcedParallelWarning, setShowForcedParallelWarning] = useState(false);
 
@@ -181,56 +142,7 @@ export function GeneralTab({ theme, isOpen }: GeneralTabProps) {
 		setShowForcedParallelWarning(false);
 	}, []);
 
-	// Check WakaTime CLI availability when section renders or toggle is enabled
-	useEffect(() => {
-		if (!isOpen || !wakatimeEnabled) return;
-		let cancelled = false;
-		let retryTimer: ReturnType<typeof setTimeout> | null = null;
-
-		window.maestro.wakatime
-			.checkCli()
-			.then((status) => {
-				if (cancelled) return;
-				setWakatimeCliStatus(status);
-				if (!status.available) {
-					retryTimer = setTimeout(() => {
-						if (!cancelled) {
-							window.maestro.wakatime
-								.checkCli()
-								.then((retryStatus) => {
-									if (!cancelled) setWakatimeCliStatus(retryStatus);
-								})
-								.catch(() => {
-									if (!cancelled) setWakatimeCliStatus({ available: false });
-								});
-						}
-					}, 3000);
-				}
-			})
-			.catch(() => {
-				if (cancelled) return;
-				setWakatimeCliStatus({ available: false });
-				retryTimer = setTimeout(() => {
-					if (!cancelled) {
-						window.maestro.wakatime
-							.checkCli()
-							.then((retryStatus) => {
-								if (!cancelled) setWakatimeCliStatus(retryStatus);
-							})
-							.catch(() => {
-								if (!cancelled) setWakatimeCliStatus({ available: false });
-							});
-					}
-				}, 3000);
-			});
-
-		return () => {
-			cancelled = true;
-			if (retryTimer) clearTimeout(retryTimer);
-		};
-	}, [isOpen, wakatimeEnabled]);
-
-	// Load sync settings and stats data when modal opens
+	// Load sync settings when modal opens
 	useEffect(() => {
 		if (!isOpen) return;
 
@@ -251,6 +163,11 @@ export function GeneralTab({ theme, isOpen }: GeneralTabProps) {
 			.catch((err) => {
 				console.error('Failed to load sync settings:', err);
 				setSyncError('Failed to load storage settings');
+				// Report to Sentry so production failures surface in dashboards
+				// rather than only being visible in the user's console.
+				captureException(err instanceof Error ? err : new Error(String(err)), {
+					extra: { context: 'GeneralTab: failed to load sync/storage settings' },
+				});
 			});
 	}, [isOpen]);
 

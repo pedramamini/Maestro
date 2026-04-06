@@ -141,6 +141,95 @@ describe('Exit Listener', () => {
 		});
 	});
 
+	describe('Group Chat Cross-Domain Containment', () => {
+		// Regression: if a sessionId starts with GROUP_CHAT_PREFIX but does NOT
+		// match either the moderator branch or the participant-parse branch,
+		// the exit handler MUST drop it — never forwarding to process:exit,
+		// never broadcasting to web clients, and never calling
+		// cueEngine.notifyAgentCompleted. Otherwise a mis-shaped group-chat
+		// sessionId leaks into the regular exit channel and fires Cue's
+		// agent.completed subscriptions spuriously with group-chat provenance.
+		it('drops unrecognized group-chat session exit without forwarding or notifying Cue', () => {
+			const notifyAgentCompleted = vi.fn();
+			const hasCompletionSubscribers = vi.fn().mockReturnValue(true);
+			mockDeps = {
+				...mockDeps,
+				isCueEnabled: () => true,
+				getCueEngine: () =>
+					({
+						notifyAgentCompleted,
+						hasCompletionSubscribers,
+					}) as unknown as ReturnType<NonNullable<ProcessListenerDependencies['getCueEngine']>>,
+			};
+			// parseParticipantSessionId returns null → participant branch skipped.
+			// The sessionId has no "-moderator-" → moderator branch skipped.
+			mockDeps.outputParser.parseParticipantSessionId = vi.fn().mockReturnValue(null);
+
+			setupListener();
+			const handler = eventHandlers.get('exit');
+
+			handler?.('group-chat-something-unrecognized', 0);
+
+			expect(mockDeps.safeSend).not.toHaveBeenCalled();
+			expect(notifyAgentCompleted).not.toHaveBeenCalled();
+			expect(hasCompletionSubscribers).not.toHaveBeenCalled();
+		});
+
+		it('notifies Cue for regular (non-group-chat) session exit', () => {
+			const notifyAgentCompleted = vi.fn();
+			const hasCompletionSubscribers = vi.fn().mockReturnValue(true);
+			mockDeps = {
+				...mockDeps,
+				isCueEnabled: () => true,
+				getCueEngine: () =>
+					({
+						notifyAgentCompleted,
+						hasCompletionSubscribers,
+					}) as unknown as ReturnType<NonNullable<ProcessListenerDependencies['getCueEngine']>>,
+			};
+
+			setupListener();
+			const handler = eventHandlers.get('exit');
+
+			handler?.('plain-session-xyz', 0);
+
+			expect(mockDeps.safeSend).toHaveBeenCalledWith('process:exit', 'plain-session-xyz', 0);
+			expect(notifyAgentCompleted).toHaveBeenCalledWith('plain-session-xyz', {
+				status: 'completed',
+				exitCode: 0,
+			});
+		});
+
+		it('passes only status+exitCode to Cue (no stdout leakage path)', () => {
+			// Defensive: the exit-listener call shape is the load-bearing
+			// invariant behind the "no stdout fallback" audit in cue-engine.ts.
+			// If this test fails because someone added a stdout field, the
+			// corresponding cue-completion-chains regression test must also be
+			// updated.
+			const notifyAgentCompleted = vi.fn();
+			const hasCompletionSubscribers = vi.fn().mockReturnValue(true);
+			mockDeps = {
+				...mockDeps,
+				isCueEnabled: () => true,
+				getCueEngine: () =>
+					({
+						notifyAgentCompleted,
+						hasCompletionSubscribers,
+					}) as unknown as ReturnType<NonNullable<ProcessListenerDependencies['getCueEngine']>>,
+			};
+
+			setupListener();
+			const handler = eventHandlers.get('exit');
+
+			handler?.('plain-session-xyz', 1);
+
+			expect(notifyAgentCompleted).toHaveBeenCalledTimes(1);
+			const [, completionData] = notifyAgentCompleted.mock.calls[0];
+			expect(Object.keys(completionData).sort()).toEqual(['exitCode', 'status']);
+			expect(completionData.stdout).toBeUndefined();
+		});
+	});
+
 	describe('Participant Exit', () => {
 		beforeEach(() => {
 			mockDeps.outputParser.parseParticipantSessionId = vi.fn().mockReturnValue({
