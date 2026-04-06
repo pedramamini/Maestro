@@ -13,6 +13,7 @@
  */
 
 import { memo, useState, useMemo } from 'react';
+import { EmptyState } from '../ui';
 import type { Theme } from '../../types';
 import type { StatsAggregation } from '../../hooks/stats/useStats';
 import { formatDurationCompact as formatDuration } from '../../../shared/formatters';
@@ -144,11 +145,8 @@ export const PeakHoursChart = memo(function PeakHoursChart({
 
 			{/* Chart */}
 			{!hasData ? (
-				<div
-					className="flex items-center justify-center"
-					style={{ height: chartHeight, color: theme.colors.textDim }}
-				>
-					<span className="text-sm">No hourly data available</span>
+				<div style={{ height: chartHeight }}>
+					<EmptyState theme={theme} className="h-full" message="No hourly data available" />
 				</div>
 			) : (
 				<div className="relative">

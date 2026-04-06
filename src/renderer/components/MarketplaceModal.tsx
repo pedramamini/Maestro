@@ -34,7 +34,7 @@ import {
 } from '../utils/markdownConfig';
 import { formatShortcutKeys } from '../utils/shortcutFormatter';
 import { GhostIconButton } from './ui/GhostIconButton';
-import { Spinner } from './ui';
+import { EmptyState, Spinner } from './ui';
 
 // ============================================================================
 // Types
@@ -1358,37 +1358,17 @@ export function MarketplaceModal({
 									</button>
 								</div>
 							) : filteredPlaybooks.length === 0 ? (
-								<div className="flex flex-col items-center justify-center h-full min-h-[200px] text-center py-12">
-									<Package
-										className="w-16 h-16 mb-4"
-										style={{ color: theme.colors.textDim, opacity: 0.5 }}
-									/>
-									{searchQuery ? (
-										<>
-											<p
-												className="text-lg font-medium mb-2"
-												style={{ color: theme.colors.textMain }}
-											>
-												No results found
-											</p>
-											<p className="text-sm" style={{ color: theme.colors.textDim }}>
-												Try adjusting your search or browse a different category
-											</p>
-										</>
-									) : (
-										<>
-											<p
-												className="text-lg font-medium mb-2"
-												style={{ color: theme.colors.textMain }}
-											>
-												No playbooks available
-											</p>
-											<p className="text-sm" style={{ color: theme.colors.textDim }}>
-												Check back later for new playbooks
-											</p>
-										</>
-									)}
-								</div>
+								<EmptyState
+									theme={theme}
+									icon={<Package className="w-16 h-16" />}
+									message={searchQuery ? 'No results found' : 'No playbooks available'}
+									description={
+										searchQuery
+											? 'Try adjusting your search or browse a different category'
+											: 'Check back later for new playbooks'
+									}
+									className="h-full min-h-[200px] py-12"
+								/>
 							) : (
 								<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
 									{filteredPlaybooks.map((playbook, index) => (

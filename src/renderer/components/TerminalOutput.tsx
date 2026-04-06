@@ -28,6 +28,7 @@ import {
 import { formatShortcutKeys } from '../utils/shortcutFormatter';
 import { MarkdownRenderer } from './MarkdownRenderer';
 import { QueuedItemsList } from './QueuedItemsList';
+import { EmptyState } from './ui';
 import { LogFilterControls } from './LogFilterControls';
 import { SaveMarkdownModal } from './SaveMarkdownModal';
 import { generateTerminalProseStyles } from '../utils/markdownConfig';
@@ -655,12 +656,7 @@ const LogItemComponent = memo(
 						log.source !== 'thinking' &&
 						log.source !== 'tool' &&
 						(hasNoMatches ? (
-							<div
-								className="flex items-center justify-center py-8 text-sm"
-								style={{ color: theme.colors.textDim }}
-							>
-								<span>No matches found for filter</span>
-							</div>
+							<EmptyState theme={theme} message="No matches found for filter" className="py-8" />
 						) : shouldCollapse && !isExpanded ? (
 							<div>
 								<div

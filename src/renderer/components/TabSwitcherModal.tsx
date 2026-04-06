@@ -10,6 +10,7 @@ import { formatShortcutKeys } from '../utils/shortcutFormatter';
 import { formatTokensCompact, formatRelativeTime, formatCost } from '../utils/formatters';
 import { calculateContextDisplay } from '../utils/contextUsage';
 import { getExtensionColor } from '../utils/extensionColors';
+import { EmptyState } from './ui';
 
 /** Named session from the store (not currently open) */
 interface NamedSession {
@@ -1016,16 +1017,17 @@ export function TabSwitcherModal({
 					})}
 
 					{filteredItems.length === 0 && (
-						<div
-							className="px-4 py-4 text-center opacity-50 text-sm"
-							style={{ color: theme.colors.textDim }}
-						>
-							{viewMode === 'open'
-								? 'No open tabs'
-								: viewMode === 'starred'
-									? 'No starred sessions'
-									: 'No named sessions found'}
-						</div>
+						<EmptyState
+							theme={theme}
+							message={
+								viewMode === 'open'
+									? 'No open tabs'
+									: viewMode === 'starred'
+										? 'No starred sessions'
+										: 'No named sessions found'
+							}
+							className="px-4 py-4 opacity-50"
+						/>
 					)}
 				</div>
 

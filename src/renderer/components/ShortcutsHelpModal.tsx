@@ -7,6 +7,7 @@ import { FIXED_SHORTCUTS } from '../constants/shortcuts';
 import { formatShortcutKeys } from '../utils/shortcutFormatter';
 import { Modal } from './ui/Modal';
 import { GhostIconButton } from './ui/GhostIconButton';
+import { EmptyState } from './ui';
 import { KEYBOARD_MASTERY_LEVELS, getLevelForPercentage } from '../constants/keyboardMastery';
 
 interface ShortcutsHelpModalProps {
@@ -203,9 +204,7 @@ export function ShortcutsHelpModal({
 					);
 				})}
 				{filteredCount === 0 && (
-					<div className="text-center text-sm opacity-50" style={{ color: theme.colors.textDim }}>
-						No shortcuts found
-					</div>
+					<EmptyState theme={theme} message="No shortcuts found" className="opacity-50" />
 				)}
 			</div>
 		</Modal>

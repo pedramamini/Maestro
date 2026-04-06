@@ -18,6 +18,7 @@ import {
 import type { Theme, GroupChat, GroupChatState } from '../types';
 import { useClickOutside, useContextMenuPosition } from '../hooks';
 import { getStatusColor } from '../utils/theme';
+import { EmptyState } from './ui';
 
 // ============================================================================
 // GroupChatContextMenu - Right-click context menu for group chat items
@@ -306,9 +307,13 @@ export function GroupChatList({
 			{isExpanded && (
 				<div className="px-2 pb-2">
 					{sortedGroupChats.length === 0 ? (
-						<div className="text-xs px-3 py-2 italic" style={{ color: theme.colors.textDim }}>
-							{groupChats.length === 0 ? 'No group chats yet' : 'All group chats are archived'}
-						</div>
+						<EmptyState
+							theme={theme}
+							message={
+								groupChats.length === 0 ? 'No group chats yet' : 'All group chats are archived'
+							}
+							className="text-xs px-3 py-2 italic"
+						/>
 					) : (
 						<div
 							className="flex flex-col border-l ml-4"

@@ -15,6 +15,7 @@ import {
 	Trash2,
 	Bot,
 } from 'lucide-react';
+import { EmptyState } from '../ui';
 import type { Session, Group, Theme } from '../../types';
 import { getBadgeForTime } from '../../constants/conductorBadges';
 import { SessionItem } from '../SessionItem';
@@ -872,13 +873,12 @@ function SessionListInner(props: SessionListProps) {
 
 					{/* Empty state for unread agents filter */}
 					{showUnreadAgentsOnly && sortedFilteredSessions.length === 0 && (
-						<div
-							className="flex-1 flex flex-col items-center justify-center gap-3 px-4"
-							style={{ color: theme.colors.textDim }}
-						>
-							<Bot className="w-8 h-8 opacity-30" />
-							<span className="text-xs italic">No unread or working agents</span>
-						</div>
+						<EmptyState
+							theme={theme}
+							icon={<Bot className="w-8 h-8" />}
+							message="No unread or working agents"
+							className="flex-1 gap-3 px-4"
+						/>
 					)}
 
 					{/* BOOKMARKS SECTION - hidden when filtering by unread agents */}

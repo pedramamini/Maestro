@@ -16,6 +16,7 @@ import { useSettingsStore } from '../stores/settingsStore';
 import { useFileExplorerStore } from '../stores/fileExplorerStore';
 import { useSessionStore, updateSessionWith } from '../stores/sessionStore';
 import { buildMaestroUrl } from '../utils/buildMaestroUrl';
+import { EmptyState } from './ui';
 
 interface QuickAction {
 	id: string;
@@ -1681,7 +1682,11 @@ export const QuickActionsModal = memo(function QuickActionsModal(props: QuickAct
 							);
 						})}
 						{filtered.length === 0 && (
-							<div className="px-4 py-4 text-center opacity-50 text-sm">No actions found</div>
+							<EmptyState
+								theme={theme}
+								message="No actions found"
+								className="px-4 py-4 opacity-50"
+							/>
 						)}
 					</div>
 				)}

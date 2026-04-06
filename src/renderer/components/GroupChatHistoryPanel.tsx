@@ -8,6 +8,7 @@
 
 import React, { useState, useMemo, useRef, useEffect, useCallback } from 'react';
 import { Check, Send, MessageSquare, Layers, AlertTriangle } from 'lucide-react';
+import { EmptyState } from './ui';
 import type { Theme } from '../types';
 import { useContextMenuPosition } from '../hooks/ui/useContextMenuPosition';
 import type {
@@ -646,19 +647,20 @@ export function GroupChatHistoryPanel({
 				{isLoading ? (
 					<div className="text-center py-8 text-xs opacity-50">Loading history...</div>
 				) : filteredEntries.length === 0 ? (
-					<div className="text-center py-8 text-xs opacity-50">
-						{entries.length === 0 ? (
-							<>
-								No task history yet.
-								<br />
-								Entries will appear when agents complete tasks.
-							</>
-						) : searchFilter ? (
-							`No entries match "${searchFilter}"`
-						) : (
-							'No entries match the selected filters.'
-						)}
-					</div>
+					<EmptyState
+						theme={theme}
+						message={
+							entries.length === 0
+								? 'No task history yet.'
+								: searchFilter
+									? `No entries match "${searchFilter}"`
+									: 'No entries match the selected filters.'
+						}
+						description={
+							entries.length === 0 ? 'Entries will appear when agents complete tasks.' : undefined
+						}
+						className="py-8"
+					/>
 				) : (
 					filteredEntries.map((entry) => {
 						const participantColor =

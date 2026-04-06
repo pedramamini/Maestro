@@ -13,6 +13,7 @@ import {
 	CheckSquare,
 } from 'lucide-react';
 import { GhostIconButton } from './ui/GhostIconButton';
+import { EmptyState } from './ui';
 import type { Theme, BatchDocumentEntry } from '../types';
 import { generateId } from '../utils/ids';
 import { useLayerStack } from '../contexts/LayerStackContext';
@@ -494,9 +495,7 @@ function DocumentSelectorModal({
 				{/* Document Checkboxes */}
 				<div className="flex-1 overflow-y-auto p-2">
 					{allDocuments.length === 0 ? (
-						<div className="p-4 text-center" style={{ color: theme.colors.textDim }}>
-							<p className="text-sm">No documents found in folder</p>
-						</div>
+						<EmptyState theme={theme} message="No documents found in folder" className="p-4" />
 					) : documentTree && documentTree.length > 0 ? (
 						// Render tree structure with folder checkboxes
 						<div className="space-y-0.5">{documentTree.map((node) => renderTreeNode(node))}</div>

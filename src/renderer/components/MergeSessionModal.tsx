@@ -18,6 +18,7 @@ import React, { useState, useEffect, useRef, useMemo, useCallback, memo } from '
 import { Search, ChevronRight, ChevronDown, GitMerge, Clipboard, Check, X } from 'lucide-react';
 import type { Theme, Session, AITab } from '../types';
 import type { MergeResult } from '../types/contextMerge';
+import { EmptyState } from './ui';
 import { GhostIconButton } from './ui/GhostIconButton';
 import { fuzzyMatchWithScore } from '../utils/search';
 import { useLayerStack } from '../contexts/LayerStackContext';
@@ -794,13 +795,13 @@ export function MergeSessionModal({
 								aria-label="Available sessions and tabs"
 							>
 								{filteredItems.length === 0 ? (
-									<div
-										className="p-4 text-center text-sm"
-										style={{ color: theme.colors.textDim }}
-										role="status"
-									>
-										{searchQuery ? 'No matching sessions found' : 'No other sessions available'}
-									</div>
+									<EmptyState
+										theme={theme}
+										message={
+											searchQuery ? 'No matching sessions found' : 'No other sessions available'
+										}
+										className="p-4"
+									/>
 								) : (
 									Array.from(groupedItems.entries()).map(([sessionId, items]) => {
 										const isExpanded = expandedSessions.has(sessionId) || searchQuery.trim() !== '';

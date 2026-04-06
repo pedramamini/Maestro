@@ -18,6 +18,8 @@ import { useLayerStack } from '../contexts/LayerStackContext';
 import { MODAL_PRIORITIES } from '../constants/modalPriorities';
 import { safeClipboardWrite } from '../utils/clipboard';
 import { ConfirmModal } from './ConfirmModal';
+import { useSessionStore } from '../stores/sessionStore';
+import { EmptyState } from './ui';
 
 interface SystemLogEntry {
 	timestamp: number;
@@ -34,6 +36,7 @@ interface LogViewerProps {
 	savedSelectedLevels?: string[]; // Persisted filter selections
 	onSelectedLevelsChange?: (levels: string[]) => void; // Callback to persist filter changes
 	onShortcutUsed?: (shortcutId: string) => void; // Keyboard mastery tracking
+	onSessionClick?: (sessionId: string, tabId?: string) => void; // Navigate to agent/tab when clicking agent pill
 }
 
 // Log level priority for determining which levels are enabled
@@ -62,11 +65,19 @@ export function LogViewer({
 	savedSelectedLevels,
 	onSelectedLevelsChange,
 	onShortcutUsed,
+	onSessionClick,
 }: LogViewerProps) {
 	const [logs, setLogs] = useState<SystemLogEntry[]>([]);
 	const [filteredLogs, setFilteredLogs] = useState<SystemLogEntry[]>([]);
 	const [searchOpen, setSearchOpen] = useState(false);
 	const [searchQuery, setSearchQuery] = useState('');
+
+	// Resolve agent name to session ID for navigation from autorun/cue pills
+	const sessions = useSessionStore((s) => s.sessions);
+	const resolveSessionByName = useCallback(
+		(name: string): string | undefined => sessions.find((s) => s.name === name)?.id,
+		[sessions]
+	);
 
 	// Determine which log levels are enabled based on current log level setting
 	// Levels with priority >= current level are enabled
@@ -610,9 +621,11 @@ export function LogViewer({
 				style={{ backgroundColor: theme.colors.bgMain }}
 			>
 				{filteredLogs.length === 0 ? (
-					<div className="text-center py-12 opacity-50" style={{ color: theme.colors.textDim }}>
-						{logs.length === 0 ? 'No logs yet' : 'No logs match your filter'}
-					</div>
+					<EmptyState
+						theme={theme}
+						message={logs.length === 0 ? 'No logs yet' : 'No logs match your filter'}
+						className="py-12 opacity-50"
+					/>
 				) : (
 					filteredLogs.map((log, index) => (
 						<div
@@ -678,13 +691,25 @@ export function LogViewer({
 										{/* Agent name pill for toast entries (from data.project) */}
 										{(() => {
 											if (log.level !== 'toast') return null;
-											const data = log.data as { project?: string } | undefined;
+											const data = log.data as
+												| { project?: string; sessionId?: string; tabId?: string }
+												| undefined;
 											const project = data?.project;
 											if (!project) return null;
+											const canNavigate = onSessionClick && data?.sessionId;
 											return (
 												<span
-													className="text-xs px-1.5 py-0.5 rounded flex items-center gap-1"
+													className={`text-xs px-1.5 py-0.5 rounded flex items-center gap-1${canNavigate ? ' cursor-pointer hover:brightness-125' : ''}`}
 													style={{ backgroundColor: 'rgba(34, 197, 94, 0.2)', color: '#22c55e' }}
+													onClick={
+														canNavigate
+															? (e) => {
+																	e.stopPropagation();
+																	onSessionClick(data.sessionId!, data.tabId);
+																}
+															: undefined
+													}
+													title={canNavigate ? `Jump to ${project}` : undefined}
 												>
 													<Pencil className="w-3 h-3" />
 													{project}
@@ -692,25 +717,55 @@ export function LogViewer({
 											);
 										})()}
 										{/* Agent name pill for autorun entries (from context) */}
-										{log.level === 'autorun' && log.context && (
-											<span
-												className="text-xs px-1.5 py-0.5 rounded flex items-center gap-1"
-												style={{ backgroundColor: 'rgba(34, 197, 94, 0.2)', color: '#22c55e' }}
-											>
-												<Pencil className="w-3 h-3" />
-												{log.context}
-											</span>
-										)}
+										{log.level === 'autorun' &&
+											log.context &&
+											(() => {
+												const sessionId = resolveSessionByName(log.context);
+												const canNavigate = onSessionClick && sessionId;
+												return (
+													<span
+														className={`text-xs px-1.5 py-0.5 rounded flex items-center gap-1${canNavigate ? ' cursor-pointer hover:brightness-125' : ''}`}
+														style={{ backgroundColor: 'rgba(34, 197, 94, 0.2)', color: '#22c55e' }}
+														onClick={
+															canNavigate
+																? (e) => {
+																		e.stopPropagation();
+																		onSessionClick(sessionId!);
+																	}
+																: undefined
+														}
+														title={canNavigate ? `Jump to ${log.context}` : undefined}
+													>
+														<Pencil className="w-3 h-3" />
+														{log.context}
+													</span>
+												);
+											})()}
 										{/* Agent name pill for cue entries (from context) */}
-										{log.level === 'cue' && log.context && (
-											<span
-												className="text-xs px-1.5 py-0.5 rounded flex items-center gap-1"
-												style={{ backgroundColor: 'rgba(6, 182, 212, 0.2)', color: '#06b6d4' }}
-											>
-												<Pencil className="w-3 h-3" />
-												{log.context}
-											</span>
-										)}
+										{log.level === 'cue' &&
+											log.context &&
+											(() => {
+												const sessionId = resolveSessionByName(log.context);
+												const canNavigate = onSessionClick && sessionId;
+												return (
+													<span
+														className={`text-xs px-1.5 py-0.5 rounded flex items-center gap-1${canNavigate ? ' cursor-pointer hover:brightness-125' : ''}`}
+														style={{ backgroundColor: 'rgba(6, 182, 212, 0.2)', color: '#06b6d4' }}
+														onClick={
+															canNavigate
+																? (e) => {
+																		e.stopPropagation();
+																		onSessionClick(sessionId!);
+																	}
+																: undefined
+														}
+														title={canNavigate ? `Jump to ${log.context}` : undefined}
+													>
+														<Pencil className="w-3 h-3" />
+														{log.context}
+													</span>
+												);
+											})()}
 									</div>
 									<div className="text-sm break-words" style={{ color: theme.colors.textMain }}>
 										{log.message}

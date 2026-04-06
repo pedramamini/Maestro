@@ -17,7 +17,7 @@ import pedramAvatar from '../assets/pedram-avatar.png';
 import { AchievementCard } from './AchievementCard';
 import { formatTokensCompact } from '../utils/formatters';
 import { Modal } from './ui/Modal';
-import { Spinner } from './ui';
+import { Spinner, EmptyState } from './ui';
 import { GhostIconButton } from './ui/GhostIconButton';
 import { buildMaestroUrl } from '../utils/buildMaestroUrl';
 import { formatElapsedTime } from '../../shared/formatters';
@@ -310,9 +310,7 @@ export function AboutModal({
 							</div>
 						</div>
 					) : (
-						<div className="text-xs text-center py-2" style={{ color: theme.colors.textDim }}>
-							No sessions found
-						</div>
+						<EmptyState theme={theme} message="No sessions found" className="text-xs py-2" />
 					)}
 				</div>
 

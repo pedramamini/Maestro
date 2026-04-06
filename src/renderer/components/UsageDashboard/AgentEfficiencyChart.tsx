@@ -13,6 +13,7 @@
  */
 
 import { memo, useMemo } from 'react';
+import { EmptyState } from '../ui';
 import type { Theme } from '../../types';
 import type { StatsAggregation } from '../../hooks/stats/useStats';
 import { COLORBLIND_AGENT_PALETTE } from '../../constants/colorblindPalettes';
@@ -99,12 +100,7 @@ export const AgentEfficiencyChart = memo(function AgentEfficiencyChart({
 				<h3 className="text-sm font-medium mb-4" style={{ color: theme.colors.textMain }}>
 					Agent Efficiency
 				</h3>
-				<div
-					className="flex items-center justify-center h-24"
-					style={{ color: theme.colors.textDim }}
-				>
-					<span className="text-sm">No agent query data available</span>
-				</div>
+				<EmptyState theme={theme} className="h-24" message="No agent query data available" />
 			</div>
 		);
 	}

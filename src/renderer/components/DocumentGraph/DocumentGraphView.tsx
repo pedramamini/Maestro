@@ -31,7 +31,7 @@ import {
 	ChevronLeft,
 	ChevronRight,
 } from 'lucide-react';
-import { Spinner } from '../ui';
+import { EmptyState, Spinner } from '../ui';
 import type { Theme } from '../../types';
 import { useLayerStack } from '../../contexts/LayerStackContext';
 import { MODAL_PRIORITIES } from '../../constants/modalPriorities';
@@ -1755,14 +1755,13 @@ export function DocumentGraphView({
 							</button>
 						</div>
 					) : nodes.length === 0 ? (
-						<div
-							className="h-full flex flex-col items-center justify-center gap-2"
-							style={{ color: theme.colors.textDim }}
-						>
-							<Network className="w-12 h-12 opacity-30" />
-							<p className="text-lg">No markdown files found</p>
-							<p className="text-sm opacity-70">This directory doesn't contain any .md files</p>
-						</div>
+						<EmptyState
+							theme={theme}
+							icon={<Network className="w-12 h-12" />}
+							message="No markdown files found"
+							description="This directory doesn't contain any .md files"
+							className="h-full gap-2"
+						/>
 					) : activeFocusFile ? (
 						<MindMap
 							centerFilePath={activeFocusFile}

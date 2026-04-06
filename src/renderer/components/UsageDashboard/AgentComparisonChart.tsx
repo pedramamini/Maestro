@@ -13,10 +13,11 @@
  */
 
 import React, { memo, useMemo, useCallback, useState } from 'react';
+import { EmptyState } from '../ui';
 import type { Theme } from '../../types';
 import type { StatsAggregation } from '../../hooks/stats/useStats';
 import { COLORBLIND_AGENT_PALETTE } from '../../constants/colorblindPalettes';
-import { formatElapsedTime as formatDuration } from '../../../shared/formatters';
+import { formatElapsedTime as formatDuration, formatNumber } from '../../../shared/formatters';
 
 interface AgentData {
 	agent: string;
@@ -68,19 +69,6 @@ function getAgentColor(
 	];
 
 	return additionalColors[(index - 1) % additionalColors.length];
-}
-
-/**
- * Format large numbers with K/M suffixes
- */
-function formatNumber(num: number): string {
-	if (num >= 1000000) {
-		return `${(num / 1000000).toFixed(1)}M`;
-	}
-	if (num >= 1000) {
-		return `${(num / 1000).toFixed(1)}K`;
-	}
-	return num.toString();
 }
 
 export const AgentComparisonChart = memo(function AgentComparisonChart({
@@ -158,12 +146,7 @@ export const AgentComparisonChart = memo(function AgentComparisonChart({
 			{/* Chart container */}
 			<div className="relative">
 				{agentData.length === 0 ? (
-					<div
-						className="flex items-center justify-center h-32"
-						style={{ color: theme.colors.textDim }}
-					>
-						<span className="text-sm">No agent data available</span>
-					</div>
+					<EmptyState theme={theme} className="h-32" message="No agent data available" />
 				) : (
 					<div className="space-y-2" role="list" aria-label="Agent usage data">
 						{agentData.map((agent) => {

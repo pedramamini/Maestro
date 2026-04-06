@@ -7,6 +7,7 @@ import { Diff, Hunk } from 'react-diff-view';
 import { parseGitDiff } from '../utils/gitDiffParser';
 import { useListNavigation } from '../hooks';
 import { generateDiffViewStyles } from '../utils/markdownConfig';
+import { EmptyState } from './ui';
 import 'react-diff-view/style/index.css';
 
 interface GitLogEntry {
@@ -352,11 +353,7 @@ export const GitLogViewer = memo(function GitLogViewer({
 								<p className="text-sm text-red-500">{error}</p>
 							</div>
 						) : entries.length === 0 ? (
-							<div className="flex items-center justify-center h-full">
-								<p className="text-sm" style={{ color: theme.colors.textDim }}>
-									No commits found
-								</p>
-							</div>
+							<EmptyState theme={theme} message="No commits found" className="h-full" />
 						) : (
 							<div className="divide-y" style={{ borderColor: theme.colors.border }}>
 								{entries.map((entry, index) => (

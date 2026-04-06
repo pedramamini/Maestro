@@ -10,6 +10,7 @@ import { CUE_COLOR } from '../../../shared/cue-pipeline-types';
 import { PipelineDot } from './StatusDot';
 import { ActivityLogDetail } from './ActivityLogDetail';
 import { formatDuration, getPipelineForSubscription } from './cueModalUtils';
+import { EmptyState } from '../ui';
 
 interface ActivityLogProps {
 	log: CueRunResult[];
@@ -22,11 +23,7 @@ export function ActivityLog({ log, theme, subscriptionPipelineMap }: ActivityLog
 	const [expandedRunId, setExpandedRunId] = useState<string | null>(null);
 
 	if (log.length === 0) {
-		return (
-			<div className="text-sm py-3" style={{ color: theme.colors.textDim }}>
-				No activity yet
-			</div>
-		);
+		return <EmptyState theme={theme} message="No activity yet" className="py-3" />;
 	}
 
 	const visible = log.slice(0, visibleCount);

@@ -18,7 +18,7 @@ import remarkGfm from 'remark-gfm';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { getSyntaxStyle } from '../../utils/syntaxTheme';
 import { Eye, Edit, ChevronDown, ChevronRight, X, FileText, Check } from 'lucide-react';
-import { Spinner } from '../ui';
+import { Spinner, EmptyState } from '../ui';
 import type { Theme } from '../../types';
 import type { GeneratedDocument } from '../Wizard/WizardContext';
 import { AustinFactsDisplay } from './AustinFactsDisplay';
@@ -1062,23 +1062,13 @@ export function DocumentGenerationView({
 	// Fallback - no documents and not generating
 	if (!isGenerating && documents.length === 0) {
 		return (
-			<div
-				className="flex flex-col h-full items-center justify-center p-6"
-				style={{ backgroundColor: theme.colors.bgMain }}
-			>
-				<p style={{ color: theme.colors.textDim }}>No documents generated yet.</p>
-				{onCancel && (
-					<button
-						onClick={onCancel}
-						className="mt-4 px-4 py-2 text-sm rounded"
-						style={{
-							backgroundColor: theme.colors.bgActivity,
-							color: theme.colors.textDim,
-						}}
-					>
-						Cancel
-					</button>
-				)}
+			<div className="flex flex-col h-full" style={{ backgroundColor: theme.colors.bgMain }}>
+				<EmptyState
+					theme={theme}
+					className="flex-1 p-6"
+					message="No documents generated yet."
+					action={onCancel ? { label: 'Cancel', onClick: onCancel } : undefined}
+				/>
 			</div>
 		);
 	}

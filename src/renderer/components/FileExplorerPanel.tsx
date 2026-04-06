@@ -23,7 +23,7 @@ import {
 	Trash2,
 	AlertTriangle,
 } from 'lucide-react';
-import { Spinner } from './ui';
+import { EmptyState, Spinner } from './ui';
 import { GhostIconButton } from './ui/GhostIconButton';
 import { updateSessionWith } from '../stores/sessionStore';
 import type { Session, Theme, FocusArea } from '../types';
@@ -1229,15 +1229,12 @@ function FileExplorerPanelInner(props: FileExplorerPanelProps) {
 					{!session.fileTreeLoading &&
 						(!session.fileTree || session.fileTree.length === 0) &&
 						!fileTreeFilter && (
-							<div className="flex flex-col items-center justify-center gap-2 py-8">
-								<Folder className="w-8 h-8 opacity-30" style={{ color: theme.colors.textDim }} />
-								<div
-									className="text-xs opacity-50 text-center"
-									style={{ color: theme.colors.textDim }}
-								>
-									No files found
-								</div>
-							</div>
+							<EmptyState
+								theme={theme}
+								icon={<Folder className="w-8 h-8" />}
+								message="No files found"
+								className="gap-2 py-8"
+							/>
 						)}
 					{flattenedTree.length > 0 && (
 						<div

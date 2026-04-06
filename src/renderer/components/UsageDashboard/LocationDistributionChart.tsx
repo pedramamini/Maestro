@@ -13,9 +13,11 @@
  */
 
 import { memo, useState, useMemo } from 'react';
+import { EmptyState } from '../ui';
 import type { Theme } from '../../types';
 import type { StatsAggregation } from '../../hooks/stats/useStats';
 import { COLORBLIND_BINARY_PALETTE } from '../../constants/colorblindPalettes';
+import { formatNumber } from '../../../shared/formatters';
 
 interface LocationData {
 	location: 'local' | 'remote';
@@ -32,19 +34,6 @@ interface LocationDistributionChartProps {
 	theme: Theme;
 	/** Enable colorblind-friendly colors */
 	colorBlindMode?: boolean;
-}
-
-/**
- * Format large numbers with K/M suffixes
- */
-function formatNumber(num: number): string {
-	if (num >= 1000000) {
-		return `${(num / 1000000).toFixed(1)}M`;
-	}
-	if (num >= 1000) {
-		return `${(num / 1000).toFixed(1)}K`;
-	}
-	return num.toString();
 }
 
 /**
@@ -223,12 +212,7 @@ export const LocationDistributionChart = memo(function LocationDistributionChart
 			{/* Chart container */}
 			<div className="flex items-center justify-center gap-8">
 				{!hasData ? (
-					<div
-						className="flex items-center justify-center h-40"
-						style={{ color: theme.colors.textDim }}
-					>
-						<span className="text-sm">No location data available</span>
-					</div>
+					<EmptyState theme={theme} className="h-40" message="No location data available" />
 				) : (
 					<>
 						{/* Donut chart */}

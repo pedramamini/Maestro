@@ -13,6 +13,7 @@
  */
 
 import React, { memo, useState, useMemo, useCallback, useId } from 'react';
+import { EmptyState } from '../ui';
 import { format, parseISO } from 'date-fns';
 import type { Theme } from '../../types';
 import type { StatsTimeRange, StatsAggregation } from '../../hooks/stats/useStats';
@@ -318,11 +319,8 @@ export const DurationTrendsChart = memo(function DurationTrendsChart({
 			{/* Chart container */}
 			<div className="relative">
 				{chartData.length === 0 ? (
-					<div
-						className="flex items-center justify-center"
-						style={{ height: chartHeight, color: theme.colors.textDim }}
-					>
-						<span className="text-sm">No duration data available</span>
+					<div style={{ height: chartHeight }}>
+						<EmptyState theme={theme} className="h-full" message="No duration data available" />
 					</div>
 				) : (
 					<svg

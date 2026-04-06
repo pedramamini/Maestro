@@ -8,6 +8,7 @@
 
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { PanelRightClose } from 'lucide-react';
+import { EmptyState } from './ui';
 import type { Theme, GroupChatParticipant, SessionState, Shortcut } from '../types';
 import type { GroupChatHistoryEntry } from '../../shared/group-chat-types';
 import { ParticipantCard } from './ParticipantCard';
@@ -303,11 +304,12 @@ export function GroupChatRightPanel({
 
 					{/* Participants sorted alphabetically */}
 					{sortedParticipants.length === 0 ? (
-						<div className="text-sm text-center py-4" style={{ color: theme.colors.textDim }}>
-							No participants yet.
-							<br />
-							Ask the moderator to add agents.
-						</div>
+						<EmptyState
+							theme={theme}
+							message="No participants yet."
+							description="Ask the moderator to add agents."
+							className="py-4"
+						/>
 					) : (
 						sortedParticipants.map((participant) => {
 							// Convert 'working' state to 'busy' for SessionState compatibility

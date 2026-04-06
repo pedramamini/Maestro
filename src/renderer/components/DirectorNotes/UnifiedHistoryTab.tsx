@@ -9,7 +9,7 @@ import React, {
 } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { Search, X } from 'lucide-react';
-import { Spinner } from '../ui';
+import { Spinner, EmptyState } from '../ui';
 import type { Theme, HistoryEntry, HistoryEntryType } from '../../types';
 import type { FileNode } from '../../types/fileTree';
 import {
@@ -592,15 +592,19 @@ export const UnifiedHistoryTab = forwardRef<TabFocusHandle, UnifiedHistoryTabPro
 							Loading history...
 						</div>
 					) : filteredEntries.length === 0 ? (
-						<div className="text-center py-8 text-xs" style={{ color: theme.colors.textDim }}>
-							{searchQuery
-								? `No entries matching "${searchQuery}".`
-								: entries.length === 0
-									? lookbackHours !== null
-										? 'No history entries in this time range. Try expanding the lookback period.'
-										: 'No history entries found across any agents.'
-									: 'No entries match the current filters.'}
-						</div>
+						<EmptyState
+							theme={theme}
+							className="py-8 text-xs"
+							message={
+								searchQuery
+									? `No entries matching "${searchQuery}".`
+									: entries.length === 0
+										? lookbackHours !== null
+											? 'No history entries in this time range. Try expanding the lookback period.'
+											: 'No history entries found across any agents.'
+										: 'No entries match the current filters.'
+							}
+						/>
 					) : (
 						<div
 							style={{

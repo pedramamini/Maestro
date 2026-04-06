@@ -7,7 +7,6 @@ import {
 	HardDrive,
 	Play,
 	ChevronLeft,
-	Loader2,
 	Plus,
 	X,
 	List,
@@ -25,6 +24,7 @@ import {
 	ArrowUpFromLine,
 	Edit3,
 } from 'lucide-react';
+import { Spinner, EmptyState } from './ui';
 import type { Theme, Session, LogEntry, UsageStats } from '../types';
 import { useLayerStack } from '../contexts/LayerStackContext';
 import { MODAL_PRIORITIES } from '../constants/modalPriorities';
@@ -1107,10 +1107,7 @@ export function AgentSessionsBrowser({
 						{hasMoreMessages && (
 							<div className="text-center py-2">
 								{messagesLoading ? (
-									<Loader2
-										className="w-5 h-5 animate-spin mx-auto"
-										style={{ color: theme.colors.textDim }}
-									/>
+									<Spinner size="md" className="mx-auto" style={{ color: theme.colors.textDim }} />
 								) : (
 									<button
 										onClick={handleLoadMore}
@@ -1177,7 +1174,7 @@ export function AgentSessionsBrowser({
 
 						{messagesLoading && messages.length === 0 && (
 							<div className="flex items-center justify-center py-8">
-								<Loader2 className="w-6 h-6 animate-spin" style={{ color: theme.colors.textDim }} />
+								<Spinner size="lg" style={{ color: theme.colors.textDim }} />
 							</div>
 						)}
 					</div>
@@ -1256,10 +1253,7 @@ export function AgentSessionsBrowser({
 								</div>
 							)}
 							{!stats.isComplete && (
-								<Loader2
-									className="w-3 h-3 animate-spin ml-auto"
-									style={{ color: theme.colors.textDim }}
-								/>
+								<Spinner size="xs" className="ml-auto" style={{ color: theme.colors.textDim }} />
 							)}
 						</div>
 					)}
@@ -1321,12 +1315,7 @@ export function AgentSessionsBrowser({
 												}
 											}}
 										/>
-										{isSearching && (
-											<Loader2
-												className="w-4 h-4 animate-spin"
-												style={{ color: theme.colors.textDim }}
-											/>
-										)}
+										{isSearching && <Spinner size="sm" style={{ color: theme.colors.textDim }} />}
 										{search && !isSearching && (
 											<button
 												onClick={() => handleSearchChange('')}
@@ -1470,20 +1459,19 @@ export function AgentSessionsBrowser({
 					>
 						{loading ? (
 							<div className="flex items-center justify-center py-12">
-								<Loader2 className="w-6 h-6 animate-spin" style={{ color: theme.colors.textDim }} />
+								<Spinner size="lg" style={{ color: theme.colors.textDim }} />
 							</div>
 						) : filteredSessions.length === 0 ? (
-							<div className="flex flex-col items-center justify-center py-12 px-4">
-								<List
-									className="w-12 h-12 mb-4 opacity-30"
-									style={{ color: theme.colors.textDim }}
-								/>
-								<p className="text-sm text-center" style={{ color: theme.colors.textDim }}>
-									{sessions.length === 0
+							<EmptyState
+								theme={theme}
+								icon={<List className="w-12 h-12" />}
+								message={
+									sessions.length === 0
 										? `No ${agentId === 'claude-code' ? 'Claude' : 'agent'} sessions found for this project`
-										: 'No sessions match your search'}
-								</p>
-							</div>
+										: 'No sessions match your search'
+								}
+								className="py-12 px-4"
+							/>
 						) : (
 							<div className="py-2">
 								{filteredSessions.map((session, i) => (
@@ -1515,10 +1503,7 @@ export function AgentSessionsBrowser({
 									<div className="py-4 flex justify-center items-center">
 										{isLoadingMoreSessions ? (
 											<div className="flex items-center gap-2">
-												<Loader2
-													className="w-4 h-4 animate-spin"
-													style={{ color: theme.colors.accent }}
-												/>
+												<Spinner size="sm" style={{ color: theme.colors.accent }} />
 												<span className="text-xs" style={{ color: theme.colors.textDim }}>
 													Loading more sessions...
 												</span>

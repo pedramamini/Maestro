@@ -16,23 +16,10 @@ import React, { memo, useState, useEffect, useMemo, useCallback } from 'react';
 import { Play, CheckSquare, ListChecks, Target, Clock, Timer } from 'lucide-react';
 import type { Theme } from '../../types';
 import type { StatsTimeRange } from '../../hooks/stats/useStats';
+import type { AutoRunSession } from '../../../shared/stats-types';
 import { captureException } from '../../utils/sentry';
-import { formatElapsedTime as formatDuration } from '../../../shared/formatters';
-
-/**
- * Auto Run session data shape from the API
- */
-interface AutoRunSession {
-	id: string;
-	sessionId: string;
-	agentType: string;
-	documentPath?: string;
-	startTime: number;
-	duration: number;
-	tasksTotal?: number;
-	tasksCompleted?: number;
-	projectPath?: string;
-}
+import { EmptyState } from '../ui';
+import { formatElapsedTime as formatDuration, formatNumber } from '../../../shared/formatters';
 
 interface AutoRunStatsProps {
 	/** Current time range for filtering */
@@ -41,20 +28,6 @@ interface AutoRunStatsProps {
 	theme: Theme;
 	/** Number of columns for responsive layout (default: 6) */
 	columns?: number;
-}
-
-/**
- * Format large numbers with K/M suffixes for readability
- * Examples: "1.2K", "3.5M", "42"
- */
-function formatNumber(num: number): string {
-	if (num >= 1000000) {
-		return `${(num / 1000000).toFixed(1)}M`;
-	}
-	if (num >= 1000) {
-		return `${(num / 1000).toFixed(1)}K`;
-	}
-	return num.toString();
 }
 
 /**
@@ -299,18 +272,13 @@ export const AutoRunStats = memo(function AutoRunStats({
 				style={{ backgroundColor: theme.colors.bgMain }}
 				data-testid="autorun-stats-empty"
 			>
-				<div
-					className="h-48 flex flex-col items-center justify-center gap-3"
-					style={{ color: theme.colors.textDim }}
-				>
-					<Play className="w-12 h-12 opacity-30" />
-					<div className="text-center">
-						<p className="text-sm mb-1" style={{ color: theme.colors.textMain }}>
-							No Auto Run data yet
-						</p>
-						<p className="text-xs">Run some batch tasks to see your stats!</p>
-					</div>
-				</div>
+				<EmptyState
+					theme={theme}
+					icon={<Play className="w-12 h-12" />}
+					message="No Auto Run data yet"
+					description="Run some batch tasks to see your stats!"
+					className="h-48"
+				/>
 			</div>
 		);
 	}
@@ -471,12 +439,7 @@ export const AutoRunStats = memo(function AutoRunStats({
 						)}
 					</div>
 				) : (
-					<div
-						className="h-32 flex items-center justify-center"
-						style={{ color: theme.colors.textDim }}
-					>
-						<span className="text-sm">No task data available</span>
-					</div>
+					<EmptyState theme={theme} message="No task data available" className="h-32" />
 				)}
 			</div>
 		</div>

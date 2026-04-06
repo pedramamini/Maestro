@@ -15,7 +15,7 @@
 
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { Search, ArrowRight, X, Circle } from 'lucide-react';
-import { Spinner } from './ui';
+import { EmptyState, Spinner } from './ui';
 import type { Theme, Session, AITab, ToolType } from '../types';
 import type { MergeResult } from '../types/contextMerge';
 import { fuzzyMatchWithScore } from '../utils/search';
@@ -518,13 +518,11 @@ export function SendToAgentModal({
 						aria-label="Available sessions"
 					>
 						{filteredSessions.length === 0 ? (
-							<div
-								className="p-4 text-center text-sm"
-								style={{ color: theme.colors.textDim }}
-								role="status"
-							>
-								{searchQuery ? 'No matching sessions found' : 'No other sessions available'}
-							</div>
+							<EmptyState
+								theme={theme}
+								message={searchQuery ? 'No matching sessions found' : 'No other sessions available'}
+								className="p-4"
+							/>
 						) : (
 							<div className="space-y-1" role="presentation">
 								{filteredSessions.map((session, index) => {
