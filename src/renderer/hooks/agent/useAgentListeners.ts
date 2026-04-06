@@ -962,7 +962,11 @@ export function useAgentListeners(deps: UseAgentListenersDeps): void {
 							return { ...s, agentSessionId };
 						}
 
-						if (targetTab.agentSessionId && targetTab.agentSessionId !== agentSessionId) {
+						if (
+							targetTab.agentSessionId &&
+							targetTab.agentSessionId !== agentSessionId &&
+							!targetTab.awaitingSessionId
+						) {
 							return s;
 						}
 

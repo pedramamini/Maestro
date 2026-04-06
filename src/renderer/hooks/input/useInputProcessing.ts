@@ -671,7 +671,6 @@ export function useInputProcessing(deps: UseInputProcessingDeps): UseInputProces
 					// Update the active tab's logs and state to 'busy' for write-mode tracking
 					// Also mark as awaitingSessionId if this is a new session (no agentSessionId yet)
 					// Set thinkingStartTime on the tab for accurate elapsed time tracking (especially for parallel tabs)
-					const isNewSession = !activeTab.agentSessionId;
 					const updatedAiTabs = s.aiTabs.map((tab) =>
 						tab.id === activeTab.id
 							? {
@@ -679,9 +678,11 @@ export function useInputProcessing(deps: UseInputProcessingDeps): UseInputProces
 									logs: [...tab.logs, newEntry],
 									state: 'busy' as const,
 									thinkingStartTime: Date.now(),
-									// Mark this tab as awaiting session ID so we can assign it correctly
-									// when the session ID comes back (prevents cross-tab assignment)
-									awaitingSessionId: isNewSession ? true : tab.awaitingSessionId,
+									// Always mark as awaiting session ID when spawning a new process.
+									// This ensures that if a resume fails and the agent emits a new
+									// session ID, the onSessionId handler accepts it and re-attaches
+									// the system prompt.
+									awaitingSessionId: true,
 								}
 							: tab
 					);
@@ -983,11 +984,12 @@ export function useInputProcessing(deps: UseInputProcessingDeps): UseInputProces
 							});
 						}
 
-						// For NEW sessions (no agentSessionId), prepare Maestro system prompt separately
-						// This introduces Maestro and sets directory restrictions for the agent
-						const isNewSession = !tabAgentSessionId;
+						// Prepare Maestro system prompt for the agent.
+						// Always send it — on resumed sessions it's harmless extra context,
+						// but on failed resumes that start a fresh session it's essential
+						// (without it the agent permanently lacks Maestro instructions).
 						let appendSystemPrompt: string | undefined;
-						if (isNewSession && maestroSystemPrompt) {
+						if (maestroSystemPrompt) {
 							// Get git branch for template substitution
 							let gitBranch: string | undefined;
 							if (freshSession.isGitRepo) {
