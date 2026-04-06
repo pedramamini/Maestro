@@ -707,7 +707,7 @@ describe('useFileExplorerEffects', () => {
 				window.dispatchEvent(event);
 			});
 
-			expect(toggleFolder).toHaveBeenCalledWith('src', 'session-1', expect.any(Function));
+			expect(toggleFolder).toHaveBeenCalledWith('src', 'session-1');
 		});
 
 		it('Cmd+ArrowDown jumps to last item', async () => {
@@ -1381,7 +1381,7 @@ describe('useFileExplorerEffects', () => {
 			});
 
 			// Should collapse 'src' folder
-			expect(toggleFolder).toHaveBeenCalledWith('src', 'session-1', expect.any(Function));
+			expect(toggleFolder).toHaveBeenCalledWith('src', 'session-1');
 		});
 
 		it('ArrowLeft on file navigates to parent folder', async () => {
@@ -1414,7 +1414,7 @@ describe('useFileExplorerEffects', () => {
 			});
 
 			// Should collapse parent 'src' and navigate to it
-			expect(toggleFolder).toHaveBeenCalledWith('src', 'session-1', expect.any(Function));
+			expect(toggleFolder).toHaveBeenCalledWith('src', 'session-1');
 			expect(useFileExplorerStore.getState().selectedFileIndex).toBe(0);
 		});
 
@@ -1445,7 +1445,7 @@ describe('useFileExplorerEffects', () => {
 			});
 
 			// Should expand 'src' folder
-			expect(toggleFolder).toHaveBeenCalledWith('src', 'session-1', expect.any(Function));
+			expect(toggleFolder).toHaveBeenCalledWith('src', 'session-1');
 		});
 
 		it('ArrowRight does nothing on already-expanded folder', async () => {

@@ -16,7 +16,7 @@ import type { Session } from '../../../renderer/types';
 import type { FileNode } from '../../../renderer/types/fileTree';
 import { createMockSession } from '../../helpers/mockSession';
 import type { RightPanelHandle } from '../../../renderer/components/RightPanel';
-import type { RefObject, SetStateAction } from 'react';
+import type { RefObject } from 'react';
 import { loadFileTree, compareFileTrees } from '../../../renderer/utils/fileExplorer';
 import { gitService } from '../../../renderer/services/git';
 import { useFileExplorerStore } from '../../../renderer/stores/fileExplorerStore';
@@ -40,17 +40,16 @@ vi.mock('../../../renderer/services/git', () => ({
 // ============================================================================
 
 const createSessionsState = (initialSessions: Session[]) => {
-	let sessions = initialSessions;
-	const sessionsRef = { current: sessions };
-	const setSessions = vi.fn((updater: SetStateAction<Session[]>) => {
-		sessions = typeof updater === 'function' ? updater(sessions) : updater;
-		sessionsRef.current = sessions;
-	});
+	// Store sessions in the Zustand store so updateSessionWith can find them
+	useSessionStore.setState((prev) => ({
+		...prev,
+		sessions: initialSessions,
+	}));
+	const sessionsRef = { current: initialSessions };
 
 	return {
-		getSessions: () => sessions,
+		getSessions: () => useSessionStore.getState().sessions,
 		sessionsRef,
-		setSessions,
 	};
 };
 
@@ -60,7 +59,6 @@ const createDeps = (
 ): UseFileTreeManagementDeps => ({
 	sessions: state.getSessions(),
 	sessionsRef: state.sessionsRef,
-	setSessions: state.setSessions,
 	activeSessionId: state.getSessions()[0]?.id ?? null,
 	activeSession: state.getSessions()[0] ?? null,
 	rightPanelRef: { current: { refreshHistoryPanel: vi.fn() } },
@@ -85,7 +83,7 @@ describe('useFileTreeManagement', () => {
 	});
 
 	afterEach(() => {
-		useSessionStore.setState({ sessionsLoaded: false, initialFileTreeReady: false });
+		useSessionStore.setState({ sessions: [], sessionsLoaded: false, initialFileTreeReady: false });
 	});
 
 	it('refreshFileTree updates tree and returns changes', async () => {

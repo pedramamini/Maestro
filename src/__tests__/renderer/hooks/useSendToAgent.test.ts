@@ -9,6 +9,8 @@ import type { Session, AITab, LogEntry, ToolType } from '../../../renderer/types
 import type { SendToAgentOptions } from '../../../renderer/components/SendToAgentModal';
 import * as contextGroomer from '../../../renderer/services/contextGroomer';
 import { createMockSession } from '../../helpers/mockSession';
+import { createMockAITab } from '../../helpers/mockTab';
+import { useSessionStore } from '../../../renderer/stores/sessionStore';
 
 // Mock the context grooming service
 vi.mock('../../../renderer/services/contextGroomer', async () => {
@@ -86,18 +88,13 @@ vi.mock('../../../renderer/utils/tabHelpers', () => ({
 
 // Create a mock tab
 function createMockTab(id: string, logs: LogEntry[] = []): AITab {
-	return {
+	return createMockAITab({
 		id,
 		name: `Tab ${id}`,
 		agentSessionId: `session-${id}`,
-		starred: false,
 		logs,
-		inputValue: '',
-		stagedImages: [],
-		createdAt: Date.now(),
-		state: 'idle',
 		saveToHistory: true,
-	};
+	});
 }
 
 // Convenience wrapper: creates a session with a pre-populated AI tab containing logs
@@ -389,7 +386,6 @@ describe('useSendToAgent', () => {
 });
 
 describe('useSendToAgentWithSessions', () => {
-	const mockSetSessions = vi.fn();
 	const mockOnSessionCreated = vi.fn();
 	const mockOnNavigateToSession = vi.fn();
 
@@ -408,10 +404,12 @@ describe('useSendToAgentWithSessions', () => {
 	it('adds new session to sessions state', async () => {
 		const sessions = [createTestSession('existing-1')];
 
+		// Seed the Zustand store so we can verify a session was added
+		useSessionStore.setState({ sessions: [...sessions] });
+
 		const { result } = renderHook(() =>
 			useSendToAgentWithSessions({
 				sessions,
-				setSessions: mockSetSessions,
 				onSessionCreated: mockOnSessionCreated,
 				onNavigateToSession: mockOnNavigateToSession,
 			})
@@ -426,16 +424,22 @@ describe('useSendToAgentWithSessions', () => {
 			});
 		});
 
-		expect(mockSetSessions).toHaveBeenCalled();
+		// Verify the new session was added to the Zustand store
+		const storeSessions = useSessionStore.getState().sessions;
+		expect(storeSessions.length).toBeGreaterThan(sessions.length);
+		const newSession = storeSessions.find((s) => s.id !== 'existing-1');
+		expect(newSession).toBeDefined();
 	});
 
 	it('sets autoSendOnActivate flag on new session tab for automatic context injection', async () => {
 		const sessions = [createTestSession('existing-1')];
 
+		// Seed the Zustand store so we can verify the new session's tab flags
+		useSessionStore.setState({ sessions: [...sessions] });
+
 		const { result } = renderHook(() =>
 			useSendToAgentWithSessions({
 				sessions,
-				setSessions: mockSetSessions,
 				onSessionCreated: mockOnSessionCreated,
 				onNavigateToSession: mockOnNavigateToSession,
 			})
@@ -450,14 +454,9 @@ describe('useSendToAgentWithSessions', () => {
 			});
 		});
 
-		// Get the session that was added via setSessions
-		const setSessionsCall = mockSetSessions.mock.calls.find(
-			(call) => typeof call[0] === 'function'
-		);
-		expect(setSessionsCall).toBeDefined();
-		const updateFn = setSessionsCall![0] as (prev: Session[]) => Session[];
-		const updatedSessions = updateFn(sessions);
-		const newSession = updatedSessions.find((s) => s.id !== 'existing-1');
+		// Verify the new session was added to the Zustand store with correct tab flags
+		const storeSessions = useSessionStore.getState().sessions;
+		const newSession = storeSessions.find((s) => s.id !== 'existing-1');
 
 		expect(newSession).toBeDefined();
 		expect(newSession!.aiTabs[0].autoSendOnActivate).toBe(true);
@@ -471,7 +470,6 @@ describe('useSendToAgentWithSessions', () => {
 		const { result } = renderHook(() =>
 			useSendToAgentWithSessions({
 				sessions,
-				setSessions: mockSetSessions,
 				onSessionCreated: mockOnSessionCreated,
 				onNavigateToSession: mockOnNavigateToSession,
 			})
@@ -499,7 +497,6 @@ describe('useSendToAgentWithSessions', () => {
 		const { result } = renderHook(() =>
 			useSendToAgentWithSessions({
 				sessions,
-				setSessions: mockSetSessions,
 				onSessionCreated: mockOnSessionCreated,
 				onNavigateToSession: mockOnNavigateToSession,
 			})
@@ -520,10 +517,12 @@ describe('useSendToAgentWithSessions', () => {
 	it('returns error when source tab not found', async () => {
 		const sessions = [createTestSession('existing-1')];
 
+		// Seed the Zustand store so we can verify no session was added
+		useSessionStore.setState({ sessions: [...sessions] });
+
 		const { result } = renderHook(() =>
 			useSendToAgentWithSessions({
 				sessions,
-				setSessions: mockSetSessions,
 			})
 		);
 
@@ -541,7 +540,9 @@ describe('useSendToAgentWithSessions', () => {
 
 		expect(transferResult.success).toBe(false);
 		expect(transferResult.error).toBe('Source tab not found');
-		expect(mockSetSessions).not.toHaveBeenCalled();
+		// Verify no new session was added to the store
+		const storeSessions = useSessionStore.getState().sessions;
+		expect(storeSessions.length).toBe(sessions.length);
 	});
 
 	it('skips session creation when createNewSession is false', async () => {
@@ -550,7 +551,6 @@ describe('useSendToAgentWithSessions', () => {
 		const { result } = renderHook(() =>
 			useSendToAgentWithSessions({
 				sessions,
-				setSessions: mockSetSessions,
 				onSessionCreated: mockOnSessionCreated,
 			})
 		);

@@ -2,21 +2,9 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
 import { useRemoteIntegration } from '../../../renderer/hooks';
 import type { Session, AITab } from '../../../renderer/types';
+import { useSessionStore } from '../../../renderer/stores/sessionStore';
 import { createMockSession } from '../../helpers/mockSession';
-
-const createMockTab = (overrides: Partial<AITab> = {}): AITab => ({
-	id: 'tab-1',
-	agentSessionId: null,
-	name: null,
-	starred: false,
-	logs: [],
-	inputValue: '',
-	stagedImages: [],
-	createdAt: 1700000000000,
-	state: 'idle',
-	saveToHistory: true,
-	...overrides,
-});
+import { createMockAITab } from '../../helpers/mockTab';
 
 describe('useRemoteIntegration', () => {
 	let onRemoteCommandHandler:
@@ -184,6 +172,7 @@ describe('useRemoteIntegration', () => {
 
 	beforeEach(() => {
 		vi.clearAllMocks();
+		useSessionStore.setState({ sessions: [], activeSessionId: '' });
 		onRemoteCommandHandler = undefined;
 		onRemoteSwitchModeHandler = undefined;
 		onRemoteInterruptHandler = undefined;
@@ -217,19 +206,16 @@ describe('useRemoteIntegration', () => {
 		const activeSessionId = overrides.activeSessionId ?? sessions[0]?.id ?? '';
 		const sessionsRef = { current: sessions };
 		const activeSessionIdRef = { current: activeSessionId };
-		const setSessions = vi.fn((fn: (prev: Session[]) => Session[]) => {
-			const result = typeof fn === 'function' ? fn(sessions) : fn;
-			sessionsRef.current = result;
-			return result;
-		});
 		const setActiveSessionId = vi.fn();
+
+		// Seed the Zustand store so updateSessionWith can find sessions
+		useSessionStore.setState({ sessions });
 
 		return {
 			activeSessionId,
 			isLiveMode: overrides.isLiveMode ?? false,
 			sessionsRef,
 			activeSessionIdRef,
-			setSessions,
 			setActiveSessionId,
 			defaultSaveToHistory: true,
 			defaultShowThinking: 'off' as const,
@@ -320,7 +306,8 @@ describe('useRemoteIntegration', () => {
 				onRemoteCommandHandler?.('session-1', 'ls -la', 'terminal');
 			});
 
-			expect(deps.setSessions).toHaveBeenCalled();
+			const updated = useSessionStore.getState().sessions.find((s) => s.id === 'session-1');
+			expect(updated?.inputMode).toBe('terminal');
 		});
 
 		it('clears activeFileTabId when remote command syncs to terminal mode', () => {
@@ -338,10 +325,9 @@ describe('useRemoteIntegration', () => {
 				onRemoteCommandHandler?.('session-1', 'ls -la', 'terminal');
 			});
 
-			const updater = deps.setSessions.mock.calls[0][0];
-			const result = typeof updater === 'function' ? updater([session]) : updater;
-			expect(result[0].inputMode).toBe('terminal');
-			expect(result[0].activeFileTabId).toBeNull();
+			const updated = useSessionStore.getState().sessions.find((s) => s.id === 'session-1');
+			expect(updated?.inputMode).toBe('terminal');
+			expect(updated?.activeFileTabId).toBeNull();
 		});
 	});
 
@@ -356,10 +342,8 @@ describe('useRemoteIntegration', () => {
 				onRemoteSwitchModeHandler?.('session-1', 'terminal');
 			});
 
-			expect(deps.setSessions).toHaveBeenCalled();
-			const updater = deps.setSessions.mock.calls[0][0];
-			const result = typeof updater === 'function' ? updater([session]) : updater;
-			expect(result[0].inputMode).toBe('terminal');
+			const updated = useSessionStore.getState().sessions.find((s) => s.id === 'session-1');
+			expect(updated?.inputMode).toBe('terminal');
 		});
 
 		it('ignores switch mode when session not found', () => {
@@ -371,9 +355,8 @@ describe('useRemoteIntegration', () => {
 				onRemoteSwitchModeHandler?.('nonexistent', 'terminal');
 			});
 
-			const updater = deps.setSessions.mock.calls[0][0];
-			const result = typeof updater === 'function' ? updater([]) : updater;
-			expect(result).toEqual([]);
+			// Store sessions should remain empty (no mutation)
+			expect(useSessionStore.getState().sessions).toEqual([]);
 		});
 
 		it('ignores switch mode when session already in mode', () => {
@@ -386,9 +369,9 @@ describe('useRemoteIntegration', () => {
 				onRemoteSwitchModeHandler?.('session-1', 'ai');
 			});
 
-			const updater = deps.setSessions.mock.calls[0][0];
-			const result = typeof updater === 'function' ? updater([session]) : updater;
-			expect(result).toEqual([session]);
+			// Session should remain unchanged when already in the requested mode
+			const updated = useSessionStore.getState().sessions.find((s) => s.id === 'session-1');
+			expect(updated?.inputMode).toBe('ai');
 		});
 
 		it('clears activeFileTabId when switching to terminal mode', () => {
@@ -405,10 +388,9 @@ describe('useRemoteIntegration', () => {
 				onRemoteSwitchModeHandler?.('session-1', 'terminal');
 			});
 
-			const updater = deps.setSessions.mock.calls[0][0];
-			const result = typeof updater === 'function' ? updater([session]) : updater;
-			expect(result[0].inputMode).toBe('terminal');
-			expect(result[0].activeFileTabId).toBeNull();
+			const updated = useSessionStore.getState().sessions.find((s) => s.id === 'session-1');
+			expect(updated?.inputMode).toBe('terminal');
+			expect(updated?.activeFileTabId).toBeNull();
 		});
 
 		it('preserves activeFileTabId when switching to ai mode', () => {
@@ -425,10 +407,9 @@ describe('useRemoteIntegration', () => {
 				onRemoteSwitchModeHandler?.('session-1', 'ai');
 			});
 
-			const updater = deps.setSessions.mock.calls[0][0];
-			const result = typeof updater === 'function' ? updater([session]) : updater;
-			expect(result[0].inputMode).toBe('ai');
-			expect(result[0].activeFileTabId).toBe('file-tab-1');
+			const updated = useSessionStore.getState().sessions.find((s) => s.id === 'session-1');
+			expect(updated?.inputMode).toBe('ai');
+			expect(updated?.activeFileTabId).toBe('file-tab-1');
 		});
 	});
 
@@ -444,7 +425,8 @@ describe('useRemoteIntegration', () => {
 			});
 
 			expect(mockProcess.interrupt).toHaveBeenCalledWith('session-1-ai');
-			expect(deps.setSessions).toHaveBeenCalled();
+			const updated = useSessionStore.getState().sessions.find((s) => s.id === 'session-1');
+			expect(updated?.state).toBe('idle');
 		});
 
 		it('ignores interrupt when session not found', async () => {
@@ -488,10 +470,10 @@ describe('useRemoteIntegration', () => {
 		});
 
 		it('switches to session and tab when tabId provided', () => {
-			const tab = createMockTab({ id: 'tab-2' });
+			const tab = createMockAITab({ id: 'tab-2' });
 			const session = createMockSession({
 				id: 'session-1',
-				aiTabs: [createMockTab(), tab],
+				aiTabs: [createMockAITab(), tab],
 			});
 			const deps = createDeps({ sessions: [session] });
 
@@ -502,7 +484,8 @@ describe('useRemoteIntegration', () => {
 			});
 
 			expect(deps.setActiveSessionId).toHaveBeenCalledWith('session-1');
-			expect(deps.setSessions).toHaveBeenCalled();
+			const updated = useSessionStore.getState().sessions.find((s) => s.id === 'session-1');
+			expect(updated?.activeTabId).toBe('tab-2');
 		});
 
 		it('ignores session selection when session not found', () => {
@@ -520,10 +503,10 @@ describe('useRemoteIntegration', () => {
 
 	describe('remote tab selection', () => {
 		it('switches to tab within session', () => {
-			const tab = createMockTab({ id: 'tab-2' });
+			const tab = createMockAITab({ id: 'tab-2' });
 			const session = createMockSession({
 				id: 'session-1',
-				aiTabs: [createMockTab(), tab],
+				aiTabs: [createMockAITab(), tab],
 			});
 			const deps = createDeps({ sessions: [session], activeSessionId: 'session-1' });
 
@@ -533,14 +516,15 @@ describe('useRemoteIntegration', () => {
 				onRemoteSelectTabHandler?.('session-1', 'tab-2');
 			});
 
-			expect(deps.setSessions).toHaveBeenCalled();
+			const updated = useSessionStore.getState().sessions.find((s) => s.id === 'session-1');
+			expect(updated?.activeTabId).toBe('tab-2');
 		});
 
 		it('switches session first if not active', () => {
-			const tab = createMockTab({ id: 'tab-2' });
+			const tab = createMockAITab({ id: 'tab-2' });
 			const session = createMockSession({
 				id: 'session-1',
-				aiTabs: [createMockTab(), tab],
+				aiTabs: [createMockAITab(), tab],
 			});
 			const deps = createDeps({ sessions: [session], activeSessionId: 'other-session' });
 
@@ -565,15 +549,16 @@ describe('useRemoteIntegration', () => {
 				onRemoteNewTabHandler?.('session-1', 'response-channel-1');
 			});
 
-			expect(deps.setSessions).toHaveBeenCalled();
+			const updated = useSessionStore.getState().sessions.find((s) => s.id === 'session-1');
+			expect(updated?.aiTabs.length).toBeGreaterThan(session.aiTabs.length);
 			expect(mockProcess.sendRemoteNewTabResponse).toHaveBeenCalled();
 		});
 	});
 
 	describe('remote close tab', () => {
 		it('closes tab in session', () => {
-			const tab1 = createMockTab({ id: 'tab-1' });
-			const tab2 = createMockTab({ id: 'tab-2' });
+			const tab1 = createMockAITab({ id: 'tab-1' });
+			const tab2 = createMockAITab({ id: 'tab-2' });
 			const session = createMockSession({
 				id: 'session-1',
 				aiTabs: [tab1, tab2],
@@ -587,13 +572,14 @@ describe('useRemoteIntegration', () => {
 				onRemoteCloseTabHandler?.('session-1', 'tab-1');
 			});
 
-			expect(deps.setSessions).toHaveBeenCalled();
+			const updated = useSessionStore.getState().sessions.find((s) => s.id === 'session-1');
+			expect(updated?.aiTabs.some((t) => t.id === 'tab-1')).toBe(false);
 		});
 	});
 
 	describe('remote rename tab', () => {
 		it('renames tab and persists to agent session (claude-code)', () => {
-			const tab = createMockTab({ id: 'tab-1', agentSessionId: 'agent-session-1' });
+			const tab = createMockAITab({ id: 'tab-1', agentSessionId: 'agent-session-1' });
 			const session = createMockSession({
 				id: 'session-1',
 				aiTabs: [tab],
@@ -608,7 +594,8 @@ describe('useRemoteIntegration', () => {
 				onRemoteRenameTabHandler?.('session-1', 'tab-1', 'New Tab Name');
 			});
 
-			expect(deps.setSessions).toHaveBeenCalled();
+			const updated = useSessionStore.getState().sessions.find((s) => s.id === 'session-1');
+			expect(updated?.aiTabs.find((t) => t.id === 'tab-1')?.name).toBe('New Tab Name');
 			// For claude-code sessions, it uses window.maestro.claude.updateSessionName
 			expect(mockClaude.updateSessionName).toHaveBeenCalledWith(
 				'/test/project',
@@ -643,7 +630,7 @@ describe('useRemoteIntegration', () => {
 		});
 
 		it('broadcasts tab changes to web clients when in live mode', () => {
-			const tab = createMockTab({ id: 'tab-1' });
+			const tab = createMockAITab({ id: 'tab-1' });
 			const session = createMockSession({
 				id: 'session-1',
 				aiTabs: [tab],
@@ -665,7 +652,7 @@ describe('useRemoteIntegration', () => {
 		});
 
 		it('does not broadcast when live mode is disabled', () => {
-			const tab = createMockTab({ id: 'tab-1' });
+			const tab = createMockAITab({ id: 'tab-1' });
 			const session = createMockSession({
 				id: 'session-1',
 				aiTabs: [tab],

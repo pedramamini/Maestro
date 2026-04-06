@@ -98,9 +98,9 @@ updateAiTab(sessionId, tabId, (tab) => ({ ...tab, someField: newValue }));
 
 ### 7. Verify full build
 
-- [ ] Run lint: `rtk npm run lint`
-- [ ] Run tests: `CI=1 rtk vitest run`
-- [ ] Verify types: `rtk tsc -p tsconfig.main.json --noEmit && rtk tsc -p tsconfig.lint.json --noEmit`
+- [x] Run lint: `rtk npm run lint` - passes clean
+- [x] Run tests: `CI=1 rtk vitest run` - 23,515 pass, 34 fail (all pre-existing baseline). Fixed 61 new failures across 7 test files (useFileExplorerEffects, useFileTreeManagement, useMainKeyboardHandler, useMergeTransferHandlers, useQueueProcessing, useRemoteIntegration, useSendToAgent) that were not updated when setSessions was removed from prop interfaces in Tasks 3-6.
+- [x] Verify types: `rtk tsc -p tsconfig.main.json --noEmit && rtk tsc -p tsconfig.lint.json --noEmit` - both pass cleanly
 
 ### 8. Verify reduction in duplication
 
