@@ -332,8 +332,14 @@ function SessionListInner(props: SessionListProps) {
 
 	const handleMoveToGroup = useCallback(
 		(sessionId: string, groupId: string) => {
+			const normalizedGroupId = groupId || undefined;
 			setSessions((prev) =>
-				prev.map((s) => (s.id === sessionId ? { ...s, groupId: groupId || undefined } : s))
+				prev.map((s) => {
+					if (s.id === sessionId) return { ...s, groupId: normalizedGroupId };
+					// Also update worktree children to keep groupId in sync
+					if (s.parentSessionId === sessionId) return { ...s, groupId: normalizedGroupId };
+					return s;
+				})
 			);
 		},
 		[setSessions]
