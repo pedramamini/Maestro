@@ -119,15 +119,41 @@ export function AgentConfigPanel({
 
 	const hasFanIn = (incomingAgentEdgeCount ?? 0) > 1;
 
+	// Layout policy:
+	//
+	// - The input/output split is a flex row that fills all remaining vertical
+	//   space (`flex: 1, minHeight: 0`). Both columns get `flex: 1` so the
+	//   output box always fills its column instead of collapsing to its content
+	//   (the previous `flex: hasMultipleTriggers ? 0 : 1` left dead space below
+	//   the output textarea in multi-trigger collapsed mode).
+	//
+	// - Single-trigger input and the output textarea both use `flex: 1,
+	//   minHeight: 0` regardless of expanded/collapsed, so they grow to fill
+	//   the available column height — no more wasted whitespace in collapsed
+	//   single-trigger mode.
+	//
+	// - Multi-trigger left column has its OWN `overflowY: auto` and lays out
+	//   each EdgePromptRow at its intrinsic content size (no row-level flex).
+	//   This is what stops textareas from being squeezed under their own
+	//   labels, and what prevents the bottom row's title from overlapping the
+	//   row above when the parent runs out of vertical space — instead of
+	//   collapsing rows below their min content size, the column scrolls.
+	//
+	// - The outer container does NOT add its own overflow: NodeConfigPanel's
+	//   content wrapper sets overflow: hidden on this branch, so we have a
+	//   single source of scrolling per axis (left rail in multi-trigger mode,
+	//   nothing for the rest in collapsed mode — both prompts fit). The
+	//   trailing fan-in / pipeline-pills section uses flexShrink: 0 so it
+	//   never steals space from the prompts.
 	return (
 		<div
 			style={{
 				display: 'flex',
 				flexDirection: 'column',
-				gap: 12,
+				gap: 10,
 				flex: 1,
 				minHeight: 0,
-				overflowY: 'auto',
+				minWidth: 0,
 			}}
 		>
 			<div
@@ -136,12 +162,26 @@ export function AgentConfigPanel({
 					gap: 12,
 					flex: 1,
 					minHeight: 0,
-					overflow: 'auto',
+					minWidth: 0,
 				}}
 			>
 				{/* Input Prompt(s) */}
 				{hasMultipleTriggers && onUpdateEdgePrompt ? (
-					<div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 6, minHeight: 0 }}>
+					<div
+						style={{
+							flex: 1,
+							minWidth: 0,
+							minHeight: 0,
+							display: 'flex',
+							flexDirection: 'column',
+							gap: 8,
+							overflowY: 'auto',
+							overflowX: 'hidden',
+							// Reserve space for the scrollbar so rows don't shift when
+							// it appears.
+							paddingRight: 6,
+						}}
+					>
 						{incomingTriggerEdges!.map((edgeInfo) => (
 							<EdgePromptRow
 								key={edgeInfo.edgeId}
@@ -153,17 +193,34 @@ export function AgentConfigPanel({
 						))}
 					</div>
 				) : (
-					<div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+					<div
+						style={{
+							flex: 1,
+							minWidth: 0,
+							minHeight: 0,
+							display: 'flex',
+							flexDirection: 'column',
+						}}
+					>
 						<label
 							style={{
 								...themedLabelStyle,
-								flex: expanded ? 1 : undefined,
+								flex: 1,
 								display: 'flex',
 								flexDirection: 'column',
 								minHeight: 0,
+								marginBottom: 0,
 							}}
 						>
-							<span style={{ display: 'flex', alignItems: 'baseline', gap: 4 }}>
+							<span
+								style={{
+									display: 'flex',
+									alignItems: 'baseline',
+									gap: 4,
+									flexShrink: 0,
+									marginBottom: 4,
+								}}
+							>
 								Input Prompt
 								{hasIncomingAgentEdges && data.includeUpstreamOutput !== false && (
 									<span
@@ -180,7 +237,6 @@ export function AgentConfigPanel({
 							<textarea
 								value={localInputPrompt}
 								onChange={handleInputPromptChange}
-								rows={expanded ? undefined : 3}
 								placeholder={
 									hasIncomingAgentEdges && data.includeUpstreamOutput !== false
 										? 'Optional — upstream output is auto-included. Add instructions to guide how the agent processes it.'
@@ -195,7 +251,8 @@ export function AgentConfigPanel({
 									resize: 'vertical',
 									fontFamily: 'inherit',
 									lineHeight: 1.4,
-									...(expanded ? { flex: 1, minHeight: 0 } : { minHeight: hasFanIn ? 64 : 80 }),
+									flex: 1,
+									minHeight: hasFanIn ? 72 : 88,
 								}}
 							/>
 						</label>
@@ -208,7 +265,8 @@ export function AgentConfigPanel({
 									fontSize: 11,
 									color: theme.colors.textDim,
 									cursor: 'pointer',
-									marginTop: 2,
+									marginTop: 4,
+									flexShrink: 0,
 								}}
 							>
 								<input
@@ -242,6 +300,7 @@ export function AgentConfigPanel({
 								fontSize: 10,
 								textAlign: 'right',
 								flexShrink: 0,
+								marginTop: 2,
 							}}
 						>
 							{localInputPrompt.length} chars
@@ -249,32 +308,43 @@ export function AgentConfigPanel({
 					</div>
 				)}
 
-				{/* Output Prompt */}
+				{/* Output Prompt — always flex: 1 so it fills the column even when
+				 *  the left side is in multi-trigger scroll mode. Previously this
+				 *  was `flex: hasMultipleTriggers ? 0 : 1` which collapsed the
+				 *  output to its content + minHeight, leaving the rest of the
+				 *  column as dead whitespace. */}
 				<div
 					style={{
-						flex: hasMultipleTriggers ? 0 : 1,
-						minWidth: hasMultipleTriggers ? 200 : undefined,
+						flex: 1,
+						minWidth: 0,
+						minHeight: 0,
 						display: 'flex',
 						flexDirection: 'column',
 						opacity: outputDisabled ? 0.35 : 1,
 						transition: 'opacity 0.15s',
-						minHeight: 0,
 					}}
 				>
 					<label
 						style={{
 							...themedLabelStyle,
-							flex: expanded ? 1 : undefined,
+							flex: 1,
 							display: 'flex',
 							flexDirection: 'column',
 							minHeight: 0,
+							marginBottom: 0,
 						}}
 					>
-						Output Prompt
+						<span
+							style={{
+								flexShrink: 0,
+								marginBottom: 4,
+							}}
+						>
+							Output Prompt
+						</span>
 						<textarea
 							value={localOutputPrompt}
 							onChange={handleOutputPromptChange}
-							rows={expanded ? undefined : 3}
 							disabled={outputDisabled}
 							placeholder={
 								outputDisabled
@@ -287,12 +357,19 @@ export function AgentConfigPanel({
 								fontFamily: 'inherit',
 								lineHeight: 1.4,
 								cursor: outputDisabled ? 'not-allowed' : undefined,
-								...(expanded ? { flex: 1, minHeight: 0 } : { minHeight: hasFanIn ? 64 : 80 }),
+								flex: 1,
+								minHeight: hasFanIn ? 72 : 88,
 							}}
 						/>
 					</label>
 					<div
-						style={{ color: theme.colors.textDim, fontSize: 10, textAlign: 'right', flexShrink: 0 }}
+						style={{
+							color: theme.colors.textDim,
+							fontSize: 10,
+							textAlign: 'right',
+							flexShrink: 0,
+							marginTop: 2,
+						}}
 					>
 						{localOutputPrompt.length} chars
 					</div>

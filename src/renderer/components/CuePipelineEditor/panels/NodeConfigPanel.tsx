@@ -81,7 +81,31 @@ export function NodeConfigPanel({
 
 	const hasFanIn = (incomingAgentEdgeCount ?? 0) > 1;
 	const hasUpstreamAgents = hasIncomingAgentEdges === true;
-	const collapsedHeight = isTrigger ? 'auto' : hasFanIn ? 420 : hasUpstreamAgents ? 360 : 320;
+	const triggerEdgeCount = incomingTriggerEdges?.length ?? 0;
+	const hasMultipleTriggers = triggerEdgeCount > 1;
+
+	// Collapsed-height policy:
+	//   - Single trigger, no upstream agents: tight (~280) — input + output prompts
+	//     have plenty of room and the panel doesn't dominate the canvas.
+	//   - Single trigger with upstream agents: a bit taller for the
+	//     "auto-include upstream output" checkbox row.
+	//   - Multi-trigger: needs room for ~2 visible EdgePromptRows side-by-side
+	//     with the output box. The left rail scrolls past the visible cap
+	//     (handled inside AgentConfigPanel) so we don't grow indefinitely.
+	//   - Fan-in: extra height for the fan-in settings card.
+	// This replaces the previous hard-coded ladder that left the output box
+	// undersized in multi-trigger collapsed mode and wasted space in
+	// single-trigger collapsed mode.
+	const collapsedHeight = (() => {
+		if (isTrigger) return 'auto' as const;
+		const base = hasUpstreamAgents ? 300 : 280;
+		const fanInBoost = hasFanIn ? 130 : 0;
+		// Multi-trigger needs more vertical room so the left rail can show two
+		// rows comfortably before scrolling. We cap the bonus so the panel
+		// can't eat the entire canvas.
+		const triggerBoost = hasMultipleTriggers ? Math.min(120, (triggerEdgeCount - 1) * 60) : 0;
+		return base + fanInBoost + triggerBoost;
+	})();
 
 	return (
 		<div
@@ -228,11 +252,17 @@ export function NodeConfigPanel({
 				</div>
 			</div>
 
-			{/* Content */}
+			{/* Content
+			 *
+			 * For triggers we let height be intrinsic and allow scroll. For
+			 * agents the inner AgentConfigPanel manages its own scroll regions
+			 * (left rail when multi-trigger, fan-in card overflow), so we use
+			 * `overflow: hidden` here to prevent a redundant outer scrollbar
+			 * fighting with the inner one. */}
 			<div
 				style={{
 					flex: isTrigger ? undefined : 1,
-					overflow: 'auto',
+					overflow: isTrigger ? 'auto' : 'hidden',
 					padding: '12px 16px',
 					display: 'flex',
 					flexDirection: 'column',
