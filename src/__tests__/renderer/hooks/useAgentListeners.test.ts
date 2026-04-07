@@ -989,4 +989,52 @@ describe('useAgentListeners', () => {
 			expect(updated?.state).toBe('idle');
 		});
 	});
+
+	// ========================================================================
+	// Regression: no TTS / audioFeedback code (removed in ff58abe14)
+	// ========================================================================
+
+	describe('regression: no TTS speak code in onExit', () => {
+		it('does not reference useSettingsStore in the module source', async () => {
+			const fs = await import('fs');
+			const path = await import('path');
+			const sourceFile = path.resolve(
+				__dirname,
+				'../../../renderer/hooks/agent/useAgentListeners.ts'
+			);
+			const source = fs.readFileSync(sourceFile, 'utf-8');
+			expect(source).not.toContain('useSettingsStore');
+			expect(source).not.toContain('audioFeedback');
+			expect(source).not.toContain('notification.speak');
+		});
+
+		it('does not call window.maestro.notification.speak on process exit', async () => {
+			const speakMock = vi.fn().mockResolvedValue(undefined);
+			(window as any).maestro.notification = {
+				...((window as any).maestro.notification || {}),
+				speak: speakMock,
+			};
+
+			const deps = createMockDeps();
+			const tab = createMockTab({ id: 'tab-1' });
+			const session = createMockSession({
+				id: 'sess-1',
+				state: 'busy',
+				busySource: 'ai',
+				aiTabs: [tab],
+				activeTabId: 'tab-1',
+			});
+			useSessionStore.setState({
+				sessions: [session],
+				activeSessionId: 'sess-1',
+			});
+
+			renderHook(() => useAgentListeners(deps));
+
+			await onExitHandler?.('sess-1-ai-tab-1');
+			await new Promise((r) => setTimeout(r, 100));
+
+			expect(speakMock).not.toHaveBeenCalled();
+		});
+	});
 });
