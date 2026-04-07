@@ -120,7 +120,10 @@ export const ClaudeUsageWidget = memo(function ClaudeUsageWidget({
 			title="Claude usage limits — click Usage Dashboard (Alt+Meta+U) for full stats"
 		>
 			<div className="flex items-center justify-between mb-0.5">
-				<span className="text-[9px] font-semibold uppercase tracking-wider opacity-40" style={{ color: theme.colors.text }}>
+				<span
+					className="text-[9px] font-semibold uppercase tracking-wider opacity-40"
+					style={{ color: theme.colors.text }}
+				>
 					Claude Usage
 				</span>
 				<button

@@ -15,6 +15,7 @@
  */
 
 import { ipcMain, dialog, shell, clipboard, nativeImage, BrowserWindow, App } from 'electron';
+import * as os from 'os';
 import * as path from 'path';
 import * as fsSync from 'fs';
 import Store from 'electron-store';
@@ -662,14 +663,14 @@ export function registerSystemHandlers(deps: SystemHandlerDependencies): void {
 
 	// ============ Claude Usage Handlers ============
 
-	// Read Claude usage data from PAI cache file, falling back to Anthropic OAuth API
+	// Read Claude usage data from PAI cache file, falling back to Anthropic OAuth API.
+	// utilization values from the API are 0–100 integers (not fractional 0–1).
 	ipcMain.handle('usage:getClaudeUsage', async () => {
-		const os = await import('os');
 		const cachePath = path.join(os.homedir(), '.claude', 'MEMORY', 'STATE', 'usage-cache.json');
 
 		// Try reading from the PAI cache file first (already kept fresh by PAI hooks)
 		try {
-			const raw = fsSync.readFileSync(cachePath, 'utf-8');
+			const raw = await fsSync.promises.readFile(cachePath, 'utf-8');
 			const data = JSON.parse(raw);
 			return { success: true, data };
 		} catch {
@@ -679,7 +680,7 @@ export function registerSystemHandlers(deps: SystemHandlerDependencies): void {
 		// Fallback: read credentials and call the API
 		try {
 			const credsPath = path.join(os.homedir(), '.claude', '.credentials.json');
-			const credsRaw = fsSync.readFileSync(credsPath, 'utf-8');
+			const credsRaw = await fsSync.promises.readFile(credsPath, 'utf-8');
 			const creds = JSON.parse(credsRaw);
 			const token = creds?.claudeAiOauth?.accessToken;
 			if (!token) return { success: false, error: 'No OAuth token found' };
@@ -693,8 +694,9 @@ export function registerSystemHandlers(deps: SystemHandlerDependencies): void {
 			if (!response.ok) return { success: false, error: `API error: ${response.status}` };
 			const data = await response.json();
 			return { success: true, data };
-		} catch (err: any) {
-			return { success: false, error: err?.message ?? 'Unknown error' };
+		} catch (err: unknown) {
+			const message = err instanceof Error ? err.message : 'Unknown error';
+			return { success: false, error: message };
 		}
 	});
 }
