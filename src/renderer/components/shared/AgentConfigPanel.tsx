@@ -138,7 +138,7 @@ function ModelTextInput({
 								if (isFiltering) {
 									// If user was filtering but didn't select, keep the filter text as the value
 									// (they might have typed a custom model name)
-									if (filterText && filterText !== committedValueRef.current) {
+									if (filterText !== committedValueRef.current) {
 										onChange(filterText);
 										committedValueRef.current = filterText;
 										setIsFiltering(false);
@@ -210,6 +210,25 @@ function ModelTextInput({
 						</div>
 					)}
 				</div>
+				{isModelField && value && (
+					<button
+						onClick={(e) => {
+							e.stopPropagation();
+							selectionMadeRef.current = true;
+							onChange('');
+							committedValueRef.current = '';
+							setShowDropdown(false);
+							setFilterText('');
+							setIsFiltering(false);
+							onBlur('');
+						}}
+						className="px-2 py-1.5 rounded text-xs whitespace-nowrap"
+						style={{ backgroundColor: theme.colors.bgActivity, color: theme.colors.textDim }}
+						title="Reset to default model"
+					>
+						Clear
+					</button>
+				)}
 				{isModelField && onRefreshModels && (
 					<button
 						onClick={(e) => {

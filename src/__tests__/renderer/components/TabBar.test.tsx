@@ -77,6 +77,11 @@ vi.mock('lucide-react', () => ({
 			⬆
 		</span>
 	),
+	Terminal: ({ className, style }: { className?: string; style?: React.CSSProperties }) => (
+		<span data-testid="terminal-icon" className={className} style={style}>
+			⌨
+		</span>
+	),
 	ChevronsLeft: ({ className, style }: { className?: string; style?: React.CSSProperties }) => (
 		<span data-testid="chevrons-left-icon" className={className} style={style}>
 			«
@@ -4313,6 +4318,126 @@ describe('Unified tabs drag and drop', () => {
 		// Should call the AI tab close handler, not file tab close handler
 		expect(mockOnAiTabClose).toHaveBeenCalledWith('ai-tab-1');
 		expect(mockOnFileTabClose).not.toHaveBeenCalled();
+	});
+
+	it('calls onUnifiedTabReorder when Move to First is clicked on terminal tab', async () => {
+		const terminalTab1 = {
+			id: 'term-1',
+			name: null,
+			shellType: 'zsh',
+			pid: 100,
+			cwd: '/test',
+			createdAt: Date.now(),
+			state: 'idle' as const,
+		};
+		const terminalTab2 = {
+			id: 'term-2',
+			name: null,
+			shellType: 'zsh',
+			pid: 200,
+			cwd: '/test',
+			createdAt: Date.now() + 1,
+			state: 'idle' as const,
+		};
+
+		const unifiedTabsWithTerminal = [
+			{ type: 'ai' as const, id: 'ai-tab-1', data: aiTab1 },
+			{ type: 'terminal' as const, id: 'term-1', data: terminalTab1 },
+			{ type: 'terminal' as const, id: 'term-2', data: terminalTab2 },
+		];
+
+		render(
+			<TabBar
+				tabs={aiTabs}
+				activeTabId="ai-tab-1"
+				theme={mockTheme}
+				onTabSelect={vi.fn()}
+				onTabClose={vi.fn()}
+				onNewTab={vi.fn()}
+				onUnifiedTabReorder={mockOnUnifiedTabReorder}
+				unifiedTabs={unifiedTabsWithTerminal}
+				activeFileTabId={null}
+				onFileTabSelect={mockOnFileTabSelect}
+				onFileTabClose={mockOnFileTabClose}
+				onTerminalTabSelect={vi.fn()}
+				onTerminalTabClose={vi.fn()}
+			/>
+		);
+
+		// Hover over term-2 (index 2 — last tab, so Move to First should show)
+		const termTabElement = screen.getByText('Terminal 2').closest('[data-tab-id]')!;
+
+		await act(async () => {
+			fireEvent.mouseEnter(termTabElement);
+			vi.advanceTimersByTime(450);
+		});
+
+		// Click Move to First
+		const moveButton = screen.getByText('Move to First Position');
+		fireEvent.click(moveButton);
+
+		// Should call onUnifiedTabReorder with index 2 -> 0
+		expect(mockOnUnifiedTabReorder).toHaveBeenCalledWith(2, 0);
+	});
+
+	it('calls onUnifiedTabReorder when Move to Last is clicked on terminal tab', async () => {
+		const terminalTab1 = {
+			id: 'term-1',
+			name: null,
+			shellType: 'zsh',
+			pid: 100,
+			cwd: '/test',
+			createdAt: Date.now(),
+			state: 'idle' as const,
+		};
+		const terminalTab2 = {
+			id: 'term-2',
+			name: null,
+			shellType: 'zsh',
+			pid: 200,
+			cwd: '/test',
+			createdAt: Date.now() + 1,
+			state: 'idle' as const,
+		};
+
+		const unifiedTabsWithTerminal = [
+			{ type: 'ai' as const, id: 'ai-tab-1', data: aiTab1 },
+			{ type: 'terminal' as const, id: 'term-1', data: terminalTab1 },
+			{ type: 'terminal' as const, id: 'term-2', data: terminalTab2 },
+		];
+
+		render(
+			<TabBar
+				tabs={aiTabs}
+				activeTabId="ai-tab-1"
+				theme={mockTheme}
+				onTabSelect={vi.fn()}
+				onTabClose={vi.fn()}
+				onNewTab={vi.fn()}
+				onUnifiedTabReorder={mockOnUnifiedTabReorder}
+				unifiedTabs={unifiedTabsWithTerminal}
+				activeFileTabId={null}
+				onFileTabSelect={mockOnFileTabSelect}
+				onFileTabClose={mockOnFileTabClose}
+				onTerminalTabSelect={vi.fn()}
+				onTerminalTabClose={vi.fn()}
+			/>
+		);
+
+		// Hover over term-1 (index 1 — middle tab, so both should show)
+		const termTabElement = screen.getByText('Terminal 1').closest('[data-tab-id]')!;
+
+		await act(async () => {
+			fireEvent.mouseEnter(termTabElement);
+			vi.advanceTimersByTime(450);
+		});
+
+		// Click Move to Last
+		const moveButton = screen.getByText('Move to Last Position');
+		fireEvent.click(moveButton);
+
+		// Should call onUnifiedTabReorder with index 1 -> 2 (last index)
+		expect(mockOnUnifiedTabReorder).toHaveBeenCalledWith(1, 2);
 	});
 });
 

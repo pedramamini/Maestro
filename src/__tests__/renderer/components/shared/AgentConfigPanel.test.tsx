@@ -6,9 +6,9 @@
  */
 
 import { describe, it, expect, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { AgentConfigPanel } from '../../../../renderer/components/shared/AgentConfigPanel';
-import type { Theme, AgentConfig } from '../../../../renderer/types';
+import type { Theme, AgentConfig, AgentCapabilities } from '../../../../renderer/types';
 
 // Mock lucide-react icons
 vi.mock('lucide-react', () => ({
@@ -188,6 +188,104 @@ describe('AgentConfigPanel', () => {
 				(input) => (input as HTMLInputElement).value === 'CUSTOM_VAR'
 			);
 			expect(customKeyInput).toBeDefined();
+		});
+	});
+
+	describe('Model field clear button', () => {
+		const modelAgent = createMockAgent({
+			configOptions: [
+				{
+					key: 'model',
+					label: 'Model',
+					type: 'text',
+					description: 'Model to use',
+					default: '',
+				},
+			],
+			capabilities: {
+				supportsModelSelection: true,
+			} as Partial<AgentCapabilities> as AgentCapabilities,
+		});
+
+		it('should show Clear button when model has a value', () => {
+			render(
+				<AgentConfigPanel
+					{...createDefaultProps({
+						agent: modelAgent,
+						agentConfig: { model: 'opencode/kimi-k2.5-free' },
+						availableModels: ['opencode/kimi-k2.5-free', 'another-model'],
+					})}
+				/>
+			);
+
+			expect(screen.getByText('Clear')).toBeInTheDocument();
+		});
+
+		it('should NOT show Clear button when model is empty', () => {
+			render(
+				<AgentConfigPanel
+					{...createDefaultProps({
+						agent: modelAgent,
+						agentConfig: { model: '' },
+						availableModels: ['opencode/kimi-k2.5-free'],
+					})}
+				/>
+			);
+
+			expect(screen.queryByText('Clear')).not.toBeInTheDocument();
+		});
+
+		it('should call onChange and onBlur with empty string when Clear is clicked', async () => {
+			const onConfigChange = vi.fn();
+			const onConfigBlur = vi.fn();
+
+			render(
+				<AgentConfigPanel
+					{...createDefaultProps({
+						agent: modelAgent,
+						agentConfig: { model: 'opencode/kimi-k2.5-free' },
+						availableModels: ['opencode/kimi-k2.5-free'],
+						onConfigChange,
+						onConfigBlur,
+					})}
+				/>
+			);
+
+			const clearBtn = screen.getByText('Clear');
+			clearBtn.click();
+
+			expect(onConfigChange).toHaveBeenCalledWith('model', '');
+			expect(onConfigBlur).toHaveBeenCalledWith('model', '');
+		});
+
+		it('should commit empty value when user manually clears input and blurs', async () => {
+			const onConfigChange = vi.fn();
+			const onConfigBlur = vi.fn();
+
+			render(
+				<AgentConfigPanel
+					{...createDefaultProps({
+						agent: modelAgent,
+						agentConfig: { model: 'opencode/kimi-k2.5-free' },
+						availableModels: ['opencode/kimi-k2.5-free'],
+						onConfigChange,
+						onConfigBlur,
+					})}
+				/>
+			);
+
+			const modelInput = screen.getByDisplayValue('opencode/kimi-k2.5-free');
+
+			// Focus to enter filter mode, then clear the text and blur
+			fireEvent.focus(modelInput);
+			fireEvent.change(modelInput, { target: { value: '' } });
+			fireEvent.blur(modelInput);
+
+			// The blur handler uses setTimeout(150ms), so wait for it
+			await waitFor(() => {
+				expect(onConfigChange).toHaveBeenCalledWith('model', '');
+				expect(onConfigBlur).toHaveBeenCalledWith('model', '');
+			});
 		});
 	});
 
