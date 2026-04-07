@@ -659,6 +659,44 @@ export function registerSystemHandlers(deps: SystemHandlerDependencies): void {
 	ipcMain.handle('power:removeReason', async (_event, reason: string) => {
 		powerManager.removeBlockReason(reason);
 	});
+
+	// ============ Claude Usage Handlers ============
+
+	// Read Claude usage data from PAI cache file, falling back to Anthropic OAuth API
+	ipcMain.handle('usage:getClaudeUsage', async () => {
+		const os = await import('os');
+		const cachePath = path.join(os.homedir(), '.claude', 'MEMORY', 'STATE', 'usage-cache.json');
+
+		// Try reading from the PAI cache file first (already kept fresh by PAI hooks)
+		try {
+			const raw = fsSync.readFileSync(cachePath, 'utf-8');
+			const data = JSON.parse(raw);
+			return { success: true, data };
+		} catch {
+			// Cache not available — fall back to calling the Anthropic OAuth API directly
+		}
+
+		// Fallback: read credentials and call the API
+		try {
+			const credsPath = path.join(os.homedir(), '.claude', '.credentials.json');
+			const credsRaw = fsSync.readFileSync(credsPath, 'utf-8');
+			const creds = JSON.parse(credsRaw);
+			const token = creds?.claudeAiOauth?.accessToken;
+			if (!token) return { success: false, error: 'No OAuth token found' };
+
+			const response = await fetch('https://api.anthropic.com/api/oauth/usage', {
+				headers: {
+					Authorization: `Bearer ${token}`,
+					'anthropic-beta': 'oauth-2025-04-20',
+				},
+			});
+			if (!response.ok) return { success: false, error: `API error: ${response.status}` };
+			const data = await response.json();
+			return { success: true, data };
+		} catch (err: any) {
+			return { success: false, error: err?.message ?? 'Unknown error' };
+		}
+	});
 }
 
 /**
