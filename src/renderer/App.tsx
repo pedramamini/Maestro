@@ -1934,6 +1934,7 @@ function MaestroConsoleInner() {
 		chatRawTextMode,
 		defaultSaveToHistory,
 		defaultShowThinking,
+		setSessions,
 		setLeftSidebarOpen,
 		setRightPanelOpen,
 		addNewSession,
