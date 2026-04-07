@@ -444,8 +444,7 @@ export const AGENT_DEFINITIONS: AgentDefinition[] = [
 				key: 'model',
 				type: 'text',
 				label: 'Model',
-				description:
-					'Model to use (e.g., "claude-sonnet-4", "gpt-5.1"). Leave empty for default.',
+				description: 'Model to use (e.g., "claude-sonnet-4", "gpt-5.1"). Leave empty for default.',
 				default: '',
 				argBuilder: (value: string) => (value && value.trim() ? ['--model', value.trim()] : []),
 			},

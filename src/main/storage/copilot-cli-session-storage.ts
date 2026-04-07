@@ -66,7 +66,7 @@ function parseWorkspaceYaml(content: string): Record<string, string> {
 		if (match) {
 			const key = match[1];
 			// Prefer single-quoted group (match[2]), fall back to unquoted (match[3])
-			const value = match[2] !== undefined ? match[2].replace(/''/g, "'") : (match[3] || '');
+			const value = match[2] !== undefined ? match[2].replace(/''/g, "'") : match[3] || '';
 			result[key] = value;
 		}
 	}

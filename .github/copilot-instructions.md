@@ -16,16 +16,19 @@ npm run validate:push    # Full pre-push validation (format + lint + eslint + te
 ```
 
 Run a single test file:
+
 ```bash
 npx vitest run src/__tests__/path/to/file.test.ts
 ```
 
 Run tests matching a name pattern:
+
 ```bash
 npx vitest run -t "pattern"
 ```
 
 Other test suites:
+
 ```bash
 npm run test:e2e           # Playwright end-to-end (requires build first)
 npm run test:integration   # Integration tests
@@ -50,22 +53,23 @@ Each agent runs **two processes simultaneously**: an AI process (suffixed `-ai`)
 ### IPC Pattern
 
 To add a new IPC capability:
+
 1. Add handler in `src/main/index.ts` via `ipcMain.handle('namespace:action', ...)`
 2. Expose in `src/main/preload.ts` via `ipcRenderer.invoke()`
 3. Add types to `MaestroAPI` interface in preload.ts
 
 ### Key Entry Points
 
-| Task | Files |
-|------|-------|
-| IPC handlers | `src/main/index.ts`, `src/main/preload.ts` |
-| Keyboard shortcuts | `src/renderer/constants/shortcuts.ts`, `App.tsx` |
-| Settings | `src/renderer/hooks/useSettings.ts` |
-| Themes | `src/renderer/constants/themes.ts`, `src/shared/theme-types.ts` |
-| Modal priorities | `src/renderer/constants/modalPriorities.ts` |
-| Agent definitions | `src/shared/agentIds.ts`, `src/main/agents/definitions.ts`, `src/main/agents/capabilities.ts` |
-| Output parsers | `src/main/parsers/`, `src/main/parsers/index.ts` |
-| System prompts | `src/prompts/*.md` |
+| Task               | Files                                                                                         |
+| ------------------ | --------------------------------------------------------------------------------------------- |
+| IPC handlers       | `src/main/index.ts`, `src/main/preload.ts`                                                    |
+| Keyboard shortcuts | `src/renderer/constants/shortcuts.ts`, `App.tsx`                                              |
+| Settings           | `src/renderer/hooks/useSettings.ts`                                                           |
+| Themes             | `src/renderer/constants/themes.ts`, `src/shared/theme-types.ts`                               |
+| Modal priorities   | `src/renderer/constants/modalPriorities.ts`                                                   |
+| Agent definitions  | `src/shared/agentIds.ts`, `src/main/agents/definitions.ts`, `src/main/agents/capabilities.ts` |
+| Output parsers     | `src/main/parsers/`, `src/main/parsers/index.ts`                                              |
+| System prompts     | `src/prompts/*.md`                                                                            |
 
 ## Code Conventions
 
@@ -92,6 +96,7 @@ To add a new IPC capability:
 ### Settings Pattern
 
 New settings follow a wrapper function pattern:
+
 1. State with `useState` in `useSettings.ts`
 2. Wrapper function that updates state AND calls `window.maestro.settings.set()`
 3. Load in `useEffect` from `window.maestro.settings.get()`
@@ -107,6 +112,7 @@ New settings follow a wrapper function pattern:
 ### SSH Remote Execution
 
 Any feature spawning agent processes **must** support SSH remote execution:
+
 1. Check `session.sshRemoteConfig?.enabled`
 2. Use `wrapSpawnWithSsh()` from `src/main/utils/ssh-spawn-wrapper.ts`
 3. Use agent's `binaryName` for remote execution (not local paths)

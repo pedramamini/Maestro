@@ -115,15 +115,11 @@ export class StderrHandler {
 			if (outputParser && toolType !== 'codex') {
 				// Codex is excluded because it has its own special stderr handling below
 				// that re-emits actual response content from stderr as data.
-				logger.info(
-					'[ProcessManager] Suppressing stderr for JSONL agent',
-					'ProcessManager',
-					{
-						sessionId,
-						toolType,
-						stderrPreview: cleanedStderr.substring(0, 100),
-					}
-				);
+				logger.info('[ProcessManager] Suppressing stderr for JSONL agent', 'ProcessManager', {
+					sessionId,
+					toolType,
+					stderrPreview: cleanedStderr.substring(0, 100),
+				});
 				return;
 			}
 

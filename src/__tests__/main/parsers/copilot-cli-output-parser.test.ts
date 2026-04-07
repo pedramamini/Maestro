@@ -233,7 +233,10 @@ describe('CopilotCliOutputParser', () => {
 				expect(event?.toolUseBlocks).toHaveLength(1);
 				expect(event?.toolUseBlocks?.[0].name).toBe('view');
 				expect(event?.toolUseBlocks?.[0].id).toBe('tooluse_abc123');
-				expect(event?.toolUseBlocks?.[0].input).toEqual({ path: '/package.json', view_range: [1, 5] });
+				expect(event?.toolUseBlocks?.[0].input).toEqual({
+					path: '/package.json',
+					view_range: [1, 5],
+				});
 			});
 
 			it('should parse message with both text and tool requests', () => {
@@ -266,7 +269,11 @@ describe('CopilotCliOutputParser', () => {
 				parser.parseJsonLine(
 					JSON.stringify({
 						type: 'assistant.message',
-						data: { content: '', toolRequests: [{ toolCallId: 't1', name: 'view', arguments: {} }], outputTokens: 100 },
+						data: {
+							content: '',
+							toolRequests: [{ toolCallId: 't1', name: 'view', arguments: {} }],
+							outputTokens: 100,
+						},
 					})
 				);
 				parser.parseJsonLine(
@@ -537,7 +544,9 @@ describe('CopilotCliOutputParser', () => {
 
 		it('should return null for non-error lines', () => {
 			expect(parser.detectErrorFromLine('')).toBeNull();
-			expect(parser.detectErrorFromLine(JSON.stringify({ type: 'assistant.turn_start' }))).toBeNull();
+			expect(
+				parser.detectErrorFromLine(JSON.stringify({ type: 'assistant.turn_start' }))
+			).toBeNull();
 		});
 	});
 
@@ -585,16 +594,40 @@ describe('CopilotCliOutputParser', () => {
 	describe('full session simulation', () => {
 		it('should correctly parse a complete simple session', () => {
 			const lines = [
-				JSON.stringify({ type: 'session.mcp_server_status_changed', data: { serverName: 'github-mcp-server', status: 'connected' }, ephemeral: true }),
-				JSON.stringify({ type: 'session.mcp_servers_loaded', data: { servers: [] }, ephemeral: true }),
+				JSON.stringify({
+					type: 'session.mcp_server_status_changed',
+					data: { serverName: 'github-mcp-server', status: 'connected' },
+					ephemeral: true,
+				}),
+				JSON.stringify({
+					type: 'session.mcp_servers_loaded',
+					data: { servers: [] },
+					ephemeral: true,
+				}),
 				JSON.stringify({ type: 'session.tools_updated', data: { model: 'claude-opus-4.6' } }),
 				JSON.stringify({ type: 'user.message', data: { content: 'Say hello' } }),
 				JSON.stringify({ type: 'assistant.turn_start', data: { turnId: '0' } }),
-				JSON.stringify({ type: 'assistant.message_delta', data: { deltaContent: 'Hello' }, ephemeral: true }),
-				JSON.stringify({ type: 'assistant.message_delta', data: { deltaContent: ' world!' }, ephemeral: true }),
-				JSON.stringify({ type: 'assistant.message', data: { content: 'Hello world!', toolRequests: [], outputTokens: 5 } }),
+				JSON.stringify({
+					type: 'assistant.message_delta',
+					data: { deltaContent: 'Hello' },
+					ephemeral: true,
+				}),
+				JSON.stringify({
+					type: 'assistant.message_delta',
+					data: { deltaContent: ' world!' },
+					ephemeral: true,
+				}),
+				JSON.stringify({
+					type: 'assistant.message',
+					data: { content: 'Hello world!', toolRequests: [], outputTokens: 5 },
+				}),
 				JSON.stringify({ type: 'assistant.turn_end', data: { turnId: '0' } }),
-				JSON.stringify({ type: 'result', sessionId: 'test-session-id', exitCode: 0, usage: { premiumRequests: 1 } }),
+				JSON.stringify({
+					type: 'result',
+					sessionId: 'test-session-id',
+					exitCode: 0,
+					usage: { premiumRequests: 1 },
+				}),
 			];
 
 			const events = lines.map((l) => parser.parseJsonLine(l)).filter((e) => e !== null);
@@ -636,17 +669,38 @@ describe('CopilotCliOutputParser', () => {
 					type: 'assistant.message',
 					data: {
 						content: '',
-						toolRequests: [{ toolCallId: 'tc1', name: 'view', arguments: { path: '/package.json' } }],
+						toolRequests: [
+							{ toolCallId: 'tc1', name: 'view', arguments: { path: '/package.json' } },
+						],
 						outputTokens: 100,
 					},
 				}),
 				// Tool execution
-				JSON.stringify({ type: 'tool.execution_start', data: { toolCallId: 'tc1', toolName: 'view', arguments: { path: '/package.json' } } }),
-				JSON.stringify({ type: 'tool.execution_complete', data: { toolCallId: 'tc1', toolName: 'view', success: true, result: { content: '{"name":"maestro"}' } } }),
+				JSON.stringify({
+					type: 'tool.execution_start',
+					data: { toolCallId: 'tc1', toolName: 'view', arguments: { path: '/package.json' } },
+				}),
+				JSON.stringify({
+					type: 'tool.execution_complete',
+					data: {
+						toolCallId: 'tc1',
+						toolName: 'view',
+						success: true,
+						result: { content: '{"name":"maestro"}' },
+					},
+				}),
 				// Final response
-				JSON.stringify({ type: 'assistant.message', data: { content: 'The package is named maestro.', toolRequests: [], outputTokens: 20 } }),
+				JSON.stringify({
+					type: 'assistant.message',
+					data: { content: 'The package is named maestro.', toolRequests: [], outputTokens: 20 },
+				}),
 				JSON.stringify({ type: 'assistant.turn_end', data: { turnId: '0' } }),
-				JSON.stringify({ type: 'result', sessionId: 'sess-456', exitCode: 0, usage: { premiumRequests: 2 } }),
+				JSON.stringify({
+					type: 'result',
+					sessionId: 'sess-456',
+					exitCode: 0,
+					usage: { premiumRequests: 2 },
+				}),
 			];
 
 			const events = lines.map((l) => parser.parseJsonLine(l)).filter((e) => e !== null);

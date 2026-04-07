@@ -78,10 +78,7 @@ interface CopilotCliToolRequest {
 // ============================================================================
 
 /** Extract a human-readable error message from Copilot CLI's polymorphic error field */
-function extractErrorText(
-	error: CopilotCliMessage['error'],
-	fallback = 'Unknown error'
-): string {
+function extractErrorText(error: CopilotCliMessage['error'], fallback = 'Unknown error'): string {
 	if (typeof error === 'object' && error?.message) return error.message;
 	if (typeof error === 'string') return error;
 	return fallback;
