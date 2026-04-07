@@ -57,6 +57,7 @@ import {
 	useAgentExecution,
 	useAgentCapabilities,
 	useMergeTransferHandlers,
+	useForkConversation,
 	useSummarizeAndContinue,
 	// Git
 	useFileTreeManagement,
@@ -1076,6 +1077,14 @@ function MaestroConsoleInner() {
 		activeSessionIdRef,
 		setActiveSessionId,
 	});
+
+	// Fork conversation hook - creates a new session from a point in conversation history
+	const handleForkConversation = useForkConversation(
+		sessions,
+		setSessions,
+		activeSessionId,
+		setActiveSessionId
+	);
 
 	// Summarize & Continue hook for context compaction (non-blocking, per-tab)
 	const {
@@ -2254,6 +2263,7 @@ function MaestroConsoleInner() {
 		handleMainPanelInputBlur,
 		handleOpenPromptComposer,
 		handleReplayMessage,
+		handleForkConversation,
 		handleMainPanelFileClick,
 		handleNavigateBack: handleFileTabNavigateBack,
 		handleNavigateForward: handleFileTabNavigateForward,

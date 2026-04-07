@@ -168,6 +168,7 @@ export interface MainPanelContentProps {
 	onInputBlur?: () => void;
 	onOpenPromptComposer?: () => void;
 	onReplayMessage?: (text: string, images?: string[]) => void;
+	onForkConversation?: (logIndex: number) => void;
 	fileTree?: FileNode[];
 	onFileClick?: (relativePath: string, options?: { openInNewTab?: boolean }) => void;
 	refreshFileTree?: (
@@ -319,6 +320,7 @@ export const MainPanelContent = React.memo(function MainPanelContent(props: Main
 		onInputBlur,
 		onOpenPromptComposer,
 		onReplayMessage,
+		onForkConversation,
 		fileTree,
 		onFileClick,
 		refreshFileTree,
@@ -531,6 +533,7 @@ export const MainPanelContent = React.memo(function MainPanelContent(props: Main
 								markdownEditMode={chatRawTextMode}
 								setMarkdownEditMode={useSettingsStore.getState().setChatRawTextMode}
 								onReplayMessage={onReplayMessage}
+								onForkConversation={onForkConversation}
 								fileTree={fileTree}
 								cwd={
 									activeSession.cwd?.startsWith(activeSession.fullPath)
