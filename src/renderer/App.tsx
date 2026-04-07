@@ -169,6 +169,7 @@ import {
 	navigateToPrevUnifiedTab,
 	navigateToClosestTerminalTab,
 	hasActiveWizard,
+	findNextUnreadSession,
 } from './utils/tabHelpers';
 // validateNewSession moved to useSymphonyContribution, useSessionCrud hooks
 // formatLogsForClipboard moved to useTabExportHandlers hook
@@ -1606,6 +1607,45 @@ function MaestroConsoleInner() {
 	// cycleSession — provided by useCycleSession hook
 	const { cycleSession } = useCycleSession({ sortedSessions, handleOpenGroupChat });
 
+	// goToNextUnreadTab — jump to the next agent with unread tabs, clearing current agent's unreads
+	const goToNextUnreadTab = useCallback(() => {
+		const currentActiveId = useSessionStore.getState().activeSessionId;
+		const result = findNextUnreadSession(sortedSessions, currentActiveId);
+
+		// Clear current agent's unread tabs
+		if (result.clearedCurrent) {
+			setSessions((prev) =>
+				prev.map((s) => {
+					if (s.id !== currentActiveId) return s;
+					return {
+						...s,
+						aiTabs: s.aiTabs.map((t) => (t.hasUnread ? { ...t, hasUnread: false } : t)),
+					};
+				})
+			);
+		}
+
+		if (result.jumped && result.targetSessionId) {
+			setActiveSessionId(result.targetSessionId);
+			const targetTabId = result.targetTabId;
+			if (targetTabId) {
+				setSessions((prev) =>
+					prev.map((s) => {
+						if (s.id !== result.targetSessionId) return s;
+						return { ...s, activeTabId: targetTabId };
+					})
+				);
+			}
+		} else {
+			notifyToast({
+				type: 'info',
+				title: 'No unread tabs',
+				message: 'All tabs have been read',
+				duration: 2,
+			});
+		}
+	}, [sortedSessions, setSessions, setActiveSessionId]);
+
 	// showConfirmation, performDeleteSession — provided by useSessionLifecycle hook (Phase 2H)
 	// deleteSession, deleteWorktreeGroup — provided by useSessionCrud hook
 
@@ -2025,6 +2065,9 @@ function MaestroConsoleInner() {
 
 		// Unread agents filter toggle
 		toggleShowUnreadAgentsOnly: useUIStore.getState().toggleShowUnreadAgentsOnly,
+
+		// Next unread tab navigation
+		goToNextUnreadTab,
 	};
 
 	// NOTE: File explorer effects (flat file list, pending jump path, scroll, keyboard nav) are
