@@ -93,7 +93,7 @@ function dispatchOrExecuteSubscription(
 		return;
 	}
 
-	deps.executeCueRun(session.id, sub.prompt_file ?? sub.prompt, event, sub.name, sub.output_prompt);
+	deps.executeCueRun(session.id, sub.prompt ?? sub.prompt_file, event, sub.name, sub.output_prompt);
 }
 
 export function setupHeartbeatSubscription(

@@ -11,7 +11,11 @@ import {
 	type SubscriptionSetupDeps,
 } from './cue-subscription-setup';
 import { createCueEvent, type CueConfig, type CueEvent, type CueSubscription } from './cue-types';
-import { hasTimeBasedSubscriptions, type SessionState } from './cue-session-state';
+import {
+	countActiveSubscriptions,
+	hasTimeBasedSubscriptions,
+	type SessionState,
+} from './cue-session-state';
 
 export interface CueSessionRuntimeServiceDeps {
 	enabled: () => boolean;
@@ -174,7 +178,7 @@ export function createCueSessionRuntimeService(
 
 		deps.onLog(
 			'cue',
-			`[CUE] Initialized session "${session.name}" with ${config.subscriptions.filter((sub) => sub.enabled !== false).length} active subscription(s)`
+			`[CUE] Initialized session "${session.name}" with ${countActiveSubscriptions(config.subscriptions, session.id)} active subscription(s)`
 		);
 	}
 
@@ -230,9 +234,7 @@ export function createCueSessionRuntimeService(
 		initSession({ ...session, projectRoot });
 		const newState = sessions.get(sessionId);
 		if (newState) {
-			const activeCount = newState.config.subscriptions.filter(
-				(sub) => sub.enabled !== false
-			).length;
+			const activeCount = countActiveSubscriptions(newState.config.subscriptions, sessionId);
 			return {
 				reloaded: true,
 				configRemoved: false,

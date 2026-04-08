@@ -52,8 +52,15 @@ export function validateCueConfigDocument(config: unknown): { valid: boolean; er
 				errors.push(`${prefix}: "event" is required and must be a string`);
 			}
 
-			const hasPrompt = sub.prompt && typeof sub.prompt === 'string';
-			const hasPromptFile = sub.prompt_file && typeof sub.prompt_file === 'string';
+			if (sub.prompt !== undefined && typeof sub.prompt !== 'string') {
+				errors.push(`${prefix}: "prompt" must be a string when provided`);
+			}
+			if (sub.prompt_file !== undefined && typeof sub.prompt_file !== 'string') {
+				errors.push(`${prefix}: "prompt_file" must be a string when provided`);
+			}
+
+			const hasPrompt = typeof sub.prompt === 'string';
+			const hasPromptFile = typeof sub.prompt_file === 'string';
 			if (!hasPrompt && !hasPromptFile) {
 				errors.push(`${prefix}: "prompt" or "prompt_file" is required`);
 			}

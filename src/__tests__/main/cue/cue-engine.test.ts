@@ -2104,7 +2104,7 @@ describe('CueEngine', () => {
 			engine.stop();
 		});
 
-		it('uses prompt_file when configured', async () => {
+		it('prefers hydrated prompt content over prompt_file path', async () => {
 			// Monday at 08:59 — fires at 09:00
 			vi.setSystemTime(new Date('2026-03-09T08:59:00'));
 
@@ -2114,7 +2114,7 @@ describe('CueEngine', () => {
 						name: 'file-prompt',
 						event: 'time.scheduled',
 						enabled: true,
-						prompt: '',
+						prompt: 'hydrated prompt content',
 						prompt_file: 'check.md',
 						schedule_times: ['09:00'],
 					},
@@ -2127,10 +2127,10 @@ describe('CueEngine', () => {
 
 			await vi.advanceTimersByTimeAsync(60_000);
 
-			// prompt_file takes precedence — engine passes prompt_file ?? prompt
+			// The hydrated prompt content should be used before falling back to the file path.
 			expect(deps.onCueRun).toHaveBeenCalledWith(
 				expect.objectContaining({
-					prompt: 'check.md',
+					prompt: 'hydrated prompt content',
 				})
 			);
 
