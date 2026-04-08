@@ -151,7 +151,11 @@ export const TerminalView = memo(
 				// to sshRemoteId which is set after an AI agent connects. Without this fallback,
 				// terminal tabs under running SSH agents spawn locally instead of on the remote host.
 				const effectiveSshConfig = session.sessionSshRemoteConfig?.enabled
-					? session.sessionSshRemoteConfig
+					? {
+							...session.sessionSshRemoteConfig,
+							workingDirOverride:
+								session.sessionSshRemoteConfig.workingDirOverride || session.cwd || undefined,
+						}
 					: session.sshRemoteId
 						? {
 								enabled: true,
@@ -169,6 +173,8 @@ export const TerminalView = memo(
 						shell: defaultShell || undefined,
 						shellArgs,
 						shellEnvVars,
+						toolType: session.toolType,
+						sessionCustomEnvVars: session.customEnvVars,
 						sessionSshRemoteConfig: effectiveSshConfig,
 					})
 					.then((result) => {
@@ -375,6 +381,7 @@ export const TerminalView = memo(
 								theme={theme}
 								fontFamily={fontFamily}
 								fontSize={fontSize}
+								isActive={isActive}
 							/>
 						</div>
 					);

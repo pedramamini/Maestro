@@ -158,6 +158,7 @@ export interface StartBatchPayload {
 	documents: string[];
 	lockedDocuments: string[];
 	totalTasksAcrossAllDocs: number;
+	completedTasksAcrossAllDocs?: number;
 	loopEnabled: boolean;
 	maxLoops?: number | null;
 	folderPath: string;
@@ -265,7 +266,7 @@ export function batchReducer(state: BatchState, action: BatchAction): BatchState
 					currentDocTasksTotal: 0,
 					currentDocTasksCompleted: 0,
 					totalTasksAcrossAllDocs: payload.totalTasksAcrossAllDocs,
-					completedTasksAcrossAllDocs: 0,
+					completedTasksAcrossAllDocs: payload.completedTasksAcrossAllDocs ?? 0,
 					// Loop mode
 					loopEnabled: payload.loopEnabled,
 					loopIteration: 0,

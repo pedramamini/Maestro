@@ -194,12 +194,6 @@ describe('CommandInputBar', () => {
 			expect(input.tagName.toLowerCase()).toBe('input');
 		});
 
-		it('renders mode toggle button', () => {
-			renderComponent();
-			const toggleButton = screen.getByRole('button', { name: /switch to/i });
-			expect(toggleButton).toBeInTheDocument();
-		});
-
 		it('renders send button', () => {
 			renderComponent({ value: 'test' });
 			const sendButton = screen.getByRole('button', { name: /send/i });
@@ -409,62 +403,6 @@ describe('CommandInputBar', () => {
 		});
 	});
 
-	describe('Mode Toggle', () => {
-		it('calls onModeToggle when toggle button is clicked', () => {
-			const onModeToggle = vi.fn();
-			renderComponent({ inputMode: 'ai', onModeToggle });
-
-			const toggleButton = screen.getByRole('button', { name: /switch to terminal/i });
-			fireEvent.click(toggleButton);
-
-			expect(onModeToggle).toHaveBeenCalledWith('terminal');
-		});
-
-		it('switches from terminal to AI mode', () => {
-			const onModeToggle = vi.fn();
-			renderComponent({ inputMode: 'terminal', onModeToggle });
-
-			const toggleButton = screen.getByRole('button', { name: /switch to AI/i });
-			fireEvent.click(toggleButton);
-
-			expect(onModeToggle).toHaveBeenCalledWith('ai');
-		});
-
-		it('triggers haptic feedback on mode toggle', () => {
-			const onModeToggle = vi.fn();
-			renderComponent({ inputMode: 'ai', onModeToggle });
-
-			const toggleButton = screen.getByRole('button', { name: /switch to/i });
-			fireEvent.click(toggleButton);
-
-			expect(navigator.vibrate).toHaveBeenCalledWith(10); // 'light' = 10ms
-		});
-
-		it('mode toggle is disabled when offline', () => {
-			renderComponent({ isOffline: true });
-			const toggleButton = screen.getByRole('button', { name: /switch to/i });
-			expect(toggleButton).toBeDisabled();
-		});
-
-		it('mode toggle is disabled when not connected', () => {
-			renderComponent({ isConnected: false });
-			const toggleButton = screen.getByRole('button', { name: /switch to/i });
-			expect(toggleButton).toBeDisabled();
-		});
-
-		it('mode toggle button shows AI label when in AI mode', () => {
-			renderComponent({ inputMode: 'ai' });
-			const toggleButton = screen.getByRole('button', { name: /currently in AI mode/i });
-			expect(toggleButton).toHaveTextContent('AI');
-		});
-
-		it('mode toggle button shows CLI label when in terminal mode', () => {
-			renderComponent({ inputMode: 'terminal' });
-			const toggleButton = screen.getByRole('button', { name: /currently in terminal mode/i });
-			expect(toggleButton).toHaveTextContent('CLI');
-		});
-	});
-
 	describe('Interrupt Button', () => {
 		it('calls onInterrupt when interrupt button is clicked', () => {
 			const onInterrupt = vi.fn();
@@ -605,8 +543,7 @@ describe('CommandInputBar', () => {
 			expect(Number.parseInt((textarea as HTMLTextAreaElement).style.height, 10)).toBeGreaterThan(
 				48
 			);
-			expect(screen.getByRole('button', { name: /switch to terminal mode/i })).toBeInTheDocument();
-			expect(screen.getByRole('button', { name: /send command/i })).toBeInTheDocument();
+			expect(screen.getByRole('button', { name: /send/i })).toBeInTheDocument();
 
 			scrollHeightSpy.mockRestore();
 		});
@@ -852,33 +789,6 @@ describe('CommandInputBar', () => {
 	});
 
 	describe('Touch Feedback on Buttons', () => {
-		it('scales down mode toggle button on touch', () => {
-			renderComponent();
-			const toggleButton = screen.getByRole('button', { name: /switch to/i });
-
-			fireEvent.touchStart(toggleButton, {
-				touches: [{ clientX: 0, clientY: 0 }],
-				currentTarget: toggleButton,
-			});
-
-			expect(toggleButton.style.transform).toBe('scale(0.95)');
-		});
-
-		it('scales back up on touch end', () => {
-			renderComponent();
-			const toggleButton = screen.getByRole('button', { name: /switch to/i });
-
-			fireEvent.touchStart(toggleButton, {
-				touches: [{ clientX: 0, clientY: 0 }],
-				currentTarget: toggleButton,
-			});
-			fireEvent.touchEnd(toggleButton, {
-				currentTarget: toggleButton,
-			});
-
-			expect(toggleButton.style.transform).toBe('scale(1)');
-		});
-
 		it('interrupt button changes color on touch', () => {
 			renderComponent({ inputMode: 'ai', isSessionBusy: true, onInterrupt: vi.fn() });
 			const interruptButton = screen.getByRole('button', { name: /cancel/i });
@@ -903,12 +813,6 @@ describe('CommandInputBar', () => {
 			expect(screen.getByLabelText(/Shell command input/i)).toBeInTheDocument();
 		});
 
-		it('mode toggle has aria-pressed attribute', () => {
-			renderComponent({ inputMode: 'ai' });
-			const toggleButton = screen.getByRole('button', { name: /switch to/i });
-			expect(toggleButton).toHaveAttribute('aria-pressed', 'true');
-		});
-
 		it('has aria-multiline on textarea', () => {
 			renderComponent({ inputMode: 'ai' });
 			const textarea = screen.getByRole('textbox');
@@ -925,14 +829,6 @@ describe('CommandInputBar', () => {
 			// MIN_TOUCH_TARGET + 4 = 48px
 			expect(sendButton.style.width).toBe('48px');
 			expect(sendButton.style.height).toBe('48px');
-		});
-
-		it('mode toggle button meets minimum touch target size', () => {
-			renderComponent();
-			const toggleButton = screen.getByRole('button', { name: /switch to/i });
-
-			expect(toggleButton.style.width).toBe('48px');
-			expect(toggleButton.style.height).toBe('48px');
 		});
 	});
 
@@ -1008,15 +904,6 @@ describe('triggerHapticFeedback helper', () => {
 		});
 	});
 
-	it('triggers light haptic (10ms)', () => {
-		renderComponent({ inputMode: 'ai', onModeToggle: vi.fn() });
-
-		const toggleButton = screen.getByRole('button', { name: /switch to/i });
-		fireEvent.click(toggleButton);
-
-		expect(navigator.vibrate).toHaveBeenCalledWith(10);
-	});
-
 	it('triggers medium haptic (25ms) on submit', () => {
 		const onSubmit = vi.fn();
 		renderComponent({ value: 'test', onSubmit });
@@ -1044,9 +931,10 @@ describe('triggerHapticFeedback helper', () => {
 		});
 
 		expect(() => {
-			renderComponent({ inputMode: 'ai', onModeToggle: vi.fn() });
-			const toggleButton = screen.getByRole('button', { name: /switch to/i });
-			fireEvent.click(toggleButton);
+			const onSubmit = vi.fn();
+			renderComponent({ value: 'test', onSubmit });
+			const form = screen.getByRole('textbox').closest('form');
+			fireEvent.submit(form!);
 		}).not.toThrow();
 	});
 });
@@ -1406,23 +1294,6 @@ describe('Edge Cases', () => {
 		expect(screen.getByTestId('slash-autocomplete')).toBeInTheDocument();
 	});
 
-	it('handles rapid mode toggles', () => {
-		const onModeToggle = vi.fn();
-		renderComponent({ inputMode: 'ai', onModeToggle });
-
-		const toggleButton = screen.getByRole('button', { name: /switch to/i });
-
-		// Rapid clicks
-		fireEvent.click(toggleButton);
-		fireEvent.click(toggleButton);
-		fireEvent.click(toggleButton);
-
-		expect(onModeToggle).toHaveBeenCalledTimes(3);
-		expect(onModeToggle).toHaveBeenNthCalledWith(1, 'terminal');
-		expect(onModeToggle).toHaveBeenNthCalledWith(2, 'terminal');
-		expect(onModeToggle).toHaveBeenNthCalledWith(3, 'terminal');
-	});
-
 	it('handles very long input value', () => {
 		const longValue = 'a'.repeat(10000);
 		renderComponent({ value: longValue });
@@ -1465,7 +1336,6 @@ describe('Edge Cases', () => {
 			renderComponent({
 				onSubmit: undefined,
 				onChange: undefined,
-				onModeToggle: undefined,
 				onInterrupt: undefined,
 				onHistoryOpen: undefined,
 			});

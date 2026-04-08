@@ -45,8 +45,32 @@ export function EdgePromptRow({
 		[debouncedUpdate]
 	);
 
+	// Sizing policy:
+	//
+	// - Expanded mode: row takes flex: 1 of the available column height and the
+	//   textarea fills the row (flex: 1 / minHeight: 0). Multiple rows split
+	//   the column evenly.
+	// - Collapsed mode: row uses INTRINSIC content height (flexShrink: 0, no
+	//   flex grow). The parent column in AgentConfigPanel sets overflowY: auto
+	//   so additional rows scroll instead of squeezing each other below their
+	//   min content size — that squeezing was what caused the bottom row's
+	//   title to visually overlap the textarea above it when 3+ triggers were
+	//   attached. Each row reserves a stable ~140px (label + textarea + count)
+	//   so the layout is predictable.
+	//
+	// `flexShrink: 0` on the title span and the char count, plus `marginBottom`
+	// on the title, are load-bearing: without them flex would still try to
+	// shrink the inner spans when vertical space is tight. Do not remove.
+	const isCollapsed = !expanded;
 	return (
-		<div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+		<div
+			style={{
+				display: 'flex',
+				flexDirection: 'column',
+				minHeight: 0,
+				...(expanded ? { flex: 1 } : { flexShrink: 0 }),
+			}}
+		>
 			<label
 				style={{
 					...themedLabelStyle,
@@ -54,9 +78,18 @@ export function EdgePromptRow({
 					display: 'flex',
 					flexDirection: 'column',
 					minHeight: 0,
+					marginBottom: 0,
 				}}
 			>
-				<span style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+				<span
+					style={{
+						display: 'flex',
+						alignItems: 'center',
+						gap: 6,
+						flexShrink: 0,
+						marginBottom: 4,
+					}}
+				>
 					<span style={{ color: theme.colors.textMain, fontWeight: 600, fontSize: 11 }}>
 						{edgeInfo.triggerLabel}
 					</span>
@@ -69,19 +102,26 @@ export function EdgePromptRow({
 				<textarea
 					value={localPrompt}
 					onChange={handleChange}
-					rows={expanded ? undefined : 2}
+					rows={isCollapsed ? 3 : undefined}
 					placeholder="Prompt for this trigger..."
 					style={{
 						...themedInputStyle,
 						resize: 'vertical',
 						fontFamily: 'inherit',
 						lineHeight: 1.4,
-						marginTop: 4,
-						...(expanded ? { flex: 1, minHeight: 0 } : { minHeight: 56 }),
+						...(expanded ? { flex: 1, minHeight: 0 } : { minHeight: 72, flexShrink: 0 }),
 					}}
 				/>
 			</label>
-			<div style={{ color: theme.colors.textDim, fontSize: 10, textAlign: 'right', flexShrink: 0 }}>
+			<div
+				style={{
+					color: theme.colors.textDim,
+					fontSize: 10,
+					textAlign: 'right',
+					flexShrink: 0,
+					marginTop: 2,
+				}}
+			>
 				{localPrompt.length} chars
 			</div>
 		</div>

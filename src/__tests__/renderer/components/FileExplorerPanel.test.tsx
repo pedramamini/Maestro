@@ -121,6 +121,11 @@ vi.mock('lucide-react', () => ({
 			⏳
 		</span>
 	),
+	Search: ({ className, style }: { className?: string; style?: React.CSSProperties }) => (
+		<span data-testid="search-icon" className={className} style={style}>
+			🔍
+		</span>
+	),
 }));
 
 // Mock @tanstack/react-virtual for virtualization

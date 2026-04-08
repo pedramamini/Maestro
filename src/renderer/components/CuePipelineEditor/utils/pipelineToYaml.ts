@@ -169,7 +169,19 @@ export function pipelineToYamlSubscriptions(pipeline: CuePipeline): CueSubscript
 		} else {
 			// Fan-out: multiple targets from trigger
 			sub.fan_out = agentTargets.map((a) => (a.data as AgentNodeData).sessionName);
-			sub.prompt = (agentTargets[0].data as AgentNodeData).inputPrompt ?? '';
+			// Resolve per-agent prompts from edge prompt → agent inputPrompt fallback
+			const perAgentPrompts = agentTargets.map((agent) => {
+				const edge = triggerOutgoing.find((e) => e.target === agent.id);
+				return edge?.prompt ?? (agent.data as AgentNodeData).inputPrompt ?? '';
+			});
+			// Use per-agent prompts if they differ; otherwise collapse to single prompt
+			const allSame = perAgentPrompts.every((p) => p === perAgentPrompts[0]);
+			if (allSame) {
+				sub.prompt = perAgentPrompts[0];
+			} else {
+				sub.prompt = perAgentPrompts[0];
+				sub.fan_out_prompts = perAgentPrompts;
+			}
 			subscriptions.push(sub);
 
 			for (const agent of agentTargets) {
@@ -241,6 +253,13 @@ function buildChain(
 					return src ? (src.data as AgentNodeData).sessionName : '';
 				})
 				.filter(Boolean);
+			// Per-subscription fan-in timeout overrides
+			if (targetData.fanInTimeoutMinutes != null) {
+				sub.fan_in_timeout_minutes = targetData.fanInTimeoutMinutes;
+			}
+			if (targetData.fanInTimeoutOnFail != null) {
+				sub.fan_in_timeout_on_fail = targetData.fanInTimeoutOnFail;
+			}
 		} else {
 			sub.source_session = fromAgentData.sessionName;
 		}
@@ -293,7 +312,12 @@ export function pipelinesToYaml(
 			if (sub.poll_minutes != null) record.poll_minutes = sub.poll_minutes;
 			if (sub.source_session != null) record.source_session = sub.source_session;
 			if (sub.fan_out != null) record.fan_out = sub.fan_out;
+			if (sub.fan_out_prompts != null) record.fan_out_prompts = sub.fan_out_prompts;
 			if (sub.filter != null) record.filter = sub.filter;
+			if (sub.fan_in_timeout_minutes != null)
+				record.fan_in_timeout_minutes = sub.fan_in_timeout_minutes;
+			if (sub.fan_in_timeout_on_fail != null)
+				record.fan_in_timeout_on_fail = sub.fan_in_timeout_on_fail;
 
 			// Save prompts as external files.
 			// Use sub.name as the suffix key so multiple triggers targeting the same agent

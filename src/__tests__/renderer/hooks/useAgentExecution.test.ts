@@ -172,11 +172,13 @@ describe('useAgentExecution', () => {
 			success: true,
 			response: 'Hello world',
 			agentSessionId: 'agent-session-123',
+			contextUsage: 0,
 			usageStats: {
 				...baseUsage,
 				inputTokens: 3,
 				outputTokens: 5,
 				totalCostUsd: 0.03,
+				reasoningTokens: undefined,
 			},
 		});
 
@@ -389,11 +391,13 @@ describe('useAgentExecution', () => {
 			success: true,
 			response: 'Summary',
 			agentSessionId: 'agent-session-999',
+			contextUsage: 0,
 			usageStats: {
 				...baseUsage,
 				inputTokens: 5,
 				outputTokens: 3,
 				totalCostUsd: 0.05,
+				reasoningTokens: undefined,
 			},
 		});
 	});

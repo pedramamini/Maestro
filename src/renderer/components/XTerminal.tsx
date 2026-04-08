@@ -192,6 +192,10 @@ export interface XTerminalProps {
 	onData?: (data: string) => void;
 	onResize?: (cols: number, rows: number) => void;
 	onTitleChange?: (title: string) => void;
+	/** Whether this terminal tab is the active/visible one. When false, the WebGL
+	 *  renderer is disposed to free GPU resources; it is re-initialised when the
+	 *  tab becomes active again. Defaults to true. */
+	isActive?: boolean;
 }
 
 // ============================================================================
@@ -199,7 +203,7 @@ export interface XTerminalProps {
 // ============================================================================
 
 export const XTerminal = forwardRef<XTerminalHandle, XTerminalProps>(function XTerminal(
-	{ sessionId, theme, fontFamily, fontSize = 12, onData, onResize, onTitleChange },
+	{ sessionId, theme, fontFamily, fontSize = 12, onData, onResize, onTitleChange, isActive = true },
 	ref
 ) {
 	const containerRef = useRef<HTMLDivElement>(null);
@@ -212,6 +216,10 @@ export const XTerminal = forwardRef<XTerminalHandle, XTerminalProps>(function XT
 	// Deferred WebGL load: resolved when the async import completes but the container was hidden.
 	// Applied on the next visible resize or explicit refresh() call.
 	const pendingWebglLoadRef = useRef<(() => void) | null>(null);
+	// WebGL addon instance — stored in a ref so the isActive effect can dispose/re-init it.
+	const webglAddonRef = useRef<import('@xterm/addon-webgl').WebglAddon | null>(null);
+	// WebGL constructor class — cached after first dynamic import so re-init doesn't re-import.
+	const webglCtorRef = useRef<typeof import('@xterm/addon-webgl').WebglAddon | null>(null);
 
 	// Link context menu state
 	const [linkMenu, setLinkMenu] = useState<LinkContextMenuState | null>(null);
@@ -375,8 +383,6 @@ export const XTerminal = forwardRef<XTerminalHandle, XTerminalProps>(function XT
 		// Additionally, loading on a hidden (0×0) container causes WebGL context creation to
 		// fail, so we defer until the container is visible; pendingWebglLoadRef is applied on
 		// the next visible resize or explicit refresh() call.
-		let webglAddon: import('@xterm/addon-webgl').WebglAddon | null = null;
-
 		const tryLoadWebgl = (WebglAddon: typeof import('@xterm/addon-webgl').WebglAddon) => {
 			const container = containerRef.current;
 			if (!container || container.offsetWidth === 0 || container.offsetHeight === 0) {
@@ -386,15 +392,17 @@ export const XTerminal = forwardRef<XTerminalHandle, XTerminalProps>(function XT
 			}
 			pendingWebglLoadRef.current = null;
 			try {
-				webglAddon = new WebglAddon();
-				webglAddon.onContextLoss(() => {
+				const addon = new WebglAddon();
+				addon.onContextLoss(() => {
 					console.warn('[XTerminal] WebGL context lost — falling back to canvas renderer');
-					webglAddon?.dispose();
-					webglAddon = null;
+					addon.dispose();
+					webglAddonRef.current = null;
 					// Force a full repaint so the fallback canvas renderer draws from the internal buffer.
 					term.refresh(0, term.rows - 1);
 				});
-				term.loadAddon(webglAddon);
+				term.loadAddon(addon);
+				webglAddonRef.current = addon;
+				webglCtorRef.current = WebglAddon;
 			} catch (err) {
 				console.warn('[XTerminal] WebGL addon failed to load, using canvas renderer:', err);
 			}
@@ -468,7 +476,8 @@ export const XTerminal = forwardRef<XTerminalHandle, XTerminalProps>(function XT
 			linkProviderDisposable.dispose();
 			resizeObserver.disconnect();
 			if (resizeTimerRef.current) clearTimeout(resizeTimerRef.current);
-			webglAddon?.dispose();
+			webglAddonRef.current?.dispose();
+			webglAddonRef.current = null;
 			term.dispose();
 			terminalRef.current = null;
 			fitAddonRef.current = null;
@@ -522,6 +531,44 @@ export const XTerminal = forwardRef<XTerminalHandle, XTerminalProps>(function XT
 			}
 		}
 	}, [fontFamily, fontSize]);
+
+	// Dispose the WebGL renderer when this terminal tab becomes inactive to free GPU resources.
+	// Re-initialise it when the tab becomes active again. Each live WebGL context holds GPU
+	// memory and a compositing layer — with multiple terminal tabs this adds up fast.
+	useEffect(() => {
+		const term = terminalRef.current;
+		if (!term) return;
+
+		if (!isActive) {
+			// Going inactive — dispose WebGL, fall back to the built-in canvas renderer
+			if (webglAddonRef.current) {
+				webglAddonRef.current.dispose();
+				webglAddonRef.current = null;
+			}
+		} else {
+			// Becoming active — re-init WebGL if we have the constructor cached
+			if (!webglAddonRef.current && webglCtorRef.current) {
+				const container = containerRef.current;
+				if (container && container.offsetWidth > 0 && container.offsetHeight > 0) {
+					try {
+						const addon = new webglCtorRef.current();
+						addon.onContextLoss(() => {
+							console.warn('[XTerminal] WebGL context lost — falling back to canvas renderer');
+							addon.dispose();
+							webglAddonRef.current = null;
+							term.refresh(0, term.rows - 1);
+						});
+						term.loadAddon(addon);
+						webglAddonRef.current = addon;
+					} catch {
+						// WebGL re-init failed — canvas renderer remains active
+					}
+				}
+				// Full repaint to sync the freshly-attached WebGL renderer with the terminal buffer
+				term.refresh(0, term.rows - 1);
+			}
+		}
+	}, [isActive]);
 
 	const dismissLinkMenu = useCallback(() => setLinkMenu(null), []);
 

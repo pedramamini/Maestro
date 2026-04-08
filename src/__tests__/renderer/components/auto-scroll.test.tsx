@@ -1,10 +1,13 @@
 /**
  * @file auto-scroll.test.tsx
- * @description Tests for the auto-scroll feature in TerminalOutput
+ * @description Tests for the auto-scroll behavior in TerminalOutput
+ *
+ * Auto-scroll is always active (no setting toggle). When at the bottom,
+ * output pins to the bottom. Scrolling up pauses auto-scroll and shows
+ * a badge with new message count. Scrolling/clicking back to bottom resumes.
  *
  * Test coverage includes:
- * - Settings integration (keyboard shortcut registration)
- * - Props threading (backward compatibility without auto-scroll props)
+ * - Props threading (renders correctly without extra props)
  * - Thinking stream auto-scroll (MutationObserver-based scroll triggering)
  */
 
@@ -12,7 +15,6 @@ import React from 'react';
 import { render, screen, fireEvent, act } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { TerminalOutput } from '../../../renderer/components/TerminalOutput';
-import { DEFAULT_SHORTCUTS } from '../../../renderer/constants/shortcuts';
 import type { Session, Theme, LogEntry } from '../../../renderer/types';
 
 // Mock dependencies (same pattern as TerminalOutput.test.tsx)
@@ -174,25 +176,8 @@ describe('Auto-scroll feature', () => {
 		vi.useRealTimers();
 	});
 
-	describe('settings integration', () => {
-		it('setting is rendered in SettingsModal with correct label (shortcut registration)', () => {
-			expect(DEFAULT_SHORTCUTS.toggleAutoScroll).toBeDefined();
-			expect(DEFAULT_SHORTCUTS.toggleAutoScroll.label).toBe('Toggle Auto-Scroll AI Output');
-			expect(DEFAULT_SHORTCUTS.toggleAutoScroll.keys).toEqual(['Alt', 'Meta', 's']);
-		});
-	});
-
-	describe('keyboard shortcut', () => {
-		it('auto-scroll keyboard shortcut is registered in shortcuts.ts', () => {
-			const shortcut = DEFAULT_SHORTCUTS.toggleAutoScroll;
-			expect(shortcut).toBeDefined();
-			expect(shortcut.id).toBe('toggleAutoScroll');
-			expect(shortcut.keys).toEqual(['Alt', 'Meta', 's']);
-		});
-	});
-
 	describe('props threading', () => {
-		it('TerminalOutput renders correctly without auto-scroll props (backward compatible)', () => {
+		it('TerminalOutput renders correctly without extra props', () => {
 			const props = createDefaultProps();
 
 			const { container } = render(<TerminalOutput {...props} />);
@@ -202,7 +187,7 @@ describe('Auto-scroll feature', () => {
 
 	describe('thinking stream auto-scroll', () => {
 		it('auto-scrolls when thinking log text grows in-place (same array length)', async () => {
-			// Setup: auto-scroll enabled, one thinking log entry
+			// Setup: one thinking log entry
 			const thinkingLog = createLogEntry({
 				id: 'thinking-1',
 				text: 'Let me analyze',
@@ -214,11 +199,7 @@ describe('Auto-scroll feature', () => {
 				activeTabId: 'tab-1',
 			});
 
-			const props = createDefaultProps({
-				session,
-				autoScrollAiMode: true,
-				setAutoScrollAiMode: vi.fn(),
-			});
+			const props = createDefaultProps({ session });
 
 			const { container, rerender } = render(<TerminalOutput {...props} />);
 
@@ -244,15 +225,7 @@ describe('Auto-scroll feature', () => {
 				activeTabId: 'tab-1',
 			});
 
-			rerender(
-				<TerminalOutput
-					{...createDefaultProps({
-						session: updatedSession,
-						autoScrollAiMode: true,
-						setAutoScrollAiMode: vi.fn(),
-					})}
-				/>
-			);
+			rerender(<TerminalOutput {...createDefaultProps({ session: updatedSession })} />);
 
 			// Trigger MutationObserver callback (simulates DOM mutation)
 			(window as any).__mutationCallback?.([]);
@@ -279,11 +252,7 @@ describe('Auto-scroll feature', () => {
 				activeTabId: 'tab-1',
 			});
 
-			const props = createDefaultProps({
-				session,
-				autoScrollAiMode: false, // OFF — so badge system is active
-				setAutoScrollAiMode: vi.fn(),
-			});
+			const props = createDefaultProps({ session });
 
 			const { container, rerender } = render(<TerminalOutput {...props} />);
 			const scrollContainer = container.querySelector('.overflow-y-auto') as HTMLElement;
@@ -304,15 +273,7 @@ describe('Auto-scroll feature', () => {
 				activeTabId: 'tab-1',
 			});
 
-			rerender(
-				<TerminalOutput
-					{...createDefaultProps({
-						session: updatedSession,
-						autoScrollAiMode: false,
-						setAutoScrollAiMode: vi.fn(),
-					})}
-				/>
-			);
+			rerender(<TerminalOutput {...createDefaultProps({ session: updatedSession })} />);
 
 			await act(async () => {
 				vi.advanceTimersByTime(50);
@@ -334,11 +295,7 @@ describe('Auto-scroll feature', () => {
 				activeTabId: 'tab-1',
 			});
 
-			const props = createDefaultProps({
-				session,
-				autoScrollAiMode: true,
-				setAutoScrollAiMode: vi.fn(),
-			});
+			const props = createDefaultProps({ session });
 
 			const { container, rerender } = render(<TerminalOutput {...props} />);
 			const scrollContainer = container.querySelector('.overflow-y-auto') as HTMLElement;
@@ -362,15 +319,7 @@ describe('Auto-scroll feature', () => {
 				activeTabId: 'tab-1',
 			});
 
-			rerender(
-				<TerminalOutput
-					{...createDefaultProps({
-						session: updatedSession,
-						autoScrollAiMode: true,
-						setAutoScrollAiMode: vi.fn(),
-					})}
-				/>
-			);
+			rerender(<TerminalOutput {...createDefaultProps({ session: updatedSession })} />);
 
 			// Trigger MutationObserver callback (simulates DOM mutation from new node)
 			(window as any).__mutationCallback?.([]);

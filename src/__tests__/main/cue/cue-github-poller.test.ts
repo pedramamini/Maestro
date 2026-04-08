@@ -572,10 +572,7 @@ describe('cue-github-poller', () => {
 		const cleanup = createCueGitHubPoller(config);
 		await vi.advanceTimersByTimeAsync(2000);
 
-		expect(config.onLog).toHaveBeenCalledWith(
-			'error',
-			expect.stringContaining('GitHub poll error')
-		);
+		expect(config.onLog).toHaveBeenCalledWith('warn', expect.stringContaining('malformed JSON'));
 		expect(config.onEvent).not.toHaveBeenCalled();
 
 		cleanup();

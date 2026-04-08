@@ -17,6 +17,7 @@ import {
 	registerProcessHandlers,
 	ProcessHandlerDependencies,
 } from '../../../../main/ipc/handlers/process';
+import { getDefaultShell } from '../../../../main/stores/defaults';
 
 // Mock electron's ipcMain
 vi.mock('electron', () => ({
@@ -860,7 +861,7 @@ describe('process IPC handlers', () => {
 				'session-1',
 				'ls -la',
 				'/test/dir',
-				process.platform === 'win32' ? 'powershell' : 'zsh', // default shell
+				getDefaultShell(), // default shell
 				{}, // shell env vars
 				null // sshRemoteConfig (not set in this test)
 			);
@@ -1007,6 +1008,37 @@ describe('process IPC handlers', () => {
 			);
 			expect(mockProcessManager.spawn).not.toHaveBeenCalled();
 			expect(result).toEqual({ pid: 5000, success: true });
+		});
+
+		it('should merge agent-level and session-level customEnvVars into terminal env', async () => {
+			mockProcessManager.spawnTerminalTab.mockReturnValue({ pid: 5010, success: true });
+			mockAgentConfigsStore.get.mockReturnValue({
+				'claude-code': { customEnvVars: { AGENT_VAR: 'from-agent', SHARED: 'agent-level' } },
+			});
+			mockSettingsStore.get.mockImplementation((key: string, defaultValue: unknown) => {
+				if (key === 'shellEnvVars') return { GLOBAL_VAR: 'from-global', SHARED: 'global-level' };
+				return defaultValue;
+			});
+
+			const handler = handlers.get('process:spawnTerminalTab');
+			await handler!({} as any, {
+				sessionId: 'session-1-terminal-tab-1',
+				cwd: '/local/project',
+				toolType: 'claude-code',
+				sessionCustomEnvVars: { SESSION_VAR: 'from-session', SHARED: 'session-level' },
+			});
+
+			expect(mockProcessManager.spawnTerminalTab).toHaveBeenCalledWith(
+				expect.objectContaining({
+					shellEnvVars: expect.objectContaining({
+						GLOBAL_VAR: 'from-global',
+						AGENT_VAR: 'from-agent',
+						SESSION_VAR: 'from-session',
+						// Session-level wins over agent-level and global
+						SHARED: 'session-level',
+					}),
+				})
+			);
 		});
 
 		it('should spawn SSH session when sessionSshRemoteConfig is enabled', async () => {

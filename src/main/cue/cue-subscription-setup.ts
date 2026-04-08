@@ -67,6 +67,12 @@ export interface SubscriptionSetupDeps {
 	enabled: () => boolean;
 	scheduledFiredKeys: Set<string>;
 	onLog: (level: MainLogLevel, message: string, data?: unknown) => void;
+	dispatchSubscription: (
+		ownerSessionId: string,
+		sub: CueSubscription,
+		event: CueEvent,
+		sourceSessionName: string
+	) => void;
 	executeCueRun: (
 		sessionId: string,
 		prompt: string,
@@ -76,18 +82,25 @@ export interface SubscriptionSetupDeps {
 	) => void;
 }
 
+function dispatchOrExecuteSubscription(
+	deps: SubscriptionSetupDeps,
+	session: SessionInfo,
+	sub: CueSubscription,
+	event: CueEvent
+): void {
+	if (sub.fan_out && sub.fan_out.length > 0) {
+		deps.dispatchSubscription(session.id, sub, event, session.name);
+		return;
+	}
+
+	deps.executeCueRun(session.id, sub.prompt ?? sub.prompt_file, event, sub.name, sub.output_prompt);
+}
+
 export function setupHeartbeatSubscription(
 	deps: SubscriptionSetupDeps,
 	session: SessionInfo,
 	state: SubscriptionSetupState,
-	sub: {
-		name: string;
-		prompt: string;
-		prompt_file?: string;
-		output_prompt?: string;
-		interval_minutes?: number;
-		filter?: Record<string, string | number | boolean>;
-	}
+	sub: CueSubscription
 ): void {
 	const intervalMs = (sub.interval_minutes ?? 0) * 60 * 1000;
 	if (intervalMs <= 0) return;
@@ -101,13 +114,7 @@ export function setupHeartbeatSubscription(
 	if (!sub.filter || matchesFilter(immediateEvent.payload, sub.filter)) {
 		deps.onLog('cue', `[CUE] "${sub.name}" triggered (time.heartbeat, initial)`);
 		state.lastTriggered = immediateEvent.timestamp;
-		deps.executeCueRun(
-			session.id,
-			sub.prompt_file ?? sub.prompt,
-			immediateEvent,
-			sub.name,
-			sub.output_prompt
-		);
+		dispatchOrExecuteSubscription(deps, session, sub, immediateEvent);
 	} else {
 		deps.onLog('cue', `[CUE] "${sub.name}" filter not matched (${describeFilter(sub.filter)})`);
 	}
@@ -129,13 +136,7 @@ export function setupHeartbeatSubscription(
 		deps.onLog('cue', `[CUE] "${sub.name}" triggered (time.heartbeat)`);
 		state.lastTriggered = event.timestamp;
 		state.nextTriggers.set(sub.name, Date.now() + intervalMs);
-		deps.executeCueRun(
-			session.id,
-			sub.prompt_file ?? sub.prompt,
-			event,
-			sub.name,
-			sub.output_prompt
-		);
+		dispatchOrExecuteSubscription(deps, session, sub, event);
 	}, intervalMs);
 
 	state.nextTriggers.set(sub.name, Date.now() + intervalMs);
@@ -146,15 +147,7 @@ export function setupScheduledSubscription(
 	deps: SubscriptionSetupDeps,
 	session: SessionInfo,
 	state: SubscriptionSetupState,
-	sub: {
-		name: string;
-		prompt: string;
-		prompt_file?: string;
-		output_prompt?: string;
-		schedule_times?: string[];
-		schedule_days?: string[];
-		filter?: Record<string, string | number | boolean>;
-	}
+	sub: CueSubscription
 ): void {
 	const times = sub.schedule_times ?? [];
 	if (times.length === 0) return;
@@ -211,13 +204,7 @@ export function setupScheduledSubscription(
 
 		deps.onLog('cue', `[CUE] "${sub.name}" triggered (time.scheduled, ${currentTime})`);
 		state.lastTriggered = event.timestamp;
-		deps.executeCueRun(
-			session.id,
-			sub.prompt_file ?? sub.prompt,
-			event,
-			sub.name,
-			sub.output_prompt
-		);
+		dispatchOrExecuteSubscription(deps, session, sub, event);
 	};
 
 	// Check every 60 seconds to catch scheduled times
@@ -235,14 +222,7 @@ export function setupFileWatcherSubscription(
 	deps: SubscriptionSetupDeps,
 	session: SessionInfo,
 	state: SubscriptionSetupState,
-	sub: {
-		name: string;
-		prompt: string;
-		prompt_file?: string;
-		output_prompt?: string;
-		watch?: string;
-		filter?: Record<string, string | number | boolean>;
-	}
+	sub: CueSubscription
 ): void {
 	if (!sub.watch) return;
 
@@ -263,13 +243,7 @@ export function setupFileWatcherSubscription(
 
 			deps.onLog('cue', `[CUE] "${sub.name}" triggered (file.changed)`);
 			state.lastTriggered = event.timestamp;
-			deps.executeCueRun(
-				session.id,
-				sub.prompt_file ?? sub.prompt,
-				event,
-				sub.name,
-				sub.output_prompt
-			);
+			dispatchOrExecuteSubscription(deps, session, sub, event);
 		},
 	});
 
@@ -302,13 +276,7 @@ export function setupGitHubPollerSubscription(
 
 			deps.onLog('cue', `[CUE] "${sub.name}" triggered (${sub.event})`);
 			state.lastTriggered = event.timestamp;
-			deps.executeCueRun(
-				session.id,
-				sub.prompt_file ?? sub.prompt,
-				event,
-				sub.name,
-				sub.output_prompt
-			);
+			dispatchOrExecuteSubscription(deps, session, sub, event);
 		},
 	});
 
@@ -343,13 +311,7 @@ export function setupTaskScannerSubscription(
 				`[CUE] "${sub.name}" triggered (task.pending: ${event.payload.taskCount} task(s) in ${event.payload.filename})`
 			);
 			state.lastTriggered = event.timestamp;
-			deps.executeCueRun(
-				session.id,
-				sub.prompt_file ?? sub.prompt,
-				event,
-				sub.name,
-				sub.output_prompt
-			);
+			dispatchOrExecuteSubscription(deps, session, sub, event);
 		},
 	});
 

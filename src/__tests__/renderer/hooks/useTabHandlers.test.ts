@@ -678,7 +678,7 @@ describe('useTabHandlers', () => {
 			expect(closeResult.tabId).toBe('tab-1');
 		});
 
-		it('handleCloseCurrentTab returns prevented when only one AI tab', () => {
+		it('handleCloseCurrentTab allows closing the last AI tab', () => {
 			const tab = createMockAITab({ id: 'tab-1' });
 			const { result } = renderWithSession([tab]);
 			let closeResult: any;
@@ -686,7 +686,8 @@ describe('useTabHandlers', () => {
 				closeResult = result.current.handleCloseCurrentTab();
 			});
 
-			expect(closeResult.type).toBe('prevented');
+			expect(closeResult.type).toBe('ai');
+			expect(closeResult.tabId).toBe('tab-1');
 		});
 
 		it('handleCloseCurrentTab returns none when no session', () => {

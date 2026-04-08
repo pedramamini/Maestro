@@ -18,6 +18,13 @@ export interface UnifiedHistoryStats {
 	totalCount: number; // Total entries (autoCount + userCount)
 }
 
+/** Pre-computed activity graph bucket for a time slice */
+export interface GraphBucket {
+	auto: number;
+	user: number;
+	cue: number;
+}
+
 /**
  * Paginated result wrapper (mirrors shared/history.ts PaginatedResult)
  */
@@ -28,6 +35,7 @@ export interface PaginatedUnifiedHistoryResult {
 	offset: number;
 	hasMore: boolean;
 	stats: UnifiedHistoryStats;
+	graphBuckets?: GraphBucket[];
 }
 
 /**
@@ -40,6 +48,8 @@ export interface UnifiedHistoryOptions {
 	limit?: number;
 	/** Number of entries to skip for pagination (default: 0) */
 	offset?: number;
+	/** Number of buckets for the activity graph (passed from frontend lookback config) */
+	graphBucketCount?: number;
 }
 
 /**

@@ -96,6 +96,14 @@ export function registerPersistenceHandlers(deps: PersistenceHandlerDependencies
 		return sessions;
 	});
 
+	ipcMain.handle('sessions:getActiveSessionId', async () => {
+		return sessionsStore.get('activeSessionId', '');
+	});
+
+	ipcMain.handle('sessions:setActiveSessionId', async (_, id: string) => {
+		sessionsStore.set('activeSessionId', id);
+	});
+
 	ipcMain.handle('sessions:setAll', async (_, sessions: StoredSession[]) => {
 		// Get previous sessions to detect changes
 		const previousSessions = sessionsStore.get('sessions', []);

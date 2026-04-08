@@ -34,6 +34,8 @@ export interface TabBarProps {
 	showUnreadOnly?: boolean;
 	onToggleUnreadFilter?: () => void;
 	onOpenTabSearch?: () => void;
+	/** Handler to open message search (Cmd+F) */
+	onOpenOutputSearch?: () => void;
 	/** Handler to close all tabs */
 	onCloseAllTabs?: () => void;
 	/** Handler to close all tabs except active */

@@ -274,6 +274,7 @@ describe('UnifiedHistoryTab', () => {
 					filter: null,
 					limit: 100,
 					offset: 0,
+					graphBucketCount: 28,
 				});
 			});
 		});
@@ -288,6 +289,7 @@ describe('UnifiedHistoryTab', () => {
 					filter: null,
 					limit: 100,
 					offset: 0,
+					graphBucketCount: 24,
 				});
 			});
 			expect(screen.getByTestId('activity-lookback-hours')).toHaveTextContent('null');

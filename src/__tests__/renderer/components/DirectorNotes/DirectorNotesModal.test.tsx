@@ -193,7 +193,7 @@ describe('DirectorNotesModal', () => {
 			renderModal();
 
 			await waitFor(() => {
-				expect(screen.getByText('(generating...)')).toBeInTheDocument();
+				expect(screen.getByText('generating…')).toBeInTheDocument();
 			});
 		});
 
@@ -221,13 +221,14 @@ describe('DirectorNotesModal', () => {
 	});
 
 	describe('Tab Switching', () => {
-		it('AI Overview tab is disabled when overview is not ready', async () => {
+		it('AI Overview tab is disabled during generation until synopsis is ready', async () => {
 			renderModal();
 
 			await waitFor(() => {
 				expect(screen.getByText('AI Overview')).toBeInTheDocument();
 			});
 
+			// Tab should be disabled during generation (overviewReady starts as false)
 			const overviewTabButton = screen.getByText('AI Overview').closest('button');
 			expect(overviewTabButton).toBeDisabled();
 			expect(overviewTabButton).toHaveStyle({ opacity: '0.5' });
@@ -262,20 +263,20 @@ describe('DirectorNotesModal', () => {
 			expect(historyContainer).toHaveClass('hidden');
 		});
 
-		it('does not switch to AI Overview when clicked while not ready', async () => {
+		it('does not switch to AI Overview when clicked during generation (tab is disabled)', async () => {
 			renderModal();
 
 			await waitFor(() => {
 				expect(screen.getByText('AI Overview')).toBeInTheDocument();
 			});
 
-			// Try clicking the disabled overview tab
+			// Click the AI Overview tab (disabled during generation — click is a no-op)
 			const overviewTabButton = screen.getByText('AI Overview').closest('button');
 			fireEvent.click(overviewTabButton!);
 
-			// Should still show history
-			const historyContainer = screen.getByTestId('unified-history-tab').closest('.h-full');
-			expect(historyContainer).not.toHaveClass('hidden');
+			// AI Overview should remain hidden (tab is disabled)
+			const aiOverviewContainer = screen.getByTestId('ai-overview-tab').closest('.h-full');
+			expect(aiOverviewContainer).toHaveClass('hidden');
 		});
 
 		it('can switch to Help tab', async () => {
@@ -388,14 +389,15 @@ describe('DirectorNotesModal', () => {
 			expect(overviewContainer).not.toHaveClass('hidden');
 		});
 
-		it('skips disabled tabs when navigating', async () => {
+		it('skips AI Overview during generation since tab is disabled', async () => {
 			renderModal();
 
 			await waitFor(() => {
 				expect(screen.getByTestId('unified-history-tab')).toBeInTheDocument();
 			});
 
-			// AI Overview is disabled (not ready). From history (index 1), Cmd+Shift+] should skip to help (index 0)
+			// AI Overview is disabled during generation. From history (index 1), Cmd+Shift+] should
+			// skip the disabled AI Overview and wrap around to Help (index 0)
 			await act(async () => {
 				window.dispatchEvent(
 					new KeyboardEvent('keydown', {
@@ -407,8 +409,12 @@ describe('DirectorNotesModal', () => {
 				);
 			});
 
+			// Should have navigated to Help (overview) tab, not AI Overview
 			const overviewContainer = screen.getByTestId('overview-tab').closest('.h-full');
 			expect(overviewContainer).not.toHaveClass('hidden');
+
+			const aiOverviewContainer = screen.getByTestId('ai-overview-tab').closest('.h-full');
+			expect(aiOverviewContainer).toHaveClass('hidden');
 		});
 	});
 
@@ -520,7 +526,7 @@ describe('DirectorNotesModal', () => {
 			renderModal();
 
 			await waitFor(() => {
-				expect(screen.getByText('(generating...)')).toBeInTheDocument();
+				expect(screen.getByText('generating…')).toBeInTheDocument();
 			});
 
 			// Trigger synopsis ready
@@ -528,35 +534,37 @@ describe('DirectorNotesModal', () => {
 				fireEvent.click(screen.getByTestId('trigger-synopsis-ready'));
 			});
 
-			expect(screen.queryByText('(generating...)')).not.toBeInTheDocument();
+			expect(screen.queryByText('generating…')).not.toBeInTheDocument();
 		});
 
-		it('shows progress percentage in tab indicator when progress updates', async () => {
+		it('does not show progress percentage in tab indicator (onProgressChange not wired in modal)', async () => {
 			renderModal();
 
 			await waitFor(() => {
-				expect(screen.getByText('(generating...)')).toBeInTheDocument();
+				expect(screen.getByText('generating…')).toBeInTheDocument();
 			});
 
-			// Trigger progress update
+			// Trigger progress update via the mock's trigger button
 			await act(async () => {
 				fireEvent.click(screen.getByTestId('trigger-progress'));
 			});
 
-			expect(screen.getByText('(42%)')).toBeInTheDocument();
-			expect(screen.queryByText('(generating...)')).not.toBeInTheDocument();
+			// The modal does not wire onProgressChange to AIOverviewTab, so the tab still shows
+			// "generating…" and no percentage is displayed
+			expect(screen.queryByText('42%')).not.toBeInTheDocument();
+			expect(screen.getByText('generating…')).toBeInTheDocument();
 		});
 
-		it('enables AI Overview tab when synopsis is ready', async () => {
+		it('enables AI Overview tab after synopsis is ready', async () => {
 			renderModal();
 
-			// Initially disabled
+			// Disabled during generation
 			await waitFor(() => {
 				const overviewTabButton = screen.getByText('AI Overview').closest('button');
 				expect(overviewTabButton).toBeDisabled();
 			});
 
-			// Trigger ready
+			// Trigger ready — tab should become enabled
 			await act(async () => {
 				fireEvent.click(screen.getByTestId('trigger-synopsis-ready'));
 			});

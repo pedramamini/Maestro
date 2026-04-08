@@ -589,16 +589,6 @@ class ConversationManager {
 					supportsStreamJsonInput: agent?.capabilities?.supportsStreamJsonInput ?? false,
 					hasImages: false, // Wizard never sends images
 				});
-			if (sendViaStdin) {
-				// Ensure the agent uses stream-json input format when sending JSON via stdin
-				const inputFormatIndex = argsForSpawn.findIndex((arg) => arg === '--input-format');
-				if (inputFormatIndex === -1) {
-					argsForSpawn.push('--input-format', 'stream-json');
-				} else if (argsForSpawn[inputFormatIndex + 1] !== 'stream-json') {
-					argsForSpawn[inputFormatIndex + 1] = 'stream-json';
-				}
-			}
-
 			// Use the agent's resolved path if available, falling back to command name
 			// This is critical for packaged Electron apps where PATH may not include agent locations
 			const commandToUse = agent.path || agent.command;

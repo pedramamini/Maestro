@@ -10,56 +10,21 @@
  */
 
 import { ipcRenderer } from 'electron';
-
-/** Event types that can trigger a Cue subscription */
-export type CueEventType =
-	| 'time.heartbeat'
-	| 'time.scheduled'
-	| 'file.changed'
-	| 'agent.completed'
-	| 'github.pull_request'
-	| 'github.issue'
-	| 'task.pending';
-
-/** Status of a Cue run */
-export type CueRunStatus = 'running' | 'completed' | 'failed' | 'timeout' | 'stopped';
-
-/** An event instance produced by a trigger */
-export interface CueEvent {
-	id: string;
-	type: CueEventType;
-	timestamp: string;
-	triggerName: string;
-	payload: Record<string, unknown>;
-}
-
-/** Result of a completed (or failed/timed-out) Cue run */
-export interface CueRunResult {
-	runId: string;
-	sessionId: string;
-	sessionName: string;
-	subscriptionName: string;
-	event: CueEvent;
-	status: CueRunStatus;
-	stdout: string;
-	stderr: string;
-	exitCode: number | null;
-	durationMs: number;
-	startedAt: string;
-	endedAt: string;
-}
-
-/** Status summary for a Cue-enabled session */
-export interface CueSessionStatus {
-	sessionId: string;
-	sessionName: string;
-	toolType: string;
-	enabled: boolean;
-	subscriptionCount: number;
-	activeRuns: number;
-	lastTriggered?: string;
-	nextTrigger?: string;
-}
+import type {
+	CueGraphSession,
+	CueRunResult,
+	CueSessionStatus,
+	CueSettings,
+} from '../../shared/cue';
+export type {
+	CueEvent,
+	CueEventType,
+	CueGraphSession,
+	CueRunResult,
+	CueRunStatus,
+	CueSessionStatus,
+	CueSettings,
+} from '../../shared/cue';
 
 /**
  * Creates the Cue API object for preload exposure
@@ -67,37 +32,13 @@ export interface CueSessionStatus {
 export function createCueApi() {
 	return {
 		// Get global Cue settings (timeout, concurrency, queue)
-		getSettings: (): Promise<{
-			timeout_minutes: number;
-			timeout_on_fail: 'break' | 'continue';
-			max_concurrent: number;
-			queue_size: number;
-		}> => ipcRenderer.invoke('cue:getSettings'),
+		getSettings: (): Promise<CueSettings> => ipcRenderer.invoke('cue:getSettings'),
 
 		// Get status of all Cue-enabled sessions
 		getStatus: (): Promise<CueSessionStatus[]> => ipcRenderer.invoke('cue:getStatus'),
 
 		// Get all sessions with their subscriptions (for graph visualization)
-		getGraphData: (): Promise<
-			Array<{
-				sessionId: string;
-				sessionName: string;
-				toolType: string;
-				subscriptions: Array<{
-					name: string;
-					event: CueEventType;
-					enabled: boolean;
-					prompt: string;
-					interval_minutes?: number;
-					watch?: string;
-					source_session?: string | string[];
-					fan_out?: string[];
-					filter?: Record<string, string | number | boolean>;
-					repo?: string;
-					poll_minutes?: number;
-				}>;
-			}>
-		> => ipcRenderer.invoke('cue:getGraphData'),
+		getGraphData: (): Promise<CueGraphSession[]> => ipcRenderer.invoke('cue:getGraphData'),
 
 		// Get currently active Cue runs
 		getActiveRuns: (): Promise<CueRunResult[]> => ipcRenderer.invoke('cue:getActiveRuns'),

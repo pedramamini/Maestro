@@ -138,7 +138,7 @@ export function ShortcutsTab({ theme, hasNoAgents, onRecordingChange }: Shortcut
 	);
 
 	return (
-		<div className="flex flex-col" style={{ minHeight: '450px' }}>
+		<div data-setting-id="shortcuts-tab" className="flex flex-col" style={{ minHeight: '450px' }}>
 			{hasNoAgents && (
 				<p
 					className="text-xs mb-3 px-2 py-1.5 rounded"

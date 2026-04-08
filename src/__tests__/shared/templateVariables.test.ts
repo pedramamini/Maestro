@@ -344,13 +344,27 @@ describe('substituteTemplateVariables', () => {
 			expect(result).toBe('Folder: /session/autorun/path');
 		});
 
-		it('should replace {{AUTORUN_FOLDER}} with empty string when neither available', () => {
+		it('should fall back to derived path from session.cwd when neither autoRunFolder nor autoRunFolderPath available', () => {
 			const context = createTestContext({
 				session: createTestSession({ autoRunFolderPath: undefined }),
 				autoRunFolder: undefined,
 			});
 			const result = substituteTemplateVariables('Folder: {{AUTORUN_FOLDER}}', context);
-			expect(result).toBe('Folder: ');
+			expect(result).toBe('Folder: /Users/test/project/.maestro/playbooks');
+		});
+
+		it('should prefer fullPath over projectRoot over cwd for AUTORUN_FOLDER fallback', () => {
+			const context = createTestContext({
+				session: createTestSession({
+					autoRunFolderPath: undefined,
+					fullPath: '/full/path',
+					projectRoot: '/project/root',
+					cwd: '/cwd',
+				}),
+				autoRunFolder: undefined,
+			});
+			const result = substituteTemplateVariables('Folder: {{AUTORUN_FOLDER}}', context);
+			expect(result).toBe('Folder: /full/path/.maestro/playbooks');
 		});
 	});
 

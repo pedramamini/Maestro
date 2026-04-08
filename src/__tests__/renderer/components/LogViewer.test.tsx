@@ -93,6 +93,20 @@ vi.mock('../../../renderer/components/ConfirmModal', () => ({
 	),
 }));
 
+// Mock sessionStore for agent name → session ID resolution
+const mockSessions = [
+	{ id: 'session-1', name: 'MyAgent', aiTabs: [{ id: 'tab-1' }] },
+	{ id: 'session-2', name: 'OtherAgent', aiTabs: [] },
+];
+vi.mock('../../../renderer/stores/sessionStore', () => ({
+	useSessionStore: (selector: (state: unknown) => unknown) => {
+		const mockState = {
+			sessions: mockSessions,
+		};
+		return selector(mockState);
+	},
+}));
+
 // Add getLogs, clearLogs, and onNewLog to the existing window.maestro.logger mock
 beforeEach(() => {
 	vi.clearAllMocks();
@@ -964,6 +978,53 @@ describe('LogViewer', () => {
 		});
 	});
 
+	describe('Viewport indicator', () => {
+		it('should show indicator line when scrolled', async () => {
+			getMockGetLogs().mockResolvedValue([
+				createMockLog({ level: 'info', message: 'Log 1' }),
+				createMockLog({ level: 'error', message: 'Log 2' }),
+				createMockLog({ level: 'warn', message: 'Log 3' }),
+			]);
+
+			render(<LogViewer theme={mockTheme} onClose={vi.fn()} />);
+
+			await waitFor(() => {
+				expect(screen.getByText('Log 1')).toBeInTheDocument();
+			});
+
+			const container = screen.getByRole('dialog').querySelector('.overflow-y-auto');
+			if (container) {
+				Object.defineProperty(container, 'scrollHeight', { value: 1000, configurable: true });
+				Object.defineProperty(container, 'clientHeight', { value: 500, configurable: true });
+				Object.defineProperty(container, 'scrollTop', {
+					value: 200,
+					writable: true,
+					configurable: true,
+				});
+				fireEvent.scroll(container);
+			}
+
+			await waitFor(() => {
+				const indicator = screen.getByRole('dialog').querySelector('.pointer-events-none.z-20');
+				expect(indicator).toBeInTheDocument();
+			});
+		});
+
+		it('should not show indicator when at top', async () => {
+			getMockGetLogs().mockResolvedValue([createMockLog({ level: 'info', message: 'Log 1' })]);
+
+			render(<LogViewer theme={mockTheme} onClose={vi.fn()} />);
+
+			await waitFor(() => {
+				expect(screen.getByText('Log 1')).toBeInTheDocument();
+			});
+
+			// No scroll event fired, so no indicator
+			const indicator = screen.getByRole('dialog').querySelector('.pointer-events-none.z-20');
+			expect(indicator).not.toBeInTheDocument();
+		});
+	});
+
 	describe('Log level colors', () => {
 		it('should use correct color for debug level', async () => {
 			getMockGetLogs().mockResolvedValue([createMockLog({ level: 'debug', message: 'Debug' })]);
@@ -1166,6 +1227,90 @@ describe('LogViewer', () => {
 				// Verify it's styled as an agent pill (teal), not a context badge (accent color)
 				expect(contextElement.closest('span')).toHaveStyle({ color: '#06b6d4' });
 			});
+		});
+
+		it('should navigate to agent when clicking toast agent pill with sessionId', async () => {
+			const onSessionClick = vi.fn();
+			getMockGetLogs().mockResolvedValue([
+				createMockLog({
+					level: 'toast',
+					message: 'Task complete',
+					data: { project: 'MyAgent', sessionId: 'session-1', tabId: 'tab-1' },
+				}),
+			]);
+
+			render(<LogViewer theme={mockTheme} onClose={vi.fn()} onSessionClick={onSessionClick} />);
+
+			await waitFor(() => {
+				const pill = screen.getByText('MyAgent');
+				expect(pill).toHaveAttribute('title', 'Jump to MyAgent');
+				fireEvent.click(pill);
+			});
+
+			expect(onSessionClick).toHaveBeenCalledWith('session-1', 'tab-1');
+		});
+
+		it('should not be clickable when toast has no sessionId', async () => {
+			const onSessionClick = vi.fn();
+			getMockGetLogs().mockResolvedValue([
+				createMockLog({
+					level: 'toast',
+					message: 'Task complete',
+					data: { project: 'MyAgent' },
+				}),
+			]);
+
+			render(<LogViewer theme={mockTheme} onClose={vi.fn()} onSessionClick={onSessionClick} />);
+
+			await waitFor(() => {
+				const pill = screen.getByText('MyAgent');
+				expect(pill).not.toHaveAttribute('title');
+				fireEvent.click(pill);
+			});
+
+			expect(onSessionClick).not.toHaveBeenCalled();
+		});
+
+		it('should navigate to agent when clicking autorun agent pill', async () => {
+			const onSessionClick = vi.fn();
+			getMockGetLogs().mockResolvedValue([
+				createMockLog({
+					level: 'autorun',
+					message: 'Auto run started',
+					context: 'MyAgent', // Matches mockSessions[0].name
+				}),
+			]);
+
+			render(<LogViewer theme={mockTheme} onClose={vi.fn()} onSessionClick={onSessionClick} />);
+
+			await waitFor(() => {
+				const pill = screen.getByText('MyAgent');
+				expect(pill).toHaveAttribute('title', 'Jump to MyAgent');
+				fireEvent.click(pill);
+			});
+
+			expect(onSessionClick).toHaveBeenCalledWith('session-1');
+		});
+
+		it('should navigate to agent when clicking cue agent pill', async () => {
+			const onSessionClick = vi.fn();
+			getMockGetLogs().mockResolvedValue([
+				createMockLog({
+					level: 'cue',
+					message: 'Cue triggered',
+					context: 'OtherAgent', // Matches mockSessions[1].name
+				}),
+			]);
+
+			render(<LogViewer theme={mockTheme} onClose={vi.fn()} onSessionClick={onSessionClick} />);
+
+			await waitFor(() => {
+				const pill = screen.getByText('OtherAgent');
+				expect(pill).toHaveAttribute('title', 'Jump to OtherAgent');
+				fireEvent.click(pill);
+			});
+
+			expect(onSessionClick).toHaveBeenCalledWith('session-2');
 		});
 
 		it('should render cue level pill with teal color', async () => {

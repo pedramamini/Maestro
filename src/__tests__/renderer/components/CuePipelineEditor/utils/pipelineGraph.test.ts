@@ -544,7 +544,7 @@ describe('convertToReactFlowEdges', () => {
 		expect((edges[0].data as { isActivePipeline: boolean }).isActivePipeline).toBe(true);
 	});
 
-	it('marks edges from non-selected pipeline as isActivePipeline=false', () => {
+	it('excludes edges from non-selected pipeline', () => {
 		const p1 = makePipeline('p1', {
 			nodes: [makeTrigger('t1', 'time.heartbeat'), makeAgent('a1', 'sess-1', 'Alice')],
 			edges: [makeEdge('e1', 't1', 'a1')],
@@ -554,9 +554,10 @@ describe('convertToReactFlowEdges', () => {
 			edges: [makeEdge('e2', 't2', 'a2')],
 		});
 		const edges = convertToReactFlowEdges([p1, p2], 'p2');
-		const e1 = edges.find((e) => e.id === 'p1:e1')!;
+		// Non-active pipeline edges are excluded to prevent orphaned edges
+		// (their source/target nodes are not rendered by convertToReactFlowNodes)
+		expect(edges.find((e) => e.id === 'p1:e1')).toBeUndefined();
 		const e2 = edges.find((e) => e.id === 'p2:e2')!;
-		expect((e1.data as { isActivePipeline: boolean }).isActivePipeline).toBe(false);
 		expect((e2.data as { isActivePipeline: boolean }).isActivePipeline).toBe(true);
 	});
 
@@ -817,5 +818,106 @@ describe('computePipelineYOffsets', () => {
 		const p2Node = nodes.find((n) => n.id === 'p2:t2')!;
 		expect(p1Node.position.y).toBe(10 + (offsets.get('p1') ?? 0));
 		expect(p2Node.position.y).toBe(20 + (offsets.get('p2') ?? 0));
+	});
+});
+
+// ─── Fan-out count ────────────────────────────────────────────────────────────
+
+describe('convertToReactFlowNodes fanOutCount', () => {
+	it('trigger node has fanOutCount when it fans out to multiple agents', () => {
+		const trigger = makeTrigger('t1', 'time.heartbeat');
+		const a1 = makeAgent('a1', 'sess-1', 'Alice');
+		const a2 = makeAgent('a2', 'sess-2', 'Bob');
+		const a3 = makeAgent('a3', 'sess-3', 'Carol');
+		const pipeline = makePipeline('p1', {
+			nodes: [trigger, a1, a2, a3],
+			edges: [makeEdge('e1', 't1', 'a1'), makeEdge('e2', 't1', 'a2'), makeEdge('e3', 't1', 'a3')],
+		});
+		const nodes = convertToReactFlowNodes([pipeline], 'p1');
+		const triggerNode = nodes.find((n) => n.id === 'p1:t1')!;
+		expect((triggerNode.data as any).fanOutCount).toBe(3);
+	});
+
+	it('trigger node has no fanOutCount when it targets a single agent', () => {
+		const trigger = makeTrigger('t1', 'time.heartbeat');
+		const agent = makeAgent('a1', 'sess-1', 'Alice');
+		const pipeline = makePipeline('p1', {
+			nodes: [trigger, agent],
+			edges: [makeEdge('e1', 't1', 'a1')],
+		});
+		const nodes = convertToReactFlowNodes([pipeline], 'p1');
+		const triggerNode = nodes.find((n) => n.id === 'p1:t1')!;
+		expect((triggerNode.data as any).fanOutCount).toBeUndefined();
+	});
+});
+
+// ─── Instance labels ──────────────────────────────────────────────────────────
+
+describe('convertToReactFlowNodes instanceLabel', () => {
+	it('assigns instance labels when the same sessionId appears multiple times', () => {
+		const a1 = makeAgent('a1', 'sess-shared', 'Worker');
+		const a2 = makeAgent('a2', 'sess-shared', 'Worker', {}, { x: 400, y: 0 });
+		const pipeline = makePipeline('p1', {
+			nodes: [a1, a2],
+		});
+		const nodes = convertToReactFlowNodes([pipeline], 'p1');
+		const node1 = nodes.find((n) => n.id === 'p1:a1')!;
+		const node2 = nodes.find((n) => n.id === 'p1:a2')!;
+		expect((node1.data as any).instanceLabel).toBe(1);
+		expect((node2.data as any).instanceLabel).toBe(2);
+	});
+
+	it('does not assign instance labels when all agents have unique sessionIds', () => {
+		const a1 = makeAgent('a1', 'sess-1', 'Alice');
+		const a2 = makeAgent('a2', 'sess-2', 'Bob');
+		const pipeline = makePipeline('p1', {
+			nodes: [a1, a2],
+		});
+		const nodes = convertToReactFlowNodes([pipeline], 'p1');
+		const node1 = nodes.find((n) => n.id === 'p1:a1')!;
+		const node2 = nodes.find((n) => n.id === 'p1:a2')!;
+		expect((node1.data as any).instanceLabel).toBeUndefined();
+		expect((node2.data as any).instanceLabel).toBeUndefined();
+	});
+});
+
+describe('convertToReactFlowNodes fanInCount', () => {
+	it('sets fanInCount for agent with multiple incoming agent edges', () => {
+		const a = makeAgent('a', 'sa', 'Alice');
+		const b = makeAgent('b', 'sb', 'Bob');
+		const c = makeAgent('c', 'sc', 'Carol');
+		const d = makeAgent('d', 'sd', 'Dave');
+		const pipeline = makePipeline('p1', {
+			nodes: [a, b, c, d],
+			edges: [makeEdge('e1', 'a', 'd'), makeEdge('e2', 'b', 'd'), makeEdge('e3', 'c', 'd')],
+		});
+		const nodes = convertToReactFlowNodes([pipeline], 'p1');
+		const nodeD = nodes.find((n) => n.id === 'p1:d')!;
+		expect((nodeD.data as any).fanInCount).toBe(3);
+	});
+
+	it('does not set fanInCount for agent with single incoming agent edge', () => {
+		const a = makeAgent('a', 'sa', 'Alice');
+		const d = makeAgent('d', 'sd', 'Dave');
+		const pipeline = makePipeline('p1', {
+			nodes: [a, d],
+			edges: [makeEdge('e1', 'a', 'd')],
+		});
+		const nodes = convertToReactFlowNodes([pipeline], 'p1');
+		const nodeD = nodes.find((n) => n.id === 'p1:d')!;
+		expect((nodeD.data as any).fanInCount).toBeUndefined();
+	});
+
+	it('does not count trigger edges as fan-in', () => {
+		const t = makeTrigger('t1', 'time.heartbeat', { interval_minutes: 5 });
+		const a = makeAgent('a', 'sa', 'Alice');
+		const d = makeAgent('d', 'sd', 'Dave');
+		const pipeline = makePipeline('p1', {
+			nodes: [t, a, d],
+			edges: [makeEdge('e1', 't1', 'd'), makeEdge('e2', 'a', 'd')],
+		});
+		const nodes = convertToReactFlowNodes([pipeline], 'p1');
+		const nodeD = nodes.find((n) => n.id === 'p1:d')!;
+		expect((nodeD.data as any).fanInCount).toBeUndefined();
 	});
 });

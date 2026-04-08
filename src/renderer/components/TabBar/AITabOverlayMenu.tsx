@@ -176,17 +176,15 @@ export const AITabOverlayMenu = memo(function AITabOverlayMenu({
 					</button>
 				)}
 
-				{/* Rename button - only show for tabs with established session */}
-				{tab.agentSessionId && (
-					<button
-						onClick={onRenameClick}
-						className="w-full flex items-center gap-2 px-2 py-1.5 rounded text-xs hover:bg-white/10 transition-colors"
-						style={{ color: theme.colors.textMain }}
-					>
-						<Edit2 className="w-3.5 h-3.5" style={{ color: theme.colors.textDim }} />
-						Rename Tab
-					</button>
-				)}
+				{/* Rename button - always available */}
+				<button
+					onClick={onRenameClick}
+					className="w-full flex items-center gap-2 px-2 py-1.5 rounded text-xs hover:bg-white/10 transition-colors"
+					style={{ color: theme.colors.textMain }}
+				>
+					<Edit2 className="w-3.5 h-3.5" style={{ color: theme.colors.textDim }} />
+					Rename Tab
+				</button>
 
 				{/* Mark as Unread button - only show for tabs with established session */}
 				{tab.agentSessionId && (

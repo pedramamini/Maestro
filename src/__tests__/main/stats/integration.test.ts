@@ -852,7 +852,25 @@ describe('electron-rebuild verification for better-sqlite3', () => {
 
 			// Workflow should verify native module architecture before packaging
 			expect(workflowContent).toContain('Verify');
-			expect(workflowContent).toContain('electron-rebuild');
+			// Rebuild and verify logic lives in shared scripts referenced by the workflow
+			expect(workflowContent).toContain('rebuild-and-verify-native.sh');
+			expect(workflowContent).toContain('verify-native-arch.sh');
+
+			// The shared scripts should contain the actual electron-rebuild calls
+			const rebuildScript = fs.readFileSync(
+				path.join(
+					__dirname,
+					'..',
+					'..',
+					'..',
+					'..',
+					'.github',
+					'scripts',
+					'rebuild-and-verify-native.sh'
+				),
+				'utf8'
+			);
+			expect(rebuildScript).toContain('electron-rebuild');
 		});
 
 		it('should use --force flag for electron-rebuild', async () => {

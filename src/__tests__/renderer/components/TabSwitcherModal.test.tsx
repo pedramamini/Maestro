@@ -427,7 +427,7 @@ describe('TabSwitcherModal', () => {
 				expect(screen.getByText('ABC12345')).toBeInTheDocument();
 			});
 
-			it('returns "New Session" if no name or UUID', () => {
+			it('returns "New Session" if no name or agentSessionId', () => {
 				const tab = createTestTab({ name: '', agentSessionId: undefined });
 
 				renderWithLayerStack(
@@ -1180,9 +1180,18 @@ describe('TabSwitcherModal', () => {
 	describe('search functionality', () => {
 		it('filters tabs by name', () => {
 			const tabs = [
-				createTestTab({ name: 'Alpha Session' }),
-				createTestTab({ name: 'Beta Session' }),
-				createTestTab({ name: 'Gamma Session' }),
+				createTestTab({
+					name: 'Alpha Session',
+					agentSessionId: 'aaaa1111-0000-0000-0000-000000000001',
+				}),
+				createTestTab({
+					name: 'Beta Session',
+					agentSessionId: 'aaaa2222-0000-0000-0000-000000000002',
+				}),
+				createTestTab({
+					name: 'Gamma Session',
+					agentSessionId: 'aaaa3333-0000-0000-0000-000000000003',
+				}),
 			];
 
 			renderWithLayerStack(

@@ -368,6 +368,124 @@ describe('buildAgentArgs', () => {
 		buildAgentArgs(agent, { baseArgs });
 		expect(baseArgs).toEqual(['--print']);
 	});
+
+	// -- Real agent config: readOnly mode produces correct non-interactive commands --
+	describe('readOnly mode with real agent configs', () => {
+		it('Codex: readOnlyArgs include bypass flags for non-interactive execution', () => {
+			const codexAgent = makeAgent({
+				id: 'codex',
+				batchModePrefix: ['exec'],
+				batchModeArgs: ['--dangerously-bypass-approvals-and-sandbox', '--skip-git-repo-check'],
+				jsonOutputArgs: ['--json'],
+				readOnlyArgs: [
+					'--sandbox',
+					'read-only',
+					'--dangerously-bypass-approvals-and-sandbox',
+					'--skip-git-repo-check',
+				],
+				workingDirArgs: (dir: string) => ['-C', dir],
+			});
+
+			const result = buildAgentArgs(codexAgent, {
+				baseArgs: [],
+				prompt: 'generate a tab name',
+				cwd: '/project',
+				readOnlyMode: true,
+			});
+
+			// batchModeArgs skipped, but readOnlyArgs provides the needed flags
+			expect(result).toContain('exec');
+			expect(result).toContain('--sandbox');
+			expect(result).toContain('read-only');
+			expect(result).toContain('--dangerously-bypass-approvals-and-sandbox');
+			expect(result).toContain('--skip-git-repo-check');
+			expect(result).toContain('--json');
+			expect(result).toContain('-C');
+			expect(result).toContain('/project');
+		});
+
+		it('Codex: non-readOnly mode deduplicates flags from batchModeArgs and yoloModeArgs', () => {
+			const codexAgent = makeAgent({
+				id: 'codex',
+				batchModePrefix: ['exec'],
+				batchModeArgs: ['--dangerously-bypass-approvals-and-sandbox', '--skip-git-repo-check'],
+				jsonOutputArgs: ['--json'],
+				readOnlyArgs: [
+					'--sandbox',
+					'read-only',
+					'--dangerously-bypass-approvals-and-sandbox',
+					'--skip-git-repo-check',
+				],
+				yoloModeArgs: ['--dangerously-bypass-approvals-and-sandbox'],
+				workingDirArgs: (dir: string) => ['-C', dir],
+			});
+
+			const result = buildAgentArgs(codexAgent, {
+				baseArgs: [],
+				prompt: 'fix a bug',
+				cwd: '/project',
+				readOnlyMode: false,
+				yoloMode: true,
+			});
+
+			// --dangerously-bypass-approvals-and-sandbox should appear only once (deduped)
+			const bypassCount = result.filter(
+				(a) => a === '--dangerously-bypass-approvals-and-sandbox'
+			).length;
+			expect(bypassCount).toBe(1);
+			// readOnlyArgs should NOT be included
+			expect(result).not.toContain('--sandbox');
+			expect(result).not.toContain('read-only');
+		});
+
+		it('Gemini CLI: readOnlyArgs include -y for non-interactive execution', () => {
+			const geminiAgent = makeAgent({
+				id: 'gemini-cli',
+				batchModeArgs: ['-y'],
+				jsonOutputArgs: ['--output-format', 'stream-json'],
+				readOnlyArgs: ['-y'],
+				readOnlyCliEnforced: false,
+				promptArgs: (prompt: string) => ['-p', prompt],
+			});
+
+			const result = buildAgentArgs(geminiAgent, {
+				baseArgs: [],
+				prompt: 'generate a tab name',
+				readOnlyMode: true,
+			});
+
+			// batchModeArgs skipped, but readOnlyArgs provides -y
+			expect(result).toContain('-y');
+			expect(result).toContain('--output-format');
+			expect(result).toContain('stream-json');
+		});
+
+		it('Factory Droid: readOnly works without extra flags (exec is read-only by default)', () => {
+			const droidAgent = makeAgent({
+				id: 'factory-droid',
+				batchModePrefix: ['exec'],
+				batchModeArgs: ['--skip-permissions-unsafe'],
+				jsonOutputArgs: ['-o', 'stream-json'],
+				readOnlyArgs: [],
+				readOnlyCliEnforced: true,
+				workingDirArgs: (dir: string) => ['--cwd', dir],
+				noPromptSeparator: true,
+			});
+
+			const result = buildAgentArgs(droidAgent, {
+				baseArgs: [],
+				prompt: 'generate a tab name',
+				cwd: '/project',
+				readOnlyMode: true,
+			});
+
+			// --skip-permissions-unsafe should NOT be present (exec is read-only by default)
+			expect(result).not.toContain('--skip-permissions-unsafe');
+			expect(result).toContain('exec');
+			expect(result).toContain('-o');
+			expect(result).toContain('stream-json');
+		});
+	});
 });
 
 // ---------------------------------------------------------------------------

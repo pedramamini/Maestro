@@ -24,6 +24,7 @@ export interface UseSessionListPropsDeps {
 	webInterfaceUrl: string | null;
 	showSessionJumpNumbers: boolean;
 	visibleSessions: Session[];
+	navIndexMap: Map<string, number>;
 
 	// Ref
 	sidebarContainerRef: React.RefObject<HTMLDivElement>;
@@ -78,6 +79,7 @@ export function useSessionListProps(deps: UseSessionListPropsDeps) {
 			// Theme & computed values
 			theme: deps.theme,
 			sortedSessions: deps.sortedSessions,
+			navIndexMap: deps.navIndexMap,
 			isLiveMode: deps.isLiveMode,
 			webInterfaceUrl: deps.webInterfaceUrl,
 			showSessionJumpNumbers: deps.showSessionJumpNumbers,
@@ -127,6 +129,7 @@ export function useSessionListProps(deps: UseSessionListPropsDeps) {
 		[
 			deps.theme,
 			deps.sortedSessions,
+			deps.navIndexMap,
 			deps.isLiveMode,
 			deps.webInterfaceUrl,
 			deps.showSessionJumpNumbers,

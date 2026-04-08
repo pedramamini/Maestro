@@ -80,6 +80,7 @@ export const TerminalTabItem = memo(function TerminalTabItem({
 		handleMouseLeave,
 		overlayMouseEnter,
 		overlayMouseLeave,
+		isOverOverlayRef,
 	} = useTabHoverOverlay({ registerRef });
 
 	const handleMouseDown = useCallback(
@@ -234,6 +235,8 @@ export const TerminalTabItem = memo(function TerminalTabItem({
 			onClick={handleTabSelect}
 			onFocus={handleMouseEnter}
 			onBlur={() => {
+				// Don't close overlay if user is interacting with it (e.g. clicking a button)
+				if (isOverOverlayRef.current) return;
 				handleMouseLeave();
 				setOverlayOpen(false);
 			}}

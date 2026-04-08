@@ -249,7 +249,13 @@ export function useRemoteIntegration(deps: UseRemoteIntegrationDeps): UseRemoteI
 							if (!s.aiTabs.some((t) => t.id === tabId)) {
 								return s;
 							}
-							return { ...s, activeTabId: tabId };
+							return {
+								...s,
+								activeTabId: tabId,
+								activeFileTabId: null,
+								activeTerminalTabId: null,
+								inputMode: 'ai' as const,
+							};
 						})
 					);
 				}
@@ -274,7 +280,13 @@ export function useRemoteIntegration(deps: UseRemoteIntegrationDeps): UseRemoteI
 						if (!s.aiTabs.some((t) => t.id === tabId)) {
 							return s;
 						}
-						return { ...s, activeTabId: tabId };
+						return {
+							...s,
+							activeTabId: tabId,
+							activeFileTabId: null,
+							activeTerminalTabId: null,
+							inputMode: 'ai' as const,
+						};
 					})
 				);
 			}
@@ -828,7 +840,7 @@ export function useRemoteIntegration(deps: UseRemoteIntegrationDeps): UseRemoteI
 
 				// Create a hash of tab properties that should trigger a broadcast when changed
 				const tabsHash = session.aiTabs
-					.map((t) => `${t.id}:${t.name || ''}:${t.starred}:${t.state}`)
+					.map((t) => `${t.id}:${t.name || ''}:${t.starred}:${t.state}:${t.hasUnread ?? false}`)
 					.join('|');
 
 				const prev = prevTabsRef.current.get(session.id);
@@ -855,6 +867,7 @@ export function useRemoteIntegration(deps: UseRemoteIntegrationDeps): UseRemoteI
 						createdAt: tab.createdAt,
 						state: tab.state,
 						thinkingStartTime: tab.thinkingStartTime,
+						hasUnread: tab.hasUnread,
 					}));
 
 					window.maestro.web.broadcastTabsChange(session.id, tabsForBroadcast, current.activeTabId);

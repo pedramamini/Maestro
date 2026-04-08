@@ -48,11 +48,17 @@ interface NumberConfigOption extends BaseConfigOption {
 
 /**
  * Select configuration option (string value from predefined options)
+ *
+ * Options can be:
+ * - Static: `options` array provided directly (e.g., Factory Droid reasoning effort)
+ * - Dynamic: `dynamic: true` with optional `options` as fallback.
+ *   Dynamic options are fetched at runtime via `agents:getConfigOptions` IPC.
  */
 interface SelectConfigOption extends BaseConfigOption {
 	type: 'select';
 	default: string;
-	options: string[];
+	options?: string[]; // Static options (or fallback for dynamic). Optional when dynamic is true.
+	dynamic?: boolean; // If true, options are fetched at runtime via discoverConfigOptions()
 	argBuilder?: (value: string) => string[];
 }
 
@@ -139,17 +145,41 @@ export const AGENT_DEFINITIONS: AgentDefinition[] = [
 		resumeArgs: (sessionId: string) => ['--resume', sessionId], // Resume with session ID
 		readOnlyArgs: ['--permission-mode', 'plan'], // Read-only/plan mode
 		readOnlyCliEnforced: true, // CLI enforces read-only via --permission-mode plan
+		modelArgs: (modelId: string) => ['--model', modelId], // Model selection: claude --model sonnet
 		configOptions: [
 			{
+				key: 'model',
+				type: 'text',
+				label: 'Model',
+				description:
+					'Model override (e.g., "sonnet", "opus", "haiku", or full name like "claude-sonnet-4-6"). Leave empty to use the default.',
+				default: '',
+				argBuilder: (value: string) => {
+					if (value && value.trim()) {
+						return ['--model', value.trim()];
+					}
+					return [];
+				},
+			},
+			{
+				key: 'effort',
+				type: 'select',
+				label: 'Effort',
+				description: 'How much effort the model should put into its response.',
+				dynamic: true,
+				default: '',
+				argBuilder: (value: string) => (value && value.trim() ? ['--effort', value.trim()] : []),
+			},
+			{
 				key: 'rateLimitAutoRetry',
-				type: 'checkbox' as const,
+				type: 'checkbox',
 				label: 'Auto-retry on Rate Limit',
 				description: 'Automatically pause and retry when encountering a Claude Code rate limit.',
 				default: true,
 			},
 			{
 				key: 'rateLimitFallbackHours',
-				type: 'number' as const,
+				type: 'number',
 				label: 'Rate Limit Fallback (Hours)',
 				description:
 					'Wait time to use if the exact rate limit reset time cannot be parsed (leave 0 to disable fallback).',
@@ -168,12 +198,20 @@ export const AGENT_DEFINITIONS: AgentDefinition[] = [
 		// Batch mode: codex exec --json --dangerously-bypass-approvals-and-sandbox --skip-git-repo-check [--sandbox read-only] [-C dir] [resume <id>] -- "prompt"
 		// Sandbox modes:
 		//   - Default (YOLO): --dangerously-bypass-approvals-and-sandbox (full system access, required by Maestro)
-		//   - Read-only: --sandbox read-only (can only read files, overrides YOLO)
+		//   - Read-only: --sandbox read-only (can only read files, overrides YOLO permissions)
+		// NOTE: --dangerously-bypass-approvals-and-sandbox is needed for ALL non-interactive exec
+		// invocations (including read-only) to bypass the interactive approval UI. The --sandbox
+		// flag independently controls what permissions the agent has.
 		batchModePrefix: ['exec'], // Codex uses 'exec' subcommand for batch mode
 		batchModeArgs: ['--dangerously-bypass-approvals-and-sandbox', '--skip-git-repo-check'], // Args only valid on 'exec' subcommand
 		jsonOutputArgs: ['--json'], // JSON output format (must come before resume subcommand)
 		resumeArgs: (sessionId: string) => ['resume', sessionId], // Resume with session/thread ID
-		readOnlyArgs: ['--sandbox', 'read-only'], // Read-only/plan mode
+		readOnlyArgs: [
+			'--sandbox',
+			'read-only',
+			'--dangerously-bypass-approvals-and-sandbox',
+			'--skip-git-repo-check',
+		], // Read-only/plan mode — includes bypass flags for non-interactive execution (sandbox read-only overrides YOLO permissions)
 		readOnlyCliEnforced: true, // CLI enforces read-only via --sandbox read-only
 		yoloModeArgs: ['--dangerously-bypass-approvals-and-sandbox'], // Full access mode
 		workingDirArgs: (dir: string) => ['-C', dir], // Set working directory
@@ -196,12 +234,14 @@ export const AGENT_DEFINITIONS: AgentDefinition[] = [
 				},
 			},
 			{
-				key: 'contextWindow',
-				type: 'number',
-				label: 'Context Window Size',
-				description:
-					'Maximum context window size in tokens. Required for context usage display. Common values: 400000 (GPT-5.2/5.3), 128000 (GPT-4o).',
-				default: 400000, // Default for GPT-5.2+ models
+				key: 'reasoningEffort',
+				type: 'select',
+				label: 'Reasoning Effort',
+				description: 'How much the model should reason before responding.',
+				dynamic: true,
+				default: '',
+				argBuilder: (value: string) =>
+					value && value.trim() ? ['-c', `reasoning.effort="${value.trim()}"`] : [],
 			},
 		],
 	},
@@ -216,9 +256,10 @@ export const AGENT_DEFINITIONS: AgentDefinition[] = [
 		jsonOutputArgs: ['--output-format', 'stream-json'],
 		resumeArgs: (sessionId: string) => ['--resume', sessionId],
 		// Note: --approval-mode plan requires experimental.plan to be enabled in Gemini CLI config.
-		// Until that feature is generally available, readOnlyArgs is empty and read-only
-		// behavior is enforced via system prompt instructions instead.
-		readOnlyArgs: [],
+		// Until that feature is generally available, read-only behavior is enforced via system
+		// prompt instructions instead. The -y flag is still needed for non-interactive execution
+		// (tab naming, context grooming) to prevent approval prompts from hanging batch mode.
+		readOnlyArgs: ['-y'],
 		readOnlyCliEnforced: false, // No CLI-level read-only enforcement; prompt-only
 		yoloModeArgs: ['-y'],
 		workingDirArgs: (dir: string) => ['--include-directories', dir],

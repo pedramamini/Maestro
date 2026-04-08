@@ -1,5 +1,5 @@
 import React, { useState, useRef, useCallback, useEffect, memo, useMemo } from 'react';
-import { Search, Mail } from 'lucide-react';
+import { Bell } from 'lucide-react';
 import type { AITab } from '../../types';
 import { hasDraft } from '../../utils/tabHelpers';
 import { formatShortcutKeys } from '../../utils/shortcutFormatter';
@@ -8,6 +8,7 @@ import { AITab as AITabComponent } from './AITab';
 import { FileTab } from './FileTab';
 import { TerminalTabItem } from './TerminalTabItem';
 import { NewTabPopover } from './NewTabPopover';
+import { SearchPopover } from './SearchPopover';
 import { isUnifiedTabActive, getShortcutHint } from './tabBarUtils';
 import type { TabBarProps } from './types';
 
@@ -42,6 +43,7 @@ function TabBarInner({
 	showUnreadOnly: showUnreadOnlyProp,
 	onToggleUnreadFilter,
 	onOpenTabSearch,
+	onOpenOutputSearch,
 	onCloseAllTabs,
 	onCloseOtherTabs,
 	onCloseTabsLeft,
@@ -52,7 +54,7 @@ function TabBarInner({
 	onFileTabClose,
 	onUnifiedTabReorder,
 	activeTerminalTabId,
-	inputMode,
+	inputMode = 'ai',
 	onTerminalTabSelect,
 	onTerminalTabClose,
 	onTerminalTabRename,
@@ -79,6 +81,8 @@ function TabBarInner({
 
 	const shortcuts = useSettingsStore((s) => s.shortcuts);
 	const tabShortcuts = useSettingsStore((s) => s.tabShortcuts);
+	const showStarredInUnreadFilter = useSettingsStore((s) => s.showStarredInUnreadFilter);
+	const showFilePreviewsInUnreadFilter = useSettingsStore((s) => s.showFilePreviewsInUnreadFilter);
 
 	const tabBarRef = useRef<HTMLDivElement>(null);
 	const stickyLeftRef = useRef<HTMLDivElement>(null);
@@ -123,7 +127,14 @@ function TabBarInner({
 
 	// Filter tabs for display
 	const displayedTabs = showUnreadOnly
-		? tabs.filter((t) => t.hasUnread || t.state === 'busy' || t.id === activeTabId || hasDraft(t))
+		? tabs.filter(
+				(t) =>
+					t.hasUnread ||
+					t.state === 'busy' ||
+					(inputMode === 'ai' && t.id === activeTabId) ||
+					hasDraft(t) ||
+					(showStarredInUnreadFilter && t.starred)
+			)
 		: tabs;
 
 	const displayedUnifiedTabs = useMemo(() => {
@@ -137,14 +148,28 @@ function TabBarInner({
 				return (
 					ut.data.hasUnread ||
 					ut.data.state === 'busy' ||
-					ut.id === activeTabId ||
-					hasDraft(ut.data)
+					(inputMode === 'ai' && ut.id === activeTabId) ||
+					hasDraft(ut.data) ||
+					(showStarredInUnreadFilter && ut.data.starred)
 				);
 			}
-			// File and terminal tabs are always visible
+			// File preview tabs: hidden by default in unread filter, shown if setting enabled
+			if (ut.type === 'file') {
+				return showFilePreviewsInUnreadFilter;
+			}
+			// Terminal tabs are always visible
 			return true;
 		});
-	}, [unifiedTabs, showUnreadOnly, activeTabId, activeFileTabId, activeTerminalTabId, inputMode]);
+	}, [
+		unifiedTabs,
+		showUnreadOnly,
+		activeTabId,
+		activeFileTabId,
+		activeTerminalTabId,
+		inputMode,
+		showStarredInUnreadFilter,
+		showFilePreviewsInUnreadFilter,
+	]);
 
 	// Drag handlers
 	const handleDragStart = useCallback((tabId: string, e: React.DragEvent) => {
@@ -336,21 +361,20 @@ function TabBarInner({
 				style={{ backgroundColor: theme.colors.bgSidebar, zIndex: 5 }}
 			>
 				{onOpenTabSearch && (
-					<button
-						onClick={onOpenTabSearch}
-						className="flex items-center justify-center w-6 h-6 rounded hover:bg-white/10 transition-colors"
-						style={{ color: theme.colors.textDim }}
-						title={`Search tabs (${formatShortcutKeys(tabShortcuts.tabSwitcher?.keys ?? ['Alt', 'Meta', 't'])})`}
-					>
-						<Search className="w-4 h-4" />
-					</button>
+					<SearchPopover
+						theme={theme}
+						onSearchTabs={onOpenTabSearch}
+						onSearchMessages={onOpenOutputSearch ?? onOpenTabSearch}
+						tabSwitcherKeys={tabShortcuts.tabSwitcher?.keys ?? ['Alt', 'Meta', 't']}
+						searchOutputKeys={shortcuts.searchOutput?.keys ?? ['Meta', 'f']}
+					/>
 				)}
 				<button
 					onClick={toggleUnreadFilter}
 					className="relative flex items-center justify-center w-6 h-6 rounded transition-colors"
 					style={{
-						color: showUnreadOnly ? theme.colors.accent : theme.colors.textDim,
-						opacity: showUnreadOnly ? 1 : 0.5,
+						color: showUnreadOnly ? theme.colors.accentForeground : theme.colors.textDim,
+						backgroundColor: showUnreadOnly ? theme.colors.accent : undefined,
 					}}
 					title={
 						showUnreadOnly
@@ -358,11 +382,13 @@ function TabBarInner({
 							: `Filter unread tabs (${formatShortcutKeys(tabShortcuts.filterUnreadTabs?.keys ?? ['Meta', 'u'])})`
 					}
 				>
-					<Mail className="w-4 h-4" />
-					<div
-						className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full"
-						style={{ backgroundColor: theme.colors.accent }}
-					/>
+					<Bell className="w-4 h-4" />
+					{tabs.some((t) => t.hasUnread) && (
+						<div
+							className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full"
+							style={{ backgroundColor: theme.colors.error }}
+						/>
+					)}
 				</button>
 			</div>
 

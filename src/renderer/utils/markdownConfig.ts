@@ -353,13 +353,19 @@ export function createMarkdownComponents(options: MarkdownComponentsOptions): Pa
 		// Override paragraph to apply search highlighting
 		p: ({ children }: any) => React.createElement('p', null, withHighlight(children)),
 
-		// Override headings to apply search highlighting
-		h1: ({ children }: any) => React.createElement('h1', null, withHighlight(children)),
-		h2: ({ children }: any) => React.createElement('h2', null, withHighlight(children)),
-		h3: ({ children }: any) => React.createElement('h3', null, withHighlight(children)),
-		h4: ({ children }: any) => React.createElement('h4', null, withHighlight(children)),
-		h5: ({ children }: any) => React.createElement('h5', null, withHighlight(children)),
-		h6: ({ children }: any) => React.createElement('h6', null, withHighlight(children)),
+		// Override headings to apply search highlighting (forward id/props for rehype-slug anchors)
+		h1: ({ children, node: _node, ...props }: any) =>
+			React.createElement('h1', props, withHighlight(children)),
+		h2: ({ children, node: _node, ...props }: any) =>
+			React.createElement('h2', props, withHighlight(children)),
+		h3: ({ children, node: _node, ...props }: any) =>
+			React.createElement('h3', props, withHighlight(children)),
+		h4: ({ children, node: _node, ...props }: any) =>
+			React.createElement('h4', props, withHighlight(children)),
+		h5: ({ children, node: _node, ...props }: any) =>
+			React.createElement('h5', props, withHighlight(children)),
+		h6: ({ children, node: _node, ...props }: any) =>
+			React.createElement('h6', props, withHighlight(children)),
 
 		// Override list items to apply search highlighting
 		li: ({ children }: any) => React.createElement('li', null, withHighlight(children)),
@@ -394,9 +400,25 @@ export function createMarkdownComponents(options: MarkdownComponentsOptions): Pa
 				}
 
 				// Standard syntax-highlighted code block
+				// Use light/dark base style depending on theme mode, then
+				// override text color & background so plain-text / unknown-language
+				// code blocks match inline code across all themes.
+				const baseStyle = getSyntaxStyle(theme.mode);
+				const themedStyle = {
+					...baseStyle,
+					'pre[class*="language-"]': {
+						...(baseStyle as any)['pre[class*="language-"]'],
+						color: theme.colors.textMain,
+						background: theme.colors.bgActivity,
+					},
+					'code[class*="language-"]': {
+						...(baseStyle as any)['code[class*="language-"]'],
+						color: theme.colors.textMain,
+					},
+				};
 				return React.createElement(SyntaxHighlighter, {
 					language,
-					style: getSyntaxStyle(theme.mode),
+					style: themedStyle,
 					customStyle: {
 						margin: codeBlockStyle?.margin ?? '0.5em 0',
 						padding: codeBlockStyle?.padding ?? '1em',
@@ -462,8 +484,16 @@ export function createMarkdownComponents(options: MarkdownComponentsOptions): Pa
 									targetElement.scrollIntoView({ behavior: 'smooth', block: 'start' });
 								}
 							}
-						} else if (href && onExternalLinkClick) {
+						} else if (href && onExternalLinkClick && /^https?:\/\/|^mailto:/.test(href)) {
 							onExternalLinkClick(href);
+						} else if (
+							href &&
+							onFileClick &&
+							!href.startsWith('mailto:') &&
+							!/^https?:\/\//.test(href)
+						) {
+							// Treat relative paths (e.g. LICENSE, ./README.md) as file links
+							onFileClick(href, { openInNewTab: e.metaKey || e.ctrlKey });
 						}
 					},
 					style: { color: theme.colors.accent, textDecoration: 'underline', cursor: 'pointer' },

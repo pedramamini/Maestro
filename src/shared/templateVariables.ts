@@ -51,6 +51,9 @@ import { buildSessionDeepLink, buildGroupDeepLink } from './deep-link-urls';
  * Context Variables:
  *   {{CONTEXT_USAGE}}     - Current context window usage percentage
  *
+ * Maestro Variables:
+ *   {{MAESTRO_CLI_PATH}}  - Platform-appropriate path to maestro-cli
+ *
  * Cue Variables (Cue automation only):
  *   {{CUE_EVENT_TYPE}}      - Cue event type (app.startup, time.heartbeat, time.scheduled, file.changed, agent.completed, github.*, task.pending)
  *   {{CUE_EVENT_TIMESTAMP}} - Cue event timestamp
@@ -88,6 +91,43 @@ import { buildSessionDeepLink, buildGroupDeepLink } from './deep-link-urls';
  *   {{CUE_GH_BASE_BRANCH}}  - Base branch (github.pull_request events)
  *   {{CUE_GH_ASSIGNEES}}    - Comma-separated assignees (github.issue events)
  */
+
+/**
+ * Detect the current platform in both Node.js (main process / CLI) and
+ * renderer (browser) contexts.  The renderer has no `process` global —
+ * platform is exposed via the preload bridge at `window.maestro.platform`.
+ */
+function getCurrentPlatform(): string {
+	if (typeof process !== 'undefined' && process.platform) {
+		return process.platform;
+	}
+
+	if (typeof globalThis !== 'undefined' && (globalThis as any).maestro?.platform) {
+		return (globalThis as any).maestro.platform;
+	}
+	return 'linux'; // safe fallback
+}
+
+/**
+ * Returns the platform-appropriate command to run maestro-cli.
+ * The CLI is bundled as a JS file inside the Maestro application package,
+ * so the returned value includes the `node` invocation with the full path.
+ */
+function getMaestroCLIPath(): string {
+	const platform = getCurrentPlatform();
+	switch (platform) {
+		case 'darwin':
+			return 'node "/Applications/Maestro.app/Contents/Resources/maestro-cli.js"';
+		case 'win32': {
+			const programFiles =
+				(typeof process !== 'undefined' && process.env?.ProgramFiles) || 'C:\\Program Files';
+			return `node "${programFiles}\\Maestro\\resources\\maestro-cli.js"`;
+		}
+		default:
+			// Linux (deb/rpm installs to /opt)
+			return 'node "/opt/Maestro/resources/maestro-cli.js"';
+	}
+}
 
 /**
  * Minimal session interface that works for both CLI (SessionInfo) and renderer (Session)
@@ -252,12 +292,14 @@ export const TEMPLATE_VARIABLES = [
 	{ variable: '{{GIT_BRANCH}}', description: 'Git branch name' },
 	{ variable: '{{GROUP_DEEP_LINK}}', description: 'Deep link to agent group (maestro://)' },
 	{ variable: '{{IS_GIT_REPO}}', description: 'Is git repo (true/false)' },
+	{ variable: '{{MAESTRO_CLI_PATH}}', description: 'Path to maestro-cli' },
 	{
 		variable: '{{LOOP_NUMBER}}',
 		description: 'Loop iteration (00001, 00002...)',
 		autoRunOnly: true,
 	},
 	{ variable: '{{MONTH}}', description: 'Month (01-12)' },
+	{ variable: '{{MAESTRO_CLI_PATH}}', description: 'Path to maestro-cli' },
 	{ variable: '{{TAB_DEEP_LINK}}', description: 'Deep link to agent + active tab (maestro://)' },
 	{ variable: '{{TIME}}', description: 'Time (HH:MM:SS)' },
 	{ variable: '{{TIMESTAMP}}', description: 'Unix timestamp (ms)' },
@@ -308,7 +350,10 @@ export function substituteTemplateVariables(template: string, context: TemplateC
 
 		// Path variables
 		CWD: session.cwd,
-		AUTORUN_FOLDER: autoRunFolder || session.autoRunFolderPath || '',
+		AUTORUN_FOLDER:
+			autoRunFolder ||
+			session.autoRunFolderPath ||
+			`${session.fullPath || session.projectRoot || session.cwd}/.maestro/playbooks`,
 
 		// Aliases (not documented in TEMPLATE_VARIABLES but still supported for internal use and backwards compatibility)
 		SESSION_ID: session.id,
@@ -350,6 +395,9 @@ export function substituteTemplateVariables(template: string, context: TemplateC
 
 		// Context variables
 		CONTEXT_USAGE: String(session.contextUsage || 0),
+
+		// Maestro variables
+		MAESTRO_CLI_PATH: getMaestroCLIPath(),
 
 		// Cue variables
 		CUE_EVENT_TYPE: context.cue?.eventType || '',

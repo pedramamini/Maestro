@@ -50,6 +50,7 @@ export interface AITabData {
 	createdAt: number;
 	state: 'idle' | 'busy';
 	thinkingStartTime?: number | null;
+	hasUnread?: boolean;
 }
 
 /**
@@ -346,7 +347,6 @@ export interface WebSettings {
 	theme: string;
 	fontSize: number;
 	enterToSendAI: boolean;
-	enterToSendTerminal: boolean;
 	defaultSaveToHistory: boolean;
 	defaultShowThinking: string;
 	autoScroll: boolean;

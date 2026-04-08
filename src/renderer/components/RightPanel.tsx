@@ -22,7 +22,7 @@ import type { FileTreeChanges } from '../utils/fileExplorer';
 import { FileExplorerPanel } from './FileExplorerPanel';
 import { HistoryPanel, HistoryPanelHandle } from './HistoryPanel';
 import { AutoRun, AutoRunHandle } from './AutoRun';
-import { AutoRunExpandedModal } from './AutoRunExpandedModal';
+import { AutoRunExpandedModal } from './AutoRun/AutoRunExpandedModal';
 import { formatShortcutKeys } from '../utils/shortcutFormatter';
 import { ConfirmModal } from './ConfirmModal';
 import { useResizablePanel } from '../hooks';
@@ -147,6 +147,16 @@ export const RightPanel = memo(
 		const autoRunDocumentTree = useBatchStore((s) => s.documentTree);
 		const autoRunIsLoadingDocuments = useBatchStore((s) => s.isLoadingDocuments);
 		const autoRunDocumentTaskCounts = useBatchStore((s) => s.documentTaskCounts);
+
+		// Direct store subscription for error state — the prop chain passes error state
+		// through updateBatchStateAndBroadcast/UPDATE_PROGRESS which drops error fields.
+		const sessionId = session?.id;
+		const errorPaused = useBatchStore(
+			useCallback((s) => s.batchRunStates[sessionId ?? '']?.errorPaused ?? false, [sessionId])
+		);
+		const batchError = useBatchStore(
+			useCallback((s) => s.batchRunStates[sessionId ?? '']?.error, [sessionId])
+		);
 
 		// === Props (domain-hook handlers + theme + batch state + refs) ===
 		const {
@@ -398,13 +408,16 @@ export const RightPanel = memo(
 			<div
 				ref={panelRef}
 				tabIndex={0}
-				className={`border-l flex flex-col ${rightPanelTransitionClass} outline-none relative ${rightPanelOpen ? '' : 'w-0 overflow-hidden opacity-0'} ${activeFocus === 'right' ? 'ring-1 ring-inset' : ''}`}
+				className={`border-l flex flex-col ${rightPanelTransitionClass} outline-none relative ${rightPanelOpen ? '' : 'w-0 overflow-hidden opacity-0'}`}
 				style={
 					{
 						width: rightPanelOpen ? `${rightPanelWidth}px` : '0',
 						backgroundColor: theme.colors.bgSidebar,
 						borderColor: theme.colors.border,
-						'--tw-ring-color': theme.colors.accent,
+						boxShadow:
+							activeFocus === 'right'
+								? `inset 1px 0 0 ${theme.colors.accent}, inset -1px 0 0 ${theme.colors.accent}, inset 0 -1px 0 ${theme.colors.accent}`
+								: undefined,
 					} as React.CSSProperties
 				}
 				onClick={() => setActiveFocus('right')}
@@ -552,18 +565,14 @@ export const RightPanel = memo(
 					<div
 						className="mx-4 mb-4 px-4 py-3 rounded border flex-shrink-0"
 						style={{
-							backgroundColor: currentSessionBatchState.errorPaused
-								? `${theme.colors.error}15`
-								: theme.colors.bgActivity,
-							borderColor: currentSessionBatchState.errorPaused
-								? theme.colors.error
-								: theme.colors.warning,
+							backgroundColor: errorPaused ? `${theme.colors.error}15` : theme.colors.bgActivity,
+							borderColor: errorPaused ? theme.colors.error : theme.colors.warning,
 						}}
 					>
 						{/* Header with status and elapsed time */}
 						<div className="flex items-center justify-between mb-2">
 							<div className="flex items-center gap-2">
-								{currentSessionBatchState.errorPaused ? (
+								{errorPaused ? (
 									<AlertTriangle className="w-4 h-4" style={{ color: theme.colors.error }} />
 								) : (
 									<Loader2
@@ -571,7 +580,7 @@ export const RightPanel = memo(
 										style={{ color: theme.colors.warning }}
 									/>
 								)}
-								{currentSessionBatchState.errorPaused ? (
+								{errorPaused ? (
 									<button
 										onClick={() => setActiveRightTab('autorun')}
 										className="text-xs font-bold uppercase cursor-pointer hover:underline"
@@ -705,7 +714,7 @@ export const RightPanel = memo(
 												: 0
 									}%`,
 									backgroundColor:
-										currentSessionBatchState.isStopping || currentSessionBatchState.errorPaused
+										currentSessionBatchState.isStopping || errorPaused
 											? theme.colors.error
 											: theme.colors.warning,
 								}}
@@ -717,13 +726,11 @@ export const RightPanel = memo(
 							<span
 								className="text-[10px] min-w-0 flex-1 truncate"
 								style={{
-									color: currentSessionBatchState.errorPaused
-										? theme.colors.error
-										: theme.colors.textDim,
+									color: errorPaused ? theme.colors.error : theme.colors.textDim,
 								}}
 							>
-								{currentSessionBatchState.errorPaused
-									? currentSessionBatchState.error?.message || 'Paused due to error'
+								{errorPaused
+									? batchError?.message || 'Paused due to error'
 									: currentSessionBatchState.isStopping
 										? 'Waiting for current task to complete before stopping...'
 										: currentSessionBatchState.totalTasksAcrossAllDocs > 0
@@ -731,9 +738,9 @@ export const RightPanel = memo(
 											: `${currentSessionBatchState.completedTasks} of ${currentSessionBatchState.totalTasks} tasks completed`}
 							</span>
 							{/* Resume/Abort buttons when error-paused */}
-							{currentSessionBatchState.errorPaused && (
+							{errorPaused && (
 								<div className="flex items-center gap-1.5 shrink-0">
-									{currentSessionBatchState.error?.recoverable && onResumeAfterError && (
+									{batchError?.recoverable && onResumeAfterError && (
 										<button
 											onClick={onResumeAfterError}
 											className="flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-medium transition-colors hover:opacity-80"

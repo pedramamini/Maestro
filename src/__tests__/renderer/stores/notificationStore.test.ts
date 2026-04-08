@@ -309,6 +309,23 @@ describe('notificationStore', () => {
 				);
 			});
 
+			it('includes sessionId and tabId in logged toast data for navigation', () => {
+				notifyToast({
+					type: 'success',
+					title: 'Done',
+					message: 'Task complete',
+					sessionId: 'sess-123',
+					tabId: 'tab-456',
+				});
+				expect(mockLoggerToast).toHaveBeenCalledWith(
+					'Done',
+					expect.objectContaining({
+						sessionId: 'sess-123',
+						tabId: 'tab-456',
+					})
+				);
+			});
+
 			it('includes audioNotification disabled reason', () => {
 				notifyToast({ type: 'info', title: 'Test', message: 'msg' });
 				expect(mockLoggerToast).toHaveBeenCalledWith(

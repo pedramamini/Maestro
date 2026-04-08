@@ -33,6 +33,7 @@ export interface UsePipelineSelectionReturn {
 	selectedNodePipelineId: string | null;
 	selectedNodeHasOutgoingEdge: boolean;
 	hasIncomingAgentEdges: boolean;
+	incomingAgentEdgeCount: number;
 	incomingTriggerEdges: IncomingTriggerEdgeInfo[];
 	selectedEdge: PipelineEdgeType | null;
 	selectedEdgePipelineId: string | null;
@@ -76,6 +77,7 @@ export function usePipelineSelection({
 		selectedNodePipelineId,
 		selectedNodeHasOutgoingEdge,
 		hasIncomingAgentEdges,
+		incomingAgentEdgeCount,
 		incomingTriggerEdges,
 	} = useMemo(() => {
 		const empty = {
@@ -83,6 +85,7 @@ export function usePipelineSelection({
 			selectedNodePipelineId: null as string | null,
 			selectedNodeHasOutgoingEdge: false,
 			hasIncomingAgentEdges: false,
+			incomingAgentEdgeCount: 0,
 			incomingTriggerEdges: [] as IncomingTriggerEdgeInfo[],
 		};
 		if (!selectedNodeId) return empty;
@@ -97,7 +100,7 @@ export function usePipelineSelection({
 
 		// Compute incoming trigger edges and check for incoming agent edges
 		const triggerEdges: IncomingTriggerEdgeInfo[] = [];
-		let hasAgentIncoming = false;
+		let agentIncomingCount = 0;
 		if (node?.type === 'agent' && pipeline) {
 			const incomingEdges = pipeline.edges.filter((e) => e.target === nodeId);
 			for (const edge of incomingEdges) {
@@ -111,7 +114,7 @@ export function usePipelineSelection({
 						prompt: edge.prompt ?? (node.data as AgentNodeData).inputPrompt ?? '',
 					});
 				} else if (sourceNode?.type === 'agent') {
-					hasAgentIncoming = true;
+					agentIncomingCount++;
 				}
 			}
 		}
@@ -120,7 +123,8 @@ export function usePipelineSelection({
 			selectedNode: node ?? null,
 			selectedNodePipelineId: node ? pipelineId : null,
 			selectedNodeHasOutgoingEdge: hasOutgoing,
-			hasIncomingAgentEdges: hasAgentIncoming,
+			hasIncomingAgentEdges: agentIncomingCount > 0,
+			incomingAgentEdgeCount: agentIncomingCount,
 			incomingTriggerEdges: triggerEdges,
 		};
 	}, [selectedNodeId, pipelineState.pipelines]);
@@ -187,6 +191,7 @@ export function usePipelineSelection({
 		selectedNodePipelineId,
 		selectedNodeHasOutgoingEdge,
 		hasIncomingAgentEdges,
+		incomingAgentEdgeCount,
 		incomingTriggerEdges,
 		selectedEdge,
 		selectedEdgePipelineId,

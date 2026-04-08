@@ -93,6 +93,8 @@ export interface ActiveProcess {
 	cueSubscriptionName?: string;
 	/** Event type that triggered this Cue run */
 	cueEventType?: string;
+	/** Child processes running inside this process (e.g., commands in a terminal shell) */
+	childProcesses?: Array<{ pid: number; command: string }>;
 }
 
 /**
@@ -165,6 +167,8 @@ export function createProcessApi() {
 			shell?: string;
 			shellArgs?: string;
 			shellEnvVars?: Record<string, string>;
+			toolType?: string;
+			sessionCustomEnvVars?: Record<string, string>;
 			cols?: number;
 			rows?: number;
 			sessionSshRemoteConfig?: {

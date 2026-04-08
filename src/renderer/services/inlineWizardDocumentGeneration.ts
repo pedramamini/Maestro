@@ -13,8 +13,10 @@ import type { ToolType } from '../types';
 import type { InlineWizardMessage, InlineGeneratedDocument } from '../hooks/batch/useInlineWizard';
 import type { ExistingDocument } from '../utils/existingDocsDetector';
 import { logger } from '../utils/logger';
+import { getStdinFlags } from '../utils/spawnHelpers';
 import { wizardDocumentGenerationPrompt, wizardInlineIterateGenerationPrompt } from '../../prompts';
 import { substituteTemplateVariables, type TemplateContext } from '../utils/templateVariables';
+import { deriveSshRemoteId } from '../components/Wizard/services/phaseGenerator';
 
 import { PLAYBOOKS_DIR } from '../../shared/maestro-paths';
 
@@ -723,9 +725,7 @@ export async function generateInlineDocuments(
 
 	// Create a date-prefixed subfolder name: "YYYY-MM-DD-Feature-Name" (with -2, -3, etc. if needed)
 	const baseFolderName = generateWizardFolderBaseName(projectName);
-	const sshRemoteId = config.sessionSshRemoteConfig?.enabled
-		? (config.sessionSshRemoteConfig.remoteId ?? undefined)
-		: undefined;
+	const sshRemoteId = deriveSshRemoteId(config.sessionSshRemoteConfig);
 
 	// Only attempt to check existing folders if we're local OR if listDocs supports remote
 	// Since generateUniqueSubfolderName uses listDocs, and listDocs supports SSH, we can pass it
@@ -995,6 +995,13 @@ export async function generateInlineDocuments(
 				// For remote sessions, we use the agent type name since the agent is installed on the remote host
 				const commandToUse = agent?.path || agent?.command || agentType;
 
+				const { sendPromptViaStdin: sendViaStdin, sendPromptViaStdinRaw: sendViaStdinRaw } =
+					getStdinFlags({
+						isSshSession: !!config.sessionSshRemoteConfig?.enabled,
+						supportsStreamJsonInput: agent?.capabilities?.supportsStreamJsonInput ?? false,
+						hasImages: false, // Document generation never sends images
+					});
+
 				window.maestro.process
 					.spawn({
 						sessionId,
@@ -1003,6 +1010,8 @@ export async function generateInlineDocuments(
 						command: commandToUse,
 						args: argsForSpawn,
 						prompt,
+						sendPromptViaStdin: sendViaStdin,
+						sendPromptViaStdinRaw: sendViaStdinRaw,
 						// Pass SSH config for remote execution
 						sessionSshRemoteConfig: config.sessionSshRemoteConfig,
 						// Pass session-level overrides

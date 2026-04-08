@@ -16,6 +16,7 @@ import { useInputContext } from '../../contexts/InputContext';
 import { useSessionStore, selectActiveSession } from '../../stores/sessionStore';
 import { useUIStore } from '../../stores/uiStore';
 import { useSettingsStore } from '../../stores/settingsStore';
+import { filterSlashCommands } from '../../utils/search';
 
 // ============================================================================
 // Dependencies interface
@@ -40,7 +41,7 @@ export interface InputKeyDownDeps {
 	/** Sync file tree to highlight the tab completion suggestion */
 	syncFileTreeToTabCompletion: (suggestion: TabCompletionSuggestion | undefined) => void;
 	/** Process and send the current input */
-	processInput: () => void;
+	processInput: (overrideInputValue?: string, options?: { forceParallel?: boolean }) => void;
 	/** Get tab completion suggestions for a given input */
 	getTabCompletionSuggestions: (input: string) => TabCompletionSuggestion[];
 	/** Ref to the input textarea */
@@ -205,11 +206,8 @@ export function useInputKeyDown(deps: InputKeyDownDeps): InputKeyDownReturn {
 			// Handle slash command autocomplete
 			if (slashCommandOpen) {
 				const isTerminalMode = activeSession?.inputMode === 'terminal';
-				const filteredCommands = allSlashCommands.filter((cmd) => {
-					if ('terminalOnly' in cmd && cmd.terminalOnly && !isTerminalMode) return false;
-					if ('aiOnly' in cmd && cmd.aiOnly && isTerminalMode) return false;
-					return cmd.command.toLowerCase().startsWith(inputValue.toLowerCase());
-				});
+				const query = inputValue.toLowerCase().replace(/^\//, '');
+				const filteredCommands = filterSlashCommands(allSlashCommands, query, !!isTerminalMode);
 
 				if (e.key === 'ArrowDown') {
 					e.preventDefault();
@@ -219,11 +217,14 @@ export function useInputKeyDown(deps: InputKeyDownDeps): InputKeyDownReturn {
 					setSelectedSlashCommandIndex((prev) => Math.max(prev - 1, 0));
 				} else if (e.key === 'Tab' || e.key === 'Enter') {
 					e.preventDefault();
-					if (filteredCommands[selectedSlashCommandIndex]) {
-						setInputValue(filteredCommands[selectedSlashCommandIndex].command);
-						setSlashCommandOpen(false);
-						inputRef.current?.focus();
-					}
+					if (filteredCommands.length === 0) return;
+					const clampedIndex = Math.max(
+						0,
+						Math.min(selectedSlashCommandIndex, filteredCommands.length - 1)
+					);
+					setInputValue(filteredCommands[clampedIndex].command);
+					setSlashCommandOpen(false);
+					inputRef.current?.focus();
 				} else if (e.key === 'Escape') {
 					e.preventDefault();
 					setSlashCommandOpen(false);
@@ -234,16 +235,57 @@ export function useInputKeyDown(deps: InputKeyDownDeps): InputKeyDownReturn {
 			// Read enter-to-send settings at call time (not closure)
 			const settings = useSettingsStore.getState();
 			const enterToSendAI = settings.enterToSendAI;
-			const enterToSendTerminal = settings.enterToSendTerminal;
 
 			if (e.key === 'Enter') {
-				const currentEnterToSend =
-					activeSession?.inputMode === 'terminal' ? enterToSendTerminal : enterToSendAI;
+				// Check for forced parallel send shortcut (only in AI mode, only when feature enabled)
+				// Note: This check is inside the `e.key === 'Enter'` guard, so the shortcut's
+				// main key must be Enter. Non-Enter shortcuts are not supported by design.
+				if (settings.forcedParallelExecution && activeSession?.inputMode === 'ai') {
+					const shortcuts = settings.shortcuts;
+					const fpShortcut = shortcuts.forcedParallelSend;
+					if (fpShortcut) {
+						const fpKeys = fpShortcut.keys.map((k: string) => k.toLowerCase());
+						const fpNeedsMeta =
+							fpKeys.includes('meta') || fpKeys.includes('ctrl') || fpKeys.includes('command');
+						const fpNeedsShift = fpKeys.includes('shift');
+						const fpNeedsAlt = fpKeys.includes('alt');
+						const fpMainKey = fpKeys[fpKeys.length - 1];
+						const metaPressed = e.metaKey || e.ctrlKey;
 
-				if (currentEnterToSend && !e.shiftKey && !e.metaKey) {
+						console.log('[ForcedParallel] Shortcut check:', {
+							metaPressed,
+							fpNeedsMeta,
+							shiftKey: e.shiftKey,
+							fpNeedsShift,
+							altKey: e.altKey,
+							fpNeedsAlt,
+							key: e.key.toLowerCase(),
+							fpMainKey,
+							match:
+								metaPressed === fpNeedsMeta &&
+								e.shiftKey === fpNeedsShift &&
+								e.altKey === fpNeedsAlt &&
+								e.key.toLowerCase() === fpMainKey,
+						});
+
+						if (
+							metaPressed === fpNeedsMeta &&
+							e.shiftKey === fpNeedsShift &&
+							e.altKey === fpNeedsAlt &&
+							e.key.toLowerCase() === fpMainKey
+						) {
+							e.preventDefault();
+							console.log('[ForcedParallel] Shortcut matched, calling processInput');
+							processInput(undefined, { forceParallel: true });
+							return;
+						}
+					}
+				}
+
+				if (enterToSendAI && !e.shiftKey && !e.metaKey) {
 					e.preventDefault();
 					processInput();
-				} else if (!currentEnterToSend && (e.metaKey || e.ctrlKey)) {
+				} else if (!enterToSendAI && (e.metaKey || e.ctrlKey)) {
 					e.preventDefault();
 					processInput();
 				}

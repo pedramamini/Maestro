@@ -82,6 +82,31 @@ export function useMainKeyboardHandler(): UseMainKeyboardHandlerReturn {
 			const ctx = keyboardHandlerRef.current;
 			if (!ctx) return;
 
+			// DEBUG: Trace tab-related shortcuts to diagnose broken Cmd+T / Cmd+Shift+T / Cmd+Shift+[]
+			const keyLowerDbg = e.key.toLowerCase();
+			if (
+				(e.metaKey || e.ctrlKey) &&
+				(keyLowerDbg === 't' ||
+					keyLowerDbg === '[' ||
+					keyLowerDbg === ']' ||
+					keyLowerDbg === '{' ||
+					keyLowerDbg === '}')
+			) {
+				console.warn(
+					'[KB-DEBUG] key=%s meta=%s shift=%s alt=%s ctrl=%s | layers=%s modal=%s | session=%s groupChat=%s mode=%s',
+					e.key,
+					e.metaKey,
+					e.shiftKey,
+					e.altKey,
+					e.ctrlKey,
+					ctx.hasOpenLayers(),
+					ctx.hasOpenModal(),
+					!!ctx.activeSessionId,
+					!!ctx.activeGroupChatId,
+					ctx.activeSession?.inputMode
+				);
+			}
+
 			// CRITICAL: When in terminal mode, let xterm.js handle Ctrl+[A-Z] control sequences.
 			// These include Ctrl+C (SIGINT), Ctrl+D (EOF), Ctrl+Z (suspend), Ctrl+\ (quit), etc.
 			// On macOS, Ctrl is used for terminal control sequences; Cmd (Meta) is for Maestro shortcuts.
@@ -92,6 +117,7 @@ export function useMainKeyboardHandler(): UseMainKeyboardHandlerReturn {
 			if (
 				isMac &&
 				ctx.activeSession?.inputMode === 'terminal' &&
+				!ctx.activeGroupChatId &&
 				e.ctrlKey &&
 				!e.metaKey &&
 				!e.altKey &&
@@ -133,9 +159,11 @@ export function useMainKeyboardHandler(): UseMainKeyboardHandlerReturn {
 					(e.metaKey || e.ctrlKey) &&
 					e.shiftKey &&
 					(e.key === '[' || e.key === ']' || e.key === '{' || e.key === '}');
-				// Allow sidebar toggle shortcuts (Alt+Cmd+Arrow) even when modals are open
+				// Allow sidebar toggle shortcuts (Alt+Cmd+Arrow) and next-unread (Alt+Cmd+ArrowDown) even when modals are open
 				const isLayoutShortcut =
-					e.altKey && (e.metaKey || e.ctrlKey) && (e.key === 'ArrowLeft' || e.key === 'ArrowRight');
+					e.altKey &&
+					(e.metaKey || e.ctrlKey) &&
+					(e.key === 'ArrowLeft' || e.key === 'ArrowRight' || e.key === 'ArrowDown');
 				// Allow right panel tab shortcuts (Cmd+Shift+F/H/S) even when overlays are open
 				const keyLower = e.key.toLowerCase();
 				const isRightPanelShortcut =
@@ -493,10 +521,6 @@ export function useMainKeyboardHandler(): UseMainKeyboardHandlerReturn {
 				e.preventDefault();
 				ctx.setSymphonyModalOpen(true);
 				trackShortcut('openSymphony');
-			} else if (ctx.isShortcut(e, 'toggleAutoScroll')) {
-				e.preventDefault();
-				ctx.setAutoScrollAiMode(!ctx.autoScrollAiMode);
-				trackShortcut('toggleAutoScroll');
 			} else if (ctx.isShortcut(e, 'directorNotes') && ctx.encoreFeatures?.directorNotes) {
 				e.preventDefault();
 				ctx.setDirectorNotesOpen?.(true);
@@ -505,6 +529,10 @@ export function useMainKeyboardHandler(): UseMainKeyboardHandlerReturn {
 				e.preventDefault();
 				ctx.setCueModalOpen?.(true);
 				trackShortcut('openCue');
+			} else if (ctx.isShortcut(e, 'nextUnreadTab')) {
+				e.preventDefault();
+				ctx.goToNextUnreadTab();
+				trackShortcut('nextUnreadTab');
 			} else if (ctx.isShortcut(e, 'filterUnreadAgents')) {
 				e.preventDefault();
 				ctx.toggleShowUnreadAgentsOnly();
@@ -744,7 +772,7 @@ export function useMainKeyboardHandler(): UseMainKeyboardHandlerReturn {
 						}
 					} else {
 						const activeTab = ctx.getActiveTab(ctx.activeSession);
-						if (activeTab?.agentSessionId) {
+						if (activeTab) {
 							ctx.setRenameTabId(activeTab.id);
 							ctx.setRenameTabInitialName(getInitialRenameValue(activeTab));
 							ctx.setRenameTabModalOpen(true);
@@ -827,16 +855,17 @@ export function useMainKeyboardHandler(): UseMainKeyboardHandlerReturn {
 						);
 						trackShortcut('toggleShowThinking');
 					}
-					if (ctx.isTabShortcut(e, 'filterUnreadTabs')) {
-						e.preventDefault();
-						ctx.toggleUnreadFilter();
-						trackShortcut('filterUnreadTabs');
-					}
-					if (ctx.isTabShortcut(e, 'toggleTabUnread')) {
-						e.preventDefault();
-						ctx.toggleTabUnread();
-						trackShortcut('toggleTabUnread');
-					}
+				}
+				// Unread filter/toggle — works across ALL tab types (AI, file, terminal)
+				if (ctx.isTabShortcut(e, 'filterUnreadTabs')) {
+					e.preventDefault();
+					ctx.toggleUnreadFilter();
+					trackShortcut('filterUnreadTabs');
+				}
+				if (ctx.isTabShortcut(e, 'toggleTabUnread')) {
+					e.preventDefault();
+					ctx.toggleTabUnread();
+					trackShortcut('toggleTabUnread');
 				}
 				// Cmd+Shift+] / Cmd+Shift+[ — Navigate tabs in unified order
 				// Cycles through ALL tab types (AI, file, terminal) via unifiedTabOrder
@@ -893,14 +922,9 @@ export function useMainKeyboardHandler(): UseMainKeyboardHandlerReturn {
 				}
 			}
 
-			// Cmd+F contextual shortcuts - track based on current focus/context
+			// Cmd+F contextual shortcuts - prioritize explicit focus over input mode
 			if (e.key === 'f' && (e.metaKey || e.ctrlKey) && !e.shiftKey) {
-				if (ctx.activeSession?.inputMode === 'terminal') {
-					// In terminal mode, Cmd+F opens the terminal search overlay (Phase 10 renders the UI)
-					e.preventDefault();
-					ctx.mainPanelRef?.current?.openTerminalSearch();
-					trackShortcut('searchTerminal');
-				} else if (ctx.activeFocus === 'right' && ctx.activeRightTab === 'files') {
+				if (ctx.activeFocus === 'right' && ctx.activeRightTab === 'files') {
 					e.preventDefault();
 					ctx.setFileTreeFilterOpen(true);
 					trackShortcut('filterFiles');
@@ -910,6 +934,11 @@ export function useMainKeyboardHandler(): UseMainKeyboardHandlerReturn {
 				} else if (ctx.activeFocus === 'right' && ctx.activeRightTab === 'history') {
 					// History filter - handled by HistoryPanel component, just track here
 					trackShortcut('filterHistory');
+				} else if (ctx.activeSession?.inputMode === 'terminal') {
+					// Terminal search - only when main panel has focus
+					e.preventDefault();
+					ctx.mainPanelRef?.current?.openTerminalSearch();
+					trackShortcut('searchTerminal');
 				} else if (ctx.activeFocus === 'main') {
 					// Main panel search - handled by TerminalOutput component, just track here
 					trackShortcut('searchOutput');
@@ -923,6 +952,7 @@ export function useMainKeyboardHandler(): UseMainKeyboardHandlerReturn {
 			// apps like vim/vi/nano keep working even after a transient focus loss.
 			if (
 				ctx.activeSession?.inputMode === 'terminal' &&
+				!ctx.activeGroupChatId &&
 				!ctx.hasOpenLayers() &&
 				!e.defaultPrevented
 			) {

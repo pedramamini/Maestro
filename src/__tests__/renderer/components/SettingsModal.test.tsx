@@ -92,10 +92,8 @@ const mockSetShellArgs = vi.fn();
 const mockSetShellEnvVars = vi.fn();
 const mockSetGhPath = vi.fn();
 const mockSetEnterToSendAI = vi.fn();
-const mockSetEnterToSendTerminal = vi.fn();
 const mockSetDefaultSaveToHistory = vi.fn();
 const mockSetDefaultShowThinking = vi.fn();
-const mockSetAutoScrollAiMode = vi.fn();
 const mockSetUserMessageAlignment = vi.fn();
 const mockSetOsNotificationsEnabled = vi.fn();
 const mockSetAudioFeedbackEnabled = vi.fn();
@@ -174,14 +172,10 @@ vi.mock('../../../renderer/hooks/settings/useSettings', () => ({
 		// Input settings
 		enterToSendAI: true,
 		setEnterToSendAI: mockSetEnterToSendAI,
-		enterToSendTerminal: true,
-		setEnterToSendTerminal: mockSetEnterToSendTerminal,
 		defaultSaveToHistory: true,
 		setDefaultSaveToHistory: mockSetDefaultSaveToHistory,
 		defaultShowThinking: 'off',
 		setDefaultShowThinking: mockSetDefaultShowThinking,
-		autoScrollAiMode: true,
-		setAutoScrollAiMode: mockSetAutoScrollAiMode,
 		userMessageAlignment: 'left',
 		setUserMessageAlignment: mockSetUserMessageAlignment,
 		// Notification settings
@@ -895,27 +889,6 @@ describe('SettingsModal', () => {
 			fireEvent.click(toggleButton!);
 
 			expect(mockSetEnterToSendAI).toHaveBeenCalledWith(false);
-		});
-
-		it('should call setEnterToSendTerminal when toggled', async () => {
-			const setEnterToSendTerminal = vi.fn();
-			render(
-				<SettingsModal
-					{...createDefaultProps({ setEnterToSendTerminal, enterToSendTerminal: true })}
-				/>
-			);
-
-			await act(async () => {
-				await vi.advanceTimersByTimeAsync(100);
-			});
-
-			// Find the Terminal Mode section and click its toggle button
-			const terminalModeLabel = screen.getByText('Terminal Mode');
-			const terminalModeSection = terminalModeLabel.closest('.p-3');
-			const toggleButton = terminalModeSection?.querySelector('button');
-			fireEvent.click(toggleButton!);
-
-			expect(mockSetEnterToSendTerminal).toHaveBeenCalledWith(false);
 		});
 
 		it('should display Cmd+Enter (or Ctrl+Enter on non-Mac) when enter-to-send is false', async () => {
@@ -2464,6 +2437,145 @@ describe('SettingsModal', () => {
 				// "90 days" appears in both the scale marker <span> and a <select> <option>
 				expect(screen.getAllByText('90 days').length).toBeGreaterThanOrEqual(1);
 			});
+		});
+	});
+
+	describe('settings search', () => {
+		it('should render search input', () => {
+			render(<SettingsModal {...createDefaultProps()} />);
+			expect(screen.getByPlaceholderText('Search settings...')).toBeInTheDocument();
+		});
+
+		it('should show search results when typing a query', async () => {
+			render(<SettingsModal {...createDefaultProps()} />);
+
+			const searchInput = screen.getByPlaceholderText('Search settings...');
+			fireEvent.change(searchInput, { target: { value: 'font' } });
+
+			await act(async () => {
+				await vi.advanceTimersByTimeAsync(50);
+			});
+
+			// Text may be split by highlight spans, so use a function matcher
+			expect(
+				screen.getByText(
+					(_content, element) => element?.textContent === 'Font Family' && element.tagName === 'DIV'
+				)
+			).toBeInTheDocument();
+			expect(
+				screen.getByText(
+					(_content, element) => element?.textContent === 'Font Size' && element.tagName === 'DIV'
+				)
+			).toBeInTheDocument();
+		});
+
+		it('should show result count badge when searching', async () => {
+			render(<SettingsModal {...createDefaultProps()} />);
+
+			const searchInput = screen.getByPlaceholderText('Search settings...');
+			fireEvent.change(searchInput, { target: { value: 'font' } });
+
+			await act(async () => {
+				await vi.advanceTimersByTimeAsync(50);
+			});
+
+			// The count badge should be visible
+			const badge = screen.getByText(/^\d+$/);
+			expect(badge).toBeInTheDocument();
+		});
+
+		it('should show no results message for unmatched query', async () => {
+			render(<SettingsModal {...createDefaultProps()} />);
+
+			const searchInput = screen.getByPlaceholderText('Search settings...');
+			fireEvent.change(searchInput, { target: { value: 'xyznonexistent' } });
+
+			await act(async () => {
+				await vi.advanceTimersByTimeAsync(50);
+			});
+
+			expect(screen.getByText(/No settings found/)).toBeInTheDocument();
+		});
+
+		it('should hide sidebar and content when search is active', async () => {
+			render(<SettingsModal {...createDefaultProps()} />);
+
+			const searchInput = screen.getByPlaceholderText('Search settings...');
+			fireEvent.change(searchInput, { target: { value: 'shell' } });
+
+			await act(async () => {
+				await vi.advanceTimersByTimeAsync(50);
+			});
+
+			// The sidebar+content wrapper should have the hidden class
+			const sidebar = screen.getByLabelText('Settings tabs');
+			expect(sidebar.closest('div.flex')?.className).toContain('hidden');
+		});
+
+		it('should clear search and show clear button', async () => {
+			render(<SettingsModal {...createDefaultProps()} />);
+
+			const searchInput = screen.getByPlaceholderText('Search settings...');
+			fireEvent.change(searchInput, { target: { value: 'notification' } });
+
+			await act(async () => {
+				await vi.advanceTimersByTimeAsync(50);
+			});
+
+			// Clear button should be visible
+			const clearButton = screen.getByLabelText('Clear search');
+			expect(clearButton).toBeInTheDocument();
+
+			fireEvent.click(clearButton);
+
+			await act(async () => {
+				await vi.advanceTimersByTimeAsync(50);
+			});
+
+			// Search should be cleared, tab content visible again
+			expect(searchInput).toHaveValue('');
+		});
+
+		it('should search across multiple tabs', async () => {
+			render(<SettingsModal {...createDefaultProps()} />);
+
+			const searchInput = screen.getByPlaceholderText('Search settings...');
+			fireEvent.change(searchInput, { target: { value: 'ignore' } });
+
+			await act(async () => {
+				await vi.advanceTimersByTimeAsync(50);
+			});
+
+			// Text may be split by highlight spans, so use a function matcher
+			expect(
+				screen.getByText(
+					(_content, element) =>
+						element?.textContent === 'Local Ignore Patterns' && element.tagName === 'DIV'
+				)
+			).toBeInTheDocument();
+			expect(
+				screen.getByText(
+					(_content, element) =>
+						element?.textContent === 'SSH Remote Ignore Patterns' && element.tagName === 'DIV'
+				)
+			).toBeInTheDocument();
+		});
+
+		it('should group results by tab label', async () => {
+			render(<SettingsModal {...createDefaultProps()} />);
+
+			const searchInput = screen.getByPlaceholderText('Search settings...');
+			fireEvent.change(searchInput, { target: { value: 'ignore' } });
+
+			await act(async () => {
+				await vi.advanceTimersByTimeAsync(50);
+			});
+
+			// Should show tab group headers (h3 elements in search results)
+			const groupHeaders = screen.getAllByRole('heading', { level: 3 });
+			const headerTexts = groupHeaders.map((h) => h.textContent);
+			expect(headerTexts).toContain('Display');
+			expect(headerTexts).toContain('SSH Hosts');
 		});
 	});
 });

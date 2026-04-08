@@ -147,7 +147,11 @@ export function StreamingDocumentPreview({
 		() =>
 			createMarkdownComponents({
 				theme,
-				onExternalLinkClick: (href) => window.maestro.shell.openExternal(href),
+				onExternalLinkClick: (href) => {
+					if (/^https?:\/\/|^mailto:/.test(href)) {
+						void window.maestro.shell.openExternal(href);
+					}
+				},
 				codeBlockStyle: {
 					padding: '0.75em',
 					fontSize: '0.85em',

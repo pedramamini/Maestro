@@ -15,7 +15,7 @@
 
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { Search, ArrowRight, X, Loader2, Circle } from 'lucide-react';
-import type { Theme, Session, AITab, ToolType } from '../types';
+import type { Theme, Session, ToolType } from '../types';
 import type { MergeResult } from '../types/contextMerge';
 import { fuzzyMatchWithScore } from '../utils/search';
 import { useLayerStack } from '../contexts/LayerStackContext';
@@ -23,6 +23,7 @@ import { MODAL_PRIORITIES } from '../constants/modalPriorities';
 import { formatTokensCompact } from '../utils/formatters';
 import { getAgentIcon } from '../constants/agentIcons';
 import { ScreenReaderAnnouncement, useAnnouncement } from './Wizard/ScreenReaderAnnouncement';
+import { getTabDisplayName } from '../utils/tabHelpers';
 
 /**
  * Session availability status for display in the selection list
@@ -113,17 +114,6 @@ function getSessionDisplayName(session: Session): string {
 function estimateTokens(logs: { text: string }[]): number {
 	const totalChars = logs.reduce((sum, log) => sum + (log.text?.length || 0), 0);
 	return Math.round(totalChars / 4);
-}
-
-/**
- * Get display name for a tab
- */
-function getTabDisplayName(tab: AITab): string {
-	if (tab.name) return tab.name;
-	if (tab.agentSessionId) {
-		return tab.agentSessionId.split('-')[0].toUpperCase();
-	}
-	return 'New Tab';
 }
 
 /**

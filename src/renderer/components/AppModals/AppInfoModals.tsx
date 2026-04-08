@@ -63,7 +63,7 @@ export interface AppInfoModalsProps {
 	sessions: Session[]; // Used by ProcessMonitor
 	groups: Group[];
 	groupChats: GroupChat[];
-	onNavigateToSession: (sessionId: string, tabId?: string) => void;
+	onNavigateToSession: (sessionId: string, tabId?: string, processType?: string) => void;
 	onNavigateToGroupChat: (groupChatId: string) => void;
 
 	// Usage Dashboard Modal

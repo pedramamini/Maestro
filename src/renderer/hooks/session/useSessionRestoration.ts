@@ -48,10 +48,8 @@ export function useSessionRestoration(): SessionRestorationReturn {
 	// useCallback/useEffect without appearing in dependency arrays. Zustand
 	// store actions returned by getState() are stable singletons that never
 	// change, so the empty deps array is intentional.
-	const { setSessions, setGroups, setActiveSessionId, setSessionsLoaded } = useMemo(
-		() => useSessionStore.getState(),
-		[]
-	);
+	const { setSessions, setGroups, setActiveSessionId, hydrateActiveSessionId, setSessionsLoaded } =
+		useMemo(() => useSessionStore.getState(), []);
 	const { setGroupChats } = useMemo(() => useGroupChatStore.getState(), []);
 
 	// --- initialLoadComplete proxy ref ---
@@ -430,12 +428,14 @@ export function useSessionRestoration(): SessionRestorationReturn {
 					const restoredSessions = await Promise.all(savedSessions.map((s) => restoreSession(s)));
 					setSessions(restoredSessions);
 
-					// Set active session to first session if current activeSessionId is invalid
-					const activeSessionId = useSessionStore.getState().activeSessionId;
-					if (
-						restoredSessions.length > 0 &&
-						!restoredSessions.find((s) => s.id === activeSessionId)
-					) {
+					// Restore persisted active session ID, falling back to first session.
+					const savedActiveSessionId = await window.maestro.sessions.getActiveSessionId();
+					if (savedActiveSessionId && restoredSessions.find((s) => s.id === savedActiveSessionId)) {
+						// Saved ID is valid — hydrate locally without writing back to disk
+						hydrateActiveSessionId(savedActiveSessionId);
+					} else if (restoredSessions[0]?.id) {
+						// Saved ID is stale or missing — persist the fallback so it
+						// doesn't retry the invalid ID on next launch
 						setActiveSessionId(restoredSessions[0].id);
 					}
 

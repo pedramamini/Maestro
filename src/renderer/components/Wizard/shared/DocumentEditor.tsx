@@ -482,7 +482,9 @@ export function DocumentEditor({
 					mermaid: MermaidWrapper,
 				},
 				onExternalLinkClick: (href) => {
-					window.maestro.shell.openExternal(href);
+					if (/^https?:\/\/|^mailto:/.test(href)) {
+						void window.maestro.shell.openExternal(href);
+					}
 				},
 			}),
 		[theme, WizardImageRenderer, MermaidWrapper]

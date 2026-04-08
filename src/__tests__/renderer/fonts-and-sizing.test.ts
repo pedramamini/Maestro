@@ -81,7 +81,6 @@ describe('Cross-platform Fonts and Sizing', () => {
 			customThemeColors: DEFAULT_CUSTOM_THEME_COLORS,
 			customThemeBaseId: 'dracula',
 			enterToSendAI: false,
-			enterToSendTerminal: true,
 			defaultSaveToHistory: true,
 			defaultShowThinking: 'off',
 			leftSidebarWidth: 256,

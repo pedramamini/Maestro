@@ -566,6 +566,16 @@ describe('system IPC handlers', () => {
 			expect(shell.openExternal).not.toHaveBeenCalled();
 		});
 
+		it('should silently ignore non-URL strings like relative file paths', async () => {
+			const handler = handlers.get('shell:openExternal');
+			// These should return gracefully instead of throwing — Fixes MAESTRO-F4/E5
+			await expect(handler!({} as any, 'LICENSE')).resolves.toBeUndefined();
+			await expect(handler!({} as any, './README.md')).resolves.toBeUndefined();
+			await expect(handler!({} as any, '../docs/guide.md')).resolves.toBeUndefined();
+			await expect(handler!({} as any, 'vscode/')).resolves.toBeUndefined();
+			expect(shell.openExternal).not.toHaveBeenCalled();
+		});
+
 		it('should gracefully handle Launch Services errors', async () => {
 			vi.mocked(shell.openExternal).mockRejectedValue(
 				new Error('No application in the Launch Services database matches the input criteria.')
@@ -585,6 +595,36 @@ describe('system IPC handlers', () => {
 			await expect(handler!({} as any, 'https://example.com')).rejects.toThrow(
 				'Unexpected Electron internal failure'
 			);
+		});
+
+		it('should redirect absolute file paths to openPath', async () => {
+			vi.mocked(fsSync.existsSync).mockReturnValue(true);
+			vi.mocked(shell.openPath).mockResolvedValue('');
+
+			const handler = handlers.get('shell:openExternal');
+			await handler!({} as any, '/Users/test/workspace/src/app.tsx');
+
+			expect(shell.openExternal).not.toHaveBeenCalled();
+			expect(shell.openPath).toHaveBeenCalledWith('/Users/test/workspace/src/app.tsx');
+		});
+
+		it('should throw for non-existent absolute file paths', async () => {
+			vi.mocked(fsSync.existsSync).mockReturnValue(false);
+
+			const handler = handlers.get('shell:openExternal');
+			await expect(handler!({} as any, '/nonexistent/path.tsx')).rejects.toThrow(
+				'Path does not exist'
+			);
+		});
+
+		it('should silently ignore relative paths like LICENSE or ./README.md', async () => {
+			const handler = handlers.get('shell:openExternal');
+
+			await expect(handler!({} as any, 'LICENSE')).resolves.toBeUndefined();
+			await expect(handler!({} as any, './README.md')).resolves.toBeUndefined();
+			await expect(handler!({} as any, 'vscode/**')).resolves.toBeUndefined();
+			expect(shell.openExternal).not.toHaveBeenCalled();
+			expect(shell.openPath).not.toHaveBeenCalled();
 		});
 	});
 

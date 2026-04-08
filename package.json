@@ -1,6 +1,6 @@
 {
 	"name": "maestro",
-	"version": "0.16.5-RC",
+	"version": "0.16.8-RC",
 	"description": "Maestro hones fractured attention into focused intent.",
 	"main": "dist/main/index.js",
 	"author": {
@@ -96,20 +96,8 @@
 			"entitlements": "build/entitlements.mac.plist",
 			"entitlementsInherit": "build/entitlements.mac.plist",
 			"target": [
-				{
-					"target": "dmg",
-					"arch": [
-						"x64",
-						"arm64"
-					]
-				},
-				{
-					"target": "zip",
-					"arch": [
-						"x64",
-						"arm64"
-					]
-				}
+				"dmg",
+				"zip"
 			],
 			"artifactName": "${name}-${version}-${arch}-mac.${ext}",
 			"icon": "build/icon.icns",

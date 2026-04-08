@@ -11,7 +11,9 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
 	ReactFlowProvider,
 	useReactFlow,
+	applyNodeChanges,
 	type Node,
+	type NodeChange,
 	type OnNodesChange,
 	type OnEdgesChange,
 	type Connection,
@@ -37,6 +39,7 @@ import { usePipelineSelection } from '../../hooks/cue/usePipelineSelection';
 import { PipelineToolbar } from './PipelineToolbar';
 import { PipelineCanvas } from './PipelineCanvas';
 import { PipelineContextMenu, type ContextMenuState } from './PipelineContextMenu';
+import { DEFAULT_EVENT_PROMPTS } from './cueEventConstants';
 
 export { validatePipelines, DEFAULT_TRIGGER_LABELS } from '../../hooks/cue/usePipelineState';
 export type { SessionInfo, ActiveRunInfo } from '../../hooks/cue/usePipelineState';
@@ -175,6 +178,7 @@ function CuePipelineEditorInner({
 		selectedNodePipelineId,
 		selectedNodeHasOutgoingEdge,
 		hasIncomingAgentEdges,
+		incomingAgentEdgeCount,
 		incomingTriggerEdges,
 		selectedEdge,
 		selectedEdgePipelineId,
@@ -190,7 +194,9 @@ function CuePipelineEditorInner({
 
 	// ─── ReactFlow nodes/edges ───────────────────────────────────────────────
 
-	const nodes = useMemo(
+	// Compute canonical nodes from pipeline state. This is the "source of truth"
+	// for node data, but ReactFlow needs its own mutable copy for smooth dragging.
+	const computedNodes = useMemo(
 		() =>
 			convertToReactFlowNodes(
 				pipelineState.pipelines,
@@ -216,6 +222,17 @@ function CuePipelineEditorInner({
 		]
 	);
 
+	// Local display nodes that ReactFlow controls directly. During drag,
+	// applyNodeChanges updates this state (cheap setState, no useMemo recompute).
+	// On drag end, positions sync back to pipelineState.
+	const [displayNodes, setDisplayNodes] = useState<Node[]>(computedNodes);
+	useEffect(() => {
+		setDisplayNodes(computedNodes);
+	}, [computedNodes]);
+
+	// Alias for the rest of the component
+	const nodes = displayNodes;
+
 	const edges = useMemo(
 		() =>
 			convertToReactFlowEdges(
@@ -234,12 +251,20 @@ function CuePipelineEditorInner({
 		]
 	);
 
-	// ─── Fit view on pipeline selection change ──────────────────────────────
+	// ─── Fit/center view on pipeline selection change ───────────────────────
 	// When switching between "All Pipelines" and a single pipeline (or between
-	// two different pipelines), the visible nodes change. Without a fitView call
-	// the viewport stays where it was, so the selected pipeline may appear off-screen.
-	// Skip the first change (mount hydration) so we don't overwrite the saved
-	// viewport restored by usePipelineLayout.
+	// two different pipelines), center the viewport on the visible nodes.
+	//
+	// No node-level filtering is needed: convertToReactFlowNodes already
+	// renders only the selected pipeline's nodes (or all in "All Pipelines"
+	// view), so fitView() without a filter centers on exactly the right set.
+	//
+	// The 150ms delay accounts for the React render cycle:
+	//   selectedPipelineId changes → computedNodes recomputes →
+	//   setDisplayNodes(computedNodes) schedules a render →
+	//   ReactFlow processes the new nodes → fitView can measure them.
+	// Skip the first change (mount hydration) so we don't overwrite the
+	// saved viewport restored by usePipelineLayout.
 	const prevSelectedIdRef = useRef(pipelineState.selectedPipelineId);
 	const hasHydratedSelectionRef = useRef(false);
 	useEffect(() => {
@@ -252,12 +277,25 @@ function CuePipelineEditorInner({
 			return;
 		}
 
-		// Short delay so ReactFlow has rendered the new node set before fitting
 		const timer = setTimeout(() => {
-			reactFlowInstance.fitView({ padding: 0.15, duration: 200 });
-		}, 50);
+			reactFlowInstance.fitView({ padding: 0.2, duration: 300 });
+		}, 150);
 		return () => clearTimeout(timer);
 	}, [pipelineState.selectedPipelineId, reactFlowInstance]);
+
+	// ─── Initial fit view ────────────────────────────────────────────────────
+	// With the always-on fitView prop removed from ReactFlow, we need to
+	// fit the viewport once after the first render with nodes. usePipelineLayout
+	// will overwrite this if it has a saved viewport.
+	const hasInitialFitRef = useRef(false);
+	useEffect(() => {
+		if (hasInitialFitRef.current || computedNodes.length === 0) return;
+		hasInitialFitRef.current = true;
+		const timer = setTimeout(() => {
+			reactFlowInstance.fitView({ padding: 0.15, duration: 200 });
+		}, 150);
+		return () => clearTimeout(timer);
+	}, [computedNodes.length, reactFlowInstance]);
 
 	// ─── Canvas callbacks ────────────────────────────────────────────────────
 
@@ -267,144 +305,51 @@ function CuePipelineEditorInner({
 	const stableYOffsetsRef = useRef(stableYOffsets);
 	stableYOffsetsRef.current = stableYOffsets;
 
-	// Throttle drag updates: buffer the latest positions during drag and
-	// flush at most once per animation frame. This keeps the controlled
-	// nodes in sync with ReactFlow (so the node visually follows the
-	// cursor) while avoiding a full convertToReactFlowNodes recompute
-	// on every mouse-move event, which caused nodes to vanish on Linux.
-	const dragBufferRef = useRef<Map<string, { x: number; y: number }> | null>(null);
-	const rafIdRef = useRef<number | null>(null);
+	// Apply ALL node changes (including mid-drag) to the local displayNodes
+	// so ReactFlow can render smooth dragging. Position commits to the
+	// canonical pipelineState happen in onNodeDragStop instead, because
+	// ReactFlow may fire the drag-end change without a position property.
+	const onNodesChange: OnNodesChange = useCallback((changes: NodeChange[]) => {
+		setDisplayNodes((nds) => applyNodeChanges(changes, nds));
+	}, []);
 
-	const flushDragBuffer = useCallback(() => {
-		rafIdRef.current = null;
-		const buffer = dragBufferRef.current;
-		if (!buffer || buffer.size === 0) return;
-		dragBufferRef.current = null;
+	// Commit final positions to canonical pipelineState when drag ends.
+	// ReactFlow's onNodeDragStop reliably provides the final node with its
+	// position, unlike onNodesChange which may omit position on drag end.
+	const onNodeDragStop = useCallback(
+		(_event: React.MouseEvent, _node: Node, draggedNodes: Node[]) => {
+			if (draggedNodes.length === 0) return;
 
-		setPipelineState((prev) => {
-			const isAllPipelines = prev.selectedPipelineId === null;
-			const yOffsets = stableYOffsetsRef.current;
+			setPipelineState((prev) => {
+				const isAllPipelines = prev.selectedPipelineId === null;
+				const yOffsets = stableYOffsetsRef.current;
 
-			const newPipelines = prev.pipelines.map((pipeline) => {
-				const yOffset = isAllPipelines ? (yOffsets.get(pipeline.id) ?? 0) : 0;
-				return {
-					...pipeline,
-					nodes: pipeline.nodes.map((pNode) => {
-						const newPos = buffer.get(`${pipeline.id}:${pNode.id}`);
-						if (newPos) {
+				// Build a lookup from composite ID → final position
+				const finalPositions = new Map<string, { x: number; y: number }>();
+				for (const dn of draggedNodes) {
+					if (dn.position) finalPositions.set(dn.id, dn.position);
+				}
+
+				const newPipelines = prev.pipelines.map((pipeline) => {
+					const yOffset = isAllPipelines ? (yOffsets.get(pipeline.id) ?? 0) : 0;
+					return {
+						...pipeline,
+						nodes: pipeline.nodes.map((pNode) => {
+							const newPos = finalPositions.get(`${pipeline.id}:${pNode.id}`);
+							if (!newPos) return pNode;
 							return {
 								...pNode,
 								position: isAllPipelines ? { x: newPos.x, y: newPos.y - yOffset } : newPos,
 							};
-						}
-						return pNode;
-					}),
-				};
-			});
-			return { ...prev, pipelines: newPipelines };
-		});
-	}, [setPipelineState]);
-
-	// Clean up any pending animation frame on unmount
-	useEffect(() => {
-		return () => {
-			if (rafIdRef.current !== null) cancelAnimationFrame(rafIdRef.current);
-		};
-	}, []);
-
-	const onNodesChange: OnNodesChange = useCallback(
-		(changes) => {
-			const positionUpdates = new Map<string, { x: number; y: number }>();
-			let hasPositionChange = false;
-			let isDragging = false;
-			for (const change of changes) {
-				if (change.type === 'position' && change.position) {
-					positionUpdates.set(change.id, change.position);
-					if (change.dragging) {
-						isDragging = true;
-					} else {
-						hasPositionChange = true;
-					}
-				}
-			}
-
-			// During active drag: buffer positions and flush once per frame
-			if (isDragging && positionUpdates.size > 0) {
-				if (!dragBufferRef.current) dragBufferRef.current = new Map();
-				for (const [id, pos] of positionUpdates) {
-					dragBufferRef.current.set(id, pos);
-				}
-				if (rafIdRef.current === null) {
-					rafIdRef.current = requestAnimationFrame(flushDragBuffer);
-				}
-				return;
-			}
-
-			if (positionUpdates.size > 0) {
-				// Cancel any pending drag RAF and merge buffered positions so stale
-				// coordinates cannot flush after we apply the non-drag update
-				if (rafIdRef.current !== null) {
-					cancelAnimationFrame(rafIdRef.current);
-					rafIdRef.current = null;
-				}
-				if (dragBufferRef.current) {
-					for (const [id, pos] of dragBufferRef.current) {
-						if (!positionUpdates.has(id)) {
-							positionUpdates.set(id, pos);
-						}
-					}
-					dragBufferRef.current = null;
-				}
-
-				setPipelineState((prev) => {
-					const isAllPipelines = prev.selectedPipelineId === null;
-
-					// In single-pipeline view there are no Y-offsets — write
-					// ReactFlow positions straight through (original behavior).
-					if (!isAllPipelines) {
-						const newPipelines = prev.pipelines.map((pipeline) => ({
-							...pipeline,
-							nodes: pipeline.nodes.map((pNode) => {
-								const newPos = positionUpdates.get(`${pipeline.id}:${pNode.id}`);
-								return newPos ? { ...pNode, position: newPos } : pNode;
-							}),
-						}));
-						return { ...prev, pipelines: newPipelines };
-					}
-
-					// All Pipelines view: ReactFlow positions include the visual
-					// Y-offsets from convertToReactFlowNodes. Subtract the same
-					// stable offsets used for display so the round-trip is clean.
-					const yOffsets = stableYOffsetsRef.current;
-
-					const newPipelines = prev.pipelines.map((pipeline) => {
-						const yOffset = yOffsets.get(pipeline.id) ?? 0;
-						return {
-							...pipeline,
-							nodes: pipeline.nodes.map((pNode) => {
-								const newPos = positionUpdates.get(`${pipeline.id}:${pNode.id}`);
-								if (newPos) {
-									return {
-										...pNode,
-										position: {
-											x: newPos.x,
-											y: newPos.y - yOffset,
-										},
-									};
-								}
-								return pNode;
-							}),
-						};
-					});
-					return { ...prev, pipelines: newPipelines };
+						}),
+					};
 				});
-			}
+				return { ...prev, pipelines: newPipelines };
+			});
 
-			if (hasPositionChange) {
-				persistLayout();
-			}
+			persistLayout();
 		},
-		[persistLayout, setPipelineState, flushDragBuffer]
+		[persistLayout, setPipelineState]
 	);
 
 	const onEdgesChange: OnEdgesChange = useCallback(() => {}, []);
@@ -424,6 +369,7 @@ function CuePipelineEditorInner({
 				const pipeline = prev.pipelines.find((p) => p.id === sourcePipelineId);
 				if (!pipeline) return prev;
 
+				const sourceNode = pipeline.nodes.find((n) => n.id === sourceNodeId);
 				const targetNode = pipeline.nodes.find((n) => n.id === targetNodeId);
 				if (!targetNode || targetNode.type === 'trigger') return prev;
 
@@ -434,11 +380,34 @@ function CuePipelineEditorInner({
 					mode: 'pass' as const,
 				};
 
+				// Auto-populate default prompt when connecting a GitHub trigger to an agent
+				// that doesn't have a prompt yet
+				let updatedNodes = pipeline.nodes;
+				if (sourceNode?.type === 'trigger' && targetNode.type === 'agent') {
+					const triggerData = sourceNode.data as TriggerNodeData;
+					const agentData = targetNode.data as AgentNodeData;
+					const defaultPrompt = DEFAULT_EVENT_PROMPTS[triggerData.eventType];
+					const hasExistingPrompt = !!agentData.inputPrompt?.trim();
+					const hasEdgePrompts = pipeline.edges.some(
+						(e) => e.target === targetNodeId && !!e.prompt?.trim()
+					);
+
+					if (defaultPrompt && !hasExistingPrompt && !hasEdgePrompts) {
+						updatedNodes = pipeline.nodes.map((n) => {
+							if (n.id !== targetNodeId) return n;
+							return {
+								...n,
+								data: { ...n.data, inputPrompt: defaultPrompt },
+							};
+						});
+					}
+				}
+
 				return {
 					...prev,
 					pipelines: prev.pipelines.map((p) => {
 						if (p.id !== sourcePipelineId) return p;
-						return { ...p, edges: [...p.edges, newEdge] };
+						return { ...p, nodes: updatedNodes, edges: [...p.edges, newEdge] };
 					}),
 				};
 			});
@@ -740,6 +709,7 @@ function CuePipelineEditorInner({
 				onEdgeClick={onEdgeClick}
 				onPaneClick={onPaneClick}
 				onNodeContextMenu={onNodeContextMenu}
+				onNodeDragStop={onNodeDragStop}
 				onDragOver={onDragOver}
 				onDrop={onDrop}
 				triggerDrawerOpen={triggerDrawerOpen}
@@ -763,6 +733,7 @@ function CuePipelineEditorInner({
 				selectedEdge={selectedEdge}
 				selectedNodeHasOutgoingEdge={selectedNodeHasOutgoingEdge}
 				hasIncomingAgentEdges={hasIncomingAgentEdges}
+				incomingAgentEdgeCount={incomingAgentEdgeCount}
 				incomingTriggerEdges={incomingTriggerEdges}
 				onUpdateNode={onUpdateNode}
 				onUpdateEdgePrompt={onUpdateEdgePrompt}

@@ -107,10 +107,14 @@ export class StderrHandler {
 				return;
 			}
 
-			// Codex writes both Rust tracing diagnostics and actual responses to stderr.
-			// Strip tracing lines (e.g. "2026-02-08T04:39:23Z ERROR codex_core::rollout::list: ...")
-			// and the "Reading prompt from stdin..." prefix, then re-emit any remaining
-			// content as regular data so it renders normally instead of as an error.
+			// Codex writes both Rust tracing diagnostics and human-readable progress to stderr.
+			// When running with --json (isStreamJsonMode), the structured output comes from
+			// stdout and is parsed by CodexOutputParser. The stderr content is a redundant
+			// human-readable echo that should NOT be re-emitted as data — doing so causes
+			// raw unformatted text (tool calls, outputs, reasoning) to appear in the terminal.
+			//
+			// Only suppress when in stream-json mode. If Codex runs without --json,
+			// stderr may contain the actual response and should be forwarded.
 			if (toolType === 'codex') {
 				const lines = cleanedStderr.split('\n');
 				const tracingLines: string[] = [];
@@ -143,8 +147,22 @@ export class StderrHandler {
 
 				const remainingContent = contentLines.join('\n').trim();
 				if (remainingContent) {
-					// Emit as regular data — this is the agent's response, not an error
-					this.emitter.emit('data', sessionId, remainingContent);
+					if (managedProcess.isStreamJsonMode) {
+						// In JSON mode, structured data comes from stdout via CodexOutputParser.
+						// Suppress stderr echo to prevent raw human-readable text in the terminal.
+						logger.debug(
+							'[ProcessManager] Suppressing Codex stderr in stream-json mode',
+							'ProcessManager',
+							{
+								sessionId,
+								contentLength: remainingContent.length,
+								preview: remainingContent.substring(0, 120),
+							}
+						);
+					} else {
+						// Non-JSON mode: stderr may contain the actual response
+						this.emitter.emit('data', sessionId, remainingContent);
+					}
 				}
 				return;
 			}

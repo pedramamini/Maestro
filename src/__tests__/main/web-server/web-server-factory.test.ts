@@ -70,6 +70,10 @@ vi.mock('../../../main/web-server/WebServer', () => {
 			setGetCueActivityCallback = vi.fn();
 			setGetUsageDashboardCallback = vi.fn();
 			setGetAchievementsCallback = vi.fn();
+			setWriteToTerminalCallback = vi.fn();
+			setResizeTerminalCallback = vi.fn();
+			setSpawnTerminalForWebCallback = vi.fn();
+			setKillTerminalForWebCallback = vi.fn();
 
 			constructor(port: number, securityToken?: string) {
 				this.port = port;

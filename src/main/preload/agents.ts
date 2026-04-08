@@ -173,6 +173,16 @@ export function createAgentsApi() {
 			ipcRenderer.invoke('agents:getModels', agentId, forceRefresh, sshRemoteId),
 
 		/**
+		 * Discover available values for a dynamic select config option
+		 */
+		getConfigOptions: (
+			agentId: string,
+			optionKey: string,
+			forceRefresh?: boolean
+		): Promise<string[]> =>
+			ipcRenderer.invoke('agents:getConfigOptions', agentId, optionKey, forceRefresh),
+
+		/**
 		 * Discover available slash commands for an agent.
 		 * Returns objects with name and optional prompt for all agents.
 		 */

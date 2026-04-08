@@ -6,16 +6,8 @@
  * for visual differentiation on the React Flow canvas.
  */
 
-/** Event types that can trigger a Cue subscription (mirrored from cue-types.ts for renderer access) */
-export type CueEventType =
-	| 'app.startup'
-	| 'time.heartbeat'
-	| 'time.scheduled'
-	| 'file.changed'
-	| 'agent.completed'
-	| 'github.pull_request'
-	| 'github.issue'
-	| 'task.pending';
+import type { CueEventType, CueGraphSession as SharedCueGraphSession } from './cue';
+export type { CueEventType } from './cue';
 
 /** Cue brand color — single source of truth for all Cue UI */
 export const CUE_COLOR = '#06b6d4';
@@ -72,6 +64,10 @@ export interface AgentNodeData {
 	outputPrompt?: string;
 	/** Whether to auto-include {{CUE_SOURCE_OUTPUT}} in generated chain prompts. Default: true. */
 	includeUpstreamOutput?: boolean;
+	/** Per-node fan-in timeout override (minutes). Used when this agent has multiple incoming agent edges. */
+	fanInTimeoutMinutes?: number;
+	/** Per-node fan-in timeout-on-fail override. 'break' waits for all, 'continue' fires with partial data. */
+	fanInTimeoutOnFail?: 'break' | 'continue';
 }
 
 export type PipelineNodeType = 'trigger' | 'agent';
@@ -118,33 +114,8 @@ export interface PipelineLayoutState {
 	viewport?: PipelineViewport;
 }
 
-/** Session data with subscriptions for the Cue graph/pipeline visualization (renderer-safe mirror of cue-types.ts CueGraphSession) */
-export interface CueGraphSession {
-	sessionId: string;
-	sessionName: string;
-	toolType: string;
-	subscriptions: Array<{
-		name: string;
-		event: CueEventType;
-		enabled: boolean;
-		prompt?: string;
-		prompt_file?: string;
-		output_prompt?: string;
-		output_prompt_file?: string;
-		interval_minutes?: number;
-		schedule_times?: string[];
-		schedule_days?: string[];
-		watch?: string;
-		source_session?: string | string[];
-		fan_out?: string[];
-		filter?: Record<string, string | number | boolean>;
-		repo?: string;
-		poll_minutes?: number;
-		gh_state?: string;
-		agent_id?: string;
-		label?: string;
-	}>;
-}
+/** Session data with subscriptions for the Cue graph/pipeline visualization */
+export type CueGraphSession = SharedCueGraphSession;
 
 /** Returns the first unused color from the palette, cycling if all used. */
 export function getNextPipelineColor(existingPipelines: CuePipeline[]): string {

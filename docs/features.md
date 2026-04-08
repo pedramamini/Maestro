@@ -13,7 +13,7 @@ icon: sparkles
 - 💬 **[Group Chat](./group-chat)** - Coordinate multiple AI agents in a single conversation. A moderator AI orchestrates discussions, routing questions to the right agents and synthesizing their responses for cross-project questions and architecture discussions.
 - 🌐 **[Remote Control](./remote-control)** - Built-in web server with QR code access. Monitor and control all your agents from your phone. Supports local network access and remote tunneling via Cloudflare for access from anywhere.
 - 🔗 **[SSH Remote Execution](./ssh-remote-execution)** - Run AI agents on remote hosts via SSH. Leverage powerful cloud VMs, access tools not installed locally, or work with projects requiring specific environments — all while controlling everything from your local Maestro instance.
-- 💻 **[Command Line Interface](./cli)** - Full CLI (`maestro-cli`) for headless operation. List agents/groups, run playbooks from cron jobs or CI/CD pipelines, with human-readable or JSONL output for scripting.
+- 💻 **[Command Line Interface](./cli)** - Full CLI (`maestro-cli`) for headless operation. List agents/groups, run playbooks, manage settings and agent configs — all from the command line. Settings changes take effect instantly in the running app.
 - 🚀 **Multi-Agent Management** - Run unlimited agents in parallel. Each agent has its own workspace, conversation history, and isolated context.
 - 📬 **Message Queueing** - Queue messages while AI is busy; they're sent automatically when the agent becomes ready. Never lose a thought.
 - 🔐 **[Global Environment Variables](./configuration#global-environment-variables)** - Configure environment variables once in Settings and they apply to all agent processes and terminal sessions. Perfect for API keys, proxy settings, and tool paths.
@@ -37,5 +37,6 @@ icon: sparkles
 - 📊 **[Usage Dashboard](./usage-dashboard)** - Comprehensive analytics for tracking AI usage patterns. View aggregated statistics, compare agent performance, analyze activity heatmaps, and export data to CSV. Access via `Opt+Cmd+U` / `Alt+Ctrl+U`. _(Encore Feature — enable in Settings > Encore Features)_
 - 🎬 **[Director's Notes](./director-notes)** - Bird's-eye view of all agent activity in a unified timeline. Aggregate history from every agent, search and filter entries, and generate AI-powered synopses of recent work. Access via `Cmd+Shift+O` / `Ctrl+Shift+O`. _(Encore Feature — enable in Settings > Encore Features)_
 - 🏆 **[Achievements](./achievements)** - Level up from Apprentice to Titan of the Baton based on cumulative Auto Run time. 11 conductor-themed ranks to unlock.
+- 💬 **[Conversational Feedback](./feedback)** - Submit bug reports and feature requests through an AI-guided conversation. The agent asks clarifying questions, checks for duplicate issues, and creates a well-structured GitHub issue — no forms to fill out.
 
 > **Note**: Maestro currently supports Claude Code, Codex (OpenAI), OpenCode, and Factory Droid as fully-integrated providers. Support for additional providers (Gemini CLI, Qwen3 Coder) is planned for future releases based on community demand.

@@ -81,6 +81,22 @@ vi.mock('../../../../main/utils/remote-git', () => ({
 	execGit: vi.fn(),
 }));
 
+// Mock the stores module — git.ts now imports getSshRemoteById from here
+// instead of receiving it via dependency injection. We delegate to the
+// mockSettingsStore so existing tests can still drive SSH remote lookups
+// by configuring `mockSettingsStore.get.mockReturnValue([...])`.
+const { mockSettingsStore } = vi.hoisted(() => ({
+	mockSettingsStore: {
+		get: vi.fn().mockReturnValue([] as Array<{ id: string }>),
+	},
+}));
+vi.mock('../../../../main/stores', () => ({
+	getSshRemoteById: (id: string) => {
+		const remotes = mockSettingsStore.get('sshRemotes', []) as Array<{ id: string }>;
+		return remotes.find((r) => r.id === id);
+	},
+}));
+
 // Mock child_process for spawnSync (used in git:showFile for images)
 // The handler uses require('child_process') at runtime - need vi.hoisted for proper hoisting
 const { mockSpawnSync } = vi.hoisted(() => ({
@@ -100,15 +116,13 @@ vi.mock('child_process', () => ({
 
 describe('Git IPC handlers', () => {
 	let handlers: Map<string, Function>;
-	let mockSettingsStore: any;
 
 	beforeEach(async () => {
 		// Clear mocks
 		vi.clearAllMocks();
 
-		mockSettingsStore = {
-			get: vi.fn().mockReturnValue([]),
-		};
+		// Reset hoisted settings store mock to a clean state for each test
+		mockSettingsStore.get.mockReturnValue([]);
 
 		// Capture all registered handlers
 		handlers = new Map();

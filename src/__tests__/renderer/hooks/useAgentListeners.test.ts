@@ -693,6 +693,32 @@ describe('useAgentListeners', () => {
 			expect(agentErrorOpen).toBe(false);
 		});
 
+		it('clears agentSessionId on session_not_found so next spawn starts fresh', () => {
+			const deps = createMockDeps();
+			const tab = createMockTab({ id: 'tab-1', agentSessionId: 'stale-session-id' });
+			const session = createMockSession({
+				id: 'sess-1',
+				state: 'busy',
+				aiTabs: [tab],
+				activeTabId: 'tab-1',
+			});
+			useSessionStore.setState({
+				sessions: [session],
+				activeSessionId: 'sess-1',
+			});
+
+			renderHook(() => useAgentListeners(deps));
+
+			onAgentErrorHandler?.('sess-1-ai-tab-1', {
+				...baseError,
+				type: 'session_not_found',
+			});
+
+			const updated = useSessionStore.getState().sessions.find((s) => s.id === 'sess-1');
+			const updatedTab = updated?.aiTabs.find((t) => t.id === 'tab-1');
+			expect(updatedTab?.agentSessionId).toBeNull();
+		});
+
 		it('appends error log entry to the target tab', () => {
 			const deps = createMockDeps();
 			const tab = createMockTab({ id: 'tab-1', logs: [] });
@@ -875,9 +901,9 @@ describe('useAgentListeners', () => {
 	// ========================================================================
 
 	describe('onExit', () => {
-		it('transitions AI session from busy to idle on process exit', async () => {
+		it('transitions AI session from busy to idle on process exit and preserves agentSessionId for resume', async () => {
 			const deps = createMockDeps();
-			const tab = createMockTab({ id: 'tab-1' });
+			const tab = createMockTab({ id: 'tab-1', agentSessionId: 'old-session-id' });
 			const session = createMockSession({
 				id: 'sess-1',
 				state: 'busy',
@@ -900,6 +926,11 @@ describe('useAgentListeners', () => {
 
 			const updated = useSessionStore.getState().sessions.find((s) => s.id === 'sess-1');
 			expect(updated?.state).toBe('idle');
+			// agentSessionId is preserved on normal exit so the next message can
+			// resume the conversation. Stale IDs are cleared by onAgentError when
+			// session_not_found is detected.
+			const updatedTab = updated?.aiTabs.find((t) => t.id === 'tab-1');
+			expect(updatedTab?.agentSessionId).toBe('old-session-id');
 		});
 
 		it('processes execution queue on exit', async () => {
@@ -956,6 +987,54 @@ describe('useAgentListeners', () => {
 
 			const updated = useSessionStore.getState().sessions.find((s) => s.id === 'sess-1');
 			expect(updated?.state).toBe('idle');
+		});
+	});
+
+	// ========================================================================
+	// Regression: no TTS / audioFeedback code (removed in ff58abe14)
+	// ========================================================================
+
+	describe('regression: no TTS speak code in onExit', () => {
+		it('does not reference useSettingsStore in the module source', async () => {
+			const fs = await import('fs');
+			const path = await import('path');
+			const sourceFile = path.resolve(
+				__dirname,
+				'../../../renderer/hooks/agent/useAgentListeners.ts'
+			);
+			const source = fs.readFileSync(sourceFile, 'utf-8');
+			expect(source).not.toContain('useSettingsStore');
+			expect(source).not.toContain('audioFeedback');
+			expect(source).not.toContain('notification.speak');
+		});
+
+		it('does not call window.maestro.notification.speak on process exit', async () => {
+			const speakMock = vi.fn().mockResolvedValue(undefined);
+			(window as any).maestro.notification = {
+				...((window as any).maestro.notification || {}),
+				speak: speakMock,
+			};
+
+			const deps = createMockDeps();
+			const tab = createMockTab({ id: 'tab-1' });
+			const session = createMockSession({
+				id: 'sess-1',
+				state: 'busy',
+				busySource: 'ai',
+				aiTabs: [tab],
+				activeTabId: 'tab-1',
+			});
+			useSessionStore.setState({
+				sessions: [session],
+				activeSessionId: 'sess-1',
+			});
+
+			renderHook(() => useAgentListeners(deps));
+
+			await onExitHandler?.('sess-1-ai-tab-1');
+			await new Promise((r) => setTimeout(r, 100));
+
+			expect(speakMock).not.toHaveBeenCalled();
 		});
 	});
 });

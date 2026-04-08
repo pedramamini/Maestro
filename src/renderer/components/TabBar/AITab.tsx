@@ -71,46 +71,9 @@ export interface AITabProps {
 	tabIndex?: number;
 }
 
-/**
- * Get the display name for a tab.
- * Priority: name > truncated session ID > "New"
- *
- * Handles different agent session ID formats:
- * - Claude UUID: "abc123-def456-ghi789" → "ABC123" (first octet)
- * - OpenCode: "SES_4BCDFE8C5FFE4KC1UV9NSMYEDB" → "SES_4BCD" (prefix + 4 chars)
- * - Codex: "thread_abc123..." → "THR_ABC1" (prefix + 4 chars)
- *
- * Memoized per-tab via useMemo in the Tab component to avoid recalculation on every render.
- */
-export function getTabDisplayName(tab: AITabType): string {
-	if (tab.name) {
-		return tab.name;
-	}
-	if (tab.agentSessionId) {
-		const id = tab.agentSessionId;
-
-		// OpenCode format: ses_XXXX... or SES_XXXX...
-		if (id.toLowerCase().startsWith('ses_')) {
-			// Return "SES_" + first 4 chars of the ID portion
-			return `SES_${id.slice(4, 8).toUpperCase()}`;
-		}
-
-		// Codex format: thread_XXXX...
-		if (id.toLowerCase().startsWith('thread_')) {
-			// Return "THR_" + first 4 chars of the ID portion
-			return `THR_${id.slice(7, 11).toUpperCase()}`;
-		}
-
-		// Claude UUID format: has dashes, return first octet
-		if (id.includes('-')) {
-			return id.split('-')[0].toUpperCase();
-		}
-
-		// Generic fallback: first 8 chars uppercase
-		return id.slice(0, 8).toUpperCase();
-	}
-	return 'New Session';
-}
+import { getTabDisplayName } from '../../utils/tabHelpers';
+// Re-export for consumers that import from here
+export { getTabDisplayName };
 
 /**
  * Individual tab component styled like browser tabs (Safari/Chrome).
@@ -494,7 +457,7 @@ export const AITab = memo(function AITab({
 			{tab.state !== 'busy' && tab.hasUnread && (
 				<div
 					className="w-2 h-2 rounded-full shrink-0"
-					style={{ backgroundColor: theme.colors.accent }}
+					style={{ backgroundColor: theme.colors.error }}
 					title="New messages"
 				/>
 			)}

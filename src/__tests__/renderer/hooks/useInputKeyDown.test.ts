@@ -134,7 +134,6 @@ beforeEach(() => {
 
 	useSettingsStore.setState({
 		enterToSendAI: true,
-		enterToSendTerminal: true,
 	} as any);
 });
 
@@ -552,9 +551,9 @@ describe('Slash command autocomplete', () => {
 
 	it('filters out aiOnly commands in terminal mode', () => {
 		setActiveSession({ inputMode: 'terminal' });
-		// Only /run is aiOnly, so it should be filtered out
-		// Input is '/r' which only matches /run
-		const deps = createMockDeps({ inputValue: '/r', allSlashCommands: commands });
+		// /run is aiOnly, so it should be filtered out in terminal mode
+		// Use '/run' which exactly matches only the aiOnly command
+		const deps = createMockDeps({ inputValue: '/run', allSlashCommands: commands });
 		const { result } = renderHook(() => useInputKeyDown(deps));
 		const e = createKeyEvent('Enter');
 
@@ -667,35 +666,6 @@ describe('Enter-to-send', () => {
 			result.current.handleInputKeyDown(e);
 		});
 
-		expect(deps.processInput).not.toHaveBeenCalled();
-	});
-
-	it('uses enterToSendTerminal setting in terminal mode', () => {
-		setActiveSession({ inputMode: 'terminal' });
-		useSettingsStore.setState({ enterToSendTerminal: true } as any);
-		const deps = createMockDeps();
-		const { result } = renderHook(() => useInputKeyDown(deps));
-		const e = createKeyEvent('Enter');
-
-		act(() => {
-			result.current.handleInputKeyDown(e);
-		});
-
-		expect(deps.processInput).toHaveBeenCalled();
-	});
-
-	it('does not send on Enter+Meta when enterToSendTerminal is true', () => {
-		setActiveSession({ inputMode: 'terminal' });
-		useSettingsStore.setState({ enterToSendTerminal: true } as any);
-		const deps = createMockDeps();
-		const { result } = renderHook(() => useInputKeyDown(deps));
-		const e = createKeyEvent('Enter', { metaKey: true });
-
-		act(() => {
-			result.current.handleInputKeyDown(e);
-		});
-
-		// metaKey with enterToSend=true should not match either branch
 		expect(deps.processInput).not.toHaveBeenCalled();
 	});
 });
@@ -889,6 +859,143 @@ describe('Tab completion trigger', () => {
 
 		// Should handle as slash command Tab, not tab completion trigger
 		expect(deps.getTabCompletionSuggestions).not.toHaveBeenCalled();
+	});
+});
+
+// ============================================================================
+// Forced parallel send shortcut
+// ============================================================================
+
+describe('Forced parallel send shortcut', () => {
+	it('Cmd+Shift+Enter calls processInput with forceParallel in AI mode', () => {
+		setActiveSession({ inputMode: 'ai' });
+		useSettingsStore.setState({
+			forcedParallelExecution: true,
+			shortcuts: {
+				...useSettingsStore.getState().shortcuts,
+				forcedParallelSend: {
+					id: 'forcedParallelSend',
+					label: 'Forced Parallel Send',
+					keys: ['Meta', 'Shift', 'Enter'],
+				},
+			},
+		} as any);
+		const deps = createMockDeps();
+		const { result } = renderHook(() => useInputKeyDown(deps));
+		const e = createKeyEvent('Enter', { metaKey: true, shiftKey: true });
+
+		act(() => {
+			result.current.handleInputKeyDown(e);
+		});
+
+		expect(e.preventDefault).toHaveBeenCalled();
+		expect(deps.processInput).toHaveBeenCalledWith(undefined, { forceParallel: true });
+	});
+
+	it('Ctrl+Shift+Enter calls processInput with forceParallel in AI mode', () => {
+		setActiveSession({ inputMode: 'ai' });
+		useSettingsStore.setState({
+			forcedParallelExecution: true,
+			shortcuts: {
+				...useSettingsStore.getState().shortcuts,
+				forcedParallelSend: {
+					id: 'forcedParallelSend',
+					label: 'Forced Parallel Send',
+					keys: ['Meta', 'Shift', 'Enter'],
+				},
+			},
+		} as any);
+		const deps = createMockDeps();
+		const { result } = renderHook(() => useInputKeyDown(deps));
+		const e = createKeyEvent('Enter', { ctrlKey: true, shiftKey: true });
+
+		act(() => {
+			result.current.handleInputKeyDown(e);
+		});
+
+		expect(e.preventDefault).toHaveBeenCalled();
+		expect(deps.processInput).toHaveBeenCalledWith(undefined, { forceParallel: true });
+	});
+
+	it('does NOT trigger forced parallel in terminal mode', () => {
+		setActiveSession({ inputMode: 'terminal' });
+		useSettingsStore.setState({
+			forcedParallelExecution: true,
+			shortcuts: {
+				...useSettingsStore.getState().shortcuts,
+				forcedParallelSend: {
+					id: 'forcedParallelSend',
+					label: 'Forced Parallel Send',
+					keys: ['Meta', 'Shift', 'Enter'],
+				},
+			},
+		} as any);
+		const deps = createMockDeps();
+		const { result } = renderHook(() => useInputKeyDown(deps));
+		const e = createKeyEvent('Enter', { metaKey: true, shiftKey: true });
+
+		act(() => {
+			result.current.handleInputKeyDown(e);
+		});
+
+		// Should NOT call processInput at all in terminal mode
+		expect(deps.processInput).not.toHaveBeenCalled();
+	});
+
+	it('does NOT trigger forced parallel when feature is disabled', () => {
+		setActiveSession({ inputMode: 'ai' });
+		useSettingsStore.setState({
+			forcedParallelExecution: false,
+			shortcuts: {
+				...useSettingsStore.getState().shortcuts,
+				forcedParallelSend: {
+					id: 'forcedParallelSend',
+					label: 'Forced Parallel Send',
+					keys: ['Meta', 'Shift', 'Enter'],
+				},
+			},
+		} as any);
+		const deps = createMockDeps();
+		const { result } = renderHook(() => useInputKeyDown(deps));
+		const e = createKeyEvent('Enter', { metaKey: true, shiftKey: true });
+
+		act(() => {
+			result.current.handleInputKeyDown(e);
+		});
+
+		// Should NOT call processInput with forceParallel when feature is disabled
+		expect(deps.processInput).not.toHaveBeenCalledWith(undefined, { forceParallel: true });
+	});
+
+	it('respects custom shortcut configuration', () => {
+		setActiveSession({ inputMode: 'ai' });
+		useSettingsStore.setState({
+			forcedParallelExecution: true,
+			shortcuts: {
+				...useSettingsStore.getState().shortcuts,
+				forcedParallelSend: {
+					id: 'forcedParallelSend',
+					label: 'Forced Parallel Send',
+					keys: ['Alt', 'Enter'],
+				},
+			},
+		} as any);
+		const deps = createMockDeps();
+		const { result } = renderHook(() => useInputKeyDown(deps));
+
+		// Default shortcut (Meta+Shift+Enter) should NOT trigger
+		const e1 = createKeyEvent('Enter', { metaKey: true, shiftKey: true });
+		act(() => {
+			result.current.handleInputKeyDown(e1);
+		});
+		expect(deps.processInput).not.toHaveBeenCalledWith(undefined, { forceParallel: true });
+
+		// Custom shortcut (Alt+Enter) SHOULD trigger
+		const e2 = createKeyEvent('Enter', { altKey: true });
+		act(() => {
+			result.current.handleInputKeyDown(e2);
+		});
+		expect(deps.processInput).toHaveBeenCalledWith(undefined, { forceParallel: true });
 	});
 });
 
@@ -1174,27 +1281,6 @@ describe('Enter-to-send — additional', () => {
 		});
 
 		expect(deps.processInput).not.toHaveBeenCalled();
-	});
-
-	it('terminal mode with enterToSendTerminal=false requires Cmd+Enter', () => {
-		setActiveSession({ inputMode: 'terminal' });
-		useSettingsStore.setState({ enterToSendTerminal: false } as any);
-		const deps = createMockDeps();
-		const { result } = renderHook(() => useInputKeyDown(deps));
-
-		// Plain Enter does not send
-		const e1 = createKeyEvent('Enter');
-		act(() => {
-			result.current.handleInputKeyDown(e1);
-		});
-		expect(deps.processInput).not.toHaveBeenCalled();
-
-		// Cmd+Enter does send
-		const e2 = createKeyEvent('Enter', { metaKey: true });
-		act(() => {
-			result.current.handleInputKeyDown(e2);
-		});
-		expect(deps.processInput).toHaveBeenCalled();
 	});
 
 	it('no active session uses undefined inputMode, falls to AI enterToSend setting', () => {

@@ -20,9 +20,10 @@ import {
 	ESTIMATED_ROW_HEIGHT_SIMPLE,
 	LOOKBACK_OPTIONS,
 } from '../History';
+import type { GraphBucket } from '../History/ActivityGraph';
 import type { HistoryStats } from '../History';
 import { HistoryDetailModal } from '../HistoryDetailModal';
-import { useListNavigation, useSettings } from '../../hooks';
+import { useListNavigation, useSettings, useThrottledCallback } from '../../hooks';
 import { useSessionStore } from '../../stores/sessionStore';
 import { useSettingsStore } from '../../stores/settingsStore';
 import type { TabFocusHandle } from './OverviewTab';
@@ -88,6 +89,12 @@ export const UnifiedHistoryTab = forwardRef<TabFocusHandle, UnifiedHistoryTabPro
 
 		// Stable snapshot of entries for the graph — only updated on fresh loads, not scroll-appends
 		const [graphEntries, setGraphEntries] = useState<UnifiedHistoryEntry[]>([]);
+		// Pre-computed graph buckets from backend (covers ALL entries, not just first page)
+		const [graphBuckets, setGraphBuckets] = useState<GraphBucket[] | undefined>(undefined);
+		// Viewport range for the red scroll indicator on the activity graph
+		const [graphViewportRange, setGraphViewportRange] = useState<
+			{ start: number; end: number } | undefined
+		>(undefined);
 
 		const listRef = useRef<HTMLDivElement>(null);
 		const loadingMoreRef = useRef(false); // Guard against concurrent loads
@@ -170,7 +177,7 @@ export const UnifiedHistoryTab = forwardRef<TabFocusHandle, UnifiedHistoryTabPro
 					return merged;
 				});
 
-				// Update graph entries for ActivityGraph
+				// Update graph entries for ActivityGraph (fallback path)
 				setGraphEntries((prev) => {
 					const existingIds = new Set(prev.map((e) => e.id));
 					const newEntries = uniqueBatch.filter((e) => !existingIds.has(e.id));
@@ -178,6 +185,37 @@ export const UnifiedHistoryTab = forwardRef<TabFocusHandle, UnifiedHistoryTabPro
 					const merged = [...newEntries, ...prev];
 					merged.sort((a, b) => b.timestamp - a.timestamp);
 					return merged;
+				});
+
+				// Incrementally update pre-computed graph buckets for new entries
+				setGraphBuckets((prev) => {
+					if (!prev || prev.length === 0) return prev;
+					const lookbackConfig =
+						LOOKBACK_OPTIONS.find((o) => o.hours === lookbackHours) || LOOKBACK_OPTIONS[0];
+					if (prev.length !== lookbackConfig.bucketCount) return prev;
+
+					const bucketEnd = Date.now();
+					const bucketStart =
+						lookbackHours !== null ? bucketEnd - lookbackHours * 60 * 60 * 1000 : 0; // "all time" — skip incremental update
+					if (bucketStart === 0) return prev; // can't incrementally bucket "all time"
+
+					const msPer = (bucketEnd - bucketStart) / prev.length;
+					if (msPer <= 0) return prev;
+
+					const updated = prev.map((b) => ({ ...b }));
+					for (const entry of uniqueBatch) {
+						if (entry.timestamp < bucketStart) continue;
+						const idx = Math.min(
+							updated.length - 1,
+							Math.floor((entry.timestamp - bucketStart) / msPer)
+						);
+						if (idx >= 0 && idx < updated.length) {
+							if (entry.type === 'AUTO') updated[idx].auto++;
+							else if (entry.type === 'USER') updated[idx].user++;
+							else if (entry.type === 'CUE') updated[idx].cue++;
+						}
+					}
+					return updated;
 				});
 			};
 
@@ -239,11 +277,15 @@ export const UnifiedHistoryTab = forwardRef<TabFocusHandle, UnifiedHistoryTabPro
 					setIsLoading(true);
 				}
 				try {
+					// On fresh loads, request graph bucket data from backend
+					const lookbackConfig =
+						LOOKBACK_OPTIONS.find((o) => o.hours === lookback) || LOOKBACK_OPTIONS[0];
 					const result = await window.maestro.directorNotes.getUnifiedHistory({
 						lookbackDays: lookbackHoursToDays(lookback),
 						filter: null,
 						limit: PAGE_SIZE,
 						offset,
+						graphBucketCount: append ? undefined : lookbackConfig.bucketCount,
 					});
 					const newEntries = result.entries as UnifiedHistoryEntry[];
 					if (append) {
@@ -252,6 +294,8 @@ export const UnifiedHistoryTab = forwardRef<TabFocusHandle, UnifiedHistoryTabPro
 						setEntries(newEntries);
 						// Update graph snapshot only on fresh loads
 						setGraphEntries(newEntries);
+						// Use backend-computed buckets (covers all entries)
+						setGraphBuckets(result.graphBuckets);
 					}
 					setHasMore(result.hasMore);
 					setTotalEntries(result.total);
@@ -264,6 +308,7 @@ export const UnifiedHistoryTab = forwardRef<TabFocusHandle, UnifiedHistoryTabPro
 					if (!append) {
 						setEntries([]);
 						setGraphEntries([]);
+						setGraphBuckets(undefined);
 					}
 					setHasMore(false);
 				} finally {
@@ -293,24 +338,11 @@ export const UnifiedHistoryTab = forwardRef<TabFocusHandle, UnifiedHistoryTabPro
 			// Reset scroll position and entries — useEffect will trigger a fresh load
 			setEntries([]);
 			setGraphEntries([]);
+			setGraphBuckets(undefined);
 			setHasMore(true);
 			setTotalEntries(0);
 			setHistoryStats(null);
 		}, []);
-
-		// Load next page when scrolling near the bottom
-		const handleScroll = useCallback(() => {
-			if (!hasMore || loadingMoreRef.current || isLoading) return;
-
-			const el = listRef.current;
-			if (!el) return;
-
-			const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < SCROLL_LOAD_THRESHOLD;
-			if (nearBottom) {
-				loadingMoreRef.current = true;
-				loadPage(entries.length, true, lookbackHours);
-			}
-		}, [hasMore, isLoading, entries.length, loadPage, lookbackHours]);
 
 		// Filter entries client-side
 		const filteredEntries = useMemo(() => {
@@ -397,6 +429,64 @@ export const UnifiedHistoryTab = forwardRef<TabFocusHandle, UnifiedHistoryTabPro
 				virtualizer.scrollToIndex(selectedIndex, { align: 'auto' });
 			}
 		}, [selectedIndex, virtualizer]);
+
+		// Scroll handler: pagination + viewport indicator
+		const scrollTargetRef = useRef<HTMLDivElement | null>(null);
+
+		const handleScrollInner = useCallback(() => {
+			const el = scrollTargetRef.current || listRef.current;
+
+			// Pagination: load next page when near bottom
+			if (el && hasMore && !loadingMoreRef.current && !isLoading) {
+				const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < SCROLL_LOAD_THRESHOLD;
+				if (nearBottom) {
+					loadingMoreRef.current = true;
+					loadPage(entries.length, true, lookbackHours);
+				}
+			}
+
+			// Viewport indicator: track which entries are visible
+			const visibleItems = virtualizer.getVirtualItems();
+			if (visibleItems.length === 0) {
+				setGraphViewportRange(undefined);
+				return;
+			}
+
+			if (
+				el &&
+				el.scrollTop < 10 &&
+				visibleItems[visibleItems.length - 1]?.index >= filteredEntries.length - 1
+			) {
+				setGraphViewportRange(undefined);
+			} else {
+				const firstIdx = visibleItems[0]?.index ?? 0;
+				const lastIdx = visibleItems[visibleItems.length - 1]?.index ?? 0;
+				const topEntry = filteredEntries[firstIdx];
+				const bottomEntry = filteredEntries[lastIdx];
+				if (topEntry && bottomEntry) {
+					setGraphViewportRange({
+						start: bottomEntry.timestamp,
+						end: topEntry.timestamp,
+					});
+				}
+			}
+		}, [hasMore, isLoading, entries.length, loadPage, lookbackHours, virtualizer, filteredEntries]);
+
+		// Throttle to ~240fps for smooth indicator movement
+		const throttledScrollHandler = useThrottledCallback(handleScrollInner, 4);
+
+		const handleScroll = useCallback(
+			(e: React.UIEvent<HTMLDivElement>) => {
+				scrollTargetRef.current = e.currentTarget;
+				throttledScrollHandler();
+			},
+			[throttledScrollHandler]
+		);
+
+		// Reset viewport indicator when filters or lookback change
+		useEffect(() => {
+			setGraphViewportRange(undefined);
+		}, [activeFilters, searchQuery, lookbackHours]);
 
 		// Search toggle
 		const openSearch = useCallback(() => {
@@ -549,6 +639,9 @@ export const UnifiedHistoryTab = forwardRef<TabFocusHandle, UnifiedHistoryTabPro
 						theme={theme}
 						lookbackHours={lookbackHours}
 						onLookbackChange={handleLookbackChange}
+						precomputedBuckets={graphBuckets}
+						viewportRange={graphViewportRange}
+						alwaysShowViewportLabel
 						onBarClick={(start, end) => {
 							// Find first entry in range and select it
 							const idx = filteredEntries.findIndex(

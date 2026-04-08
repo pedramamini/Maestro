@@ -6,7 +6,7 @@
  * Usage & Stats configuration (stats collection, time ranges, WakaTime integration).
  */
 
-import { useState } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import {
 	Clapperboard,
 	ChevronDown,
@@ -18,9 +18,12 @@ import {
 	Plus,
 	X,
 	Zap,
+	Timer,
+	Key,
 } from 'lucide-react';
 import { useSettings } from '../../../hooks';
 import { useAgentConfiguration } from '../../../hooks/agent/useAgentConfiguration';
+import { captureException } from '../../../utils/sentry';
 import type { Theme, AgentConfig, ToolType } from '../../../types';
 import { AgentConfigPanel } from '../../shared/AgentConfigPanel';
 import { AGENT_TILES } from '../../Wizard/screens/AgentSelectionScreen';
@@ -43,7 +46,85 @@ export function EncoreTab({ theme, isOpen }: EncoreTabProps) {
 		setStatsCollectionEnabled,
 		defaultStatsTimeRange,
 		setDefaultStatsTimeRange,
+		// WakaTime
+		wakatimeEnabled,
+		setWakatimeEnabled,
+		wakatimeApiKey,
+		setWakatimeApiKey,
+		wakatimeDetailedTracking,
+		setWakatimeDetailedTracking,
 	} = useSettings();
+
+	// WakaTime CLI check and API key validation state
+	const [wakatimeCliStatus, setWakatimeCliStatus] = useState<{
+		available: boolean;
+		version?: string;
+	} | null>(null);
+	const [wakatimeKeyValid, setWakatimeKeyValid] = useState<boolean | null>(null);
+	const [wakatimeKeyValidating, setWakatimeKeyValidating] = useState(false);
+	const wakatimeApiKeyRef = useRef(wakatimeApiKey);
+	wakatimeApiKeyRef.current = wakatimeApiKey;
+	const handleWakatimeApiKeyChange = useCallback(
+		(value: string) => {
+			setWakatimeApiKey(value);
+			setWakatimeKeyValid(null);
+			setWakatimeKeyValidating(false);
+		},
+		[setWakatimeApiKey]
+	);
+
+	// Check WakaTime CLI availability when section renders or toggle is enabled
+	useEffect(() => {
+		if (!isOpen || !wakatimeEnabled) return;
+		let cancelled = false;
+		let retryTimer: ReturnType<typeof setTimeout> | null = null;
+
+		const handleCliError = (err: unknown) => {
+			captureException(err instanceof Error ? err : new Error(String(err)), {
+				extra: { context: 'WakaTime CLI check' },
+			});
+			if (!cancelled) setWakatimeCliStatus({ available: false });
+		};
+
+		window.maestro.wakatime
+			.checkCli()
+			.then((status) => {
+				if (cancelled) return;
+				setWakatimeCliStatus(status);
+				if (!status.available) {
+					retryTimer = setTimeout(() => {
+						if (!cancelled) {
+							window.maestro.wakatime
+								.checkCli()
+								.then((retryStatus) => {
+									if (!cancelled) setWakatimeCliStatus(retryStatus);
+								})
+								.catch(handleCliError);
+						}
+					}, 3000);
+				}
+			})
+			.catch((err) => {
+				if (cancelled) return;
+				handleCliError(err);
+				retryTimer = setTimeout(() => {
+					if (!cancelled) {
+						window.maestro.wakatime
+							.checkCli()
+							.then((retryStatus) => {
+								if (!cancelled) setWakatimeCliStatus(retryStatus);
+							})
+							.catch(handleCliError);
+					}
+				}, 3000);
+			});
+
+		return () => {
+			cancelled = true;
+			if (retryTimer) clearTimeout(retryTimer);
+			setWakatimeCliStatus(null);
+		};
+	}, [isOpen, wakatimeEnabled]);
 
 	// Symphony registry URL management
 	const [newRegistryUrl, setNewRegistryUrl] = useState('');
@@ -157,6 +238,7 @@ export function EncoreTab({ theme, isOpen }: EncoreTabProps) {
 
 			{/* Usage & Stats Feature Section */}
 			<div
+				data-setting-id="encore-usage-stats"
 				className="rounded-lg border"
 				style={{
 					borderColor: encoreFeatures.usageStats ? theme.colors.accent : theme.colors.border,
@@ -245,12 +327,167 @@ export function EncoreTab({ theme, isOpen }: EncoreTabProps) {
 								/>
 							</div>
 						</div>
+
+						<div className="border-t" style={{ borderColor: theme.colors.border }} />
+
+						{/* WakaTime Integration */}
+						<div className="flex items-center justify-between">
+							<div>
+								<p
+									className="text-sm flex items-center gap-2"
+									style={{ color: theme.colors.textMain }}
+								>
+									<Timer className="w-3.5 h-3.5 opacity-60" />
+									Enable WakaTime tracking
+								</p>
+								<p className="text-xs opacity-50 mt-0.5">
+									Track coding activity in Maestro sessions via WakaTime.
+								</p>
+							</div>
+							<button
+								onClick={() => setWakatimeEnabled(!wakatimeEnabled)}
+								className="relative w-10 h-5 rounded-full transition-colors"
+								style={{
+									backgroundColor: wakatimeEnabled ? theme.colors.accent : theme.colors.bgActivity,
+								}}
+								role="switch"
+								aria-checked={wakatimeEnabled}
+								aria-label="Enable WakaTime tracking"
+							>
+								<span
+									className={`absolute left-0 top-0.5 w-4 h-4 rounded-full bg-white transition-transform ${
+										wakatimeEnabled ? 'translate-x-5' : 'translate-x-0.5'
+									}`}
+								/>
+							</button>
+						</div>
+
+						{/* CLI not found warning */}
+						{wakatimeEnabled && wakatimeCliStatus && !wakatimeCliStatus.available && (
+							<p className="text-xs mt-1" style={{ color: theme.colors.warning }}>
+								WakaTime CLI is being installed automatically...
+							</p>
+						)}
+
+						{/* Detailed file tracking toggle (only shown when enabled) */}
+						{wakatimeEnabled && (
+							<div className="flex items-center justify-between">
+								<div>
+									<p className="text-sm" style={{ color: theme.colors.textMain }}>
+										Detailed file tracking
+									</p>
+									<p className="text-xs opacity-50 mt-0.5">
+										Track per-file write activity. Sends file paths (not content) to WakaTime.
+									</p>
+								</div>
+								<button
+									onClick={() => setWakatimeDetailedTracking(!wakatimeDetailedTracking)}
+									className="relative w-10 h-5 rounded-full transition-colors flex-shrink-0 outline-none"
+									tabIndex={0}
+									style={{
+										backgroundColor: wakatimeDetailedTracking
+											? theme.colors.accent
+											: theme.colors.bgActivity,
+									}}
+									role="switch"
+									aria-checked={wakatimeDetailedTracking}
+									aria-label="Detailed file tracking"
+								>
+									<span
+										className={`absolute left-0 top-0.5 w-4 h-4 rounded-full bg-white transition-transform ${
+											wakatimeDetailedTracking ? 'translate-x-5' : 'translate-x-0.5'
+										}`}
+									/>
+								</button>
+							</div>
+						)}
+
+						{/* API Key Input (only shown when enabled) */}
+						{wakatimeEnabled && (
+							<div>
+								<label htmlFor="wakatime-api-key" className="block text-xs opacity-60 mb-1">
+									API Key
+								</label>
+								<div
+									className="flex items-center border rounded px-3 py-2"
+									style={{
+										backgroundColor: theme.colors.bgMain,
+										borderColor: theme.colors.border,
+									}}
+								>
+									<Key className="w-4 h-4 mr-2 opacity-50" />
+									<input
+										id="wakatime-api-key"
+										type="password"
+										value={wakatimeApiKey}
+										onChange={(e) => handleWakatimeApiKeyChange(e.target.value)}
+										onBlur={() => {
+											const keyAtBlur = wakatimeApiKey;
+											if (keyAtBlur) {
+												setWakatimeKeyValidating(true);
+												setWakatimeKeyValid(null);
+												window.maestro.wakatime
+													.validateApiKey(keyAtBlur)
+													.then((result) => {
+														if (wakatimeApiKeyRef.current === keyAtBlur) {
+															setWakatimeKeyValid(result.valid);
+														}
+													})
+													.catch((err) => {
+														captureException(err instanceof Error ? err : new Error(String(err)), {
+															extra: {
+																context: 'WakaTime API key validation',
+															},
+														});
+														if (wakatimeApiKeyRef.current === keyAtBlur) {
+															setWakatimeKeyValid(false);
+														}
+													})
+													.finally(() => {
+														if (wakatimeApiKeyRef.current === keyAtBlur) {
+															setWakatimeKeyValidating(false);
+														}
+													});
+											}
+										}}
+										className="bg-transparent flex-1 text-sm outline-none"
+										style={{ color: theme.colors.textMain }}
+										placeholder="waka_..."
+									/>
+									{wakatimeKeyValidating && <span className="ml-2 text-xs opacity-50">...</span>}
+									{!wakatimeKeyValidating && wakatimeKeyValid === true && (
+										<Check className="w-4 h-4 ml-2" style={{ color: theme.colors.success }} />
+									)}
+									{wakatimeApiKey && (
+										<button
+											type="button"
+											aria-label="Clear WakaTime API key"
+											onClick={() => handleWakatimeApiKeyChange('')}
+											className="ml-2 opacity-50 hover:opacity-100"
+											title="Clear API key"
+											style={
+												!wakatimeKeyValidating && wakatimeKeyValid === false
+													? { color: theme.colors.error, opacity: 1 }
+													: undefined
+											}
+										>
+											<X className="w-3 h-3" />
+										</button>
+									)}
+								</div>
+								<p className="text-[10px] mt-1.5 opacity-50">
+									Get your API key from wakatime.com/settings/api-key. Keys are stored locally in
+									~/.maestro/settings.json.
+								</p>
+							</div>
+						)}
 					</div>
 				)}
 			</div>
 
 			{/* Maestro Symphony Feature Section */}
 			<div
+				data-setting-id="encore-symphony"
 				className="rounded-lg border"
 				style={{
 					borderColor: encoreFeatures.symphony ? theme.colors.accent : theme.colors.border,
@@ -418,6 +655,7 @@ export function EncoreTab({ theme, isOpen }: EncoreTabProps) {
 
 			{/* Maestro Cue Feature Section */}
 			<div
+				data-setting-id="encore-cue"
 				className="rounded-lg border"
 				style={{
 					borderColor: encoreFeatures.maestroCue ? theme.colors.accent : theme.colors.border,
@@ -482,6 +720,7 @@ export function EncoreTab({ theme, isOpen }: EncoreTabProps) {
 
 			{/* Director's Notes Feature Section */}
 			<div
+				data-setting-id="encore-director-notes"
 				className="rounded-lg border"
 				style={{
 					borderColor: encoreFeatures.directorNotes ? theme.colors.accent : theme.colors.border,
@@ -715,6 +954,8 @@ export function EncoreTab({ theme, isOpen }: EncoreTabProps) {
 										availableModels={ac.availableModels}
 										loadingModels={ac.loadingModels}
 										onRefreshModels={ac.refreshModels}
+										dynamicOptions={ac.dynamicOptions}
+										loadingDynamicOptions={ac.loadingDynamicOptions}
 										onRefreshAgent={ac.refreshAgent}
 										refreshingAgent={ac.refreshingAgent}
 										compact

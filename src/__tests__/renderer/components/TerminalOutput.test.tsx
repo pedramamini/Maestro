@@ -1856,9 +1856,8 @@ describe('TerminalOutput', () => {
 	});
 
 	describe('auto-scroll when at bottom', () => {
-		it('auto-scrolls to bottom when user is at bottom and new content arrives (no autoScrollAiMode)', async () => {
+		it('auto-scrolls to bottom when user is at bottom and new content arrives', async () => {
 			// isAtBottom starts as true (initial state), so auto-scroll should work
-			// even when autoScrollAiMode preference is OFF
 			const logs: LogEntry[] = [
 				createLogEntry({ id: 'user-1', text: 'Hello', source: 'user' }),
 				createLogEntry({ id: 'resp-1', text: 'Hi there', source: 'stdout' }),
@@ -1869,10 +1868,7 @@ describe('TerminalOutput', () => {
 				activeTabId: 'tab-1',
 			});
 
-			const props = createDefaultProps({
-				session,
-				autoScrollAiMode: false, // Auto-scroll preference is OFF
-			});
+			const props = createDefaultProps({ session });
 			const { container, rerender } = render(<TerminalOutput {...props} />);
 
 			const scrollContainer = container.querySelector('.overflow-y-auto') as HTMLElement;
@@ -1891,9 +1887,7 @@ describe('TerminalOutput', () => {
 				tabs: [{ id: 'tab-1', agentSessionId: 'claude-123', logs: newLogs, isUnread: false }],
 			};
 
-			rerender(
-				<TerminalOutput {...createDefaultProps({ session: newSession, autoScrollAiMode: false })} />
-			);
+			rerender(<TerminalOutput {...createDefaultProps({ session: newSession })} />);
 
 			// MutationObserver fires on DOM change, RAF needs time to execute
 			await act(async () => {
@@ -1904,7 +1898,7 @@ describe('TerminalOutput', () => {
 			expect(scrollToSpy).toHaveBeenCalled();
 		});
 
-		it('does NOT auto-scroll when user has scrolled up and autoScrollAiMode is off', async () => {
+		it('does NOT auto-scroll when user has scrolled up (auto-scroll paused)', async () => {
 			const logs: LogEntry[] = [
 				createLogEntry({ id: 'user-1', text: 'Hello', source: 'user' }),
 				createLogEntry({ id: 'resp-1', text: 'Response', source: 'stdout' }),
@@ -1915,10 +1909,7 @@ describe('TerminalOutput', () => {
 				activeTabId: 'tab-1',
 			});
 
-			const props = createDefaultProps({
-				session,
-				autoScrollAiMode: false,
-			});
+			const props = createDefaultProps({ session });
 			const { container, rerender } = render(<TerminalOutput {...props} />);
 
 			const scrollContainer = container.querySelector('.overflow-y-auto') as HTMLElement;
@@ -1948,19 +1939,17 @@ describe('TerminalOutput', () => {
 				tabs: [{ id: 'tab-1', agentSessionId: 'claude-123', logs: newLogs, isUnread: false }],
 			};
 
-			rerender(
-				<TerminalOutput {...createDefaultProps({ session: newSession, autoScrollAiMode: false })} />
-			);
+			rerender(<TerminalOutput {...createDefaultProps({ session: newSession })} />);
 
 			await act(async () => {
 				vi.advanceTimersByTime(50);
 			});
 
-			// scrollTo should NOT have been called — user scrolled up, no auto-scroll
+			// scrollTo should NOT have been called — user scrolled up, auto-scroll paused
 			expect(scrollToSpy).not.toHaveBeenCalled();
 		});
 
-		it('auto-scrolls when autoScrollAiMode is on and not paused', async () => {
+		it('auto-scrolls when at bottom and new content arrives', async () => {
 			const logs: LogEntry[] = [createLogEntry({ id: 'user-1', text: 'Hello', source: 'user' })];
 
 			const session = createDefaultSession({
@@ -1968,11 +1957,7 @@ describe('TerminalOutput', () => {
 				activeTabId: 'tab-1',
 			});
 
-			const props = createDefaultProps({
-				session,
-				autoScrollAiMode: true,
-				setAutoScrollAiMode: vi.fn(),
-			});
+			const props = createDefaultProps({ session });
 			const { container, rerender } = render(<TerminalOutput {...props} />);
 
 			const scrollContainer = container.querySelector('.overflow-y-auto') as HTMLElement;
@@ -1991,15 +1976,7 @@ describe('TerminalOutput', () => {
 				tabs: [{ id: 'tab-1', agentSessionId: 'claude-123', logs: newLogs, isUnread: false }],
 			};
 
-			rerender(
-				<TerminalOutput
-					{...createDefaultProps({
-						session: newSession,
-						autoScrollAiMode: true,
-						setAutoScrollAiMode: vi.fn(),
-					})}
-				/>
-			);
+			rerender(<TerminalOutput {...createDefaultProps({ session: newSession })} />);
 
 			await act(async () => {
 				vi.advanceTimersByTime(50);
@@ -2008,7 +1985,7 @@ describe('TerminalOutput', () => {
 			expect(scrollToSpy).toHaveBeenCalled();
 		});
 
-		it('always auto-scrolls in terminal mode regardless of autoScrollAiMode', async () => {
+		it('always auto-scrolls in terminal mode', async () => {
 			const logs: LogEntry[] = [createLogEntry({ id: 'cmd-1', text: 'ls', source: 'user' })];
 
 			const session = createDefaultSession({
@@ -2016,10 +1993,7 @@ describe('TerminalOutput', () => {
 				shellLogs: logs,
 			});
 
-			const props = createDefaultProps({
-				session,
-				autoScrollAiMode: false,
-			});
+			const props = createDefaultProps({ session });
 			const { container, rerender } = render(<TerminalOutput {...props} />);
 
 			const scrollContainer = container.querySelector('.overflow-y-auto') as HTMLElement;
@@ -2038,9 +2012,7 @@ describe('TerminalOutput', () => {
 				shellLogs: newLogs,
 			};
 
-			rerender(
-				<TerminalOutput {...createDefaultProps({ session: newSession, autoScrollAiMode: false })} />
-			);
+			rerender(<TerminalOutput {...createDefaultProps({ session: newSession })} />);
 
 			await act(async () => {
 				vi.advanceTimersByTime(50);

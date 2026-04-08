@@ -1,55 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-
-/** Event types that can trigger a Cue subscription */
-type CueEventType =
-	| 'time.heartbeat'
-	| 'time.scheduled'
-	| 'file.changed'
-	| 'agent.completed'
-	| 'github.pull_request'
-	| 'github.issue'
-	| 'task.pending';
-
-/** Status of a Cue run */
-type CueRunStatus = 'running' | 'completed' | 'failed' | 'timeout' | 'stopped';
-
-/** An event instance produced by a trigger */
-interface CueEvent {
-	id: string;
-	type: CueEventType;
-	timestamp: string;
-	triggerName: string;
-	payload: Record<string, unknown>;
-}
-
-/** Result of a completed (or failed/timed-out) Cue run */
-export interface CueRunResult {
-	runId: string;
-	sessionId: string;
-	sessionName: string;
-	subscriptionName: string;
-	event: CueEvent;
-	status: CueRunStatus;
-	stdout: string;
-	stderr: string;
-	exitCode: number | null;
-	durationMs: number;
-	startedAt: string;
-	endedAt: string;
-}
-
-/** Status summary for a Cue-enabled session */
-export interface CueSessionStatus {
-	sessionId: string;
-	sessionName: string;
-	toolType: string;
-	projectRoot: string;
-	enabled: boolean;
-	subscriptionCount: number;
-	activeRuns: number;
-	lastTriggered?: string;
-	nextTrigger?: string;
-}
+import type { CueRunResult, CueSessionStatus } from '../../shared/cue';
+export type { CueRunResult, CueSessionStatus } from '../../shared/cue';
 
 export interface UseCueReturn {
 	sessions: CueSessionStatus[];

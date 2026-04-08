@@ -35,12 +35,14 @@ interface ProcessConfig {
 	sessionCustomArgs?: string;
 	sessionCustomEnvVars?: Record<string, string>;
 	sessionCustomModel?: string;
+	sessionCustomEffort?: string;
 	sessionCustomContextWindow?: number;
 	// Per-session SSH remote config (takes precedence over agent-level SSH config)
 	sessionSshRemoteConfig?: {
 		enabled: boolean;
 		remoteId: string | null;
 		workingDirOverride?: string;
+		syncHistory?: boolean;
 	};
 	// System prompt delivery (separate from user message for token efficiency)
 	appendSystemPrompt?: string; // System prompt to pass via --append-system-prompt or embed in prompt
@@ -184,6 +186,7 @@ type GroupChatData = {
 		customArgs?: string;
 		customEnvVars?: Record<string, string>;
 		customModel?: string;
+		customEffort?: string;
 		sshRemoteConfig?: {
 			enabled: boolean;
 			remoteId: string | null;
@@ -211,6 +214,8 @@ type GroupChatData = {
 	draftMessage?: string;
 	archived?: boolean;
 };
+
+import type { CueGraphSession, CueRunResult, CueSessionStatus, CueSettings } from '../shared/cue';
 
 interface MaestroAPI {
 	// Context merging API (for session context transfer and grooming)
@@ -249,10 +254,13 @@ interface MaestroAPI {
 		get: (key: string) => Promise<unknown>;
 		set: (key: string, value: unknown) => Promise<boolean>;
 		getAll: () => Promise<Record<string, unknown>>;
+		onExternalChange: (handler: () => void) => () => void;
 	};
 	sessions: {
 		getAll: () => Promise<any[]>;
 		setAll: (sessions: any[]) => Promise<boolean>;
+		getActiveSessionId: () => Promise<string>;
+		setActiveSessionId: (id: string) => Promise<void>;
 	};
 	groups: {
 		getAll: () => Promise<any[]>;
@@ -266,12 +274,15 @@ interface MaestroAPI {
 			shell?: string;
 			shellArgs?: string;
 			shellEnvVars?: Record<string, string>;
+			toolType?: string;
+			sessionCustomEnvVars?: Record<string, string>;
 			cols?: number;
 			rows?: number;
 			sessionSshRemoteConfig?: {
 				enabled: boolean;
 				remoteId: string | null;
 				workingDirOverride?: string;
+				syncHistory?: boolean;
 			};
 		}) => Promise<{ pid: number; success: boolean }>;
 		write: (sessionId: string, data: string) => Promise<boolean>;
@@ -287,6 +298,7 @@ interface MaestroAPI {
 				enabled: boolean;
 				remoteId: string | null;
 				workingDirOverride?: string;
+				syncHistory?: boolean;
 			};
 		}) => Promise<{ exitCode: number }>;
 		getActiveProcesses: () => Promise<
@@ -544,6 +556,7 @@ interface MaestroAPI {
 				createdAt: number;
 				state: 'idle' | 'busy';
 				thinkingStartTime?: number | null;
+				hasUnread?: boolean;
 			}>,
 			activeTabId: string
 		) => Promise<void>;
@@ -880,6 +893,11 @@ interface MaestroAPI {
 		getCustomEnvVars: (agentId: string) => Promise<Record<string, string> | null>;
 		getAllCustomEnvVars: () => Promise<Record<string, Record<string, string>>>;
 		getModels: (agentId: string, forceRefresh?: boolean, sshRemoteId?: string) => Promise<string[]>;
+		getConfigOptions: (
+			agentId: string,
+			optionKey: string,
+			forceRefresh?: boolean
+		) => Promise<string[]>;
 		discoverSlashCommands: (
 			agentId: string,
 			cwd: string,
@@ -1422,7 +1440,8 @@ interface MaestroAPI {
 	history: {
 		getAll: (
 			projectPath?: string,
-			sessionId?: string
+			sessionId?: string,
+			sharedContext?: { sshRemoteId: string; remoteCwd: string }
 		) => Promise<
 			Array<{
 				id: string;
@@ -1439,6 +1458,7 @@ interface MaestroAPI {
 				success?: boolean;
 				elapsedTimeMs?: number;
 				validated?: boolean;
+				hostname?: string;
 			}>
 		>;
 		getAllPaginated: (options?: {
@@ -1461,28 +1481,33 @@ interface MaestroAPI {
 				success?: boolean;
 				elapsedTimeMs?: number;
 				validated?: boolean;
+				hostname?: string;
 			}>;
 			total: number;
 			limit: number;
 			offset: number;
 			hasMore: boolean;
 		}>;
-		add: (entry: {
-			id: string;
-			type: HistoryEntryType;
-			timestamp: number;
-			summary: string;
-			fullResponse?: string;
-			agentSessionId?: string;
-			projectPath: string;
-			sessionId?: string;
-			sessionName?: string;
-			contextUsage?: number;
-			usageStats?: UsageStats;
-			success?: boolean;
-			elapsedTimeMs?: number;
-			validated?: boolean;
-		}) => Promise<boolean>;
+		add: (
+			entry: {
+				id: string;
+				type: HistoryEntryType;
+				timestamp: number;
+				summary: string;
+				fullResponse?: string;
+				agentSessionId?: string;
+				projectPath: string;
+				sessionId?: string;
+				sessionName?: string;
+				contextUsage?: number;
+				usageStats?: UsageStats;
+				success?: boolean;
+				elapsedTimeMs?: number;
+				validated?: boolean;
+				hostname?: string;
+			},
+			sharedContext?: { sshRemoteId: string; remoteCwd: string }
+		) => Promise<boolean>;
 		clear: (projectPath?: string, sessionId?: string) => Promise<boolean>;
 		delete: (entryId: string, sessionId?: string) => Promise<boolean>;
 		update: (
@@ -1923,6 +1948,12 @@ interface MaestroAPI {
 			readOnly?: boolean
 		) => Promise<void>;
 		stopModerator: (id: string) => Promise<void>;
+		stopAll: (id: string) => Promise<void>;
+		reportAutoRunComplete: (
+			groupChatId: string,
+			participantName: string,
+			summary: string
+		) => Promise<void>;
 		getModeratorSessionId: (id: string) => Promise<string | null>;
 		// Participants
 		addParticipant: (
@@ -2050,8 +2081,17 @@ interface MaestroAPI {
 		onParticipantState: (
 			callback: (groupChatId: string, participantName: string, state: 'idle' | 'working') => void
 		) => () => void;
+		onParticipantLiveOutput: (
+			callback: (groupChatId: string, participantName: string, chunk: string) => void
+		) => () => void;
 		onModeratorSessionIdChanged: (
 			callback: (groupChatId: string, sessionId: string) => void
+		) => () => void;
+		onAutoRunTriggered: (
+			callback: (groupChatId: string, participantName: string, filename?: string) => void
+		) => () => void;
+		onAutoRunBatchComplete: (
+			callback: (groupChatId: string, participantName: string) => void
 		) => () => void;
 	};
 	// Leaderboard API
@@ -2875,6 +2915,7 @@ interface MaestroAPI {
 				enabled: boolean;
 				remoteId: string | null;
 				workingDirOverride?: string;
+				syncHistory?: boolean;
 			};
 		}) => Promise<string | null>;
 	};
@@ -2886,6 +2927,7 @@ interface MaestroAPI {
 			filter?: 'AUTO' | 'USER' | 'CUE' | null;
 			limit?: number;
 			offset?: number;
+			graphBucketCount?: number;
 		}) => Promise<{
 			entries: Array<{
 				id: string;
@@ -2916,6 +2958,7 @@ interface MaestroAPI {
 				userCount: number;
 				totalCount: number;
 			};
+			graphBuckets?: Array<{ auto: number; user: number; cue: number }>;
 		}>;
 		generateSynopsis: (options: {
 			lookbackDays: number;
@@ -2964,98 +3007,11 @@ interface MaestroAPI {
 
 	// Cue API (event-driven automation)
 	cue: {
-		getSettings: () => Promise<{
-			timeout_minutes: number;
-			timeout_on_fail: 'break' | 'continue';
-			max_concurrent: number;
-			queue_size: number;
-		}>;
-		getStatus: () => Promise<
-			Array<{
-				sessionId: string;
-				sessionName: string;
-				toolType: string;
-				projectRoot: string;
-				enabled: boolean;
-				subscriptionCount: number;
-				activeRuns: number;
-				lastTriggered?: string;
-				nextTrigger?: string;
-			}>
-		>;
-		getGraphData: () => Promise<
-			Array<{
-				sessionId: string;
-				sessionName: string;
-				toolType: string;
-				subscriptions: Array<{
-					name: string;
-					event:
-						| 'time.heartbeat'
-						| 'time.scheduled'
-						| 'file.changed'
-						| 'agent.completed'
-						| 'github.pull_request'
-						| 'github.issue'
-						| 'task.pending';
-					enabled: boolean;
-					prompt: string;
-					interval_minutes?: number;
-					schedule_times?: string[];
-					schedule_days?: string[];
-					watch?: string;
-					source_session?: string | string[];
-					fan_out?: string[];
-					filter?: Record<string, string | number | boolean>;
-					repo?: string;
-					poll_minutes?: number;
-				}>;
-			}>
-		>;
-		getActiveRuns: () => Promise<
-			Array<{
-				runId: string;
-				sessionId: string;
-				sessionName: string;
-				subscriptionName: string;
-				event: {
-					id: string;
-					type: 'time.heartbeat' | 'time.scheduled' | 'file.changed' | 'agent.completed';
-					timestamp: string;
-					triggerName: string;
-					payload: Record<string, unknown>;
-				};
-				status: 'running' | 'completed' | 'failed' | 'timeout' | 'stopped';
-				stdout: string;
-				stderr: string;
-				exitCode: number | null;
-				durationMs: number;
-				startedAt: string;
-				endedAt: string;
-			}>
-		>;
-		getActivityLog: (limit?: number) => Promise<
-			Array<{
-				runId: string;
-				sessionId: string;
-				sessionName: string;
-				subscriptionName: string;
-				event: {
-					id: string;
-					type: 'time.heartbeat' | 'time.scheduled' | 'file.changed' | 'agent.completed';
-					timestamp: string;
-					triggerName: string;
-					payload: Record<string, unknown>;
-				};
-				status: 'running' | 'completed' | 'failed' | 'timeout' | 'stopped';
-				stdout: string;
-				stderr: string;
-				exitCode: number | null;
-				durationMs: number;
-				startedAt: string;
-				endedAt: string;
-			}>
-		>;
+		getSettings: () => Promise<CueSettings>;
+		getStatus: () => Promise<CueSessionStatus[]>;
+		getGraphData: () => Promise<CueGraphSession[]>;
+		getActiveRuns: () => Promise<CueRunResult[]>;
+		getActivityLog: (limit?: number) => Promise<CueRunResult[]>;
 		enable: () => Promise<void>;
 		disable: () => Promise<void>;
 		stopRun: (runId: string) => Promise<boolean>;
@@ -3074,28 +3030,7 @@ interface MaestroAPI {
 		validateYaml: (content: string) => Promise<{ valid: boolean; errors: string[] }>;
 		savePipelineLayout: (layout: Record<string, unknown>) => Promise<void>;
 		loadPipelineLayout: () => Promise<Record<string, unknown> | null>;
-		onActivityUpdate: (
-			callback: (data: {
-				runId: string;
-				sessionId: string;
-				sessionName: string;
-				subscriptionName: string;
-				event: {
-					id: string;
-					type: 'time.heartbeat' | 'time.scheduled' | 'file.changed' | 'agent.completed';
-					timestamp: string;
-					triggerName: string;
-					payload: Record<string, unknown>;
-				};
-				status: 'running' | 'completed' | 'failed' | 'timeout' | 'stopped';
-				stdout: string;
-				stderr: string;
-				exitCode: number | null;
-				durationMs: number;
-				startedAt: string;
-				endedAt: string;
-			}) => void
-		) => () => void;
+		onActivityUpdate: (callback: (data: CueRunResult) => void) => () => void;
 	};
 
 	// WakaTime API (CLI check, API key validation)

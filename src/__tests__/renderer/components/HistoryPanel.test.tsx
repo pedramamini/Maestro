@@ -188,7 +188,7 @@ describe('HistoryPanel', () => {
 		mockHistoryDelete = vi.fn().mockResolvedValue(true);
 		mockHistoryUpdate = vi.fn().mockResolvedValue(true);
 
-		// Add history and settings mocks to window.maestro
+		// Add history, settings, and directorNotes mocks to window.maestro
 		(
 			window as unknown as {
 				maestro: {
@@ -201,6 +201,9 @@ describe('HistoryPanel', () => {
 						get: ReturnType<typeof vi.fn>;
 						set: ReturnType<typeof vi.fn>;
 					};
+					directorNotes: {
+						onHistoryEntryAdded: ReturnType<typeof vi.fn>;
+					};
 				};
 			}
 		).maestro = {
@@ -212,6 +215,9 @@ describe('HistoryPanel', () => {
 			settings: {
 				get: vi.fn().mockResolvedValue(undefined),
 				set: vi.fn().mockResolvedValue(undefined),
+			},
+			directorNotes: {
+				onHistoryEntryAdded: vi.fn().mockReturnValue(() => {}),
 			},
 		};
 
@@ -1408,7 +1414,7 @@ describe('HistoryPanel', () => {
 			const { rerender } = render(<HistoryPanel session={session1} theme={mockTheme} />);
 
 			await waitFor(() => {
-				expect(mockHistoryGetAll).toHaveBeenCalledWith('/project1', 'session-1');
+				expect(mockHistoryGetAll).toHaveBeenCalledWith('/project1', 'session-1', undefined);
 			});
 
 			// Change session
@@ -1417,7 +1423,7 @@ describe('HistoryPanel', () => {
 			rerender(<HistoryPanel session={session2} theme={mockTheme} />);
 
 			await waitFor(() => {
-				expect(mockHistoryGetAll).toHaveBeenCalledWith('/project2', 'session-2');
+				expect(mockHistoryGetAll).toHaveBeenCalledWith('/project2', 'session-2', undefined);
 			});
 		});
 	});

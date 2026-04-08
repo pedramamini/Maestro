@@ -45,7 +45,6 @@ describe('useSettings', () => {
 			customThemeColors: DEFAULT_CUSTOM_THEME_COLORS,
 			customThemeBaseId: 'dracula',
 			enterToSendAI: false,
-			enterToSendTerminal: true,
 			defaultSaveToHistory: true,
 			defaultShowThinking: 'off',
 			leftSidebarWidth: 256,
@@ -155,7 +154,6 @@ describe('useSettings', () => {
 
 			expect(result.current.activeThemeId).toBe('dracula');
 			expect(result.current.enterToSendAI).toBe(false);
-			expect(result.current.enterToSendTerminal).toBe(true);
 			expect(result.current.defaultSaveToHistory).toBe(true);
 			expect(result.current.leftSidebarWidth).toBe(256);
 			expect(result.current.rightPanelWidth).toBe(384);
@@ -277,7 +275,6 @@ describe('useSettings', () => {
 			vi.mocked(window.maestro.settings.getAll).mockResolvedValue({
 				activeThemeId: 'gruvbox',
 				enterToSendAI: true,
-				enterToSendTerminal: false,
 				defaultSaveToHistory: true,
 				leftSidebarWidth: 300,
 				rightPanelWidth: 400,
@@ -289,7 +286,6 @@ describe('useSettings', () => {
 
 			expect(result.current.activeThemeId).toBe('gruvbox');
 			expect(result.current.enterToSendAI).toBe(true);
-			expect(result.current.enterToSendTerminal).toBe(false);
 			expect(result.current.defaultSaveToHistory).toBe(true);
 			expect(result.current.leftSidebarWidth).toBe(300);
 			expect(result.current.rightPanelWidth).toBe(400);
@@ -591,18 +587,6 @@ describe('useSettings', () => {
 
 			expect(result.current.enterToSendAI).toBe(true);
 			expect(window.maestro.settings.set).toHaveBeenCalledWith('enterToSendAI', true);
-		});
-
-		it('should update enterToSendTerminal and persist to settings', async () => {
-			const { result } = renderHook(() => useSettings());
-			await waitForSettingsLoaded(result);
-
-			act(() => {
-				result.current.setEnterToSendTerminal(false);
-			});
-
-			expect(result.current.enterToSendTerminal).toBe(false);
-			expect(window.maestro.settings.set).toHaveBeenCalledWith('enterToSendTerminal', false);
 		});
 
 		it('should update defaultSaveToHistory and persist to settings', async () => {

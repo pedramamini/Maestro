@@ -7,7 +7,7 @@ import React, {
 	forwardRef,
 	useMemo,
 } from 'react';
-import { HelpCircle } from 'lucide-react';
+import { HelpCircle, Search } from 'lucide-react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import type { Session, Theme, HistoryEntry, HistoryEntryType } from '../types';
 import { HistoryDetailModal } from './HistoryDetailModal';
@@ -23,6 +23,8 @@ import {
 } from './History';
 import { useUIStore } from '../stores/uiStore';
 import { useSettingsStore } from '../stores/settingsStore';
+import { formatShortcutKeys } from '../utils/shortcutFormatter';
+import { buildSharedHistoryContext } from '../utils/sessionHelpers';
 
 interface HistoryPanelProps {
 	session: Session;
@@ -59,6 +61,7 @@ export const HistoryPanel = React.memo(
 		ref
 	) {
 		const maestroCueEnabled = useSettingsStore((s) => s.encoreFeatures.maestroCue);
+		const shortcuts = useSettingsStore((s) => s.shortcuts);
 		const visibleTypes: HistoryEntryType[] = maestroCueEnabled
 			? ['AUTO', 'USER', 'CUE']
 			: ['AUTO', 'USER'];
@@ -72,7 +75,9 @@ export const HistoryPanel = React.memo(
 		const [searchFilter, setSearchFilter] = useState('');
 		const searchFilterOpen = useUIStore((s) => s.historySearchFilterOpen);
 		const setSearchFilterOpen = useUIStore((s) => s.setHistorySearchFilterOpen);
-		const [graphReferenceTime, setGraphReferenceTime] = useState<number | undefined>(undefined);
+		const [graphViewportRange, setGraphViewportRange] = useState<
+			{ start: number; end: number } | undefined
+		>(undefined);
 		const [helpModalOpen, setHelpModalOpen] = useState(false);
 		const [graphLookbackHours, setGraphLookbackHours] = useState<number | null>(null); // default to "All time"
 
@@ -98,7 +103,11 @@ export const HistoryPanel = React.memo(
 
 				try {
 					// Only show entries from this session or legacy entries without sessionId
-					const entries = await window.maestro.history.getAll(session.cwd, session.id);
+					const entries = await window.maestro.history.getAll(
+						session.cwd,
+						session.id,
+						buildSharedHistoryContext(session)
+					);
 					// Ensure entries is an array, limit to MAX_HISTORY_IN_MEMORY
 					const validEntries = Array.isArray(entries) ? entries : [];
 					setHistoryEntries(validEntries.slice(0, MAX_HISTORY_IN_MEMORY));
@@ -129,6 +138,23 @@ export const HistoryPanel = React.memo(
 		useEffect(() => {
 			loadHistory();
 		}, [loadHistory]);
+
+		// Subscribe to real-time history entry additions
+		useEffect(() => {
+			const cleanup = window.maestro.directorNotes.onHistoryEntryAdded((entry, sourceSessionId) => {
+				// Only add entries belonging to this session
+				if (sourceSessionId !== session.id) return;
+
+				setHistoryEntries((prev) => {
+					// Deduplicate
+					if (prev.some((e) => e.id === entry.id)) return prev;
+					// Prepend (newest first), cap at MAX_HISTORY_IN_MEMORY
+					return [entry, ...prev].slice(0, MAX_HISTORY_IN_MEMORY);
+				});
+			});
+
+			return cleanup;
+		}, [session.id]);
 
 		// Load persisted graph lookback preference for this session
 		useEffect(() => {
@@ -326,9 +352,8 @@ export const HistoryPanel = React.memo(
 		// PERF: Store scroll target ref for throttled handler
 		const scrollTargetRef = useRef<HTMLDivElement | null>(null);
 
-		// Handle scroll to update graph reference time
+		// Handle scroll to update graph viewport indicator
 		// PERF: Inner handler contains the actual logic
-		// Note: With virtualization, we no longer need to load more entries on scroll
 		const handleScrollInner = useCallback(() => {
 			const target = scrollTargetRef.current;
 			if (!target) return;
@@ -336,19 +361,27 @@ export const HistoryPanel = React.memo(
 			// Save scroll position to module-level cache (persists across session switches)
 			scrollPositionCache.set(session.id, target.scrollTop);
 
-			// Find the topmost visible entry to update the graph's reference time
-			// This creates the "sliding window" effect as you scroll through history
-			// With virtualization, we use the virtualizer's visible range
+			// Track which entries are visible to show a viewport indicator on the graph
 			const visibleItems = virtualizer.getVirtualItems();
-			const firstVisibleIndex = visibleItems[0]?.index ?? 0;
-			const topmostVisibleEntry = allFilteredEntries[firstVisibleIndex];
+			if (visibleItems.length === 0) {
+				setGraphViewportRange(undefined);
+				return;
+			}
 
-			// Update the graph reference time to the topmost visible entry's timestamp
-			// If at the very top (no scrolling), use undefined to show "now"
-			if (target.scrollTop < 10) {
-				setGraphReferenceTime(undefined);
-			} else if (topmostVisibleEntry) {
-				setGraphReferenceTime(topmostVisibleEntry.timestamp);
+			const firstVisibleIndex = visibleItems[0]?.index ?? 0;
+			const lastVisibleIndex = visibleItems[visibleItems.length - 1]?.index ?? 0;
+			const topEntry = allFilteredEntries[firstVisibleIndex];
+			const bottomEntry = allFilteredEntries[lastVisibleIndex];
+
+			if (target.scrollTop < 10 && lastVisibleIndex >= allFilteredEntries.length - 1) {
+				// All entries visible — no indicator needed
+				setGraphViewportRange(undefined);
+			} else if (topEntry && bottomEntry) {
+				// Entries are newest-first, so topEntry.timestamp > bottomEntry.timestamp
+				setGraphViewportRange({
+					start: bottomEntry.timestamp,
+					end: topEntry.timestamp,
+				});
 			}
 		}, [session.id, allFilteredEntries, virtualizer]);
 
@@ -385,10 +418,10 @@ export const HistoryPanel = React.memo(
 			hasRestoredScroll.current = false;
 		}, [session.id]);
 
-		// Reset selected index and graph reference time when filters or lookback change
+		// Reset selected index and viewport indicator when filters or lookback change
 		useEffect(() => {
 			setSelectedIndex(-1);
-			setGraphReferenceTime(undefined); // Reset to "now" when filters change
+			setGraphViewportRange(undefined); // Reset viewport indicator when filters change
 			// Scroll to top when filters change
 			if (listRef.current) {
 				listRef.current.scrollTop = 0;
@@ -465,9 +498,68 @@ export const HistoryPanel = React.memo(
 			<div className="flex flex-col h-full">
 				{/* Filter Pills + Activity Graph + Help Button */}
 				<div className="flex flex-col gap-2 mb-4 pt-2">
+					{/* Search Filter — above buttons when open */}
+					{searchFilterOpen && (
+						<div>
+							<input
+								ref={searchInputRef}
+								autoFocus
+								type="text"
+								placeholder="Filter history..."
+								value={searchFilter}
+								onChange={(e) => setSearchFilter(e.target.value)}
+								onKeyDown={(e) => {
+									if (e.key === 'Escape') {
+										setSearchFilterOpen(false);
+										setSearchFilter('');
+										// Return focus to the list
+										listRef.current?.focus();
+									} else if (e.key === 'ArrowDown') {
+										e.preventDefault();
+										// Move focus to list and select first item
+										listRef.current?.focus();
+										if (filteredEntries.length > 0) {
+											setSelectedIndex(0);
+										}
+									}
+								}}
+								className="w-full px-3 py-2 rounded border bg-transparent outline-none text-sm"
+								style={{ borderColor: theme.colors.accent, color: theme.colors.textMain }}
+							/>
+							{searchFilter && (
+								<div
+									className="text-[10px] mt-1 text-right"
+									style={{ color: theme.colors.textDim }}
+								>
+									{allFilteredEntries.length} result{allFilteredEntries.length !== 1 ? 's' : ''}
+								</div>
+							)}
+						</div>
+					)}
+
 					<div
 						className={`flex items-start gap-3${visibleTypes.length > 2 ? ' justify-center' : ''}`}
 					>
+						{/* Search button — left of filter pills */}
+						<button
+							onClick={() => {
+								if (searchFilterOpen) {
+									searchInputRef.current?.focus();
+								} else {
+									setSearchFilterOpen(true);
+									setTimeout(() => searchInputRef.current?.focus(), 0);
+								}
+							}}
+							className="flex-shrink-0 flex items-center justify-center w-8 h-8 rounded transition-colors hover:bg-white/10"
+							style={{
+								color: searchFilterOpen ? theme.colors.accent : theme.colors.textDim,
+								border: `1px solid ${theme.colors.border}`,
+							}}
+							title={`Search History (${formatShortcutKeys(shortcuts.filterHistory?.keys ?? ['Meta', 'f'])})`}
+						>
+							<Search className="w-3.5 h-3.5" />
+						</button>
+
 						{/* Filter pills — centered when graph is on its own row */}
 						<HistoryFilterToggle
 							activeFilters={activeFilters}
@@ -481,14 +573,14 @@ export const HistoryPanel = React.memo(
 							<ActivityGraph
 								entries={historyEntries}
 								theme={theme}
-								referenceTime={graphReferenceTime}
+								viewportRange={graphViewportRange}
 								onBarClick={handleGraphBarClickVirtualized}
 								lookbackHours={graphLookbackHours}
 								onLookbackChange={handleLookbackChange}
 							/>
 						)}
 
-						{/* Help button */}
+						{/* Help button — right of filter pills */}
 						<button
 							onClick={() => setHelpModalOpen(true)}
 							className="flex-shrink-0 flex items-center justify-center w-8 h-8 rounded transition-colors hover:bg-white/10"
@@ -507,49 +599,13 @@ export const HistoryPanel = React.memo(
 						<ActivityGraph
 							entries={historyEntries}
 							theme={theme}
-							referenceTime={graphReferenceTime}
+							viewportRange={graphViewportRange}
 							onBarClick={handleGraphBarClickVirtualized}
 							lookbackHours={graphLookbackHours}
 							onLookbackChange={handleLookbackChange}
 						/>
 					)}
 				</div>
-
-				{/* Search Filter */}
-				{searchFilterOpen && (
-					<div className="mb-3">
-						<input
-							ref={searchInputRef}
-							autoFocus
-							type="text"
-							placeholder="Filter history..."
-							value={searchFilter}
-							onChange={(e) => setSearchFilter(e.target.value)}
-							onKeyDown={(e) => {
-								if (e.key === 'Escape') {
-									setSearchFilterOpen(false);
-									setSearchFilter('');
-									// Return focus to the list
-									listRef.current?.focus();
-								} else if (e.key === 'ArrowDown') {
-									e.preventDefault();
-									// Move focus to list and select first item
-									listRef.current?.focus();
-									if (filteredEntries.length > 0) {
-										setSelectedIndex(0);
-									}
-								}
-							}}
-							className="w-full px-3 py-2 rounded border bg-transparent outline-none text-sm"
-							style={{ borderColor: theme.colors.accent, color: theme.colors.textMain }}
-						/>
-						{searchFilter && (
-							<div className="text-[10px] mt-1 text-right" style={{ color: theme.colors.textDim }}>
-								{allFilteredEntries.length} result{allFilteredEntries.length !== 1 ? 's' : ''}
-							</div>
-						)}
-					</div>
-				)}
 
 				{/* History List - Virtualized */}
 				<div

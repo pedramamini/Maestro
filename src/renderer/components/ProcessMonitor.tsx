@@ -27,7 +27,7 @@ interface ProcessMonitorProps {
 	groups: Group[];
 	groupChats?: GroupChat[];
 	onClose: () => void;
-	onNavigateToSession?: (sessionId: string, tabId?: string) => void;
+	onNavigateToSession?: (sessionId: string, tabId?: string, processType?: string) => void;
 	onNavigateToGroupChat?: (groupChatId: string) => void;
 }
 
@@ -46,6 +46,7 @@ interface ActiveProcess {
 	cueSessionName?: string;
 	cueSubscriptionName?: string;
 	cueEventType?: string;
+	childProcesses?: Array<{ pid: number; command: string }>;
 }
 
 interface ProcessNode {
@@ -86,6 +87,7 @@ interface ProcessNode {
 	cueEventType?: string; // Event type that triggered this Cue run
 	cueSessionName?: string; // Target session name for this Cue run
 	tabName?: string; // AI tab name (e.g., user-assigned tab label)
+	childProcesses?: Array<{ pid: number; command: string }>; // Child processes running inside terminal
 }
 
 // Format runtime in human readable format (e.g., "2m 30s", "1h 5m", "3d 2h")
@@ -129,6 +131,7 @@ interface ProcessDetailData {
 	cueEventType?: string;
 	cueSessionName?: string;
 	tabName?: string;
+	childProcesses?: Array<{ pid: number; command: string }>;
 }
 
 export function ProcessMonitor(props: ProcessMonitorProps) {
@@ -325,6 +328,11 @@ export function ProcessMonitor(props: ProcessMonitorProps) {
 		if (aiTabMatch) {
 			return aiTabMatch[1];
 		}
+		// Check for tab-based terminal pattern: {sessionId}-terminal-{tabId}
+		const terminalTabMatch = processSessionId.match(/^(.+)-terminal-.+$/);
+		if (terminalTabMatch) {
+			return terminalTabMatch[1];
+		}
 		// Try to match common suffixes
 		const suffixes = ['-ai', '-terminal'];
 		for (const suffix of suffixes) {
@@ -341,7 +349,8 @@ export function ProcessMonitor(props: ProcessMonitorProps) {
 		processSessionId: string
 	): 'ai' | 'terminal' | 'batch' | 'synopsis' | 'wizard' | 'wizard-gen' | 'cue' => {
 		if (processSessionId.startsWith('cue-run-')) return 'cue';
-		if (processSessionId.endsWith('-terminal')) return 'terminal';
+		if (processSessionId.endsWith('-terminal') || processSessionId.match(/-terminal-.+$/))
+			return 'terminal';
 		if (processSessionId.match(/-batch-\d+$/)) return 'batch';
 		if (processSessionId.match(/-synopsis-\d+$/)) return 'synopsis';
 		// Wizard document generation: inline-wizard-gen-{timestamp}-{random}
@@ -351,10 +360,13 @@ export function ProcessMonitor(props: ProcessMonitorProps) {
 		return 'ai';
 	};
 
-	// Extract tab ID from process session ID (format: {sessionId}-ai-{tabId})
+	// Extract tab ID from process session ID (format: {sessionId}-ai-{tabId} or {sessionId}-terminal-{tabId})
 	const parseTabId = (processSessionId: string): string | null => {
-		const match = processSessionId.match(/-ai-(.+)$/);
-		return match ? match[1] : null;
+		const aiMatch = processSessionId.match(/-ai-(.+)$/);
+		if (aiMatch) return aiMatch[1];
+		const terminalMatch = processSessionId.match(/-terminal-(.+)$/);
+		if (terminalMatch) return terminalMatch[1];
+		return null;
 	};
 
 	// Build the process tree using real active processes
@@ -407,7 +419,14 @@ export function ProcessMonitor(props: ProcessMonitorProps) {
 				let label: string;
 				let isAutoRun = false;
 				if (processType === 'terminal') {
-					label = 'Terminal Shell';
+					// Show the running command if there are child processes
+					if (proc.childProcesses && proc.childProcesses.length > 0) {
+						const lastChild = proc.childProcesses[proc.childProcesses.length - 1];
+						const cmdBasename = lastChild.command.split('/').pop() || lastChild.command;
+						label = `Terminal: ${cmdBasename}`;
+					} else {
+						label = 'Terminal Shell';
+					}
 				} else if (processType === 'batch') {
 					label = `AI Agent (${proc.toolType})`;
 					isAutoRun = true;
@@ -420,11 +439,13 @@ export function ProcessMonitor(props: ProcessMonitorProps) {
 				// Get session name for process label
 				const sessionName = session.name;
 
-				// Look up Claude session ID and tab name from the tab if this is an AI process
+				// Look up Claude session ID and tab name from the tab if this is an AI or terminal process
 				let agentSessionId: string | undefined;
 				let tabId: string | undefined;
 				let tabName: string | undefined;
-				if (processType === 'ai' || processType === 'batch' || processType === 'synopsis') {
+				if (processType === 'terminal') {
+					tabId = parseTabId(proc.sessionId) || undefined;
+				} else if (processType === 'ai' || processType === 'batch' || processType === 'synopsis') {
 					tabId = parseTabId(proc.sessionId) || undefined;
 					if (session.aiTabs) {
 						// First try to find by tab ID
@@ -472,6 +493,7 @@ export function ProcessMonitor(props: ProcessMonitorProps) {
 					args: proc.args,
 					sshRemote,
 					tabName,
+					childProcesses: proc.childProcesses,
 				});
 			});
 
@@ -747,6 +769,7 @@ export function ProcessMonitor(props: ProcessMonitorProps) {
 			cueEventType: node.cueEventType,
 			cueSessionName: node.cueSessionName,
 			tabName: node.tabName,
+			childProcesses: node.childProcesses,
 		});
 	};
 
@@ -863,7 +886,7 @@ export function ProcessMonitor(props: ProcessMonitorProps) {
 		}
 	};
 
-	const renderNode = (node: ProcessNode, depth: number = 0): React.ReactNode => {
+	const renderNode = (node: ProcessNode, depth: number = 0, index: number = 0): React.ReactNode => {
 		const isExpanded = expandedNodes.has(node.id);
 		const hasChildren = node.children && node.children.length > 0;
 		const paddingLeft = depth * 20 + 16; // 20px per depth level + 16px base
@@ -920,7 +943,7 @@ export function ProcessMonitor(props: ProcessMonitorProps) {
 						)}
 					</button>
 					{isExpanded && hasChildren && (
-						<div>{node.children!.map((child) => renderNode(child, depth + 1))}</div>
+						<div>{node.children!.map((child, i) => renderNode(child, depth + 1, i))}</div>
 					)}
 				</div>
 			);
@@ -1011,7 +1034,7 @@ export function ProcessMonitor(props: ProcessMonitorProps) {
 							>
 								{node.sshRemote ? `SSH: ${node.sshRemote.name}` : 'Local'}
 							</span>
-							<span>Session: {node.sessionId?.substring(0, 8)}...</span>
+							<span>Session: {node.sessionId?.substring(0, 8)}</span>
 						</span>
 						{node.sessionId && onNavigateToSession && (
 							<button
@@ -1033,7 +1056,7 @@ export function ProcessMonitor(props: ProcessMonitorProps) {
 						)}
 					</div>
 					{isExpanded && hasChildren && (
-						<div>{node.children!.map((child) => renderNode(child, depth + 1))}</div>
+						<div>{node.children!.map((child, i) => renderNode(child, depth + 1, i))}</div>
 					)}
 				</div>
 			);
@@ -1047,6 +1070,7 @@ export function ProcessMonitor(props: ProcessMonitorProps) {
 			const isWizardProcess = node.processType === 'wizard' || node.processType === 'wizard-gen';
 			// Determine if this is a Cue run process
 			const isCueProcess = node.processType === 'cue';
+			const altBg = index % 2 === 1 ? `${theme.colors.textDim}08` : 'transparent';
 
 			return (
 				<div
@@ -1057,9 +1081,10 @@ export function ProcessMonitor(props: ProcessMonitorProps) {
 					style={{
 						paddingLeft: `${paddingLeft}px`,
 						color: theme.colors.textMain,
-						backgroundColor: isSelected ? `${theme.colors.accent}25` : 'transparent',
+						backgroundColor: isSelected ? `${theme.colors.accent}25` : altBg,
 						outline: isSelected ? `2px solid ${theme.colors.accent}` : 'none',
 						outlineOffset: '-2px',
+						borderTop: index > 0 ? `1px solid ${theme.colors.border}40` : 'none',
 					}}
 					onClick={() => setSelectedNodeId(node.id)}
 					onDoubleClick={() => openProcessDetail(node)}
@@ -1067,7 +1092,7 @@ export function ProcessMonitor(props: ProcessMonitorProps) {
 						if (!isSelected) e.currentTarget.style.backgroundColor = `${theme.colors.accent}15`;
 					}}
 					onMouseLeave={(e) => {
-						if (!isSelected) e.currentTarget.style.backgroundColor = 'transparent';
+						if (!isSelected) e.currentTarget.style.backgroundColor = altBg;
 					}}
 				>
 					{/* First line: status dot, label, badges, kill button */}
@@ -1078,136 +1103,143 @@ export function ProcessMonitor(props: ProcessMonitorProps) {
 							style={{ backgroundColor: theme.colors.success }}
 						/>
 						<span className="text-sm flex-1 truncate">{node.label}</span>
-						{node.isAutoRun && (
-							<span
-								className="text-xs font-semibold px-1.5 py-0.5 rounded flex-shrink-0"
-								style={{
-									backgroundColor: theme.colors.accent + '20',
-									color: theme.colors.accent,
-								}}
-							>
-								AUTO
-							</span>
-						)}
-						{/* Group Chat badges */}
-						{node.processType === 'moderator' && (
-							<span
-								className="text-xs font-semibold px-1.5 py-0.5 rounded flex-shrink-0"
-								style={{
-									backgroundColor: theme.colors.warning + '20',
-									color: theme.colors.warning,
-								}}
-							>
-								MODERATOR
-							</span>
-						)}
-						{node.processType === 'participant' && (
-							<span
-								className="text-xs font-semibold px-1.5 py-0.5 rounded flex-shrink-0"
-								style={{
-									backgroundColor: theme.colors.accent + '20',
-									color: theme.colors.accent,
-								}}
-							>
-								PARTICIPANT
-							</span>
-						)}
-						{/* Wizard badges */}
-						{node.processType === 'wizard' && (
-							<span
-								className="text-xs font-semibold px-1.5 py-0.5 rounded flex-shrink-0"
-								style={{
-									backgroundColor: '#a855f7' + '20',
-									color: '#a855f7',
-								}}
-							>
-								WIZARD
-							</span>
-						)}
-						{node.processType === 'wizard-gen' && (
-							<span
-								className="text-xs font-semibold px-1.5 py-0.5 rounded flex-shrink-0"
-								style={{
-									backgroundColor: '#a855f7' + '20',
-									color: '#a855f7',
-								}}
-							>
-								GENERATING
-							</span>
-						)}
-						{/* Cue badge */}
-						{node.processType === 'cue' && (
-							<span
-								className="text-xs font-semibold px-1.5 py-0.5 rounded flex-shrink-0"
-								style={{
-									backgroundColor: '#06b6d4' + '20',
-									color: '#06b6d4',
-								}}
-							>
-								{node.cueEventType?.replace('.', ' ').toUpperCase() ?? 'CUE'}
-							</span>
-						)}
-						{/* Jump to agent button */}
-						{node.sessionId &&
-							onNavigateToSession &&
-							!isGroupChatProcess &&
-							!isWizardProcess &&
-							!isCueProcess && (
+						<div className="flex items-center gap-2 ml-auto flex-shrink-0">
+							{node.isAutoRun && (
+								<span
+									className="text-xs font-semibold px-1.5 py-0.5 rounded flex-shrink-0"
+									style={{
+										backgroundColor: theme.colors.accent + '20',
+										color: theme.colors.accent,
+									}}
+								>
+									AUTO
+								</span>
+							)}
+							{/* Group Chat badges */}
+							{node.processType === 'moderator' && (
+								<span
+									className="text-xs font-semibold px-1.5 py-0.5 rounded"
+									style={{
+										backgroundColor: theme.colors.warning + '30',
+										color: theme.colors.warning,
+										border: `1px solid ${theme.colors.warning}50`,
+									}}
+								>
+									MODERATOR
+								</span>
+							)}
+							{node.processType === 'participant' && (
+								<span
+									className="text-xs font-semibold px-1.5 py-0.5 rounded"
+									style={{
+										backgroundColor: theme.colors.success + '30',
+										color: theme.colors.success,
+										border: `1px solid ${theme.colors.success}50`,
+									}}
+								>
+									PARTICIPANT
+								</span>
+							)}
+							{/* Wizard badges */}
+							{node.processType === 'wizard' && (
+								<span
+									className="text-xs font-semibold px-1.5 py-0.5 rounded"
+									style={{
+										backgroundColor: '#a855f7' + '30',
+										color: '#a855f7',
+										border: '1px solid #a855f750',
+									}}
+								>
+									WIZARD
+								</span>
+							)}
+							{node.processType === 'wizard-gen' && (
+								<span
+									className="text-xs font-semibold px-1.5 py-0.5 rounded"
+									style={{
+										backgroundColor: '#a855f7' + '30',
+										color: '#a855f7',
+										border: '1px solid #a855f750',
+									}}
+								>
+									GENERATING
+								</span>
+							)}
+							{/* Cue badge */}
+							{node.processType === 'cue' && (
+								<span
+									className="text-xs font-semibold px-1.5 py-0.5 rounded"
+									style={{
+										backgroundColor: '#06b6d4' + '30',
+										color: '#06b6d4',
+										border: '1px solid #06b6d450',
+									}}
+								>
+									{node.cueEventType?.replace('.', ' ').toUpperCase() ?? 'CUE'}
+								</span>
+							)}
+							{/* Jump to agent button */}
+							{node.sessionId &&
+								onNavigateToSession &&
+								!isGroupChatProcess &&
+								!isWizardProcess &&
+								!isCueProcess && (
+									<button
+										className="p-1 rounded opacity-0 group-hover:opacity-100 hover:bg-opacity-20 transition-opacity flex-shrink-0"
+										style={{ color: theme.colors.accent }}
+										onClick={(e) => {
+											e.stopPropagation();
+											onNavigateToSession(node.sessionId!, node.tabId, node.processType);
+											onClose();
+										}}
+										onMouseEnter={(e) =>
+											(e.currentTarget.style.backgroundColor = `${theme.colors.accent}20`)
+										}
+										onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
+										title={node.tabId ? 'Jump to tab' : 'Jump to agent'}
+									>
+										<ExternalLink className="w-4 h-4" />
+									</button>
+								)}
+							{/* Jump to group chat button */}
+							{isGroupChatProcess && node.groupChatId && onNavigateToGroupChat && (
 								<button
 									className="p-1 rounded opacity-0 group-hover:opacity-100 hover:bg-opacity-20 transition-opacity flex-shrink-0"
 									style={{ color: theme.colors.accent }}
 									onClick={(e) => {
 										e.stopPropagation();
-										onNavigateToSession(node.sessionId!, node.tabId);
+										onNavigateToGroupChat(node.groupChatId!);
 										onClose();
 									}}
 									onMouseEnter={(e) =>
 										(e.currentTarget.style.backgroundColor = `${theme.colors.accent}20`)
 									}
 									onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
-									title={node.tabId ? 'Jump to tab' : 'Jump to agent'}
+									title="Jump to group chat"
 								>
 									<ExternalLink className="w-4 h-4" />
 								</button>
 							)}
-						{/* Jump to group chat button */}
-						{isGroupChatProcess && node.groupChatId && onNavigateToGroupChat && (
-							<button
-								className="p-1 rounded opacity-0 group-hover:opacity-100 hover:bg-opacity-20 transition-opacity flex-shrink-0"
-								style={{ color: theme.colors.accent }}
-								onClick={(e) => {
-									e.stopPropagation();
-									onNavigateToGroupChat(node.groupChatId!);
-									onClose();
-								}}
-								onMouseEnter={(e) =>
-									(e.currentTarget.style.backgroundColor = `${theme.colors.accent}20`)
-								}
-								onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
-								title="Jump to group chat"
-							>
-								<ExternalLink className="w-4 h-4" />
-							</button>
-						)}
-						{/* Kill button */}
-						{node.processSessionId && (
-							<button
-								className="p-1 rounded opacity-0 group-hover:opacity-100 hover:bg-opacity-20 transition-opacity"
-								style={{ color: theme.colors.error }}
-								onClick={(e) => {
-									e.stopPropagation();
-									setKillConfirmProcessId(node.processSessionId!);
-									setKillConfirmCueRunId(node.cueRunId);
-								}}
-								onMouseEnter={(e) =>
-									(e.currentTarget.style.backgroundColor = `${theme.colors.error}20`)
-								}
-								onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
-								title="Kill process"
-							>
-								<XCircle className="w-4 h-4" />
-							</button>
-						)}
+							{/* Kill button */}
+							{node.processSessionId && (
+								<button
+									className="p-1 rounded opacity-0 group-hover:opacity-100 hover:bg-opacity-20 transition-opacity"
+									style={{ color: theme.colors.error }}
+									onClick={(e) => {
+										e.stopPropagation();
+										setKillConfirmProcessId(node.processSessionId!);
+										setKillConfirmCueRunId(node.cueRunId);
+									}}
+									onMouseEnter={(e) =>
+										(e.currentTarget.style.backgroundColor = `${theme.colors.error}20`)
+									}
+									onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
+									title="Kill process"
+								>
+									<XCircle className="w-4 h-4" />
+								</button>
+							)}
+						</div>
 					</div>
 					{/* Second line: Claude session ID, PID, runtime, status - indented */}
 					<div className="flex items-center gap-3 mt-1" style={{ paddingLeft: '24px' }}>
@@ -1217,17 +1249,17 @@ export function ProcessMonitor(props: ProcessMonitorProps) {
 								style={{ color: theme.colors.accent }}
 								onClick={(e) => {
 									e.stopPropagation();
-									onNavigateToSession(node.sessionId!, node.tabId);
+									onNavigateToSession(node.sessionId!, node.tabId, node.processType);
 									onClose();
 								}}
 								title="Click to navigate to this session"
 							>
-								{node.agentSessionId.substring(0, 8)}...
+								{node.agentSessionId.substring(0, 8)}
 							</button>
 						)}
 						{node.agentSessionId && (!node.sessionId || !onNavigateToSession) && (
 							<span className="text-xs font-mono" style={{ color: theme.colors.accent }}>
-								{node.agentSessionId.substring(0, 8)}...
+								{node.agentSessionId.substring(0, 8)}
 							</span>
 						)}
 						{/* For group chat and wizard processes, show tool type */}
@@ -1343,7 +1375,7 @@ export function ProcessMonitor(props: ProcessMonitorProps) {
 						</span>
 					</button>
 					{isExpanded && hasChildren && (
-						<div>{node.children!.map((child) => renderNode(child, depth + 1))}</div>
+						<div>{node.children!.map((child, i) => renderNode(child, depth + 1, i))}</div>
 					)}
 				</div>
 			);
@@ -1654,12 +1686,40 @@ export function ProcessMonitor(props: ProcessMonitorProps) {
 								</span>
 							</div>
 							<code
-								className="text-sm font-mono break-all block whitespace-pre-wrap"
-								style={{ color: theme.colors.textMain, userSelect: 'text', cursor: 'text' }}
+								className="text-sm font-mono break-all block whitespace-pre-wrap overflow-y-auto"
+								style={{
+									color: theme.colors.textMain,
+									userSelect: 'text',
+									cursor: 'text',
+									maxHeight: '300px',
+								}}
 							>
 								{commandLine}
 							</code>
 						</div>
+
+						{/* Child Processes (terminal only) */}
+						{detailView.childProcesses && detailView.childProcesses.length > 0 && (
+							<div className="p-4 rounded-lg" style={{ backgroundColor: theme.colors.bgMain }}>
+								<div className="flex items-center gap-2 mb-2">
+									<Activity className="w-4 h-4" style={{ color: theme.colors.accent }} />
+									<span
+										className="text-xs font-medium uppercase tracking-wide"
+										style={{ color: theme.colors.textDim }}
+									>
+										Running in Terminal
+									</span>
+								</div>
+								<div className="flex flex-col gap-1">
+									{detailView.childProcesses.map((child) => (
+										<div key={child.pid} className="flex items-center gap-3 text-sm font-mono">
+											<span style={{ color: theme.colors.textDim }}>PID {child.pid}</span>
+											<span style={{ color: theme.colors.textMain }}>{child.command}</span>
+										</div>
+									))}
+								</div>
+							</div>
+						)}
 
 						{/* Start Time */}
 						<div className="p-4 rounded-lg" style={{ backgroundColor: theme.colors.bgMain }}>
@@ -1711,8 +1771,14 @@ export function ProcessMonitor(props: ProcessMonitorProps) {
 				role="dialog"
 				aria-modal="true"
 				aria-label={detailView ? 'Process Details' : 'System Processes'}
-				className="w-[875px] max-h-[80vh] rounded-xl shadow-2xl border overflow-hidden flex flex-col outline-none"
-				style={{ backgroundColor: theme.colors.bgActivity, borderColor: theme.colors.border }}
+				className="max-h-[80vh] rounded-xl shadow-2xl border overflow-hidden flex flex-col outline-none"
+				style={{
+					backgroundColor: theme.colors.bgActivity,
+					borderColor: theme.colors.border,
+					width: 'fit-content',
+					minWidth: '700px',
+					maxWidth: '90vw',
+				}}
 				onClick={(e) => e.stopPropagation()}
 				onKeyDown={detailView ? undefined : handleKeyDown}
 			>
@@ -1815,7 +1881,7 @@ export function ProcessMonitor(props: ProcessMonitorProps) {
 									No running processes
 								</div>
 							) : (
-								<div className="py-2">{processTree.map((node) => renderNode(node, 0))}</div>
+								<div className="py-2">{processTree.map((node, i) => renderNode(node, 0, i))}</div>
 							)}
 						</div>
 
@@ -1827,14 +1893,14 @@ export function ProcessMonitor(props: ProcessMonitorProps) {
 								color: theme.colors.textDim,
 							}}
 						>
-							<div className="flex items-center gap-4">
+							<div className="flex items-center gap-4 whitespace-nowrap">
 								<span>
 									{sessions.length} {sessions.length === 1 ? 'session' : 'sessions'} •{' '}
 									{groups.length} {groups.length === 1 ? 'group' : 'groups'}
 								</span>
 								<span style={{ opacity: 0.7 }}>↑↓ navigate • Enter view details • R refresh</span>
 							</div>
-							<div className="flex items-center gap-2">
+							<div className="flex items-center gap-2 flex-shrink-0 whitespace-nowrap">
 								<div
 									className="w-2 h-2 rounded-full"
 									style={{ backgroundColor: theme.colors.success }}

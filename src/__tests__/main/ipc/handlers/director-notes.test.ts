@@ -29,6 +29,9 @@ vi.mock('../../../../main/history-manager', () => ({
 	getHistoryManager: vi.fn(),
 }));
 
+// Mock the shared-history-manager module (no longer imported by director-notes)
+vi.mock('../../../../main/shared-history-manager', () => ({}));
+
 // Mock the stores module
 const mockGetSessionsStore = vi.fn().mockReturnValue({
 	get: vi.fn().mockReturnValue([]),
@@ -460,6 +463,79 @@ describe('director-notes IPC handlers', () => {
 			expect(result.entries).toEqual([]);
 			expect(result.total).toBe(0);
 			expect(result.hasMore).toBe(false);
+		});
+
+		it('should return pre-computed graphBuckets when graphBucketCount is provided', async () => {
+			const now = Date.now();
+			const oneHourAgo = now - 60 * 60 * 1000;
+			const twoHoursAgo = now - 2 * 60 * 60 * 1000;
+			const twentyThreeHoursAgo = now - 23 * 60 * 60 * 1000;
+
+			vi.mocked(mockHistoryManager.listSessionsWithHistory).mockReturnValue(['session-1']);
+			vi.mocked(mockHistoryManager.getEntries).mockReturnValue([
+				createMockEntry({ id: 'e1', type: 'AUTO', timestamp: oneHourAgo }),
+				createMockEntry({ id: 'e2', type: 'USER', timestamp: oneHourAgo }),
+				createMockEntry({ id: 'e3', type: 'AUTO', timestamp: twoHoursAgo }),
+				createMockEntry({ id: 'e4', type: 'CUE', timestamp: twentyThreeHoursAgo }),
+			]);
+
+			const handler = handlers.get('director-notes:getUnifiedHistory');
+			const result = await handler!({} as any, {
+				lookbackDays: 1,
+				graphBucketCount: 24,
+			});
+
+			expect(result.graphBuckets).toBeDefined();
+			expect(result.graphBuckets).toHaveLength(24);
+
+			// All buckets should sum to total entries
+			const totalInBuckets = result.graphBuckets!.reduce(
+				(sum: number, b: { auto: number; user: number; cue: number }) =>
+					sum + b.auto + b.user + b.cue,
+				0
+			);
+			expect(totalInBuckets).toBe(4);
+		});
+
+		it('should not return graphBuckets when graphBucketCount is not provided', async () => {
+			const now = Date.now();
+			vi.mocked(mockHistoryManager.listSessionsWithHistory).mockReturnValue(['session-1']);
+			vi.mocked(mockHistoryManager.getEntries).mockReturnValue([
+				createMockEntry({ id: 'e1', timestamp: now - 1000 }),
+			]);
+
+			const handler = handlers.get('director-notes:getUnifiedHistory');
+			const result = await handler!({} as any, { lookbackDays: 7 });
+
+			expect(result.graphBuckets).toBeUndefined();
+		});
+
+		it('should compute graphBuckets for all-time mode (lookbackDays=0)', async () => {
+			const now = Date.now();
+			const oneDayAgo = now - 24 * 60 * 60 * 1000;
+			const thirtyDaysAgo = now - 30 * 24 * 60 * 60 * 1000;
+
+			vi.mocked(mockHistoryManager.listSessionsWithHistory).mockReturnValue(['session-1']);
+			vi.mocked(mockHistoryManager.getEntries).mockReturnValue([
+				createMockEntry({ id: 'e1', type: 'AUTO', timestamp: oneDayAgo }),
+				createMockEntry({ id: 'e2', type: 'USER', timestamp: thirtyDaysAgo }),
+			]);
+
+			const handler = handlers.get('director-notes:getUnifiedHistory');
+			const result = await handler!({} as any, {
+				lookbackDays: 0,
+				graphBucketCount: 24,
+			});
+
+			expect(result.graphBuckets).toBeDefined();
+			expect(result.graphBuckets).toHaveLength(24);
+
+			const totalInBuckets = result.graphBuckets!.reduce(
+				(sum: number, b: { auto: number; user: number; cue: number }) =>
+					sum + b.auto + b.user + b.cue,
+				0
+			);
+			expect(totalInBuckets).toBe(2);
 		});
 
 		it('should support pagination with limit and offset', async () => {

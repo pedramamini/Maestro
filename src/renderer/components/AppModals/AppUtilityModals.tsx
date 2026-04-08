@@ -21,7 +21,7 @@ import { FileSearchModal } from '../FileSearchModal';
 import { PromptComposerModal } from '../PromptComposerModal';
 import { ExecutionQueueBrowser } from '../ExecutionQueueBrowser';
 import { BatchRunnerModal } from '../BatchRunnerModal';
-import { AutoRunSetupModal } from '../AutoRunSetupModal';
+import { AutoRunSetupModal } from '../AutoRun/AutoRunSetupModal';
 import { LightboxModal } from '../LightboxModal';
 
 // Lazy-loaded heavy modals (rarely used, loaded on-demand)
@@ -126,6 +126,15 @@ export interface AppUtilityModalsProps {
 	autoRunSelectedDocument: string | null;
 	autoRunCompletedTaskCount: number;
 	onAutoRunResetTasks: () => void;
+	onClearActiveTerminal?: () => void;
+
+	// Tab-level actions (for QuickActionsModal)
+	onCloseCurrentTab?: () => void;
+	onMoveTabToFirst?: () => void;
+	onMoveTabToLast?: () => void;
+	onCopyTabContext?: (tabId: string) => void;
+	onExportTabHtml?: (tabId: string) => void;
+	onPublishTabGist?: (tabId: string) => void;
 
 	// Gist publishing (for QuickActionsModal)
 	isFilePreviewOpen: boolean;
@@ -145,10 +154,6 @@ export interface AppUtilityModalsProps {
 	// Maestro Cue
 	onOpenMaestroCue?: () => void;
 	onConfigureCue?: (session: Session) => void;
-
-	// Auto-scroll
-	autoScrollAiMode?: boolean;
-	setAutoScrollAiMode?: (value: boolean) => void;
 
 	// LightboxModal
 	lightboxImage: string | null;
@@ -230,6 +235,7 @@ export interface AppUtilityModalsProps {
 	onPromptToggleTabSaveToHistory?: () => void;
 	promptTabReadOnlyMode: boolean;
 	onPromptToggleTabReadOnlyMode: () => void;
+	promptComposerAgentId?: string;
 	promptTabShowThinking: ThinkingMode;
 	onPromptToggleTabShowThinking?: () => void;
 	promptSupportsThinking: boolean;
@@ -240,7 +246,7 @@ export interface AppUtilityModalsProps {
 	queueBrowserOpen: boolean;
 	onCloseQueueBrowser: () => void;
 	onRemoveQueueItem: (sessionId: string, itemId: string) => void;
-	onSwitchQueueSession: (sessionId: string) => void;
+	onSwitchQueueSession: (sessionId: string, tabId?: string) => void;
 	onReorderQueueItems: (sessionId: string, fromIndex: number, toIndex: number) => void;
 }
 
@@ -339,6 +345,14 @@ export const AppUtilityModals = memo(function AppUtilityModals({
 	autoRunSelectedDocument,
 	autoRunCompletedTaskCount,
 	onAutoRunResetTasks,
+	onClearActiveTerminal,
+	// Tab-level actions
+	onCloseCurrentTab,
+	onMoveTabToFirst,
+	onMoveTabToLast,
+	onCopyTabContext,
+	onExportTabHtml,
+	onPublishTabGist,
 	// Gist publishing
 	isFilePreviewOpen,
 	ghCliAvailable,
@@ -353,9 +367,6 @@ export const AppUtilityModals = memo(function AppUtilityModals({
 	// Maestro Cue
 	onOpenMaestroCue,
 	onConfigureCue,
-	// Auto-scroll
-	autoScrollAiMode,
-	setAutoScrollAiMode,
 	// LightboxModal
 	lightboxImage,
 	lightboxImages,
@@ -414,6 +425,7 @@ export const AppUtilityModals = memo(function AppUtilityModals({
 	onPromptToggleTabSaveToHistory,
 	promptTabReadOnlyMode,
 	onPromptToggleTabReadOnlyMode,
+	promptComposerAgentId,
 	promptTabShowThinking,
 	onPromptToggleTabShowThinking,
 	promptSupportsThinking,
@@ -506,6 +518,13 @@ export const AppUtilityModals = memo(function AppUtilityModals({
 					autoRunSelectedDocument={autoRunSelectedDocument}
 					autoRunCompletedTaskCount={autoRunCompletedTaskCount}
 					onAutoRunResetTasks={onAutoRunResetTasks}
+					onClearActiveTerminal={onClearActiveTerminal}
+					onCloseCurrentTab={onCloseCurrentTab}
+					onMoveTabToFirst={onMoveTabToFirst}
+					onMoveTabToLast={onMoveTabToLast}
+					onCopyTabContext={onCopyTabContext}
+					onExportTabHtml={onExportTabHtml}
+					onPublishTabGist={onPublishTabGist}
 					isFilePreviewOpen={isFilePreviewOpen}
 					ghCliAvailable={ghCliAvailable}
 					onPublishGist={onPublishGist}
@@ -516,8 +535,6 @@ export const AppUtilityModals = memo(function AppUtilityModals({
 					onOpenDirectorNotes={onOpenDirectorNotes}
 					onOpenMaestroCue={onOpenMaestroCue}
 					onConfigureCue={onConfigureCue}
-					autoScrollAiMode={autoScrollAiMode}
-					setAutoScrollAiMode={setAutoScrollAiMode}
 				/>
 			)}
 
@@ -655,6 +672,7 @@ export const AppUtilityModals = memo(function AppUtilityModals({
 					onToggleTabSaveToHistory={onPromptToggleTabSaveToHistory}
 					tabReadOnlyMode={promptTabReadOnlyMode}
 					onToggleTabReadOnlyMode={onPromptToggleTabReadOnlyMode}
+					agentId={promptComposerAgentId}
 					tabShowThinking={promptTabShowThinking}
 					onToggleTabShowThinking={onPromptToggleTabShowThinking}
 					supportsThinking={promptSupportsThinking}

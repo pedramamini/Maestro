@@ -28,7 +28,6 @@ export interface UseSettingsReturn {
 	setTheme: (themeId: string) => Promise<boolean>;
 	setFontSize: (size: number) => Promise<boolean>;
 	setEnterToSendAI: (value: boolean) => Promise<boolean>;
-	setEnterToSendTerminal: (value: boolean) => Promise<boolean>;
 	setAutoScroll: (value: boolean) => Promise<boolean>;
 	setDefaultSaveToHistory: (value: boolean) => Promise<boolean>;
 	setDefaultShowThinking: (value: string) => Promise<boolean>;
@@ -47,7 +46,6 @@ const SETTING_KEY_TO_FIELD: Record<string, keyof WebSettings> = {
 	activeThemeId: 'theme',
 	fontSize: 'fontSize',
 	enterToSendAI: 'enterToSendAI',
-	enterToSendTerminal: 'enterToSendTerminal',
 	defaultSaveToHistory: 'defaultSaveToHistory',
 	defaultShowThinking: 'defaultShowThinking',
 	autoScroll: 'autoScroll',
@@ -148,11 +146,6 @@ export function useSettings(
 		[setSetting]
 	);
 
-	const setEnterToSendTerminal = useCallback(
-		(value: boolean) => setSetting('enterToSendTerminal', value),
-		[setSetting]
-	);
-
 	const setAutoScroll = useCallback(
 		(value: boolean) => setSetting('autoScroll', value),
 		[setSetting]
@@ -195,7 +188,6 @@ export function useSettings(
 		setTheme,
 		setFontSize,
 		setEnterToSendAI,
-		setEnterToSendTerminal,
 		setAutoScroll,
 		setDefaultSaveToHistory,
 		setDefaultShowThinking,

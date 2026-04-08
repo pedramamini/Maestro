@@ -14,7 +14,7 @@
 import React from 'react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
-import { AutoRunExpandedModal } from '../../../renderer/components/AutoRunExpandedModal';
+import { AutoRunExpandedModal } from '../../../renderer/components/AutoRun/AutoRunExpandedModal';
 import { LayerStackProvider } from '../../../renderer/contexts/LayerStackContext';
 import type { Theme, BatchRunState, SessionState, Shortcut } from '../../../renderer/types';
 import { formatShortcutKeys } from '../../../renderer/utils/shortcutFormatter';
@@ -63,6 +63,24 @@ vi.mock('lucide-react', () => ({
 	LayoutGrid: ({ className, style }: { className?: string; style?: React.CSSProperties }) => (
 		<svg data-testid="layout-grid-icon" className={className} style={style} />
 	),
+	ChevronDown: ({ className, style }: { className?: string; style?: React.CSSProperties }) => (
+		<svg data-testid="chevron-down-icon" className={className} style={style} />
+	),
+	ChevronRight: ({ className, style }: { className?: string; style?: React.CSSProperties }) => (
+		<svg data-testid="chevron-right-icon" className={className} style={style} />
+	),
+	RefreshCw: ({ className, style }: { className?: string; style?: React.CSSProperties }) => (
+		<svg data-testid="refresh-cw-icon" className={className} style={style} />
+	),
+	FolderOpen: ({ className, style }: { className?: string; style?: React.CSSProperties }) => (
+		<svg data-testid="folder-open-icon" className={className} style={style} />
+	),
+	Plus: ({ className, style }: { className?: string; style?: React.CSSProperties }) => (
+		<svg data-testid="plus-icon" className={className} style={style} />
+	),
+	Folder: ({ className, style }: { className?: string; style?: React.CSSProperties }) => (
+		<svg data-testid="folder-icon" className={className} style={style} />
+	),
 }));
 
 // Track AutoRun ref methods
@@ -75,7 +93,7 @@ let autoRunRefMethods: {
 };
 
 // Mock AutoRun component
-vi.mock('../../../renderer/components/AutoRun', () => ({
+vi.mock('../../../renderer/components/AutoRun/AutoRun', () => ({
 	AutoRun: React.forwardRef((props: any, ref: any) => {
 		// Expose ref methods
 		React.useImperativeHandle(ref, () => autoRunRefMethods);
@@ -254,7 +272,7 @@ describe('AutoRunExpandedModal', () => {
 
 			// Find the Edit button by its title (not the image button)
 			const editButton = screen.getByTitle('Edit document');
-			expect(editButton).toHaveClass('font-semibold');
+			expect(editButton).toHaveClass('font-medium');
 		});
 
 		it('should show Preview button as selected when mode is preview', () => {
@@ -262,7 +280,7 @@ describe('AutoRunExpandedModal', () => {
 			renderWithProvider(<AutoRunExpandedModal {...props} />);
 
 			const previewButton = screen.getByRole('button', { name: /preview/i });
-			expect(previewButton).toHaveClass('font-semibold');
+			expect(previewButton).toHaveClass('font-medium');
 		});
 
 		it('should call AutoRun switchMode when Edit button is clicked', () => {
@@ -420,7 +438,7 @@ describe('AutoRunExpandedModal', () => {
 			renderWithProvider(<AutoRunExpandedModal {...props} />);
 
 			const previewButton = screen.getByRole('button', { name: /preview/i });
-			expect(previewButton).toHaveClass('font-semibold');
+			expect(previewButton).toHaveClass('font-medium');
 		});
 	});
 
@@ -670,7 +688,7 @@ describe('AutoRunExpandedModal', () => {
 
 			const runButton = screen.getByRole('button', { name: /run/i });
 			expect(runButton).toHaveStyle({
-				backgroundColor: props.theme.colors.accent,
+				color: props.theme.colors.accent,
 			});
 		});
 

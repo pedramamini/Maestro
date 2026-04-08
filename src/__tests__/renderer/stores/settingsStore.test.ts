@@ -40,7 +40,6 @@ function resetStore() {
 		customThemeColors: DEFAULT_CUSTOM_THEME_COLORS,
 		customThemeBaseId: 'dracula',
 		enterToSendAI: false,
-		enterToSendTerminal: true,
 		defaultSaveToHistory: true,
 		defaultShowThinking: 'off',
 		leftSidebarWidth: 256,
@@ -94,6 +93,8 @@ function resetStore() {
 		directorNotesSettings: { provider: 'claude-code', defaultLookbackDays: 7 },
 		wakatimeApiKey: '',
 		wakatimeEnabled: false,
+		forcedParallelExecution: false,
+		forcedParallelAcknowledged: false,
 	});
 }
 
@@ -120,7 +121,7 @@ describe('settingsStore', () => {
 	// ========================================================================
 
 	describe('initial state', () => {
-		it('has correct default values for all 66 fields', () => {
+		it('has correct default values for all 68 fields', () => {
 			const state = useSettingsStore.getState();
 
 			expect(state.settingsLoaded).toBe(false);
@@ -139,7 +140,6 @@ describe('settingsStore', () => {
 			expect(state.customThemeColors).toEqual(DEFAULT_CUSTOM_THEME_COLORS);
 			expect(state.customThemeBaseId).toBe('dracula');
 			expect(state.enterToSendAI).toBe(false);
-			expect(state.enterToSendTerminal).toBe(true);
 			expect(state.defaultSaveToHistory).toBe(true);
 			expect(state.defaultShowThinking).toBe('off');
 			expect(state.leftSidebarWidth).toBe(256);
@@ -196,6 +196,8 @@ describe('settingsStore', () => {
 			});
 			expect(state.wakatimeApiKey).toBe('');
 			expect(state.wakatimeEnabled).toBe(false);
+			expect(state.forcedParallelExecution).toBe(false);
+			expect(state.forcedParallelAcknowledged).toBe(false);
 		});
 	});
 
@@ -301,12 +303,6 @@ describe('settingsStore', () => {
 				useSettingsStore.getState().setEnterToSendAI(true);
 				expect(useSettingsStore.getState().enterToSendAI).toBe(true);
 				expect(window.maestro.settings.set).toHaveBeenCalledWith('enterToSendAI', true);
-			});
-
-			it('setEnterToSendTerminal updates state and persists', () => {
-				useSettingsStore.getState().setEnterToSendTerminal(false);
-				expect(useSettingsStore.getState().enterToSendTerminal).toBe(false);
-				expect(window.maestro.settings.set).toHaveBeenCalledWith('enterToSendTerminal', false);
 			});
 
 			it('setDefaultSaveToHistory updates state and persists', () => {
@@ -617,6 +613,31 @@ describe('settingsStore', () => {
 				useSettingsStore.getState().setWakatimeEnabled(true);
 				expect(useSettingsStore.getState().wakatimeEnabled).toBe(true);
 				expect(window.maestro.settings.set).toHaveBeenCalledWith('wakatimeEnabled', true);
+			});
+		});
+
+		describe('Forced Parallel Execution', () => {
+			it('setForcedParallelExecution updates state and persists', () => {
+				useSettingsStore.getState().setForcedParallelExecution(true);
+				expect(useSettingsStore.getState().forcedParallelExecution).toBe(true);
+				expect(window.maestro.settings.set).toHaveBeenCalledWith('forcedParallelExecution', true);
+			});
+
+			it('setForcedParallelAcknowledged updates state and persists', () => {
+				useSettingsStore.getState().setForcedParallelAcknowledged(true);
+				expect(useSettingsStore.getState().forcedParallelAcknowledged).toBe(true);
+				expect(window.maestro.settings.set).toHaveBeenCalledWith(
+					'forcedParallelAcknowledged',
+					true
+				);
+			});
+
+			it('forcedParallelExecution defaults to false', () => {
+				expect(useSettingsStore.getState().forcedParallelExecution).toBe(false);
+			});
+
+			it('forcedParallelAcknowledged defaults to false', () => {
+				expect(useSettingsStore.getState().forcedParallelAcknowledged).toBe(false);
 			});
 		});
 	});

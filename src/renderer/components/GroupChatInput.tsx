@@ -618,10 +618,10 @@ export const GroupChatInput = React.memo(function GroupChatInput({
 										? `1px solid ${theme.colors.warning}50`
 										: '1px solid transparent',
 								}}
-								title="Toggle read-only mode (agents won't modify files)"
+								title="Toggle Read-Only mode (agents won't modify files)"
 							>
 								<Eye className="w-3 h-3" />
-								<span>Read-only</span>
+								<span>Read-Only</span>
 							</button>
 
 							{/* Enter to send toggle */}

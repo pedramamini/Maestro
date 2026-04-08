@@ -13,9 +13,29 @@ Maestro can update itself automatically! This feature was introduced in **v0.8.7
 
 ---
 
+## v0.16.x - Maestro Cue
+
+**Latest: v0.16.6-RC** | In Development
+
+### New Features
+
+- **Maestro Cue** — Event-driven automation engine that watches for file changes, time intervals, agent completions, GitHub PRs/issues, and pending markdown tasks to trigger automated prompts. Configured via `.maestro/cue.yaml` per project. Gated as an Encore Feature
+- **Environment tab** — Dedicated Settings tab for managing global environment variables passed to all agents
+- **Static history graph with viewport indicator** — The activity graph in the History panel no longer shifts as you scroll; instead, a sliding indicator line with a timestamp label shows your current position in the timeline
+- **File preview tab filtering** — New setting to control whether file preview tabs remain visible when the unread filter is active, with a redesigned Tab Filtering section in Display settings
+- **Cloudflare tunnel auto-restart** — The web/mobile tunnel automatically restarts when the web server port changes
+- **Custom TTS notifications** — Synopsis text is now sent to custom notification commands for user-initiated tasks
+
+### Bug Fixes
+
+- **Auto Run document clarity** — Rewrote the Auto Run instructions in the system prompt for improved agent comprehension
+- **openExternal guard** — Prevented relative paths from being passed to `shell.openExternal`, suppressing RangeError noise
+
+---
+
 ## v0.15.x - Maestro Symphony
 
-**Latest: v0.15.3** | Released January 1, 1
+**Latest: v0.15.3** | Released April 5, 2026
 
 # Major 0.15.x Additions
 
@@ -31,32 +51,19 @@ Maestro can update itself automatically! This feature was introduced in **v0.8.7
 
 ## Changes in v0.15.3
 
-Patch release with new features, SSH remote hardening, mobile improvements, and cross-platform fixes.
-
-### New Features
-
+- **CLI settings management:** Full `maestro-cli settings` command suite — list, get, set, and reset any Maestro setting from the command line. Includes per-agent configuration (custom paths, args, env vars, model overrides). Supports category filtering, verbose descriptions, and machine-readable JSON output for scripting
+- **Live settings reload:** Settings changes made via the CLI are automatically detected by the running desktop app — no restart required
+- **Plan-Mode toggle:** Claude Code and OpenCode agents now show "Plan-Mode" instead of "Read-Only" for the read-only toggle, matching their native terminology
+- **Solarized Dark theme:** New Solarized Dark color theme with tuned contrast for tags, code blocks, and pill labels
+- **Files pane icon theme:** Choose between default and rich icon themes in the files pane — rich theme adds colorful, language-specific icons for 70+ file types and folder categories. Toggle under Settings > Display
 - **Persistent web link:** The web/mobile interface link now persists across app restarts — no need to re-enable it each session
 - **OpenCode v1.2+ session support:** Automatically reads OpenCode's new SQLite session storage format alongside the legacy JSONL format
 - **Group chat @mentions:** Use `@agent-name` syntax in the prompt composer to direct messages to specific agents in group chat
+- **Group chat over SSH:** Group chat synthesis and moderation now run correctly on SSH remote agents instead of always spawning locally
+- **Group chat participant management:** Remove button on participant cards lets you remove stale or unwanted participants from a group chat
 - **Batch resume/abort:** New controls in the right panel for resuming or aborting batch operations
 - **Default worktree directory:** Worktree configuration now defaults to the parent of the agent's working directory instead of blank
-
-### Bug Fixes
-
-- **Windows stop button:** Stop/cancel button now correctly terminates Claude Code agents on Windows
-- **PTY spawn failures:** Graceful error handling when terminal process spawn fails instead of silent failure
-- **Toast notification z-index:** Toast notifications now render above modal backdrops via React portal
-- **SSH remote wizard support:** Full SSH remote ID threading through wizard file operations — documents read, write, and save correctly on remote hosts
-- **Auto Run subfolder path:** Fixed disk fallback path for Auto Run document retrieval when using subfolders
-- **Git push PATH:** Resolved PATH issues that could cause git push to fail in certain environments
-- **Execution queue drag-and-drop:** Fixed drag-and-drop reordering failing when the execution queue contains only 2 items
-- **Sentry-reported crash guards:** Defensive null checks in error pattern matching, session storage readers, and CLI activity monitoring to prevent crashes reported via Sentry
-- **Version manager PATH:** Agent spawning now includes version manager binary directories (nvm, fnm, mise, etc.) in the expanded PATH
-- **WebContents crash handler:** Restored the renderer crash handler that was accidentally removed during a prior refactor
-
-### Mobile
-
-- **Remote session stability:** Stabilized mobile remote session UI with improved composer, scoped drafts, and connection handling
+- **Drawfinity in Symphony:** Added Drawfinity to the Symphony project registry
 
 ### Previous Releases in this Series
 

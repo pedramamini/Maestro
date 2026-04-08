@@ -454,6 +454,8 @@ export function GroupChatModal(props: GroupChatModalProps): JSX.Element | null {
 								availableModels={ac.availableModels}
 								loadingModels={ac.loadingModels}
 								onRefreshModels={ac.refreshModels}
+								dynamicOptions={ac.dynamicOptions}
+								loadingDynamicOptions={ac.loadingDynamicOptions}
 								onRefreshAgent={ac.refreshAgent}
 								refreshingAgent={ac.refreshingAgent}
 								compact

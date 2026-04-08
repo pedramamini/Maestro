@@ -1,0 +1,86 @@
+import * as crypto from 'crypto';
+import type { MainLogLevel } from '../../shared/logger-types';
+import type { CueEvent, CueSubscription } from './cue-types';
+
+export interface CueDispatchServiceDeps {
+	getSessions: () => Array<{ id: string; name: string }>;
+	executeRun: (
+		sessionId: string,
+		prompt: string,
+		event: CueEvent,
+		subscriptionName: string,
+		outputPrompt?: string,
+		chainDepth?: number
+	) => void;
+	onLog: (level: MainLogLevel, message: string, data?: unknown) => void;
+}
+
+export interface CueDispatchService {
+	dispatchSubscription(
+		ownerSessionId: string,
+		sub: CueSubscription,
+		event: CueEvent,
+		sourceSessionName: string,
+		chainDepth?: number
+	): void;
+}
+
+export function createCueDispatchService(deps: CueDispatchServiceDeps): CueDispatchService {
+	return {
+		dispatchSubscription(
+			ownerSessionId: string,
+			sub: CueSubscription,
+			event: CueEvent,
+			sourceSessionName: string,
+			chainDepth?: number
+		): void {
+			if (sub.fan_out && sub.fan_out.length > 0) {
+				const targetNames = sub.fan_out.join(', ');
+				deps.onLog('cue', `[CUE] Fan-out: "${sub.name}" → ${targetNames}`);
+
+				const allSessions = deps.getSessions();
+				for (let i = 0; i < sub.fan_out.length; i++) {
+					const targetName = sub.fan_out[i];
+					const targetSession = allSessions.find(
+						(s) => s.name === targetName || s.id === targetName
+					);
+
+					if (!targetSession) {
+						deps.onLog('cue', `[CUE] Fan-out target not found: "${targetName}" — skipping`);
+						continue;
+					}
+
+					const fanOutEvent: CueEvent = {
+						...event,
+						id: crypto.randomUUID(),
+						payload: {
+							...event.payload,
+							fanOutSource: sourceSessionName,
+							fanOutIndex: i,
+						},
+					};
+					const perTargetPrompt = sub.fan_out_prompts?.[i];
+					const prompt = perTargetPrompt ?? sub.prompt ?? sub.prompt_file ?? '';
+					deps.executeRun(
+						targetSession.id,
+						prompt,
+						fanOutEvent,
+						sub.name,
+						sub.output_prompt,
+						chainDepth
+					);
+				}
+				return;
+			}
+
+			deps.executeRun(
+				ownerSessionId,
+				sub.prompt ?? sub.prompt_file ?? '',
+				event,
+				sub.name,
+				sub.output_prompt,
+				chainDepth
+			);
+		},
+	};
+}

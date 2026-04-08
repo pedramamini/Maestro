@@ -11,7 +11,7 @@ interface ExecutionQueueBrowserProps {
 	activeSessionId: string | null;
 	theme: Theme;
 	onRemoveItem: (sessionId: string, itemId: string) => void;
-	onSwitchSession: (sessionId: string) => void;
+	onSwitchSession: (sessionId: string, tabId?: string) => void;
 	onReorderItems?: (sessionId: string, fromIndex: number, toIndex: number) => void;
 }
 
@@ -245,7 +245,7 @@ export function ExecutionQueueBrowser({
 												theme={theme}
 												onRemove={() => onRemoveItem(session.id, item.id)}
 												onSwitchToSession={() => {
-													onSwitchSession(session.id);
+													onSwitchSession(session.id, item.tabId);
 													onClose();
 												}}
 												isDragging={dragState?.itemId === item.id}

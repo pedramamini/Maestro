@@ -5,6 +5,7 @@ import chokidar, { FSWatcher } from 'chokidar';
 import { execFileNoThrow } from '../../utils/execFile';
 import { execGit } from '../../utils/remote-git';
 import { logger } from '../../utils/logger';
+import { getSshRemoteById } from '../../stores';
 import { isWebContentsAvailable } from '../../utils/safe-send';
 import {
 	withIpcErrorLogging,
@@ -22,7 +23,6 @@ import {
 	isImageFile,
 	getImageMimeType,
 } from '../../../shared/gitUtils';
-import { SshRemoteConfig } from '../../../shared/types';
 import {
 	worktreeInfoRemote,
 	worktreeSetupRemote,
@@ -42,27 +42,6 @@ export interface GitHandlerDependencies {
 	settingsStore: {
 		get: (key: string, defaultValue?: unknown) => unknown;
 	};
-}
-
-// Module-level reference to settings store (set during registration)
-let gitSettingsStore: GitHandlerDependencies['settingsStore'] | null = null;
-
-/**
- * Look up SSH remote configuration by ID.
- * Returns null if ID is not provided or config not found.
- */
-function getSshRemoteById(sshRemoteId?: string): SshRemoteConfig | null {
-	if (!sshRemoteId || !gitSettingsStore) return null;
-
-	const sshRemotes = gitSettingsStore.get('sshRemotes', []) as SshRemoteConfig[];
-	const config = sshRemotes.find((r) => r.id === sshRemoteId && r.enabled);
-
-	if (!config) {
-		logger.debug(`SSH remote not found or disabled: ${sshRemoteId}`, LOG_CONTEXT);
-		return null;
-	}
-
-	return config;
 }
 
 // Worktree directory watchers keyed by session ID
@@ -88,9 +67,7 @@ const handlerOpts = (operation: string, logSuccess = false): CreateHandlerOption
  *
  * @param deps Dependencies including settingsStore for SSH remote configuration lookup
  */
-export function registerGitHandlers(deps: GitHandlerDependencies): void {
-	// Store the settings reference for SSH remote lookups
-	gitSettingsStore = deps.settingsStore;
+export function registerGitHandlers(_deps: GitHandlerDependencies): void {
 	// Basic Git operations
 	// All handlers accept optional sshRemoteId and remoteCwd for remote execution
 
@@ -100,7 +77,7 @@ export function registerGitHandlers(deps: GitHandlerDependencies): void {
 		withIpcErrorLogging(
 			handlerOpts('status'),
 			async (cwd: string, sshRemoteId?: string, remoteCwd?: string) => {
-				const sshRemote = getSshRemoteById(sshRemoteId);
+				const sshRemote = sshRemoteId ? getSshRemoteById(sshRemoteId) : undefined;
 				const effectiveRemoteCwd = sshRemote ? remoteCwd || cwd : undefined;
 				const result = await execGit(['status', '--porcelain'], cwd, sshRemote, effectiveRemoteCwd);
 				return { stdout: result.stdout, stderr: result.stderr };
@@ -114,7 +91,7 @@ export function registerGitHandlers(deps: GitHandlerDependencies): void {
 			handlerOpts('diff'),
 			async (cwd: string, file?: string, sshRemoteId?: string, remoteCwd?: string) => {
 				const args = file ? ['diff', file] : ['diff'];
-				const sshRemote = getSshRemoteById(sshRemoteId);
+				const sshRemote = sshRemoteId ? getSshRemoteById(sshRemoteId) : undefined;
 				const effectiveRemoteCwd = sshRemote ? remoteCwd || cwd : undefined;
 				const result = await execGit(args, cwd, sshRemote, effectiveRemoteCwd);
 				return { stdout: result.stdout, stderr: result.stderr };
@@ -127,7 +104,7 @@ export function registerGitHandlers(deps: GitHandlerDependencies): void {
 		withIpcErrorLogging(
 			handlerOpts('isRepo'),
 			async (cwd: string, sshRemoteId?: string, remoteCwd?: string) => {
-				const sshRemote = getSshRemoteById(sshRemoteId);
+				const sshRemote = sshRemoteId ? getSshRemoteById(sshRemoteId) : undefined;
 				const effectiveRemoteCwd = sshRemote ? remoteCwd || cwd : undefined;
 				const result = await execGit(
 					['rev-parse', '--is-inside-work-tree'],
@@ -145,7 +122,7 @@ export function registerGitHandlers(deps: GitHandlerDependencies): void {
 		withIpcErrorLogging(
 			handlerOpts('numstat'),
 			async (cwd: string, sshRemoteId?: string, remoteCwd?: string) => {
-				const sshRemote = getSshRemoteById(sshRemoteId);
+				const sshRemote = sshRemoteId ? getSshRemoteById(sshRemoteId) : undefined;
 				const effectiveRemoteCwd = sshRemote ? remoteCwd || cwd : undefined;
 				const result = await execGit(['diff', '--numstat'], cwd, sshRemote, effectiveRemoteCwd);
 				return { stdout: result.stdout, stderr: result.stderr };
@@ -158,7 +135,7 @@ export function registerGitHandlers(deps: GitHandlerDependencies): void {
 		withIpcErrorLogging(
 			handlerOpts('branch'),
 			async (cwd: string, sshRemoteId?: string, remoteCwd?: string) => {
-				const sshRemote = getSshRemoteById(sshRemoteId);
+				const sshRemote = sshRemoteId ? getSshRemoteById(sshRemoteId) : undefined;
 				const effectiveRemoteCwd = sshRemote ? remoteCwd || cwd : undefined;
 				const result = await execGit(
 					['rev-parse', '--abbrev-ref', 'HEAD'],
@@ -176,7 +153,7 @@ export function registerGitHandlers(deps: GitHandlerDependencies): void {
 		withIpcErrorLogging(
 			handlerOpts('remote'),
 			async (cwd: string, sshRemoteId?: string, remoteCwd?: string) => {
-				const sshRemote = getSshRemoteById(sshRemoteId);
+				const sshRemote = sshRemoteId ? getSshRemoteById(sshRemoteId) : undefined;
 				const effectiveRemoteCwd = sshRemote ? remoteCwd || cwd : undefined;
 				const result = await execGit(
 					['remote', 'get-url', 'origin'],
@@ -194,7 +171,7 @@ export function registerGitHandlers(deps: GitHandlerDependencies): void {
 		withIpcErrorLogging(
 			handlerOpts('branches'),
 			async (cwd: string, sshRemoteId?: string, remoteCwd?: string) => {
-				const sshRemote = getSshRemoteById(sshRemoteId);
+				const sshRemote = sshRemoteId ? getSshRemoteById(sshRemoteId) : undefined;
 				const effectiveRemoteCwd = sshRemote ? remoteCwd || cwd : undefined;
 				const result = await execGit(
 					['branch', '-a', '--format=%(refname:short)'],
@@ -217,7 +194,7 @@ export function registerGitHandlers(deps: GitHandlerDependencies): void {
 		withIpcErrorLogging(
 			handlerOpts('tags'),
 			async (cwd: string, sshRemoteId?: string, remoteCwd?: string) => {
-				const sshRemote = getSshRemoteById(sshRemoteId);
+				const sshRemote = sshRemoteId ? getSshRemoteById(sshRemoteId) : undefined;
 				const effectiveRemoteCwd = sshRemote ? remoteCwd || cwd : undefined;
 				const result = await execGit(['tag', '--list'], cwd, sshRemote, effectiveRemoteCwd);
 				if (result.exitCode !== 0) {
@@ -235,7 +212,7 @@ export function registerGitHandlers(deps: GitHandlerDependencies): void {
 		withIpcErrorLogging(
 			handlerOpts('info'),
 			async (cwd: string, sshRemoteId?: string, remoteCwd?: string) => {
-				const sshRemote = getSshRemoteById(sshRemoteId);
+				const sshRemote = sshRemoteId ? getSshRemoteById(sshRemoteId) : undefined;
 				const effectiveRemoteCwd = sshRemote ? remoteCwd || cwd : undefined;
 				// Get comprehensive git info in a single call
 				const [branchResult, remoteResult, statusResult, behindAheadResult] = await Promise.all([
@@ -278,7 +255,7 @@ export function registerGitHandlers(deps: GitHandlerDependencies): void {
 				sshRemoteId?: string,
 				remoteCwd?: string
 			) => {
-				const sshRemote = getSshRemoteById(sshRemoteId);
+				const sshRemote = sshRemoteId ? getSshRemoteById(sshRemoteId) : undefined;
 				const effectiveRemoteCwd = sshRemote ? remoteCwd || cwd : undefined;
 				// Get git log with formatted output for parsing
 				// Format: hash|author|date|refs|subject followed by shortstat
@@ -343,7 +320,7 @@ export function registerGitHandlers(deps: GitHandlerDependencies): void {
 		withIpcErrorLogging(
 			handlerOpts('commitCount'),
 			async (cwd: string, sshRemoteId?: string, remoteCwd?: string) => {
-				const sshRemote = getSshRemoteById(sshRemoteId);
+				const sshRemote = sshRemoteId ? getSshRemoteById(sshRemoteId) : undefined;
 				const effectiveRemoteCwd = sshRemote ? remoteCwd || cwd : undefined;
 				// Get total commit count using rev-list
 				const result = await execGit(
@@ -365,7 +342,7 @@ export function registerGitHandlers(deps: GitHandlerDependencies): void {
 		withIpcErrorLogging(
 			handlerOpts('show'),
 			async (cwd: string, hash: string, sshRemoteId?: string, remoteCwd?: string) => {
-				const sshRemote = getSshRemoteById(sshRemoteId);
+				const sshRemote = sshRemoteId ? getSshRemoteById(sshRemoteId) : undefined;
 				const effectiveRemoteCwd = sshRemote ? remoteCwd || cwd : undefined;
 				// Get the full diff for a specific commit
 				const result = await execGit(
@@ -430,7 +407,7 @@ export function registerGitHandlers(deps: GitHandlerDependencies): void {
 			async (worktreePath: string, sshRemoteId?: string) => {
 				// SSH remote: dispatch to remote git operations
 				if (sshRemoteId) {
-					const sshConfig = getSshRemoteById(sshRemoteId);
+					const sshConfig = sshRemoteId ? getSshRemoteById(sshRemoteId) : undefined;
 					if (!sshConfig) {
 						throw new Error(`SSH remote not found: ${sshRemoteId}`);
 					}
@@ -511,7 +488,7 @@ export function registerGitHandlers(deps: GitHandlerDependencies): void {
 		createIpcHandler(handlerOpts('getRepoRoot'), async (cwd: string, sshRemoteId?: string) => {
 			// SSH remote: dispatch to remote git operations
 			if (sshRemoteId) {
-				const sshConfig = getSshRemoteById(sshRemoteId);
+				const sshConfig = sshRemoteId ? getSshRemoteById(sshRemoteId) : undefined;
 				if (!sshConfig) {
 					throw new Error(`SSH remote not found: ${sshRemoteId}`);
 				}
@@ -546,7 +523,7 @@ export function registerGitHandlers(deps: GitHandlerDependencies): void {
 			) => {
 				// SSH remote: dispatch to remote git operations
 				if (sshRemoteId) {
-					const sshConfig = getSshRemoteById(sshRemoteId);
+					const sshConfig = sshRemoteId ? getSshRemoteById(sshRemoteId) : undefined;
 					if (!sshConfig) {
 						throw new Error(`SSH remote not found: ${sshRemoteId}`);
 					}
@@ -727,7 +704,7 @@ export function registerGitHandlers(deps: GitHandlerDependencies): void {
 			) => {
 				// SSH remote: dispatch to remote git operations
 				if (sshRemoteId) {
-					const sshConfig = getSshRemoteById(sshRemoteId);
+					const sshConfig = sshRemoteId ? getSshRemoteById(sshRemoteId) : undefined;
 					if (!sshConfig) {
 						throw new Error(`SSH remote not found: ${sshRemoteId}`);
 					}
@@ -965,7 +942,7 @@ export function registerGitHandlers(deps: GitHandlerDependencies): void {
 		createIpcHandler(handlerOpts('listWorktrees'), async (cwd: string, sshRemoteId?: string) => {
 			// SSH remote: dispatch to remote git operations
 			if (sshRemoteId) {
-				const sshConfig = getSshRemoteById(sshRemoteId);
+				const sshConfig = sshRemoteId ? getSshRemoteById(sshRemoteId) : undefined;
 				if (!sshConfig) {
 					throw new Error(`SSH remote not found: ${sshRemoteId}`);
 				}
@@ -1048,7 +1025,7 @@ export function registerGitHandlers(deps: GitHandlerDependencies): void {
 		createIpcHandler(
 			handlerOpts('scanWorktreeDirectory'),
 			async (parentPath: string, sshRemoteId?: string) => {
-				const sshRemote = getSshRemoteById(sshRemoteId);
+				const sshRemote = sshRemoteId ? getSshRemoteById(sshRemoteId) : undefined;
 
 				try {
 					// Read directory contents (SSH-aware)

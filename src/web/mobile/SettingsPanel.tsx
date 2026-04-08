@@ -575,12 +575,6 @@ export function SettingsPanel({ onClose, settingsHook }: SettingsPanelProps) {
 							[
 								{ key: 'enterToSendAI', label: 'Enter to send (AI mode)', field: 'enterToSendAI' },
 								{
-									key: 'enterToSendTerminal',
-									label: 'Enter to send (Terminal mode)',
-									field: 'enterToSendTerminal',
-								},
-								{ key: 'autoScroll', label: 'Auto-scroll', field: 'autoScroll' },
-								{
 									key: 'defaultSaveToHistory',
 									label: 'Save to history by default',
 									field: 'defaultSaveToHistory',

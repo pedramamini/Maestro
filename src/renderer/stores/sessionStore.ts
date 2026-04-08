@@ -14,7 +14,7 @@
  */
 
 import { create } from 'zustand';
-import type { Session, Group, LogEntry } from '../types';
+import type { Session, Group, LogEntry, AITab } from '../types';
 import { generateId } from '../utils/ids';
 import { getActiveTab } from '../utils/tabHelpers';
 
@@ -70,6 +70,12 @@ export interface SessionStoreActions {
 	 * Resets cycle position (so next Cmd+J/K starts fresh).
 	 */
 	setActiveSessionId: (id: string) => void;
+
+	/**
+	 * Set the active session ID from persisted state on startup.
+	 * Updates local state only — does not write back to disk.
+	 */
+	hydrateActiveSessionId: (id: string) => void;
 
 	/**
 	 * Set the active session ID without resetting cycle position.
@@ -198,7 +204,16 @@ export const useSessionStore = create<SessionStore>()((set) => ({
 		}),
 
 	// Active session
-	setActiveSessionId: (id) => set({ activeSessionId: id, cyclePosition: -1 }),
+	setActiveSessionId: (id) => {
+		set({ activeSessionId: id, cyclePosition: -1 });
+		// Fire-and-forget: persist to disk for restore on next launch.
+		// Not awaited — UI state must update synchronously; if the write
+		// fails the only consequence is the session won't be pre-selected
+		// on next launch (falls back to first session).
+		window.maestro?.sessions?.setActiveSessionId(id);
+	},
+
+	hydrateActiveSessionId: (id) => set({ activeSessionId: id, cyclePosition: -1 }),
 
 	setActiveSessionIdInternal: (v) =>
 		set((s) => ({ activeSessionId: resolve(v, s.activeSessionId) })),
@@ -414,6 +429,47 @@ export const selectIsAnySessionBusy = (state: SessionStore): boolean =>
  */
 export function getSessionState() {
 	return useSessionStore.getState();
+}
+
+/**
+ * Update a session by ID using a mapper function.
+ * Convenience helper for call sites that need a full session → session transform
+ * rather than just a Partial<Session> update.
+ *
+ * Operates directly on the store outside of React — safe to call from callbacks.
+ *
+ * @example
+ * updateSessionWith(activeSession.id, (s) => ({ ...s, batchRunnerPrompt: prompt }));
+ */
+export function updateSessionWith(sessionId: string, updater: (session: Session) => Session): void {
+	useSessionStore
+		.getState()
+		.setSessions((prev: Session[]) => prev.map((s) => (s.id === sessionId ? updater(s) : s)));
+}
+
+/**
+ * Update a specific AI tab within a session using a mapper function.
+ * Convenience helper for tab-level updates that need a full tab → tab transform.
+ *
+ * Operates directly on the store outside of React — safe to call from callbacks.
+ *
+ * @example
+ * updateAiTab(sessionId, tabId, (tab) => ({ ...tab, autoSendOnActivate: false }));
+ */
+export function updateAiTab(
+	sessionId: string,
+	tabId: string,
+	updater: (tab: AITab) => AITab
+): void {
+	useSessionStore.getState().setSessions((prev: Session[]) =>
+		prev.map((s) => {
+			if (s.id !== sessionId) return s;
+			return {
+				...s,
+				aiTabs: s.aiTabs.map((t) => (t.id === tabId ? updater(t) : t)),
+			};
+		})
+	);
 }
 
 /**

@@ -9,10 +9,10 @@
  * - WebSocket: Real-time updates for session state, logs, theme
  *
  * URL Structure:
- *   http://localhost:PORT/$TOKEN/                  → Dashboard (all live sessions)
- *   http://localhost:PORT/$TOKEN/session/$UUID     → Single session view
- *   http://localhost:PORT/$TOKEN/api/*             → REST API
- *   http://localhost:PORT/$TOKEN/ws                → WebSocket
+ *   http://LAN_IP:PORT/$TOKEN/                  → Dashboard (all live sessions)
+ *   http://LAN_IP:PORT/$TOKEN/session/$UUID     → Single session view
+ *   http://LAN_IP:PORT/$TOKEN/api/*             → REST API
+ *   http://LAN_IP:PORT/$TOKEN/ws                → WebSocket
  *
  * Security:
  * - Token regenerated on each app restart (unless Persistent Web Link is enabled)
@@ -29,8 +29,8 @@ import { FastifyInstance, FastifyRequest } from 'fastify';
 import { randomUUID } from 'crypto';
 import path from 'path';
 import { existsSync } from 'fs';
-import { getLocalIpAddressSync } from '../utils/networkUtils';
 import { logger } from '../utils/logger';
+import { getLocalIpAddress } from '../utils/networkUtils';
 import { WebSocketMessageHandler } from './handlers';
 import { BroadcastService } from './services';
 import { ApiRoutes, StaticRoutes, WsRoute } from './routes';
@@ -267,7 +267,6 @@ export class WebServer {
 
 	/**
 	 * Get the full secure URL (with token)
-	 * Uses the detected local IP address for LAN accessibility
 	 */
 	getSecureUrl(): string {
 		return `http://${this.localIpAddress}:${this.port}/${this.securityToken}`;
@@ -275,7 +274,6 @@ export class WebServer {
 
 	/**
 	 * Get URL for a specific session
-	 * Uses the detected local IP address for LAN accessibility
 	 */
 	getSessionUrl(sessionId: string): string {
 		return `http://${this.localIpAddress}:${this.port}/${this.securityToken}/session/${sessionId}`;
@@ -301,6 +299,41 @@ export class WebServer {
 
 	setWriteToSessionCallback(callback: WriteToSessionCallback): void {
 		this.callbackRegistry.setWriteToSessionCallback(callback);
+	}
+
+	private writeToTerminalCallback: ((sessionId: string, data: string) => boolean) | null = null;
+	private resizeTerminalCallback:
+		| ((sessionId: string, cols: number, rows: number) => boolean)
+		| null = null;
+	private spawnTerminalForWebCallback:
+		| ((
+				sessionId: string,
+				config: { cwd: string; cols?: number; rows?: number }
+		  ) => Promise<{ success: boolean; pid: number }>)
+		| null = null;
+	private killTerminalForWebCallback: ((sessionId: string) => boolean) | null = null;
+
+	setWriteToTerminalCallback(callback: (sessionId: string, data: string) => boolean): void {
+		this.writeToTerminalCallback = callback;
+	}
+
+	setResizeTerminalCallback(
+		callback: (sessionId: string, cols: number, rows: number) => boolean
+	): void {
+		this.resizeTerminalCallback = callback;
+	}
+
+	setSpawnTerminalForWebCallback(
+		callback: (
+			sessionId: string,
+			config: { cwd: string; cols?: number; rows?: number }
+		) => Promise<{ success: boolean; pid: number }>
+	): void {
+		this.spawnTerminalForWebCallback = callback;
+	}
+
+	setKillTerminalForWebCallback(callback: (sessionId: string) => boolean): void {
+		this.killTerminalForWebCallback = callback;
 	}
 
 	setExecuteCommandCallback(callback: ExecuteCommandCallback): void {
@@ -590,6 +623,17 @@ export class WebServer {
 				logger.info(`Client connected: ${client.id} (total: ${this.webClients.size})`, LOG_CONTEXT);
 			},
 			onClientDisconnect: (clientId) => {
+				const client = this.webClients.get(clientId);
+				if (client?.subscribedSessionId) {
+					// Kill any terminal PTY spawned for this web client's session
+					const killed = this.killTerminalForWebCallback?.(client.subscribedSessionId);
+					if (killed) {
+						logger.info(
+							`Killed terminal PTY for disconnected client ${clientId} (session: ${client.subscribedSessionId})`,
+							LOG_CONTEXT
+						);
+					}
+				}
 				this.webClients.delete(clientId);
 				logger.info(
 					`Client disconnected: ${clientId} (total: ${this.webClients.size})`,
@@ -693,6 +737,18 @@ export class WebServer {
 			getUsageDashboard: async (timeRange: 'day' | 'week' | 'month' | 'all') =>
 				this.callbackRegistry.getUsageDashboard(timeRange),
 			getAchievements: async () => this.callbackRegistry.getAchievements(),
+			writeToTerminal: (sessionId: string, data: string) =>
+				this.writeToTerminalCallback?.(sessionId, data) ?? false,
+			resizeTerminal: (sessionId: string, cols: number, rows: number) =>
+				this.resizeTerminalCallback?.(sessionId, cols, rows) ?? false,
+			spawnTerminalForWeb: (
+				sessionId: string,
+				config: { cwd: string; cols?: number; rows?: number }
+			) =>
+				this.spawnTerminalForWebCallback?.(sessionId, config) ??
+				Promise.resolve({ success: false, pid: 0 }),
+			killTerminalForWeb: (sessionId: string) =>
+				this.killTerminalForWebCallback?.(sessionId) ?? false,
 		});
 	}
 
@@ -792,6 +848,26 @@ export class WebServer {
 		this.broadcastService.broadcastCueSubscriptionsChanged(subscriptions);
 	}
 
+	broadcastToolEvent(
+		sessionId: string,
+		tabId: string,
+		toolLog: {
+			id: string;
+			timestamp: number;
+			source: 'tool';
+			text: string;
+			metadata?: {
+				toolState?: {
+					name: string;
+					status: 'running' | 'completed' | 'error';
+					input?: Record<string, unknown>;
+				};
+			};
+		}
+	): void {
+		this.broadcastService.broadcastToolEvent(sessionId, tabId, toolLog);
+	}
+
 	// ============ Server Lifecycle ============
 
 	getWebClientCount(): number {
@@ -808,8 +884,9 @@ export class WebServer {
 		}
 
 		try {
-			// Detect local IP address for LAN accessibility (sync - no network delay)
-			this.localIpAddress = getLocalIpAddressSync();
+			// Detect LAN IP for display URLs, bind to 0.0.0.0 for LAN accessibility
+			// Security token (UUID) prevents unauthorized access
+			this.localIpAddress = await getLocalIpAddress();
 			logger.info(`Using IP address: ${this.localIpAddress}`, LOG_CONTEXT);
 
 			// Setup middleware and routes (must be done before listen)

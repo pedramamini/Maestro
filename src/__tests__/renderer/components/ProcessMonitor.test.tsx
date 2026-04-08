@@ -534,7 +534,7 @@ describe('ProcessMonitor', () => {
 			render(<ProcessMonitor theme={theme} sessions={[session]} groups={[]} onClose={onClose} />);
 
 			await waitFor(() => {
-				expect(screen.getByText(/Session: abcdef12\.\.\./)).toBeInTheDocument();
+				expect(screen.getByText(/Session: abcdef12/)).toBeInTheDocument();
 			});
 		});
 	});
@@ -693,7 +693,7 @@ describe('ProcessMonitor', () => {
 
 			await waitFor(() => {
 				// Claude session ID starts with abc12345
-				expect(screen.getByText('abc12345...')).toBeInTheDocument();
+				expect(screen.getByText('abc12345')).toBeInTheDocument();
 			});
 		});
 
@@ -713,14 +713,14 @@ describe('ProcessMonitor', () => {
 			);
 
 			await waitFor(() => {
-				expect(screen.getByText('abc12345...')).toBeInTheDocument();
+				expect(screen.getByText('abc12345')).toBeInTheDocument();
 			});
 
 			// Click the Claude session ID
 			const claudeIdButton = screen.getByTitle('Click to navigate to this session');
 			fireEvent.click(claudeIdButton);
 
-			expect(onNavigateToSession).toHaveBeenCalledWith('session-1', 'tab-1');
+			expect(onNavigateToSession).toHaveBeenCalledWith('session-1', 'tab-1', 'ai');
 			expect(onClose).toHaveBeenCalled();
 		});
 
@@ -732,7 +732,7 @@ describe('ProcessMonitor', () => {
 			render(<ProcessMonitor theme={theme} sessions={[session]} groups={[]} onClose={onClose} />);
 
 			await waitFor(() => {
-				expect(screen.getByText('abc12345...')).toBeInTheDocument();
+				expect(screen.getByText('abc12345')).toBeInTheDocument();
 			});
 
 			// Should be a span, not a button
@@ -759,7 +759,7 @@ describe('ProcessMonitor', () => {
 			});
 
 			fireEvent.click(screen.getByTitle('Jump to tab'));
-			expect(onNavigateToSession).toHaveBeenCalledWith('session-1', 'tab-1');
+			expect(onNavigateToSession).toHaveBeenCalledWith('session-1', 'tab-1', 'ai');
 			expect(onClose).toHaveBeenCalled();
 		});
 
@@ -795,7 +795,7 @@ describe('ProcessMonitor', () => {
 			render(<ProcessMonitor theme={theme} sessions={[session]} groups={[]} onClose={onClose} />);
 
 			await waitFor(() => {
-				expect(screen.getByText('abc12345...')).toBeInTheDocument();
+				expect(screen.getByText('abc12345')).toBeInTheDocument();
 			});
 
 			expect(screen.queryByTitle('Jump to agent')).not.toBeInTheDocument();
@@ -1505,6 +1505,18 @@ describe('ProcessMonitor', () => {
 
 		it('should parse base session ID from terminal process', async () => {
 			const process = createActiveProcess({ sessionId: 'abc123-terminal' });
+			getActiveProcessesMock().mockResolvedValue([process]);
+
+			const session = createSession({ id: 'abc123' });
+			render(<ProcessMonitor theme={theme} sessions={[session]} groups={[]} onClose={onClose} />);
+
+			await waitFor(() => {
+				expect(screen.getByText('Test Session')).toBeInTheDocument();
+			});
+		});
+
+		it('should parse base session ID from terminal tab process', async () => {
+			const process = createActiveProcess({ sessionId: 'abc123-terminal-tab1' });
 			getActiveProcessesMock().mockResolvedValue([process]);
 
 			const session = createSession({ id: 'abc123' });

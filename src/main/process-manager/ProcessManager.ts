@@ -18,6 +18,7 @@ import { SshCommandRunner } from './runners/SshCommandRunner';
 import { logger } from '../utils/logger';
 import { isWindows } from '../../shared/platformDetection';
 import type { SshRemoteConfig } from '../../shared/types';
+import { getDefaultShell } from '../stores/defaults';
 
 /** Time (ms) to wait for a PTY process to exit after SIGTERM before sending SIGKILL. */
 const PTY_KILL_ESCALATION_MS = 2000;
@@ -228,38 +229,41 @@ export class ProcessManager extends EventEmitter {
 			this.bufferManager.flushDataBuffer(sessionId);
 
 			if (proc.isTerminal && proc.ptyProcess) {
-				const ptyProc = proc.ptyProcess;
-				const pid = proc.pid;
+				if (isWindows() && proc.pid) {
+					// On Windows, node-pty's kill() only terminates the direct ConPTY
+					// child (the shell), not grandchild processes it spawned (e.g., dev
+					// servers, watchers). Use taskkill /t /f to kill the entire tree.
+					this.killWindowsProcessTree(proc.pid, sessionId);
+				} else {
+					const ptyProc = proc.ptyProcess;
+					const pid = proc.pid;
 
-				// Use SIGTERM (not the default SIGHUP which shells may survive on macOS)
-				try {
-					ptyProc.kill('SIGTERM');
-				} catch {
-					// Process may already be dead
-				}
-
-				// Escalate to SIGKILL if the process doesn't exit promptly.
-				// The ptyProcess reference is captured by the closure so the
-				// process can be forcefully terminated even after map removal.
-				const escalationTimer = setTimeout(() => {
+					// Use SIGTERM (not the default SIGHUP which shells may survive on macOS)
 					try {
-						// node-pty's kill() is the only portable way to signal the PTY child.
-						// If the process already exited, this is a harmless no-op.
-						ptyProc.kill('SIGKILL');
-						logger.warn(
-							'[ProcessManager] PTY did not exit after SIGTERM, escalated to SIGKILL',
-							'ProcessManager',
-							{ sessionId, pid }
-						);
+						ptyProc.kill('SIGTERM');
 					} catch {
-						// Process already exited — expected after normal SIGTERM
+						// Process may already be dead
 					}
-				}, PTY_KILL_ESCALATION_MS);
 
-				// Cancel escalation if the PTY exits on its own
-				ptyProc.onExit(() => {
-					clearTimeout(escalationTimer);
-				});
+					// Escalate to SIGKILL if the process doesn't exit promptly.
+					const escalationTimer = setTimeout(() => {
+						try {
+							ptyProc.kill('SIGKILL');
+							logger.warn(
+								'[ProcessManager] PTY did not exit after SIGTERM, escalated to SIGKILL',
+								'ProcessManager',
+								{ sessionId, pid }
+							);
+						} catch {
+							// Process already exited — expected after normal SIGTERM
+						}
+					}, PTY_KILL_ESCALATION_MS);
+
+					// Cancel escalation if the PTY exits on its own
+					ptyProc.onExit(() => {
+						clearTimeout(escalationTimer);
+					});
+				}
 			} else if (proc.childProcess) {
 				const pid = proc.childProcess.pid;
 				if (isWindows() && pid) {
@@ -365,7 +369,7 @@ export class ProcessManager extends EventEmitter {
 		cols?: number;
 		rows?: number;
 	}): SpawnResult {
-		const shell = config.shell || (process.platform === 'win32' ? 'powershell.exe' : 'zsh');
+		const shell = config.shell || getDefaultShell();
 		logger.info('[ProcessManager] Spawning terminal tab PTY', 'ProcessManager', {
 			sessionId: config.sessionId,
 			cwd: config.cwd,

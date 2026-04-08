@@ -30,7 +30,7 @@ import { useLayerStack } from '../contexts/LayerStackContext';
 import { MODAL_PRIORITIES } from '../constants/modalPriorities';
 import { SessionActivityGraph, type ActivityEntry } from './SessionActivityGraph';
 import { SessionListItem } from './SessionListItem';
-import { ToolCallCard, getToolName } from './ToolCallCard';
+import { ToolCallCard } from './ToolCallCard';
 import { formatSize, formatNumber, formatTokens, formatRelativeTime } from '../utils/formatters';
 import {
 	useSessionViewer,
@@ -601,12 +601,16 @@ export function AgentSessionsBrowser({
 	const handleResume = useCallback(() => {
 		if (viewingSession) {
 			// Convert messages to LogEntry format for AI terminal
-			const logEntries: LogEntry[] = messages.map((msg, idx) => ({
-				id: msg.uuid || `${viewingSession.sessionId}-${idx}`,
-				timestamp: new Date(msg.timestamp).getTime(),
-				source: msg.type === 'user' ? ('user' as const) : ('stdout' as const),
-				text: msg.content || (msg.toolUse ? `[Tool: ${getToolName(msg.toolUse)}]` : '[No content]'),
-			}));
+			// Skip tool call messages — matching live session behavior where tool entries
+			// are only added to logs when showThinking is on (restored tabs start with it off)
+			const logEntries: LogEntry[] = messages
+				.filter((msg) => !(msg.toolUse && Array.isArray(msg.toolUse) && msg.toolUse.length > 0))
+				.map((msg, idx) => ({
+					id: msg.uuid || `${viewingSession.sessionId}-${idx}`,
+					timestamp: new Date(msg.timestamp).getTime(),
+					source: msg.type === 'user' ? ('user' as const) : ('stdout' as const),
+					text: msg.content || '[No content]',
+				}));
 			// Pass session name and starred status for the new tab
 			const isStarred = starredSessions.has(viewingSession.sessionId);
 			// Build usageStats from session metadata so restored tabs show context/cost

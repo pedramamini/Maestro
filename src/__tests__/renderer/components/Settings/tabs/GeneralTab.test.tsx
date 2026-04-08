@@ -43,10 +43,8 @@ const mockSetShellEnvVars = vi.fn();
 const mockSetGhPath = vi.fn();
 const mockSetLogLevel = vi.fn();
 const mockSetEnterToSendAI = vi.fn();
-const mockSetEnterToSendTerminal = vi.fn();
 const mockSetDefaultSaveToHistory = vi.fn();
 const mockSetDefaultShowThinking = vi.fn();
-const mockSetAutoScrollAiMode = vi.fn();
 const mockSetAutomaticTabNamingEnabled = vi.fn();
 const mockSetPreventSleepEnabled = vi.fn();
 const mockSetDisableGpuAcceleration = vi.fn();
@@ -79,14 +77,10 @@ vi.mock('../../../../../renderer/hooks/settings/useSettings', () => ({
 		// Input settings
 		enterToSendAI: true,
 		setEnterToSendAI: mockSetEnterToSendAI,
-		enterToSendTerminal: true,
-		setEnterToSendTerminal: mockSetEnterToSendTerminal,
 		defaultSaveToHistory: true,
 		setDefaultSaveToHistory: mockSetDefaultSaveToHistory,
 		defaultShowThinking: 'off',
 		setDefaultShowThinking: mockSetDefaultShowThinking,
-		autoScrollAiMode: true,
-		setAutoScrollAiMode: mockSetAutoScrollAiMode,
 		// Tab naming
 		automaticTabNamingEnabled: true,
 		setAutomaticTabNamingEnabled: mockSetAutomaticTabNamingEnabled,
@@ -174,7 +168,6 @@ describe('GeneralTab', () => {
 			expect(screen.getByText('Default History Toggle')).toBeInTheDocument();
 			expect(screen.getByText('Default Thinking Mode')).toBeInTheDocument();
 			expect(screen.getByText('Automatic Tab Naming')).toBeInTheDocument();
-			expect(screen.getByText('Auto-scroll AI Output')).toBeInTheDocument();
 			expect(screen.getByText('Power')).toBeInTheDocument();
 			expect(screen.getByText('Rendering Options')).toBeInTheDocument();
 			expect(screen.getByText('Updates')).toBeInTheDocument();
@@ -429,23 +422,6 @@ describe('GeneralTab', () => {
 
 			expect(screen.getByPlaceholderText('/path/to/shell')).toBeInTheDocument();
 			expect(screen.getByPlaceholderText('--flag value')).toBeInTheDocument();
-		});
-
-		it('should show environment variables section when expanded', async () => {
-			render(<GeneralTab theme={mockTheme} isOpen={true} />);
-
-			await act(async () => {
-				await vi.advanceTimersByTimeAsync(100);
-			});
-
-			const configButton = screen.getByText('Shell Configuration').closest('button');
-			fireEvent.click(configButton!);
-
-			await act(async () => {
-				await vi.advanceTimersByTimeAsync(100);
-			});
-
-			expect(screen.getByText('Global Environment Variables')).toBeInTheDocument();
 		});
 
 		it('should collapse when clicked again', async () => {
@@ -738,7 +714,7 @@ describe('GeneralTab', () => {
 	// 9. Enter to Send
 	// =========================================================================
 	describe('Enter to Send', () => {
-		it('should display AI Interaction Mode and Terminal Mode sections', async () => {
+		it('should display AI Interaction Mode section', async () => {
 			render(<GeneralTab theme={mockTheme} isOpen={true} />);
 
 			await act(async () => {
@@ -746,7 +722,6 @@ describe('GeneralTab', () => {
 			});
 
 			expect(screen.getByText('AI Interaction Mode')).toBeInTheDocument();
-			expect(screen.getByText('Terminal Mode')).toBeInTheDocument();
 		});
 
 		it('should call setEnterToSendAI when AI toggle is clicked', async () => {
@@ -762,21 +737,6 @@ describe('GeneralTab', () => {
 			fireEvent.click(toggleButton!);
 
 			expect(mockSetEnterToSendAI).toHaveBeenCalledWith(false);
-		});
-
-		it('should call setEnterToSendTerminal when Terminal toggle is clicked', async () => {
-			render(<GeneralTab theme={mockTheme} isOpen={true} />);
-
-			await act(async () => {
-				await vi.advanceTimersByTimeAsync(100);
-			});
-
-			const terminalModeLabel = screen.getByText('Terminal Mode');
-			const terminalModeSection = terminalModeLabel.closest('.p-3');
-			const toggleButton = terminalModeSection?.querySelector('button');
-			fireEvent.click(toggleButton!);
-
-			expect(mockSetEnterToSendTerminal).toHaveBeenCalledWith(false);
 		});
 
 		it('should show correct label based on enterToSendAI value', async () => {
@@ -961,34 +921,6 @@ describe('GeneralTab', () => {
 
 	// =========================================================================
 	// 12. Auto-scroll
-	// =========================================================================
-	describe('Auto-scroll', () => {
-		it('should render auto-scroll toggle', async () => {
-			render(<GeneralTab theme={mockTheme} isOpen={true} />);
-
-			await act(async () => {
-				await vi.advanceTimersByTimeAsync(100);
-			});
-
-			expect(screen.getByText('Auto-scroll AI output')).toBeInTheDocument();
-		});
-
-		it('should call setAutoScrollAiMode when toggle is clicked', async () => {
-			render(<GeneralTab theme={mockTheme} isOpen={true} />);
-
-			await act(async () => {
-				await vi.advanceTimersByTimeAsync(100);
-			});
-
-			const titleElement = screen.getByText('Auto-scroll AI output');
-			const toggleContainer = titleElement.closest('[role="button"]');
-			const toggleSwitch = toggleContainer?.querySelector('button[role="switch"]');
-
-			fireEvent.click(toggleSwitch!);
-			expect(mockSetAutoScrollAiMode).toHaveBeenCalledWith(false);
-		});
-	});
-
 	// =========================================================================
 	// 13. Tab Naming
 	// =========================================================================

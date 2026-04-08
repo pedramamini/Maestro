@@ -32,6 +32,25 @@ export const EVENT_LABELS: Record<CueEventType, string> = {
 	'task.pending': 'Pending Task',
 };
 
+/** Default prompt templates for event types that benefit from pre-populated context */
+export const DEFAULT_EVENT_PROMPTS: Partial<Record<CueEventType, string>> = {
+	'github.issue': `Issue URL: {{CUE_GH_URL}}
+Issue #: {{CUE_GH_NUMBER}}
+Issue Title: {{CUE_GH_TITLE}}
+Author: {{CUE_GH_AUTHOR}}
+Labels: {{CUE_GH_LABELS}}
+
+{{CUE_GH_BODY}}`,
+	'github.pull_request': `PR URL: {{CUE_GH_URL}}
+PR #: {{CUE_GH_NUMBER}}
+PR Title: {{CUE_GH_TITLE}}
+Author: {{CUE_GH_AUTHOR}}
+Branch: {{CUE_GH_BRANCH}} → {{CUE_GH_BASE_BRANCH}}
+Labels: {{CUE_GH_LABELS}}
+
+{{CUE_GH_BODY}}`,
+};
+
 /** Brand color for each event type (used in nodes, drawers, minimap) */
 export const EVENT_COLORS: Record<CueEventType, string> = {
 	'app.startup': '#10b981',

@@ -11,6 +11,8 @@ import { useThemeColors } from '../components/ThemeProvider';
 import { useSwipeGestures } from '../hooks/useSwipeGestures';
 import { triggerHaptic, HAPTIC_PATTERNS } from './constants';
 import { GitStatusPanel } from './GitStatusPanel';
+import { DocumentCard } from './AutoRunDocumentCard';
+import { useAutoRun } from '../hooks/useAutoRun';
 import type { AutoRunState, UseWebSocketReturn } from '../hooks/useWebSocket';
 import type { UseGitStatusReturn } from '../hooks/useGitStatus';
 
@@ -63,10 +65,10 @@ export function RightDrawer({
 	onClose,
 	onFileSelect,
 	projectPath,
-	onAutoRunOpenDocument: _onAutoRunOpenDocument,
+	onAutoRunOpenDocument,
 	onAutoRunOpenSetup,
-	sendRequest: _sendRequest,
-	send: _send,
+	sendRequest,
+	send,
 	onViewDiff,
 }: RightDrawerProps) {
 	const colors = useThemeColors();
@@ -93,11 +95,19 @@ export function RightDrawer({
 		lockDirection: true,
 	});
 
+	const closeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+	useEffect(
+		() => () => {
+			if (closeTimerRef.current) clearTimeout(closeTimerRef.current);
+		},
+		[]
+	);
+
 	const handleClose = useCallback(() => {
 		triggerHaptic(HAPTIC_PATTERNS.tap);
 		setIsOpen(false);
 		// Wait for close animation before unmounting
-		setTimeout(() => onClose(), 300);
+		closeTimerRef.current = setTimeout(() => onClose(), 300);
 	}, [onClose]);
 
 	const handleOverlayClick = useCallback(() => {
@@ -220,13 +230,25 @@ export function RightDrawer({
 					}}
 				>
 					{currentTab === 'files' && (
-						<FilesTabContent sessionId={sessionId} onFileSelect={onFileSelect} />
+						<FilesTabContent
+							sessionId={sessionId}
+							onFileSelect={onFileSelect}
+							sendRequest={sendRequest}
+							projectPath={projectPath}
+						/>
 					)}
 					{currentTab === 'history' && (
 						<HistoryTabContent sessionId={sessionId} projectPath={projectPath} />
 					)}
 					{currentTab === 'autorun' && (
-						<AutoRunTabContent autoRunState={autoRunState} onOpenSetup={onAutoRunOpenSetup} />
+						<AutoRunTabContent
+							sessionId={sessionId}
+							autoRunState={autoRunState}
+							onOpenSetup={onAutoRunOpenSetup}
+							sendRequest={sendRequest}
+							send={send}
+							onOpenDocument={onAutoRunOpenDocument}
+						/>
 					)}
 					{currentTab === 'git' && (
 						<GitStatusPanel sessionId={sessionId} gitStatus={gitStatus} onViewDiff={onViewDiff} />
@@ -238,39 +260,275 @@ export function RightDrawer({
 }
 
 /**
- * Files tab content - placeholder for file explorer
- * (No FileExplorerPanel exists in mobile yet)
+ * File node in the tree
  */
-function FilesTabContent(_props: { sessionId: string; onFileSelect?: (path: string) => void }) {
+interface FileNode {
+	name: string;
+	type: 'file' | 'folder';
+	children?: FileNode[];
+	path: string;
+}
+
+/**
+ * Props for FilesTabContent
+ */
+interface FilesTabContentProps {
+	sessionId: string;
+	onFileSelect?: (path: string) => void;
+	sendRequest?: UseWebSocketReturn['sendRequest'];
+	projectPath?: string;
+}
+
+/**
+ * Files tab content - file explorer tree
+ */
+function FilesTabContent({
+	sessionId,
+	onFileSelect,
+	sendRequest,
+	projectPath,
+}: FilesTabContentProps) {
 	const colors = useThemeColors();
+	const [tree, setTree] = useState<FileNode[]>([]);
+	const [expanded, setExpanded] = useState<Set<string>>(new Set());
+	const [loading, setLoading] = useState(false);
+	const [error, setError] = useState<string | null>(null);
+	const [filter, setFilter] = useState('');
+
+	const loadTree = useCallback(() => {
+		if (!sendRequest || !projectPath) return;
+		setLoading(true);
+		setError(null);
+		sendRequest<{ tree: FileNode[]; error?: string }>('get_file_tree', {
+			sessionId,
+			path: projectPath,
+			maxDepth: 3,
+		})
+			.then((response) => {
+				setTree(response.tree || []);
+				if (response.error) setError(response.error);
+				setLoading(false);
+			})
+			.catch((err: any) => {
+				setError(err.message || 'Failed to load');
+				setLoading(false);
+			});
+	}, [sendRequest, projectPath, sessionId]);
+
+	// Load on mount and when dependencies change
+	useEffect(() => {
+		loadTree();
+	}, [loadTree]);
+
+	const toggleFolder = useCallback((path: string) => {
+		setExpanded((prev) => {
+			const next = new Set(prev);
+			if (next.has(path)) next.delete(path);
+			else next.add(path);
+			return next;
+		});
+	}, []);
+
+	const filterLower = filter.toLowerCase();
+
+	const matchesFilter = useCallback(
+		(node: FileNode): boolean => {
+			if (!filterLower) return true;
+			if (node.name.toLowerCase().includes(filterLower)) return true;
+			if (node.type === 'folder' && node.children) {
+				return node.children.some((c) => matchesFilter(c));
+			}
+			return false;
+		},
+		[filterLower]
+	);
+
+	const renderNode = (node: FileNode, depth: number) => {
+		if (!matchesFilter(node)) return null;
+		const isExpanded = expanded.has(node.path) || (!!filterLower && node.type === 'folder');
+		const isFolder = node.type === 'folder';
+
+		return (
+			<div key={node.path}>
+				<button
+					onClick={() => {
+						if (isFolder) {
+							toggleFolder(node.path);
+						} else {
+							onFileSelect?.(node.path);
+						}
+					}}
+					style={{
+						display: 'flex',
+						alignItems: 'center',
+						gap: '4px',
+						width: '100%',
+						padding: '3px 8px',
+						paddingLeft: `${8 + depth * 16}px`,
+						border: 'none',
+						backgroundColor: 'transparent',
+						color: colors.textMain,
+						fontSize: '12px',
+						fontFamily: 'monospace',
+						cursor: 'pointer',
+						textAlign: 'left',
+						whiteSpace: 'nowrap',
+						overflow: 'hidden',
+						textOverflow: 'ellipsis',
+					}}
+					onMouseEnter={(e) => {
+						(e.currentTarget as HTMLElement).style.backgroundColor = `${colors.textDim}10`;
+					}}
+					onMouseLeave={(e) => {
+						(e.currentTarget as HTMLElement).style.backgroundColor = 'transparent';
+					}}
+					title={node.path}
+				>
+					{isFolder ? (
+						<>
+							<svg
+								width="10"
+								height="10"
+								viewBox="0 0 24 24"
+								fill="none"
+								stroke={colors.textDim}
+								strokeWidth="2"
+								strokeLinecap="round"
+								strokeLinejoin="round"
+								style={{
+									flexShrink: 0,
+									transform: isExpanded ? 'rotate(90deg)' : 'rotate(0deg)',
+									transition: 'transform 0.1s ease',
+								}}
+							>
+								<polyline points="9 18 15 12 9 6" />
+							</svg>
+							<svg
+								width="14"
+								height="14"
+								viewBox="0 0 24 24"
+								fill={isExpanded ? colors.accent : colors.textDim}
+								stroke="none"
+								style={{ flexShrink: 0, opacity: 0.7 }}
+							>
+								<path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
+							</svg>
+						</>
+					) : (
+						<>
+							<span style={{ width: '10px', flexShrink: 0 }} />
+							<svg
+								width="14"
+								height="14"
+								viewBox="0 0 24 24"
+								fill="none"
+								stroke={colors.textDim}
+								strokeWidth="2"
+								strokeLinecap="round"
+								strokeLinejoin="round"
+								style={{ flexShrink: 0, opacity: 0.5 }}
+							>
+								<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+								<polyline points="14 2 14 8 20 8" />
+							</svg>
+						</>
+					)}
+					<span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{node.name}</span>
+				</button>
+				{isFolder && isExpanded && node.children && (
+					<div>{node.children.map((child) => renderNode(child, depth + 1))}</div>
+				)}
+			</div>
+		);
+	};
+
+	if (!sendRequest || !projectPath) {
+		return (
+			<div
+				style={{ padding: '24px', textAlign: 'center', color: colors.textDim, fontSize: '13px' }}
+			>
+				No project path available
+			</div>
+		);
+	}
 
 	return (
-		<div
-			style={{
-				display: 'flex',
-				flexDirection: 'column',
-				alignItems: 'center',
-				justifyContent: 'center',
-				padding: '40px 20px',
-				textAlign: 'center',
-				height: '100%',
-			}}
-		>
-			<svg
-				width="32"
-				height="32"
-				viewBox="0 0 24 24"
-				fill="none"
-				stroke={colors.textDim}
-				strokeWidth="2"
-				strokeLinecap="round"
-				strokeLinejoin="round"
+		<div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+			{/* Filter + refresh bar */}
+			<div
+				style={{
+					display: 'flex',
+					gap: '4px',
+					padding: '8px',
+					borderBottom: `1px solid ${colors.border}`,
+					flexShrink: 0,
+				}}
 			>
-				<path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
-			</svg>
-			<p style={{ fontSize: '14px', color: colors.textDim, marginTop: '12px' }}>
-				File explorer coming soon
-			</p>
+				<input
+					type="text"
+					placeholder="Filter files..."
+					value={filter}
+					onChange={(e) => setFilter(e.target.value)}
+					style={{
+						flex: 1,
+						padding: '4px 8px',
+						fontSize: '12px',
+						border: `1px solid ${colors.border}`,
+						borderRadius: '4px',
+						backgroundColor: 'transparent',
+						color: colors.textMain,
+						outline: 'none',
+					}}
+				/>
+				<button
+					onClick={loadTree}
+					disabled={loading}
+					style={{
+						padding: '4px 8px',
+						border: `1px solid ${colors.border}`,
+						borderRadius: '4px',
+						backgroundColor: 'transparent',
+						color: colors.textDim,
+						cursor: loading ? 'wait' : 'pointer',
+						fontSize: '12px',
+						flexShrink: 0,
+					}}
+					title="Refresh file tree"
+				>
+					{loading ? '...' : '\u21BB'}
+				</button>
+			</div>
+			{/* Tree content */}
+			<div style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden', padding: '4px 0' }}>
+				{error && (
+					<div style={{ padding: '12px', color: '#ef4444', fontSize: '12px' }}>{error}</div>
+				)}
+				{loading && tree.length === 0 && (
+					<div
+						style={{
+							padding: '24px',
+							textAlign: 'center',
+							color: colors.textDim,
+							fontSize: '13px',
+						}}
+					>
+						Loading files...
+					</div>
+				)}
+				{!loading && !error && tree.length === 0 && (
+					<div
+						style={{
+							padding: '24px',
+							textAlign: 'center',
+							color: colors.textDim,
+							fontSize: '13px',
+						}}
+					>
+						No files found
+					</div>
+				)}
+				{tree.map((node) => renderNode(node, 0))}
+			</div>
 		</div>
 	);
 }
@@ -410,59 +668,199 @@ function HistoryTabContent({
 }
 
 /**
- * Auto Run tab content - inline auto run info
- * Reuses the AutoRunPanel logic but rendered inline
+ * Auto Run tab content - inline auto run with document listing
+ * Provides document cards, progress status, and launch/stop controls inline.
  */
 function AutoRunTabContent({
+	sessionId,
 	autoRunState,
 	onOpenSetup,
+	sendRequest,
+	send,
+	onOpenDocument,
 }: {
+	sessionId: string;
 	autoRunState: AutoRunState | null;
 	onOpenSetup?: () => void;
+	sendRequest: UseWebSocketReturn['sendRequest'];
+	send: UseWebSocketReturn['send'];
+	onOpenDocument?: (filename: string) => void;
 }) {
 	const colors = useThemeColors();
+
+	const { documents, isLoadingDocs, loadDocuments, stopAutoRun } = useAutoRun(
+		sendRequest,
+		send,
+		autoRunState
+	);
+
+	const [isStopping, setIsStopping] = useState(false);
+
+	// Load documents on mount
+	useEffect(() => {
+		loadDocuments(sessionId);
+	}, [sessionId, loadDocuments]);
+
+	// Reset stopping state when autoRun stops
+	useEffect(() => {
+		if (!autoRunState?.isRunning) {
+			setIsStopping(false);
+		}
+	}, [autoRunState?.isRunning]);
+
+	const handleRefresh = useCallback(() => {
+		triggerHaptic(HAPTIC_PATTERNS.tap);
+		loadDocuments(sessionId);
+	}, [sessionId, loadDocuments]);
+
+	const handleStop = useCallback(async () => {
+		triggerHaptic(HAPTIC_PATTERNS.interrupt);
+		setIsStopping(true);
+		const success = await stopAutoRun(sessionId);
+		if (!success) {
+			setIsStopping(false);
+		}
+	}, [sessionId, stopAutoRun]);
+
+	const handleDocumentTap = useCallback(
+		(filename: string) => {
+			onOpenDocument?.(filename);
+		},
+		[onOpenDocument]
+	);
+
 	const isRunning = autoRunState?.isRunning ?? false;
-	const totalTasks = autoRunState?.totalTasks ?? 0;
+	const isStopped = isStopping || autoRunState?.isStopping;
+	const totalTasks = autoRunState?.totalTasks;
 	const completedTasks = autoRunState?.completedTasks ?? 0;
-	const progress = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
+	const currentTaskIndex = autoRunState?.currentTaskIndex ?? 0;
+	const progress =
+		totalTasks != null && totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
+	const totalDocs = autoRunState?.totalDocuments;
+	const currentDocIndex = autoRunState?.currentDocumentIndex;
 
 	return (
-		<div style={{ padding: '16px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
-			{/* Status */}
+		<div style={{ padding: '12px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+			{/* Compact toolbar row */}
+			<div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+				<button
+					onClick={handleRefresh}
+					style={{
+						width: '36px',
+						height: '36px',
+						display: 'flex',
+						alignItems: 'center',
+						justifyContent: 'center',
+						borderRadius: '8px',
+						backgroundColor: colors.bgSidebar,
+						border: `1px solid ${colors.border}`,
+						color: colors.textMain,
+						cursor: 'pointer',
+						touchAction: 'manipulation',
+						WebkitTapHighlightColor: 'transparent',
+						flexShrink: 0,
+					}}
+					aria-label="Refresh documents"
+					title="Refresh documents"
+				>
+					<svg
+						width="14"
+						height="14"
+						viewBox="0 0 24 24"
+						fill="none"
+						stroke="currentColor"
+						strokeWidth="2"
+						strokeLinecap="round"
+						strokeLinejoin="round"
+					>
+						<path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.2" />
+					</svg>
+				</button>
+
+				{onOpenSetup && (
+					<button
+						onClick={() => {
+							triggerHaptic(HAPTIC_PATTERNS.tap);
+							onOpenSetup();
+						}}
+						disabled={isRunning}
+						style={{
+							flex: 1,
+							padding: '8px 12px',
+							borderRadius: '8px',
+							backgroundColor: isRunning ? `${colors.accent}40` : colors.accent,
+							border: 'none',
+							color: 'white',
+							fontSize: '13px',
+							fontWeight: 600,
+							cursor: isRunning ? 'not-allowed' : 'pointer',
+							opacity: isRunning ? 0.5 : 1,
+							touchAction: 'manipulation',
+							WebkitTapHighlightColor: 'transparent',
+							minHeight: '36px',
+						}}
+					>
+						Configure & Launch
+					</button>
+				)}
+			</div>
+
+			{/* Progress section (when running) */}
 			{isRunning && (
 				<div
 					style={{
-						backgroundColor: colors.accent,
-						padding: '12px 16px',
+						backgroundColor: isStopped ? colors.warning : colors.accent,
+						padding: '10px 14px',
 						borderRadius: '10px',
 						display: 'flex',
 						alignItems: 'center',
-						gap: '12px',
+						gap: '10px',
 					}}
 				>
+					{/* Progress badge */}
 					<div
 						style={{
-							fontSize: '14px',
+							fontSize: '13px',
 							fontWeight: 700,
-							color: colors.accent,
+							color: isStopped ? colors.warning : colors.accent,
 							backgroundColor: 'white',
-							padding: '6px 12px',
-							borderRadius: '16px',
+							padding: '4px 10px',
+							borderRadius: '12px',
 							flexShrink: 0,
 						}}
 					>
 						{progress}%
 					</div>
-					<div style={{ flex: 1 }}>
-						<span style={{ fontSize: '13px', color: 'white', fontWeight: 500 }}>
-							Task {(autoRunState?.currentTaskIndex ?? 0) + 1}/{totalTasks}
-						</span>
+
+					{/* Status text + progress bar */}
+					<div style={{ flex: 1, minWidth: 0 }}>
 						<div
 							style={{
-								height: '4px',
+								display: 'flex',
+								alignItems: 'center',
+								gap: '10px',
+								fontSize: '12px',
+								color: 'white',
+								fontWeight: 500,
+							}}
+						>
+							{totalTasks != null && totalTasks > 0 && (
+								<span>
+									Task {currentTaskIndex + 1}/{totalTasks}
+								</span>
+							)}
+							{totalDocs != null && currentDocIndex != null && totalDocs > 1 && (
+								<span>
+									Doc {currentDocIndex + 1}/{totalDocs}
+								</span>
+							)}
+						</div>
+						<div
+							style={{
+								height: '3px',
 								backgroundColor: 'rgba(255,255,255,0.3)',
 								borderRadius: '2px',
-								marginTop: '6px',
+								marginTop: '5px',
 								overflow: 'hidden',
 							}}
 						>
@@ -477,48 +875,86 @@ function AutoRunTabContent({
 							/>
 						</div>
 					</div>
-				</div>
-			)}
 
-			{!isRunning && (
-				<div style={{ padding: '20px', textAlign: 'center' }}>
-					<p style={{ fontSize: '14px', color: colors.textDim, margin: 0 }}>
-						Auto Run is not active
-					</p>
-				</div>
-			)}
-
-			{/* Actions */}
-			<div style={{ display: 'flex', gap: '8px' }}>
-				{onOpenSetup && (
+					{/* Stop button */}
 					<button
-						onClick={() => {
-							triggerHaptic(HAPTIC_PATTERNS.tap);
-							onOpenSetup();
-						}}
-						disabled={isRunning}
+						onClick={handleStop}
+						disabled={isStopped}
 						style={{
-							flex: 1,
-							padding: '12px',
-							borderRadius: '10px',
-							backgroundColor: isRunning ? `${colors.accent}40` : colors.accent,
+							padding: '6px 12px',
+							borderRadius: '8px',
+							backgroundColor: isStopped ? `${colors.error}60` : colors.error,
 							border: 'none',
 							color: 'white',
-							fontSize: '13px',
+							fontSize: '12px',
 							fontWeight: 600,
-							cursor: isRunning ? 'not-allowed' : 'pointer',
-							opacity: isRunning ? 0.5 : 1,
+							cursor: isStopped ? 'not-allowed' : 'pointer',
 							touchAction: 'manipulation',
 							WebkitTapHighlightColor: 'transparent',
-							minHeight: '44px',
+							flexShrink: 0,
 						}}
+						aria-label={isStopped ? 'Stopping Auto Run' : 'Stop Auto Run'}
 					>
-						Configure & Launch
+						{isStopped ? 'Stopping...' : 'Stop'}
 					</button>
-				)}
-			</div>
+				</div>
+			)}
+
+			{/* Document list */}
+			{isLoadingDocs ? (
+				<div
+					style={{
+						padding: '24px',
+						textAlign: 'center',
+						color: colors.textDim,
+						fontSize: '13px',
+					}}
+				>
+					Loading documents...
+				</div>
+			) : documents.length === 0 ? (
+				<div
+					style={{
+						padding: '20px',
+						textAlign: 'center',
+					}}
+				>
+					<p style={{ fontSize: '13px', color: colors.textDim, margin: '0 0 6px 0' }}>
+						No Auto Run documents found
+					</p>
+					<p style={{ fontSize: '12px', color: colors.textDim, margin: 0, opacity: 0.7 }}>
+						Add documents to{' '}
+						<code
+							style={{
+								fontSize: '11px',
+								backgroundColor: `${colors.textDim}15`,
+								padding: '1px 4px',
+								borderRadius: '3px',
+							}}
+						>
+							.maestro/playbooks/
+						</code>{' '}
+						directory
+					</p>
+				</div>
+			) : (
+				<div
+					style={{
+						display: 'flex',
+						flexDirection: 'column',
+						gap: '8px',
+					}}
+				>
+					{documents.map((doc) => (
+						<DocumentCard key={doc.filename} document={doc} onTap={handleDocumentTap} />
+					))}
+				</div>
+			)}
 		</div>
 	);
 }
 
 export default RightDrawer;
+
+// Export tab content components for reuse in RightPanel (inline mode)
+export { FilesTabContent, HistoryTabContent, AutoRunTabContent };

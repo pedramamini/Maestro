@@ -34,11 +34,14 @@ interface GraphSessionInput {
 		watch?: string;
 		source_session?: string | string[];
 		fan_out?: string[];
+		fan_out_prompts?: string[];
 		filter?: Record<string, string | number | boolean>;
 		repo?: string;
 		poll_minutes?: number;
 		agent_id?: string;
 		label?: string;
+		fan_in_timeout_minutes?: number;
+		fan_in_timeout_on_fail?: 'break' | 'continue';
 	}>;
 }
 
@@ -262,19 +265,27 @@ export function subscriptionsToPipelines(
 						sessionColumn.set(sessionName, 1);
 						sessionRow.set(sessionName, i);
 
-						// Set prompts on first fan-out target if present
-						if (i === 0 && sub.prompt) {
-							(agentNode.data as AgentNodeData).inputPrompt = sub.prompt;
+						// Apply per-agent prompt from fan_out_prompts, fallback to shared prompt
+						const perAgentPrompt = sub.fan_out_prompts?.[i];
+						const agentPrompt = perAgentPrompt ?? sub.prompt;
+						if (agentPrompt) {
+							(agentNode.data as AgentNodeData).inputPrompt = agentPrompt;
 						}
 						if (i === 0 && sub.output_prompt) {
 							(agentNode.data as AgentNodeData).outputPrompt = sub.output_prompt;
 						}
 
+						// Store per-edge prompt when fan_out_prompts differ from shared prompt
+						const edgePrompt =
+							perAgentPrompt !== undefined && perAgentPrompt !== sub.prompt
+								? perAgentPrompt
+								: undefined;
 						edges.push({
 							id: `edge-${edgeCount++}`,
 							source: triggerId,
 							target: agentNode.id,
 							mode: 'pass' as EdgeMode,
+							...(edgePrompt ? { prompt: edgePrompt } : {}),
 						});
 					}
 				} else {
@@ -388,6 +399,13 @@ export function subscriptionsToPipelines(
 				}
 				if (sub.output_prompt) {
 					(targetNode.data as AgentNodeData).outputPrompt = sub.output_prompt;
+				}
+				// Fan-in timeout settings
+				if (typeof sub.fan_in_timeout_minutes === 'number') {
+					(targetNode.data as AgentNodeData).fanInTimeoutMinutes = sub.fan_in_timeout_minutes;
+				}
+				if (sub.fan_in_timeout_on_fail === 'break' || sub.fan_in_timeout_on_fail === 'continue') {
+					(targetNode.data as AgentNodeData).fanInTimeoutOnFail = sub.fan_in_timeout_on_fail;
 				}
 
 				// Create edges from pre-resolved source(s) to target

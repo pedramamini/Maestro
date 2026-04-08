@@ -241,14 +241,31 @@ export const AgentDrawer = memo(function AgentDrawer({
 									{isOnCanvas && (
 										<div
 											style={{
-												width: 6,
-												height: 6,
-												borderRadius: '50%',
-												backgroundColor: theme.colors.success,
+												display: 'flex',
+												flexDirection: 'column',
+												alignItems: 'flex-end',
+												gap: 2,
 												flexShrink: 0,
 											}}
-											title="On canvas"
-										/>
+										>
+											<div
+												style={{
+													width: 6,
+													height: 6,
+													borderRadius: '50%',
+													backgroundColor: theme.colors.success,
+												}}
+											/>
+											<span
+												style={{
+													fontSize: 9,
+													color: theme.colors.textDim,
+													whiteSpace: 'nowrap',
+												}}
+											>
+												on canvas
+											</span>
+										</div>
 									)}
 								</div>
 							);

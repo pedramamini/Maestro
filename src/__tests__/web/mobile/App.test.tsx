@@ -8,6 +8,13 @@ import React from 'react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, act, waitFor, within } from '@testing-library/react';
 
+// ResizeObserver mock for jsdom (used by WebTerminal and other components)
+globalThis.ResizeObserver = class MockResizeObserver {
+	observe = vi.fn();
+	unobserve = vi.fn();
+	disconnect = vi.fn();
+} as unknown as typeof ResizeObserver;
+
 // First, set up all mocks before importing the component
 
 // Mock ThemeProvider
@@ -25,6 +32,18 @@ const mockColors = {
 
 vi.mock('../../../web/components/ThemeProvider', () => ({
 	useThemeColors: () => mockColors,
+	useTheme: () => ({
+		theme: {
+			id: 'dracula',
+			name: 'Dracula',
+			mode: 'dark',
+			colors: mockColors,
+		},
+		isDark: true,
+		isLight: false,
+		isVibe: false,
+		isDevicePreference: false,
+	}),
 }));
 
 // Mock main.tsx hooks
@@ -173,60 +192,32 @@ vi.mock('../../../web/utils/logger', () => ({
 }));
 
 // Mock child components
-vi.mock('../../../web/mobile/SessionPillBar', () => {
-	const MockSessionPillBar = ({
+vi.mock('../../../web/mobile/LeftPanel', () => ({
+	LeftPanel: ({
 		sessions,
 		activeSessionId,
 		onSelectSession,
-		onOpenAllSessions,
-		onOpenHistory,
+		onClose,
 	}: {
 		sessions: unknown[];
 		activeSessionId: string | null;
 		onSelectSession: (id: string) => void;
-		onOpenAllSessions?: () => void;
-		onOpenHistory?: () => void;
-	}) => {
-		const React = require('react');
-		return React.createElement('div', { 'data-testid': 'session-pill-bar' }, [
-			...sessions.map((s: any) =>
-				React.createElement(
-					'button',
-					{
-						key: s.id,
-						'data-testid': `session-${s.id}`,
-						onClick: () => onSelectSession(s.id),
-					},
-					s.name
-				)
-			),
-			onOpenAllSessions &&
-				React.createElement(
-					'button',
-					{
-						key: 'open-all-sessions',
-						'data-testid': 'open-all-sessions',
-						onClick: onOpenAllSessions,
-					},
-					'All Sessions'
-				),
-			onOpenHistory &&
-				React.createElement(
-					'button',
-					{
-						key: 'open-history',
-						'data-testid': 'open-history',
-						onClick: onOpenHistory,
-					},
-					'History'
-				),
-		]);
-	};
-	return {
-		default: MockSessionPillBar,
-		SessionPillBar: MockSessionPillBar,
-	};
-});
+		onClose: () => void;
+		collapsedGroups: Set<string>;
+		setCollapsedGroups: React.Dispatch<React.SetStateAction<Set<string>>>;
+	}) => (
+		<div data-testid="left-panel">
+			{sessions.map((s: any) => (
+				<button key={s.id} data-testid={`session-${s.id}`} onClick={() => onSelectSession(s.id)}>
+					{s.name}
+				</button>
+			))}
+			<button data-testid="close-left-panel" onClick={onClose}>
+				Close
+			</button>
+		</div>
+	),
+}));
 
 vi.mock('../../../web/mobile/AllSessionsView', () => ({
 	AllSessionsView: ({
@@ -305,13 +296,8 @@ vi.mock('../../../web/mobile/CommandInputBar', () => ({
 		placeholder,
 		disabled,
 		inputMode,
-		onModeToggle,
 		isSessionBusy,
 		onInterrupt,
-		hasActiveSession,
-		cwd,
-		slashCommands,
-		showRecentCommands,
 	}: {
 		isOffline: boolean;
 		isConnected: boolean;
@@ -321,13 +307,8 @@ vi.mock('../../../web/mobile/CommandInputBar', () => ({
 		placeholder: string;
 		disabled: boolean;
 		inputMode: string;
-		onModeToggle: (mode: 'ai' | 'terminal') => void;
 		isSessionBusy: boolean;
 		onInterrupt: () => void;
-		hasActiveSession: boolean;
-		cwd?: string;
-		slashCommands: unknown[];
-		showRecentCommands: boolean;
 	}) => (
 		<div data-testid="command-input-bar">
 			<input
@@ -339,12 +320,6 @@ vi.mock('../../../web/mobile/CommandInputBar', () => ({
 			/>
 			<button data-testid="submit-command" onClick={() => onSubmit(value)}>
 				Send
-			</button>
-			<button
-				data-testid="mode-toggle"
-				onClick={() => onModeToggle(inputMode === 'ai' ? 'terminal' : 'ai')}
-			>
-				{inputMode}
 			</button>
 			{isSessionBusy && (
 				<button data-testid="interrupt-button" onClick={onInterrupt}>
@@ -513,7 +488,163 @@ vi.mock('../../../web/mobile/SlashCommandAutocomplete', () => ({
 }));
 
 vi.mock('../../../web/mobile/RightDrawer', () => ({
-	RightDrawer: ({
+	RightDrawer: () => null,
+}));
+
+vi.mock('../../../web/mobile/WebTerminal', () => ({
+	WebTerminal: React.forwardRef((_props: unknown, _ref: unknown) => (
+		<div data-testid="web-terminal">WebTerminal Mock</div>
+	)),
+}));
+
+vi.mock('../../../web/mobile/AutoRunPanel', () => ({
+	AutoRunPanel: () => null,
+}));
+
+vi.mock('../../../web/mobile/AutoRunDocumentViewer', () => ({
+	AutoRunDocumentViewer: () => null,
+}));
+
+vi.mock('../../../web/mobile/AutoRunSetupSheet', () => ({
+	AutoRunSetupSheet: () => null,
+}));
+
+vi.mock('../../../web/mobile/NotificationSettingsSheet', () => ({
+	NotificationSettingsSheet: () => null,
+}));
+
+vi.mock('../../../web/mobile/SettingsPanel', () => ({
+	SettingsPanel: () => null,
+}));
+
+vi.mock('../../../web/mobile/AgentCreationSheet', () => ({
+	AgentCreationSheet: () => null,
+}));
+
+vi.mock('../../../web/mobile/GroupChatPanel', () => ({
+	GroupChatPanel: () => null,
+}));
+
+vi.mock('../../../web/mobile/GroupChatSetupSheet', () => ({
+	GroupChatSetupSheet: () => null,
+}));
+
+vi.mock('../../../web/mobile/ContextManagementSheet', () => ({
+	ContextManagementSheet: () => null,
+}));
+
+vi.mock('../../../web/mobile/CuePanel', () => ({
+	CuePanel: () => null,
+}));
+
+vi.mock('../../../web/mobile/UsageDashboardPanel', () => ({
+	UsageDashboardPanel: () => null,
+}));
+
+vi.mock('../../../web/mobile/AchievementsPanel', () => ({
+	AchievementsPanel: () => null,
+}));
+
+vi.mock('../../../web/mobile/GitDiffViewer', () => ({
+	GitDiffViewer: () => null,
+}));
+
+vi.mock('../../../web/mobile/QuickActionsMenu', () => ({
+	QuickActionsMenu: () => null,
+}));
+
+vi.mock('../../../web/hooks/useGroupChat', () => ({
+	useGroupChat: () => ({
+		chats: [],
+		activeChat: null,
+		isLoading: false,
+		loadChats: vi.fn(),
+		startChat: vi.fn(),
+		loadChatState: vi.fn(),
+		sendMessage: vi.fn(),
+		stopChat: vi.fn(),
+		setActiveChatId: vi.fn(),
+		handleGroupChatMessage: vi.fn(),
+		handleGroupChatStateChange: vi.fn(),
+	}),
+}));
+
+vi.mock('../../../web/hooks/useCue', () => ({
+	useCue: () => ({
+		subscriptions: [],
+		activity: [],
+		isLoading: false,
+		loadSubscriptions: vi.fn(),
+		toggleSubscription: vi.fn(),
+		loadActivity: vi.fn(),
+		handleCueActivityEvent: vi.fn(),
+		handleCueSubscriptionsChanged: vi.fn(),
+	}),
+}));
+
+vi.mock('../../../web/hooks/useAutoRun', () => ({
+	useAutoRun: () => ({
+		documents: [],
+		autoRunState: null,
+		isLoadingDocs: false,
+		selectedDoc: null,
+		loadDocuments: vi.fn(),
+		loadDocumentContent: vi.fn(),
+		saveDocumentContent: vi.fn(),
+		launchAutoRun: vi.fn(),
+		stopAutoRun: vi.fn(),
+	}),
+}));
+
+vi.mock('../../../web/hooks/useSettings', () => ({
+	useSettings: () => ({
+		settings: {},
+		isLoading: false,
+		setSetting: vi.fn(),
+		setTheme: vi.fn(),
+		setFontSize: vi.fn(),
+		setEnterToSendAI: vi.fn(),
+		setEnterToSendTerminal: vi.fn(),
+		setAutoScroll: vi.fn(),
+		setDefaultSaveToHistory: vi.fn(),
+		setDefaultShowThinking: vi.fn(),
+		setNotificationsEnabled: vi.fn(),
+		setAudioFeedbackEnabled: vi.fn(),
+		setColorBlindMode: vi.fn(),
+		setConductorProfile: vi.fn(),
+		handleSettingsChanged: vi.fn(),
+	}),
+}));
+
+vi.mock('../../../web/hooks/useAgentManagement', () => ({
+	useAgentManagement: () => ({
+		groups: [],
+		isLoading: false,
+		createAgent: vi.fn(),
+		deleteAgent: vi.fn(),
+		renameAgent: vi.fn(),
+		getGroups: vi.fn(),
+		createGroup: vi.fn(),
+		renameGroup: vi.fn(),
+		deleteGroup: vi.fn(),
+		moveToGroup: vi.fn(),
+		handleGroupsChanged: vi.fn(),
+	}),
+}));
+
+vi.mock('../../../web/hooks/useGitStatus', () => ({
+	useGitStatus: () => ({
+		status: null,
+		diff: null,
+		isLoading: false,
+		loadStatus: vi.fn(),
+		loadDiff: vi.fn(),
+		refresh: vi.fn(),
+	}),
+}));
+
+vi.mock('../../../web/mobile/RightPanel', () => ({
+	RightPanel: ({
 		activeTab,
 		onClose,
 	}: {
@@ -521,8 +652,8 @@ vi.mock('../../../web/mobile/RightDrawer', () => ({
 		activeTab?: string;
 		onClose: () => void;
 	}) => (
-		<div data-testid="right-drawer" data-active-tab={activeTab}>
-			<button data-testid="close-right-drawer" onClick={onClose}>
+		<div data-testid="right-panel" data-active-tab={activeTab}>
+			<button data-testid="close-right-panel" onClick={onClose}>
 				Close
 			</button>
 		</div>
@@ -658,8 +789,8 @@ describe('MobileApp', () => {
 				});
 
 				// The cost should be formatted in the header
-				// With mocked header, we verify the session was added
-				expect(screen.getByTestId('session-session-1')).toBeInTheDocument();
+				// Verify the session was added and auto-selected (name shown in header)
+				expect(screen.getByText('Test Session')).toBeInTheDocument();
 			});
 
 			it('displays cost with 3 decimals when between 0.01 and 1.0', async () => {
@@ -679,7 +810,7 @@ describe('MobileApp', () => {
 					]);
 				});
 
-				expect(screen.getByTestId('session-session-1')).toBeInTheDocument();
+				expect(screen.getByText('Test Session')).toBeInTheDocument();
 			});
 
 			it('displays cost with 2 decimals when 1.0 or more', async () => {
@@ -699,7 +830,7 @@ describe('MobileApp', () => {
 					]);
 				});
 
-				expect(screen.getByTestId('session-session-1')).toBeInTheDocument();
+				expect(screen.getByText('Test Session')).toBeInTheDocument();
 			});
 		});
 
@@ -717,7 +848,7 @@ describe('MobileApp', () => {
 				});
 
 				// Session should still render, just without context bar
-				expect(screen.getByTestId('session-session-1')).toBeInTheDocument();
+				expect(screen.getByText('Test Session')).toBeInTheDocument();
 			});
 
 			it('returns null when contextWindow is 0', async () => {
@@ -737,7 +868,7 @@ describe('MobileApp', () => {
 					]);
 				});
 
-				expect(screen.getByTestId('session-session-1')).toBeInTheDocument();
+				expect(screen.getByText('Test Session')).toBeInTheDocument();
 			});
 
 			it('caps context usage at 100%', async () => {
@@ -757,7 +888,7 @@ describe('MobileApp', () => {
 					]);
 				});
 
-				expect(screen.getByTestId('session-session-1')).toBeInTheDocument();
+				expect(screen.getByText('Test Session')).toBeInTheDocument();
 			});
 		});
 
@@ -928,8 +1059,11 @@ describe('MobileApp', () => {
 				]);
 			});
 
-			// Session pill bar should be visible with sessions
-			expect(screen.getByTestId('session-pill-bar')).toBeInTheDocument();
+			// First session should be auto-selected (name shown in header)
+			expect(screen.getByText('Session 1')).toBeInTheDocument();
+
+			// Open the left panel to verify sessions are listed
+			fireEvent.click(screen.getByLabelText('Agents'));
 			expect(screen.getByTestId('session-session-1')).toBeInTheDocument();
 			expect(screen.getByTestId('session-session-2')).toBeInTheDocument();
 		});
@@ -944,6 +1078,8 @@ describe('MobileApp', () => {
 				]);
 			});
 
+			// Open the left panel to access session list
+			fireEvent.click(screen.getByLabelText('Agents'));
 			fireEvent.click(screen.getByTestId('session-session-2'));
 
 			expect(mockTriggerHaptic).toHaveBeenCalledWith([10]); // tap
@@ -982,6 +1118,8 @@ describe('MobileApp', () => {
 				mockHandlers.onSessionAdded?.(createMockSession({ id: 'session-2', name: 'Session 2' }));
 			});
 
+			// Open left panel to verify session-2 was added
+			fireEvent.click(screen.getByLabelText('Agents'));
 			expect(screen.getByTestId('session-session-2')).toBeInTheDocument();
 		});
 
@@ -1000,7 +1138,8 @@ describe('MobileApp', () => {
 				);
 			});
 
-			// Should still only have one session with id session-1
+			// Open left panel to verify only one session-1 exists
+			fireEvent.click(screen.getByLabelText('Agents'));
 			expect(screen.getAllByTestId('session-session-1')).toHaveLength(1);
 		});
 
@@ -1018,6 +1157,8 @@ describe('MobileApp', () => {
 				mockHandlers.onSessionRemoved?.('session-1');
 			});
 
+			// Open left panel to verify session-1 was removed
+			fireEvent.click(screen.getByLabelText('Agents'));
 			expect(screen.queryByTestId('session-session-1')).not.toBeInTheDocument();
 			expect(screen.getByTestId('session-session-2')).toBeInTheDocument();
 		});
@@ -1135,9 +1276,9 @@ describe('MobileApp', () => {
 				mockHandlers.onSessionsUpdate?.([createMockSession({ id: 'session-1', inputMode: 'ai' })]);
 			});
 
-			fireEvent.click(screen.getByTestId('mode-toggle'));
+			// Use Cmd+J keyboard shortcut to toggle mode
+			fireEvent.keyDown(document, { key: 'j', metaKey: true });
 
-			expect(mockTriggerHaptic).toHaveBeenCalledWith([10]); // tap
 			expect(mockSend).toHaveBeenCalledWith({
 				type: 'switch_mode',
 				sessionId: 'session-1',
@@ -1162,14 +1303,14 @@ describe('MobileApp', () => {
 			const input = screen.getByTestId('command-input');
 			fireEvent.change(input, { target: { value: 'Explain the repo status' } });
 
-			fireEvent.click(screen.getByTestId('mode-toggle'));
+			// Toggle to terminal mode via Cmd+J
+			fireEvent.keyDown(document, { key: 'j', metaKey: true });
 
-			expect(screen.getByTestId('input-mode')).toHaveTextContent('terminal');
-			expect(screen.getByTestId('command-input')).toHaveValue('');
+			// CommandInputBar is hidden in terminal mode (WebTerminal handles input)
+			// Toggle back to AI mode
+			fireEvent.keyDown(document, { key: 'j', metaKey: true });
 
-			fireEvent.change(screen.getByTestId('command-input'), { target: { value: 'pwd' } });
-			fireEvent.click(screen.getByTestId('mode-toggle'));
-
+			// AI draft should be restored
 			expect(screen.getByTestId('input-mode')).toHaveTextContent('ai');
 			expect(screen.getByTestId('command-input')).toHaveValue('Explain the repo status');
 		});
@@ -1202,6 +1343,8 @@ describe('MobileApp', () => {
 				target: { value: 'draft for session one' },
 			});
 
+			// Open left panel to switch sessions
+			fireEvent.click(screen.getByLabelText('Agents'));
 			fireEvent.click(screen.getByTestId('session-session-2'));
 			expect(screen.getByTestId('command-input')).toHaveValue('');
 
@@ -1307,7 +1450,7 @@ describe('MobileApp', () => {
 			expect(screen.getByTestId('tab-bar')).toBeInTheDocument();
 		});
 
-		it('does not render tab bar in terminal mode', async () => {
+		it('renders tab bar even in terminal mode (unified tab bar)', async () => {
 			render(<MobileApp />);
 
 			await act(async () => {
@@ -1324,7 +1467,8 @@ describe('MobileApp', () => {
 				]);
 			});
 
-			expect(screen.queryByTestId('tab-bar')).not.toBeInTheDocument();
+			// Tab bar now always shows when session has aiTabs (includes terminal tab indicator)
+			expect(screen.getByTestId('tab-bar')).toBeInTheDocument();
 		});
 
 		it('handles tab selection', async () => {
@@ -1435,8 +1579,8 @@ describe('MobileApp', () => {
 		});
 	});
 
-	describe('all sessions view', () => {
-		it('opens all sessions view', async () => {
+	describe('agents panel (left panel)', () => {
+		it('opens agents panel', async () => {
 			render(<MobileApp />);
 
 			await act(async () => {
@@ -1445,12 +1589,12 @@ describe('MobileApp', () => {
 				]);
 			});
 
-			fireEvent.click(screen.getByTestId('open-all-sessions'));
+			fireEvent.click(screen.getByLabelText('Agents'));
 
-			expect(screen.getByTestId('all-sessions-view')).toBeInTheDocument();
+			expect(screen.getByTestId('left-panel')).toBeInTheDocument();
 		});
 
-		it('closes all sessions view', async () => {
+		it('closes agents panel', async () => {
 			render(<MobileApp />);
 
 			await act(async () => {
@@ -1459,16 +1603,16 @@ describe('MobileApp', () => {
 				]);
 			});
 
-			fireEvent.click(screen.getByTestId('open-all-sessions'));
-			expect(screen.getByTestId('all-sessions-view')).toBeInTheDocument();
+			fireEvent.click(screen.getByLabelText('Agents'));
+			expect(screen.getByTestId('left-panel')).toBeInTheDocument();
 
-			fireEvent.click(screen.getByTestId('close-all-sessions'));
-			expect(screen.queryByTestId('all-sessions-view')).not.toBeInTheDocument();
+			fireEvent.click(screen.getByTestId('close-left-panel'));
+			expect(screen.queryByTestId('left-panel')).not.toBeInTheDocument();
 		});
 	});
 
-	describe('history panel', () => {
-		it('opens history panel via right drawer', async () => {
+	describe('right panel', () => {
+		it('opens right panel via header button', async () => {
 			render(<MobileApp />);
 
 			await act(async () => {
@@ -1477,15 +1621,14 @@ describe('MobileApp', () => {
 				]);
 			});
 
-			fireEvent.click(screen.getByTestId('open-history'));
+			fireEvent.click(screen.getByLabelText('Files & History'));
 
-			// History is now inside the RightDrawer with activeTab='history'
-			const drawer = screen.getByTestId('right-drawer');
-			expect(drawer).toBeInTheDocument();
-			expect(drawer).toHaveAttribute('data-active-tab', 'history');
+			const panel = screen.getByTestId('right-panel');
+			expect(panel).toBeInTheDocument();
+			expect(panel).toHaveAttribute('data-active-tab', 'files');
 		});
 
-		it('closes history panel via right drawer', async () => {
+		it('closes right panel', async () => {
 			render(<MobileApp />);
 
 			await act(async () => {
@@ -1494,14 +1637,14 @@ describe('MobileApp', () => {
 				]);
 			});
 
-			fireEvent.click(screen.getByTestId('open-history'));
-			expect(screen.getByTestId('right-drawer')).toBeInTheDocument();
+			fireEvent.click(screen.getByLabelText('Files & History'));
+			expect(screen.getByTestId('right-panel')).toBeInTheDocument();
 
-			fireEvent.click(screen.getByTestId('close-right-drawer'));
-			expect(screen.queryByTestId('right-drawer')).not.toBeInTheDocument();
+			fireEvent.click(screen.getByTestId('close-right-panel'));
+			expect(screen.queryByTestId('right-panel')).not.toBeInTheDocument();
 		});
 
-		it('opens history panel and can close it again', async () => {
+		it('opens right panel and can close it again', async () => {
 			render(<MobileApp />);
 
 			await act(async () => {
@@ -1510,22 +1653,22 @@ describe('MobileApp', () => {
 				]);
 			});
 
-			// Open history panel
-			fireEvent.click(screen.getByTestId('open-history'));
-			const drawer = screen.getByTestId('right-drawer');
-			expect(drawer).toBeInTheDocument();
-			expect(drawer).toHaveAttribute('data-active-tab', 'history');
+			// Open right panel
+			fireEvent.click(screen.getByLabelText('Files & History'));
+			const panel = screen.getByTestId('right-panel');
+			expect(panel).toBeInTheDocument();
+			expect(panel).toHaveAttribute('data-active-tab', 'files');
 
-			// Close drawer
-			fireEvent.click(screen.getByTestId('close-right-drawer'));
-			expect(screen.queryByTestId('right-drawer')).not.toBeInTheDocument();
+			// Close panel
+			fireEvent.click(screen.getByTestId('close-right-panel'));
+			expect(screen.queryByTestId('right-panel')).not.toBeInTheDocument();
 
 			// Reopen
-			fireEvent.click(screen.getByTestId('open-history'));
-			expect(screen.getByTestId('right-drawer')).toBeInTheDocument();
+			fireEvent.click(screen.getByLabelText('Files & History'));
+			expect(screen.getByTestId('right-panel')).toBeInTheDocument();
 		});
 
-		it('opens history panel with history tab active', async () => {
+		it('toggles right panel via header button', async () => {
 			render(<MobileApp />);
 
 			await act(async () => {
@@ -1534,17 +1677,13 @@ describe('MobileApp', () => {
 				]);
 			});
 
-			// Open history panel
-			fireEvent.click(screen.getByTestId('open-history'));
-			const drawer = screen.getByTestId('right-drawer');
-			expect(drawer).toBeInTheDocument();
-			expect(drawer).toHaveAttribute('data-active-tab', 'history');
+			// Open right panel
+			fireEvent.click(screen.getByLabelText('Files & History'));
+			expect(screen.getByTestId('right-panel')).toBeInTheDocument();
 
-			// Close and reopen to verify drawer opens with history tab
-			fireEvent.click(screen.getByTestId('close-right-drawer'));
-			expect(screen.queryByTestId('right-drawer')).not.toBeInTheDocument();
-			fireEvent.click(screen.getByTestId('open-history'));
-			expect(screen.getByTestId('right-drawer')).toHaveAttribute('data-active-tab', 'history');
+			// Toggle off via same button
+			fireEvent.click(screen.getByLabelText('Files & History'));
+			expect(screen.queryByTestId('right-panel')).not.toBeInTheDocument();
 		});
 	});
 
@@ -1645,7 +1784,8 @@ describe('MobileApp', () => {
 				mockHandlers.onSessionOutput?.('session-1', 'ls -la output', 'terminal');
 			});
 
-			expect(screen.getByTestId('message-history')).toBeInTheDocument();
+			// In terminal mode, WebTerminal is shown instead of MessageHistory
+			expect(screen.getByTestId('web-terminal')).toBeInTheDocument();
 		});
 	});
 
@@ -2082,7 +2222,10 @@ describe('MobileApp', () => {
 				mockHandlers.onSessionsUpdate?.([createMockSession({ id: 'session-1' })]);
 			});
 
-			expect(global.fetch).toHaveBeenCalledWith(expect.stringContaining('/session/session-1'));
+			expect(global.fetch).toHaveBeenCalledWith(
+				expect.stringContaining('/session/session-1'),
+				expect.anything()
+			);
 		});
 
 		it('fetches logs with tabId when available', async () => {
@@ -2098,7 +2241,10 @@ describe('MobileApp', () => {
 				]);
 			});
 
-			expect(global.fetch).toHaveBeenCalledWith(expect.stringContaining('tabId=tab-1'));
+			expect(global.fetch).toHaveBeenCalledWith(
+				expect.stringContaining('tabId=tab-1'),
+				expect.anything()
+			);
 		});
 
 		it('clears logs when offline', async () => {
@@ -2133,7 +2279,7 @@ describe('MobileApp', () => {
 	});
 
 	describe('connection state display', () => {
-		it('shows session pill bar when connected', async () => {
+		it('shows active session name in header when connected', async () => {
 			mockWebSocketState = 'authenticated';
 
 			render(<MobileApp />);
@@ -2142,23 +2288,26 @@ describe('MobileApp', () => {
 				mockHandlers.onSessionsUpdate?.([createMockSession({ id: 'session-1' })]);
 			});
 
-			expect(screen.getByTestId('session-pill-bar')).toBeInTheDocument();
+			// Session name should be visible in the header
+			expect(screen.getByText('Test Session')).toBeInTheDocument();
 		});
 
-		it('hides session pill bar when offline', () => {
+		it('shows Maestro title when offline', () => {
 			mockIsOffline.mockReturnValue(true);
 
 			render(<MobileApp />);
 
-			expect(screen.queryByTestId('session-pill-bar')).not.toBeInTheDocument();
+			// No active session, header shows default
+			expect(screen.queryByText('Test Session')).not.toBeInTheDocument();
 		});
 
-		it('hides session pill bar when disconnected', () => {
+		it('does not show session info when disconnected', () => {
 			mockWebSocketState = 'disconnected';
 
 			render(<MobileApp />);
 
-			expect(screen.queryByTestId('session-pill-bar')).not.toBeInTheDocument();
+			// No session is active when disconnected
+			expect(screen.queryByText('Test Session')).not.toBeInTheDocument();
 		});
 	});
 
@@ -2190,6 +2339,9 @@ describe('MobileApp', () => {
 					createMockSession({ id: 'session-3', name: 'Session 3' }),
 				]);
 			});
+
+			// Open left panel to access session list
+			fireEvent.click(screen.getByLabelText('Agents'));
 
 			fireEvent.click(screen.getByTestId('session-session-2'));
 			fireEvent.click(screen.getByTestId('session-session-3'));

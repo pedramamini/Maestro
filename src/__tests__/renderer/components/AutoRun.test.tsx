@@ -10,6 +10,17 @@ import { AutoRun, AutoRunHandle } from '../../../renderer/components/AutoRun';
 import { LayerStackProvider } from '../../../renderer/contexts/LayerStackContext';
 import { formatShortcutKeys } from '../../../renderer/utils/shortcutFormatter';
 import type { Theme, BatchRunState, SessionState } from '../../../renderer/types';
+import { useBatchStore } from '../../../renderer/stores/batchStore';
+
+// Helper to seed the Zustand batch store so the component's direct store reads
+// (isErrorPaused, batchError) see the expected state for a given session.
+const seedBatchStore = (sessionId: string, state: Partial<BatchRunState>) => {
+	useBatchStore.setState({
+		batchRunStates: {
+			[sessionId]: state as BatchRunState,
+		},
+	});
+};
 
 // Helper to render with LayerStackProvider (required by AutoRunSearchBar)
 const renderWithProvider = (ui: React.ReactElement) => {
@@ -58,7 +69,7 @@ vi.mock('react-syntax-highlighter/dist/esm/styles/prism', () => ({
 	vs: {},
 }));
 
-vi.mock('../../../renderer/components/AutoRunnerHelpModal', () => ({
+vi.mock('../../../renderer/components/AutoRun/AutoRunnerHelpModal', () => ({
 	AutoRunnerHelpModal: ({ onClose }: { onClose: () => void }) => (
 		<div data-testid="help-modal">
 			<button onClick={onClose}>Close</button>
@@ -72,7 +83,7 @@ vi.mock('../../../renderer/components/MermaidRenderer', () => ({
 	),
 }));
 
-vi.mock('../../../renderer/components/AutoRunDocumentSelector', () => ({
+vi.mock('../../../renderer/components/AutoRun/AutoRunDocumentSelector', () => ({
 	AutoRunDocumentSelector: ({
 		theme,
 		documents,
@@ -274,12 +285,12 @@ describe('AutoRun', () => {
 			expect(screen.getByTestId('document-selector')).toBeInTheDocument();
 		});
 
-		it('displays Edit and Preview toggle buttons', () => {
+		it('displays Edit/Preview toggle button', () => {
 			const props = createDefaultProps();
 			renderWithProvider(<AutoRun {...props} />);
 
-			expect(screen.getByTitle('Edit document')).toBeInTheDocument();
-			expect(screen.getByTitle('Preview document')).toBeInTheDocument();
+			// In edit mode, toggle shows "Switch to preview"
+			expect(screen.getByTitle('Switch to preview')).toBeInTheDocument();
 		});
 
 		it('displays Run button when not locked', () => {
@@ -299,25 +310,25 @@ describe('AutoRun', () => {
 	});
 
 	describe('Mode Toggling', () => {
-		it('calls onModeChange when clicking Edit button', async () => {
+		it('calls onModeChange when clicking toggle to edit', async () => {
 			const props = createDefaultProps({ mode: 'preview' });
 			renderWithProvider(<AutoRun {...props} />);
 
-			fireEvent.click(screen.getByTitle('Edit document'));
+			fireEvent.click(screen.getByTitle('Switch to edit'));
 			expect(props.onModeChange).toHaveBeenCalledWith('edit');
 		});
 
-		it('calls onModeChange when clicking Preview button', async () => {
+		it('calls onModeChange when clicking toggle to preview', async () => {
 			const props = createDefaultProps({ mode: 'edit' });
 			renderWithProvider(<AutoRun {...props} />);
 
-			fireEvent.click(screen.getByTitle('Preview document'));
+			fireEvent.click(screen.getByTitle('Switch to preview'));
 			expect(props.onModeChange).toHaveBeenCalledWith('preview');
 		});
 
-		it('disables Edit button when batch run is active', () => {
+		it('disables Edit toggle when batch run is active', () => {
 			const batchRunState = createBatchRunState();
-			const props = createDefaultProps({ batchRunState });
+			const props = createDefaultProps({ batchRunState, mode: 'preview' });
 			renderWithProvider(<AutoRun {...props} />);
 
 			expect(screen.getByTitle('Editing disabled while Auto Run active')).toBeDisabled();
@@ -759,7 +770,10 @@ describe('AutoRun', () => {
 				'new content',
 				undefined // sshRemoteId (undefined for local sessions)
 			);
-			expect(onOpenBatchRunner).toHaveBeenCalled();
+			// onOpenBatchRunner is called after await onSave() resolves
+			await waitFor(() => {
+				expect(onOpenBatchRunner).toHaveBeenCalled();
+			});
 		});
 
 		it('disables Run button when agent is busy', () => {
@@ -1079,11 +1093,14 @@ describe('AutoRun', () => {
 			const textarea = screen.getByRole('textbox');
 			fireEvent.keyDown(textarea, { key: 'e', metaKey: true });
 
-			expect(onStateChange).toHaveBeenCalledWith(
-				expect.objectContaining({
-					mode: 'preview',
-				})
-			);
+			// onStateChange fires inside requestAnimationFrame after scroll sync
+			await waitFor(() => {
+				expect(onStateChange).toHaveBeenCalledWith(
+					expect.objectContaining({
+						mode: 'preview',
+					})
+				);
+			});
 		});
 	});
 
@@ -2275,13 +2292,14 @@ describe('Batch Run State UI', () => {
 
 	it('shows task progress in batch run state', () => {
 		const batchRunState = createBatchRunState();
-		const props = createDefaultProps({ batchRunState });
+		const props = createDefaultProps({ batchRunState, mode: 'preview' });
 		renderWithProvider(<AutoRun {...props} />);
 
 		// Stop button should be visible
 		expect(screen.getByText('Stop')).toBeInTheDocument();
-		// Edit button should be disabled (title changes when locked)
-		expect(screen.getByTitle('Editing disabled while Auto Run active')).toBeDisabled();
+		// Edit/Preview toggle should be disabled when locked in preview mode
+		const toggle = screen.getByTitle('Editing disabled while Auto Run active');
+		expect(toggle).toBeDisabled();
 	});
 
 	it('shows textarea as readonly when locked', () => {
@@ -2614,22 +2632,22 @@ describe('hideTopControls Prop Behavior', () => {
 		const props = createDefaultProps({ hideTopControls: false });
 		renderWithProvider(<AutoRun {...props} />);
 
-		// All control buttons should be visible (Edit/Preview use title since they're icon-only)
-		expect(screen.getByTitle('Edit document')).toBeInTheDocument();
-		expect(screen.getByTitle('Preview document')).toBeInTheDocument();
+		// Top toolbar buttons should be visible
 		expect(screen.getByText('Run')).toBeInTheDocument();
 		expect(screen.getByTitle('Learn about Auto Runner')).toBeInTheDocument();
+		// Bottom bar Edit/Preview toggle should be visible
+		expect(screen.getByTitle('Switch to preview')).toBeInTheDocument();
 	});
 
 	it('hides top control buttons when hideTopControls is true', () => {
 		const props = createDefaultProps({ hideTopControls: true });
 		renderWithProvider(<AutoRun {...props} />);
 
-		// Top control bar buttons should be hidden (Edit/Preview use title since they're icon-only)
-		expect(screen.queryByTitle('Edit document')).not.toBeInTheDocument();
-		expect(screen.queryByTitle('Preview document')).not.toBeInTheDocument();
+		// Top toolbar buttons should be hidden
 		expect(screen.queryByText('Run')).not.toBeInTheDocument();
 		expect(screen.queryByTitle('Learn about Auto Runner')).not.toBeInTheDocument();
+		// Bottom bar Edit/Preview toggle should still be visible
+		expect(screen.getByTitle('Switch to preview')).toBeInTheDocument();
 	});
 
 	it('still shows document selector when hideTopControls is true', () => {
@@ -3423,6 +3441,7 @@ describe('Reset Tasks Flash Notification', () => {
 				},
 				errorDocumentIndex: 0,
 			});
+			seedBatchStore('test-session-1', batchRunState);
 			const props = createDefaultProps({
 				batchRunState,
 				onResumeAfterError,
@@ -3449,6 +3468,7 @@ describe('Reset Tasks Flash Notification', () => {
 				},
 				errorDocumentIndex: 0,
 			});
+			seedBatchStore('test-session-1', batchRunState);
 			const props = createDefaultProps({
 				batchRunState,
 				onResumeAfterError,
@@ -3478,6 +3498,7 @@ describe('Reset Tasks Flash Notification', () => {
 				},
 				errorDocumentIndex: 0,
 			});
+			seedBatchStore('test-session-1', batchRunState);
 			const props = createDefaultProps({
 				batchRunState,
 				onAbortBatchOnError,
@@ -3501,6 +3522,7 @@ describe('Reset Tasks Flash Notification', () => {
 				},
 				errorDocumentIndex: 0,
 			});
+			seedBatchStore('test-session-1', batchRunState);
 			const props = createDefaultProps({
 				batchRunState,
 				onResumeAfterError,

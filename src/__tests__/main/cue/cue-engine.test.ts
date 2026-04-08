@@ -1600,6 +1600,107 @@ describe('CueEngine', () => {
 			expect(graph).toHaveLength(1);
 			expect(graph[0].sessionId).toBe('session-1');
 		});
+
+		it('includes subscriptions with agent_id targeting a different session', () => {
+			const config = createMockConfig({
+				subscriptions: [
+					{
+						name: 'step-a',
+						event: 'time.heartbeat',
+						enabled: true,
+						prompt: 'do A',
+						interval_minutes: 5,
+					},
+					{
+						name: 'step-b',
+						event: 'agent.completed',
+						enabled: true,
+						prompt: 'do B',
+						agent_id: 'other-session-99',
+					},
+				],
+			});
+			mockLoadCueConfig.mockReturnValue(config);
+			const deps = createMockDeps();
+			const engine = new CueEngine(deps);
+			engine.start();
+
+			const graph = engine.getGraphData();
+			expect(graph).toHaveLength(1);
+			expect(graph[0].subscriptions).toHaveLength(2);
+			expect(graph[0].subscriptions.map((s) => s.name)).toEqual(['step-a', 'step-b']);
+
+			engine.stop();
+		});
+
+		it('includes subscriptions with foreign agent_id when loading from disk', () => {
+			const config = createMockConfig({
+				subscriptions: [
+					{
+						name: 'trigger',
+						event: 'time.heartbeat',
+						enabled: true,
+						prompt: 'start',
+						interval_minutes: 10,
+					},
+					{
+						name: 'downstream',
+						event: 'agent.completed',
+						enabled: true,
+						prompt: 'continue',
+						agent_id: 'closed-agent-id',
+					},
+				],
+			});
+			mockLoadCueConfig.mockReturnValue(config);
+			const deps = createMockDeps();
+			const engine = new CueEngine(deps);
+			// Engine never started — simulates disabled path
+
+			const graph = engine.getGraphData();
+			expect(graph).toHaveLength(1);
+			expect(graph[0].subscriptions).toHaveLength(2);
+			expect(graph[0].subscriptions.map((s) => s.name)).toEqual(['trigger', 'downstream']);
+		});
+
+		it('returns all subscriptions from multiple sessions sharing the same config', () => {
+			const config = createMockConfig({
+				subscriptions: [
+					{
+						name: 'step-a',
+						event: 'time.heartbeat',
+						enabled: true,
+						prompt: 'do A',
+						interval_minutes: 5,
+						agent_id: 'session-1',
+					},
+					{
+						name: 'step-b',
+						event: 'agent.completed',
+						enabled: true,
+						prompt: 'do B',
+						agent_id: 'session-2',
+					},
+				],
+			});
+			mockLoadCueConfig.mockReturnValue(config);
+
+			const session1 = createMockSession({ id: 'session-1', name: 'Agent A' });
+			const session2 = createMockSession({ id: 'session-2', name: 'Agent B' });
+			const deps = createMockDeps({
+				getSessions: vi.fn(() => [session1, session2]),
+			});
+			const engine = new CueEngine(deps);
+			engine.start();
+
+			const graph = engine.getGraphData();
+			expect(graph).toHaveLength(2);
+			// Each session should report ALL subscriptions (not just its own)
+			expect(graph[0].subscriptions).toHaveLength(2);
+			expect(graph[1].subscriptions).toHaveLength(2);
+
+			engine.stop();
+		});
 	});
 
 	describe('calculateNextScheduledTime', () => {
@@ -2003,7 +2104,7 @@ describe('CueEngine', () => {
 			engine.stop();
 		});
 
-		it('uses prompt_file when configured', async () => {
+		it('prefers hydrated prompt content over prompt_file path', async () => {
 			// Monday at 08:59 — fires at 09:00
 			vi.setSystemTime(new Date('2026-03-09T08:59:00'));
 
@@ -2013,7 +2114,7 @@ describe('CueEngine', () => {
 						name: 'file-prompt',
 						event: 'time.scheduled',
 						enabled: true,
-						prompt: '',
+						prompt: 'hydrated prompt content',
 						prompt_file: 'check.md',
 						schedule_times: ['09:00'],
 					},
@@ -2026,10 +2127,10 @@ describe('CueEngine', () => {
 
 			await vi.advanceTimersByTimeAsync(60_000);
 
-			// prompt_file takes precedence — engine passes prompt_file ?? prompt
+			// The hydrated prompt content should be used before falling back to the file path.
 			expect(deps.onCueRun).toHaveBeenCalledWith(
 				expect.objectContaining({
-					prompt: 'check.md',
+					prompt: 'hydrated prompt content',
 				})
 			);
 

@@ -29,6 +29,21 @@ export interface UseSortedSessionsReturn {
 	 * Note: A session may appear twice if bookmarked and in an expanded group.
 	 */
 	visibleSessions: Session[];
+	/**
+	 * Sessions in visual navigation order for keyboard arrow-key navigation.
+	 * Order: Bookmarked sessions first (with worktree children), then group sessions,
+	 * then ungrouped sessions. Bookmarked sessions appear in BOTH positions (bookmark
+	 * section and their group) so they're navigable from either context.
+	 */
+	navSessions: Session[];
+	/** Number of items in the bookmarks section of navSessions (including worktree children) */
+	bookmarkNavSize: number;
+	/**
+	 * Maps render context keys to indices in navSessions for keyboard selection highlighting.
+	 * Key format: 'bookmark:{id}', 'bookmark:wt:{childId}', 'group:{groupId}:{id}',
+	 * 'group:{groupId}:wt:{childId}', 'ungrouped:{id}', 'ungrouped:wt:{childId}'
+	 */
+	navIndexMap: Map<string, number>;
 }
 
 /**
@@ -116,6 +131,60 @@ export function useSortedSessions(deps: UseSortedSessionsDeps): UseSortedSession
 		return map;
 	}, [groups]);
 
+	// Build navSessions: matches visual rendering order for keyboard navigation.
+	// Bookmarked sessions first (with worktree children), then group sessions, then ungrouped.
+	// Bookmarked sessions that belong to a group appear in BOTH positions.
+	const { navSessions, navIndexMap, bookmarkNavSize } = useMemo(() => {
+		const result: Session[] = [];
+		const indexMap = new Map<string, number>();
+		let idx = 0;
+
+		const addWithWorktrees = (session: Session, keyPrefix: string) => {
+			if (session.parentSessionId) return;
+			result.push(session);
+			indexMap.set(`${keyPrefix}:${session.id}`, idx++);
+			if (session.worktreesExpanded !== false) {
+				const children = worktreeChildrenByParent.get(session.id);
+				if (children) {
+					for (const child of children) {
+						result.push(child);
+						indexMap.set(`${keyPrefix}:wt:${child.id}`, idx++);
+					}
+				}
+			}
+		};
+
+		// 1. Bookmarked sessions first
+		const bookmarkedParents = sessions
+			.filter((s) => s.bookmarked && !s.parentSessionId)
+			.sort((a, b) => compareNamesIgnoringEmojis(a.name, b.name));
+		for (const session of bookmarkedParents) {
+			addWithWorktrees(session, 'bookmark');
+		}
+		const bmSize = idx;
+
+		// 2. Group sessions (same order as sortedSessions — all members including bookmarked)
+		const navSortedGroups = [...groups].sort((a, b) => compareNamesIgnoringEmojis(a.name, b.name));
+		for (const group of navSortedGroups) {
+			const groupSessions = sessions
+				.filter((s) => s.groupId === group.id && !s.parentSessionId)
+				.sort((a, b) => compareNamesIgnoringEmojis(a.name, b.name));
+			for (const session of groupSessions) {
+				addWithWorktrees(session, `group:${group.id}`);
+			}
+		}
+
+		// 3. Ungrouped sessions
+		const navUngrouped = sessions
+			.filter((s) => !s.groupId && !s.parentSessionId)
+			.sort((a, b) => compareNamesIgnoringEmojis(a.name, b.name));
+		for (const session of navUngrouped) {
+			addWithWorktrees(session, 'ungrouped');
+		}
+
+		return { navSessions: result, navIndexMap: indexMap, bookmarkNavSize: bmSize };
+	}, [sessions, groups, worktreeChildrenByParent]);
+
 	// Create visible sessions array for session jump shortcuts (Opt+Cmd+NUMBER)
 	// Order: Bookmarked sessions first (if bookmarks folder expanded), then groups/ungrouped
 	// Note: A session can appear twice if it's both bookmarked and in an expanded group
@@ -150,5 +219,8 @@ export function useSortedSessions(deps: UseSortedSessionsDeps): UseSortedSession
 	return {
 		sortedSessions,
 		visibleSessions,
+		navSessions,
+		bookmarkNavSize,
+		navIndexMap,
 	};
 }

@@ -19,6 +19,8 @@ export interface TriggerNodeDataProps {
 	isSaved?: boolean;
 	/** Whether this pipeline is currently running */
 	isRunning?: boolean;
+	/** Number of fan-out targets (shown as badge when > 1) */
+	fanOutCount?: number;
 	theme?: Theme;
 }
 
@@ -37,6 +39,7 @@ export const TriggerNode = memo(function TriggerNode({
 				maxWidth: 320,
 				height: 60,
 				borderRadius: 9999,
+				willChange: 'transform',
 				backgroundColor: `${color}18`,
 				border: `2px solid ${selected ? color : `${color}60`}`,
 				boxShadow: selected ? `0 0 12px ${color}40` : undefined,
@@ -47,9 +50,10 @@ export const TriggerNode = memo(function TriggerNode({
 				display: 'flex',
 				flexDirection: 'row',
 				alignItems: 'stretch',
-				overflow: 'hidden',
+				overflow: 'visible',
 				cursor: 'default',
 				transition: 'border-color 0.15s, box-shadow 0.15s',
+				position: 'relative',
 			}}
 		>
 			{/* Drag handle */}
@@ -224,6 +228,33 @@ export const TriggerNode = memo(function TriggerNode({
 					right: -8,
 				}}
 			/>
+
+			{/* Fan-out count badge */}
+			{data.fanOutCount && (
+				<div
+					style={{
+						position: 'absolute',
+						top: -8,
+						right: -8,
+						minWidth: 18,
+						height: 18,
+						borderRadius: 9,
+						backgroundColor: color,
+						color: '#fff',
+						fontSize: 10,
+						fontWeight: 700,
+						display: 'flex',
+						alignItems: 'center',
+						justifyContent: 'center',
+						padding: '0 4px',
+						border: `2px solid ${theme?.colors.bgMain ?? '#1e1e2e'}`,
+						zIndex: 11,
+					}}
+					title={`Fan-out to ${data.fanOutCount} agents`}
+				>
+					×{data.fanOutCount}
+				</div>
+			)}
 		</div>
 	);
 });

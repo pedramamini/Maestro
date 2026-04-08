@@ -23,14 +23,17 @@ vi.mock('../../../renderer/components/ui/Modal', () => ({
 		title,
 		testId,
 		onClose,
+		customHeader,
 	}: {
 		children: React.ReactNode;
 		footer?: React.ReactNode;
 		title: string;
 		testId?: string;
 		onClose: () => void;
+		customHeader?: React.ReactNode;
 	}) => (
 		<div data-testid={testId} role="dialog" aria-label={title}>
+			{customHeader && <div data-testid="custom-header">{customHeader}</div>}
 			<button data-testid={`${testId}-close`} onClick={onClose}>
 				Close
 			</button>
@@ -67,6 +70,22 @@ vi.mock('../../../renderer/constants/modalPriorities', () => ({
 		CUE_YAML_EDITOR: 463,
 		CUE_PATTERN_PREVIEW: 464,
 	},
+}));
+
+// Mock modalStore
+const mockOpenCueModalWithTab = vi.fn();
+let mockCueModalOpen = false;
+
+vi.mock('../../../renderer/stores/modalStore', () => ({
+	useModalStore: vi.fn((selector: (s: any) => any) =>
+		selector({
+			modals: new Map([['cueModal', { open: mockCueModalOpen, data: undefined }]]),
+		})
+	),
+	selectModalOpen: (id: string) => (state: any) => state.modals.get(id)?.open ?? false,
+	getModalActions: () => ({
+		openCueModalWithTab: mockOpenCueModalWithTab,
+	}),
 }));
 
 // Mock sessionStore
@@ -108,6 +127,7 @@ const existingWindowMaestro = (window as any).maestro;
 
 beforeEach(() => {
 	vi.clearAllMocks();
+	mockCueModalOpen = false;
 
 	(window as any).maestro = {
 		...existingWindowMaestro,
@@ -715,6 +735,82 @@ describe('CueYamlEditor', () => {
 			fireEvent.click(screen.getByText('Exit'));
 
 			expect(defaultProps.onClose).toHaveBeenCalledOnce();
+
+			mockConfirm.mockRestore();
+		});
+	});
+
+	describe('navigation buttons (opened directly)', () => {
+		it('should show Dashboard and Pipeline Editor buttons when CueModal is not open', async () => {
+			mockCueModalOpen = false;
+			render(<CueYamlEditor {...defaultProps} />);
+
+			await waitFor(() => {
+				expect(screen.getByText('Dashboard')).toBeInTheDocument();
+				expect(screen.getByText('Pipeline Editor')).toBeInTheDocument();
+			});
+		});
+
+		it('should NOT show nav buttons when CueModal is already open', async () => {
+			mockCueModalOpen = true;
+			render(<CueYamlEditor {...defaultProps} />);
+
+			await waitFor(() => {
+				expect(screen.getByTestId('cue-yaml-editor')).toBeInTheDocument();
+			});
+
+			expect(screen.queryByText('Dashboard')).not.toBeInTheDocument();
+			expect(screen.queryByText('Pipeline Editor')).not.toBeInTheDocument();
+		});
+
+		it('should close YAML editor and open CueModal with dashboard tab', async () => {
+			mockCueModalOpen = false;
+			render(<CueYamlEditor {...defaultProps} />);
+
+			await waitFor(() => {
+				expect(screen.getByText('Dashboard')).toBeInTheDocument();
+			});
+
+			fireEvent.click(screen.getByText('Dashboard'));
+
+			expect(defaultProps.onClose).toHaveBeenCalledOnce();
+			expect(mockOpenCueModalWithTab).toHaveBeenCalledWith('dashboard');
+		});
+
+		it('should close YAML editor and open CueModal with pipeline tab', async () => {
+			mockCueModalOpen = false;
+			render(<CueYamlEditor {...defaultProps} />);
+
+			await waitFor(() => {
+				expect(screen.getByText('Pipeline Editor')).toBeInTheDocument();
+			});
+
+			fireEvent.click(screen.getByText('Pipeline Editor'));
+
+			expect(defaultProps.onClose).toHaveBeenCalledOnce();
+			expect(mockOpenCueModalWithTab).toHaveBeenCalledWith('pipeline');
+		});
+
+		it('should prompt for confirmation when navigating with unsaved changes', async () => {
+			mockCueModalOpen = false;
+			const mockConfirm = vi.spyOn(window, 'confirm').mockReturnValue(false);
+			mockReadYaml.mockResolvedValue('original');
+
+			render(<CueYamlEditor {...defaultProps} />);
+
+			await waitFor(() => {
+				expect(screen.getByTestId('yaml-editor')).toBeInTheDocument();
+			});
+
+			fireEvent.change(screen.getByTestId('yaml-editor'), {
+				target: { value: 'modified' },
+			});
+
+			fireEvent.click(screen.getByText('Dashboard'));
+
+			expect(mockConfirm).toHaveBeenCalledWith('You have unsaved changes. Discard them?');
+			expect(defaultProps.onClose).not.toHaveBeenCalled();
+			expect(mockOpenCueModalWithTab).not.toHaveBeenCalled();
 
 			mockConfirm.mockRestore();
 		});

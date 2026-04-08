@@ -111,6 +111,7 @@ const mockShortcuts: Record<string, Shortcut> = {
 	viewGitLog: { id: 'viewGitLog', keys: ['Cmd', 'G'], enabled: true },
 	toggleMarkdownMode: { id: 'toggleMarkdownMode', keys: ['Cmd', 'M'], enabled: true },
 	createDebugPackage: { id: 'createDebugPackage', keys: ['Alt', 'Cmd', 'D'], enabled: true },
+	nextUnreadTab: { id: 'nextUnreadTab', keys: ['Alt', 'Meta', 'ArrowDown'], enabled: true },
 };
 
 // Create mock session
@@ -292,6 +293,16 @@ describe('QuickActionsModal', () => {
 			expect(screen.getByText('Toggle Sidebar')).toBeInTheDocument();
 			expect(
 				screen.getByText(formatShortcutKeys(mockShortcuts.toggleSidebar.keys))
+			).toBeInTheDocument();
+		});
+
+		it('renders Next Unread Tab action with shortcut', () => {
+			const props = createDefaultProps();
+			render(<QuickActionsModal {...props} />);
+
+			expect(screen.getByText('Next Unread Tab')).toBeInTheDocument();
+			expect(
+				screen.getByText(formatShortcutKeys(mockShortcuts.nextUnreadTab.keys))
 			).toBeInTheDocument();
 		});
 

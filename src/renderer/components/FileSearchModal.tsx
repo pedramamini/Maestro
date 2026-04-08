@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { Search, File, FileImage, FileText } from 'lucide-react';
+import { useVirtualizer } from '@tanstack/react-virtual';
 import type { Theme, Shortcut } from '../types';
 import type { FileNode } from '../types/fileTree';
 import { fuzzyMatchWithScore } from '../utils/search';
@@ -196,9 +197,12 @@ export function flattenPreviewableFiles(
 
 type ViewMode = 'visible' | 'all';
 
+const ROW_HEIGHT = 44; // Height of each file row in pixels
+
 /**
  * Fuzzy File Search Modal - Quick navigation to any file in the file tree.
  * Supports fuzzy search, arrow key navigation, and Cmd+1-9,0 quick select.
+ * Uses virtualized rendering to handle large file trees efficiently.
  */
 export function FileSearchModal({
 	theme,
@@ -210,10 +214,8 @@ export function FileSearchModal({
 }: FileSearchModalProps) {
 	const [search, setSearch] = useState('');
 	const [selectedIndex, setSelectedIndex] = useState(0);
-	const [firstVisibleIndex, setFirstVisibleIndex] = useState(0);
 	const [viewMode, setViewMode] = useState<ViewMode>('visible');
 	const inputRef = useRef<HTMLInputElement>(null);
-	const selectedItemRef = useRef<HTMLButtonElement>(null);
 	const scrollContainerRef = useRef<HTMLDivElement>(null);
 	const layerIdRef = useRef<string>();
 	const onCloseRef = useRef(onClose);
@@ -221,13 +223,11 @@ export function FileSearchModal({
 	const handleSearchChange = useCallback((value: string) => {
 		setSearch(value);
 		setSelectedIndex(0);
-		setFirstVisibleIndex(0);
 	}, []);
 
 	const handleViewModeChange = useCallback((mode: ViewMode) => {
 		setViewMode(mode);
 		setSelectedIndex(0);
-		setFirstVisibleIndex(0);
 	}, []);
 
 	// Keep onClose ref up to date
@@ -314,29 +314,36 @@ export function FileSearchModal({
 			.map((r) => r.file);
 	}, [allFiles, visibleFiles, search, viewMode]);
 
+	// Virtualizer for efficient rendering
+	const virtualizer = useVirtualizer({
+		count: filteredFiles.length,
+		getScrollElement: () => scrollContainerRef.current,
+		estimateSize: () => ROW_HEIGHT,
+		overscan: 10,
+	});
+
 	const toggleViewMode = useCallback(() => {
 		handleViewModeChange(viewMode === 'visible' ? 'all' : 'visible');
 	}, [handleViewModeChange, viewMode]);
 
-	// Scroll selected item into view
+	// Scroll selected item into view via virtualizer
 	useEffect(() => {
-		selectedItemRef.current?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
-	}, [selectedIndex]);
+		virtualizer.scrollToIndex(selectedIndex, { align: 'auto', behavior: 'smooth' });
+	}, [selectedIndex, virtualizer]);
 
-	// Track scroll position to determine which items are visible
-	const handleScroll = () => {
-		if (scrollContainerRef.current) {
-			const scrollTop = scrollContainerRef.current.scrollTop;
-			const itemHeight = 40; // Approximate height of each item
-			const visibleIndex = Math.floor(scrollTop / itemHeight);
-			setFirstVisibleIndex(visibleIndex);
-		}
-	};
+	// Derive first visible index from virtualizer for Cmd+1-9 badges
+	const firstVisibleIndex = useMemo(() => {
+		const items = virtualizer.getVirtualItems();
+		return items.length > 0 ? items[0].index : 0;
+	}, [virtualizer.getVirtualItems()]);
 
-	const handleItemSelect = (file: FlatFileItem) => {
-		onFileSelect(file);
-		onClose();
-	};
+	const handleItemSelect = useCallback(
+		(file: FlatFileItem) => {
+			onFileSelect(file);
+			onClose();
+		},
+		[onFileSelect, onClose]
+	);
 
 	const handleKeyDown = useCallback(
 		(e: React.KeyboardEvent) => {
@@ -450,84 +457,95 @@ export function FileSearchModal({
 					</span>
 				</div>
 
-				{/* File List */}
-				<div
-					ref={scrollContainerRef}
-					onScroll={handleScroll}
-					className="overflow-y-auto py-2 scrollbar-thin flex-1"
-				>
-					{filteredFiles.map((file, i) => {
-						const isSelected = i === selectedIndex;
+				{/* Virtualized File List */}
+				<div ref={scrollContainerRef} className="overflow-y-auto py-2 scrollbar-thin flex-1">
+					<div
+						style={{
+							height: `${virtualizer.getTotalSize()}px`,
+							width: '100%',
+							position: 'relative',
+						}}
+					>
+						{virtualizer.getVirtualItems().map((virtualRow) => {
+							const file = filteredFiles[virtualRow.index];
+							if (!file) return null;
+							const i = virtualRow.index;
+							const isSelected = i === selectedIndex;
 
-						// Calculate dynamic number badge
-						const maxFirstIndex = Math.max(0, filteredFiles.length - 10);
-						const effectiveFirstIndex = Math.min(firstVisibleIndex, maxFirstIndex);
-						const distanceFromFirstVisible = i - effectiveFirstIndex;
-						const showNumber = distanceFromFirstVisible >= 0 && distanceFromFirstVisible < 10;
-						const numberBadge = distanceFromFirstVisible === 9 ? 0 : distanceFromFirstVisible + 1;
+							// Calculate dynamic number badge based on virtualizer scroll
+							const maxFirstIndex = Math.max(0, filteredFiles.length - 10);
+							const effectiveFirstIndex = Math.min(firstVisibleIndex, maxFirstIndex);
+							const distanceFromFirstVisible = i - effectiveFirstIndex;
+							const showNumber = distanceFromFirstVisible >= 0 && distanceFromFirstVisible < 10;
+							const numberBadge = distanceFromFirstVisible === 9 ? 0 : distanceFromFirstVisible + 1;
 
-						const directory = getDirectory(file.fullPath);
+							const directory = getDirectory(file.fullPath);
 
-						return (
-							<button
-								key={file.fullPath}
-								ref={isSelected ? selectedItemRef : null}
-								onClick={() => handleItemSelect(file)}
-								className="w-full text-left px-4 py-2 flex items-center gap-3 hover:bg-opacity-10"
-								style={{
-									backgroundColor: isSelected ? theme.colors.accent : 'transparent',
-									color: isSelected ? theme.colors.accentForeground : theme.colors.textMain,
-								}}
-							>
-								{/* Number Badge */}
-								{showNumber ? (
-									<div
-										className="flex-shrink-0 w-5 h-5 rounded flex items-center justify-center text-xs font-bold"
-										style={{ backgroundColor: theme.colors.bgMain, color: theme.colors.textDim }}
-									>
-										{numberBadge}
-									</div>
-								) : (
-									<div className="flex-shrink-0 w-5 h-5" />
-								)}
-
-								{/* File Icon based on type */}
-								{(() => {
-									const iconType = getFileIconType(file.name);
-									const iconColor = isSelected
-										? theme.colors.accentForeground
-										: theme.colors.textDim;
-									if (iconType === 'image') {
-										return (
-											<FileImage className="w-4 h-4 flex-shrink-0" style={{ color: iconColor }} />
-										);
-									} else if (iconType === 'text') {
-										return (
-											<FileText className="w-4 h-4 flex-shrink-0" style={{ color: iconColor }} />
-										);
-									} else {
-										return <File className="w-4 h-4 flex-shrink-0" style={{ color: iconColor }} />;
-									}
-								})()}
-
-								{/* File Info */}
-								<div className="flex flex-col flex-1 min-w-0">
-									<span className="font-medium truncate">{file.name}</span>
-									{directory && (
-										<span
-											className="text-[10px] truncate"
-											style={{
-												color: isSelected ? theme.colors.accentForeground : theme.colors.textDim,
-												opacity: 0.7,
-											}}
+							return (
+								<button
+									key={file.fullPath}
+									ref={isSelected ? (el) => el?.scrollIntoView?.({ block: 'nearest' }) : undefined}
+									onClick={() => handleItemSelect(file)}
+									className="absolute top-0 left-0 w-full text-left px-4 py-2 flex items-center gap-3 hover:bg-opacity-10"
+									style={{
+										height: `${virtualRow.size}px`,
+										transform: `translateY(${virtualRow.start}px)`,
+										backgroundColor: isSelected ? theme.colors.accent : 'transparent',
+										color: isSelected ? theme.colors.accentForeground : theme.colors.textMain,
+									}}
+								>
+									{/* Number Badge */}
+									{showNumber ? (
+										<div
+											className="flex-shrink-0 w-5 h-5 rounded flex items-center justify-center text-xs font-bold"
+											style={{ backgroundColor: theme.colors.bgMain, color: theme.colors.textDim }}
 										>
-											{directory}
-										</span>
+											{numberBadge}
+										</div>
+									) : (
+										<div className="flex-shrink-0 w-5 h-5" />
 									)}
-								</div>
-							</button>
-						);
-					})}
+
+									{/* File Icon based on type */}
+									{(() => {
+										const iconType = getFileIconType(file.name);
+										const iconColor = isSelected
+											? theme.colors.accentForeground
+											: theme.colors.textDim;
+										if (iconType === 'image') {
+											return (
+												<FileImage className="w-4 h-4 flex-shrink-0" style={{ color: iconColor }} />
+											);
+										} else if (iconType === 'text') {
+											return (
+												<FileText className="w-4 h-4 flex-shrink-0" style={{ color: iconColor }} />
+											);
+										} else {
+											return (
+												<File className="w-4 h-4 flex-shrink-0" style={{ color: iconColor }} />
+											);
+										}
+									})()}
+
+									{/* File Info */}
+									<div className="flex flex-col flex-1 min-w-0">
+										<span className="font-medium truncate">{file.name}</span>
+										{directory && (
+											<span
+												className="text-[10px] truncate"
+												style={{
+													color: isSelected ? theme.colors.accentForeground : theme.colors.textDim,
+													opacity: 0.7,
+												}}
+											>
+												{directory}
+											</span>
+										)}
+									</div>
+								</button>
+							);
+						})}
+					</div>
 
 					{filteredFiles.length === 0 && (
 						<div

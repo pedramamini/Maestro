@@ -191,6 +191,43 @@ describe('useAgentSessionManagement', () => {
 		expect(Object.prototype.hasOwnProperty.call(payload, 'contextUsage')).toBe(false);
 	});
 
+	it('uses entry contextUsage as fallback for cross-session history entries', async () => {
+		const activeSession = createMockSession({
+			contextUsage: 99,
+			aiTabs: [createMockTab({ id: 'tab-4', name: 'Active Tab' })],
+			activeTabId: 'tab-4',
+		});
+
+		const rightPanelRef = createRightPanelRef();
+
+		const { result } = renderHook(() =>
+			useAgentSessionManagement({
+				activeSession,
+				setSessions: vi.fn(),
+				setActiveAgentSessionId: vi.fn(),
+				setAgentSessionsOpen: vi.fn(),
+				rightPanelRef,
+				defaultSaveToHistory: false,
+			})
+		);
+
+		await act(async () => {
+			await result.current.addHistoryEntry({
+				type: 'AUTO',
+				summary: 'Background task with context',
+				sessionId: 'session-override',
+				projectPath: '/override/project',
+				sessionName: 'Background Session',
+				contextUsage: 75, // From the spawned agent's last usage event
+			});
+		});
+
+		const payload = vi.mocked(window.maestro.history.add).mock.calls[0][0];
+
+		// Should use entry's contextUsage (75), not active session's (99)
+		expect(payload.contextUsage).toBe(75);
+	});
+
 	it('switches to an existing tab when resuming a known agent session', async () => {
 		const existingTab = createMockTab({ id: 'tab-existing', agentSessionId: 'agent-123' });
 		const activeSession = createMockSession({

@@ -82,6 +82,11 @@ export interface TaskResult {
 	usageStats?: UsageStats;
 
 	/**
+	 * Context usage percentage estimated from the last usage event
+	 */
+	contextUsage?: number;
+
+	/**
 	 * Time elapsed processing this task (ms)
 	 */
 	elapsedTimeMs: number;
@@ -170,6 +175,7 @@ export interface DocumentProcessorCallbacks {
 		response?: string;
 		agentSessionId?: string;
 		usageStats?: UsageStats;
+		contextUsage?: number;
 	}>;
 }
 
@@ -419,6 +425,7 @@ export function useDocumentProcessor(): UseDocumentProcessorReturn {
 				success: result.success,
 				agentSessionId: result.agentSessionId,
 				usageStats: result.usageStats,
+				contextUsage: result.contextUsage,
 				elapsedTimeMs,
 				tasksCompletedThisRun,
 				newRemainingTasks,

@@ -63,7 +63,7 @@ export function NotificationsPanel({
 	return (
 		<div className="space-y-6">
 			{/* OS Notifications */}
-			<div>
+			<div data-setting-id="notifications-os">
 				<SettingCheckbox
 					icon={Bell}
 					sectionLabel="Operating System Notifications"
@@ -92,7 +92,7 @@ export function NotificationsPanel({
 			</div>
 
 			{/* Custom Notification */}
-			<div>
+			<div data-setting-id="notifications-custom">
 				<SettingCheckbox
 					icon={Volume2}
 					sectionLabel="Custom Notification"
@@ -265,7 +265,7 @@ export function NotificationsPanel({
 			</div>
 
 			{/* Toast Duration */}
-			<div>
+			<div data-setting-id="notifications-toast">
 				<label className="block text-xs font-bold opacity-70 uppercase mb-2 flex items-center gap-2">
 					<Clock className="w-3 h-3" />
 					Toast Notification Duration

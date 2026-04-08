@@ -586,11 +586,6 @@ export async function sendWizardMessage(
 				supportsStreamJsonInput: agent?.capabilities?.supportsStreamJsonInput ?? false,
 				hasImages: false, // Inline wizard never sends images
 			});
-		if (sendViaStdin && !argsForSpawn.includes('--input-format')) {
-			// Add --input-format stream-json when using stdin with stream-json compatible agents
-			argsForSpawn.push('--input-format', 'stream-json');
-		}
-
 		logger.info(`Using stdin for Windows`, '[InlineWizardConversation]', {
 			sessionId: session.sessionId,
 			platform: navigator.platform,

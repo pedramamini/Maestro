@@ -13,6 +13,8 @@
  * - Cache can be manually cleared or bypassed with forceRefresh flag
  */
 
+import * as fs from 'fs';
+import * as os from 'os';
 import * as path from 'path';
 import { execFileNoThrow } from '../utils/execFile';
 import { logger } from '../utils/logger';
@@ -35,6 +37,8 @@ export class AgentDetector {
 	private customPaths: Record<string, string> = {};
 	// Cache for model discovery results: agentId -> { models, timestamp }
 	private modelCache: Map<string, { models: string[]; timestamp: number }> = new Map();
+	// Cache for config option discovery: "agentId:optionKey" -> { options, timestamp }
+	private configOptionCache: Map<string, { options: string[]; timestamp: number }> = new Map();
 	// Configurable cache TTL (useful for testing or different environments)
 	private readonly modelCacheTtlMs: number;
 
@@ -192,8 +196,15 @@ export class AgentDetector {
 	clearModelCache(agentId?: string): void {
 		if (agentId) {
 			this.modelCache.delete(agentId);
+			// Also clear config option caches for this agent
+			for (const key of this.configOptionCache.keys()) {
+				if (key.startsWith(`${agentId}:`)) {
+					this.configOptionCache.delete(key);
+				}
+			}
 		} else {
 			this.modelCache.clear();
+			this.configOptionCache.clear();
 		}
 	}
 
@@ -251,6 +262,59 @@ export class AgentDetector {
 		try {
 			// Agent-specific model discovery commands
 			switch (agentId) {
+				case 'claude-code': {
+					// Claude Code: no CLI listing command.
+					// Discover models dynamically from two sources:
+					// 1. Well-known aliases (always valid, resolve to latest in each tier)
+					// 2. Historical model usage from ~/.claude/stats-cache.json
+					const models: string[] = ['sonnet', 'opus', 'haiku'];
+					try {
+						const statsPath = path.join(os.homedir(), '.claude', 'stats-cache.json');
+						const statsContent = fs.readFileSync(statsPath, 'utf8');
+						const stats = JSON.parse(statsContent);
+						// modelUsage keys are full model IDs the user has used
+						if (stats.modelUsage && typeof stats.modelUsage === 'object') {
+							for (const modelId of Object.keys(stats.modelUsage)) {
+								if (!models.includes(modelId)) {
+									models.push(modelId);
+								}
+							}
+						}
+					} catch {
+						// stats-cache.json may not exist yet (fresh install)
+						logger.debug('Could not read Claude stats-cache.json for model discovery', LOG_CONTEXT);
+					}
+					logger.info(`Discovered ${models.length} models for ${agentId}`, LOG_CONTEXT, { models });
+					return models;
+				}
+
+				case 'codex': {
+					// Codex: read ~/.codex/models_cache.json maintained by the Codex CLI.
+					// Contains the full list of available models with metadata.
+					try {
+						const codexHome = process.env.CODEX_HOME || path.join(os.homedir(), '.codex');
+						const cachePath = path.join(codexHome, 'models_cache.json');
+						const cacheContent = fs.readFileSync(cachePath, 'utf8');
+						const cache = JSON.parse(cacheContent);
+						if (Array.isArray(cache.models)) {
+							const models = cache.models
+								.filter(
+									(m: { slug?: string; visibility?: string }) => m.slug && m.visibility !== 'hide'
+								)
+								.map((m: { slug: string }) => m.slug);
+							logger.info(
+								`Discovered ${models.length} models for ${agentId} from models_cache.json`,
+								LOG_CONTEXT,
+								{ models }
+							);
+							return models;
+						}
+					} catch {
+						logger.debug('Could not read Codex models_cache.json for model discovery', LOG_CONTEXT);
+					}
+					return [];
+				}
+
 				case 'opencode': {
 					// OpenCode: `opencode models` returns one model per line
 					const result = await execFileNoThrow(command, ['models'], undefined, env);
@@ -286,5 +350,119 @@ export class AgentDetector {
 			captureException(error, { operation: 'agent:modelDiscovery', agentId });
 			return [];
 		}
+	}
+
+	/**
+	 * Discover available values for a dynamic select config option.
+	 * Returns an array of option values, or empty array if discovery is not supported.
+	 *
+	 * @param agentId - Agent identifier
+	 * @param optionKey - The config option key (e.g., 'effort', 'reasoningEffort')
+	 * @param forceRefresh - If true, bypass cache
+	 */
+	async discoverConfigOptions(
+		agentId: string,
+		optionKey: string,
+		forceRefresh = false
+	): Promise<string[]> {
+		const agent = await this.getAgent(agentId);
+
+		if (!agent || !agent.available) {
+			return [];
+		}
+
+		// Check cache
+		const cacheKey = `${agentId}:${optionKey}`;
+		if (!forceRefresh) {
+			const cached = this.configOptionCache.get(cacheKey);
+			if (cached && Date.now() - cached.timestamp < this.modelCacheTtlMs) {
+				return cached.options;
+			}
+		}
+
+		const options = await this.runConfigOptionDiscovery(agentId, optionKey);
+		this.configOptionCache.set(cacheKey, { options, timestamp: Date.now() });
+		return options;
+	}
+
+	/**
+	 * Run agent-specific discovery for a config option's available values.
+	 */
+	private async runConfigOptionDiscovery(agentId: string, optionKey: string): Promise<string[]> {
+		try {
+			switch (agentId) {
+				case 'claude-code': {
+					if (optionKey === 'effort') {
+						// Claude Code: parse --help output to extract effort levels
+						const command =
+							(await this.getAgent(agentId))?.path ||
+							(await this.getAgent(agentId))?.command ||
+							'claude';
+						const env = getExpandedEnv();
+						const result = await execFileNoThrow(command, ['--help'], undefined, env);
+						if (result.exitCode === 0) {
+							// Match: --effort <level>  Effort level ... (low, medium, high, max)
+							const match = result.stdout.match(/--effort\s+<\w+>\s+.*?\(([^)]+)\)/);
+							if (match) {
+								const levels = match[1]
+									.split(',')
+									.map((s) => s.trim())
+									.filter((s) => s.length > 0);
+								logger.info(
+									`Discovered ${levels.length} effort levels for ${agentId} from --help`,
+									LOG_CONTEXT,
+									{ levels }
+								);
+								return ['', ...levels]; // Empty string = use default
+							}
+						}
+						logger.debug('Could not parse effort levels from Claude --help output', LOG_CONTEXT);
+						return [];
+					}
+					break;
+				}
+
+				case 'codex': {
+					if (optionKey === 'reasoningEffort') {
+						// Codex: read reasoning levels from ~/.codex/models_cache.json
+						const codexHome = process.env.CODEX_HOME || path.join(os.homedir(), '.codex');
+						const cachePath = path.join(codexHome, 'models_cache.json');
+						const cacheContent = fs.readFileSync(cachePath, 'utf8');
+						const cache = JSON.parse(cacheContent);
+						if (Array.isArray(cache.models)) {
+							// Collect union of all reasoning levels across visible models
+							const levelSet = new Set<string>();
+							for (const model of cache.models) {
+								if (model.visibility === 'hide') continue;
+								for (const rl of model.supported_reasoning_levels || []) {
+									if (rl.effort) levelSet.add(rl.effort);
+								}
+							}
+							const levels = Array.from(levelSet);
+							// Sort by severity: minimal < low < medium < high < xhigh
+							const order = ['minimal', 'low', 'medium', 'high', 'xhigh'];
+							levels.sort(
+								(a, b) =>
+									(order.indexOf(a) === -1 ? 99 : order.indexOf(a)) -
+									(order.indexOf(b) === -1 ? 99 : order.indexOf(b))
+							);
+							logger.info(
+								`Discovered ${levels.length} reasoning levels for ${agentId} from models_cache.json`,
+								LOG_CONTEXT,
+								{ levels }
+							);
+							return ['', ...levels]; // Empty string = use default
+						}
+					}
+					break;
+				}
+			}
+		} catch (error) {
+			logger.debug(`Config option discovery failed for ${agentId}:${optionKey}`, LOG_CONTEXT, {
+				error,
+			});
+		}
+
+		return [];
 	}
 }

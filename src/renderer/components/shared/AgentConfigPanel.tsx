@@ -138,7 +138,7 @@ function ModelTextInput({
 								if (isFiltering) {
 									// If user was filtering but didn't select, keep the filter text as the value
 									// (they might have typed a custom model name)
-									if (filterText && filterText !== committedValueRef.current) {
+									if (filterText !== committedValueRef.current) {
 										onChange(filterText);
 										committedValueRef.current = filterText;
 										setIsFiltering(false);
@@ -210,6 +210,25 @@ function ModelTextInput({
 						</div>
 					)}
 				</div>
+				{isModelField && value && (
+					<button
+						onClick={(e) => {
+							e.stopPropagation();
+							selectionMadeRef.current = true;
+							onChange('');
+							committedValueRef.current = '';
+							setShowDropdown(false);
+							setFilterText('');
+							setIsFiltering(false);
+							onBlur('');
+						}}
+						className="px-2 py-1.5 rounded text-xs whitespace-nowrap"
+						style={{ backgroundColor: theme.colors.bgActivity, color: theme.colors.textDim }}
+						title="Reset to default model"
+					>
+						Clear
+					</button>
+				)}
 				{isModelField && onRefreshModels && (
 					<button
 						onClick={(e) => {
@@ -267,6 +286,9 @@ export interface AgentConfigPanelProps {
 	availableModels?: string[];
 	loadingModels?: boolean;
 	onRefreshModels?: () => void;
+	// Dynamic config options (for select fields with dynamic: true)
+	dynamicOptions?: Record<string, string[]>;
+	loadingDynamicOptions?: boolean;
 	// Agent refresh
 	onRefreshAgent?: () => void;
 	refreshingAgent?: boolean;
@@ -301,6 +323,8 @@ export function AgentConfigPanel({
 	availableModels = [],
 	loadingModels = false,
 	onRefreshModels,
+	dynamicOptions = {},
+	loadingDynamicOptions = false,
 	onRefreshAgent,
 	refreshingAgent = false,
 	compact = false,
@@ -667,28 +691,50 @@ export function AgentConfigPanel({
 								</span>
 							</label>
 						)}
-						{option.type === 'select' && option.options && (
-							<select
-								value={agentConfig[option.key] ?? option.default ?? ''}
-								onChange={(e) => {
-									onConfigChange(option.key, e.target.value);
-									callOnConfigBlurSafely(option.key, e.target.value);
-								}}
-								onClick={(e) => e.stopPropagation()}
-								className="w-full p-2 rounded border bg-transparent outline-none text-xs cursor-pointer"
-								style={{
-									borderColor: theme.colors.border,
-									color: theme.colors.textMain,
-									backgroundColor: theme.colors.bgMain,
-								}}
-							>
-								{option.options.map((opt) => (
-									<option key={opt} value={opt} style={{ backgroundColor: theme.colors.bgMain }}>
-										{opt}
-									</option>
-								))}
-							</select>
-						)}
+						{option.type === 'select' &&
+							(() => {
+								// Dynamic selects get their options from IPC discovery
+								const opts =
+									option.dynamic && dynamicOptions[option.key]?.length
+										? dynamicOptions[option.key]
+										: option.options;
+								if (!opts || opts.length === 0) {
+									if (option.dynamic && loadingDynamicOptions) {
+										return (
+											<p className="text-xs" style={{ color: theme.colors.textDim }}>
+												Loading options...
+											</p>
+										);
+									}
+									return null;
+								}
+								return (
+									<select
+										value={agentConfig[option.key] ?? option.default ?? ''}
+										onChange={(e) => {
+											onConfigChange(option.key, e.target.value);
+											callOnConfigBlurSafely(option.key, e.target.value);
+										}}
+										onClick={(e) => e.stopPropagation()}
+										className="w-full p-2 rounded border bg-transparent outline-none text-xs cursor-pointer"
+										style={{
+											borderColor: theme.colors.border,
+											color: theme.colors.textMain,
+											backgroundColor: theme.colors.bgMain,
+										}}
+									>
+										{opts.map((opt) => (
+											<option
+												key={opt}
+												value={opt}
+												style={{ backgroundColor: theme.colors.bgMain }}
+											>
+												{opt || '(default)'}
+											</option>
+										))}
+									</select>
+								);
+							})()}
 						<p className="text-xs opacity-50 mt-2">{option.description}</p>
 					</div>
 				))}

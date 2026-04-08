@@ -7,6 +7,7 @@ import { ProcessManager } from '../../process-manager';
 import { AgentDetector } from '../../agents';
 import { logger } from '../../utils/logger';
 import { isWindows } from '../../../shared/platformDetection';
+import { getChildProcesses } from '../../process-manager/utils/childProcessInfo';
 import { addBreadcrumb, captureException } from '../../utils/sentry';
 import { isWebContentsAvailable } from '../../utils/safe-send';
 import {
@@ -28,6 +29,7 @@ import { buildExpandedEnv } from '../../../shared/pathUtils';
 import type { SshRemoteConfig } from '../../../shared/types';
 import { powerManager } from '../../power-manager';
 import { MaestroSettings } from './persistence';
+import { getDefaultShell } from '../../stores/defaults';
 
 const LOG_CONTEXT = '[ProcessManager]';
 
@@ -122,6 +124,7 @@ export function registerProcessHandlers(deps: ProcessHandlerDependencies): void 
 				sessionCustomArgs?: string; // Session-specific custom args
 				sessionCustomEnvVars?: Record<string, string>; // Session-specific env vars
 				sessionCustomModel?: string; // Session-specific model selection
+				sessionCustomEffort?: string; // Session-specific effort/reasoning level
 				sessionCustomContextWindow?: number; // Session-specific context window size
 				// Per-session SSH remote config (takes precedence over agent-level SSH config)
 				sessionSshRemoteConfig?: {
@@ -193,6 +196,7 @@ export function registerProcessHandlers(deps: ProcessHandlerDependencies): void 
 				const configResolution = applyAgentConfigOverrides(agent, finalArgs, {
 					agentConfigValues,
 					sessionCustomModel: config.sessionCustomModel,
+					sessionCustomEffort: config.sessionCustomEffort,
 					sessionCustomArgs: config.sessionCustomArgs,
 					sessionCustomEnvVars: config.sessionCustomEnvVars,
 				});
@@ -311,7 +315,7 @@ export function registerProcessHandlers(deps: ProcessHandlerDependencies): void 
 				let shellToUse =
 					config.shell ||
 					(config.toolType === 'terminal'
-						? settingsStore.get('defaultShell', isWindows() ? 'powershell' : 'zsh')
+						? settingsStore.get('defaultShell', getDefaultShell())
 						: undefined);
 				let shellArgsStr: string | undefined;
 
@@ -748,17 +752,29 @@ export function registerProcessHandlers(deps: ProcessHandlerDependencies): void 
 			const processManager = requireProcessManager(getProcessManager);
 			const processes = processManager.getAll();
 			// Return serializable process info (exclude non-serializable PTY/child process objects)
-			const result: Array<Record<string, unknown>> = processes.map((p) => ({
-				sessionId: p.sessionId,
-				toolType: p.toolType,
-				pid: p.pid,
-				cwd: p.cwd,
-				isTerminal: p.isTerminal,
-				isBatchMode: p.isBatchMode || false,
-				startTime: p.startTime,
-				command: p.command,
-				args: p.args,
-			}));
+			// For terminal processes, also fetch child processes to show what's running inside the shell
+			const result: Array<Record<string, unknown>> = await Promise.all(
+				processes.map(async (p) => {
+					const entry: Record<string, unknown> = {
+						sessionId: p.sessionId,
+						toolType: p.toolType,
+						pid: p.pid,
+						cwd: p.cwd,
+						isTerminal: p.isTerminal,
+						isBatchMode: p.isBatchMode || false,
+						startTime: p.startTime,
+						command: p.command,
+						args: p.args,
+					};
+					if (p.isTerminal && p.pid) {
+						const children = await getChildProcesses(p.pid);
+						if (children.length > 0) {
+							entry.childProcesses = children;
+						}
+					}
+					return entry;
+				})
+			);
 
 			// Append active Cue run processes if available
 			const cueProcesses = deps.getCueProcesses?.() ?? [];
@@ -801,6 +817,10 @@ export function registerProcessHandlers(deps: ProcessHandlerDependencies): void 
 				shellEnvVars?: Record<string, string>;
 				cols?: number;
 				rows?: number;
+				// Agent type (e.g. 'claude-code') — used to resolve agent-level customEnvVars
+				toolType?: string;
+				// Session-level custom env vars (override agent-level)
+				sessionCustomEnvVars?: Record<string, string>;
 				// Per-session SSH remote config
 				sessionSshRemoteConfig?: {
 					enabled: boolean;
@@ -812,15 +832,30 @@ export function registerProcessHandlers(deps: ProcessHandlerDependencies): void 
 
 				// Resolve shell: prefer config.shell, then settings default
 				const globalShellEnvVars = settingsStore.get('shellEnvVars', {}) as Record<string, string>;
-				let shellToUse =
-					config.shell || settingsStore.get('defaultShell', isWindows() ? 'powershell' : 'zsh');
+				let shellToUse = config.shell || settingsStore.get('defaultShell', getDefaultShell());
 				const customShellPath = settingsStore.get('customShellPath', '');
 				if (customShellPath && (customShellPath as string).trim()) {
 					shellToUse = (customShellPath as string).trim();
 				}
 
-				// Merge global env vars with any per-invocation env vars (per-invocation takes precedence)
-				const mergedEnvVars = { ...globalShellEnvVars, ...(config.shellEnvVars || {}) };
+				// Resolve agent-level custom env vars from agent config store
+				let agentCustomEnvVars: Record<string, string> = {};
+				if (config.toolType) {
+					const allConfigs = agentConfigsStore.get('configs', {});
+					const agentConfig = allConfigs[config.toolType];
+					if (agentConfig?.customEnvVars) {
+						agentCustomEnvVars = agentConfig.customEnvVars;
+					}
+				}
+
+				// Merge env vars: global → agent-level → session-level → per-invocation
+				// Each layer takes precedence over the previous
+				const mergedEnvVars = {
+					...globalShellEnvVars,
+					...agentCustomEnvVars,
+					...(config.sessionCustomEnvVars || {}),
+					...(config.shellEnvVars || {}),
+				};
 
 				logger.info(`Spawning terminal tab: ${config.sessionId}`, LOG_CONTEXT, {
 					sessionId: config.sessionId,
@@ -923,8 +958,7 @@ export function registerProcessHandlers(deps: ProcessHandlerDependencies): void 
 
 				// Get the shell from settings if not provided
 				// Custom shell path takes precedence over the selected shell ID
-				let shell =
-					config.shell || settingsStore.get('defaultShell', isWindows() ? 'powershell' : 'zsh');
+				let shell = config.shell || settingsStore.get('defaultShell', getDefaultShell());
 				const customShellPath = settingsStore.get('customShellPath', '');
 				if (customShellPath && customShellPath.trim()) {
 					shell = customShellPath.trim();

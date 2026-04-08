@@ -106,6 +106,7 @@ export interface UseAgentListenersDeps {
 				response?: string;
 				agentSessionId?: string;
 				usageStats?: UsageStats;
+				contextUsage?: number;
 		  }>)
 		| null
 	>;
@@ -413,8 +414,14 @@ export function useAgentListeners(deps: UseAgentListenersDeps): void {
 						const sessionSizeBytes = logs.reduce((sum, log) => sum + (log.text?.length || 0), 0);
 						const sessionSizeKB = (sessionSizeBytes / 1024).toFixed(1);
 
-						const sessionGroup = currentSession.groupId
-							? getGroups().find((g) => g.id === currentSession.groupId)
+						// Resolve group: worktree children may inherit group from parent
+						const effectiveGroupId =
+							currentSession.groupId ||
+							(currentSession.parentSessionId
+								? getSessions().find((s) => s.id === currentSession.parentSessionId)?.groupId
+								: undefined);
+						const sessionGroup = effectiveGroupId
+							? getGroups().find((g) => g.id === effectiveGroupId)
 							: null;
 						const groupName = sessionGroup?.name || 'Ungrouped';
 						const projectName =
@@ -518,6 +525,9 @@ export function useAgentListeners(deps: UseAgentListenersDeps): void {
 																...tab,
 																state: 'idle' as const,
 																thinkingStartTime: undefined,
+																// Clear stale agentSessionId so the next spawn
+																// starts a fresh session instead of trying --resume
+																agentSessionId: null,
 															}
 														: tab;
 												} else {
@@ -526,6 +536,7 @@ export function useAgentListeners(deps: UseAgentListenersDeps): void {
 																...tab,
 																state: 'idle' as const,
 																thinkingStartTime: undefined,
+																agentSessionId: null,
 															}
 														: tab;
 												}
@@ -571,6 +582,7 @@ export function useAgentListeners(deps: UseAgentListenersDeps): void {
 										return {
 											...tab,
 											state: 'idle' as const,
+											agentSessionId: null,
 										};
 									}
 									return tab;
@@ -615,6 +627,9 @@ export function useAgentListeners(deps: UseAgentListenersDeps): void {
 															...tab,
 															state: 'idle' as const,
 															thinkingStartTime: undefined,
+															// Preserve agentSessionId for session resume —
+															// stale IDs are cleared by onAgentError when
+															// session_not_found is detected
 														}
 													: tab;
 											} else {
@@ -849,6 +864,7 @@ export function useAgentListeners(deps: UseAgentListenersDeps): void {
 									fullResponse: parsed.fullSynopsis,
 									agentSessionId: synopsisData!.agentSessionId,
 									usageStats: result.usageStats,
+									contextUsage: result.contextUsage,
 									sessionId: synopsisData!.sessionId,
 									projectPath: synopsisData!.cwd,
 									sessionName: synopsisData!.tabName,
@@ -948,7 +964,11 @@ export function useAgentListeners(deps: UseAgentListenersDeps): void {
 							return { ...s, agentSessionId };
 						}
 
-						if (targetTab.agentSessionId && targetTab.agentSessionId !== agentSessionId) {
+						if (
+							targetTab.agentSessionId &&
+							targetTab.agentSessionId !== agentSessionId &&
+							!targetTab.awaitingSessionId
+						) {
 							return s;
 						}
 
@@ -1227,6 +1247,9 @@ export function useAgentListeners(deps: UseAgentListenersDeps): void {
 												...tab,
 												logs: [...tab.logs, errorLogEntry],
 												agentError: isSessionNotFound ? undefined : agentError,
+												// Clear stale agentSessionId on session_not_found so the next
+												// spawn starts a fresh session instead of retrying --resume
+												...(isSessionNotFound ? { agentSessionId: null } : {}),
 											}
 										: tab
 								)

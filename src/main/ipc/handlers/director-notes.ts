@@ -85,6 +85,15 @@ export interface UnifiedHistoryOptions {
 	limit?: number;
 	/** Number of entries to skip for pagination (default: 0) */
 	offset?: number;
+	/** Number of buckets for the activity graph (passed from frontend lookback config) */
+	graphBucketCount?: number;
+}
+
+/** Pre-computed activity graph bucket for a time slice */
+export interface GraphBucket {
+	auto: number;
+	user: number;
+	cue: number;
 }
 
 export interface UnifiedHistoryEntry extends HistoryEntry {
@@ -141,10 +150,16 @@ export function registerDirectorNotesHandlers(deps: DirectorNotesHandlerDependen
 			handlerOpts('getUnifiedHistory'),
 			async (
 				options: UnifiedHistoryOptions
-			): Promise<PaginatedResult<UnifiedHistoryEntry> & { stats: UnifiedHistoryStats }> => {
-				const { lookbackDays, filter, limit, offset } = options;
+			): Promise<
+				PaginatedResult<UnifiedHistoryEntry> & {
+					stats: UnifiedHistoryStats;
+					graphBuckets?: GraphBucket[];
+				}
+			> => {
+				const { lookbackDays, filter, limit, offset, graphBucketCount } = options;
+				const now = Date.now();
 				// lookbackDays <= 0 means "all time" — no cutoff
-				const cutoffTime = lookbackDays > 0 ? Date.now() - lookbackDays * 24 * 60 * 60 * 1000 : 0;
+				const cutoffTime = lookbackDays > 0 ? now - lookbackDays * 24 * 60 * 60 * 1000 : 0;
 
 				// Get all session IDs from history manager
 				const sessionIds = historyManager.listSessionsWithHistory();
@@ -159,6 +174,20 @@ export function registerDirectorNotesHandlers(deps: DirectorNotesHandlerDependen
 				let autoCount = 0;
 				let userCount = 0;
 
+				// Pre-compute graph bucketing parameters if requested
+				// For "all time" (cutoffTime=0), we do a two-pass: first find earliest, then bucket
+				let graphBuckets: GraphBucket[] | undefined;
+				let bucketStartTime = cutoffTime > 0 ? cutoffTime : 0;
+				const bucketEndTime = now;
+				const bucketCount = graphBucketCount || 0;
+				let msPerBucket = 0;
+				let earliestTimestamp = Infinity;
+
+				if (bucketCount > 0 && cutoffTime > 0) {
+					msPerBucket = (bucketEndTime - bucketStartTime) / bucketCount;
+					graphBuckets = Array.from({ length: bucketCount }, () => ({ auto: 0, user: 0, cue: 0 }));
+				}
+
 				for (const sessionId of sessionIds) {
 					const entries = historyManager.getEntries(sessionId);
 					const maestroSessionName = sessionNameMap.get(sessionId);
@@ -172,6 +201,24 @@ export function registerDirectorNotesHandlers(deps: DirectorNotesHandlerDependen
 						else if (entry.type === 'USER') userCount++;
 						if (entry.agentSessionId) uniqueAgentSessions.add(entry.agentSessionId);
 
+						// Track earliest for "all time" bucketing
+						if (bucketCount > 0 && cutoffTime === 0 && entry.timestamp < earliestTimestamp) {
+							earliestTimestamp = entry.timestamp;
+						}
+
+						// Bucket for graph (fixed-window mode, not "all time")
+						if (graphBuckets && msPerBucket > 0) {
+							const idx = Math.min(
+								bucketCount - 1,
+								Math.floor((entry.timestamp - bucketStartTime) / msPerBucket)
+							);
+							if (idx >= 0 && idx < bucketCount) {
+								if (entry.type === 'AUTO') graphBuckets[idx].auto++;
+								else if (entry.type === 'USER') graphBuckets[idx].user++;
+								else if (entry.type === 'CUE') graphBuckets[idx].cue++;
+							}
+						}
+
 						// Apply type filter for the result set
 						if (filter && entry.type !== filter) continue;
 
@@ -180,6 +227,28 @@ export function registerDirectorNotesHandlers(deps: DirectorNotesHandlerDependen
 							sourceSessionId: sessionId,
 							agentName: maestroSessionName,
 						});
+					}
+				}
+
+				// For "all time" mode, do a second pass to bucket now that we know the earliest timestamp
+				if (bucketCount > 0 && cutoffTime === 0) {
+					if (earliestTimestamp === Infinity) earliestTimestamp = now - 24 * 60 * 60 * 1000;
+					bucketStartTime = earliestTimestamp;
+					msPerBucket = (bucketEndTime - bucketStartTime) / bucketCount;
+					graphBuckets = Array.from({ length: bucketCount }, () => ({ auto: 0, user: 0, cue: 0 }));
+
+					if (msPerBucket > 0) {
+						for (const entry of allEntries) {
+							const idx = Math.min(
+								bucketCount - 1,
+								Math.floor((entry.timestamp - bucketStartTime) / msPerBucket)
+							);
+							if (idx >= 0 && idx < bucketCount) {
+								if (entry.type === 'AUTO') graphBuckets[idx].auto++;
+								else if (entry.type === 'USER') graphBuckets[idx].user++;
+								else if (entry.type === 'CUE') graphBuckets[idx].cue++;
+							}
+						}
 					}
 				}
 
@@ -203,7 +272,7 @@ export function registerDirectorNotesHandlers(deps: DirectorNotesHandlerDependen
 					LOG_CONTEXT
 				);
 
-				return { ...result, stats };
+				return { ...result, stats, graphBuckets };
 			}
 		)
 	);
