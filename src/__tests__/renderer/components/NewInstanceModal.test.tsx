@@ -2488,7 +2488,12 @@ describe('NewInstanceModal', () => {
 				undefined,
 				undefined,
 				undefined,
-				{ enabled: true, remoteId: 'remote-1' }
+				{
+					enabled: true,
+					remoteId: 'remote-1',
+					syncHistory: undefined,
+					workingDirOverride: undefined,
+				}
 			);
 		});
 
