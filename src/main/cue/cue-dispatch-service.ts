@@ -60,7 +60,7 @@ export function createCueDispatchService(deps: CueDispatchServiceDeps): CueDispa
 						},
 					};
 					const perTargetPrompt = sub.fan_out_prompts?.[i];
-					const prompt = perTargetPrompt || sub.prompt_file || sub.prompt;
+					const prompt = perTargetPrompt || sub.prompt || sub.prompt_file || '';
 					deps.executeRun(
 						targetSession.id,
 						prompt,
@@ -75,7 +75,7 @@ export function createCueDispatchService(deps: CueDispatchServiceDeps): CueDispa
 
 			deps.executeRun(
 				ownerSessionId,
-				sub.prompt_file ?? sub.prompt,
+				sub.prompt ?? sub.prompt_file ?? '',
 				event,
 				sub.name,
 				sub.output_prompt,

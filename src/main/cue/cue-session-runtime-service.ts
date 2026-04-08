@@ -263,7 +263,7 @@ export function createCueSessionRuntimeService(
 
 	return {
 		getSessionStates(): Map<string, SessionState> {
-			return sessions;
+			return new Map(sessions);
 		},
 
 		getSessionConfigs(): Map<string, CueConfig> {

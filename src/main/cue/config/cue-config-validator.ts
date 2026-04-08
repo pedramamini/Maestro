@@ -120,6 +120,27 @@ export function validateCueConfigDocument(config: unknown): { valid: boolean; er
 					errors.push(
 						`${prefix}: "source_session" must be a string or array of strings for agent.completed events`
 					);
+				} else if (
+					typeof sub.source_session === 'string' &&
+					sub.source_session.trim().length === 0
+				) {
+					errors.push(
+						`${prefix}: "source_session" must be a non-empty string or non-empty array of non-empty strings for agent.completed events`
+					);
+				} else if (Array.isArray(sub.source_session)) {
+					if (sub.source_session.length === 0) {
+						errors.push(
+							`${prefix}: "source_session" must be a non-empty string or non-empty array of non-empty strings for agent.completed events`
+						);
+					} else if (
+						sub.source_session.some(
+							(source) => typeof source !== 'string' || source.trim().length === 0
+						)
+					) {
+						errors.push(
+							`${prefix}: "source_session" must be a non-empty string or non-empty array of non-empty strings for agent.completed events`
+						);
+					}
 				}
 			} else if (event === 'task.pending') {
 				if (!sub.watch || typeof sub.watch !== 'string') {
@@ -130,7 +151,11 @@ export function validateCueConfigDocument(config: unknown): { valid: boolean; er
 					validateGlobPattern(sub.watch as string, prefix, errors);
 				}
 				if (sub.poll_minutes !== undefined) {
-					if (typeof sub.poll_minutes !== 'number' || sub.poll_minutes < 1) {
+					if (
+						typeof sub.poll_minutes !== 'number' ||
+						!Number.isFinite(sub.poll_minutes) ||
+						sub.poll_minutes < 1
+					) {
 						errors.push(`${prefix}: "poll_minutes" must be a number >= 1 for task.pending events`);
 					}
 				}
@@ -141,7 +166,11 @@ export function validateCueConfigDocument(config: unknown): { valid: boolean; er
 					);
 				}
 				if (sub.poll_minutes !== undefined) {
-					if (typeof sub.poll_minutes !== 'number' || sub.poll_minutes < 1) {
+					if (
+						typeof sub.poll_minutes !== 'number' ||
+						!Number.isFinite(sub.poll_minutes) ||
+						sub.poll_minutes < 1
+					) {
 						errors.push(`${prefix}: "poll_minutes" must be a number >= 1 for ${event} events`);
 					}
 				}
