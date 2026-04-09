@@ -436,6 +436,21 @@ describe('envBuilder - Global Environment Variables', () => {
 
 			expect(env.TERM).toBe('xterm-256color');
 		});
+
+		it('should set a default VIMINIT for terminal sessions', () => {
+			delete process.env.VIMINIT;
+			const env = buildPtyTerminalEnv({});
+
+			expect(env.VIMINIT).toBe('set nocompatible | set esckeys');
+		});
+
+		it('should respect explicit VIMINIT from shell env vars', () => {
+			const env = buildPtyTerminalEnv({
+				VIMINIT: 'set compatible',
+			});
+
+			expect(env.VIMINIT).toBe('set compatible');
+		});
 	});
 
 	describe('Test 2.9: Edge Cases and Special Values', () => {
