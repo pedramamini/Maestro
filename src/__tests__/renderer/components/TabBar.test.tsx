@@ -1102,7 +1102,7 @@ describe('TabBar', () => {
 				/>
 			);
 
-			const tab = screen.getByText('TAB').closest('[data-tab-id]')!;
+			const tab = screen.getByText('New Session').closest('[data-tab-id]')!;
 			fireEvent.mouseEnter(tab);
 
 			act(() => {
@@ -2652,7 +2652,7 @@ describe('TabBar', () => {
 				/>
 			);
 
-			const tab = screen.getByText('TAB').closest('[data-tab-id]')!;
+			const tab = screen.getByText('New Session').closest('[data-tab-id]')!;
 			fireEvent.mouseEnter(tab);
 
 			act(() => {

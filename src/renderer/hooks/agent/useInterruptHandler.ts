@@ -93,7 +93,12 @@ export function useInterruptHandler(deps: UseInterruptHandlerDeps): UseInterrupt
 				}
 			}
 
-			await Promise.allSettled(interruptPromises);
+			const results = await Promise.allSettled(interruptPromises);
+			// If the primary interrupt failed, throw to trigger force-kill fallback.
+			// Secondary (forced-parallel) failures are non-critical.
+			if (results[0].status === 'rejected') {
+				throw results[0].reason;
+			}
 
 			// Check if there are queued items to process after interrupt
 			const currentSession = sessionsRef.current?.find((s) => s.id === activeSession.id);
@@ -262,7 +267,12 @@ export function useInterruptHandler(deps: UseInterruptHandlerDeps): UseInterrupt
 							// Non-critical
 						}
 					}
-					await Promise.allSettled(killPromises);
+					const killResults = await Promise.allSettled(killPromises);
+					// If the primary kill failed, throw to trigger kill error handling.
+					// Secondary (forced-parallel) failures are non-critical.
+					if (killResults[0].status === 'rejected') {
+						throw killResults[0].reason;
+					}
 
 					const killLog: LogEntry = {
 						id: generateId(),
