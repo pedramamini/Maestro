@@ -1,0 +1,454 @@
+/**
+ * Tests for the Cue Process Lifecycle module.
+ *
+ * Verifies process spawning, stdio capture, timeout enforcement with
+ * SIGTERM → SIGKILL escalation, active process tracking, and stop logic.
+ */
+
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { EventEmitter } from 'events';
+import type { ChildProcess } from 'child_process';
+import type { SpawnSpec } from '../../../main/cue/cue-spawn-builder';
+
+// ─── Mocks ───────────────────────────────────────────────────────────────────
+
+// Mock parsers — default returns null (no parser)
+const mockGetOutputParser = vi.fn(() => null as any);
+vi.mock('../../../main/parsers', () => ({
+	getOutputParser: (...args: unknown[]) => mockGetOutputParser(...args),
+}));
+
+// Mock child_process.spawn
+class MockChildProcess extends EventEmitter {
+	pid = 12345;
+	exitCode: number | null = null;
+	signalCode: string | null = null;
+	stdin = {
+		write: vi.fn(),
+		end: vi.fn(),
+	};
+	stdout = new EventEmitter();
+	stderr = new EventEmitter();
+	killed = false;
+
+	kill(signal?: string) {
+		this.killed = true;
+		return true;
+	}
+
+	constructor() {
+		super();
+		(this.stdout as any).setEncoding = vi.fn();
+		(this.stderr as any).setEncoding = vi.fn();
+	}
+}
+
+let mockChild: MockChildProcess;
+const mockSpawn = vi.fn(() => {
+	mockChild = new MockChildProcess();
+	return mockChild as unknown as ChildProcess;
+});
+
+vi.mock('child_process', async (importOriginal) => {
+	const actual = await importOriginal<typeof import('child_process')>();
+	return {
+		...actual,
+		spawn: (...args: unknown[]) => mockSpawn(...args),
+		default: {
+			...actual,
+			spawn: (...args: unknown[]) => mockSpawn(...args),
+		},
+	};
+});
+
+// Must import after mocks
+import {
+	runProcess,
+	stopProcess,
+	getActiveProcessMap,
+	getProcessList,
+} from '../../../main/cue/cue-process-lifecycle';
+
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+
+function createSpec(overrides: Partial<SpawnSpec> = {}): SpawnSpec {
+	return {
+		command: 'claude',
+		args: ['--print', '--', 'test prompt'],
+		cwd: '/projects/test',
+		env: { PATH: '/usr/bin' },
+		...overrides,
+	};
+}
+
+function createOptions(overrides = {}) {
+	return {
+		toolType: 'claude-code',
+		timeoutMs: 30000,
+		onLog: vi.fn(),
+		...overrides,
+	};
+}
+
+// ─── Tests ───────────────────────────────────────────────────────────────────
+
+describe('cue-process-lifecycle', () => {
+	beforeEach(() => {
+		vi.clearAllMocks();
+		vi.useFakeTimers();
+		getActiveProcessMap().clear();
+	});
+
+	afterEach(() => {
+		vi.useRealTimers();
+	});
+
+	describe('runProcess', () => {
+		it('spawns process with correct command, args, and cwd', async () => {
+			const spec = createSpec();
+			const resultPromise = runProcess('run-1', spec, createOptions());
+			await vi.advanceTimersByTimeAsync(0);
+
+			expect(mockSpawn).toHaveBeenCalledWith(
+				'claude',
+				['--print', '--', 'test prompt'],
+				expect.objectContaining({
+					cwd: '/projects/test',
+					stdio: ['pipe', 'pipe', 'pipe'],
+				})
+			);
+
+			mockChild.emit('close', 0);
+			await resultPromise;
+		});
+
+		it('captures stdout and returns it in result', async () => {
+			const resultPromise = runProcess('run-1', createSpec(), createOptions());
+			await vi.advanceTimersByTimeAsync(0);
+
+			mockChild.stdout.emit('data', 'Hello ');
+			mockChild.stdout.emit('data', 'world');
+			mockChild.emit('close', 0);
+
+			const result = await resultPromise;
+			expect(result.stdout).toBe('Hello world');
+		});
+
+		it('captures stderr and returns it in result', async () => {
+			const resultPromise = runProcess('run-1', createSpec(), createOptions());
+			await vi.advanceTimersByTimeAsync(0);
+
+			mockChild.stderr.emit('data', 'Warning: something');
+			mockChild.emit('close', 0);
+
+			const result = await resultPromise;
+			expect(result.stderr).toBe('Warning: something');
+		});
+
+		it('returns completed status on exit code 0', async () => {
+			const resultPromise = runProcess('run-1', createSpec(), createOptions());
+			await vi.advanceTimersByTimeAsync(0);
+
+			mockChild.emit('close', 0);
+			const result = await resultPromise;
+
+			expect(result.status).toBe('completed');
+			expect(result.exitCode).toBe(0);
+		});
+
+		it('returns failed status on non-zero exit code', async () => {
+			const resultPromise = runProcess('run-1', createSpec(), createOptions());
+			await vi.advanceTimersByTimeAsync(0);
+
+			mockChild.emit('close', 1);
+			const result = await resultPromise;
+
+			expect(result.status).toBe('failed');
+			expect(result.exitCode).toBe(1);
+		});
+
+		it('handles spawn errors gracefully', async () => {
+			const resultPromise = runProcess('run-1', createSpec(), createOptions());
+			await vi.advanceTimersByTimeAsync(0);
+
+			mockChild.emit('error', new Error('spawn ENOENT'));
+			const result = await resultPromise;
+
+			expect(result.status).toBe('failed');
+			expect(result.stderr).toContain('Spawn error: spawn ENOENT');
+			expect(result.exitCode).toBeNull();
+		});
+
+		it('tracks the process in activeProcesses while running', async () => {
+			const resultPromise = runProcess('tracked-run', createSpec(), createOptions());
+			await vi.advanceTimersByTimeAsync(0);
+
+			expect(getActiveProcessMap().has('tracked-run')).toBe(true);
+
+			mockChild.emit('close', 0);
+			await resultPromise;
+
+			expect(getActiveProcessMap().has('tracked-run')).toBe(false);
+		});
+
+		it('closes stdin for local execution', async () => {
+			const resultPromise = runProcess('run-1', createSpec(), createOptions());
+			await vi.advanceTimersByTimeAsync(0);
+
+			expect(mockChild.stdin.end).toHaveBeenCalled();
+
+			mockChild.emit('close', 0);
+			await resultPromise;
+		});
+
+		describe('stdin modes', () => {
+			it('writes sshStdinScript to stdin for SSH stdin-script mode', async () => {
+				const spec = createSpec({ sshStdinScript: '#!/bin/bash\nclaude "prompt"' });
+				const resultPromise = runProcess(
+					'run-1',
+					spec,
+					createOptions({
+						sshRemoteEnabled: true,
+						sshStdinScript: '#!/bin/bash\nclaude "prompt"',
+					})
+				);
+				await vi.advanceTimersByTimeAsync(0);
+
+				expect(mockChild.stdin.write).toHaveBeenCalledWith('#!/bin/bash\nclaude "prompt"');
+				expect(mockChild.stdin.end).toHaveBeenCalled();
+
+				mockChild.emit('close', 0);
+				await resultPromise;
+			});
+
+			it('writes stdinPrompt to stdin for SSH prompt mode', async () => {
+				const spec = createSpec({ stdinPrompt: 'large prompt' });
+				const resultPromise = runProcess(
+					'run-1',
+					spec,
+					createOptions({
+						sshRemoteEnabled: true,
+						stdinPrompt: 'large prompt',
+					})
+				);
+				await vi.advanceTimersByTimeAsync(0);
+
+				expect(mockChild.stdin.write).toHaveBeenCalledWith('large prompt');
+				expect(mockChild.stdin.end).toHaveBeenCalled();
+
+				mockChild.emit('close', 0);
+				await resultPromise;
+			});
+		});
+
+		describe('timeout enforcement', () => {
+			it('sends SIGTERM when timeout expires', async () => {
+				const resultPromise = runProcess('run-1', createSpec(), createOptions({ timeoutMs: 5000 }));
+				await vi.advanceTimersByTimeAsync(0);
+
+				const childKill = vi.spyOn(mockChild, 'kill');
+
+				await vi.advanceTimersByTimeAsync(5000);
+				expect(childKill).toHaveBeenCalledWith('SIGTERM');
+
+				mockChild.emit('close', null);
+				const result = await resultPromise;
+				expect(result.status).toBe('timeout');
+			});
+
+			it('escalates to SIGKILL after SIGTERM + delay', async () => {
+				const resultPromise = runProcess('run-1', createSpec(), createOptions({ timeoutMs: 5000 }));
+				await vi.advanceTimersByTimeAsync(0);
+
+				const childKill = vi.spyOn(mockChild, 'kill');
+
+				await vi.advanceTimersByTimeAsync(5000);
+				expect(childKill).toHaveBeenCalledWith('SIGTERM');
+
+				mockChild.killed = false;
+				await vi.advanceTimersByTimeAsync(5000);
+				expect(childKill).toHaveBeenCalledWith('SIGKILL');
+
+				mockChild.emit('close', null);
+				await resultPromise;
+			});
+
+			it('does not timeout when timeoutMs is 0', async () => {
+				const resultPromise = runProcess('run-1', createSpec(), createOptions({ timeoutMs: 0 }));
+				await vi.advanceTimersByTimeAsync(0);
+
+				const childKill = vi.spyOn(mockChild, 'kill');
+
+				await vi.advanceTimersByTimeAsync(60000);
+				expect(childKill).not.toHaveBeenCalled();
+
+				mockChild.emit('close', 0);
+				await resultPromise;
+			});
+
+			it('logs timeout messages', async () => {
+				const onLog = vi.fn();
+				const resultPromise = runProcess(
+					'run-1',
+					createSpec(),
+					createOptions({
+						timeoutMs: 5000,
+						onLog,
+					})
+				);
+				await vi.advanceTimersByTimeAsync(0);
+
+				await vi.advanceTimersByTimeAsync(5000);
+
+				expect(onLog).toHaveBeenCalledWith('cue', expect.stringContaining('timed out'));
+
+				mockChild.emit('close', null);
+				await resultPromise;
+			});
+		});
+
+		describe('output parsing', () => {
+			it('returns raw stdout when no parser is registered', async () => {
+				mockGetOutputParser.mockReturnValue(null);
+
+				const resultPromise = runProcess('run-1', createSpec(), createOptions());
+				await vi.advanceTimersByTimeAsync(0);
+
+				mockChild.stdout.emit('data', 'plain text output\n');
+				mockChild.emit('close', 0);
+				const result = await resultPromise;
+
+				expect(result.stdout).toBe('plain text output\n');
+			});
+
+			it('extracts result-event text when parser is available', async () => {
+				mockGetOutputParser.mockReturnValue({
+					parseJsonLine: (line: string) => {
+						try {
+							const msg = JSON.parse(line);
+							if (msg.type === 'text') {
+								return { type: 'result', text: msg.part?.text || '' };
+							}
+							return { type: 'system', raw: msg };
+						} catch {
+							return { type: 'text', text: line };
+						}
+					},
+				} as any);
+
+				const ndjson = JSON.stringify({ type: 'text', part: { text: 'Parsed output' } });
+
+				const resultPromise = runProcess(
+					'run-1',
+					createSpec(),
+					createOptions({ toolType: 'opencode' })
+				);
+				await vi.advanceTimersByTimeAsync(0);
+
+				mockChild.stdout.emit('data', ndjson);
+				mockChild.emit('close', 0);
+				const result = await resultPromise;
+
+				expect(result.stdout).toBe('Parsed output');
+			});
+		});
+	});
+
+	describe('stopProcess', () => {
+		it('returns false for unknown runId', () => {
+			expect(stopProcess('nonexistent')).toBe(false);
+		});
+
+		it('sends SIGTERM to a running process', async () => {
+			const resultPromise = runProcess('stop-test', createSpec(), createOptions());
+			await vi.advanceTimersByTimeAsync(0);
+
+			const childKill = vi.spyOn(mockChild, 'kill');
+
+			const stopped = stopProcess('stop-test');
+			expect(stopped).toBe(true);
+			expect(childKill).toHaveBeenCalledWith('SIGTERM');
+
+			mockChild.emit('close', null);
+			await resultPromise;
+		});
+
+		it('escalates to SIGKILL after delay if process survives SIGTERM', async () => {
+			const resultPromise = runProcess('stop-test', createSpec(), createOptions());
+			await vi.advanceTimersByTimeAsync(0);
+
+			const childKill = vi.spyOn(mockChild, 'kill');
+
+			stopProcess('stop-test');
+			expect(childKill).toHaveBeenCalledWith('SIGTERM');
+
+			// Process hasn't exited — SIGKILL should fire after delay
+			await vi.advanceTimersByTimeAsync(5000);
+			expect(childKill).toHaveBeenCalledWith('SIGKILL');
+
+			mockChild.emit('close', null);
+			await resultPromise;
+		});
+	});
+
+	describe('getProcessList', () => {
+		it('returns empty array when no active processes', () => {
+			expect(getProcessList()).toEqual([]);
+		});
+
+		it('returns process info during active run', async () => {
+			const resultPromise = runProcess('list-test', createSpec(), createOptions());
+			await vi.advanceTimersByTimeAsync(0);
+
+			const list = getProcessList();
+			expect(list).toHaveLength(1);
+			expect(list[0].runId).toBe('list-test');
+			expect(list[0].pid).toBe(12345);
+			expect(list[0].toolType).toBe('claude-code');
+			expect(list[0].cwd).toBe('/projects/test');
+			expect(list[0].command).toBe('claude');
+			expect(Array.isArray(list[0].args)).toBe(true);
+			expect(typeof list[0].startTime).toBe('number');
+
+			mockChild.emit('close', 0);
+			await resultPromise;
+		});
+
+		it('excludes completed processes', async () => {
+			const resultPromise = runProcess('completed-run', createSpec(), createOptions());
+			await vi.advanceTimersByTimeAsync(0);
+
+			expect(getProcessList().some((p) => p.runId === 'completed-run')).toBe(true);
+
+			mockChild.emit('close', 0);
+			await resultPromise;
+
+			expect(getProcessList().some((p) => p.runId === 'completed-run')).toBe(false);
+		});
+	});
+
+	describe('settled guard', () => {
+		it('ignores duplicate close events', async () => {
+			const resultPromise = runProcess('run-1', createSpec(), createOptions());
+			await vi.advanceTimersByTimeAsync(0);
+
+			mockChild.emit('close', 0);
+			mockChild.emit('close', 1); // duplicate — should be ignored
+			const result = await resultPromise;
+
+			expect(result.status).toBe('completed');
+			expect(result.exitCode).toBe(0);
+		});
+
+		it('ignores error after close', async () => {
+			const resultPromise = runProcess('run-1', createSpec(), createOptions());
+			await vi.advanceTimersByTimeAsync(0);
+
+			mockChild.emit('close', 0);
+			mockChild.emit('error', new Error('late error')); // should be ignored
+			const result = await resultPromise;
+
+			expect(result.status).toBe('completed');
+		});
+	});
+});

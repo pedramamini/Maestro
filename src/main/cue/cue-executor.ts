@@ -1,23 +1,31 @@
 /**
- * Cue Executor — spawns background agent processes when Cue triggers fire.
+ * Cue Executor — orchestrates background agent process execution when Cue
+ * triggers fire.
  *
- * Reads prompt files, substitutes Cue-specific template variables, spawns the
- * agent process, captures output, enforces timeouts, and records history entries.
- * Follows the same spawn pattern as Auto Run (via process:spawn IPC handler).
+ * Thin orchestrator that composes three single-responsibility modules:
+ * - CueTemplateContextBuilder: builds templateContext.cue from event payload
+ * - CueSpawnBuilder: constructs a SpawnSpec from session/agent/SSH config
+ * - CueProcessLifecycle: spawns the process, captures output, enforces timeout
+ *
+ * Also contains recordCueHistoryEntry (pure data transformation).
  */
 
-import { spawn, type ChildProcess } from 'child_process';
 import * as crypto from 'crypto';
-import type { CueEvent, CueRunResult, CueRunStatus, CueSubscription } from './cue-types';
-import type { HistoryEntry, SessionInfo, ToolType } from '../../shared/types';
+import type { CueRunResult, CueSubscription } from './cue-types';
+import type { HistoryEntry, SessionInfo } from '../../shared/types';
 import { substituteTemplateVariables, type TemplateContext } from '../../shared/templateVariables';
-import { getAgentDefinition, getAgentCapabilities } from '../agents';
-import { buildAgentArgs, applyAgentConfigOverrides } from '../utils/agent-args';
-import { wrapSpawnWithSsh, type SshSpawnWrapConfig } from '../utils/ssh-spawn-wrapper';
-import type { SshRemoteSettingsStore } from '../utils/ssh-remote-resolver';
-import { getOutputParser } from '../parsers';
+import { buildCueTemplateContext } from './cue-template-context-builder';
+import { buildSpawnSpec } from './cue-spawn-builder';
+import {
+	runProcess,
+	stopProcess,
+	getActiveProcessMap,
+	getProcessList,
+} from './cue-process-lifecycle';
+// Re-export types that external consumers use
+export type { CueProcessInfo } from './cue-process-lifecycle';
+export type { SpawnSpec } from './cue-spawn-builder';
 
-const SIGKILL_DELAY_MS = 5000;
 const MAX_HISTORY_RESPONSE_LENGTH = 10000;
 
 /** Configuration for executing a Cue-triggered prompt */
@@ -25,7 +33,7 @@ export interface CueExecutionConfig {
 	runId: string;
 	session: SessionInfo;
 	subscription: CueSubscription;
-	event: CueEvent;
+	event: import('./cue-types').CueEvent;
 	promptPath: string;
 	toolType: string;
 	projectRoot: string;
@@ -39,75 +47,15 @@ export interface CueExecutionConfig {
 	customEffort?: string;
 	onLog: (level: string, message: string) => void;
 	/** Optional SSH settings store for SSH remote execution */
-	sshStore?: SshRemoteSettingsStore;
+	sshStore?: import('../utils/ssh-remote-resolver').SshRemoteSettingsStore;
 	/** Optional agent-level config values (from agent config store) */
 	agentConfigValues?: Record<string, unknown>;
-}
-
-/** Metadata stored alongside each active Cue process */
-interface CueActiveProcess {
-	child: ChildProcess;
-	command: string;
-	args: string[];
-	cwd: string;
-	toolType: string;
-	startTime: number;
-}
-
-/** Serializable process info for the Process Monitor */
-export interface CueProcessInfo {
-	runId: string;
-	pid: number;
-	command: string;
-	args: string[];
-	cwd: string;
-	toolType: string;
-	startTime: number;
-}
-
-/** Map of active Cue processes by runId */
-const activeProcesses = new Map<string, CueActiveProcess>();
-
-/**
- * Extract clean human-readable text from agent stdout.
- * For agents that output JSON/NDJSON (like OpenCode --format json), parses each
- * line and collects text from 'result' events. Falls back to raw stdout when no
- * parser is available or no result-text events are found (e.g. plain-text agents).
- */
-function extractCleanStdout(rawStdout: string, toolType: string): string {
-	if (!rawStdout.trim()) {
-		return rawStdout;
-	}
-
-	const parser = getOutputParser(toolType as ToolType);
-	if (!parser) {
-		return rawStdout;
-	}
-
-	const textParts: string[] = [];
-	for (const line of rawStdout.split('\n')) {
-		if (!line.trim()) continue;
-		const event = parser.parseJsonLine(line);
-		if (event?.type === 'result' && event.text) {
-			textParts.push(event.text);
-		}
-	}
-
-	return textParts.length > 0 ? textParts.join('\n') : rawStdout;
 }
 
 /**
  * Execute a Cue-triggered prompt by spawning an agent process.
  *
- * Steps:
- * 1. Resolve and read the prompt file
- * 2. Populate template context with Cue event data
- * 3. Substitute template variables
- * 4. Build agent spawn args (same pattern as process:spawn)
- * 5. Apply SSH wrapping if configured
- * 6. Spawn the process, capture stdout/stderr
- * 7. Enforce timeout with SIGTERM → SIGKILL escalation
- * 8. Return CueRunResult
+ * Orchestrates: template context → variable substitution → spawn spec → process.
  */
 export async function executeCuePrompt(config: CueExecutionConfig): Promise<CueRunResult> {
 	const {
@@ -116,376 +64,111 @@ export async function executeCuePrompt(config: CueExecutionConfig): Promise<CueR
 		subscription,
 		event,
 		promptPath,
-		toolType,
-		projectRoot,
 		templateContext,
 		timeoutMs,
 		sshRemoteConfig,
-		customPath,
-		customArgs,
-		customEnvVars,
-		customModel,
-		customEffort,
 		onLog,
-		sshStore,
-		agentConfigValues,
 	} = config;
 
 	const startedAt = new Date().toISOString();
 	const startTime = Date.now();
 
-	// 1. Resolve prompt: the normalizer (cue-config-normalizer.ts) already resolved
-	// prompt_file → file contents at config load time, so promptPath is the inline
-	// prompt content (or empty string if the prompt_file failed to load — surfaced as
-	// a warning at session init time in cue-session-runtime-service.ts).
-	const promptContent = promptPath;
-	const trimmedPrompt = promptContent?.trim();
+	// Helper to build a failed result
+	const failedResult = (message: string): CueRunResult => ({
+		runId,
+		sessionId: session.id,
+		sessionName: session.name,
+		subscriptionName: subscription.name,
+		event,
+		status: 'failed',
+		stdout: '',
+		stderr: message,
+		exitCode: null,
+		durationMs: Date.now() - startTime,
+		startedAt,
+		endedAt: new Date().toISOString(),
+	});
+
+	// 1. Validate prompt content
+	const trimmedPrompt = promptPath?.trim();
 	if (!trimmedPrompt) {
 		const message = `Cue subscription "${subscription.name}" has no prompt content (prompt_file may have failed to load at config time)`;
 		onLog('error', message);
-		return {
-			runId,
-			sessionId: session.id,
-			sessionName: session.name,
-			subscriptionName: subscription.name,
-			event,
-			status: 'failed',
-			stdout: '',
-			stderr: message,
-			exitCode: null,
-			durationMs: Date.now() - startTime,
-			startedAt,
-			endedAt: new Date().toISOString(),
-		};
+		return failedResult(message);
 	}
 
-	// 3. Populate the template context with Cue event data
-	templateContext.cue = {
-		eventType: event.type,
-		eventTimestamp: event.timestamp,
-		triggerName: subscription.name,
+	// 2. Build template context and substitute variables
+	templateContext.cue = buildCueTemplateContext(event, subscription, runId);
+	const substitutedPrompt = substituteTemplateVariables(promptPath, templateContext);
+
+	// 3. Build spawn spec (agent args, SSH wrapping, etc.)
+	const buildResult = await buildSpawnSpec(config, substitutedPrompt);
+	if (!buildResult.ok) {
+		onLog('error', buildResult.message);
+		return failedResult(buildResult.message);
+	}
+
+	const { spec } = buildResult;
+
+	// Log SSH remote usage
+	if (spec.sshRemoteUsed) {
+		onLog('cue', `[CUE] Using SSH remote: ${spec.sshRemoteUsed.name || spec.sshRemoteUsed.host}`);
+	}
+
+	// 4. Execute the process
+	onLog(
+		'cue',
+		`[CUE] Executing run ${runId}: "${subscription.name}" → ${spec.command} (${event.type})`
+	);
+
+	const processResult = await runProcess(runId, spec, {
+		toolType: config.toolType,
+		timeoutMs,
+		sshRemoteEnabled: sshRemoteConfig?.enabled,
+		sshStdinScript: spec.sshStdinScript,
+		stdinPrompt: spec.stdinPrompt,
+		onLog,
+	});
+
+	// 5. Assemble final result
+	return {
 		runId,
-		filePath: String(event.payload.path ?? ''),
-		fileName: String(event.payload.filename ?? ''),
-		fileDir: String(event.payload.directory ?? ''),
-		fileExt: String(event.payload.extension ?? ''),
-		fileChangeType: String(event.payload.changeType ?? ''),
-		sourceSession: String(event.payload.sourceSession ?? ''),
-		sourceOutput: String(event.payload.sourceOutput ?? ''),
-		sourceStatus: String(event.payload.status ?? ''),
-		sourceExitCode: String(event.payload.exitCode ?? ''),
-		sourceDuration: String(event.payload.durationMs ?? ''),
-		sourceTriggeredBy: String(event.payload.triggeredBy ?? ''),
+		sessionId: session.id,
+		sessionName: session.name,
+		subscriptionName: subscription.name,
+		event,
+		status: processResult.status,
+		stdout: processResult.stdout,
+		stderr: processResult.stderr,
+		exitCode: processResult.exitCode,
+		durationMs: Date.now() - startTime,
+		startedAt,
+		endedAt: new Date().toISOString(),
 	};
-
-	// Populate task.pending-specific template context
-	if (event.type === 'task.pending') {
-		templateContext.cue = {
-			...templateContext.cue,
-			taskFile: String(event.payload.path ?? ''),
-			taskFileName: String(event.payload.filename ?? ''),
-			taskFileDir: String(event.payload.directory ?? ''),
-			taskCount: String(event.payload.taskCount ?? '0'),
-			taskList: String(event.payload.taskList ?? ''),
-			taskContent: String(event.payload.content ?? ''),
-		};
-	}
-
-	// Populate GitHub-specific template context
-	if (event.type === 'github.pull_request' || event.type === 'github.issue') {
-		templateContext.cue = {
-			...templateContext.cue,
-			ghType: String(event.payload.type ?? ''),
-			ghNumber: String(event.payload.number ?? ''),
-			ghTitle: String(event.payload.title ?? ''),
-			ghAuthor: String(event.payload.author ?? ''),
-			ghUrl: String(event.payload.url ?? ''),
-			ghBody: String(event.payload.body ?? ''),
-			ghLabels: String(event.payload.labels ?? ''),
-			ghState: String(event.payload.state ?? ''),
-			ghRepo: String(event.payload.repo ?? ''),
-			ghBranch: String(event.payload.head_branch ?? ''),
-			ghBaseBranch: String(event.payload.base_branch ?? ''),
-			ghAssignees: String(event.payload.assignees ?? ''),
-			ghMergedAt: String(event.payload.merged_at ?? ''),
-		};
-	}
-
-	// 4. Substitute template variables
-	const substitutedPrompt = substituteTemplateVariables(promptContent, templateContext);
-
-	// 5. Look up agent definition and build args
-	const agentDef = getAgentDefinition(toolType);
-	if (!agentDef) {
-		const message = `Unknown agent type: ${toolType}`;
-		onLog('error', message);
-		return {
-			runId,
-			sessionId: session.id,
-			sessionName: session.name,
-			subscriptionName: subscription.name,
-			event,
-			status: 'failed',
-			stdout: '',
-			stderr: message,
-			exitCode: null,
-			durationMs: Date.now() - startTime,
-			startedAt,
-			endedAt: new Date().toISOString(),
-		};
-	}
-
-	// Build args following the same pipeline as process:spawn
-	// Cast to AgentConfig-like shape with available/path/capabilities for buildAgentArgs
-	const agentConfig = {
-		...agentDef,
-		available: true,
-		path: customPath || agentDef.command,
-		capabilities: getAgentCapabilities(toolType),
-	};
-
-	let finalArgs = buildAgentArgs(agentConfig, {
-		baseArgs: agentDef.args,
-		prompt: substitutedPrompt,
-		cwd: projectRoot,
-		yoloMode: true, // Cue runs always use YOLO mode like Auto Run
-	});
-
-	// Apply config overrides (custom model, custom args, custom env vars)
-	const configResolution = applyAgentConfigOverrides(agentConfig, finalArgs, {
-		agentConfigValues: (agentConfigValues ?? {}) as Record<string, any>,
-		sessionCustomModel: customModel,
-		sessionCustomEffort: customEffort,
-		sessionCustomArgs: customArgs,
-		sessionCustomEnvVars: customEnvVars,
-	});
-	finalArgs = configResolution.args;
-	const effectiveEnvVars = configResolution.effectiveCustomEnvVars;
-
-	// Determine the command to use
-	let command = customPath || agentDef.command;
-
-	// 6. Apply SSH wrapping if configured.
-	// For SSH: wrapSpawnWithSsh appends the prompt itself (via promptArgs/noPromptSeparator/'--, prompt').
-	//          Pass finalArgs WITHOUT the prompt so the wrapper handles it cleanly.
-	// For local: append the prompt below after the SSH check (same logic as ChildProcessSpawner).
-	let spawnArgs = finalArgs;
-	let spawnCwd = projectRoot;
-	let spawnEnvVars = effectiveEnvVars;
-	let prompt: string | undefined = substitutedPrompt;
-	let sshStdinScript: string | undefined;
-
-	if (sshRemoteConfig?.enabled && sshStore) {
-		const sshWrapConfig: SshSpawnWrapConfig = {
-			command,
-			args: finalArgs, // No prompt yet — wrapSpawnWithSsh appends it via config.prompt
-			cwd: projectRoot,
-			prompt: substitutedPrompt,
-			customEnvVars: effectiveEnvVars,
-			agentBinaryName: agentDef.binaryName,
-			promptArgs: agentDef.promptArgs,
-			noPromptSeparator: agentDef.noPromptSeparator,
-		};
-
-		const sshResult = await wrapSpawnWithSsh(sshWrapConfig, sshRemoteConfig, sshStore);
-		command = sshResult.command;
-		spawnArgs = sshResult.args;
-		spawnCwd = sshResult.cwd;
-		spawnEnvVars = sshResult.customEnvVars;
-		prompt = sshResult.prompt;
-		sshStdinScript = sshResult.sshStdinScript;
-
-		if (sshResult.sshRemoteUsed) {
-			onLog(
-				'cue',
-				`[CUE] Using SSH remote: ${sshResult.sshRemoteUsed.name || sshResult.sshRemoteUsed.host}`
-			);
-		}
-	}
-
-	// For local execution: append prompt as a positional CLI argument.
-	// SSH mode skips this — wrapSpawnWithSsh already embedded the prompt in spawnArgs.
-	// Mirrors ChildProcessSpawner logic: promptArgs > noPromptSeparator > '--' separator.
-	if (!sshRemoteConfig?.enabled) {
-		if (agentDef.promptArgs) {
-			spawnArgs = [...spawnArgs, ...agentDef.promptArgs(substitutedPrompt)];
-		} else if (agentDef.noPromptSeparator) {
-			spawnArgs = [...spawnArgs, substitutedPrompt];
-		} else {
-			spawnArgs = [...spawnArgs, '--', substitutedPrompt];
-		}
-	}
-
-	// 7. Spawn the process
-	onLog('cue', `[CUE] Executing run ${runId}: "${subscription.name}" → ${command} (${event.type})`);
-
-	return new Promise<CueRunResult>((resolve) => {
-		const env = {
-			...process.env,
-			...(spawnEnvVars || {}),
-		};
-
-		const child = spawn(command, spawnArgs, {
-			cwd: spawnCwd,
-			env,
-			stdio: ['pipe', 'pipe', 'pipe'],
-		});
-
-		activeProcesses.set(runId, {
-			child,
-			command,
-			args: spawnArgs,
-			cwd: spawnCwd,
-			toolType,
-			startTime: Date.now(),
-		});
-
-		let stdout = '';
-		let stderr = '';
-		let settled = false;
-		let timeoutTimer: ReturnType<typeof setTimeout> | undefined;
-		let killTimer: ReturnType<typeof setTimeout> | undefined;
-
-		const finish = (status: CueRunStatus, exitCode: number | null) => {
-			if (settled) return;
-			settled = true;
-
-			activeProcesses.delete(runId);
-			if (timeoutTimer) clearTimeout(timeoutTimer);
-			if (killTimer) clearTimeout(killTimer);
-
-			resolve({
-				runId,
-				sessionId: session.id,
-				sessionName: session.name,
-				subscriptionName: subscription.name,
-				event,
-				status,
-				stdout: extractCleanStdout(stdout, toolType),
-				stderr,
-				exitCode,
-				durationMs: Date.now() - startTime,
-				startedAt,
-				endedAt: new Date().toISOString(),
-			});
-		};
-
-		// Capture stdout
-		child.stdout?.setEncoding('utf8');
-		child.stdout?.on('data', (data: string) => {
-			stdout += data;
-		});
-
-		// Capture stderr
-		child.stderr?.setEncoding('utf8');
-		child.stderr?.on('data', (data: string) => {
-			stderr += data;
-		});
-
-		// Handle process exit
-		child.on('close', (code) => {
-			const status: CueRunStatus = code === 0 ? 'completed' : 'failed';
-			finish(status, code);
-		});
-
-		// Handle spawn errors
-		child.on('error', (error) => {
-			stderr += `\nSpawn error: ${error.message}`;
-			finish('failed', null);
-		});
-
-		// Write prompt to stdin if not embedded in args
-		// For agents with promptArgs (like OpenCode -p), the prompt is in the args
-		// For others (like Claude --print), if prompt was passed via args separator, skip stdin
-		// When SSH wrapping returns a prompt, it means "send via stdin"
-		if (sshStdinScript && sshRemoteConfig?.enabled) {
-			// SSH stdin script mode — send the full bash script (includes prompt) via stdin
-			child.stdin?.write(sshStdinScript);
-			child.stdin?.end();
-		} else if (prompt && sshRemoteConfig?.enabled) {
-			// SSH small prompt mode — send raw prompt via stdin
-			child.stdin?.write(prompt);
-			child.stdin?.end();
-		} else {
-			// Local mode — prompt is already in the args (via buildAgentArgs)
-			child.stdin?.end();
-		}
-
-		// 8. Enforce timeout
-		if (timeoutMs > 0) {
-			timeoutTimer = setTimeout(() => {
-				if (settled) return;
-				onLog('cue', `[CUE] Run ${runId} timed out after ${timeoutMs}ms, sending SIGTERM`);
-				child.kill('SIGTERM');
-
-				// Escalate to SIGKILL after delay
-				killTimer = setTimeout(() => {
-					if (settled) return;
-					onLog('cue', `[CUE] Run ${runId} still alive, sending SIGKILL`);
-					child.kill('SIGKILL');
-				}, SIGKILL_DELAY_MS);
-
-				// If the process exits after SIGTERM, mark as timeout
-				child.removeAllListeners('close');
-				child.on('close', (code) => {
-					finish('timeout', code);
-				});
-			}, timeoutMs);
-		}
-	});
 }
 
 /**
  * Stop a running Cue process by runId.
- * Sends SIGTERM, then SIGKILL after 5 seconds.
- *
- * @returns true if the process was found and signaled, false if not found
+ * Delegates to the process lifecycle module.
  */
 export function stopCueRun(runId: string): boolean {
-	const entry = activeProcesses.get(runId);
-	if (!entry) return false;
-
-	entry.child.kill('SIGTERM');
-
-	// Escalate to SIGKILL after delay — only if the process hasn't actually exited.
-	// Check both exitCode and signalCode: either being non-null means the child has
-	// terminated. This avoids sending SIGKILL to a recycled PID.
-	setTimeout(() => {
-		if (entry.child.exitCode === null && entry.child.signalCode === null) {
-			entry.child.kill('SIGKILL');
-		}
-	}, SIGKILL_DELAY_MS);
-
-	return true;
+	return stopProcess(runId);
 }
 
 /**
  * Get the map of currently active processes (for testing/monitoring).
+ * Delegates to the process lifecycle module.
  */
-export function getActiveProcesses(): Map<string, CueActiveProcess> {
-	return activeProcesses;
+export function getActiveProcesses(): Map<string, any> {
+	return getActiveProcessMap();
 }
 
 /**
  * Get serializable info about active Cue processes (for Process Monitor).
- * Filters out entries where the process PID is unavailable (spawn failure).
+ * Delegates to the process lifecycle module.
  */
-export function getCueProcessList(): CueProcessInfo[] {
-	const result: CueProcessInfo[] = [];
-	for (const [runId, entry] of activeProcesses) {
-		if (entry.child.pid) {
-			result.push({
-				runId,
-				pid: entry.child.pid,
-				command: entry.command,
-				args: entry.args,
-				cwd: entry.cwd,
-				toolType: entry.toolType,
-				startTime: entry.startTime,
-			});
-		}
-	}
-	return result;
+export function getCueProcessList(): import('./cue-process-lifecycle').CueProcessInfo[] {
+	return getProcessList();
 }
 
 /**
