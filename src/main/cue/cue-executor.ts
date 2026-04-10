@@ -88,6 +88,7 @@ function extractCleanStdout(rawStdout: string, toolType: string): string {
 
 	const resultParts: string[] = [];
 	const assistantTextByMessage = new Map<string, string>();
+	const assistantTextWithoutId: string[] = [];
 	for (const line of rawStdout.split('\n')) {
 		if (!line.trim()) continue;
 		const event = parser.parseJsonLine(line);
@@ -97,10 +98,15 @@ function extractCleanStdout(rawStdout: string, toolType: string): string {
 			// Track assistant text per message ID to avoid duplication from
 			// streaming chunks. Each chunk for the same message ID carries the
 			// full text so far, so we keep only the latest (longest) version.
-			const msgId = event.raw?.message?.id ?? event.sessionId ?? '';
-			const existing = assistantTextByMessage.get(msgId);
-			if (!existing || event.text.length > existing.length) {
-				assistantTextByMessage.set(msgId, event.text);
+			const raw = event.raw as { message?: { id?: string } } | undefined;
+			const msgId = raw?.message?.id;
+			if (msgId) {
+				const existing = assistantTextByMessage.get(msgId);
+				if (!existing || event.text.length > existing.length) {
+					assistantTextByMessage.set(msgId, event.text);
+				}
+			} else {
+				assistantTextWithoutId.push(event.text);
 			}
 		}
 	}
@@ -109,8 +115,8 @@ function extractCleanStdout(rawStdout: string, toolType: string): string {
 	if (resultParts.length > 0) {
 		return resultParts.join('\n');
 	}
-	if (assistantTextByMessage.size > 0) {
-		return [...assistantTextByMessage.values()].join('\n');
+	if (assistantTextByMessage.size > 0 || assistantTextWithoutId.length > 0) {
+		return [...assistantTextByMessage.values(), ...assistantTextWithoutId].join('\n');
 	}
 	return rawStdout;
 }
