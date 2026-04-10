@@ -173,7 +173,7 @@ export interface MainPanelContentProps {
 	onInputBlur?: () => void;
 	onOpenPromptComposer?: () => void;
 	onReplayMessage?: (text: string, images?: string[]) => void;
-	onForkConversation?: (logIndex: number) => void;
+	onForkConversation?: (logId: string) => void;
 	fileTree?: FileNode[];
 	onFileClick?: (relativePath: string, options?: { openInNewTab?: boolean }) => void;
 	refreshFileTree?: (

@@ -16,15 +16,20 @@ export function useForkConversation(
 	setActiveSessionId: (id: string) => void
 ) {
 	return useCallback(
-		(logIndex: number) => {
+		(logId: string) => {
 			const session = sessions.find((s) => s.id === activeSessionId);
 			if (!session) return;
 
 			const sourceTab = getActiveTab(session);
 			if (!sourceTab) return;
 
-			// 1. Slice logs up to and including the selected message
-			const slicedLogs = sourceTab.logs.slice(0, logIndex + 1);
+			// 1. Resolve the raw log index from the log ID
+			//    The caller passes a log ID (not a visual index) so that search-filtering
+			//    and consecutive-entry collapsing in the UI cannot shift the fork point.
+			const rawLogIndex = sourceTab.logs.findIndex((l) => l.id === logId);
+			if (rawLogIndex === -1) return;
+
+			const slicedLogs = sourceTab.logs.slice(0, rawLogIndex + 1);
 			if (slicedLogs.length === 0) return;
 
 			// 2. Format sliced logs as context (same filter as Send-to-Agent: user, ai, stdout)
@@ -36,7 +41,8 @@ export function useForkConversation(
 						(log.source === 'user' || log.source === 'ai' || log.source === 'stdout')
 				)
 				.map((log) => {
-					const role = log.source === 'user' ? 'User' : 'Assistant';
+					const role =
+						log.source === 'user' ? 'User' : log.source === 'stdout' ? 'Tool Output' : 'Assistant';
 					return `${role}: ${log.text}`;
 				})
 				.join('\n\n');
@@ -49,7 +55,7 @@ export function useForkConversation(
 			const contextMessage = formattedContext
 				? `# Forked Conversation
 
-The following is a conversation forked from "${sessionName}" (tab: "${sourceDisplayName}") at message ${logIndex + 1} of ${sourceTab.logs.length}. This is the conversation history up to the fork point.
+The following is a conversation forked from "${sessionName}" (tab: "${sourceDisplayName}") at message ${rawLogIndex + 1} of ${sourceTab.logs.length}. This is the conversation history up to the fork point.
 
 ---
 
@@ -67,7 +73,7 @@ You are continuing this conversation from the fork point above. Briefly acknowle
 				id: `fork-notice-${Date.now()}`,
 				timestamp: Date.now(),
 				source: 'system',
-				text: `Forked from "${sessionName}" (tab: "${sourceDisplayName}") at message ${logIndex + 1} of ${sourceTab.logs.length}`,
+				text: `Forked from "${sessionName}" (tab: "${sourceDisplayName}") at message ${rawLogIndex + 1} of ${sourceTab.logs.length}`,
 			};
 
 			const userContextLog: LogEntry = {
@@ -94,6 +100,11 @@ You are continuing this conversation from the fork point above. Briefly acknowle
 			// Copy relevant session config from source
 			newSession.cwd = session.cwd;
 			newSession.fullPath = session.fullPath;
+			newSession.shellCwd = session.shellCwd || session.cwd;
+			// Update the initial terminal tab's cwd to match the source session
+			if (newSession.terminalTabs?.[0]) {
+				newSession.terminalTabs[0].cwd = session.shellCwd || session.cwd;
+			}
 			newSession.isGitRepo = session.isGitRepo;
 			newSession.customPath = session.customPath;
 			newSession.customArgs = session.customArgs;

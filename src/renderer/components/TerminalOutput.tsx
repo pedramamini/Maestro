@@ -178,7 +178,7 @@ interface LogItemProps {
 	ghCliAvailable?: boolean;
 	onPublishGist?: (text: string) => void;
 	// Fork conversation from this message (AI mode only, user and ai source messages)
-	onForkConversation?: (index: number) => void;
+	onForkConversation?: (logId: string) => void;
 	// Message alignment
 	userMessageAlignment: 'left' | 'right';
 }
@@ -920,7 +920,7 @@ const LogItemComponent = memo(
 						{/* Fork conversation from this message - AI and user messages only */}
 						{(log.source === 'ai' || log.source === 'user') && isAIMode && onForkConversation && (
 							<button
-								onClick={() => onForkConversation(index)}
+								onClick={() => onForkConversation(log.id)}
 								className="p-1.5 rounded opacity-0 group-hover:opacity-50 hover:!opacity-100"
 								style={{ color: theme.colors.textDim }}
 								title="Fork conversation from here"
@@ -1073,7 +1073,7 @@ interface TerminalOutputProps {
 	markdownEditMode: boolean; // Whether to show raw markdown or rendered markdown for AI responses
 	setMarkdownEditMode: (value: boolean) => void; // Toggle markdown mode
 	onReplayMessage?: (text: string, images?: string[]) => void; // Replay a user message
-	onForkConversation?: (logIndex: number) => void; // Fork conversation from a specific message
+	onForkConversation?: (logId: string) => void; // Fork conversation from a specific message
 	fileTree?: FileNode[]; // File tree for linking file references
 	cwd?: string; // Current working directory for proximity-based matching
 	projectRoot?: string; // Project root absolute path for converting absolute paths to relative
