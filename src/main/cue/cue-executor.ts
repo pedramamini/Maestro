@@ -86,16 +86,33 @@ function extractCleanStdout(rawStdout: string, toolType: string): string {
 		return rawStdout;
 	}
 
-	const textParts: string[] = [];
+	const resultParts: string[] = [];
+	const assistantTextByMessage = new Map<string, string>();
 	for (const line of rawStdout.split('\n')) {
 		if (!line.trim()) continue;
 		const event = parser.parseJsonLine(line);
 		if (event?.type === 'result' && event.text) {
-			textParts.push(event.text);
+			resultParts.push(event.text);
+		} else if (event?.type === 'text' && event.text) {
+			// Track assistant text per message ID to avoid duplication from
+			// streaming chunks. Each chunk for the same message ID carries the
+			// full text so far, so we keep only the latest (longest) version.
+			const msgId = event.raw?.message?.id ?? event.sessionId ?? '';
+			const existing = assistantTextByMessage.get(msgId);
+			if (!existing || event.text.length > existing.length) {
+				assistantTextByMessage.set(msgId, event.text);
+			}
 		}
 	}
 
-	return textParts.length > 0 ? textParts.join('\n') : rawStdout;
+	// Prefer explicit result text, fall back to assistant message text
+	if (resultParts.length > 0) {
+		return resultParts.join('\n');
+	}
+	if (assistantTextByMessage.size > 0) {
+		return [...assistantTextByMessage.values()].join('\n');
+	}
+	return rawStdout;
 }
 
 /**
