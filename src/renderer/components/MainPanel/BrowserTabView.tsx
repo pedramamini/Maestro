@@ -53,7 +53,12 @@ export const BrowserTabView = React.memo(function BrowserTabView({
 	const webviewRef = useRef<ElectronWebviewElement | null>(null);
 	const hostRef = useRef<HTMLDivElement | null>(null);
 	const isDomReadyRef = useRef(false);
+	const latestTabRef = useRef(tab);
 	const [addressValue, setAddressValue] = useState(tab.url);
+
+	useEffect(() => {
+		latestTabRef.current = tab;
+	}, [tab]);
 
 	useEffect(() => {
 		setAddressValue(tab.url);
@@ -64,44 +69,96 @@ export const BrowserTabView = React.memo(function BrowserTabView({
 		if (!webview) return;
 		isDomReadyRef.current = false;
 
-		const updateNavigationState = () => {
-			if (!isDomReadyRef.current) return;
+		const updateTabState = (updates: Partial<BrowserTab>) => {
+			onUpdateTab(tab.id, updates);
+		};
 
-			const nextUrl = webview.getURL?.() || tab.url || DEFAULT_BROWSER_TAB_URL;
-			const nextTitle = getBrowserTabTitle(nextUrl, webview.getTitle?.() || tab.title);
+		const readWebviewState = (): Partial<BrowserTab> | null => {
+			if (!isDomReadyRef.current) return null;
 
-			setAddressValue(nextUrl);
-			onUpdateTab(tab.id, {
+			const nextUrl = webview.getURL?.() || latestTabRef.current.url || DEFAULT_BROWSER_TAB_URL;
+			return {
 				url: nextUrl,
-				title: nextTitle,
+				title: getBrowserTabTitle(nextUrl, webview.getTitle?.() || latestTabRef.current.title),
 				canGoBack: webview.canGoBack(),
 				canGoForward: webview.canGoForward(),
 				isLoading: webview.isLoading(),
 				webContentsId: webview.getWebContentsId?.(),
-			});
+			};
 		};
 
-		const handleStartLoading = () => onUpdateTab(tab.id, { isLoading: true });
+		const updateNavigationState = () => {
+			const nextState = readWebviewState();
+			if (!nextState) return;
+
+			setAddressValue(nextState.url || DEFAULT_BROWSER_TAB_URL);
+			updateTabState(nextState);
+		};
+
+		const handleStartLoading = () => updateTabState({ isLoading: true });
 		const handleStopLoading = () => {
 			syncWebviewLayout(webview);
 			updateNavigationState();
 		};
 		const handleNavigate = (event: Event) => {
-			const nextUrl = (event as Event & { url?: string }).url || webview.getURL?.() || tab.url;
+			const nextUrl =
+				(event as Event & { url?: string }).url ||
+				webview.getURL?.() ||
+				latestTabRef.current.url ||
+				DEFAULT_BROWSER_TAB_URL;
 			setAddressValue(nextUrl);
-			onUpdateTab(tab.id, { url: nextUrl });
+			updateTabState({
+				url: nextUrl,
+				title: getBrowserTabTitle(nextUrl, latestTabRef.current.title),
+			});
 			updateNavigationState();
+		};
+		const handleNavigationStart = (event: Event) => {
+			if ((event as Event & { isMainFrame?: boolean }).isMainFrame === false) return;
+			const nextUrl =
+				(event as Event & { url?: string }).url ||
+				webview.getURL?.() ||
+				latestTabRef.current.url ||
+				DEFAULT_BROWSER_TAB_URL;
+			setAddressValue(nextUrl);
+			updateTabState({
+				url: nextUrl,
+				title: getBrowserTabTitle(nextUrl),
+				isLoading: true,
+				favicon: null,
+			});
 		};
 		const handleTitleUpdated = (event: Event) => {
 			const nextTitle = getBrowserTabTitle(
-				webview.getURL?.() || tab.url,
+				webview.getURL?.() || latestTabRef.current.url,
 				(event as Event & { title?: string }).title || webview.getTitle?.()
 			);
-			onUpdateTab(tab.id, { title: nextTitle });
+			updateTabState({ title: nextTitle });
 		};
 		const handleFaviconUpdated = (event: Event) => {
 			const favicons = (event as Event & { favicons?: string[] }).favicons;
-			onUpdateTab(tab.id, { favicon: favicons?.[0] || null });
+			if (!Array.isArray(favicons)) return;
+			updateTabState({ favicon: favicons[0] || null });
+		};
+		const handleDidFailLoad = (event: Event) => {
+			if ((event as Event & { isMainFrame?: boolean }).isMainFrame === false) return;
+			const nextUrl =
+				(event as Event & { validatedURL?: string; url?: string }).validatedURL ||
+				(event as Event & { validatedURL?: string; url?: string }).url ||
+				webview.getURL?.() ||
+				latestTabRef.current.url ||
+				DEFAULT_BROWSER_TAB_URL;
+			setAddressValue(nextUrl);
+			updateTabState({
+				url: nextUrl,
+				title: getBrowserTabTitle(nextUrl),
+				canGoBack: isDomReadyRef.current ? webview.canGoBack() : latestTabRef.current.canGoBack,
+				canGoForward: isDomReadyRef.current
+					? webview.canGoForward()
+					: latestTabRef.current.canGoForward,
+				isLoading: false,
+				webContentsId: webview.getWebContentsId?.(),
+			});
 		};
 		const handleDomReady = () => {
 			isDomReadyRef.current = true;
@@ -117,8 +174,12 @@ export const BrowserTabView = React.memo(function BrowserTabView({
 
 		webview.addEventListener('did-start-loading', handleStartLoading);
 		webview.addEventListener('did-stop-loading', handleStopLoading);
+		webview.addEventListener('did-start-navigation', handleNavigationStart);
+		webview.addEventListener('did-redirect-navigation', handleNavigationStart);
 		webview.addEventListener('did-navigate', handleNavigate);
 		webview.addEventListener('did-navigate-in-page', handleNavigate);
+		webview.addEventListener('did-fail-load', handleDidFailLoad);
+		webview.addEventListener('did-finish-load', updateNavigationState);
 		webview.addEventListener('page-title-updated', handleTitleUpdated);
 		webview.addEventListener('page-favicon-updated', handleFaviconUpdated);
 		webview.addEventListener('dom-ready', handleDomReady);
@@ -139,8 +200,12 @@ export const BrowserTabView = React.memo(function BrowserTabView({
 			resizeObserver?.disconnect();
 			webview.removeEventListener('did-start-loading', handleStartLoading);
 			webview.removeEventListener('did-stop-loading', handleStopLoading);
+			webview.removeEventListener('did-start-navigation', handleNavigationStart);
+			webview.removeEventListener('did-redirect-navigation', handleNavigationStart);
 			webview.removeEventListener('did-navigate', handleNavigate);
 			webview.removeEventListener('did-navigate-in-page', handleNavigate);
+			webview.removeEventListener('did-fail-load', handleDidFailLoad);
+			webview.removeEventListener('did-finish-load', updateNavigationState);
 			webview.removeEventListener('page-title-updated', handleTitleUpdated);
 			webview.removeEventListener('page-favicon-updated', handleFaviconUpdated);
 			webview.removeEventListener('dom-ready', handleDomReady);
