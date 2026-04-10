@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
 	DEFAULT_BROWSER_TAB_URL,
+	DEFAULT_BROWSER_TAB_TITLE,
+	getBrowserTabPartition,
 	getBrowserTabTitle,
 	getSafeBrowserTabPartition,
 	normalizeBrowserTabUrl,
@@ -55,6 +57,16 @@ describe('browserTabPersistence', () => {
 			expect(getBrowserTabTitle('https://example.com/docs', '')).toBe('example.com');
 		});
 
+		it('uses the default new-tab title for about:blank without a page title', () => {
+			expect(getBrowserTabTitle(DEFAULT_BROWSER_TAB_URL, '')).toBe(DEFAULT_BROWSER_TAB_TITLE);
+		});
+
+		it('sanitizes session ids when deriving persisted browser partitions', () => {
+			expect(getBrowserTabPartition(' session / branch:1 ')).toBe(
+				'persist:maestro-browser-session-session-branch-1'
+			);
+		});
+
 		it('keeps safe persisted partitions and repairs unsafe ones', () => {
 			expect(
 				getSafeBrowserTabPartition('persist:maestro-browser-session-session-1', 'session-1')
@@ -89,6 +101,29 @@ describe('browserTabPersistence', () => {
 				canGoBack: false,
 				canGoForward: false,
 				isLoading: false,
+				favicon: null,
+			});
+		});
+
+		it('repairs missing browser tab fields to safe defaults during persistence', () => {
+			expect(
+				sanitizeBrowserTabForPersistence(
+					{
+						id: 'browser-2',
+						url: '',
+						title: '',
+						createdAt: 1,
+						canGoBack: false,
+						canGoForward: false,
+						isLoading: false,
+					},
+					'session / 2'
+				)
+			).toMatchObject({
+				id: 'browser-2',
+				url: DEFAULT_BROWSER_TAB_URL,
+				title: DEFAULT_BROWSER_TAB_TITLE,
+				partition: 'persist:maestro-browser-session-session-2',
 				favicon: null,
 			});
 		});

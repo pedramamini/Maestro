@@ -362,6 +362,43 @@ describe('useDebouncedPersistence', () => {
 				});
 				expect(persisted[0].activeBrowserTabId).toBeNull();
 			});
+
+			it('persists legacy browser tabs with safe defaults while preserving valid active selection', () => {
+				const browserTab = makeBrowserTab({
+					id: 'browser-legacy',
+					url: '',
+					title: '',
+					partition: undefined,
+					favicon: undefined,
+				});
+				const session = makeSession({
+					id: 'session legacy/browser',
+					browserTabs: [browserTab],
+					activeBrowserTabId: 'browser-legacy',
+					unifiedTabOrder: [
+						{ type: 'ai', id: 'default-tab' },
+						{ type: 'browser', id: 'browser-legacy' },
+					],
+				});
+
+				const initialLoadRef = makeInitialLoadRef(true);
+				const { result } = renderHook(() => useDebouncedPersistence([session], initialLoadRef));
+
+				act(() => {
+					result.current.flushNow();
+				});
+
+				const persisted = vi
+					.mocked(window.maestro.sessions.setAll)
+					.mock.calls.at(-1)?.[0] as Session[];
+				expect(persisted[0].browserTabs[0]).toMatchObject({
+					url: 'about:blank',
+					title: 'New Tab',
+					partition: 'persist:maestro-browser-session-session-legacy-browser',
+					favicon: null,
+				});
+				expect(persisted[0].activeBrowserTabId).toBe('browser-legacy');
+			});
 		});
 
 		describe('log truncation', () => {
