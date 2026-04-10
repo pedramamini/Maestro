@@ -8,8 +8,6 @@
 
 import { spawn, type ChildProcess } from 'child_process';
 import * as crypto from 'crypto';
-import * as fs from 'fs';
-import * as path from 'path';
 import type { CueEvent, CueRunResult, CueRunStatus, CueSubscription } from './cue-types';
 import type { HistoryEntry, SessionInfo, ToolType } from '../../shared/types';
 import { substituteTemplateVariables, type TemplateContext } from '../../shared/templateVariables';
@@ -136,35 +134,29 @@ export async function executeCuePrompt(config: CueExecutionConfig): Promise<CueR
 	const startedAt = new Date().toISOString();
 	const startTime = Date.now();
 
-	// 1. Resolve prompt: try file path first, fall back to inline prompt text
-	let promptContent: string;
-	if (promptPath.endsWith('.md') || promptPath.endsWith('.txt') || promptPath.endsWith('.yaml')) {
-		const resolvedPath = path.isAbsolute(promptPath)
-			? promptPath
-			: path.join(projectRoot, promptPath);
-		try {
-			promptContent = fs.readFileSync(resolvedPath, 'utf-8');
-		} catch (error) {
-			const message = `Failed to read prompt file: ${resolvedPath} - ${error instanceof Error ? error.message : String(error)}`;
-			onLog('error', message);
-			return {
-				runId,
-				sessionId: session.id,
-				sessionName: session.name,
-				subscriptionName: subscription.name,
-				event,
-				status: 'failed',
-				stdout: '',
-				stderr: message,
-				exitCode: null,
-				durationMs: Date.now() - startTime,
-				startedAt,
-				endedAt: new Date().toISOString(),
-			};
-		}
-	} else {
-		// Inline prompt text (no file extension = raw prompt content)
-		promptContent = promptPath;
+	// 1. Resolve prompt: the normalizer (cue-config-normalizer.ts) already resolved
+	// prompt_file → file contents at config load time, so promptPath is the inline
+	// prompt content (or empty string if the prompt_file failed to load — surfaced as
+	// a warning at session init time in cue-session-runtime-service.ts).
+	const promptContent = promptPath;
+	const trimmedPrompt = promptContent?.trim();
+	if (!trimmedPrompt) {
+		const message = `Cue subscription "${subscription.name}" has no prompt content (prompt_file may have failed to load at config time)`;
+		onLog('error', message);
+		return {
+			runId,
+			sessionId: session.id,
+			sessionName: session.name,
+			subscriptionName: subscription.name,
+			event,
+			status: 'failed',
+			stdout: '',
+			stderr: message,
+			exitCode: null,
+			durationMs: Date.now() - startTime,
+			startedAt,
+			endedAt: new Date().toISOString(),
+		};
 	}
 
 	// 3. Populate the template context with Cue event data

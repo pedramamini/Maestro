@@ -59,8 +59,17 @@ export function createCueDispatchService(deps: CueDispatchServiceDeps): CueDispa
 							fanOutIndex: i,
 						},
 					};
+					// The normalizer (cue-config-normalizer.ts) resolves prompt_file → prompt
+					// content at config load time. sub.prompt is always a string post-normalization.
 					const perTargetPrompt = sub.fan_out_prompts?.[i];
-					const prompt = perTargetPrompt ?? sub.prompt ?? sub.prompt_file ?? '';
+					const prompt = perTargetPrompt ?? sub.prompt;
+					if (!prompt) {
+						deps.onLog(
+							'warn',
+							`[CUE] Fan-out target ${i} of "${sub.name}" has no prompt — skipping dispatch`
+						);
+						continue;
+					}
 					deps.executeRun(
 						targetSession.id,
 						prompt,
@@ -73,14 +82,12 @@ export function createCueDispatchService(deps: CueDispatchServiceDeps): CueDispa
 				return;
 			}
 
-			deps.executeRun(
-				ownerSessionId,
-				sub.prompt ?? sub.prompt_file ?? '',
-				event,
-				sub.name,
-				sub.output_prompt,
-				chainDepth
-			);
+			const prompt = sub.prompt;
+			if (!prompt) {
+				deps.onLog('warn', `[CUE] "${sub.name}" has no prompt — skipping dispatch`);
+				return;
+			}
+			deps.executeRun(ownerSessionId, prompt, event, sub.name, sub.output_prompt, chainDepth);
 		},
 	};
 }

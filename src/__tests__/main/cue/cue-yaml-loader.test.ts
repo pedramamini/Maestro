@@ -30,7 +30,12 @@ vi.mock('fs', () => ({
 }));
 
 // Must import after mocks
-import { loadCueConfig, watchCueYaml, validateCueConfig } from '../../../main/cue/cue-yaml-loader';
+import {
+	loadCueConfig,
+	loadCueConfigDetailed,
+	watchCueYaml,
+	validateCueConfig,
+} from '../../../main/cue/cue-yaml-loader';
 import * as chokidar from 'chokidar';
 
 describe('cue-yaml-loader', () => {
@@ -195,8 +200,10 @@ subscriptions:
 
 			const result = loadCueConfig('/projects/test');
 			expect(result).not.toBeNull();
+			// The normalizer reads the prompt file at config-load time and stores the
+			// resolved content on `prompt`. The raw `prompt_file` field from YAML is
+			// internal-only (CueSubscriptionDocument) and not part of the runtime contract.
 			expect(result!.subscriptions[0].prompt).toBe('Prompt from external file');
-			expect(result!.subscriptions[0].prompt_file).toBe('.maestro/prompts/worker-pipeline.md');
 		});
 
 		it('keeps inline prompt when both prompt and prompt_file exist', () => {
@@ -232,8 +239,9 @@ subscriptions:
 
 			const result = loadCueConfig('/projects/test');
 			expect(result).not.toBeNull();
+			// Same rationale as the prompt_file test above: output_prompt_file is
+			// resolved into output_prompt at config-load time.
 			expect(result!.subscriptions[0].output_prompt).toBe('Format the output as markdown');
-			expect(result!.subscriptions[0].output_prompt_file).toBe('.maestro/prompts/format-output.md');
 		});
 
 		it('keeps inline output_prompt when both output_prompt and output_prompt_file exist', () => {
@@ -287,6 +295,162 @@ subscriptions:
 
 			const result = loadCueConfig('/projects/test');
 			expect(result!.subscriptions[0].source_session).toEqual(['agent-1', 'agent-2']);
+		});
+	});
+
+	describe('loadCueConfigDetailed', () => {
+		it('returns { ok: false, reason: "missing" } when no config file exists', () => {
+			mockExistsSync.mockReturnValue(false);
+
+			const result = loadCueConfigDetailed('/projects/test');
+
+			expect(result).toEqual({ ok: false, reason: 'missing' });
+		});
+
+		it('returns { ok: false, reason: "parse-error" } for malformed YAML', () => {
+			mockExistsSync.mockReturnValue(true);
+			mockReadFileSync.mockReturnValue('{ invalid yaml [');
+
+			const result = loadCueConfigDetailed('/projects/test');
+
+			expect(result.ok).toBe(false);
+			if (!result.ok) {
+				expect(result.reason).toBe('parse-error');
+				if (result.reason === 'parse-error') {
+					expect(result.message).toBeTruthy();
+				}
+			}
+		});
+
+		it('returns { ok: false, reason: "parse-error" } when YAML root is not a mapping', () => {
+			mockExistsSync.mockReturnValue(true);
+			mockReadFileSync.mockReturnValue('- a\n- b\n- c\n');
+
+			const result = loadCueConfigDetailed('/projects/test');
+
+			expect(result.ok).toBe(false);
+			if (!result.ok && result.reason === 'parse-error') {
+				expect(result.message).toMatch(/mapping/);
+			}
+		});
+
+		it('returns { ok: false, reason: "invalid", errors } when validation fails', () => {
+			mockExistsSync.mockReturnValue(true);
+			mockReadFileSync.mockReturnValue(`
+subscriptions:
+  - name: bad-sub
+    event: time.heartbeat
+    prompt: Hi
+`);
+			// Missing interval_minutes for time.heartbeat — validator rejects this.
+
+			const result = loadCueConfigDetailed('/projects/test');
+
+			expect(result.ok).toBe(false);
+			if (!result.ok && result.reason === 'invalid') {
+				expect(result.errors.length).toBeGreaterThan(0);
+				expect(result.errors).toEqual(
+					expect.arrayContaining([expect.stringMatching(/interval_minutes/)])
+				);
+			}
+		});
+
+		it('returns { ok: true, config, warnings: [] } for a valid config', () => {
+			mockExistsSync.mockReturnValue(true);
+			mockReadFileSync.mockReturnValue(`
+subscriptions:
+  - name: heartbeat-sub
+    event: time.heartbeat
+    prompt: Check status
+    interval_minutes: 5
+`);
+
+			const result = loadCueConfigDetailed('/projects/test');
+
+			expect(result.ok).toBe(true);
+			if (result.ok) {
+				expect(result.config.subscriptions).toHaveLength(1);
+				expect(result.config.subscriptions[0].name).toBe('heartbeat-sub');
+				expect(result.warnings).toEqual([]);
+			}
+		});
+
+		it('surfaces a warning when prompt_file references a missing file', () => {
+			let readCount = 0;
+			mockExistsSync.mockReturnValue(true);
+			mockReadFileSync.mockImplementation((p: string) => {
+				readCount++;
+				if (String(p).endsWith('.maestro/prompts/missing.md')) {
+					throw new Error('ENOENT: no such file');
+				}
+				return `
+subscriptions:
+  - name: file-sub
+    event: time.heartbeat
+    prompt_file: .maestro/prompts/missing.md
+    interval_minutes: 5
+`;
+			});
+
+			const result = loadCueConfigDetailed('/projects/test');
+
+			expect(readCount).toBeGreaterThanOrEqual(1);
+			expect(result.ok).toBe(true);
+			if (result.ok) {
+				expect(result.warnings.length).toBeGreaterThan(0);
+				expect(result.warnings[0]).toContain('file-sub');
+				expect(result.warnings[0]).toContain('missing.md');
+			}
+		});
+
+		it('surfaces a warning when output_prompt_file references a missing file', () => {
+			mockExistsSync.mockReturnValue(true);
+			mockReadFileSync.mockImplementation((p: string) => {
+				if (String(p).endsWith('.maestro/prompts/missing-output.md')) {
+					throw new Error('ENOENT: no such file');
+				}
+				return `
+subscriptions:
+  - name: out-sub
+    event: time.heartbeat
+    prompt: Main prompt
+    output_prompt_file: .maestro/prompts/missing-output.md
+    interval_minutes: 5
+`;
+			});
+
+			const result = loadCueConfigDetailed('/projects/test');
+
+			expect(result.ok).toBe(true);
+			if (result.ok) {
+				expect(result.warnings.length).toBeGreaterThan(0);
+				expect(result.warnings[0]).toContain('out-sub');
+				expect(result.warnings[0]).toContain('missing-output.md');
+			}
+		});
+
+		it('returns no warnings when prompt_file resolves successfully', () => {
+			mockExistsSync.mockReturnValue(true);
+			mockReadFileSync.mockImplementation((p: string) => {
+				if (String(p).endsWith('.maestro/prompts/exists.md')) {
+					return 'Resolved prompt body';
+				}
+				return `
+subscriptions:
+  - name: file-sub
+    event: time.heartbeat
+    prompt_file: .maestro/prompts/exists.md
+    interval_minutes: 5
+`;
+			});
+
+			const result = loadCueConfigDetailed('/projects/test');
+
+			expect(result.ok).toBe(true);
+			if (result.ok) {
+				expect(result.warnings).toEqual([]);
+				expect(result.config.subscriptions[0].prompt).toBe('Resolved prompt body');
+			}
 		});
 	});
 

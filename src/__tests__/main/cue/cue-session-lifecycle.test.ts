@@ -18,6 +18,12 @@ const mockLoadCueConfig = vi.fn<(projectRoot: string) => CueConfig | null>();
 const mockWatchCueYaml = vi.fn<(projectRoot: string, onChange: () => void) => () => void>();
 vi.mock('../../../main/cue/cue-yaml-loader', () => ({
 	loadCueConfig: (...args: unknown[]) => mockLoadCueConfig(args[0] as string),
+	loadCueConfigDetailed: (...args: unknown[]) => {
+		const config = mockLoadCueConfig(args[0] as string);
+		return config
+			? { ok: true as const, config, warnings: [] as string[] }
+			: { ok: false as const, reason: 'missing' as const };
+	},
 	watchCueYaml: (...args: unknown[]) => mockWatchCueYaml(args[0] as string, args[1] as () => void),
 }));
 
@@ -319,10 +325,10 @@ describe('CueEngine session lifecycle', () => {
 
 	it('refreshSession does not double-count active runs', async () => {
 		// Setup: heartbeat, max_concurrent=2, controllable onCueRun (never resolves).
-		// During initSession, the immediate heartbeat fire reads maxConcurrent from
-		// this.sessions.get(sessionId), which is not yet set (happens after the
-		// subscription setup loop), so it defaults to 1. With activeRunCount=1
-		// from the orphaned in-flight run, the immediate fire goes into the queue.
+		// During initSession, the session is registered in the registry BEFORE trigger
+		// sources start, so the immediate heartbeat fire reads maxConcurrent=2 correctly.
+		// With activeRunCount=1 from the orphaned in-flight run and maxConcurrent=2,
+		// the immediate fire during refresh dispatches directly (1 < 2).
 		const config = createMockConfig({
 			subscriptions: [
 				{
@@ -358,13 +364,13 @@ describe('CueEngine session lifecycle', () => {
 		// Refresh the session (tears down old timers, re-inits)
 		engine.refreshSession('session-1', '/projects/test');
 
-		// The immediate heartbeat during refresh was queued (not dispatched),
-		// because activeRunCount=1 and the session state isn't in the map yet
-		// during setupHeartbeatSubscription, so maxConcurrent defaults to 1.
-		expect(onCueRun).toHaveBeenCalledTimes(1);
+		// The immediate heartbeat during refresh is dispatched directly because
+		// the session is registered before trigger sources start, so maxConcurrent=2
+		// is read and activeRunCount=1 < 2 allows immediate dispatch.
+		expect(onCueRun).toHaveBeenCalledTimes(2);
 
-		// The queue should have exactly 1 entry from the refresh's immediate fire
-		expect(engine.getQueueStatus().get('session-1')).toBe(1);
+		// Nothing in the queue — the heartbeat was dispatched, not queued
+		expect(engine.getQueueStatus().get('session-1') ?? 0).toBe(0);
 
 		// Advance timer to trigger the interval heartbeat (60 min).
 		// Now the session state IS in the map, so max_concurrent=2 is read.
@@ -461,5 +467,143 @@ describe('CueEngine session lifecycle', () => {
 		await vi.advanceTimersByTimeAsync(0); // flush microtasks
 
 		engine.stop();
+	});
+
+	// ─── init-reason matrix ──────────────────────────────────────────────
+	// app.startup must fire exactly once per process lifecycle, and only when
+	// the engine is starting because of a real system boot. The init-reason
+	// signature on initSession encodes this policy explicitly. These tests pin
+	// down each reason so the dedup story stays correct.
+	describe('init-reason matrix for app.startup', () => {
+		function makeStartupConfig() {
+			return createMockConfig({
+				subscriptions: [
+					{
+						name: 'init',
+						event: 'app.startup',
+						enabled: true,
+						prompt: 'do init',
+					},
+				],
+			});
+		}
+
+		it('system-boot fires app.startup exactly once', () => {
+			mockLoadCueConfig.mockReturnValue(makeStartupConfig());
+			const deps = createMockDeps();
+			const engine = new CueEngine(deps);
+
+			engine.start('system-boot');
+
+			expect(deps.onCueRun).toHaveBeenCalledTimes(1);
+			expect(deps.onCueRun).toHaveBeenCalledWith(
+				expect.objectContaining({ subscriptionName: 'init' })
+			);
+
+			engine.stop();
+		});
+
+		it('user-toggle (default) does NOT fire app.startup', () => {
+			mockLoadCueConfig.mockReturnValue(makeStartupConfig());
+			const deps = createMockDeps();
+			const engine = new CueEngine(deps);
+
+			engine.start('user-toggle');
+
+			expect(deps.onCueRun).not.toHaveBeenCalled();
+
+			engine.stop();
+		});
+
+		it('start() with no argument defaults to user-toggle and does NOT fire app.startup', () => {
+			mockLoadCueConfig.mockReturnValue(makeStartupConfig());
+			const deps = createMockDeps();
+			const engine = new CueEngine(deps);
+
+			// No argument — must default to user-toggle, not system-boot.
+			engine.start();
+
+			expect(deps.onCueRun).not.toHaveBeenCalled();
+
+			engine.stop();
+		});
+
+		it('refresh (via refreshSession) does NOT re-fire app.startup', () => {
+			mockLoadCueConfig.mockReturnValue(makeStartupConfig());
+			const deps = createMockDeps();
+			const engine = new CueEngine(deps);
+
+			// First boot fires startup once.
+			engine.start('system-boot');
+			expect(deps.onCueRun).toHaveBeenCalledTimes(1);
+
+			// A YAML hot-reload triggers refreshSession, which calls initSession with
+			// reason='refresh'. Even though the same subscription is in the new config,
+			// startup must NOT re-fire — that would surprise users editing their YAML.
+			engine.refreshSession('session-1', '/projects/test');
+			expect(deps.onCueRun).toHaveBeenCalledTimes(1);
+
+			engine.stop();
+		});
+
+		it('toggling the engine off and on does NOT re-fire app.startup', () => {
+			mockLoadCueConfig.mockReturnValue(makeStartupConfig());
+			const deps = createMockDeps();
+			const engine = new CueEngine(deps);
+
+			engine.start('system-boot');
+			expect(deps.onCueRun).toHaveBeenCalledTimes(1);
+
+			engine.stop();
+			// User flips Cue back on. start() defaults to user-toggle.
+			engine.start();
+			expect(deps.onCueRun).toHaveBeenCalledTimes(1);
+
+			engine.stop();
+		});
+
+		it('a second system-boot in the same process lifecycle still dedups', () => {
+			// Edge case: simulates someone (e.g. a test) calling start('system-boot')
+			// twice without a real Electron restart. The startup keys persist across
+			// stop/start so the second boot is a no-op for app.startup.
+			mockLoadCueConfig.mockReturnValue(makeStartupConfig());
+			const deps = createMockDeps();
+			const engine = new CueEngine(deps);
+
+			engine.start('system-boot');
+			expect(deps.onCueRun).toHaveBeenCalledTimes(1);
+
+			engine.stop();
+			engine.start('system-boot');
+			expect(deps.onCueRun).toHaveBeenCalledTimes(1);
+
+			engine.stop();
+		});
+
+		it('removeSession clears startup keys so re-adding the session can re-fire', () => {
+			mockLoadCueConfig.mockReturnValue(makeStartupConfig());
+			const deps = createMockDeps();
+			const engine = new CueEngine(deps);
+
+			engine.start('system-boot');
+			expect(deps.onCueRun).toHaveBeenCalledTimes(1);
+
+			// Remove the session (simulates user deleting an agent).
+			engine.removeSession('session-1');
+
+			// If the same session id is re-added later (e.g. user undoes the delete),
+			// startup should be eligible to fire again — but only on a real boot.
+			// A user-toggle still does not fire it.
+			engine.refreshSession('session-1', '/projects/test');
+			expect(deps.onCueRun).toHaveBeenCalledTimes(1);
+
+			// A subsequent real boot (new process lifecycle) must re-trigger startup.
+			// stop() first so start() isn't skipped by the enabled guard.
+			engine.stop();
+			engine.start('system-boot');
+			expect(deps.onCueRun).toHaveBeenCalledTimes(2);
+
+			engine.stop();
+		});
 	});
 });

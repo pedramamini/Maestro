@@ -1,8 +1,21 @@
 /**
- * Cue Engine Core — the main coordinator for Maestro Cue event-driven automation.
+ * Cue Engine Core — thin façade for Maestro Cue event-driven automation.
  *
- * Discovers maestro-cue.yaml files per session, manages interval timers,
- * file watchers, and agent completion listeners. Runs in the Electron main process.
+ * Coordinates a small set of single-responsibility services. The engine itself
+ * owns no Cue runtime state — every mutable thing (sessions, dedup keys, run
+ * lifecycle, fan-in, etc.) lives behind a service interface.
+ *
+ * Service map:
+ * - CueSessionRegistry      — sole owner of per-session state and dedup keys
+ * - CueSessionRuntimeService — session lifecycle (init/refresh/teardown)
+ * - CueRunManager           — concurrency, queues, run execution
+ * - CueDispatchService      — fan-out routing
+ * - CueCompletionService    — agent.completed routing (single + fan-in)
+ * - CueFanInTracker         — multi-source agent.completed state machine
+ * - CueQueryService         — read-only projections (status, graph, settings)
+ * - CueRecoveryService      — DB init, sleep detection, missed-event recovery
+ * - CueHeartbeat            — periodic heartbeat write
+ * - CueActivityLog          — recent run history
  *
  * Supports agent completion chains:
  * - Fan-out: a subscription fires its prompt against multiple target sessions
@@ -19,12 +32,9 @@ import {
 	type CueRunResult,
 	type CueEvent,
 } from './cue-types';
-import { captureException } from '../utils/sentry';
-import { loadCueConfig } from './cue-yaml-loader';
-import { initCueDb, closeCueDb, pruneCueEvents } from './cue-db';
 import { createCueActivityLog } from './cue-activity-log';
 import type { CueActivityLog } from './cue-activity-log';
-import { createCueHeartbeat, EVENT_PRUNE_AGE_MS } from './cue-heartbeat';
+import { createCueHeartbeat } from './cue-heartbeat';
 import type { CueHeartbeat } from './cue-heartbeat';
 import { createCueFanInTracker } from './cue-fan-in-tracker';
 import type { CueFanInTracker } from './cue-fan-in-tracker';
@@ -37,11 +47,12 @@ import type { CueCompletionService } from './cue-completion-service';
 import { createCueQueryService } from './cue-query-service';
 import type { CueQueryService } from './cue-query-service';
 import { createCueSessionRuntimeService } from './cue-session-runtime-service';
-import type { CueSessionRuntimeService } from './cue-session-runtime-service';
-const MAX_CHAIN_DEPTH = 10;
+import type { CueSessionRuntimeService, SessionInitReason } from './cue-session-runtime-service';
+import { createCueSessionRegistry, type CueSessionRegistry } from './cue-session-registry';
+import { createCueRecoveryService, type CueRecoveryService } from './cue-recovery-service';
+import { loadCueConfig } from './cue-yaml-loader';
 
-// Re-export for backwards compat (tests import from cue-engine)
-export { calculateNextScheduledTime } from './cue-subscription-setup';
+const MAX_CHAIN_DEPTH = 10;
 
 /** Dependencies injected into the CueEngine */
 export interface CueEngineDeps {
@@ -65,29 +76,24 @@ export interface CueEngineDeps {
 export class CueEngine {
 	private enabled = false;
 	private activityLog: CueActivityLog = createCueActivityLog();
+	private registry: CueSessionRegistry;
 	private fanInTracker!: CueFanInTracker;
 	private runManager!: CueRunManager;
-	/** Tracks "subName:HH:MM" keys that time.scheduled already fired, preventing double-fire on config refresh */
-	private scheduledFiredKeys = new Set<string>();
-	/** Tracks "sessionId:subName" keys for app.startup subscriptions that already fired this process lifecycle.
-	 *  NOT cleared on stop() — persists across engine stop/start cycles (feature toggling). Only resets on app restart. */
-	private startupFiredKeys = new Set<string>();
-	/** True only during the initial session scan inside start(true). Cleared immediately after the scan
-	 *  completes so that later refreshSession/initSession calls don't fire app.startup subs. */
-	private isBootScan = false;
 	private heartbeat: CueHeartbeat;
 	private dispatchService: CueDispatchService;
 	private completionService: CueCompletionService;
 	private queryService: CueQueryService;
 	private sessionRuntimeService: CueSessionRuntimeService;
+	private recoveryService: CueRecoveryService;
 	private deps: CueEngineDeps;
 
 	constructor(deps: CueEngineDeps) {
 		this.deps = deps;
+		this.registry = createCueSessionRegistry();
+
 		this.runManager = createCueRunManager({
 			getSessions: deps.getSessions,
-			getSessionSettings: (sessionId) =>
-				this.sessionRuntimeService.getSessionState(sessionId)?.config.settings,
+			getSessionSettings: (sessionId) => this.registry.get(sessionId)?.config.settings,
 			onCueRun: deps.onCueRun,
 			onStopCueRun: deps.onStopCueRun,
 			onLog: deps.onLog,
@@ -145,19 +151,7 @@ export class CueEngine {
 			onLog: deps.onLog,
 			onPreventSleep: deps.onPreventSleep,
 			onAllowSleep: deps.onAllowSleep,
-			scheduledFiredKeys: this.scheduledFiredKeys,
-			startupFiredKeys: this.startupFiredKeys,
-			isBootScan: () => this.isBootScan,
-			executeCueRun: (sessionId, prompt, event, subscriptionName, outputPrompt, chainDepth) => {
-				this.runManager.execute(
-					sessionId,
-					prompt,
-					event,
-					subscriptionName,
-					outputPrompt,
-					chainDepth
-				);
-			},
+			registry: this.registry,
 			dispatchSubscription: (ownerSessionId, sub, event, sourceSessionName, chainDepth) => {
 				this.dispatchService.dispatchSubscription(
 					ownerSessionId,
@@ -178,7 +172,13 @@ export class CueEngine {
 			enabled: () => this.enabled,
 			getSessions: () =>
 				deps.getSessions().map((session) => ({ id: session.id, name: session.name })),
-			getSessionConfigs: () => this.sessionRuntimeService.getSessionConfigs(),
+			getSessionConfigs: () => {
+				const configs = new Map<string, CueConfig>();
+				for (const [sessionId, state] of this.registry.snapshot()) {
+					configs.set(sessionId, state.config);
+				}
+				return configs;
+			},
 			fanInTracker: this.fanInTracker,
 			onDispatch: (ownerSessionId, sub, event, sourceSessionName, chainDepth) => {
 				this.dispatchService.dispatchSubscription(
@@ -201,16 +201,17 @@ export class CueEngine {
 					toolType: session.toolType,
 					projectRoot: session.projectRoot,
 				})),
-			getSessionStates: () => this.sessionRuntimeService.getSessionStates(),
+			getSessionStates: () => this.registry.snapshot(),
 			getActiveRunCount: (sessionId) => this.runManager.getActiveRunCount(sessionId),
 			loadConfigForProjectRoot: loadCueConfig,
 		});
-		this.heartbeat = createCueHeartbeat({
+		this.heartbeat = createCueHeartbeat();
+		this.recoveryService = createCueRecoveryService({
 			onLog: deps.onLog,
 			getSessions: () => {
 				const result = new Map<string, { config: CueConfig; sessionName: string }>();
 				const allSessions = deps.getSessions();
-				for (const [sessionId, state] of this.sessionRuntimeService.getSessionStates()) {
+				for (const [sessionId, state] of this.registry.snapshot()) {
 					const session = allSessions.find((s) => s.id === sessionId);
 					result.set(sessionId, {
 						config: state.config,
@@ -225,29 +226,20 @@ export class CueEngine {
 		});
 	}
 
-	/** Enable the engine and scan all sessions for Cue configs.
-	 *  @param isSystemBoot Pass `true` only at application launch (index.ts). When false (default),
-	 *  app.startup subscriptions will NOT fire — this prevents re-firing when the user toggles Cue on/off. */
-	start(isSystemBoot = false): void {
+	/**
+	 * Enable the engine and scan all sessions for Cue configs.
+	 *
+	 * @param reason Why the engine is starting. Determines whether `app.startup`
+	 *   subscriptions fire:
+	 *   - `'system-boot'`: pass at Electron launch (index.ts). app.startup fires.
+	 *   - `'user-toggle'` (default): user flipped the Cue toggle. app.startup
+	 *     does NOT re-fire — toggling is idempotent.
+	 */
+	start(reason: SessionInitReason = 'user-toggle'): void {
 		if (this.enabled) return;
 
-		if (isSystemBoot) {
-			this.isBootScan = true;
-		}
-
-		// Initialize Cue database and prune old events — fail gracefully so app startup is not blocked
-		try {
-			initCueDb((level, msg) => this.deps.onLog(level as MainLogLevel, msg));
-			pruneCueEvents(EVENT_PRUNE_AGE_MS);
-		} catch (error) {
-			this.deps.onLog(
-				'error',
-				`[CUE] Failed to initialize Cue database — engine will not start: ${error}`
-			);
-			captureException(error instanceof Error ? error : new Error(String(error)), {
-				extra: { operation: 'cue.dbInit' },
-			});
-			this.isBootScan = false;
+		const initResult = this.recoveryService.init();
+		if (!initResult.ok) {
 			return;
 		}
 
@@ -256,15 +248,11 @@ export class CueEngine {
 
 		const sessions = this.deps.getSessions();
 		for (const session of sessions) {
-			this.sessionRuntimeService.initSession(session);
+			this.sessionRuntimeService.initSession(session, { reason });
 		}
 
-		// Boot scan complete — clear the flag so later refreshSession/initSession
-		// calls (YAML hot-reload, auto-discovery) don't fire app.startup subs
-		this.isBootScan = false;
-
 		// Detect sleep gap from previous heartbeat
-		this.heartbeat.detectSleepAndReconcile();
+		this.recoveryService.detectSleepAndReconcile();
 
 		// Start heartbeat writer (30s interval)
 		this.heartbeat.start();
@@ -277,21 +265,16 @@ export class CueEngine {
 		this.enabled = false;
 		this.sessionRuntimeService.clearAll();
 
-		// Clear concurrency and fan-in state
+		// Clear concurrency and fan-in state. The session registry's clear()
+		// preserves app.startup dedup keys across stop/start cycles, so toggling
+		// Cue off/on does not re-fire startup subscriptions. Startup keys only
+		// reset when the Electron process restarts (new CueEngine instance).
 		this.runManager.reset();
 		this.fanInTracker.reset();
-		this.scheduledFiredKeys.clear();
-		// NOTE: startupFiredKeys is NOT cleared here — it persists across engine stop/start
-		// cycles so that toggling Cue off/on does not re-fire app.startup subscriptions.
-		// It only resets when the Electron process restarts (new CueEngine instance).
 
-		// Stop heartbeat and close database
+		// Stop heartbeat and close database via the recovery service.
 		this.heartbeat.stop();
-		try {
-			closeCueDb();
-		} catch {
-			// Non-fatal — database may not have been initialized
-		}
+		this.recoveryService.shutdown();
 
 		this.deps.onLog('cue', '[CUE] Engine stopped');
 	}
@@ -370,7 +353,7 @@ export class CueEngine {
 	 * Returns true if the subscription was found and triggered.
 	 */
 	triggerSubscription(subscriptionName: string): boolean {
-		for (const [sessionId, state] of this.sessionRuntimeService.getSessionStates()) {
+		for (const [sessionId, state] of this.registry.snapshot()) {
 			for (const sub of state.config.subscriptions) {
 				if (sub.name !== subscriptionName) continue;
 				if (sub.agent_id && sub.agent_id !== sessionId) continue;
