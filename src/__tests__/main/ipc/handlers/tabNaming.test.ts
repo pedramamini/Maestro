@@ -653,6 +653,277 @@ describe('Tab Naming IPC Handlers', () => {
 	});
 });
 
+describe('tab naming diagnostic logging', () => {
+	let mockProcessManager: {
+		spawn: Mock;
+		kill: Mock;
+		on: Mock;
+		off: Mock;
+	};
+
+	let mockAgentDetector: {
+		getAgent: Mock;
+	};
+
+	let mockAgentConfigsStore: {
+		get: Mock;
+		set: Mock;
+	};
+
+	let mockSettingsStore: {
+		get: Mock;
+		set: Mock;
+	};
+
+	const mockAgent: AgentConfig = {
+		id: 'claude-code',
+		name: 'Claude Code',
+		command: 'claude',
+		path: '/usr/local/bin/claude',
+		args: [],
+	};
+
+	let loggerMock: { info: Mock; warn: Mock; error: Mock; debug: Mock };
+
+	beforeEach(async () => {
+		vi.clearAllMocks();
+		registeredHandlers.clear();
+
+		const loggerModule = await import('../../../../main/utils/logger');
+		loggerMock = loggerModule.logger as unknown as typeof loggerMock;
+
+		(ipcMain.handle as Mock).mockImplementation(
+			(channel: string, handler: (...args: unknown[]) => Promise<unknown>) => {
+				registeredHandlers.set(channel, handler);
+			}
+		);
+
+		mockProcessManager = {
+			spawn: vi.fn(),
+			kill: vi.fn(),
+			on: vi.fn(),
+			off: vi.fn(),
+		};
+
+		mockAgentDetector = {
+			getAgent: vi.fn().mockResolvedValue(mockAgent),
+		};
+
+		mockAgentConfigsStore = {
+			get: vi.fn().mockReturnValue({}),
+			set: vi.fn(),
+		};
+
+		mockSettingsStore = {
+			get: vi.fn().mockReturnValue({}),
+			set: vi.fn(),
+		};
+
+		registerTabNamingHandlers({
+			getProcessManager: () => mockProcessManager as unknown as ProcessManager,
+			getAgentDetector: () => mockAgentDetector as unknown as AgentDetector,
+			agentConfigsStore: mockAgentConfigsStore as unknown as Parameters<
+				typeof registerTabNamingHandlers
+			>[0]['agentConfigsStore'],
+			settingsStore: mockSettingsStore as unknown as Parameters<
+				typeof registerTabNamingHandlers
+			>[0]['settingsStore'],
+		});
+	});
+
+	async function invokeHandler(channel: string, ...args: unknown[]): Promise<unknown> {
+		const handler = registeredHandlers.get(channel);
+		if (!handler) {
+			throw new Error(`No handler registered for channel: ${channel}`);
+		}
+		return handler({}, ...args);
+	}
+
+	it('logs warn with output snippet when extraction fails on empty output', async () => {
+		let onExitCallback: ((sessionId: string, code?: number) => void) | undefined;
+
+		mockProcessManager.on.mockImplementation(
+			(event: string, callback: (...args: any[]) => void) => {
+				if (event === 'exit') onExitCallback = callback;
+			}
+		);
+
+		const resultPromise = invokeHandler('tabNaming:generateTabName', {
+			userMessage: 'Test',
+			agentType: 'claude-code',
+			cwd: '/test',
+		});
+
+		await vi.waitFor(() => {
+			expect(mockProcessManager.spawn).toHaveBeenCalled();
+		});
+
+		onExitCallback?.('tab-naming-mock-uuid-1234', 0);
+		await resultPromise;
+
+		expect(loggerMock.warn).toHaveBeenCalledWith(
+			'Tab naming extraction failed',
+			expect.any(String),
+			expect.objectContaining({
+				reason: 'empty_output',
+				outputLength: 0,
+			})
+		);
+	});
+
+	it('logs warn with non-zero exit code and output snippet', async () => {
+		let onDataCallback: ((sessionId: string, data: string) => void) | undefined;
+		let onExitCallback: ((sessionId: string, code?: number) => void) | undefined;
+
+		mockProcessManager.on.mockImplementation(
+			(event: string, callback: (...args: any[]) => void) => {
+				if (event === 'data') onDataCallback = callback;
+				if (event === 'exit') onExitCallback = callback;
+			}
+		);
+
+		const resultPromise = invokeHandler('tabNaming:generateTabName', {
+			userMessage: 'Test',
+			agentType: 'claude-code',
+			cwd: '/test',
+		});
+
+		await vi.waitFor(() => {
+			expect(mockProcessManager.spawn).toHaveBeenCalled();
+		});
+
+		onDataCallback?.('tab-naming-mock-uuid-1234', 'Error: authentication failed');
+		onExitCallback?.('tab-naming-mock-uuid-1234', 1);
+		await resultPromise;
+
+		expect(loggerMock.warn).toHaveBeenCalledWith(
+			'Tab naming process exited with non-zero code',
+			expect.any(String),
+			expect.objectContaining({
+				exitCode: 1,
+				outputSnippet: expect.stringContaining('authentication failed'),
+			})
+		);
+	});
+
+	it('logs warn with filter reason when output exists but parsing fails', async () => {
+		let onDataCallback: ((sessionId: string, data: string) => void) | undefined;
+		let onExitCallback: ((sessionId: string, code?: number) => void) | undefined;
+
+		mockProcessManager.on.mockImplementation(
+			(event: string, callback: (...args: any[]) => void) => {
+				if (event === 'data') onDataCallback = callback;
+				if (event === 'exit') onExitCallback = callback;
+			}
+		);
+
+		const resultPromise = invokeHandler('tabNaming:generateTabName', {
+			userMessage: 'Test',
+			agentType: 'claude-code',
+			cwd: '/test',
+		});
+
+		await vi.waitFor(() => {
+			expect(mockProcessManager.spawn).toHaveBeenCalled();
+		});
+
+		// Output that's too long to pass the 40-char filter
+		const longOutput =
+			'This is a very long output that exceeds the maximum character limit for tab names';
+		onDataCallback?.('tab-naming-mock-uuid-1234', longOutput);
+		onExitCallback?.('tab-naming-mock-uuid-1234', 0);
+		await resultPromise;
+
+		expect(loggerMock.warn).toHaveBeenCalledWith(
+			'Tab naming extraction failed',
+			expect.any(String),
+			expect.objectContaining({
+				reason: expect.stringContaining('no_valid_lines_after_filtering'),
+				outputSnippet: expect.stringContaining('This is a very long output'),
+			})
+		);
+	});
+
+	it('logs warn with output snippet on timeout', async () => {
+		vi.useFakeTimers();
+
+		let onDataCallback: ((sessionId: string, data: string) => void) | undefined;
+
+		mockProcessManager.on.mockImplementation(
+			(event: string, callback: (...args: any[]) => void) => {
+				if (event === 'data') onDataCallback = callback;
+			}
+		);
+
+		const resultPromise = invokeHandler('tabNaming:generateTabName', {
+			userMessage: 'Test',
+			agentType: 'claude-code',
+			cwd: '/test',
+		});
+
+		// Flush microtasks so the spawn call and promise setup complete
+		await vi.advanceTimersByTimeAsync(0);
+
+		expect(mockProcessManager.spawn).toHaveBeenCalled();
+
+		// Send partial output that won't parse as a valid tab name (too long for 40-char filter)
+		onDataCallback?.(
+			'tab-naming-mock-uuid-1234',
+			'Thinking about what name to give this tab based on the conversation context provided'
+		);
+
+		await vi.advanceTimersByTimeAsync(46000);
+		const result = await resultPromise;
+
+		expect(result).toBeNull();
+		expect(loggerMock.warn).toHaveBeenCalledWith(
+			'Tab naming request timed out',
+			expect.any(String),
+			expect.objectContaining({
+				outputLength: expect.any(Number),
+				outputSnippet: expect.stringContaining('Thinking about what name'),
+			})
+		);
+
+		vi.useRealTimers();
+	});
+
+	it('does not log extraction failure warn when extraction succeeds', async () => {
+		let onDataCallback: ((sessionId: string, data: string) => void) | undefined;
+		let onExitCallback: ((sessionId: string, code?: number) => void) | undefined;
+
+		mockProcessManager.on.mockImplementation(
+			(event: string, callback: (...args: any[]) => void) => {
+				if (event === 'data') onDataCallback = callback;
+				if (event === 'exit') onExitCallback = callback;
+			}
+		);
+
+		const resultPromise = invokeHandler('tabNaming:generateTabName', {
+			userMessage: 'Test',
+			agentType: 'claude-code',
+			cwd: '/test',
+		});
+
+		await vi.waitFor(() => {
+			expect(mockProcessManager.spawn).toHaveBeenCalled();
+		});
+
+		onDataCallback?.('tab-naming-mock-uuid-1234', 'Clean Tab Name');
+		onExitCallback?.('tab-naming-mock-uuid-1234', 0);
+
+		const result = await resultPromise;
+		expect(result).toBe('Clean Tab Name');
+
+		// Should not have logged any extraction failure
+		const warnCalls = loggerMock.warn.mock.calls;
+		const extractionFailCalls = warnCalls.filter(
+			(call: unknown[]) => call[0] === 'Tab naming extraction failed'
+		);
+		expect(extractionFailCalls).toHaveLength(0);
+	});
+});
+
 describe('extractTabName utility', () => {
 	// Test the extractTabName function indirectly through the handler
 	// Since it's not exported, we test its behavior through the IPC handler

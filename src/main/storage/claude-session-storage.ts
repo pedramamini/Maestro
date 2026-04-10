@@ -734,7 +734,7 @@ export class ClaudeSessionStorage extends BaseSessionStorage {
 						}
 					}
 
-					if (msgContent && msgContent.trim()) {
+					if ((msgContent && msgContent.trim()) || toolUse) {
 						messages.push({
 							type: entry.type,
 							role: entry.message?.role,

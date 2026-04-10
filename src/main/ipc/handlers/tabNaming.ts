@@ -235,7 +235,11 @@ export function registerTabNamingHandlers(deps: TabNamingHandlerDependencies): v
 
 						// Set timeout
 						const timeoutId = setTimeout(() => {
-							logger.warn('Tab naming request timed out', LOG_CONTEXT, { sessionId });
+							logger.warn('Tab naming request timed out', LOG_CONTEXT, {
+								sessionId,
+								outputLength: output.length,
+								outputSnippet: output.substring(0, 500) || '(no output received)',
+							});
 							resolveWith(null, 'timed out');
 						}, TAB_NAMING_TIMEOUT_MS);
 
@@ -244,9 +248,9 @@ export function registerTabNamingHandlers(deps: TabNamingHandlerDependencies): v
 						// without waiting for the full process to exit.
 						const earlyExtractIntervalId = setInterval(() => {
 							if (resolved || !output.trim()) return;
-							const earlyName = extractTabName(output);
-							if (earlyName) {
-								resolveWith(earlyName, 'resolved early from partial output');
+							const earlyResult = extractTabName(output);
+							if (earlyResult.name) {
+								resolveWith(earlyResult.name, 'resolved early from partial output');
 							}
 						}, EARLY_EXTRACT_INTERVAL_MS);
 
@@ -267,8 +271,26 @@ export function registerTabNamingHandlers(deps: TabNamingHandlerDependencies): v
 								return;
 							}
 
-							const tabName = extractTabName(output);
-							resolveWith(tabName, `completed (exit code ${code})`);
+							if (code !== undefined && code !== 0) {
+								logger.warn('Tab naming process exited with non-zero code', LOG_CONTEXT, {
+									sessionId,
+									exitCode: code,
+									outputLength: output.length,
+									outputSnippet: output.substring(0, 200),
+								});
+							}
+
+							const extraction = extractTabName(output);
+							if (!extraction.name) {
+								logger.warn('Tab naming extraction failed', LOG_CONTEXT, {
+									sessionId,
+									reason: extraction.reason,
+									exitCode: code,
+									outputLength: output.length,
+									outputSnippet: output.substring(0, 500),
+								});
+							}
+							resolveWith(extraction.name, `completed (exit code ${code})`);
 						};
 
 						processManager.on('data', onData);
@@ -307,12 +329,23 @@ export function registerTabNamingHandlers(deps: TabNamingHandlerDependencies): v
 }
 
 /**
+ * Result from extractTabName with diagnostic info for logging.
+ */
+interface TabNameExtractionResult {
+	/** The extracted tab name, or null if extraction failed */
+	name: string | null;
+	/** Human-readable reason for the outcome (useful for debugging failures) */
+	reason: string;
+}
+
+/**
  * Extract a clean tab name from agent output.
  * The output may contain ANSI codes, extra whitespace, or markdown formatting.
+ * Returns a structured result with diagnostic reason for logging.
  */
-function extractTabName(output: string): string | null {
+function extractTabName(output: string): TabNameExtractionResult {
 	if (!output || !output.trim()) {
-		return null;
+		return { name: null, reason: 'empty_output' };
 	}
 
 	// Remove ANSI escape codes
@@ -343,7 +376,10 @@ function extractTabName(output: string): string | null {
 	});
 
 	if (lines.length === 0) {
-		return null;
+		return {
+			name: null,
+			reason: `no_valid_lines_after_filtering (cleaned: ${cleaned.substring(0, 120)})`,
+		};
 	}
 
 	// Use the last meaningful line (often the actual tab name)
@@ -362,8 +398,8 @@ function extractTabName(output: string): string | null {
 
 	// If the result is empty or too short, return null
 	if (tabName.length < 2) {
-		return null;
+		return { name: null, reason: `too_short (length: ${tabName.length}, value: "${tabName}")` };
 	}
 
-	return tabName;
+	return { name: tabName, reason: 'ok' };
 }
