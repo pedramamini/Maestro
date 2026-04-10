@@ -3439,6 +3439,61 @@ describe('tabHelpers', () => {
 			expect(result.clearedCurrent).toBe(false);
 		});
 
+		it('jumps to session with draft tab (unsent input)', () => {
+			const sessions = [
+				createMockSession({
+					id: 'a',
+					aiTabs: [createMockTab({ id: 'tab-a', hasUnread: false })],
+					activeTabId: 'tab-a',
+				}),
+				createMockSession({
+					id: 'b',
+					aiTabs: [createMockTab({ id: 'tab-b', hasUnread: false, inputValue: 'draft text' })],
+					activeTabId: 'tab-b',
+				}),
+			];
+			const result = findNextUnreadSession(sessions, 'a');
+			expect(result.jumped).toBe(true);
+			expect(result.targetSessionId).toBe('b');
+		});
+
+		it('jumps to session with staged images (draft)', () => {
+			const sessions = [
+				createMockSession({
+					id: 'a',
+					aiTabs: [createMockTab({ id: 'tab-a', hasUnread: false })],
+					activeTabId: 'tab-a',
+				}),
+				createMockSession({
+					id: 'b',
+					aiTabs: [
+						createMockTab({
+							id: 'tab-b',
+							hasUnread: false,
+							stagedImages: [{ name: 'img.png', data: 'base64data', mediaType: 'image/png' }],
+						}),
+					],
+					activeTabId: 'tab-b',
+				}),
+			];
+			const result = findNextUnreadSession(sessions, 'a');
+			expect(result.jumped).toBe(true);
+			expect(result.targetSessionId).toBe('b');
+		});
+
+		it('reports clearedCurrent when current session has draft tabs', () => {
+			const sessions = [
+				createMockSession({
+					id: 'a',
+					aiTabs: [createMockTab({ id: 'tab-a', hasUnread: false, inputValue: 'wip' })],
+					activeTabId: 'tab-a',
+				}),
+			];
+			const result = findNextUnreadSession(sessions, 'a');
+			expect(result.jumped).toBe(false);
+			expect(result.clearedCurrent).toBe(true);
+		});
+
 		it('prefers the next session in order over earlier ones', () => {
 			const sessions = [
 				createMockSession({

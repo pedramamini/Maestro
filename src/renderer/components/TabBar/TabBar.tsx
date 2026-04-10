@@ -399,7 +399,7 @@ function TabBarInner({
 						className="flex items-center px-3 py-1.5 text-xs italic shrink-0 self-center mb-1"
 						style={{ color: theme.colors.textDim }}
 					>
-						No unread tabs
+						No unread or draft tabs
 					</div>
 				)}
 

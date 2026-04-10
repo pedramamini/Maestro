@@ -518,7 +518,7 @@ export const QuickActionsModal = memo(function QuickActionsModal(props: QuickAct
 		},
 		{
 			id: 'nextUnreadTab',
-			label: 'Next Unread Tab',
+			label: 'Next Unread / Draft Tab',
 			shortcut: shortcuts.nextUnreadTab,
 			action: () => {
 				const result = findNextUnreadSession(sessions, activeSessionId);
@@ -547,7 +547,7 @@ export const QuickActionsModal = memo(function QuickActionsModal(props: QuickAct
 						);
 					}
 				} else {
-					setSuccessFlashNotification('No unread tabs');
+					setSuccessFlashNotification('No unread or draft tabs');
 					setTimeout(() => setSuccessFlashNotification(null), 2000);
 				}
 				setQuickActionOpen(false);

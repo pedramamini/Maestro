@@ -2083,13 +2083,14 @@ export function findNextUnreadSession(
 ): GoToNextUnreadResult {
 	const currentIndex = orderedSessions.findIndex((s) => s.id === activeSessionId);
 	const currentSession = orderedSessions.find((s) => s.id === activeSessionId);
-	const currentHasUnread = currentSession?.aiTabs?.some((tab) => tab.hasUnread) ?? false;
+	const isActionable = (tab: AITab) => tab.hasUnread || hasDraft(tab);
+	const currentHasUnread = currentSession?.aiTabs?.some(isActionable) ?? false;
 
 	// Search forward from current position, wrapping around
 	for (let i = 1; i <= orderedSessions.length; i++) {
 		const candidate = orderedSessions[(currentIndex + i) % orderedSessions.length];
-		if (candidate.id !== activeSessionId && candidate.aiTabs?.some((tab) => tab.hasUnread)) {
-			const firstUnreadTab = candidate.aiTabs.find((tab) => tab.hasUnread);
+		if (candidate.id !== activeSessionId && candidate.aiTabs?.some(isActionable)) {
+			const firstUnreadTab = candidate.aiTabs.find(isActionable);
 			return {
 				jumped: true,
 				clearedCurrent: currentHasUnread,

@@ -1637,7 +1637,7 @@ function MaestroConsoleInner() {
 				);
 			}
 		} else {
-			showSuccessFlash('No unread tabs');
+			showSuccessFlash('No unread or draft tabs');
 		}
 	}, [sortedSessions, setSessions, setActiveSessionId, showSuccessFlash]);
 

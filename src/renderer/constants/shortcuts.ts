@@ -86,7 +86,7 @@ export const DEFAULT_SHORTCUTS: Record<string, Shortcut> = {
 	},
 	nextUnreadTab: {
 		id: 'nextUnreadTab',
-		label: 'Next Unread Tab',
+		label: 'Next Unread / Draft Tab',
 		keys: ['Alt', 'Meta', 'ArrowDown'],
 	},
 	jumpToTerminal: {

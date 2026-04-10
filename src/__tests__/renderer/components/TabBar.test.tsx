@@ -779,7 +779,7 @@ describe('TabBar', () => {
 				/>
 			);
 
-			expect(screen.getByText('No unread tabs')).toBeInTheDocument();
+			expect(screen.getByText('No unread or draft tabs')).toBeInTheDocument();
 		});
 
 		it('includes tabs with drafts in filtered view', () => {
