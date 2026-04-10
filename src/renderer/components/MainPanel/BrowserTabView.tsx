@@ -52,6 +52,7 @@ export const BrowserTabView = React.memo(function BrowserTabView({
 }: BrowserTabViewProps) {
 	const webviewRef = useRef<ElectronWebviewElement | null>(null);
 	const hostRef = useRef<HTMLDivElement | null>(null);
+	const isDomReadyRef = useRef(false);
 	const [addressValue, setAddressValue] = useState(tab.url);
 
 	useEffect(() => {
@@ -61,8 +62,11 @@ export const BrowserTabView = React.memo(function BrowserTabView({
 	useEffect(() => {
 		const webview = webviewRef.current;
 		if (!webview) return;
+		isDomReadyRef.current = false;
 
 		const updateNavigationState = () => {
+			if (!isDomReadyRef.current) return;
+
 			const nextUrl = webview.getURL?.() || tab.url || DEFAULT_BROWSER_TAB_URL;
 			const nextTitle = getBrowserTabTitle(nextUrl, webview.getTitle?.() || tab.title);
 
@@ -100,6 +104,7 @@ export const BrowserTabView = React.memo(function BrowserTabView({
 			onUpdateTab(tab.id, { favicon: favicons?.[0] || null });
 		};
 		const handleDomReady = () => {
+			isDomReadyRef.current = true;
 			syncWebviewLayout(webview);
 			updateNavigationState();
 		};
@@ -128,9 +133,9 @@ export const BrowserTabView = React.memo(function BrowserTabView({
 		}
 
 		syncWebviewLayout(webview);
-		updateNavigationState();
 
 		return () => {
+			isDomReadyRef.current = false;
 			resizeObserver?.disconnect();
 			webview.removeEventListener('did-start-loading', handleStartLoading);
 			webview.removeEventListener('did-stop-loading', handleStopLoading);
@@ -282,7 +287,7 @@ export const BrowserTabView = React.memo(function BrowserTabView({
 					ref={(element) => {
 						webviewRef.current = element as unknown as ElectronWebviewElement | null;
 					}}
-					allowpopups={false}
+					allowpopups="false"
 					className="w-full h-full border-0 bg-white"
 					partition={tab.partition}
 					src={tab.url || DEFAULT_BROWSER_TAB_URL}

@@ -6,7 +6,7 @@
 
 import { useRef, useEffect } from 'react';
 import type { Theme } from '../../../types';
-import type { CueSettings } from '../../../../main/cue/cue-types';
+import type { CueSettings } from '../../../../shared/cue';
 import { useClickOutside } from '../../../hooks/ui';
 import { CueSelect } from './CueSelect';
 

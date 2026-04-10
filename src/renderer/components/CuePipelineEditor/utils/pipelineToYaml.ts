@@ -15,7 +15,7 @@ import type {
 	TriggerNodeData,
 	AgentNodeData,
 } from '../../../../shared/cue-pipeline-types';
-import type { CueSubscription, CueSettings } from '../../../../main/cue/cue-types';
+import type { CueSubscription, CueSettings } from '../../../../shared/cue';
 import { cuePromptFilePath } from '../../../../shared/maestro-paths';
 
 const SOURCE_OUTPUT_VAR = '{{CUE_SOURCE_OUTPUT}}';
