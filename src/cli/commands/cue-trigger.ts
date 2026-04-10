@@ -34,15 +34,23 @@ export async function cueTrigger(
 					type: 'trigger_result',
 					success: result.success,
 					subscriptionName,
-					...(options.prompt ? { prompt: options.prompt } : {}),
+					...(options.prompt !== undefined ? { prompt: options.prompt } : {}),
+					...(result.error ? { error: result.error } : {}),
 				})
 			);
+			if (!result.success) {
+				process.exitCode = 1;
+			}
 		} else if (result.success) {
 			console.log(
 				`Triggered Cue subscription "${subscriptionName}"${options.prompt ? ' with custom prompt' : ''}`
 			);
 		} else {
-			console.error(`Subscription "${subscriptionName}" not found or could not be triggered`);
+			console.error(
+				`Subscription "${subscriptionName}" not found or could not be triggered${
+					result.error ? `: ${result.error}` : ''
+				}`
+			);
 			process.exit(1);
 		}
 	} catch (error) {

@@ -1717,11 +1717,12 @@ export function createWebServerFactory(deps: WebServerFactoryDependencies) {
 			return new Promise((resolve) => {
 				const responseChannel = `remote:triggerCueSubscription:response:${randomUUID()}`;
 				let resolved = false;
+				let timeoutId: ReturnType<typeof setTimeout> | undefined;
 
 				const handleResponse = (_event: Electron.IpcMainEvent, result: any) => {
 					if (resolved) return;
 					resolved = true;
-					clearTimeout(timeoutId);
+					if (timeoutId) clearTimeout(timeoutId);
 					resolve(result ?? false);
 				};
 
@@ -1739,7 +1740,7 @@ export function createWebServerFactory(deps: WebServerFactoryDependencies) {
 					responseChannel
 				);
 
-				const timeoutId = setTimeout(() => {
+				timeoutId = setTimeout(() => {
 					if (resolved) return;
 					resolved = true;
 					ipcMain.removeListener(responseChannel, handleResponse);

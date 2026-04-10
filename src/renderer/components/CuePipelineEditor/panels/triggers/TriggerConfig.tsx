@@ -264,7 +264,7 @@ export function TriggerConfig({ node, theme, onUpdateNode }: TriggerConfigProps)
 					{nameField}
 					<div style={{ color: theme.colors.textDim, fontSize: 12, fontStyle: 'italic' }}>
 						Triggered manually via{' '}
-						<code>maestro-cli cue trigger {data.customLabel || data.label || 'name'}</code>.
+						<code>maestro-cli cue trigger "{data.customLabel || data.label || 'name'}"</code>.
 						Supports an optional <code>--prompt</code> override.
 					</div>
 				</div>

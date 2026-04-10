@@ -2322,11 +2322,15 @@ export class WebSocketMessageHandler {
 	 * Handle trigger_cue_subscription message - manually trigger a Cue subscription
 	 */
 	private handleTriggerCueSubscription(client: WebClient, message: WebClientMessage): void {
-		const subscriptionName = message.subscriptionName as string;
-		const prompt = message.prompt as string | undefined;
+		const subscriptionName = message.subscriptionName;
+		const prompt = message.prompt;
 
-		if (!subscriptionName) {
+		if (typeof subscriptionName !== 'string' || subscriptionName.trim() === '') {
 			this.sendError(client, 'Missing subscriptionName');
+			return;
+		}
+		if (prompt !== undefined && typeof prompt !== 'string') {
+			this.sendError(client, 'Invalid prompt: must be a string when provided');
 			return;
 		}
 
@@ -2336,7 +2340,7 @@ export class WebSocketMessageHandler {
 		}
 
 		this.callbacks
-			.triggerCueSubscription(subscriptionName, prompt)
+			.triggerCueSubscription(subscriptionName, prompt as string | undefined)
 			.then((success) => {
 				this.send(client, {
 					type: 'trigger_cue_subscription_result',
@@ -2347,7 +2351,9 @@ export class WebSocketMessageHandler {
 				});
 			})
 			.catch((error) => {
-				this.sendError(client, `Failed to trigger Cue subscription: ${error.message}`);
+				const err = error instanceof Error ? error : new Error(String(error));
+				logger.error(`Failed to trigger Cue subscription: ${err.message}`, 'WebSocket');
+				this.sendError(client, `Failed to trigger Cue subscription: ${err.message}`);
 			});
 	}
 

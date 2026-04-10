@@ -55,7 +55,7 @@ import { buildSessionDeepLink, buildGroupDeepLink } from './deep-link-urls';
  *   {{MAESTRO_CLI_PATH}}  - Platform-appropriate path to maestro-cli
  *
  * Cue Variables (Cue automation only):
- *   {{CUE_EVENT_TYPE}}      - Cue event type (app.startup, time.heartbeat, time.scheduled, file.changed, agent.completed, github.*, task.pending)
+ *   {{CUE_EVENT_TYPE}}      - Cue event type (app.startup, time.heartbeat, time.scheduled, file.changed, agent.completed, github.*, task.pending, cli.trigger)
  *   {{CUE_EVENT_TIMESTAMP}} - Cue event timestamp
  *   {{CUE_TRIGGER_NAME}}   - Cue trigger/subscription name
  *   {{CUE_RUN_ID}}         - Cue run UUID

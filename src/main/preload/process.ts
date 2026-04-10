@@ -1098,7 +1098,15 @@ export function createProcessApi() {
 				subscriptionName: string,
 				prompt: string | undefined,
 				responseChannel: string
-			) => callback(subscriptionName, prompt, responseChannel);
+			) => {
+				try {
+					Promise.resolve(callback(subscriptionName, prompt, responseChannel)).catch(() => {
+						ipcRenderer.send(responseChannel, false);
+					});
+				} catch {
+					ipcRenderer.send(responseChannel, false);
+				}
+			};
 			ipcRenderer.on('remote:triggerCueSubscription', handler);
 			return () => ipcRenderer.removeListener('remote:triggerCueSubscription', handler);
 		},

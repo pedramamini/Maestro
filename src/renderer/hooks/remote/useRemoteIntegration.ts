@@ -887,7 +887,8 @@ export function useRemoteIntegration(deps: UseRemoteIntegrationDeps): UseRemoteI
 				try {
 					const result = await window.maestro.cue.triggerSubscription(subscriptionName, prompt);
 					window.maestro.process.sendRemoteTriggerCueSubscriptionResponse(responseChannel, result);
-				} catch {
+				} catch (error) {
+					console.error('[Remote Cue Trigger] Failed:', subscriptionName, error);
 					window.maestro.process.sendRemoteTriggerCueSubscriptionResponse(responseChannel, false);
 				}
 			}
