@@ -14,15 +14,15 @@ Cue is an event-driven automation system that triggers AI agent prompts in respo
 
 ### Supported Trigger Types
 
-| Event Type            | Description                                               | Source Module                                 |
-| --------------------- | --------------------------------------------------------- | --------------------------------------------- |
-| `time.heartbeat`      | Periodic interval timer ("run every N minutes")           | `triggers/cue-heartbeat-trigger-source.ts`    |
-| `time.scheduled`      | Cron-like triggers (specific times/days)                  | `triggers/cue-scheduled-trigger-source.ts`    |
-| `file.changed`        | File system change via chokidar watcher                   | `triggers/cue-file-watcher-trigger-source.ts` |
-| `agent.completed`     | Fires when another agent finishes                         | `cue-engine` (reactive)                       |
-| `github.pull_request` | New PRs detected via `gh` CLI polling                     | `triggers/cue-github-poller-trigger-source.ts`|
-| `github.issue`        | New issues detected via `gh` CLI polling                  | `triggers/cue-github-poller-trigger-source.ts`|
-| `task.pending`        | Unchecked markdown tasks (`- [ ]`) found in watched files | `triggers/cue-task-scanner-trigger-source.ts` |
+| Event Type            | Description                                               | Source Module                                  |
+| --------------------- | --------------------------------------------------------- | ---------------------------------------------- |
+| `time.heartbeat`      | Periodic interval timer ("run every N minutes")           | `triggers/cue-heartbeat-trigger-source.ts`     |
+| `time.scheduled`      | Cron-like triggers (specific times/days)                  | `triggers/cue-scheduled-trigger-source.ts`     |
+| `file.changed`        | File system change via chokidar watcher                   | `triggers/cue-file-watcher-trigger-source.ts`  |
+| `agent.completed`     | Fires when another agent finishes                         | `cue-engine` (reactive)                        |
+| `github.pull_request` | New PRs detected via `gh` CLI polling                     | `triggers/cue-github-poller-trigger-source.ts` |
+| `github.issue`        | New issues detected via `gh` CLI polling                  | `triggers/cue-github-poller-trigger-source.ts` |
+| `task.pending`        | Unchecked markdown tasks (`- [ ]`) found in watched files | `triggers/cue-task-scanner-trigger-source.ts`  |
 
 ### Execution Patterns
 
@@ -123,17 +123,17 @@ Thin facade over `config/` modules. Provides `loadCueConfig()`, `resolveCueConfi
 
 The `cue-subscription-setup.ts` module was deleted on rc. Each event source is now its own trigger source implementing a common interface in `triggers/cue-trigger-source.ts`:
 
-| File                                | Purpose                                                 |
-| ----------------------------------- | ------------------------------------------------------- |
-| `cue-trigger-source.ts`             | Common trigger source interface                         |
-| `cue-trigger-source-registry.ts`    | Registry and lookup of trigger sources                  |
-| `cue-trigger-filter.ts`             | Shared filter-matching helpers                          |
-| `cue-heartbeat-trigger-source.ts`   | `time.heartbeat` interval timer                         |
-| `cue-scheduled-trigger-source.ts`   | `time.scheduled` cron-like firing                       |
-| `cue-schedule-utils.ts`             | Next-occurrence calculation (replaces `calculateNextScheduledTime`) |
-| `cue-file-watcher-trigger-source.ts`| `file.changed` chokidar wrapper                         |
-| `cue-github-poller-trigger-source.ts`| `github.pull_request` / `github.issue` poller          |
-| `cue-task-scanner-trigger-source.ts`| `task.pending` markdown scanner                         |
+| File                                  | Purpose                                                             |
+| ------------------------------------- | ------------------------------------------------------------------- |
+| `cue-trigger-source.ts`               | Common trigger source interface                                     |
+| `cue-trigger-source-registry.ts`      | Registry and lookup of trigger sources                              |
+| `cue-trigger-filter.ts`               | Shared filter-matching helpers                                      |
+| `cue-heartbeat-trigger-source.ts`     | `time.heartbeat` interval timer                                     |
+| `cue-scheduled-trigger-source.ts`     | `time.scheduled` cron-like firing                                   |
+| `cue-schedule-utils.ts`               | Next-occurrence calculation (replaces `calculateNextScheduledTime`) |
+| `cue-file-watcher-trigger-source.ts`  | `file.changed` chokidar wrapper                                     |
+| `cue-github-poller-trigger-source.ts` | `github.pull_request` / `github.issue` poller                       |
+| `cue-task-scanner-trigger-source.ts`  | `task.pending` markdown scanner                                     |
 
 ### cue-run-manager.ts (~452 lines)
 
@@ -233,15 +233,15 @@ Simple in-memory ring buffer of completed run results (max 500). Used by the Cue
 
 The engine orchestration logic was split into focused services on rc:
 
-| File                             | Responsibility                                                   |
-| -------------------------------- | ---------------------------------------------------------------- |
-| `cue-completion-service.ts`      | Handles `agent.completed` routing and fan-in dispatch            |
-| `cue-dispatch-service.ts`        | Central subscription dispatch (fan-out expansion, run manager)   |
-| `cue-query-service.ts`           | Status, active runs, graph-data queries                          |
-| `cue-recovery-service.ts`        | Post-sleep reconciliation and orphan cleanup                     |
-| `cue-session-registry.ts`        | Per-session subscription bookkeeping                             |
-| `cue-session-runtime-service.ts` | Session lifecycle, YAML hot-reload, teardown                     |
-| `cue-session-state.ts`           | Immutable session state model                                    |
+| File                             | Responsibility                                                       |
+| -------------------------------- | -------------------------------------------------------------------- |
+| `cue-completion-service.ts`      | Handles `agent.completed` routing and fan-in dispatch                |
+| `cue-dispatch-service.ts`        | Central subscription dispatch (fan-out expansion, run manager)       |
+| `cue-query-service.ts`           | Status, active runs, graph-data queries                              |
+| `cue-recovery-service.ts`        | Post-sleep reconciliation and orphan cleanup                         |
+| `cue-session-registry.ts`        | Per-session subscription bookkeeping                                 |
+| `cue-session-runtime-service.ts` | Session lifecycle, YAML hot-reload, teardown                         |
+| `cue-session-state.ts`           | Immutable session state model                                        |
 | `pipeline-layout-store.ts`       | Persistence for the visual pipeline editor layout (nodes + viewport) |
 
 ### cue-db.ts (~320 lines)
