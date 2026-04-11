@@ -431,7 +431,7 @@ Registered in `src/main/ipc/handlers/openspec.ts`:
 ### At Runtime (Auto Run / System Prompt)
 
 1. The renderer collects session context into a `TemplateContext` object
-2. `replaceTemplateVariables()` performs case-insensitive substitution
+2. `substituteTemplateVariables(template, context)` performs case-insensitive substitution
 3. Git branch is fetched asynchronously if the session is in a git repo
 4. The conductor profile is loaded from settings
 5. The fully resolved prompt is sent to the agent
