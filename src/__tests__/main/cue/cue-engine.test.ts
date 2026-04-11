@@ -18,9 +18,16 @@ import type { CueConfig, CueEvent, CueRunResult } from '../../../main/cue/cue-ty
 
 // Mock the yaml loader
 const mockLoadCueConfig = vi.fn<(projectRoot: string) => CueConfig | null>();
+type DetailedResult =
+	| { ok: true; config: CueConfig; warnings: string[] }
+	| { ok: false; reason: 'missing' }
+	| { ok: false; reason: 'parse-error'; message: string }
+	| { ok: false; reason: 'invalid'; errors: string[] };
+const mockLoadCueConfigDetailed = vi.fn<(projectRoot: string) => DetailedResult>();
 const mockWatchCueYaml = vi.fn<(projectRoot: string, onChange: () => void) => () => void>();
 vi.mock('../../../main/cue/cue-yaml-loader', () => ({
 	loadCueConfig: (...args: unknown[]) => mockLoadCueConfig(args[0] as string),
+	loadCueConfigDetailed: (...args: unknown[]) => mockLoadCueConfigDetailed(args[0] as string),
 	watchCueYaml: (...args: unknown[]) => mockWatchCueYaml(args[0] as string, args[1] as () => void),
 }));
 
@@ -60,11 +67,10 @@ vi.mock('crypto', () => ({
 	randomUUID: vi.fn(() => `uuid-${Math.random().toString(36).slice(2, 8)}`),
 }));
 
-import {
-	CueEngine,
-	calculateNextScheduledTime,
-	type CueEngineDeps,
-} from '../../../main/cue/cue-engine';
+import { CueEngine, type CueEngineDeps } from '../../../main/cue/cue-engine';
+// `calculateNextScheduledTime` moved to triggers/cue-schedule-utils as part of
+// the Phase 4 trigger source isolation. cue-subscription-setup.ts is gone.
+import { calculateNextScheduledTime } from '../../../main/cue/triggers/cue-schedule-utils';
 import { createMockSession, createMockConfig, createMockDeps } from './cue-test-helpers';
 
 describe('CueEngine', () => {
@@ -80,6 +86,14 @@ describe('CueEngine', () => {
 
 		yamlWatcherCleanup = vi.fn();
 		mockWatchCueYaml.mockReturnValue(yamlWatcherCleanup);
+
+		// Default loadCueConfigDetailed: derive from loadCueConfig for tests that
+		// only configure mockLoadCueConfig. Tests that need to inject warnings or
+		// load failures can override mockLoadCueConfigDetailed directly.
+		mockLoadCueConfigDetailed.mockImplementation((projectRoot: string) => {
+			const config = mockLoadCueConfig(projectRoot);
+			return config ? { ok: true, config, warnings: [] } : { ok: false, reason: 'missing' };
+		});
 
 		fileWatcherCleanup = vi.fn();
 		mockCreateCueFileWatcher.mockReturnValue(fileWatcherCleanup);
@@ -1067,6 +1081,7 @@ describe('CueEngine', () => {
 						event: 'github.issue',
 						enabled: true,
 						prompt: 'triage issue',
+						repo: 'owner/repo',
 					},
 				],
 			});
@@ -1094,6 +1109,7 @@ describe('CueEngine', () => {
 						event: 'github.pull_request',
 						enabled: true,
 						prompt: 'review',
+						repo: 'owner/repo',
 					},
 				],
 			});
@@ -1115,6 +1131,7 @@ describe('CueEngine', () => {
 						enabled: true,
 						prompt: 'review merged PR',
 						gh_state: 'merged',
+						repo: 'owner/repo',
 					},
 				],
 			});
@@ -1754,12 +1771,9 @@ describe('CueEngine', () => {
 		it('returns null for invalid time strings', () => {
 			vi.setSystemTime(new Date('2026-03-09T08:00:00'));
 			const result = calculateNextScheduledTime(['25:99']);
-			// Invalid hours/minutes — parseInt yields 25 and 99, but the resulting
-			// Date will roll over. The function still produces a candidate because
-			// Date constructor handles overflow. Check it doesn't crash.
-			// With hour=25, the date rolls to next day 01:XX — still a valid timestamp.
-			// This is acceptable behavior (no crash), but let's verify it returns something.
-			expect(typeof result === 'number' || result === null).toBe(true);
+			// Out-of-bounds hour (25) and minute (99) must be rejected — the function
+			// validates bounds before calling setHours, so no Date rollover occurs.
+			expect(result).toBeNull();
 		});
 
 		it('handles midnight crossing', () => {
@@ -1834,8 +1848,9 @@ describe('CueEngine', () => {
 		});
 
 		it('does not fire when current time does not match', async () => {
-			// Set to Monday 2026-03-09 at 09:00:30 — interval fires at 09:01
-			vi.setSystemTime(new Date('2026-03-09T09:00:30'));
+			// Set to Monday 2026-03-09 at 09:01:30 — neither the immediate check nor
+			// the first interval tick (at 09:02:30) matches the '09:00' schedule slot.
+			vi.setSystemTime(new Date('2026-03-09T09:01:30'));
 
 			const config = createMockConfig({
 				subscriptions: [
@@ -2104,10 +2119,14 @@ describe('CueEngine', () => {
 			engine.stop();
 		});
 
-		it('prefers hydrated prompt content over prompt_file path', async () => {
+		it('uses hydrated prompt content from materialized config', async () => {
 			// Monday at 08:59 — fires at 09:00
 			vi.setSystemTime(new Date('2026-03-09T08:59:00'));
 
+			// As of the Phase 2 cleanup, prompt_file no longer exists on the runtime
+			// CueSubscription contract — the normalizer resolves it into `prompt` at
+			// load time. This test confirms that hydrated content flows through to
+			// onCueRun unchanged.
 			const config = createMockConfig({
 				subscriptions: [
 					{
@@ -2115,7 +2134,6 @@ describe('CueEngine', () => {
 						event: 'time.scheduled',
 						enabled: true,
 						prompt: 'hydrated prompt content',
-						prompt_file: 'check.md',
 						schedule_times: ['09:00'],
 					},
 				],
@@ -2127,7 +2145,6 @@ describe('CueEngine', () => {
 
 			await vi.advanceTimersByTimeAsync(60_000);
 
-			// The hydrated prompt content should be used before falling back to the file path.
 			expect(deps.onCueRun).toHaveBeenCalledWith(
 				expect.objectContaining({
 					prompt: 'hydrated prompt content',
@@ -2897,6 +2914,10 @@ describe('CueEngine', () => {
 	});
 
 	describe('prompt file existence warning (Fix 7)', () => {
+		// The warning now originates inside materializeCueConfig() and flows through
+		// loadCueConfigDetailed().warnings, which session-runtime-service forwards to
+		// the logger. These tests inject the warning directly via the detailed mock to
+		// verify the integration path: loader warnings → engine logger.
 		it('logs warning when prompt_file is set but prompt is empty', () => {
 			const config = createMockConfig({
 				subscriptions: [
@@ -2905,12 +2926,17 @@ describe('CueEngine', () => {
 						event: 'time.heartbeat',
 						enabled: true,
 						prompt: '',
-						prompt_file: 'missing.md',
 						interval_minutes: 60,
 					},
 				],
 			});
-			mockLoadCueConfig.mockReturnValue(config);
+			mockLoadCueConfigDetailed.mockReturnValue({
+				ok: true,
+				config,
+				warnings: [
+					'"missing-file-sub" has prompt_file "missing.md" but the file was not found — subscription will fail on trigger',
+				],
+			});
 			const deps = createMockDeps();
 			const engine = new CueEngine(deps);
 			engine.start();
@@ -2929,12 +2955,16 @@ describe('CueEngine', () => {
 						event: 'time.heartbeat',
 						enabled: true,
 						prompt: 'content from file',
-						prompt_file: 'exists.md',
 						interval_minutes: 60,
 					},
 				],
 			});
-			mockLoadCueConfig.mockReturnValue(config);
+			// No warnings — the loader successfully resolved the prompt file content.
+			mockLoadCueConfigDetailed.mockReturnValue({
+				ok: true,
+				config,
+				warnings: [],
+			});
 			const deps = createMockDeps();
 			const engine = new CueEngine(deps);
 			engine.start();

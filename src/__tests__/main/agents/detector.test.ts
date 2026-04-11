@@ -20,6 +20,16 @@ vi.mock('../../../main/utils/logger', () => ({
 	},
 }));
 
+vi.mock('../../../main/agents/opencode-config', async () => {
+	const actual = await vi.importActual<typeof import('../../../main/agents/opencode-config')>(
+		'../../../main/agents/opencode-config'
+	);
+	return {
+		...actual,
+		discoverModelsFromLocalConfigs: vi.fn().mockResolvedValue([]),
+	};
+});
+
 // Make readFileSync mockable for ESM - vi.spyOn on ESM namespace fails
 // Also mock fs.promises.access to prevent real filesystem probing
 const { _readFileSync, _fsAccess } = vi.hoisted(() => ({
@@ -1270,7 +1280,7 @@ describe('agent-detector', () => {
 
 			expect(models).toEqual([]);
 			expect(logger.warn).toHaveBeenCalledWith(
-				expect.stringContaining('Model discovery failed'),
+				expect.stringContaining('CLI model discovery failed'),
 				'AgentDetector',
 				expect.any(Object)
 			);

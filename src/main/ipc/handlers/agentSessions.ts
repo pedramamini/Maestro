@@ -629,6 +629,58 @@ export function registerAgentSessionsHandlers(deps?: AgentSessionsHandlerDepende
 					}
 				}
 
+				// Also check the generic origins store for named sessions not found
+				// in provider-specific stores (e.g., sessions named via the generic API)
+				if (originsStore) {
+					const seenIds = new Set(
+						allNamedSessions.map((s) => `${s.agentId}:${s.projectPath}:${s.agentSessionId}`)
+					);
+					const genericOrigins = originsStore.get('origins', {});
+					for (const [agentId, projectEntries] of Object.entries(genericOrigins)) {
+						if (!projectEntries || typeof projectEntries !== 'object') continue;
+						for (const [projectPath, sessions] of Object.entries(
+							projectEntries as Record<
+								string,
+								Record<
+									string,
+									{
+										origin?: string;
+										sessionName?: string;
+										starred?: boolean;
+									}
+								>
+							>
+						)) {
+							if (!sessions || typeof sessions !== 'object') continue;
+							for (const [sessionId, info] of Object.entries(sessions)) {
+								if (!info?.sessionName) continue;
+								const key = `${agentId}:${projectPath}:${sessionId}`;
+								if (seenIds.has(key)) continue;
+
+								// Validate file exists via the storage provider
+								const storage = getSessionStorage(agentId);
+								if (storage) {
+									try {
+										const sessionPath = storage.getSessionPath(projectPath, sessionId);
+										if (sessionPath) {
+											await fs.stat(sessionPath);
+											allNamedSessions.push({
+												agentId,
+												agentSessionId: sessionId,
+												projectPath,
+												sessionName: info.sessionName,
+												starred: info.starred,
+											});
+										}
+									} catch {
+										// File doesn't exist, skip stale entry
+									}
+								}
+							}
+						}
+					}
+				}
+
 				logger.info(
 					`Found ${allNamedSessions.length} named sessions across all providers`,
 					LOG_CONTEXT

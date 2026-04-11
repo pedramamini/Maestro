@@ -7,39 +7,25 @@
  * - YAML read/write/validate operations
  * - Engine enable/disable controls
  * - Error handling when engine is not initialized
+ *
+ * Phase 6 cleanup: the IPC handler is now a thin transport layer. YAML I/O
+ * lives in cue-config-repository.ts and pipeline layout I/O lives in
+ * pipeline-layout-store.ts. These tests mock those modules directly to verify
+ * the handlers correctly delegate, rather than mocking fs/path under the hood.
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import * as fs from 'fs';
 
 // Track registered IPC handlers
 const registeredHandlers = new Map<string, (...args: unknown[]) => unknown>();
 
 vi.mock('electron', () => ({
-	app: {
-		getPath: vi.fn((name: string) => `/mock-user-data/${name}`),
-	},
 	ipcMain: {
 		handle: vi.fn((channel: string, handler: (...args: unknown[]) => unknown) => {
 			registeredHandlers.set(channel, handler);
 		}),
 	},
 }));
-
-vi.mock('fs', () => ({
-	existsSync: vi.fn(),
-	readFileSync: vi.fn(),
-	writeFileSync: vi.fn(),
-	mkdirSync: vi.fn(),
-}));
-
-vi.mock('path', async () => {
-	const actual = await vi.importActual<typeof import('path')>('path');
-	return {
-		...actual,
-		join: vi.fn((...args: string[]) => args.join('/')),
-	};
-});
 
 vi.mock('js-yaml', () => ({
 	load: vi.fn(),
@@ -58,20 +44,33 @@ vi.mock('../../../main/utils/ipcHandler', () => ({
 
 vi.mock('../../../main/cue/cue-yaml-loader', () => ({
 	validateCueConfig: vi.fn(),
-	resolveCueConfigPath: vi.fn(),
+}));
+
+vi.mock('../../../main/cue/config/cue-config-repository', () => ({
+	readCueConfigFile: vi.fn(),
+	writeCueConfigFile: vi.fn(),
+	deleteCueConfigFile: vi.fn(),
+	writeCuePromptFile: vi.fn(),
+}));
+
+vi.mock('../../../main/cue/pipeline-layout-store', () => ({
+	savePipelineLayout: vi.fn(),
+	loadPipelineLayout: vi.fn(),
 }));
 
 vi.mock('../../../main/cue/cue-types', () => ({
 	CUE_YAML_FILENAME: 'maestro-cue.yaml', // legacy name kept in cue-types for compat
 }));
 
-vi.mock('../../../shared/maestro-paths', () => ({
-	CUE_CONFIG_PATH: '.maestro/cue.yaml',
-	MAESTRO_DIR: '.maestro',
-}));
-
 import { registerCueHandlers } from '../../../main/ipc/handlers/cue';
-import { validateCueConfig, resolveCueConfigPath } from '../../../main/cue/cue-yaml-loader';
+import { validateCueConfig } from '../../../main/cue/cue-yaml-loader';
+import {
+	readCueConfigFile,
+	writeCueConfigFile,
+	deleteCueConfigFile,
+	writeCuePromptFile,
+} from '../../../main/cue/config/cue-config-repository';
+import { savePipelineLayout, loadPipelineLayout } from '../../../main/cue/pipeline-layout-store';
 import * as yaml from 'js-yaml';
 
 // Create a mock CueEngine
@@ -278,38 +277,75 @@ describe('Cue IPC Handlers', () => {
 
 	describe('cue:readYaml', () => {
 		it('should return file content when file exists', async () => {
-			vi.mocked(resolveCueConfigPath).mockReturnValue('/projects/test/.maestro/cue.yaml');
-			vi.mocked(fs.readFileSync).mockReturnValue('subscriptions: []');
+			vi.mocked(readCueConfigFile).mockReturnValue({
+				filePath: '/projects/test/.maestro/cue.yaml',
+				raw: 'subscriptions: []',
+			});
 
 			const handler = registerAndGetHandler('cue:readYaml');
 			const result = await handler(null, { projectRoot: '/projects/test' });
 			expect(result).toBe('subscriptions: []');
-			expect(resolveCueConfigPath).toHaveBeenCalledWith('/projects/test');
-			expect(fs.readFileSync).toHaveBeenCalledWith('/projects/test/.maestro/cue.yaml', 'utf-8');
+			expect(readCueConfigFile).toHaveBeenCalledWith('/projects/test');
 		});
 
 		it('should return null when file does not exist', async () => {
-			vi.mocked(resolveCueConfigPath).mockReturnValue(null);
+			vi.mocked(readCueConfigFile).mockReturnValue(null);
 
 			const handler = registerAndGetHandler('cue:readYaml');
 			const result = await handler(null, { projectRoot: '/projects/test' });
 			expect(result).toBeNull();
-			expect(fs.readFileSync).not.toHaveBeenCalled();
 		});
 	});
 
 	describe('cue:writeYaml', () => {
-		it('should write content to the correct file path', async () => {
+		it('should delegate to writeCueConfigFile', async () => {
 			const content = 'subscriptions:\n  - name: test\n    event: time.heartbeat';
-			vi.mocked(fs.existsSync).mockReturnValue(true); // .maestro dir exists
 
 			const handler = registerAndGetHandler('cue:writeYaml');
 			await handler(null, { projectRoot: '/projects/test', content });
-			expect(fs.writeFileSync).toHaveBeenCalledWith(
-				'/projects/test/.maestro/cue.yaml',
-				content,
-				'utf-8'
+			expect(writeCueConfigFile).toHaveBeenCalledWith('/projects/test', content);
+		});
+
+		it('should also write external prompt files when provided', async () => {
+			const content = 'subscriptions: []';
+			const promptFiles = {
+				'.maestro/prompts/sub-1.md': 'prompt body 1',
+				'.maestro/prompts/sub-2.md': 'prompt body 2',
+			};
+
+			const handler = registerAndGetHandler('cue:writeYaml');
+			await handler(null, { projectRoot: '/projects/test', content, promptFiles });
+
+			expect(writeCueConfigFile).toHaveBeenCalledWith('/projects/test', content);
+			expect(writeCuePromptFile).toHaveBeenCalledWith(
+				'/projects/test',
+				'.maestro/prompts/sub-1.md',
+				'prompt body 1'
 			);
+			expect(writeCuePromptFile).toHaveBeenCalledWith(
+				'/projects/test',
+				'.maestro/prompts/sub-2.md',
+				'prompt body 2'
+			);
+		});
+	});
+
+	describe('cue:deleteYaml', () => {
+		it('should delegate to deleteCueConfigFile and return its result', async () => {
+			vi.mocked(deleteCueConfigFile).mockReturnValue(true);
+
+			const handler = registerAndGetHandler('cue:deleteYaml');
+			const result = await handler(null, { projectRoot: '/projects/test' });
+			expect(result).toBe(true);
+			expect(deleteCueConfigFile).toHaveBeenCalledWith('/projects/test');
+		});
+
+		it('returns false when there is nothing to delete', async () => {
+			vi.mocked(deleteCueConfigFile).mockReturnValue(false);
+
+			const handler = registerAndGetHandler('cue:deleteYaml');
+			const result = await handler(null, { projectRoot: '/projects/test' });
+			expect(result).toBe(false);
 		});
 	});
 
@@ -417,7 +453,7 @@ describe('Cue IPC Handlers', () => {
 	});
 
 	describe('cue:savePipelineLayout', () => {
-		it('should write layout to JSON file', async () => {
+		it('should delegate to savePipelineLayout', async () => {
 			const layout = {
 				pipelines: [{ id: 'p1', name: 'Pipeline 1', color: '#06b6d4', nodes: [], edges: [] }],
 				selectedPipelineId: 'p1',
@@ -426,11 +462,7 @@ describe('Cue IPC Handlers', () => {
 
 			const handler = registerAndGetHandler('cue:savePipelineLayout');
 			await handler(null, { layout });
-			expect(fs.writeFileSync).toHaveBeenCalledWith(
-				expect.stringContaining('cue-pipeline-layout.json'),
-				JSON.stringify(layout, null, 2),
-				'utf-8'
-			);
+			expect(savePipelineLayout).toHaveBeenCalledWith(layout);
 		});
 	});
 
@@ -441,8 +473,7 @@ describe('Cue IPC Handlers', () => {
 				selectedPipelineId: 'p1',
 				viewport: { x: 100, y: 200, zoom: 1.5 },
 			};
-			vi.mocked(fs.existsSync).mockReturnValue(true);
-			vi.mocked(fs.readFileSync).mockReturnValue(JSON.stringify(layout));
+			vi.mocked(loadPipelineLayout).mockReturnValue(layout as any);
 
 			const handler = registerAndGetHandler('cue:loadPipelineLayout');
 			const result = await handler(null);
@@ -450,7 +481,7 @@ describe('Cue IPC Handlers', () => {
 		});
 
 		it('should return null when file does not exist', async () => {
-			vi.mocked(fs.existsSync).mockReturnValue(false);
+			vi.mocked(loadPipelineLayout).mockReturnValue(null);
 
 			const handler = registerAndGetHandler('cue:loadPipelineLayout');
 			const result = await handler(null);

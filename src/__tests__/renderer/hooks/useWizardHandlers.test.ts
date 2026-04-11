@@ -342,6 +342,7 @@ describe('useWizardHandlers', () => {
 			expect((window as any).maestro.agents.discoverSlashCommands).toHaveBeenCalledWith(
 				'claude-code',
 				'/projects/test',
+				undefined,
 				undefined
 			);
 

@@ -578,7 +578,7 @@ describe('RightPanel', () => {
 			expect(screen.getByText('Auto Run Active')).toBeInTheDocument();
 		});
 
-		it('should show "Stopping..." when isStopping is true', () => {
+		it('should show "Stopping" when isStopping is true', () => {
 			const currentSessionBatchState: BatchRunState = {
 				isRunning: true,
 				isStopping: true,
@@ -596,7 +596,7 @@ describe('RightPanel', () => {
 			const props = createDefaultProps({ currentSessionBatchState });
 			render(<RightPanel {...props} />);
 
-			expect(screen.getByText('Stopping...')).toBeInTheDocument();
+			expect(screen.getByText('Stopping')).toBeInTheDocument();
 			expect(screen.getByText(/waiting for current task/i)).toBeInTheDocument();
 		});
 

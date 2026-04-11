@@ -81,8 +81,7 @@ export function AutoRunnerHelpModal({ theme, onClose }: AutoRunnerHelpModalProps
 							Playbooks can be <strong style={{ color: theme.colors.textMain }}>exported</strong> as
 							ZIP files to share with teammates, or{' '}
 							<strong style={{ color: theme.colors.textMain }}>imported</strong> from ZIPs you
-							receive. The{' '}
-							<strong style={{ color: theme.colors.textMain }}>Playbook Exchange</strong> is a
+							receive. The <strong style={{ color: theme.colors.textMain }}>PlayBooks</strong> is a
 							public library of community-contributed playbooks you can browse and install directly
 							from the toolbar.
 						</p>
@@ -153,9 +152,9 @@ export function AutoRunnerHelpModal({ theme, onClose }: AutoRunnerHelpModalProps
 							<div className="flex items-start gap-2">
 								<Globe className="w-4 h-4 mt-0.5 shrink-0" style={{ color: theme.colors.accent }} />
 								<div>
-									<strong style={{ color: theme.colors.textMain }}>Playbook Exchange</strong> —
-									Browse community playbooks and import them as starting points. Customize to fit
-									your project.
+									<strong style={{ color: theme.colors.textMain }}>PlayBooks</strong> — Browse
+									community playbooks and import them as starting points. Customize to fit your
+									project.
 								</div>
 							</div>
 						</div>

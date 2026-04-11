@@ -383,7 +383,7 @@ describe('HistoryEntryItem', () => {
 		const sessionButton = screen.getByTitle('session-abc-123');
 		fireEvent.click(sessionButton);
 
-		expect(onOpenSessionAsTab).toHaveBeenCalledWith('session-abc-123');
+		expect(onOpenSessionAsTab).toHaveBeenCalledWith('session-abc-123', '/test/project');
 	});
 
 	it('shows elapsed time when present', () => {

@@ -215,7 +215,10 @@ function createExecutionConfig(overrides: Partial<CueExecutionConfig> = {}): Cue
 		session: createMockSession(),
 		subscription: createMockSubscription(),
 		event: createMockEvent(),
-		promptPath: 'prompts/on-config-change.md',
+		// Inline prompt content — as of the Phase 2 cleanup, the executor no longer
+		// reads prompt files. The cue-config-normalizer resolves prompt_file at config
+		// load time and stores the resolved content here.
+		promptPath: 'Default test prompt body',
 		toolType: 'claude-code',
 		projectRoot: '/projects/test',
 		templateContext: createMockTemplateContext(),
@@ -247,8 +250,10 @@ describe('cue-executor', () => {
 		vi.useFakeTimers();
 		getActiveProcesses().clear();
 
-		// Default mock implementations
-		mockReadFileSync.mockReturnValue('Prompt content: check {{CUE_FILE_PATH}}');
+		// Default mock implementations.
+		// mockReadFileSync remains wired up so we can assert the executor never
+		// touches the filesystem for prompt resolution (that's the normalizer's job).
+		mockReadFileSync.mockReturnValue('SHOULD-NEVER-BE-READ');
 		mockGetAgentDefinition.mockReturnValue(defaultAgentDef);
 		mockSubstitute.mockImplementation((template: string) => `substituted: ${template}`);
 	});
@@ -258,48 +263,38 @@ describe('cue-executor', () => {
 	});
 
 	describe('executeCuePrompt', () => {
-		it('should resolve relative prompt paths against projectRoot', async () => {
+		// As of the Phase 2 cleanup, the executor no longer resolves prompt files —
+		// the cue-config-normalizer reads prompt_file at config-load time and stores
+		// the resolved content in `prompt`. The executor's `promptPath` parameter is
+		// now always inline prompt content.
+		it('uses promptPath as inline prompt content (no filesystem read)', async () => {
 			const config = createExecutionConfig({
-				promptPath: 'prompts/check.md',
+				promptPath: 'Inline prompt body that came from the normalizer',
 				projectRoot: '/projects/test',
 			});
 
 			const resultPromise = executeCuePrompt(config);
-			// Let spawn happen
 			await vi.advanceTimersByTimeAsync(0);
 
-			expect(mockReadFileSync).toHaveBeenCalledWith('/projects/test/prompts/check.md', 'utf-8');
+			// The executor must NOT touch the filesystem for prompt resolution.
+			expect(mockReadFileSync).not.toHaveBeenCalled();
 
-			// Close the process to resolve
-			mockChild.emit('close', 0);
-			await resultPromise;
-		});
-
-		it('should use absolute prompt paths directly', async () => {
-			const config = createExecutionConfig({
-				promptPath: '/absolute/path/prompt.md',
-			});
-
-			const resultPromise = executeCuePrompt(config);
-			await vi.advanceTimersByTimeAsync(0);
-
-			expect(mockReadFileSync).toHaveBeenCalledWith('/absolute/path/prompt.md', 'utf-8');
+			// The prompt content should flow through unchanged to the template substitution.
+			expect(mockSubstitute).toHaveBeenCalledWith(
+				'Inline prompt body that came from the normalizer',
+				expect.anything()
+			);
 
 			mockChild.emit('close', 0);
 			await resultPromise;
 		});
 
-		it('should return failed result when prompt file cannot be read', async () => {
-			mockReadFileSync.mockImplementation(() => {
-				throw new Error('ENOENT: no such file');
-			});
-
-			const config = createExecutionConfig();
+		it('returns failed result when prompt content is empty', async () => {
+			const config = createExecutionConfig({ promptPath: '' });
 			const result = await executeCuePrompt(config);
 
 			expect(result.status).toBe('failed');
-			expect(result.stderr).toContain('Failed to read prompt file');
-			expect(result.stderr).toContain('ENOENT');
+			expect(result.stderr).toContain('no prompt content');
 			expect(result.exitCode).toBeNull();
 		});
 
@@ -315,7 +310,12 @@ describe('cue-executor', () => {
 			});
 
 			const templateContext = createMockTemplateContext();
-			const config = createExecutionConfig({ event, templateContext });
+			const config = createExecutionConfig({
+				event,
+				templateContext,
+				// Inline prompt content (the normalizer would have resolved any prompt_file by now)
+				promptPath: 'Prompt content: check {{CUE_FILE_PATH}}',
+			});
 
 			const resultPromise = executeCuePrompt(config);
 			await vi.advanceTimersByTimeAsync(0);
@@ -339,7 +339,7 @@ describe('cue-executor', () => {
 				sourceTriggeredBy: '',
 			});
 
-			// Verify substituteTemplateVariables was called
+			// Verify substituteTemplateVariables was called with the inline prompt content
 			expect(mockSubstitute).toHaveBeenCalledWith(
 				'Prompt content: check {{CUE_FILE_PATH}}',
 				templateContext

@@ -659,7 +659,7 @@ describe('ThinkingStatusPill', () => {
 					onStopAutoRun={() => {}}
 				/>
 			);
-			expect(screen.getByText('AutoRun Stopping...')).toBeInTheDocument();
+			expect(screen.getByText('AutoRun Stopping')).toBeInTheDocument();
 			expect(screen.getByText('Stopping')).toBeInTheDocument();
 		});
 

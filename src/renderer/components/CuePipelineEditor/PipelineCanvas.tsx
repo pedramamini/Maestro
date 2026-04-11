@@ -28,7 +28,7 @@ import type {
 	AgentNodeData,
 	CuePipelineSessionInfo as SessionInfo,
 } from '../../../shared/cue-pipeline-types';
-import type { CueSettings } from '../../../main/cue/cue-types';
+import type { CueSettings } from '../../../shared/cue';
 import { TriggerNode, type TriggerNodeDataProps } from './nodes/TriggerNode';
 import { AgentNode, type AgentNodeDataProps } from './nodes/AgentNode';
 import { edgeTypes } from './edges/PipelineEdge';

@@ -15,11 +15,18 @@ import type { MainLogLevel } from '../../shared/logger-types';
 import type { CueEvent, CueRunResult, CueSettings, CueSubscription } from './cue-types';
 import { recordCueEvent, updateCueEventStatus } from './cue-db';
 import { SOURCE_OUTPUT_MAX_CHARS } from './cue-fan-in-tracker';
+import { captureException } from '../utils/sentry';
+
+/** Phase of a run in the state machine: running → stopping | finished */
+export type RunPhase = 'running' | 'stopping' | 'finished';
 
 /** Active run tracking */
 export interface ActiveRun {
 	result: CueRunResult;
 	abortController?: AbortController;
+	phase: RunPhase;
+	/** The runId of the currently executing child process (differs from result.runId during output prompt phase) */
+	processRunId?: string;
 }
 
 /** A queued event waiting for a concurrency slot */
@@ -84,10 +91,22 @@ export function createCueRunManager(deps: CueRunManagerDeps): CueRunManager {
 	const activeRuns = new Map<string, ActiveRun>();
 	const activeRunCount = new Map<string, number>();
 	const eventQueue = new Map<string, QueuedEvent[]>();
-	const manuallyStoppedRuns = new Set<string>();
 
 	function getSessionName(sessionId: string): string {
 		return deps.getSessions().find((s) => s.id === sessionId)?.name ?? sessionId;
+	}
+
+	/**
+	 * Attempt a phase transition on an active run.
+	 * Returns the previous phase on success, or null if invalid
+	 * (run not found, already finished, or already in target phase).
+	 */
+	function transitionRun(runId: string, toPhase: 'stopping' | 'finished'): RunPhase | null {
+		const run = activeRuns.get(runId);
+		if (!run || run.phase === 'finished' || run.phase === toPhase) return null;
+		const from = run.phase;
+		run.phase = toPhase;
+		return from;
 	}
 
 	function drainQueue(sessionId: string): void {
@@ -162,7 +181,7 @@ export function createCueRunManager(deps: CueRunManagerDeps): CueRunManager {
 			endedAt: '',
 		};
 
-		activeRuns.set(runId, { result, abortController });
+		activeRuns.set(runId, { result, abortController, phase: 'running' });
 		deps.onPreventSleep?.(`cue:run:${runId}`);
 		const timeoutMs = (settings?.timeout_minutes ?? 30) * 60 * 1000;
 		try {
@@ -194,7 +213,7 @@ export function createCueRunManager(deps: CueRunManagerDeps): CueRunManager {
 				event,
 				timeoutMs,
 			});
-			if (manuallyStoppedRuns.has(runId)) {
+			if (!activeRuns.has(runId)) {
 				return;
 			}
 			result.status = runResult.status;
@@ -234,6 +253,10 @@ export function createCueRunManager(deps: CueRunManagerDeps): CueRunManager {
 					// Non-fatal if DB is unavailable
 				}
 
+				// Track the output prompt's process ID so stopRun can kill it
+				const run = activeRuns.get(runId);
+				if (run) run.processRunId = outputRunId;
+
 				const contextPrompt = `${outputPrompt}\n\n---\n\nContext from completed task:\n${result.stdout.substring(0, SOURCE_OUTPUT_MAX_CHARS)}`;
 				const outputResult = await deps.onCueRun({
 					runId: outputRunId,
@@ -250,7 +273,7 @@ export function createCueRunManager(deps: CueRunManagerDeps): CueRunManager {
 					// Non-fatal if DB is unavailable
 				}
 
-				if (manuallyStoppedRuns.has(runId)) {
+				if (!activeRuns.has(runId)) {
 					return;
 				}
 
@@ -264,42 +287,36 @@ export function createCueRunManager(deps: CueRunManagerDeps): CueRunManager {
 				}
 			}
 		} catch (error) {
-			if (manuallyStoppedRuns.has(runId)) {
+			if (!activeRuns.has(runId)) {
 				return;
 			}
 			result.status = 'failed';
 			result.stderr = error instanceof Error ? error.message : String(error);
 		} finally {
-			result.endedAt = new Date().toISOString();
-			result.durationMs = Date.now() - new Date(result.startedAt).getTime();
-			activeRuns.delete(runId);
+			// Only clean up if the run is still tracked. If it was already removed
+			// (by stopRun or reset), that caller handled its own cleanup.
+			if (activeRuns.has(runId)) {
+				// Natural completion — set final timing and perform all cleanup
+				result.endedAt = new Date().toISOString();
+				result.durationMs = Date.now() - new Date(result.startedAt).getTime();
 
-			const wasManuallyStopped = manuallyStoppedRuns.has(runId);
-
-			// Only release sleep block here for non-stopped runs — stopRun already released eagerly
-			if (!wasManuallyStopped) {
+				transitionRun(runId, 'finished');
+				activeRuns.delete(runId);
 				deps.onAllowSleep?.(`cue:run:${runId}`);
-			}
 
-			// Only decrement here for non-stopped runs — stopRun already decremented eagerly
-			if (!wasManuallyStopped) {
 				const count = activeRunCount.get(sessionId) ?? 1;
 				activeRunCount.set(sessionId, Math.max(0, count - 1));
 				drainQueue(sessionId);
-			}
 
-			if (wasManuallyStopped) {
-				try {
-					updateCueEventStatus(runId, 'stopped');
-				} catch {
-					// Non-fatal if DB is unavailable
-				}
-				manuallyStoppedRuns.delete(runId);
-			} else {
 				try {
 					updateCueEventStatus(runId, result.status);
-				} catch {
-					// Non-fatal if DB is unavailable
+				} catch (err) {
+					deps.onLog('warn', `[CUE] Failed to update DB status for run ${runId}`);
+					captureException(err, {
+						operation: 'cue:updateEventStatus',
+						runId,
+						status: result.status,
+					});
 				}
 				deps.onLog('cue', `[CUE] Run finished: ${subscriptionName} (${result.status})`, {
 					type: 'runFinished',
@@ -366,25 +383,42 @@ export function createCueRunManager(deps: CueRunManagerDeps): CueRunManager {
 		},
 
 		stopRun(runId: string): boolean {
-			const run = activeRuns.get(runId);
-			if (!run) return false;
+			// Phase-validated transition: only running → stopping is valid
+			const prevPhase = transitionRun(runId, 'stopping');
+			if (prevPhase === null) return false;
 
-			manuallyStoppedRuns.add(runId);
+			const run = activeRuns.get(runId)!;
+
+			// Signal the process to stop — kill the currently executing child process.
+			// During output prompt phase, processRunId differs from the parent runId.
 			deps.onStopCueRun?.(runId);
+			if (run.processRunId && run.processRunId !== runId) {
+				deps.onStopCueRun?.(run.processRunId);
+			}
 			run.abortController?.abort();
+
+			// Finalize the result for immediate UI feedback
 			run.result.status = 'stopped';
 			run.result.endedAt = new Date().toISOString();
 			run.result.durationMs = Date.now() - new Date(run.result.startedAt).getTime();
 
+			// Remove from activeRuns — the finally block in doExecuteCueRun
+			// sees this and skips its own cleanup (single ownership).
 			activeRuns.delete(runId);
 			deps.onAllowSleep?.(`cue:run:${runId}`);
 
-			// Free the concurrency slot immediately so queued events can proceed.
-			// The finally block in doExecuteCueRun skips its decrement for manually stopped runs.
+			// Free the concurrency slot immediately so queued events can proceed
 			const count = activeRunCount.get(run.result.sessionId) ?? 1;
 			activeRunCount.set(run.result.sessionId, Math.max(0, count - 1));
 			drainQueue(run.result.sessionId);
 
+			// Record final status in DB and notify
+			try {
+				updateCueEventStatus(runId, 'stopped');
+			} catch (err) {
+				deps.onLog('warn', `[CUE] Failed to update DB status for stopped run ${runId}`);
+				captureException(err, { operation: 'cue:updateEventStatus', runId, status: 'stopped' });
+			}
 			deps.onRunStopped(run.result);
 			deps.onLog('cue', `[CUE] Run stopped: ${runId}`, {
 				type: 'runStopped',
@@ -446,7 +480,6 @@ export function createCueRunManager(deps: CueRunManagerDeps): CueRunManager {
 			activeRuns.clear();
 			activeRunCount.clear();
 			eventQueue.clear();
-			manuallyStoppedRuns.clear();
 		},
 	};
 }

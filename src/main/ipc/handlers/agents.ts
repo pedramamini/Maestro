@@ -2,11 +2,18 @@ import { ipcMain } from 'electron';
 import Store from 'electron-store';
 import * as fs from 'fs';
 import * as path from 'path';
-import * as os from 'os';
-import { AgentDetector, AGENT_DEFINITIONS, getAgentCapabilities } from '../../agents';
+import {
+	AgentDetector,
+	AGENT_DEFINITIONS,
+	getAgentCapabilities,
+	parseOpenCodeConfig,
+	extractModelsFromConfig,
+	getOpenCodeConfigPaths,
+	getOpenCodeCommandDirs,
+} from '../../agents';
 import { execFileNoThrow } from '../../utils/execFile';
 import { logger } from '../../utils/logger';
-import { getWhichCommand, isWindows } from '../../../shared/platformDetection';
+import { getWhichCommand } from '../../../shared/platformDetection';
 import {
 	withIpcErrorLogging,
 	requireDependency,
@@ -55,7 +62,6 @@ interface DiscoveredCommand {
 
 async function discoverOpenCodeSlashCommands(cwd: string): Promise<DiscoveredCommand[]> {
 	const commands = new Map<string, DiscoveredCommand>();
-	const globalConfigBase = process.env.XDG_CONFIG_HOME || path.join(os.homedir(), '.config');
 
 	// Strip YAML frontmatter (---\n...\n---) from command file content,
 	// returning only the body text that serves as the prompt.
@@ -93,7 +99,7 @@ async function discoverOpenCodeSlashCommands(cwd: string): Promise<DiscoveredCom
 		}
 	};
 
-	// Helper: read command names from an opencode.json config file
+	// Helper: read command definitions from an opencode.json config file
 	const addCommandsFromConfig = async (configPath: string) => {
 		let content: string;
 		try {
@@ -105,10 +111,8 @@ async function discoverOpenCodeSlashCommands(cwd: string): Promise<DiscoveredCom
 			}
 			throw error;
 		}
-		let config: any;
-		try {
-			config = JSON.parse(content);
-		} catch {
+		const config = parseOpenCodeConfig(content);
+		if (!config) {
 			logger.warn(`OpenCode config has invalid JSON, skipping: ${configPath}`, LOG_CONTEXT);
 			return;
 		}
@@ -126,49 +130,12 @@ async function discoverOpenCodeSlashCommands(cwd: string): Promise<DiscoveredCom
 		}
 	};
 
-	// OpenCode home directory (e.g., ~/.opencode/) — used for global commands and config
-	const home = os.homedir();
-	const opencodeHome = path.join(home, '.opencode');
-
-	// Project-local directories take priority (read first), then global locations.
-	// Global command directory is platform-specific to avoid ENOENT noise on Windows.
-	await addCommandsFromDir(path.join(cwd, '.opencode', 'commands'));
-	await addCommandsFromDir(path.join(opencodeHome, 'commands'));
-
-	if (isWindows()) {
-		const localAppData = process.env.LOCALAPPDATA || path.join(home, 'AppData', 'Local');
-		await addCommandsFromDir(path.join(localAppData, 'opencode', 'commands'));
-	} else {
-		await addCommandsFromDir(path.join(globalConfigBase, 'opencode', 'commands'));
+	// Probe command directories and config files using shared path resolution
+	for (const dir of getOpenCodeCommandDirs(cwd)) {
+		await addCommandsFromDir(dir);
 	}
 
-	// Build platform-aware config file paths in precedence order.
-	// Honor OPENCODE_CONFIG env var first (explicit user override), then probe
-	// platform-specific locations matching OpenCode's own resolution logic.
-	const configPaths: string[] = [];
-
-	if (process.env.OPENCODE_CONFIG) {
-		configPaths.push(process.env.OPENCODE_CONFIG);
-	}
-
-	if (isWindows()) {
-		const localAppData = process.env.LOCALAPPDATA || path.join(home, 'AppData', 'Local');
-		configPaths.push(
-			path.join(cwd, 'opencode.json'),
-			path.join(localAppData, 'opencode', 'opencode.json'),
-			path.join(home, '.opencode.json'),
-			path.join(opencodeHome, 'opencode.json')
-		);
-	} else {
-		configPaths.push(
-			path.join(cwd, 'opencode.json'),
-			path.join(opencodeHome, 'opencode.json'),
-			path.join(home, '.opencode.json'),
-			path.join(globalConfigBase, 'opencode', 'opencode.json')
-		);
-	}
-
-	for (const configPath of configPaths) {
+	for (const configPath of getOpenCodeConfigPaths(cwd)) {
 		await addCommandsFromConfig(configPath);
 	}
 
@@ -350,8 +317,99 @@ const REMOTE_MODEL_CACHE_TTL_MS = 5 * 60 * 1000;
 const SSH_MODEL_TIMEOUT_MS = 10000;
 
 /**
+ * Read OpenCode config files from a remote SSH host and extract model IDs.
+ *
+ * Probes the same config paths OpenCode uses on POSIX systems:
+ *   ~/.opencode/opencode.json, ~/.opencode.json, ~/.config/opencode/opencode.json
+ *
+ * Uses a single SSH command with a shell script that cats each file, avoiding
+ * multiple round-trips. Returns unique model IDs in provider/model format.
+ */
+async function discoverModelsFromRemoteConfigs(sshRemote: SshRemoteConfig): Promise<string[]> {
+	// Shell script that probes each config path and prints its content with delimiters.
+	// We use a delimiter so we can split multiple config files from a single stdout.
+	const configPaths = [
+		'~/.opencode/opencode.json',
+		'~/.opencode.json',
+		'${XDG_CONFIG_HOME:-$HOME/.config}/opencode/opencode.json',
+	];
+
+	// Build a script that cats each config file if it exists
+	const catScript = configPaths
+		.map(
+			(p) =>
+				`if [ -f ${p} ]; then echo "___OPENCODE_CONFIG_START___"; cat ${p}; echo "___OPENCODE_CONFIG_END___"; fi`
+		)
+		.join('; ');
+
+	const remoteOptions: RemoteCommandOptions = {
+		command: 'sh',
+		args: ['-c', catScript],
+		env: sshRemote.remoteEnv,
+	};
+
+	try {
+		const sshCommand = await buildSshCommand(sshRemote, remoteOptions);
+		const resultPromise = execFileNoThrow(sshCommand.command, sshCommand.args);
+		const timeoutPromise = new Promise<{ exitCode: number; stdout: string; stderr: string }>(
+			(_, reject) => {
+				setTimeout(() => reject(new Error('SSH config read timed out')), SSH_MODEL_TIMEOUT_MS);
+			}
+		);
+
+		const result = await Promise.race([resultPromise, timeoutPromise]);
+
+		if (result.exitCode !== 0 || !result.stdout.includes('___OPENCODE_CONFIG_START___')) {
+			return [];
+		}
+
+		// Parse delimited config blocks from stdout
+		const seen = new Set<string>();
+		const models: string[] = [];
+		const blocks = result.stdout.split('___OPENCODE_CONFIG_START___').slice(1);
+
+		for (const block of blocks) {
+			const endIdx = block.indexOf('___OPENCODE_CONFIG_END___');
+			const jsonStr = endIdx >= 0 ? block.slice(0, endIdx).trim() : block.trim();
+			if (!jsonStr) continue;
+
+			const config = parseOpenCodeConfig(jsonStr);
+			if (!config) continue;
+
+			for (const modelId of extractModelsFromConfig(config)) {
+				if (!seen.has(modelId)) {
+					seen.add(modelId);
+					models.push(modelId);
+				}
+			}
+		}
+
+		if (models.length > 0) {
+			logger.info(
+				`Extracted ${models.length} models from remote OpenCode configs on ${sshRemote.host}`,
+				LOG_CONTEXT,
+				{ models }
+			);
+		}
+
+		return models;
+	} catch (error) {
+		if (error instanceof Error && error.message.includes('timed out')) {
+			logger.warn(`Timed out reading remote OpenCode configs on ${sshRemote.host}`, LOG_CONTEXT);
+			return [];
+		}
+		// Non-fatal: config reading failure shouldn't block CLI-based discovery
+		logger.warn(`Failed to read remote OpenCode configs on ${sshRemote.host}`, LOG_CONTEXT, {
+			error,
+		});
+		return [];
+	}
+}
+
+/**
  * Discover available models for an agent on a remote SSH host.
- * Uses the agent's `models` subcommand over SSH.
+ * Uses the agent's `models` subcommand over SSH, supplemented by models
+ * from remote opencode.json config files for OpenCode agents.
  * Returns an empty array on timeout, non-zero exit, or unknown agent.
  * Throws on unexpected errors (e.g., SSH config issues, parsing bugs).
  */
@@ -416,10 +474,31 @@ async function discoverModelsRemote(
 			return [];
 		}
 
-		const models = stripAnsi(result.stdout)
+		const seen = new Set<string>();
+		const models: string[] = [];
+
+		// Source 1: CLI-discovered models
+		const cliModels = stripAnsi(result.stdout)
 			.split('\n')
 			.map((l) => l.trim())
 			.filter((l) => l.length > 0);
+		for (const m of cliModels) {
+			if (!seen.has(m)) {
+				seen.add(m);
+				models.push(m);
+			}
+		}
+
+		// Source 2: Remote opencode.json config files (OpenCode only)
+		if (agentId === 'opencode') {
+			const configModels = await discoverModelsFromRemoteConfigs(sshRemote);
+			for (const m of configModels) {
+				if (!seen.has(m)) {
+					seen.add(m);
+					models.push(m);
+				}
+			}
+		}
 
 		logger.info(
 			`Discovered ${models.length} models for "${agentDef.name}" on remote ${sshRemote.host}`,
@@ -452,6 +531,135 @@ async function discoverModelsRemote(
  * - Configuration: getConfig, setConfig, getConfigValue, setConfigValue
  * - Custom paths: setCustomPath, getCustomPath, getAllCustomPaths
  */
+/**
+ * Discover OpenCode slash commands from a remote SSH host.
+ *
+ * Reads .opencode/commands/*.md files and opencode.json command definitions
+ * from the remote host using a single SSH invocation with execFileNoThrow.
+ */
+async function discoverOpenCodeSlashCommandsRemote(
+	sshRemote: SshRemoteConfig,
+	cwd: string
+): Promise<DiscoveredCommand[]> {
+	// Shell script probes command directories and config files on the remote host.
+	// All paths are static (no user-controlled interpolation).
+	const commandDirs = [
+		`${cwd}/.opencode/commands`,
+		'~/.opencode/commands',
+		'${XDG_CONFIG_HOME:-$HOME/.config}/opencode/commands',
+	];
+	const configPaths = [
+		`${cwd}/opencode.json`,
+		'~/.opencode/opencode.json',
+		'~/.opencode.json',
+		'${XDG_CONFIG_HOME:-$HOME/.config}/opencode/opencode.json',
+	];
+
+	const dirScript = commandDirs
+		.map(
+			(dir) =>
+				`if [ -d ${dir} ]; then for f in ${dir}/*.md; do [ -f "$f" ] && echo "___CMD_FILE_START___ $(basename "$f")" && cat "$f" && echo "___CMD_FILE_END___"; done; fi`
+		)
+		.join('; ');
+
+	const configScript = configPaths
+		.map(
+			(p) =>
+				`if [ -f ${p} ]; then echo "___OPENCODE_CONFIG_START___"; cat ${p}; echo "___OPENCODE_CONFIG_END___"; fi`
+		)
+		.join('; ');
+
+	const fullScript = `${dirScript}; ${configScript}`;
+
+	const remoteOptions: RemoteCommandOptions = {
+		command: 'sh',
+		args: ['-c', fullScript],
+		env: sshRemote.remoteEnv,
+	};
+
+	try {
+		const sshCommand = await buildSshCommand(sshRemote, remoteOptions);
+		const resultPromise = execFileNoThrow(sshCommand.command, sshCommand.args);
+		const timeoutPromise = new Promise<{ exitCode: number; stdout: string; stderr: string }>(
+			(_, reject) => {
+				setTimeout(
+					() => reject(new Error('SSH slash command discovery timed out')),
+					SSH_MODEL_TIMEOUT_MS
+				);
+			}
+		);
+
+		const result = await Promise.race([resultPromise, timeoutPromise]);
+		if (result.exitCode !== 0 && !result.stdout) {
+			logger.warn(`Remote slash command discovery failed on ${sshRemote.host}`, LOG_CONTEXT, {
+				exitCode: result.exitCode,
+				stderr: result.stderr?.substring(0, 500),
+			});
+			return [];
+		}
+
+		const commands = new Map<string, DiscoveredCommand>();
+		const output = result.stdout;
+
+		// Parse .md command files
+		const cmdFileRegex = /___CMD_FILE_START___ (.+?)\n([\s\S]*?)___CMD_FILE_END___/g;
+		let match: RegExpExecArray | null;
+		while ((match = cmdFileRegex.exec(output)) !== null) {
+			const filename = match[1].trim();
+			const content = match[2].trim();
+			const name = filename.replace(/\.md$/, '');
+			if (!commands.has(name)) {
+				// Strip YAML frontmatter
+				let prompt = content;
+				const trimmed = prompt.trimStart();
+				if (trimmed.startsWith('---')) {
+					const endIndex = trimmed.indexOf('\n---', 3);
+					if (endIndex !== -1) {
+						prompt = trimmed.slice(endIndex + 4).trim();
+					}
+				}
+				commands.set(name, { name, prompt: prompt || undefined });
+			}
+		}
+
+		// Parse config file command definitions
+		const configBlocks = output.split('___OPENCODE_CONFIG_START___').slice(1);
+		for (const block of configBlocks) {
+			const endIdx = block.indexOf('___OPENCODE_CONFIG_END___');
+			const jsonStr = endIdx >= 0 ? block.slice(0, endIdx).trim() : block.trim();
+			if (!jsonStr) continue;
+
+			const config = parseOpenCodeConfig(jsonStr);
+			if (!config?.command || typeof config.command !== 'object') continue;
+
+			for (const [name, value] of Object.entries(config.command)) {
+				if (commands.has(name)) continue;
+				const prompt =
+					typeof value === 'string'
+						? value
+						: typeof (value as any)?.prompt === 'string'
+							? (value as any).prompt
+							: undefined;
+				commands.set(name, { name, prompt });
+			}
+		}
+
+		const commandList = Array.from(commands.values());
+		logger.info(
+			`Discovered ${commandList.length} OpenCode slash commands on remote ${sshRemote.host}`,
+			LOG_CONTEXT
+		);
+		return commandList;
+	} catch (error) {
+		if (error instanceof Error && error.message.includes('timed out')) {
+			logger.warn(`Timed out discovering slash commands on ${sshRemote.host}`, LOG_CONTEXT);
+			return [];
+		}
+		logger.warn(`Failed to discover slash commands on ${sshRemote.host}`, LOG_CONTEXT, { error });
+		return [];
+	}
+}
+
 export function registerAgentsHandlers(deps: AgentsHandlerDependencies): void {
 	const { getAgentDetector, agentConfigsStore, settingsStore } = deps;
 
@@ -1002,9 +1210,22 @@ export function registerAgentsHandlers(deps: AgentsHandlerDependencies): void {
 		'agents:discoverSlashCommands',
 		withIpcErrorLogging(
 			handlerOpts('discoverSlashCommands'),
-			async (agentId: string, cwd: string, customPath?: string) => {
+			async (agentId: string, cwd: string, customPath?: string, sshRemoteId?: string) => {
 				const agentDetector = requireDependency(getAgentDetector, 'Agent detector');
 				logger.info(`Discovering slash commands for agent: ${agentId} in ${cwd}`, LOG_CONTEXT);
+
+				// SSH remote: discover OpenCode commands from remote host
+				if (agentId === 'opencode' && sshRemoteId) {
+					const sshRemote = getSshRemoteById(settingsStore, sshRemoteId);
+					if (!sshRemote) {
+						logger.warn(
+							`SSH remote ${sshRemoteId} not found for slash command discovery`,
+							LOG_CONTEXT
+						);
+						return null;
+					}
+					return discoverOpenCodeSlashCommandsRemote(sshRemote, cwd);
+				}
 
 				const agent = await agentDetector.getAgent(agentId);
 				if (!agent?.available) {

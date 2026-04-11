@@ -10,6 +10,11 @@ import type { WindowState } from '../stores/types';
 import { logger } from '../utils/logger';
 import { initAutoUpdater } from '../auto-updater';
 
+const BROWSER_TAB_PARTITION_PREFIX = 'persist:maestro-browser-session-';
+const ALLOWED_BROWSER_TAB_EMBED_PROTOCOLS = new Set(['http:', 'https:']);
+const ALLOWED_BROWSER_TAB_ABOUT_URLS = new Set(['about:blank']);
+const ALLOWED_APP_PERMISSIONS = new Set(['clipboard-read', 'clipboard-sanitized-write']);
+
 /** Sentry severity levels */
 type SentrySeverityLevel = 'fatal' | 'error' | 'warning' | 'log' | 'info' | 'debug';
 
@@ -23,6 +28,86 @@ interface SentryModule {
 
 /** Cached Sentry module reference */
 let sentryModule: SentryModule | null = null;
+
+type BrowserTabWebPreferences = Record<string, unknown> & {
+	partition?: string;
+	preload?: string;
+	nodeIntegration?: boolean;
+	nodeIntegrationInSubFrames?: boolean;
+	contextIsolation?: boolean;
+	sandbox?: boolean;
+	webSecurity?: boolean;
+	allowRunningInsecureContent?: boolean;
+};
+
+interface BrowserTabGuestContents {
+	getType?: () => string;
+	setWindowOpenHandler: (
+		handler: ({ url }: { url: string }) => { action: 'deny' | 'allow' }
+	) => void;
+	on: (
+		event: string,
+		handler: (event: { preventDefault: () => void }, url: string) => void
+	) => void;
+}
+
+function isAllowedBrowserTabUrl(rawUrl: string): boolean {
+	if (ALLOWED_BROWSER_TAB_ABOUT_URLS.has(rawUrl)) return true;
+
+	try {
+		return ALLOWED_BROWSER_TAB_EMBED_PROTOCOLS.has(new URL(rawUrl).protocol);
+	} catch {
+		return false;
+	}
+}
+
+function isAllowedBrowserTabPartition(partition: string): boolean {
+	return partition.startsWith(BROWSER_TAB_PARTITION_PREFIX);
+}
+
+function hardenBrowserTabWebPreferences(webPreferences: BrowserTabWebPreferences): void {
+	delete webPreferences.preload;
+	delete (webPreferences as Record<string, unknown>).preloadURL;
+
+	webPreferences.nodeIntegration = false;
+	webPreferences.nodeIntegrationInSubFrames = false;
+	webPreferences.contextIsolation = true;
+	webPreferences.sandbox = true;
+	webPreferences.webSecurity = true;
+	webPreferences.allowRunningInsecureContent = false;
+}
+
+function attachBrowserTabGuestSecurity(guestContents: BrowserTabGuestContents): void {
+	const denyBrowserTabNavigation = (
+		eventName: 'will-navigate' | 'will-redirect',
+		event: { preventDefault: () => void },
+		url: string
+	) => {
+		if (isAllowedBrowserTabUrl(url)) return;
+
+		event.preventDefault();
+		logger.warn(`Blocked browser-tab ${eventName}: ${url}`, 'Window', {
+			url,
+			type: guestContents.getType?.() ?? 'unknown',
+		});
+	};
+
+	guestContents.setWindowOpenHandler(({ url }) => {
+		logger.warn(`Blocked browser-tab popup: ${url}`, 'Window', {
+			url,
+			type: guestContents.getType?.() ?? 'unknown',
+		});
+		return { action: 'deny' };
+	});
+
+	guestContents.on('will-navigate', (event, url) => {
+		denyBrowserTabNavigation('will-navigate', event, url);
+	});
+
+	guestContents.on('will-redirect', (event, url) => {
+		denyBrowserTabNavigation('will-redirect', event, url);
+	});
+}
 
 /**
  * Reports a crash event to Sentry from the main process.
@@ -106,6 +191,8 @@ export function createWindowManager(deps: WindowManagerDependencies): WindowMana
 					contextIsolation: true,
 					nodeIntegration: false,
 					sandbox: true,
+					// Embedded browser tabs use Electron's guest webview surface in the renderer.
+					webviewTag: true,
 				},
 			});
 
@@ -177,6 +264,27 @@ export function createWindowManager(deps: WindowManagerDependencies): WindowMana
 			// Navigation & Window Security Hardening
 			// ================================================================
 
+			// Restrict renderer-created webviews to the browser-tab surface only.
+			mainWindow.webContents.on('will-attach-webview', (event, webPreferences, params) => {
+				const src = typeof params.src === 'string' ? params.src : '';
+				const partition =
+					typeof webPreferences.partition === 'string' ? webPreferences.partition : '';
+
+				hardenBrowserTabWebPreferences(webPreferences as BrowserTabWebPreferences);
+
+				if (!isAllowedBrowserTabUrl(src) || !isAllowedBrowserTabPartition(partition)) {
+					event.preventDefault();
+					logger.warn(`Blocked unsafe webview attachment: ${src || '<empty src>'}`, 'Window', {
+						src,
+						partition,
+					});
+				}
+			});
+
+			mainWindow.webContents.on('did-attach-webview', (_event, guestContents) => {
+				attachBrowserTabGuestSecurity(guestContents as BrowserTabGuestContents);
+			});
+
 			// Deny all popup/new-window requests — external links use IPC shell:openExternal
 			mainWindow.webContents.setWindowOpenHandler(({ url }) => {
 				logger.warn(`Blocked window.open request: ${url}`, 'Window');
@@ -203,12 +311,21 @@ export function createWindowManager(deps: WindowManagerDependencies): WindowMana
 			});
 
 			// Deny most browser permission requests (camera, mic, geolocation, etc.)
-			// Allow clipboard access for copy-to-clipboard functionality
+			// Allow clipboard access for the app window only, never embedded browser tabs.
 			mainWindow.webContents.session.setPermissionRequestHandler(
-				(_webContents, permission, callback) => {
-					if (permission === 'clipboard-read' || permission === 'clipboard-sanitized-write') {
+				(webContents, permission, callback) => {
+					const contentsType = webContents?.getType?.();
+					const isAppWindow = contentsType === 'window';
+
+					if (isAppWindow && ALLOWED_APP_PERMISSIONS.has(permission)) {
 						callback(true);
 					} else {
+						if (contentsType === 'webview') {
+							logger.warn(`Blocked browser-tab permission request: ${permission}`, 'Window', {
+								permission,
+								type: contentsType,
+							});
+						}
 						callback(false);
 					}
 				}

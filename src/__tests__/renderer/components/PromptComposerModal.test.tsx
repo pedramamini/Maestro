@@ -6,6 +6,12 @@ import { formatEnterToSend } from '../../../renderer/utils/shortcutFormatter';
 import { LayerStackProvider } from '../../../renderer/contexts/LayerStackContext';
 import type { Theme, Session, Group } from '../../../renderer/types';
 
+// Mock useAtMentionCompletion hook
+const mockGetSuggestions = vi.fn().mockReturnValue([]);
+vi.mock('../../../renderer/hooks/input/useAtMentionCompletion', () => ({
+	useAtMentionCompletion: () => ({ getSuggestions: mockGetSuggestions }),
+}));
+
 // Mock Lucide icons
 vi.mock('lucide-react', () => ({
 	X: ({ className, style }: { className?: string; style?: React.CSSProperties }) => (
@@ -37,6 +43,12 @@ vi.mock('lucide-react', () => ({
 	),
 	Pin: ({ className, style }: { className?: string; style?: React.CSSProperties }) => (
 		<svg data-testid="pin-icon" className={className} style={style} />
+	),
+	File: ({ className, style }: { className?: string; style?: React.CSSProperties }) => (
+		<svg data-testid="file-icon" className={className} style={style} />
+	),
+	Folder: ({ className, style }: { className?: string; style?: React.CSSProperties }) => (
+		<svg data-testid="folder-icon" className={className} style={style} />
 	),
 }));
 
@@ -97,6 +109,7 @@ describe('PromptComposerModal', () => {
 		onClose = vi.fn();
 		onSubmit = vi.fn();
 		onSend = vi.fn();
+		mockGetSuggestions.mockReturnValue([]);
 	});
 
 	afterEach(() => {
@@ -226,7 +239,9 @@ describe('PromptComposerModal', () => {
 				/>
 			);
 
-			expect(screen.getByPlaceholderText('Write your prompt here...')).toBeInTheDocument();
+			expect(
+				screen.getByPlaceholderText('Write your prompt here... (@ to reference files)')
+			).toBeInTheDocument();
 		});
 
 		it('should render textarea with initial value', () => {
@@ -242,7 +257,7 @@ describe('PromptComposerModal', () => {
 			);
 
 			const textarea = screen.getByPlaceholderText(
-				'Write your prompt here...'
+				'Write your prompt here... (@ to reference files)'
 			) as HTMLTextAreaElement;
 			expect(textarea.value).toBe('Initial prompt text');
 		});
@@ -437,7 +452,9 @@ describe('PromptComposerModal', () => {
 				/>
 			);
 
-			const textarea = screen.getByPlaceholderText('Write your prompt here...');
+			const textarea = screen.getByPlaceholderText(
+				'Write your prompt here... (@ to reference files)'
+			);
 			fireEvent.change(textarea, { target: { value: 'Hello' } });
 
 			expect(screen.getByText('5 characters')).toBeInTheDocument();
@@ -458,7 +475,9 @@ describe('PromptComposerModal', () => {
 				/>
 			);
 
-			const textarea = screen.getByPlaceholderText('Write your prompt here...');
+			const textarea = screen.getByPlaceholderText(
+				'Write your prompt here... (@ to reference files)'
+			);
 			expect(document.activeElement).toBe(textarea);
 		});
 
@@ -475,7 +494,7 @@ describe('PromptComposerModal', () => {
 			);
 
 			const textarea = screen.getByPlaceholderText(
-				'Write your prompt here...'
+				'Write your prompt here... (@ to reference files)'
 			) as HTMLTextAreaElement;
 			expect(textarea.selectionStart).toBe(11);
 			expect(textarea.selectionEnd).toBe(11);
@@ -510,7 +529,7 @@ describe('PromptComposerModal', () => {
 			);
 
 			const textarea = screen.getByPlaceholderText(
-				'Write your prompt here...'
+				'Write your prompt here... (@ to reference files)'
 			) as HTMLTextAreaElement;
 			expect(textarea.value).toBe('New value');
 		});
@@ -541,7 +560,7 @@ describe('PromptComposerModal', () => {
 			);
 
 			const textarea = screen.getByPlaceholderText(
-				'Write your prompt here...'
+				'Write your prompt here... (@ to reference files)'
 			) as HTMLTextAreaElement;
 			expect(textarea.value).toBe('Second');
 		});
@@ -647,7 +666,9 @@ describe('PromptComposerModal', () => {
 				/>
 			);
 
-			const textarea = screen.getByPlaceholderText('Write your prompt here...');
+			const textarea = screen.getByPlaceholderText(
+				'Write your prompt here... (@ to reference files)'
+			);
 			fireEvent.keyDown(textarea, { key: 'Enter', metaKey: true });
 
 			expect(onSend).toHaveBeenCalledWith('Test message');
@@ -666,7 +687,9 @@ describe('PromptComposerModal', () => {
 				/>
 			);
 
-			const textarea = screen.getByPlaceholderText('Write your prompt here...');
+			const textarea = screen.getByPlaceholderText(
+				'Write your prompt here... (@ to reference files)'
+			);
 			fireEvent.keyDown(textarea, { key: 'Enter', ctrlKey: true });
 
 			expect(onSend).toHaveBeenCalledWith('Test message');
@@ -685,7 +708,9 @@ describe('PromptComposerModal', () => {
 				/>
 			);
 
-			const textarea = screen.getByPlaceholderText('Write your prompt here...');
+			const textarea = screen.getByPlaceholderText(
+				'Write your prompt here... (@ to reference files)'
+			);
 			fireEvent.keyDown(textarea, { key: 'Enter' });
 
 			expect(onSend).not.toHaveBeenCalled();
@@ -703,7 +728,9 @@ describe('PromptComposerModal', () => {
 				/>
 			);
 
-			const textarea = screen.getByPlaceholderText('Write your prompt here...');
+			const textarea = screen.getByPlaceholderText(
+				'Write your prompt here... (@ to reference files)'
+			);
 			fireEvent.keyDown(textarea, { key: 'Enter', metaKey: true });
 
 			expect(onSend).not.toHaveBeenCalled();
@@ -721,7 +748,9 @@ describe('PromptComposerModal', () => {
 				/>
 			);
 
-			const textarea = screen.getByPlaceholderText('Write your prompt here...');
+			const textarea = screen.getByPlaceholderText(
+				'Write your prompt here... (@ to reference files)'
+			);
 			fireEvent.keyDown(textarea, { key: 'Enter', metaKey: true });
 
 			expect(onSend).not.toHaveBeenCalled();
@@ -760,7 +789,9 @@ describe('PromptComposerModal', () => {
 				/>
 			);
 
-			const textarea = screen.getByPlaceholderText('Write your prompt here...');
+			const textarea = screen.getByPlaceholderText(
+				'Write your prompt here... (@ to reference files)'
+			);
 			fireEvent.change(textarea, { target: { value: 'Edited text' } });
 
 			const closeButton = screen.getByTitle('Close (Escape)');
@@ -806,7 +837,9 @@ describe('PromptComposerModal', () => {
 				/>
 			);
 
-			const textarea = screen.getByPlaceholderText('Write your prompt here...');
+			const textarea = screen.getByPlaceholderText(
+				'Write your prompt here... (@ to reference files)'
+			);
 			fireEvent.click(textarea);
 
 			expect(onClose).not.toHaveBeenCalled();
@@ -847,7 +880,9 @@ describe('PromptComposerModal', () => {
 				/>
 			);
 
-			const textarea = screen.getByPlaceholderText('Write your prompt here...');
+			const textarea = screen.getByPlaceholderText(
+				'Write your prompt here... (@ to reference files)'
+			);
 			fireEvent.change(textarea, { target: { value: 'Modified' } });
 
 			fireEvent.keyDown(document, { key: 'Escape' });
@@ -871,7 +906,9 @@ describe('PromptComposerModal', () => {
 				/>
 			);
 
-			const textarea = screen.getByPlaceholderText('Write your prompt here...');
+			const textarea = screen.getByPlaceholderText(
+				'Write your prompt here... (@ to reference files)'
+			);
 			fireEvent.change(textarea, { target: { value: 'New content' } });
 
 			expect((textarea as HTMLTextAreaElement).value).toBe('New content');
@@ -889,7 +926,9 @@ describe('PromptComposerModal', () => {
 				/>
 			);
 
-			const textarea = screen.getByPlaceholderText('Write your prompt here...');
+			const textarea = screen.getByPlaceholderText(
+				'Write your prompt here... (@ to reference files)'
+			);
 			expect(textarea).toHaveStyle({ color: mockTheme.colors.textMain });
 		});
 	});
@@ -942,7 +981,7 @@ describe('PromptComposerModal', () => {
 
 			// Unicode chars are still counted as characters
 			const textarea = screen.getByPlaceholderText(
-				'Write your prompt here...'
+				'Write your prompt here... (@ to reference files)'
 			) as HTMLTextAreaElement;
 			expect(textarea.value).toBe('Hello 世界 🌍');
 		});
@@ -1065,7 +1104,9 @@ describe('PromptComposerModal', () => {
 				/>
 			);
 
-			const textarea = screen.getByPlaceholderText('Write your prompt here...');
+			const textarea = screen.getByPlaceholderText(
+				'Write your prompt here... (@ to reference files)'
+			);
 			expect(textarea.tagName).toBe('TEXTAREA');
 		});
 
@@ -1158,7 +1199,7 @@ describe('PromptComposerModal', () => {
 			);
 
 			expect(
-				screen.getByPlaceholderText('Write your prompt here... (@ to mention agent)')
+				screen.getByPlaceholderText('Write your prompt here... (@ to mention files or agents)')
 			).toBeInTheDocument();
 		});
 
@@ -1177,7 +1218,7 @@ describe('PromptComposerModal', () => {
 			);
 
 			const textarea = screen.getByPlaceholderText(
-				'Write your prompt here... (@ to mention agent)'
+				'Write your prompt here... (@ to mention files or agents)'
 			);
 			fireEvent.change(textarea, { target: { value: '@' } });
 
@@ -1200,7 +1241,7 @@ describe('PromptComposerModal', () => {
 			);
 
 			const textarea = screen.getByPlaceholderText(
-				'Write your prompt here... (@ to mention agent)'
+				'Write your prompt here... (@ to mention files or agents)'
 			);
 			fireEvent.change(textarea, { target: { value: '@Age' } });
 
@@ -1223,7 +1264,7 @@ describe('PromptComposerModal', () => {
 			);
 
 			const textarea = screen.getByPlaceholderText(
-				'Write your prompt here... (@ to mention agent)'
+				'Write your prompt here... (@ to mention files or agents)'
 			) as HTMLTextAreaElement;
 			fireEvent.change(textarea, { target: { value: '@' } });
 			fireEvent.click(screen.getByText('@Agent1'));
@@ -1246,7 +1287,7 @@ describe('PromptComposerModal', () => {
 			);
 
 			const textarea = screen.getByPlaceholderText(
-				'Write your prompt here... (@ to mention agent)'
+				'Write your prompt here... (@ to mention files or agents)'
 			) as HTMLTextAreaElement;
 			fireEvent.change(textarea, { target: { value: '@' } });
 			fireEvent.keyDown(textarea, { key: 'Tab' });
@@ -1269,7 +1310,7 @@ describe('PromptComposerModal', () => {
 			);
 
 			const textarea = screen.getByPlaceholderText(
-				'Write your prompt here... (@ to mention agent)'
+				'Write your prompt here... (@ to mention files or agents)'
 			) as HTMLTextAreaElement;
 			fireEvent.change(textarea, { target: { value: '@' } });
 			fireEvent.keyDown(textarea, { key: 'ArrowDown' });
@@ -1293,7 +1334,7 @@ describe('PromptComposerModal', () => {
 			);
 
 			const textarea = screen.getByPlaceholderText(
-				'Write your prompt here... (@ to mention agent)'
+				'Write your prompt here... (@ to mention files or agents)'
 			);
 			fireEvent.change(textarea, { target: { value: '@' } });
 			expect(screen.getByText('@Agent1')).toBeInTheDocument();
@@ -1320,7 +1361,7 @@ describe('PromptComposerModal', () => {
 			);
 
 			const textarea = screen.getByPlaceholderText(
-				'Write your prompt here... (@ to mention agent)'
+				'Write your prompt here... (@ to mention files or agents)'
 			);
 			fireEvent.change(textarea, { target: { value: '@' } });
 
@@ -1348,7 +1389,7 @@ describe('PromptComposerModal', () => {
 			);
 
 			const textarea = screen.getByPlaceholderText(
-				'Write your prompt here... (@ to mention agent)'
+				'Write your prompt here... (@ to mention files or agents)'
 			) as HTMLTextAreaElement;
 			fireEvent.change(textarea, { target: { value: '@' } });
 			fireEvent.click(screen.getByText('@TEAM'));
@@ -1356,7 +1397,17 @@ describe('PromptComposerModal', () => {
 			expect(textarea.value).toBe('@Agent1 @Agent2 ');
 		});
 
-		it('should not show mention dropdown without sessions prop', () => {
+		it('should show file suggestions from useAtMentionCompletion', () => {
+			mockGetSuggestions.mockReturnValue([
+				{
+					value: 'src/index.ts',
+					type: 'file',
+					displayText: 'index.ts',
+					fullPath: 'src/index.ts',
+					score: 100,
+					source: 'project',
+				},
+			]);
 			renderWithProvider(
 				<PromptComposerModal
 					isOpen={true}
@@ -1368,13 +1419,72 @@ describe('PromptComposerModal', () => {
 				/>
 			);
 
-			const textarea = screen.getByPlaceholderText('Write your prompt here...');
+			const textarea = screen.getByPlaceholderText(
+				'Write your prompt here... (@ to reference files)'
+			);
+			fireEvent.change(textarea, { target: { value: '@ind' } });
+
+			expect(mockGetSuggestions).toHaveBeenCalledWith('ind');
+			expect(screen.getByText('src/index.ts')).toBeInTheDocument();
+		});
+
+		it('should insert file path on file suggestion click', () => {
+			mockGetSuggestions.mockReturnValue([
+				{
+					value: 'src/utils.ts',
+					type: 'file',
+					displayText: 'utils.ts',
+					fullPath: 'src/utils.ts',
+					score: 100,
+					source: 'project',
+				},
+			]);
+			renderWithProvider(
+				<PromptComposerModal
+					isOpen={true}
+					onClose={onClose}
+					theme={mockTheme}
+					initialValue=""
+					onSubmit={onSubmit}
+					onSend={onSend}
+				/>
+			);
+
+			const textarea = screen.getByPlaceholderText(
+				'Write your prompt here... (@ to reference files)'
+			) as HTMLTextAreaElement;
+			fireEvent.change(textarea, { target: { value: '@util' } });
+			fireEvent.click(screen.getByText('src/utils.ts'));
+
+			expect(textarea.value).toBe('@src/utils.ts ');
+		});
+
+		it('should not show agent mention dropdown without sessions prop', () => {
+			renderWithProvider(
+				<PromptComposerModal
+					isOpen={true}
+					onClose={onClose}
+					theme={mockTheme}
+					initialValue=""
+					onSubmit={onSubmit}
+					onSend={onSend}
+				/>
+			);
+
+			const textarea = screen.getByPlaceholderText(
+				'Write your prompt here... (@ to reference files)'
+			);
 			fireEvent.change(textarea, { target: { value: '@' } });
 
-			// No mention dropdown should appear
+			// No agent mention buttons should appear (file mentions may appear if mocked)
 			const buttons = screen.queryAllByRole('button');
-			const mentionButtons = buttons.filter((btn) => btn.textContent?.startsWith('@'));
-			expect(mentionButtons).toHaveLength(0);
+			const agentMentionButtons = buttons.filter(
+				(btn) =>
+					btn.textContent?.startsWith('@') &&
+					!btn.querySelector('[data-testid="file-icon"]') &&
+					!btn.querySelector('[data-testid="folder-icon"]')
+			);
+			expect(agentMentionButtons).toHaveLength(0);
 		});
 	});
 });

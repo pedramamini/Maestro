@@ -548,7 +548,7 @@ app.whenReady().then(async () => {
 	if (encoreFeatures.maestroCue && cueEngine) {
 		logger.info('Maestro Cue Encore Feature enabled — starting Cue engine', 'Startup');
 		try {
-			cueEngine.start(true);
+			cueEngine.start('system-boot');
 		} catch (err) {
 			logger.error(
 				`Cue engine failed to start at boot — will remain available for retry via Settings: ${err}`,

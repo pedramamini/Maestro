@@ -145,6 +145,7 @@ interface ActiveProcess {
 	cueSessionName?: string;
 	cueSubscriptionName?: string;
 	cueEventType?: string;
+	childProcesses?: Array<{ pid: number; command: string }>;
 }
 
 const createActiveProcess = (overrides: Partial<ActiveProcess> = {}): ActiveProcess => ({
@@ -566,6 +567,29 @@ describe('ProcessMonitor', () => {
 
 			await waitFor(() => {
 				expect(screen.getByText('Test Session - Terminal Shell')).toBeInTheDocument();
+			});
+		});
+
+		it('should display child processes as tree nodes under terminal process', async () => {
+			const process = createActiveProcess({
+				sessionId: 'session-1-terminal-tab-1',
+				isTerminal: true,
+				childProcesses: [
+					{ pid: 11111, command: 'node' },
+					{ pid: 22222, command: '/usr/bin/npm' },
+				],
+			});
+			getActiveProcessesMock().mockResolvedValue([process]);
+
+			const session = createSession();
+			render(<ProcessMonitor theme={theme} sessions={[session]} groups={[]} onClose={onClose} />);
+
+			await waitFor(() => {
+				// Terminal label should show the last child command basename
+				expect(screen.getByText('Test Session - Terminal: npm')).toBeInTheDocument();
+				// Child process nodes should be rendered
+				expect(screen.getByText('node')).toBeInTheDocument();
+				expect(screen.getByText('npm')).toBeInTheDocument();
 			});
 		});
 

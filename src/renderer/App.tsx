@@ -766,6 +766,7 @@ function MaestroConsoleInner() {
 		activeTab,
 		unifiedTabs,
 		activeFileTab,
+		activeBrowserTab,
 		isResumingSession,
 		fileTabBackHistory,
 		fileTabForwardHistory,
@@ -794,6 +795,10 @@ function MaestroConsoleInner() {
 		handleOpenFileTab,
 		handleSelectFileTab,
 		handleCloseFileTab,
+		handleNewBrowserTab,
+		handleSelectBrowserTab,
+		handleCloseBrowserTab,
+		handleUpdateBrowserTab,
 		handleFileTabEditModeChange,
 		handleFileTabEditContentChange,
 		handleFileTabScrollPositionChange,
@@ -1245,6 +1250,7 @@ function MaestroConsoleInner() {
 			rightPanelRef,
 			defaultSaveToHistory,
 			defaultShowThinking,
+			showFlash: showSuccessFlash,
 		});
 
 	// handleDirectorNotesResumeSession — extracted to useModalHandlers (Tier 3C)
@@ -1637,7 +1643,7 @@ function MaestroConsoleInner() {
 				);
 			}
 		} else {
-			showSuccessFlash('No unread tabs');
+			showSuccessFlash('No unread or draft tabs');
 		}
 	}, [sortedSessions, setSessions, setActiveSessionId, showSuccessFlash]);
 
@@ -2246,8 +2252,14 @@ function MaestroConsoleInner() {
 		unifiedTabs,
 		activeFileTabId: activeSession?.activeFileTabId ?? null,
 		activeFileTab,
+		activeBrowserTabId: activeSession?.activeBrowserTabId ?? null,
+		activeBrowserTab,
 		handleFileTabSelect: handleSelectFileTab,
 		handleFileTabClose: handleCloseFileTab,
+		handleNewBrowserTab,
+		handleBrowserTabSelect: handleSelectBrowserTab,
+		handleBrowserTabClose: handleCloseBrowserTab,
+		handleBrowserTabUpdate: handleUpdateBrowserTab,
 
 		// Terminal tab callbacks (Phase 8)
 		handleOpenTerminalTab,
@@ -2423,7 +2435,6 @@ function MaestroConsoleInner() {
 
 		// Document Graph handlers
 		handleFocusFileInGraph,
-		handleOpenLastDocumentGraph,
 	});
 
 	return (

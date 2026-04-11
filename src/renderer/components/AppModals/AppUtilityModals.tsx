@@ -678,6 +678,9 @@ export const AppUtilityModals = memo(function AppUtilityModals({
 					supportsThinking={promptSupportsThinking}
 					enterToSend={promptEnterToSend}
 					onToggleEnterToSend={onPromptToggleEnterToSend}
+					activeSession={activeSession}
+					sessions={sessions}
+					groups={groups}
 				/>
 			)}
 

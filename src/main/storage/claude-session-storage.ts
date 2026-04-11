@@ -734,7 +734,7 @@ export class ClaudeSessionStorage extends BaseSessionStorage {
 						}
 					}
 
-					if (msgContent && msgContent.trim()) {
+					if ((msgContent && msgContent.trim()) || toolUse) {
 						messages.push({
 							type: entry.type,
 							role: entry.message?.role,
@@ -1137,11 +1137,17 @@ export class ClaudeSessionStorage extends BaseSessionStorage {
 							const stats = await fs.stat(sessionFile);
 							lastActivityAt = stats.mtime.getTime();
 						} else {
-							// No session file path found, skip this stale entry
+							logger.debug(
+								`Skipping named session ${agentSessionId}: no session file path for project ${projectPath}`,
+								LOG_CONTEXT
+							);
 							continue;
 						}
 					} catch {
-						// Session file doesn't exist or is inaccessible, skip stale entry
+						logger.debug(
+							`Skipping named session ${agentSessionId}: file not found at expected path for project ${projectPath}`,
+							LOG_CONTEXT
+						);
 						continue;
 					}
 

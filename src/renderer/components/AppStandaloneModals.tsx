@@ -31,6 +31,7 @@ import type {
 } from '../types';
 import type { FileTabInfo } from '../hooks/ui/useAppHandlers';
 import type { MainPanelHandle } from './MainPanel';
+import type { FileNode } from '../types/fileTree';
 
 // Lazy-loaded components (rarely-used heavy modals)
 const SettingsModal = lazy(() =>
@@ -90,7 +91,7 @@ export interface AppStandaloneModalsProps {
 
 	// --- Director's Notes ---
 	onDirectorNotesResumeSession: (sourceSessionId: string, agentSessionId: string) => void;
-	onFileClick: (node: { name: string; type: string }, path: string) => void;
+	onFileClick: (node: FileNode, path: string) => void;
 
 	// --- Cue ---
 	shortcuts: Record<string, Shortcut>;

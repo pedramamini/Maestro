@@ -365,7 +365,7 @@ export function AutoRunExpandedModal({
 								) : (
 									<Square className="w-3.5 h-3.5" />
 								)}
-								{isStopping ? 'Stopping...' : 'Stop'}
+								{isStopping ? 'Stopping' : 'Stop'}
 							</button>
 						) : (
 							<button
@@ -389,7 +389,7 @@ export function AutoRunExpandedModal({
 								Run
 							</button>
 						)}
-						{/* Exchange button */}
+						{/* PlayBooks button */}
 						{onOpenMarketplace && (
 							<button
 								onClick={onOpenMarketplace}
@@ -399,10 +399,10 @@ export function AutoRunExpandedModal({
 									border: `1px solid ${theme.colors.accent}40`,
 									backgroundColor: `${theme.colors.accent}15`,
 								}}
-								title="Browse Playbook Exchange - discover and share community playbooks"
+								title="Browse PlayBooks - discover and share community playbooks"
 							>
 								<LayoutGrid className="w-3.5 h-3.5" />
-								Exchange
+								PlayBooks
 							</button>
 						)}
 					</div>

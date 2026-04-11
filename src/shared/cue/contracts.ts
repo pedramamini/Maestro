@@ -47,15 +47,20 @@ export type CueGitHubState = 'open' | 'closed' | 'merged' | 'all';
 /** All valid GitHub state values */
 export const CUE_GITHUB_STATES: CueGitHubState[] = ['open', 'closed', 'merged', 'all'];
 
-/** A Cue subscription defines a trigger-prompt pairing */
+/**
+ * A Cue subscription defines a trigger-prompt pairing.
+ *
+ * Note: prompt content is always materialized at config-load time. The raw YAML
+ * `prompt_file` / `output_prompt_file` fields are resolved by the normalizer and
+ * are NOT part of the runtime contract. See `CueSubscriptionDocument` in the
+ * config normalizer if you need to know whether the prompt came from a file.
+ */
 export interface CueSubscription {
 	name: string;
 	event: CueEventType;
 	enabled: boolean;
 	prompt: string;
-	prompt_file?: string;
 	output_prompt?: string;
-	output_prompt_file?: string;
 	interval_minutes?: number;
 	schedule_times?: string[];
 	schedule_days?: CueScheduleDay[];

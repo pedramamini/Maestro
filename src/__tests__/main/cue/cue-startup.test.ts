@@ -25,6 +25,12 @@ const mockLoadCueConfig = vi.fn<(projectRoot: string) => CueConfig | null>();
 const mockWatchCueYaml = vi.fn<(projectRoot: string, onChange: () => void) => () => void>();
 vi.mock('../../../main/cue/cue-yaml-loader', () => ({
 	loadCueConfig: (...args: unknown[]) => mockLoadCueConfig(args[0] as string),
+	loadCueConfigDetailed: (...args: unknown[]) => {
+		const config = mockLoadCueConfig(args[0] as string);
+		return config
+			? { ok: true as const, config, warnings: [] as string[] }
+			: { ok: false as const, reason: 'missing' as const };
+	},
 	watchCueYaml: (...args: unknown[]) => mockWatchCueYaml(args[0] as string, args[1] as () => void),
 }));
 
@@ -105,7 +111,7 @@ describe('CueEngine app.startup', () => {
 
 		const deps = createMockDeps();
 		const engine = new CueEngine(deps);
-		engine.start(true);
+		engine.start('system-boot');
 
 		expect(deps.onCueRun).toHaveBeenCalledTimes(1);
 		expect(deps.onCueRun).toHaveBeenCalledWith(
@@ -142,7 +148,7 @@ describe('CueEngine app.startup', () => {
 
 		const deps = createMockDeps();
 		const engine = new CueEngine(deps);
-		engine.start(true);
+		engine.start('system-boot');
 
 		expect(deps.onCueRun).toHaveBeenCalledTimes(1);
 
@@ -162,7 +168,7 @@ describe('CueEngine app.startup', () => {
 		const deps = createMockDeps();
 		const engine = new CueEngine(deps);
 
-		engine.start(true);
+		engine.start('system-boot');
 		expect(deps.onCueRun).toHaveBeenCalledTimes(1);
 
 		// User toggles Cue off then on (feature toggle, not system boot)
@@ -181,7 +187,7 @@ describe('CueEngine app.startup', () => {
 
 		const deps = createMockDeps();
 		const engine = new CueEngine(deps);
-		engine.start(true);
+		engine.start('system-boot');
 
 		expect(deps.onCueRun).toHaveBeenCalledTimes(1);
 
@@ -193,7 +199,7 @@ describe('CueEngine app.startup', () => {
 
 		// Simulate a new system boot cycle
 		engine.stop();
-		engine.start(true);
+		engine.start('system-boot');
 
 		expect(deps.onCueRun).toHaveBeenCalledTimes(2);
 
@@ -206,7 +212,7 @@ describe('CueEngine app.startup', () => {
 
 		const deps = createMockDeps();
 		const engine = new CueEngine(deps);
-		engine.start(true);
+		engine.start('system-boot');
 
 		expect(deps.onCueRun).not.toHaveBeenCalled();
 
@@ -219,7 +225,7 @@ describe('CueEngine app.startup', () => {
 
 		const deps = createMockDeps();
 		const engine = new CueEngine(deps);
-		engine.start(true);
+		engine.start('system-boot');
 
 		expect(deps.onCueRun).not.toHaveBeenCalled();
 
@@ -232,7 +238,7 @@ describe('CueEngine app.startup', () => {
 
 		const deps = createMockDeps();
 		const engine = new CueEngine(deps);
-		engine.start(true);
+		engine.start('system-boot');
 
 		expect(deps.onCueRun).toHaveBeenCalledTimes(1);
 
@@ -247,7 +253,7 @@ describe('CueEngine app.startup', () => {
 
 		const deps = createMockDeps();
 		const engine = new CueEngine(deps);
-		engine.start(true);
+		engine.start('system-boot');
 
 		expect(deps.onCueRun).not.toHaveBeenCalled();
 		expect(deps.onLog).toHaveBeenCalledWith('cue', expect.stringContaining('filter not matched'));
@@ -263,7 +269,7 @@ describe('CueEngine app.startup', () => {
 
 		const deps = createMockDeps();
 		const engine = new CueEngine(deps);
-		engine.start(true);
+		engine.start('system-boot');
 
 		expect(deps.onCueRun).toHaveBeenCalledTimes(1);
 
@@ -294,7 +300,7 @@ describe('CueEngine app.startup', () => {
 			getSessions: vi.fn(() => [session1, session2, session3]),
 		});
 		const engine = new CueEngine(deps);
-		engine.start(true);
+		engine.start('system-boot');
 
 		// Fan-out dispatches to both targets
 		expect(deps.onCueRun).toHaveBeenCalledTimes(2);
@@ -361,7 +367,7 @@ describe('CueEngine app.startup', () => {
 			onCueRun,
 		});
 		const engine = new CueEngine(deps);
-		engine.start(true);
+		engine.start('system-boot');
 
 		expect(onCueRun).toHaveBeenCalledWith(
 			expect.objectContaining({
@@ -409,7 +415,7 @@ describe('CueEngine app.startup', () => {
 
 		const deps = createMockDeps();
 		const engine = new CueEngine(deps);
-		engine.start(true);
+		engine.start('system-boot');
 
 		await vi.advanceTimersByTimeAsync(100);
 
@@ -435,7 +441,7 @@ describe('CueEngine app.startup', () => {
 			getSessions: vi.fn(() => [session1, session2]),
 		});
 		const engine = new CueEngine(deps);
-		engine.start(true);
+		engine.start('system-boot');
 
 		expect(deps.onCueRun).toHaveBeenCalledTimes(2);
 		expect(deps.onCueRun).toHaveBeenCalledWith(expect.objectContaining({ sessionId: 'session-1' }));
@@ -450,7 +456,7 @@ describe('CueEngine app.startup', () => {
 
 		const deps = createMockDeps();
 		const engine = new CueEngine(deps);
-		engine.start(true);
+		engine.start('system-boot');
 
 		expect(deps.onCueRun).toHaveBeenCalledWith(
 			expect.objectContaining({
@@ -471,7 +477,7 @@ describe('CueEngine app.startup', () => {
 		const onPreventSleep = vi.fn();
 		const deps = createMockDeps({ onPreventSleep });
 		const engine = new CueEngine(deps);
-		engine.start(true);
+		engine.start('system-boot');
 
 		const scheduleCalls = onPreventSleep.mock.calls.filter(
 			(args: unknown[]) =>
@@ -488,7 +494,7 @@ describe('CueEngine app.startup', () => {
 
 		const deps = createMockDeps();
 		const engine = new CueEngine(deps);
-		engine.start(true);
+		engine.start('system-boot');
 
 		expect(deps.onLog).toHaveBeenCalledWith(
 			'cue',
@@ -517,12 +523,12 @@ describe('CueEngine app.startup', () => {
 		const engine = new CueEngine(deps);
 
 		// First system boot
-		engine.start(true);
+		engine.start('system-boot');
 		expect(deps.onCueRun).toHaveBeenCalledTimes(1);
 
 		// Stop and start again as system boot — should NOT fire (keys persisted)
 		engine.stop();
-		engine.start(true);
+		engine.start('system-boot');
 		expect(deps.onCueRun).toHaveBeenCalledTimes(1);
 
 		engine.stop();

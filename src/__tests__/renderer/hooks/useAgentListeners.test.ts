@@ -603,6 +603,134 @@ describe('useAgentListeners', () => {
 
 			expect(window.maestro.agentSessions.registerSessionOrigin).not.toHaveBeenCalled();
 		});
+
+		it('stores session ID at session level when tab was closed (not on another tab)', () => {
+			const deps = createMockDeps();
+			// Tab B exists but Tab A (from the process session ID) was closed
+			const tabB = createMockTab({
+				id: 'tab-b',
+				agentSessionId: null,
+				awaitingSessionId: false,
+			});
+			const session = createMockSession({
+				id: 'sess-1',
+				aiTabs: [tabB],
+				activeTabId: 'tab-b',
+			});
+			useSessionStore.setState({
+				sessions: [session],
+				activeSessionId: 'sess-1',
+			});
+
+			renderHook(() => useAgentListeners(deps));
+
+			// Process reports back with tab-a's ID, but tab-a no longer exists
+			onSessionIdHandler?.('sess-1-ai-tab-a', 'orphan-session-id');
+
+			const updated = useSessionStore.getState().sessions.find((s) => s.id === 'sess-1');
+			// Session-level agentSessionId should be set
+			expect(updated?.agentSessionId).toBe('orphan-session-id');
+			// Tab B should NOT have been assigned the orphaned session ID
+			const updatedTabB = updated?.aiTabs.find((t) => t.id === 'tab-b');
+			expect(updatedTabB?.agentSessionId).toBeNull();
+		});
+
+		it('does not cross-bind when closed tab had awaitingSessionId and another tab also awaits', () => {
+			const deps = createMockDeps();
+			// Tab B is awaiting its own session ID — must not receive Tab A's
+			const tabB = createMockTab({
+				id: 'tab-b',
+				agentSessionId: null,
+				awaitingSessionId: true,
+			});
+			const session = createMockSession({
+				id: 'sess-1',
+				aiTabs: [tabB],
+				activeTabId: 'tab-b',
+			});
+			useSessionStore.setState({
+				sessions: [session],
+				activeSessionId: 'sess-1',
+			});
+
+			renderHook(() => useAgentListeners(deps));
+
+			// Tab A was closed, its process reports back with explicit tab ID
+			onSessionIdHandler?.('sess-1-ai-tab-a', 'tab-a-session');
+
+			const updated = useSessionStore.getState().sessions.find((s) => s.id === 'sess-1');
+			// Tab B must keep awaiting ITS OWN session ID
+			const updatedTabB = updated?.aiTabs.find((t) => t.id === 'tab-b');
+			expect(updatedTabB?.agentSessionId).toBeNull();
+			expect(updatedTabB?.awaitingSessionId).toBe(true);
+			// Session level gets the orphaned ID
+			expect(updated?.agentSessionId).toBe('tab-a-session');
+		});
+
+		it('still binds correctly to existing tab when tab ID matches', () => {
+			const deps = createMockDeps();
+			// Tab A exists and is awaiting — should receive its session ID normally
+			const tabA = createMockTab({
+				id: 'tab-a',
+				agentSessionId: null,
+				awaitingSessionId: true,
+			});
+			const tabB = createMockTab({
+				id: 'tab-b',
+				agentSessionId: null,
+			});
+			const session = createMockSession({
+				id: 'sess-1',
+				aiTabs: [tabA, tabB],
+				activeTabId: 'tab-a',
+			});
+			useSessionStore.setState({
+				sessions: [session],
+				activeSessionId: 'sess-1',
+			});
+
+			renderHook(() => useAgentListeners(deps));
+
+			onSessionIdHandler?.('sess-1-ai-tab-a', 'correct-session');
+
+			const updated = useSessionStore.getState().sessions.find((s) => s.id === 'sess-1');
+			const updatedTabA = updated?.aiTabs.find((t) => t.id === 'tab-a');
+			expect(updatedTabA?.agentSessionId).toBe('correct-session');
+			expect(updatedTabA?.awaitingSessionId).toBe(false);
+			// Tab B untouched
+			const updatedTabB = updated?.aiTabs.find((t) => t.id === 'tab-b');
+			expect(updatedTabB?.agentSessionId).toBeNull();
+		});
+
+		it('handles forced-parallel session ID for closed tab without cross-binding', () => {
+			const deps = createMockDeps();
+			const tabB = createMockTab({
+				id: 'tab-b',
+				agentSessionId: null,
+			});
+			const session = createMockSession({
+				id: 'sess-1',
+				aiTabs: [tabB],
+				activeTabId: 'tab-b',
+			});
+			useSessionStore.setState({
+				sessions: [session],
+				activeSessionId: 'sess-1',
+			});
+
+			renderHook(() => useAgentListeners(deps));
+
+			// Forced-parallel process from closed tab-a reports session ID
+			// The -fp-{timestamp} suffix is stripped by REGEX_AI_TAB, leaving tabId = 'tab-a'
+			onSessionIdHandler?.('sess-1-ai-tab-a-fp-1712611230000', 'fp-session');
+
+			const updated = useSessionStore.getState().sessions.find((s) => s.id === 'sess-1');
+			// Tab B must NOT be contaminated
+			const updatedTabB = updated?.aiTabs.find((t) => t.id === 'tab-b');
+			expect(updatedTabB?.agentSessionId).toBeNull();
+			// Session level gets the ID
+			expect(updated?.agentSessionId).toBe('fp-session');
+		});
 	});
 
 	// ========================================================================
@@ -987,6 +1115,67 @@ describe('useAgentListeners', () => {
 
 			const updated = useSessionStore.getState().sessions.find((s) => s.id === 'sess-1');
 			expect(updated?.state).toBe('idle');
+		});
+
+		it('transitions session to idle when exiting process tab was already closed', async () => {
+			const deps = createMockDeps();
+			// Tab B is the only remaining tab — Tab A was closed while its process ran
+			const tabB = createMockTab({ id: 'tab-b', state: 'idle', agentSessionId: null });
+			const session = createMockSession({
+				id: 'sess-1',
+				state: 'idle', // Already set to idle by closeTab cleanup
+				busySource: undefined,
+				aiTabs: [tabB],
+				activeTabId: 'tab-b',
+			});
+			useSessionStore.setState({
+				sessions: [session],
+				activeSessionId: 'sess-1',
+			});
+
+			renderHook(() => useAgentListeners(deps));
+
+			// Tab A's process exits — tab-a no longer in aiTabs
+			await onExitHandler?.('sess-1-ai-tab-a');
+			await new Promise((r) => setTimeout(r, 50));
+
+			const updated = useSessionStore.getState().sessions.find((s) => s.id === 'sess-1');
+			// Session stays idle (was already idle from closeTab fix)
+			expect(updated?.state).toBe('idle');
+			// Tab B must remain untouched
+			const updatedTabB = updated?.aiTabs.find((t) => t.id === 'tab-b');
+			expect(updatedTabB?.state).toBe('idle');
+			expect(updatedTabB?.agentSessionId).toBeNull();
+		});
+
+		it('keeps other busy tabs running when closed tab process exits', async () => {
+			const deps = createMockDeps();
+			// Tab B is actively working on its own task
+			const tabB = createMockTab({ id: 'tab-b', state: 'busy', agentSessionId: 'tab-b-session' });
+			const session = createMockSession({
+				id: 'sess-1',
+				state: 'busy',
+				busySource: 'ai',
+				aiTabs: [tabB],
+				activeTabId: 'tab-b',
+			});
+			useSessionStore.setState({
+				sessions: [session],
+				activeSessionId: 'sess-1',
+			});
+
+			renderHook(() => useAgentListeners(deps));
+
+			// Tab A's orphaned process exits — should not affect Tab B
+			await onExitHandler?.('sess-1-ai-tab-a');
+			await new Promise((r) => setTimeout(r, 50));
+
+			const updated = useSessionStore.getState().sessions.find((s) => s.id === 'sess-1');
+			// Session stays busy because Tab B is still working
+			expect(updated?.state).toBe('busy');
+			const updatedTabB = updated?.aiTabs.find((t) => t.id === 'tab-b');
+			expect(updatedTabB?.state).toBe('busy');
+			expect(updatedTabB?.agentSessionId).toBe('tab-b-session');
 		});
 	});
 

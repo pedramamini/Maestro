@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { Session, FocusArea } from '../../types';
 import { shouldOpenExternally, getAllFolderPaths } from '../../utils/fileExplorer';
+import type { FileNode } from '../../types/fileTree';
 import { useModalStore } from '../../stores/modalStore';
 import { useFileExplorerStore } from '../../stores/fileExplorerStore';
 
@@ -63,7 +64,7 @@ export interface UseAppHandlersReturn {
 
 	// File handlers
 	/** Handle file click in file explorer */
-	handleFileClick: (node: { name: string; type: string }, path: string) => Promise<void>;
+	handleFileClick: (node: FileNode, path: string) => Promise<void>;
 	/** Update working directory via folder selection dialog */
 	updateSessionWorkingDirectory: () => Promise<void>;
 
@@ -180,7 +181,7 @@ export function useAppHandlers(deps: UseAppHandlersDeps): UseAppHandlersReturn {
 	// --- FILE HANDLERS ---
 
 	const handleFileClick = useCallback(
-		async (node: { name: string; type: string }, path: string) => {
+		async (node: FileNode, path: string) => {
 			if (!activeSession) return; // Guard against null session
 			if (node.type === 'file') {
 				// Construct full file path using projectRoot (not fullPath which can diverge from file tree root)

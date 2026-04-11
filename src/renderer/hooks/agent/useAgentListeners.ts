@@ -949,6 +949,18 @@ export function useAgentListeners(deps: UseAgentListenersDeps): void {
 						let targetTab;
 						if (tabId) {
 							targetTab = s.aiTabs?.find((tab) => tab.id === tabId);
+							// If the tab ID was explicitly in the session ID but no longer
+							// exists in aiTabs, the tab was closed. Store at session level
+							// only — do NOT fall back to another tab, as that would
+							// cross-contaminate an unrelated tab with the closed tab's
+							// agent session.
+							if (!targetTab) {
+								console.log(
+									'[onSessionId] Tab was closed, storing session ID at session level only:',
+									{ tabId: tabId.substring(0, 8), agentSessionId: agentSessionId.substring(0, 8) }
+								);
+								return { ...s, agentSessionId };
+							}
 						}
 
 						if (!targetTab) {
