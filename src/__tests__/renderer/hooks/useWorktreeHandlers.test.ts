@@ -43,7 +43,7 @@ import type { Session } from '../../../renderer/types';
 
 const mockGit = {
 	scanWorktreeDirectory: vi.fn().mockResolvedValue({ gitSubdirs: [] }),
-	watchWorktreeDirectory: vi.fn(),
+	watchWorktreeDirectory: vi.fn().mockResolvedValue({ success: true }),
 	unwatchWorktreeDirectory: vi.fn(),
 	onWorktreeDiscovered: vi.fn().mockReturnValue(() => {}),
 	worktreeSetup: vi.fn().mockResolvedValue({ success: true }),
@@ -1329,6 +1329,142 @@ describe('Effects', () => {
 				'parent-2',
 				'/projects/other-worktrees'
 			);
+		});
+
+		it('logs error when watcher IPC call fails', async () => {
+			const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+			mockGit.watchWorktreeDirectory.mockResolvedValueOnce({
+				success: false,
+				error: 'Directory not found',
+			});
+
+			const parentWithWatch = {
+				...mockParentSession,
+				worktreeConfig: { basePath: '/projects/worktrees', watchEnabled: true },
+			};
+
+			useSessionStore.setState({
+				sessions: [parentWithWatch],
+				activeSessionId: 'parent-1',
+				sessionsLoaded: false,
+			} as any);
+
+			renderHook(() => useWorktreeHandlers());
+
+			// Let the promise settle
+			await act(async () => {
+				await new Promise((r) => setTimeout(r, 0));
+			});
+
+			expect(consoleSpy).toHaveBeenCalledWith(
+				expect.stringContaining('[WorktreeWatcher]'),
+				expect.stringContaining('Directory not found')
+			);
+
+			consoleSpy.mockRestore();
+		});
+	});
+
+	describe('Visibility-change rescan', () => {
+		it('rescans worktree directories when app regains focus', async () => {
+			vi.useFakeTimers();
+
+			const parentWithWatch = {
+				...mockParentSession,
+				worktreeConfig: { basePath: '/projects/worktrees', watchEnabled: true },
+			};
+
+			mockGit.scanWorktreeDirectory.mockResolvedValue({
+				gitSubdirs: [
+					{ path: '/projects/worktrees/cli-branch', branch: 'cli-branch', name: 'cli-branch' },
+				],
+			});
+
+			useSessionStore.setState({
+				sessions: [parentWithWatch],
+				activeSessionId: 'parent-1',
+				sessionsLoaded: true,
+			} as any);
+
+			renderHook(() => useWorktreeHandlers());
+
+			// Run startup scan timer
+			await act(async () => {
+				await vi.runAllTimersAsync();
+			});
+
+			// Reset mock to track visibility-change calls separately
+			mockGit.scanWorktreeDirectory.mockClear();
+			mockGit.scanWorktreeDirectory.mockResolvedValue({
+				gitSubdirs: [
+					{ path: '/projects/worktrees/cli-branch', branch: 'cli-branch', name: 'cli-branch' },
+					{
+						path: '/projects/worktrees/new-cli-branch',
+						branch: 'new-cli-branch',
+						name: 'new-cli-branch',
+					},
+				],
+			});
+
+			// Simulate app regaining focus
+			await act(async () => {
+				Object.defineProperty(document, 'hidden', { value: false, writable: true });
+				document.dispatchEvent(new Event('visibilitychange'));
+				await vi.runAllTimersAsync();
+			});
+
+			// Should have rescanned
+			expect(mockGit.scanWorktreeDirectory).toHaveBeenCalledWith('/projects/worktrees', undefined);
+
+			// New worktree session should have been created
+			const sessions = useSessionStore.getState().sessions;
+			expect(sessions.some((s) => s.worktreeBranch === 'new-cli-branch')).toBe(true);
+		});
+
+		it('does NOT rescan when app is hidden', () => {
+			const parentWithWatch = {
+				...mockParentSession,
+				worktreeConfig: { basePath: '/projects/worktrees', watchEnabled: true },
+			};
+
+			useSessionStore.setState({
+				sessions: [parentWithWatch],
+				activeSessionId: 'parent-1',
+				sessionsLoaded: false,
+			} as any);
+
+			renderHook(() => useWorktreeHandlers());
+
+			mockGit.scanWorktreeDirectory.mockClear();
+
+			// Simulate app going to background
+			Object.defineProperty(document, 'hidden', { value: true, writable: true });
+			document.dispatchEvent(new Event('visibilitychange'));
+
+			expect(mockGit.scanWorktreeDirectory).not.toHaveBeenCalled();
+		});
+
+		it('cleans up visibility listener on unmount', () => {
+			const removeListenerSpy = vi.spyOn(document, 'removeEventListener');
+
+			const parentWithWatch = {
+				...mockParentSession,
+				worktreeConfig: { basePath: '/projects/worktrees', watchEnabled: true },
+			};
+
+			useSessionStore.setState({
+				sessions: [parentWithWatch],
+				activeSessionId: 'parent-1',
+				sessionsLoaded: false,
+			} as any);
+
+			const { unmount } = renderHook(() => useWorktreeHandlers());
+
+			unmount();
+
+			expect(removeListenerSpy).toHaveBeenCalledWith('visibilitychange', expect.any(Function));
+
+			removeListenerSpy.mockRestore();
 		});
 	});
 });
