@@ -100,8 +100,16 @@ function extractCleanStdout(rawStdout: string, toolType: string): string {
  */
 function killCueProcess(child: ChildProcess): void {
 	if (isWindows() && child.pid) {
-		execFile('taskkill', ['/pid', String(child.pid), '/t', '/f'], () => {
-			// taskkill returns non-zero if the process is already dead, which is fine
+		execFile('taskkill', ['/pid', String(child.pid), '/t', '/f'], (error) => {
+			if (!error) return;
+			const msg = error.message.toLowerCase();
+			const alreadyStopped = msg.includes('not found') || msg.includes('no running instance');
+			if (alreadyStopped) return;
+
+			captureException(error, {
+				operation: 'cue:taskkill',
+				pid: child.pid,
+			});
 		});
 	} else {
 		child.kill('SIGTERM');
