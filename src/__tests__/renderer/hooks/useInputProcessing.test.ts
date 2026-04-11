@@ -26,6 +26,7 @@ import type {
 	QueuedItem,
 } from '../../../renderer/types';
 import { createMockAITab } from '../../helpers/mockTab';
+import { createMockSession as baseCreateMockSession } from '../../helpers/mockSession';
 
 // Create a mock AITab
 const createMockTab = (overrides: Partial<AITab> = {}): AITab =>
@@ -35,39 +36,17 @@ const createMockTab = (overrides: Partial<AITab> = {}): AITab =>
 		...overrides,
 	});
 
-// Create a mock Session
+// Thin wrapper: pre-populates an AI tab so input processing has a tab
+// to route messages to.
 const createMockSession = (overrides: Partial<Session> = {}): Session => {
 	const baseTab = createMockTab();
-
-	return {
-		id: 'session-1',
-		name: 'Test Session',
-		toolType: 'claude-code',
-		state: 'idle',
-		cwd: '/test/project',
-		fullPath: '/test/project',
-		projectRoot: '/test/project',
-		aiLogs: [],
-		shellLogs: [],
-		workLog: [],
-		contextUsage: 0,
-		inputMode: 'ai',
+	return baseCreateMockSession({
 		aiPid: 1234,
 		terminalPid: 5678,
-		port: 0,
-		isLive: false,
-		changedFiles: [],
-		isGitRepo: false,
-		fileTree: [],
-		fileExplorerExpanded: [],
-		fileExplorerScrollPos: 0,
 		aiTabs: [baseTab],
 		activeTabId: baseTab.id,
-		closedTabHistory: [],
-		executionQueue: [],
-		activeTimeMs: 0,
 		...overrides,
-	} as Session;
+	});
 };
 
 // Default batch state (not running)

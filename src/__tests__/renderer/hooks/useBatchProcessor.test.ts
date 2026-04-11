@@ -23,6 +23,7 @@ import type {
 import { countUnfinishedTasks, uncheckAllTasks, useBatchProcessor } from '../../../renderer/hooks';
 import { useBatchStore } from '../../../renderer/stores/batchStore';
 import { useSettingsStore } from '../../../renderer/stores/settingsStore';
+import { createMockSession as baseCreateMockSession } from '../../helpers/mockSession';
 
 // Mock notifyToast so we can verify toast notifications
 const { mockNotifyToast } = vi.hoisted(() => ({
@@ -578,24 +579,15 @@ describe('countUnfinishedTasks + uncheckAllTasks integration', () => {
 
 describe('useBatchProcessor hook', () => {
 	// Mock sessions and groups
-	const createMockSession = (overrides?: Partial<Session>): Session => ({
-		id: 'test-session-id',
-		name: 'Test Session',
-		toolType: 'claude-code',
-		state: 'idle',
-		inputMode: 'ai',
-		cwd: '/test/path',
-		projectRoot: '/test/path',
-		aiPid: 0,
-		terminalPid: 0,
-		aiLogs: [],
-		shellLogs: [],
-		isGitRepo: true,
-		fileTree: [],
-		fileExplorerExpanded: [],
-		messageQueue: [],
-		...overrides,
-	});
+	const createMockSession = (overrides?: Partial<Session>): Session =>
+		baseCreateMockSession({
+			id: 'test-session-id',
+			cwd: '/test/path',
+			fullPath: '/test/path',
+			projectRoot: '/test/path',
+			isGitRepo: true,
+			...overrides,
+		});
 
 	const createMockGroup = (overrides?: Partial<Group>): Group => ({
 		id: 'test-group-id',

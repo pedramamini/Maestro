@@ -6,3 +6,4 @@
  */
 
 export { createMockAITab, createMockFileTab } from './mockTab';
+export { createMockSession } from './mockSession';

@@ -6,6 +6,7 @@ import {
 	type TransferRequest,
 } from '../../../renderer/hooks';
 import type { Session, AITab, LogEntry, ToolType } from '../../../renderer/types';
+import { createMockSession as baseCreateMockSession } from '../../helpers/mockSession';
 import type { SendToAgentOptions } from '../../../renderer/components/SendToAgentModal';
 import { createMockAITab } from '../../helpers/mockTab';
 import * as contextGroomer from '../../../renderer/services/contextGroomer';
@@ -95,7 +96,8 @@ function createMockTab(id: string, logs: LogEntry[] = []): AITab {
 	});
 }
 
-// Create a minimal session for testing
+// Thin wrapper: positional signature preserved. Pre-populates a tab
+// with hello/hi logs so Send To Agent has real content to forward.
 function createMockSession(
 	id: string,
 	toolType: ToolType = 'claude-code',
@@ -105,37 +107,14 @@ function createMockSession(
 		{ id: 'log-1', timestamp: Date.now(), source: 'user', text: 'Hello' },
 		{ id: 'log-2', timestamp: Date.now() + 100, source: 'ai', text: 'Hi there!' },
 	]);
-
-	return {
+	return baseCreateMockSession({
 		id,
 		name: `Session ${id}`,
 		toolType,
 		state,
-		cwd: '/test/project',
-		fullPath: '/test/project',
-		projectRoot: '/test/project',
-		aiLogs: [],
-		shellLogs: [],
-		workLog: [],
-		contextUsage: 0,
-		inputMode: 'ai',
-		aiPid: 0,
-		terminalPid: 0,
-		port: 0,
-		isLive: false,
-		changedFiles: [],
-		isGitRepo: false,
-		fileTree: [],
-		fileExplorerExpanded: [],
-		fileExplorerScrollPos: 0,
-		activeTimeMs: 0,
-		executionQueue: [],
 		aiTabs: [tab],
 		activeTabId: tab.id,
-		closedTabHistory: [],
-		terminalTabs: [],
-		activeTerminalTabId: null,
-	};
+	});
 }
 
 describe('useSendToAgent', () => {

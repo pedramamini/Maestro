@@ -28,6 +28,7 @@ import { useSessionStore } from '../../../renderer/stores/sessionStore';
 import { useGroupChatStore } from '../../../renderer/stores/groupChatStore';
 import { gitService } from '../../../renderer/services/git';
 import type { Session } from '../../../renderer/types';
+import { createMockSession as baseCreateMockSession } from '../../helpers/mockSession';
 
 // Cast to access mock methods
 const mockGitService = gitService as {
@@ -40,57 +41,46 @@ const mockGitService = gitService as {
 // Test Helpers
 // ============================================================================
 
+// Thin wrapper: restoration tests need a heavily pre-populated session
+// (tab, shellLogs, live URL, auto run folder, agent error state, etc.) so
+// migration logic has something to migrate. Delegates to the shared factory
+// for baseline required fields.
 function createMockSession(overrides: Partial<Session> = {}): Session {
-	return {
+	return baseCreateMockSession({
 		id: 'session-1',
 		name: 'Test Agent',
 		cwd: '/projects/myapp',
 		fullPath: '/projects/myapp',
 		projectRoot: '/projects/myapp',
-		toolType: 'claude-code' as any,
 		groupId: 'group-1',
-		inputMode: 'ai' as any,
-		state: 'idle' as any,
 		aiTabs: [
 			{
 				id: 'tab-1',
 				agentSessionId: null,
 				name: null,
-				state: 'busy' as const,
+				state: 'busy',
 				logs: [],
 				starred: false,
 				inputValue: '',
 				stagedImages: [],
 				createdAt: Date.now(),
 			},
-		],
+		] as any,
 		activeTabId: 'tab-1',
-		aiLogs: [],
-		shellLogs: [{ id: 'log-1', timestamp: Date.now(), source: 'system' as const, text: 'hello' }],
-		workLog: [],
-		contextUsage: 0,
+		shellLogs: [
+			{ id: 'log-1', timestamp: Date.now(), source: 'system' as const, text: 'hello' },
+		] as any,
 		aiPid: 123,
 		terminalPid: 456,
 		port: 3000,
 		isLive: true,
 		liveUrl: 'http://localhost:3000',
-		changedFiles: [],
 		isGitRepo: true,
-		fileTree: [],
-		fileExplorerExpanded: [],
-		fileExplorerScrollPos: 0,
 		autoRunFolderPath: '/projects/myapp/.maestro-autorun',
 		fileTreeAutoRefreshInterval: 180,
-		executionQueue: [],
 		activeTimeMs: 5000,
-		closedTabHistory: [],
-		filePreviewTabs: [],
-		activeFileTabId: null,
-		browserTabs: [],
-		activeBrowserTabId: null,
 		unifiedTabOrder: [{ type: 'ai' as const, id: 'tab-1' }],
-		unifiedClosedTabHistory: [],
-		busySource: 'user',
+		busySource: 'user' as any,
 		thinkingStartTime: Date.now(),
 		currentCycleTokens: 100,
 		currentCycleBytes: 2000,
@@ -98,7 +88,7 @@ function createMockSession(overrides: Partial<Session> = {}): Session {
 		agentError: { message: 'stale error' } as any,
 		agentErrorPaused: true,
 		...overrides,
-	} as any;
+	});
 }
 
 // Mock IPC

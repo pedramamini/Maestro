@@ -25,48 +25,43 @@ import { useModalStore } from '../../../renderer/stores/modalStore';
 import { useUIStore } from '../../../renderer/stores/uiStore';
 import type { Session, AITab } from '../../../renderer/types';
 import { createMockAITab } from '../../helpers/mockTab';
+import { createMockSession as baseCreateMockSession } from '../../helpers/mockSession';
 
 // ============================================================================
 // Test Helpers
 // ============================================================================
 
-function createMockSession(overrides: Partial<Session> = {}): Session {
+function createMockAITab(overrides: Partial<AITab> = {}): AITab {
 	return {
-		id: 'session-1',
+		id: 'tab-1',
+		agentSessionId: null,
+		name: null,
+		starred: false,
+		logs: [],
+		inputValue: '',
+		stagedImages: [],
+		createdAt: Date.now(),
+		state: 'idle' as const,
+		hasUnread: false,
+		isAtBottom: true,
+		...overrides,
+	} as AITab;
+}
+
+// Thin wrapper: lifecycle tests need a session with a pre-populated AI tab
+// and a group membership so deletion/rename code paths execute.
+function createMockSession(overrides: Partial<Session> = {}): Session {
+	return baseCreateMockSession({
 		name: 'Test Agent',
 		cwd: '/projects/myapp',
 		fullPath: '/projects/myapp',
 		projectRoot: '/projects/myapp',
-		toolType: 'claude-code' as any,
 		groupId: 'group-1',
-		inputMode: 'ai' as any,
-		state: 'idle' as any,
 		aiTabs: [createMockAITab()],
 		activeTabId: 'tab-1',
-		aiLogs: [],
-		shellLogs: [],
-		workLog: [],
-		contextUsage: 0,
-		aiPid: 0,
-		terminalPid: 0,
 		port: 3000,
-		isLive: false,
-		changedFiles: [],
-		isGitRepo: false,
-		fileTree: [],
-		fileExplorerExpanded: [],
-		fileExplorerScrollPos: 0,
-		executionQueue: [],
-		activeTimeMs: 0,
-		closedTabHistory: [],
-		filePreviewTabs: [],
-		activeFileTabId: null,
-		unifiedTabOrder: [],
-		unifiedClosedTabHistory: [],
-		terminalTabs: [],
-		activeTerminalTabId: null,
 		...overrides,
-	} as Session;
+	});
 }
 
 // ============================================================================

@@ -14,6 +14,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { GroupChatInput } from '../../../renderer/components/GroupChatInput';
 import type { Theme, Session, Group, GroupChatParticipant } from '../../../renderer/types';
+import { createMockSession as baseCreateMockSession } from '../../helpers/mockSession';
 
 // =============================================================================
 // TEST HELPERS
@@ -44,39 +45,10 @@ function createMockTheme(): Theme {
 }
 
 /**
- * Creates a mock session for testing
+ * Thin wrapper: positional signature preserved. Delegates to shared factory.
  */
 function createMockSession(id: string, name: string, toolType: string = 'claude-code'): Session {
-	return {
-		id,
-		name,
-		toolType,
-		state: 'idle',
-		cwd: '/test/project',
-		fullPath: '/test/project',
-		projectRoot: '/test/project',
-		aiLogs: [],
-		shellLogs: [],
-		workLog: [],
-		contextUsage: 0,
-		inputMode: 'ai',
-		aiPid: 0,
-		terminalPid: 0,
-		port: 0,
-		isLive: false,
-		changedFiles: [],
-		isGitRepo: false,
-		fileTree: [],
-		fileExplorerExpanded: [],
-		fileExplorerScrollPos: 0,
-		executionQueue: [],
-		activeTimeMs: 0,
-		aiTabs: [],
-		activeTabId: '',
-		closedTabHistory: [],
-		terminalTabs: [],
-		activeTerminalTabId: null,
-	};
+	return baseCreateMockSession({ id, name, toolType: toolType as any });
 }
 
 /**

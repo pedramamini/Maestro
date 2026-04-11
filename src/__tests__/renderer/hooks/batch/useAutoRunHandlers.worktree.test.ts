@@ -16,6 +16,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
 import { useAutoRunHandlers } from '../../../../renderer/hooks';
 import type { Session, BatchRunConfig } from '../../../../renderer/types';
+import { createMockSession as baseCreateMockSession } from '../../../helpers/mockSession';
 import { useSessionStore } from '../../../../renderer/stores/sessionStore';
 import { useSettingsStore } from '../../../../renderer/stores/settingsStore';
 
@@ -51,42 +52,24 @@ import {
 // Helpers
 // ============================================================================
 
+// Thin wrapper: seeds a worktree parent with auto run content so batch
+// handlers can exercise worktree creation.
 const createMockSession = (overrides: Partial<Session> = {}): Session =>
-	({
+	baseCreateMockSession({
 		id: 'parent-session-1',
 		name: 'Parent Agent',
-		toolType: 'claude-code',
-		state: 'idle',
 		cwd: '/projects/my-repo',
 		fullPath: '/projects/my-repo',
 		projectRoot: '/projects/my-repo',
-		aiLogs: [],
-		shellLogs: [],
-		workLog: [],
-		contextUsage: 0,
-		inputMode: 'ai',
-		aiPid: 0,
-		terminalPid: 0,
-		port: 0,
-		isLive: false,
-		changedFiles: [],
 		isGitRepo: true,
-		fileTree: [],
-		fileExplorerExpanded: [],
-		fileExplorerScrollPos: 0,
-		executionQueue: [],
-		activeTimeMs: 0,
-		aiTabs: [],
-		activeTabId: 'tab-1',
-		closedTabHistory: [],
 		autoRunFolderPath: '/projects/autorun-docs',
 		autoRunSelectedFile: 'Phase 1',
 		autoRunContent: '# Phase 1',
 		autoRunContentVersion: 1,
 		autoRunMode: 'edit',
-		worktreeConfig: { basePath: '/projects/worktrees' },
+		worktreeConfig: { basePath: '/projects/worktrees', watchEnabled: false },
 		...overrides,
-	}) as Session;
+	});
 
 const createMockDeps = () => ({
 	setSessions: vi.fn(),

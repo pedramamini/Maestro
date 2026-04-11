@@ -5,6 +5,7 @@ import { PromptComposerModal } from '../../../renderer/components/PromptComposer
 import { formatEnterToSend } from '../../../renderer/utils/shortcutFormatter';
 import { LayerStackProvider } from '../../../renderer/contexts/LayerStackContext';
 import type { Theme, Session, Group } from '../../../renderer/types';
+import { createMockSession as baseCreateMockSession } from '../../helpers/mockSession';
 
 // Mock useAtMentionCompletion hook
 const mockGetSuggestions = vi.fn().mockReturnValue([]);
@@ -1176,39 +1177,13 @@ describe('PromptComposerModal', () => {
 	});
 
 	describe('@mention autocomplete (group chat mode)', () => {
+		// Thin wrapper: positional signature preserved. Delegates to shared factory.
 		function createMockSession(
 			id: string,
 			name: string,
 			toolType: string = 'claude-code'
 		): Session {
-			return {
-				id,
-				name,
-				toolType,
-				state: 'idle',
-				cwd: '/test',
-				fullPath: '/test',
-				projectRoot: '/test',
-				aiLogs: [],
-				shellLogs: [],
-				workLog: [],
-				contextUsage: 0,
-				inputMode: 'ai',
-				aiPid: 0,
-				terminalPid: 0,
-				port: 0,
-				isLive: false,
-				changedFiles: [],
-				isGitRepo: false,
-				fileTree: [],
-				fileExplorerExpanded: [],
-				fileExplorerScrollPos: 0,
-				executionQueue: [],
-				activeTimeMs: 0,
-				aiTabs: [],
-				activeTabId: '',
-				closedTabHistory: [],
-			};
+			return baseCreateMockSession({ id, name, toolType: toolType as any });
 		}
 
 		function createMockGroup(id: string, name: string, emoji: string = '📁'): Group {

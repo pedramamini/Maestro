@@ -26,6 +26,7 @@ import { MergeSessionModal } from '../../../renderer/components/MergeSessionModa
 import { LayerStackProvider } from '../../../renderer/contexts/LayerStackContext';
 import type { Theme, Session, AITab, ToolType } from '../../../renderer/types';
 import { createMockAITab } from '../../helpers/mockTab';
+import { createMockSession as baseCreateMockSession } from '../../helpers/mockSession';
 
 // Create a test theme
 const testTheme: Theme = {
@@ -59,43 +60,24 @@ function createMockTab(id: string, logs: any[] = [], name?: string): AITab {
 	});
 }
 
-// Create a mock session
-const createMockSession = (overrides: Partial<Session> = {}): Session => ({
-	id: 'test-session-1',
-	name: 'Test Session',
-	toolType: 'claude-code' as ToolType,
-	state: 'idle',
-	cwd: '/test/path',
-	fullPath: '/test/path',
-	projectRoot: '/test/path',
-	aiLogs: [],
-	shellLogs: [],
-	workLog: [],
-	contextUsage: 0,
-	inputMode: 'ai',
-	aiPid: 0,
-	terminalPid: 0,
-	port: 0,
-	isLive: false,
-	changedFiles: [],
-	isGitRepo: true,
-	fileTree: [],
-	fileExplorerExpanded: [],
-	fileExplorerScrollPos: 0,
-	activeTimeMs: 0,
-	executionQueue: [],
-	aiTabs: [
-		createMockTab('tab-1', [
-			{ id: '1', timestamp: Date.now(), source: 'user', text: 'Hello' },
-			{ id: '2', timestamp: Date.now(), source: 'ai', text: 'Hi there!' },
-		]),
-	],
-	activeTabId: 'tab-1',
-	closedTabHistory: [],
-	terminalTabs: [],
-	activeTerminalTabId: null,
-	...overrides,
-});
+// Thin wrapper: pre-populates an AI tab with chat logs so merging has
+// real content to merge.
+const createMockSession = (overrides: Partial<Session> = {}): Session =>
+	baseCreateMockSession({
+		id: 'test-session-1',
+		cwd: '/test/path',
+		fullPath: '/test/path',
+		projectRoot: '/test/path',
+		isGitRepo: true,
+		aiTabs: [
+			createMockTab('tab-1', [
+				{ id: '1', timestamp: Date.now(), source: 'user', text: 'Hello' },
+				{ id: '2', timestamp: Date.now(), source: 'ai', text: 'Hi there!' },
+			]),
+		] as any,
+		activeTabId: 'tab-1',
+		...overrides,
+	});
 
 // Create mock sessions for testing
 const mockSourceSession = createMockSession({

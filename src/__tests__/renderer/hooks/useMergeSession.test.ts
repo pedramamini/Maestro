@@ -8,6 +8,7 @@ import {
 } from '../../../renderer/hooks';
 import type { Session, AITab, LogEntry, ToolType } from '../../../renderer/types';
 import { createMockAITab } from '../../helpers/mockTab';
+import { createMockSession as baseCreateMockSession } from '../../helpers/mockSession';
 import type { MergeOptions } from '../../../renderer/components/MergeSessionModal';
 import * as contextGroomer from '../../../renderer/services/contextGroomer';
 
@@ -94,7 +95,8 @@ function createMockTab(id: string, logs: LogEntry[] = [], name?: string): AITab 
 	});
 }
 
-// Create a minimal session for testing
+// Thin wrapper: positional signature is preserved for test readability.
+// Pre-populates a tab with hello/hi logs so merge tests have content.
 function createMockSession(
 	id: string,
 	toolType: ToolType = 'claude-code',
@@ -105,37 +107,15 @@ function createMockSession(
 		{ id: 'log-1', timestamp: Date.now(), source: 'user', text: 'Hello from source' },
 		{ id: 'log-2', timestamp: Date.now() + 100, source: 'ai', text: 'Hi! How can I help you?' },
 	]);
-
-	return {
+	const resolvedTabs = tabs || [defaultTab];
+	return baseCreateMockSession({
 		id,
 		name: `Session ${id}`,
 		toolType,
 		state,
-		cwd: '/test/project',
-		fullPath: '/test/project',
-		projectRoot: '/test/project',
-		aiLogs: [],
-		shellLogs: [],
-		workLog: [],
-		contextUsage: 0,
-		inputMode: 'ai',
-		aiPid: 0,
-		terminalPid: 0,
-		port: 0,
-		isLive: false,
-		changedFiles: [],
-		isGitRepo: false,
-		fileTree: [],
-		fileExplorerExpanded: [],
-		fileExplorerScrollPos: 0,
-		activeTimeMs: 0,
-		executionQueue: [],
-		aiTabs: tabs || [defaultTab],
-		activeTabId: (tabs || [defaultTab])[0].id,
-		closedTabHistory: [],
-		terminalTabs: [],
-		activeTerminalTabId: null,
-	};
+		aiTabs: resolvedTabs,
+		activeTabId: resolvedTabs[0].id,
+	});
 }
 
 describe('useMergeSession', () => {

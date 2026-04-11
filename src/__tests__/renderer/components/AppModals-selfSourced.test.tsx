@@ -13,6 +13,7 @@ import { useSessionStore } from '../../../renderer/stores/sessionStore';
 import { useGroupChatStore } from '../../../renderer/stores/groupChatStore';
 import { useModalStore } from '../../../renderer/stores/modalStore';
 import type { Theme, Session, Shortcut, Group, GroupChat } from '../../../renderer/types';
+import { createMockSession as baseCreateMockSession } from '../../helpers/mockSession';
 
 // Track props passed to sub-components
 let capturedInfoProps: Record<string, unknown> = {};
@@ -164,16 +165,7 @@ const mockTheme: Theme = {
 };
 
 function createMockSession(overrides: Partial<Session> = {}): Session {
-	return {
-		id: 'session-1',
-		name: 'Test Agent',
-		state: 'idle',
-		toolType: 'claude-code',
-		cwd: '/tmp',
-		terminalTabs: [],
-		activeTerminalTabId: null,
-		...overrides,
-	} as Session;
+	return baseCreateMockSession({ name: 'Test Agent', cwd: '/tmp', ...overrides });
 }
 
 function createMockGroup(overrides: Partial<Group> = {}): Group {
