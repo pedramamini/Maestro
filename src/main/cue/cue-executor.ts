@@ -12,7 +12,7 @@
 
 import * as crypto from 'crypto';
 import type { CueEvent, CueRunResult, CueSubscription } from './cue-types';
-import type { HistoryEntry, SessionInfo } from '../../shared/types';
+import type { HistoryEntry, SessionInfo, ToolType } from '../../shared/types';
 import { substituteTemplateVariables, type TemplateContext } from '../../shared/templateVariables';
 import { buildCueTemplateContext } from './cue-template-context-builder';
 import { buildSpawnSpec } from './cue-spawn-builder';
@@ -23,6 +23,7 @@ import {
 	getActiveProcessMap,
 	getProcessList,
 } from './cue-process-lifecycle';
+import { getOutputParser } from '../parsers';
 // Re-export types that external consumers use
 export type { CueProcessInfo } from './cue-process-lifecycle';
 export type { SpawnSpec } from './cue-spawn-builder';
@@ -52,30 +53,6 @@ export interface CueExecutionConfig {
 	/** Optional agent-level config values (from agent config store) */
 	agentConfigValues?: Record<string, unknown>;
 }
-
-/** Metadata stored alongside each active Cue process */
-interface CueActiveProcess {
-	child: ChildProcess;
-	command: string;
-	args: string[];
-	cwd: string;
-	toolType: string;
-	startTime: number;
-}
-
-/** Serializable process info for the Process Monitor */
-export interface CueProcessInfo {
-	runId: string;
-	pid: number;
-	command: string;
-	args: string[];
-	cwd: string;
-	toolType: string;
-	startTime: number;
-}
-
-/** Map of active Cue processes by runId */
-const activeProcesses = new Map<string, CueActiveProcess>();
 
 /**
  * Extract clean human-readable text from agent stdout.
@@ -206,7 +183,7 @@ export async function executeCuePrompt(config: CueExecutionConfig): Promise<CueR
 		subscriptionName: subscription.name,
 		event,
 		status: processResult.status,
-		stdout: processResult.stdout,
+		stdout: extractCleanStdout(processResult.stdout, config.toolType),
 		stderr: processResult.stderr,
 		exitCode: processResult.exitCode,
 		durationMs: Date.now() - startTime,
