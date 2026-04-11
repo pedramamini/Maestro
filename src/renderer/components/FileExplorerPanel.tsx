@@ -15,7 +15,6 @@ import {
 	ExternalLink,
 	FolderOpen,
 	Server,
-	GitBranch,
 	Clock,
 	RotateCw,
 	FileText,
@@ -342,7 +341,7 @@ interface FileExplorerPanelProps {
 		activeSessionId: string,
 		setSessions: React.Dispatch<React.SetStateAction<Session[]>>
 	) => void;
-	handleFileClick: (node: any, path: string, activeSession: Session) => Promise<void>;
+	handleFileClick: (node: FileNode, path: string, activeSession: Session) => Promise<void>;
 	expandAllFolders: (
 		activeSessionId: string,
 		activeSession: Session,
@@ -365,10 +364,6 @@ interface FileExplorerPanelProps {
 	setShowHiddenFiles: (value: boolean) => void;
 	/** Callback to open graph view focused on a specific file (relative path to session.cwd) */
 	onFocusFileInGraph?: (relativePath: string) => void;
-	/** Path of the last opened document graph focus file (for quick re-open) */
-	lastGraphFocusFile?: string;
-	/** Callback to open the last document graph */
-	onOpenLastDocumentGraph?: () => void;
 }
 
 function FileExplorerPanelInner(props: FileExplorerPanelProps) {
@@ -399,8 +394,6 @@ function FileExplorerPanelInner(props: FileExplorerPanelProps) {
 		fileExplorerIconTheme,
 		setShowHiddenFiles,
 		onFocusFileInGraph,
-		lastGraphFocusFile,
-		onOpenLastDocumentGraph,
 	} = props;
 
 	const shortcuts = useSettingsStore((s) => s.shortcuts);
@@ -1190,7 +1183,7 @@ function FileExplorerPanelInner(props: FileExplorerPanelProps) {
 					{/* Expand all */}
 					<button
 						onClick={() => expandAllFolders(session.id, session, setSessions)}
-						className="flex-1 flex items-center justify-center gap-1 py-0.5 px-2 rounded text-xs font-medium transition-colors hover:bg-white/10"
+						className="flex items-center justify-center py-0.5 px-0.5 rounded text-xs font-medium transition-colors hover:bg-white/10"
 						style={{
 							color: theme.colors.accent,
 							border: `1px solid ${theme.colors.accent}40`,
@@ -1206,7 +1199,7 @@ function FileExplorerPanelInner(props: FileExplorerPanelProps) {
 					{/* Collapse all */}
 					<button
 						onClick={() => collapseAllFolders(session.id, setSessions)}
-						className="flex-1 flex items-center justify-center gap-1 py-0.5 px-2 rounded text-xs font-medium transition-colors hover:bg-white/10"
+						className="flex items-center justify-center py-0.5 px-0.5 rounded text-xs font-medium transition-colors hover:bg-white/10"
 						style={{
 							color: theme.colors.accent,
 							border: `1px solid ${theme.colors.accent}40`,
@@ -1219,22 +1212,6 @@ function FileExplorerPanelInner(props: FileExplorerPanelProps) {
 							<ChevronUp className="w-3 h-3" />
 						</div>
 					</button>
-					{/* Document Graph */}
-					{lastGraphFocusFile && onOpenLastDocumentGraph && (
-						<button
-							onClick={onOpenLastDocumentGraph}
-							className="flex-1 flex items-center justify-center gap-1 py-0.5 px-2 rounded text-xs font-medium transition-colors hover:bg-white/10"
-							style={{
-								color: theme.colors.accent,
-								border: `1px solid ${theme.colors.accent}40`,
-								backgroundColor: `${theme.colors.accent}15`,
-							}}
-							title="Open Last Document Graph"
-						>
-							<GitBranch className="w-3 h-3" />
-							{showToolbarLabels && 'Graph'}
-						</button>
-					)}
 				</div>
 				{/* Path row — full width */}
 				<div className="flex items-center gap-1.5 min-w-0 overflow-hidden justify-center">

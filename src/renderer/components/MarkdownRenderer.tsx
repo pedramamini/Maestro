@@ -7,7 +7,10 @@ import { getSyntaxStyle } from '../utils/syntaxTheme';
 import { Clipboard, Loader2, ImageOff } from 'lucide-react';
 import type { Theme } from '../types';
 import type { FileNode } from '../types/fileTree';
+import type { PluggableList } from 'unified';
+import type { ExtraProps } from 'react-markdown';
 import { remarkFileLinks, buildFileTreeIndices } from '../utils/remarkFileLinks';
+import { extractHexColor } from '../../shared/hexColor';
 import remarkFrontmatter from 'remark-frontmatter';
 import { remarkFrontmatterTable } from '../utils/remarkFrontmatterTable';
 import { REMARK_GFM_PLUGINS } from '../utils/markdownConfig';
@@ -340,7 +343,11 @@ export const MarkdownRenderer = memo(
 
 		// Memoize remark plugins to avoid recreating on every render
 		const remarkPlugins = useMemo(() => {
-			const plugins: any[] = [...REMARK_GFM_PLUGINS, remarkFrontmatter, remarkFrontmatterTable];
+			const plugins: PluggableList = [
+				...REMARK_GFM_PLUGINS,
+				remarkFrontmatter,
+				remarkFrontmatterTable,
+			];
 			// Add remarkFileLinks if we have file tree for relative paths,
 			// OR if we have projectRoot for absolute paths (even with empty file tree)
 			// OR if we have homeDir for tilde paths (even without file tree or projectRoot)
@@ -382,7 +389,9 @@ export const MarkdownRenderer = memo(
 						a: ({ node: _node, href, children, ...props }) => {
 							// Check for maestro-file:// protocol OR data-maestro-file attribute
 							// (data attribute is fallback when rehype strips custom protocols)
-							const dataFilePath = (props as any)['data-maestro-file'];
+							const dataFilePath = (props as Record<string, unknown>)['data-maestro-file'] as
+								| string
+								| undefined;
 							const isMaestroFile = href?.startsWith('maestro-file://') || !!dataFilePath;
 							const filePath =
 								dataFilePath ||
@@ -448,12 +457,16 @@ export const MarkdownRenderer = memo(
 								</a>
 							);
 						},
-						pre: ({ children }: any) => {
+						pre: ({ children }: JSX.IntrinsicElements['pre'] & ExtraProps) => {
 							// In react-markdown v10, block code is <pre><code>...</code></pre>
 							// Extract the code element and render with SyntaxHighlighter
 							const codeElement = React.Children.toArray(children).find(
-								(child: any) => child?.type === 'code' || child?.props?.node?.tagName === 'code'
-							) as React.ReactElement<any> | undefined;
+								(child) =>
+									React.isValidElement(child) &&
+									(child.type === 'code' || child.props?.node?.tagName === 'code')
+							) as
+								| React.ReactElement<{ className?: string; children?: React.ReactNode }>
+								| undefined;
 
 							if (codeElement?.props) {
 								const { className, children: codeChildren } = codeElement.props;
@@ -474,18 +487,45 @@ export const MarkdownRenderer = memo(
 							// Fallback: render as-is
 							return <pre>{children}</pre>;
 						},
-						code: ({ node: _node, className, children, ...props }: any) => {
+						code: ({
+							node: _node,
+							className,
+							children,
+							...props
+						}: JSX.IntrinsicElements['code'] & ExtraProps) => {
 							// Inline code only — block code is handled by the pre component above
+							const hexColor = extractHexColor(children);
 							return (
 								<code className={className} {...props}>
+									{hexColor && (
+										<span
+											style={{
+												display: 'inline-block',
+												width: '0.75em',
+												height: '0.75em',
+												backgroundColor: hexColor,
+												borderRadius: '2px',
+												marginRight: '0.35em',
+												verticalAlign: 'middle',
+												border: '1px solid rgba(128, 128, 128, 0.3)',
+											}}
+										/>
+									)}
 									{children}
 								</code>
 							);
 						},
-						img: ({ node: _node, src, alt, ...props }: any) => {
+						img: ({
+							node: _node,
+							src,
+							alt,
+							...props
+						}: JSX.IntrinsicElements['img'] & ExtraProps) => {
 							// Use LocalImage component to handle file:// URLs via IPC
 							// Extract width from data-maestro-width attribute if present
-							const widthStr = props['data-maestro-width'];
+							const widthStr = (props as Record<string, unknown>)['data-maestro-width'] as
+								| string
+								| undefined;
 							const width = widthStr ? parseInt(widthStr, 10) : undefined;
 
 							return (
@@ -498,7 +538,11 @@ export const MarkdownRenderer = memo(
 								/>
 							);
 						},
-						table: ({ node: _node, style, ...props }: any) => (
+						table: ({
+							node: _node,
+							style,
+							...props
+						}: JSX.IntrinsicElements['table'] & ExtraProps) => (
 							<div className="overflow-x-auto scrollbar-thin" style={{ maxWidth: '100%' }}>
 								<table
 									{...props}
@@ -510,7 +554,7 @@ export const MarkdownRenderer = memo(
 								/>
 							</div>
 						),
-						th: ({ node: _node, style, ...props }: any) => (
+						th: ({ node: _node, style, ...props }: JSX.IntrinsicElements['th'] & ExtraProps) => (
 							<th
 								{...props}
 								style={{
@@ -522,7 +566,7 @@ export const MarkdownRenderer = memo(
 								}}
 							/>
 						),
-						td: ({ node: _node, style, ...props }: any) => (
+						td: ({ node: _node, style, ...props }: JSX.IntrinsicElements['td'] & ExtraProps) => (
 							<td
 								{...props}
 								style={{
@@ -539,9 +583,11 @@ export const MarkdownRenderer = memo(
 						// Strip event handler attributes (e.g. onToggle) that rehype-raw may
 						// pass through as strings from AI-generated HTML, which React rejects.
 						// Fixes MAESTRO-8Q
-						details: ({ node: _node, onToggle: _onToggle, ...props }: any) => (
-							<details {...props} />
-						),
+						details: ({
+							node: _node,
+							onToggle: _onToggle,
+							...props
+						}: JSX.IntrinsicElements['details'] & ExtraProps) => <details {...props} />,
 					}}
 				>
 					{sanitizedContent}

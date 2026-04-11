@@ -300,7 +300,7 @@ describe('QuickActionsModal', () => {
 			const props = createDefaultProps();
 			render(<QuickActionsModal {...props} />);
 
-			expect(screen.getByText('Next Unread Tab')).toBeInTheDocument();
+			expect(screen.getByText('Next Unread / Draft Tab')).toBeInTheDocument();
 			expect(
 				screen.getByText(formatShortcutKeys(mockShortcuts.nextUnreadTab.keys))
 			).toBeInTheDocument();

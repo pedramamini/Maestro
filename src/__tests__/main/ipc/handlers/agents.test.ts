@@ -21,33 +21,40 @@ vi.mock('electron', () => ({
 }));
 
 // Mock agents module (capabilities exports)
-vi.mock('../../../../main/agents', () => ({
-	getAgentCapabilities: vi.fn(),
-	AGENT_DEFINITIONS: [
-		{ id: 'claude-code', name: 'Claude Code', binaryName: 'claude', configOptions: [] },
-		{ id: 'codex', name: 'Codex', binaryName: 'codex', configOptions: [] },
-		{ id: 'opencode', name: 'OpenCode', binaryName: 'opencode', configOptions: [] },
-		{ id: 'terminal', name: 'Terminal', binaryName: 'bash', configOptions: [] },
-	],
-	DEFAULT_CAPABILITIES: {
-		supportsResume: false,
-		supportsReadOnlyMode: false,
-		supportsJsonOutput: false,
-		supportsSessionId: false,
-		supportsImageInput: false,
-		supportsImageInputOnResume: false,
-		supportsSlashCommands: false,
-		supportsSessionStorage: false,
-		supportsCostTracking: false,
-		supportsUsageStats: false,
-		supportsBatchMode: false,
-		requiresPromptToStart: false,
-		supportsStreaming: false,
-		supportsResultMessages: false,
-		supportsModelSelection: false,
-		supportsStreamJsonInput: false,
-	},
-}));
+vi.mock('../../../../main/agents', async () => {
+	const opencodeConfig = await import('../../../../main/agents/opencode-config');
+	return {
+		getAgentCapabilities: vi.fn(),
+		AGENT_DEFINITIONS: [
+			{ id: 'claude-code', name: 'Claude Code', binaryName: 'claude', configOptions: [] },
+			{ id: 'codex', name: 'Codex', binaryName: 'codex', configOptions: [] },
+			{ id: 'opencode', name: 'OpenCode', binaryName: 'opencode', configOptions: [] },
+			{ id: 'terminal', name: 'Terminal', binaryName: 'bash', configOptions: [] },
+		],
+		DEFAULT_CAPABILITIES: {
+			supportsResume: false,
+			supportsReadOnlyMode: false,
+			supportsJsonOutput: false,
+			supportsSessionId: false,
+			supportsImageInput: false,
+			supportsImageInputOnResume: false,
+			supportsSlashCommands: false,
+			supportsSessionStorage: false,
+			supportsCostTracking: false,
+			supportsUsageStats: false,
+			supportsBatchMode: false,
+			requiresPromptToStart: false,
+			supportsStreaming: false,
+			supportsResultMessages: false,
+			supportsModelSelection: false,
+			supportsStreamJsonInput: false,
+		},
+		parseOpenCodeConfig: opencodeConfig.parseOpenCodeConfig,
+		extractModelsFromConfig: opencodeConfig.extractModelsFromConfig,
+		getOpenCodeConfigPaths: opencodeConfig.getOpenCodeConfigPaths,
+		getOpenCodeCommandDirs: opencodeConfig.getOpenCodeCommandDirs,
+	};
+});
 
 // Mock the logger
 vi.mock('../../../../main/utils/logger', () => ({

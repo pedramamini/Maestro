@@ -189,9 +189,10 @@ export function createAgentsApi() {
 		discoverSlashCommands: (
 			agentId: string,
 			cwd: string,
-			customPath?: string
+			customPath?: string,
+			sshRemoteId?: string
 		): Promise<{ name: string; prompt?: string }[] | null> =>
-			ipcRenderer.invoke('agents:discoverSlashCommands', agentId, cwd, customPath),
+			ipcRenderer.invoke('agents:discoverSlashCommands', agentId, cwd, customPath, sshRemoteId),
 	};
 }
 

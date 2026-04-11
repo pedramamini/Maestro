@@ -22,6 +22,7 @@ import { captureException } from '../utils/sentry';
 import { getAgentCapabilities } from './capabilities';
 import { checkBinaryExists, checkCustomPath, getExpandedEnv } from './path-prober';
 import { AGENT_DEFINITIONS, type AgentConfig } from './definitions';
+import { discoverModelsFromLocalConfigs } from './opencode-config';
 import { isWindows } from '../../shared/platformDetection';
 
 const LOG_CONTEXT = 'AgentDetector';
@@ -316,23 +317,42 @@ export class AgentDetector {
 				}
 
 				case 'opencode': {
-					// OpenCode: `opencode models` returns one model per line
-					const result = await execFileNoThrow(command, ['models'], undefined, env);
+					// OpenCode: merge models from two sources:
+					// 1. `opencode models` CLI command (runtime-available models)
+					// 2. opencode.json config files (provider-defined models that may
+					//    not appear in `opencode models` output, e.g. cloud providers)
+					const seen = new Set<string>();
+					const models: string[] = [];
 
-					if (result.exitCode !== 0) {
+					// Source 1: CLI discovery
+					const result = await execFileNoThrow(command, ['models'], undefined, env);
+					if (result.exitCode === 0) {
+						const cliModels = result.stdout
+							.split('\n')
+							.map((line) => line.trim())
+							.filter((line) => line.length > 0);
+						for (const m of cliModels) {
+							if (!seen.has(m)) {
+								seen.add(m);
+								models.push(m);
+							}
+						}
+					} else {
 						logger.warn(
-							`Model discovery failed for ${agentId}: exit code ${result.exitCode}`,
+							`CLI model discovery failed for ${agentId}: exit code ${result.exitCode}`,
 							LOG_CONTEXT,
 							{ stderr: result.stderr }
 						);
-						return [];
 					}
 
-					// Parse output: one model per line (e.g., "opencode/gpt-5-nano", "ollama/gpt-oss:latest")
-					const models = result.stdout
-						.split('\n')
-						.map((line) => line.trim())
-						.filter((line) => line.length > 0);
+					// Source 2: opencode.json config files
+					const configModels = await discoverModelsFromLocalConfigs();
+					for (const m of configModels) {
+						if (!seen.has(m)) {
+							seen.add(m);
+							models.push(m);
+						}
+					}
 
 					logger.info(`Discovered ${models.length} models for ${agentId}`, LOG_CONTEXT, {
 						models,

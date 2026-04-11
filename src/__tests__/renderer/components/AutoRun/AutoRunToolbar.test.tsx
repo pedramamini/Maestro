@@ -148,11 +148,11 @@ describe('AutoRunToolbar', () => {
 			expect(screen.getByText('Stop')).toBeDefined();
 		});
 
-		it('shows "Stopping..." text when isStopping', () => {
+		it('shows "Stopping" text when isStopping', () => {
 			render(
 				<AutoRunToolbar {...createDefaultProps({ isAutoRunActive: true, isStopping: true })} />
 			);
-			expect(screen.getByText('Stopping...')).toBeDefined();
+			expect(screen.getByText('Stopping')).toBeDefined();
 		});
 
 		it('is disabled when isStopping', () => {
@@ -219,22 +219,22 @@ describe('AutoRunToolbar', () => {
 		});
 	});
 
-	describe('Exchange button', () => {
+	describe('PlayBooks button', () => {
 		it('is shown when onOpenMarketplace is provided', () => {
 			const onOpenMarketplace = vi.fn();
 			render(<AutoRunToolbar {...createDefaultProps({ onOpenMarketplace })} />);
-			expect(screen.getByText('Exchange')).toBeDefined();
+			expect(screen.getByText('PlayBooks')).toBeDefined();
 		});
 
 		it('is hidden when onOpenMarketplace is not provided', () => {
 			render(<AutoRunToolbar {...createDefaultProps()} />);
-			expect(screen.queryByText('Exchange')).toBeNull();
+			expect(screen.queryByText('PlayBooks')).toBeNull();
 		});
 
 		it('calls onOpenMarketplace when clicked', () => {
 			const onOpenMarketplace = vi.fn();
 			render(<AutoRunToolbar {...createDefaultProps({ onOpenMarketplace })} />);
-			fireEvent.click(screen.getByText('Exchange'));
+			fireEvent.click(screen.getByText('PlayBooks'));
 			expect(onOpenMarketplace).toHaveBeenCalledTimes(1);
 		});
 	});

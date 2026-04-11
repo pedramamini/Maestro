@@ -5,6 +5,7 @@ import { hasDraft } from '../../utils/tabHelpers';
 import { formatShortcutKeys } from '../../utils/shortcutFormatter';
 import { useSettingsStore } from '../../stores/settingsStore';
 import { AITab as AITabComponent } from './AITab';
+import { BrowserTabItem } from './BrowserTabItem';
 import { FileTab } from './FileTab';
 import { TerminalTabItem } from './TerminalTabItem';
 import { NewTabPopover } from './NewTabPopover';
@@ -16,9 +17,8 @@ import type { TabBarProps } from './types';
 const STICKY_RIGHT_WIDTH = 48;
 
 /**
- * TabBar component for displaying AI session tabs.
- * Shows tabs for each Claude Code conversation within a Maestro session.
- * Appears only in AI mode (hidden in terminal mode).
+ * TabBar component for displaying the unified tab strip.
+ * Shows AI, file, browser, and terminal tabs within a Maestro session.
  */
 function TabBarInner({
 	tabs,
@@ -28,6 +28,7 @@ function TabBarInner({
 	onTabSelect,
 	onTabClose,
 	onNewTab,
+	onNewBrowserTab,
 	onNewTerminalTab,
 	onRequestRename,
 	onTabReorder,
@@ -52,6 +53,9 @@ function TabBarInner({
 	activeFileTabId,
 	onFileTabSelect,
 	onFileTabClose,
+	activeBrowserTabId,
+	onBrowserTabSelect,
+	onBrowserTabClose,
 	onUnifiedTabReorder,
 	activeTerminalTabId,
 	inputMode = 'ai',
@@ -100,7 +104,7 @@ function TabBarInner({
 				const targetTabId =
 					inputMode === 'terminal'
 						? activeTerminalTabId || activeTabId
-						: activeFileTabId || activeTabId;
+						: activeFileTabId || activeBrowserTabId || activeTabId;
 				const tabElement = container?.querySelector(
 					`[data-tab-id="${targetTabId}"]`
 				) as HTMLElement | null;
@@ -123,7 +127,15 @@ function TabBarInner({
 				}
 			});
 		});
-	}, [activeTabId, activeFileTabId, activeTerminalTabId, inputMode, activeTabName, showUnreadOnly]);
+	}, [
+		activeTabId,
+		activeFileTabId,
+		activeBrowserTabId,
+		activeTerminalTabId,
+		inputMode,
+		activeTabName,
+		showUnreadOnly,
+	]);
 
 	// Filter tabs for display
 	const displayedTabs = showUnreadOnly
@@ -399,7 +411,7 @@ function TabBarInner({
 						className="flex items-center px-3 py-1.5 text-xs italic shrink-0 self-center mb-1"
 						style={{ color: theme.colors.textDim }}
 					>
-						No unread tabs
+						No unread or draft tabs
 					</div>
 				)}
 
@@ -410,6 +422,7 @@ function TabBarInner({
 							unifiedTab,
 							activeTabId,
 							activeFileTabId,
+							activeBrowserTabId,
 							activeTerminalTabId,
 							inputMode
 						);
@@ -419,6 +432,7 @@ function TabBarInner({
 									prevTab,
 									activeTabId,
 									activeFileTabId,
+									activeBrowserTabId,
 									activeTerminalTabId,
 									inputMode
 								)
@@ -482,7 +496,7 @@ function TabBarInner({
 									/>
 								</React.Fragment>
 							);
-						} else {
+						} else if (unifiedTab.type === 'terminal') {
 							const terminalTab = unifiedTab.data;
 							const terminalIndex = allTabs
 								.filter((ut) => ut.type === 'terminal')
@@ -505,6 +519,39 @@ function TabBarInner({
 										isDragging={draggingTabId === terminalTab.id}
 										isDragOver={dragOverTabId === terminalTab.id}
 										registerRef={(el) => registerTabRef(terminalTab.id, el)}
+										onMoveToFirst={
+											!isFirstTab && onUnifiedTabReorder ? handleMoveToFirst : undefined
+										}
+										onMoveToLast={!isLastTab && onUnifiedTabReorder ? handleMoveToLast : undefined}
+										isFirstTab={isFirstTab}
+										isLastTab={isLastTab}
+										onCloseOtherTabs={onCloseOtherTabs ? handleTabCloseOther : undefined}
+										onCloseTabsLeft={onCloseTabsLeft ? handleTabCloseLeft : undefined}
+										onCloseTabsRight={onCloseTabsRight ? handleTabCloseRight : undefined}
+										totalTabs={allTabs.length}
+										tabIndex={originalIndex}
+										shortcutHint={shortcutHint}
+									/>
+								</React.Fragment>
+							);
+						} else {
+							const browserTab = unifiedTab.data;
+							return (
+								<React.Fragment key={unifiedTab.id}>
+									{showSeparator && separator}
+									<BrowserTabItem
+										tab={browserTab}
+										isActive={isActive}
+										theme={theme}
+										onSelect={onBrowserTabSelect || (() => {})}
+										onClose={onBrowserTabClose || (() => {})}
+										onDragStart={handleDragStart}
+										onDragOver={handleDragOver}
+										onDragEnd={handleDragEnd}
+										onDrop={handleDrop}
+										isDragging={draggingTabId === browserTab.id}
+										isDragOver={dragOverTabId === browserTab.id}
+										registerRef={(el) => registerTabRef(browserTab.id, el)}
 										onMoveToFirst={
 											!isFirstTab && onUnifiedTabReorder ? handleMoveToFirst : undefined
 										}
@@ -556,6 +603,7 @@ function TabBarInner({
 			<NewTabPopover
 				theme={theme}
 				onNewTab={onNewTab}
+				onNewBrowserTab={onNewBrowserTab}
 				onNewTerminalTab={onNewTerminalTab}
 				newTabKeys={tabShortcuts.newTab?.keys ?? ['Meta', 't']}
 				terminalKeys={shortcuts.toggleMode?.keys ?? ['Meta', 'j']}

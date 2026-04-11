@@ -8,8 +8,16 @@
  */
 
 import { useMemo } from 'react';
-import type { Session, Theme, RightPanelTab, BatchRunState } from '../../types';
+import type {
+	Session,
+	Theme,
+	RightPanelTab,
+	BatchRunState,
+	LogEntry,
+	UsageStats,
+} from '../../types';
 import type { FileTreeChanges } from '../../utils/fileExplorer';
+import type { FileNode } from '../../types/fileTree';
 
 /**
  * Dependencies for computing RightPanel props.
@@ -32,7 +40,7 @@ export interface UseRightPanelPropsDeps {
 		activeSessionId: string,
 		setSessions: React.Dispatch<React.SetStateAction<Session[]>>
 	) => void;
-	handleFileClick: (node: any, path: string, activeSession: Session) => Promise<void>;
+	handleFileClick: (node: FileNode, path: string, activeSession: Session) => Promise<void>;
 	expandAllFolders: (
 		activeSessionId: string,
 		activeSession: Session,
@@ -73,7 +81,14 @@ export interface UseRightPanelPropsDeps {
 	handleAbortBatchOnError: () => void;
 	handleResumeAfterError: () => void;
 	handleJumpToAgentSession: (agentSessionId: string) => void;
-	handleResumeSession: (agentSessionId: string) => void;
+	handleResumeSession: (
+		agentSessionId: string,
+		providedMessages?: LogEntry[],
+		sessionName?: string,
+		starred?: boolean,
+		usageStats?: UsageStats,
+		projectPath?: string
+	) => void;
 
 	// Modal handlers
 	handleOpenAboutModal: () => void;
@@ -85,7 +100,6 @@ export interface UseRightPanelPropsDeps {
 
 	// Document Graph handlers
 	handleFocusFileInGraph: (relativePath: string) => void;
-	handleOpenLastDocumentGraph: () => void;
 }
 
 /**
@@ -134,7 +148,15 @@ export function useRightPanelProps(deps: UseRightPanelPropsDeps) {
 			onResumeAfterError: deps.handleResumeAfterError,
 			onJumpToAgentSession: deps.handleJumpToAgentSession,
 			onResumeSession: deps.handleResumeSession,
-			onOpenSessionAsTab: deps.handleResumeSession,
+			onOpenSessionAsTab: (agentSessionId: string, projectPath?: string) =>
+				deps.handleResumeSession(
+					agentSessionId,
+					undefined,
+					undefined,
+					undefined,
+					undefined,
+					projectPath
+				),
 
 			// Modal handlers
 			onOpenAboutModal: deps.handleOpenAboutModal,
@@ -146,7 +168,6 @@ export function useRightPanelProps(deps: UseRightPanelPropsDeps) {
 
 			// Document Graph
 			onFocusFileInGraph: deps.handleFocusFileInGraph,
-			onOpenLastDocumentGraph: deps.handleOpenLastDocumentGraph,
 		}),
 		[
 			deps.theme,
@@ -181,7 +202,6 @@ export function useRightPanelProps(deps: UseRightPanelPropsDeps) {
 			deps.handleLaunchWizardTab,
 			deps.handleMainPanelFileClick,
 			deps.handleFocusFileInGraph,
-			deps.handleOpenLastDocumentGraph,
 			// Refs (stable)
 			deps.fileTreeContainerRef,
 			deps.fileTreeFilterInputRef,

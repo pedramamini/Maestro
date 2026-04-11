@@ -88,9 +88,7 @@ function normalizeSubscription(
 		promptSpec,
 		outputPromptSpec,
 		prompt,
-		prompt_file: promptSpec.file,
 		output_prompt: outputPrompt,
-		output_prompt_file: outputPromptSpec?.file,
 		interval_minutes: typeof sub.interval_minutes === 'number' ? sub.interval_minutes : undefined,
 		schedule_times:
 			Array.isArray(sub.schedule_times) &&
@@ -177,12 +175,41 @@ export function parseCueConfigDocument(raw: string, projectRoot: string): CueCon
 	};
 }
 
-export function materializeCueConfig(document: CueConfigDocument): CueConfig {
+export interface MaterializedCueConfig {
+	config: CueConfig;
+	/**
+	 * Non-fatal warnings surfaced during materialization (e.g. prompt_file references
+	 * pointing at files that could not be read). Callers should log these to the user.
+	 */
+	warnings: string[];
+}
+
+export function materializeCueConfig(document: CueConfigDocument): MaterializedCueConfig {
+	const warnings: string[] = [];
+
+	const subscriptions = document.subscriptions.map((sub) => {
+		// Surface unresolved prompt_file references as warnings — the file existed
+		// in the YAML but readPromptFile() returned undefined / empty.
+		if (sub.promptSpec.file && !sub.promptSpec.inline && !sub.prompt) {
+			warnings.push(
+				`"${sub.name}" has prompt_file "${sub.promptSpec.file}" but the file was not found or resolved to empty/unreadable content — subscription will fail on trigger`
+			);
+		}
+		if (sub.outputPromptSpec?.file && !sub.outputPromptSpec.inline && sub.output_prompt == null) {
+			warnings.push(
+				`"${sub.name}" has output_prompt_file "${sub.outputPromptSpec.file}" but the file was not found or resolved to empty/unreadable content`
+			);
+		}
+
+		const { promptSpec: _promptSpec, outputPromptSpec: _outputPromptSpec, ...subscription } = sub;
+		return subscription as CueSubscription;
+	});
+
 	return {
-		subscriptions: document.subscriptions.map(
-			({ promptSpec: _promptSpec, outputPromptSpec: _outputPromptSpec, ...subscription }) =>
-				subscription as CueSubscription
-		),
-		settings: document.settings,
+		config: {
+			subscriptions,
+			settings: document.settings,
+		},
+		warnings,
 	};
 }

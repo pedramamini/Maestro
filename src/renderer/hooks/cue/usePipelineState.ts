@@ -20,8 +20,8 @@ import type {
 import { getNextPipelineColor } from '../../components/CuePipelineEditor/pipelineColors';
 import { graphSessionsToPipelines } from '../../components/CuePipelineEditor/utils/yamlToPipeline';
 import { pipelinesToYaml } from '../../components/CuePipelineEditor/utils/pipelineToYaml';
-import type { CueSettings } from '../../../main/cue/cue-types';
-import { DEFAULT_CUE_SETTINGS } from '../../../main/cue/cue-types';
+import type { CueSettings } from '../../../shared/cue';
+import { DEFAULT_CUE_SETTINGS } from '../../../shared/cue';
 import { usePipelineLayout } from './usePipelineLayout';
 import { captureException } from '../../utils/sentry';
 import { getModalActions } from '../../stores/modalStore';

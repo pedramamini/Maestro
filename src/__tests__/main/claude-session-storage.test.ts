@@ -1118,4 +1118,67 @@ describe('ClaudeSessionStorage', () => {
 			expect(originsB['sess-1'].origin).toBe('auto');
 		});
 	});
+
+	describe('readSessionMessages', () => {
+		let storage: ClaudeSessionStorage;
+
+		beforeEach(() => {
+			vi.clearAllMocks();
+			storage = new ClaudeSessionStorage();
+		});
+
+		it('should include messages with only tool_use blocks and no text content', async () => {
+			const content = jsonl(
+				userMsg('What files are in this directory?'),
+				assistantMsg([
+					{ type: 'tool_use', id: 'tool-1', name: 'list_directory', input: { path: '.' } },
+				])
+			);
+
+			vi.mocked(fs.readFile).mockResolvedValue(content);
+
+			const result = await storage.readSessionMessages('/test/project', 'sess-1');
+			expect(result.messages).toHaveLength(2);
+			expect(result.total).toBe(2);
+			// The tool-only message should have toolUse set and empty content
+			const toolMsg = result.messages.find((m) => m.toolUse)!;
+			expect(toolMsg).toBeDefined();
+			const toolUseBlocks = toolMsg.toolUse as Array<{ name: string }>;
+			expect(toolUseBlocks).toHaveLength(1);
+			expect(toolUseBlocks[0].name).toBe('list_directory');
+		});
+
+		it('should include messages with both text and tool_use blocks', async () => {
+			const content = jsonl(
+				userMsg('Read the config file'),
+				assistantMsg([
+					{ type: 'text', text: 'Let me read that file for you.' },
+					{ type: 'tool_use', id: 'tool-1', name: 'read_file', input: { path: 'config.json' } },
+				])
+			);
+
+			vi.mocked(fs.readFile).mockResolvedValue(content);
+
+			const result = await storage.readSessionMessages('/test/project', 'sess-1');
+			expect(result.messages).toHaveLength(2);
+			const assistantMessage = result.messages.find((m) => m.type === 'assistant');
+			expect(assistantMessage!.content).toBe('Let me read that file for you.');
+			expect(assistantMessage!.toolUse).toHaveLength(1);
+		});
+
+		it('should skip messages with no text and no tool_use', async () => {
+			const content = jsonl(
+				userMsg('Hello'),
+				// An assistant message with only an image block (no text, no tool_use)
+				assistantMsg([{ type: 'image', source: { type: 'base64', data: 'abc' } }])
+			);
+
+			vi.mocked(fs.readFile).mockResolvedValue(content);
+
+			const result = await storage.readSessionMessages('/test/project', 'sess-1');
+			// Only the user message should survive
+			expect(result.messages).toHaveLength(1);
+			expect(result.messages[0].type).toBe('user');
+		});
+	});
 });

@@ -20,6 +20,12 @@ const mockLoadCueConfig = vi.fn<(projectRoot: string) => CueConfig | null>();
 const mockWatchCueYaml = vi.fn<(projectRoot: string, onChange: () => void) => () => void>();
 vi.mock('../../../main/cue/cue-yaml-loader', () => ({
 	loadCueConfig: (...args: unknown[]) => mockLoadCueConfig(args[0] as string),
+	loadCueConfigDetailed: (...args: unknown[]) => {
+		const config = mockLoadCueConfig(args[0] as string);
+		return config
+			? { ok: true as const, config, warnings: [] as string[] }
+			: { ok: false as const, reason: 'missing' as const };
+	},
 	watchCueYaml: (...args: unknown[]) => mockWatchCueYaml(args[0] as string, args[1] as () => void),
 }));
 

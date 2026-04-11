@@ -32,6 +32,7 @@ import { useSettingsStore } from '../stores/settingsStore';
 import { useFileExplorerStore } from '../stores/fileExplorerStore';
 import { useBatchStore } from '../stores/batchStore';
 import { useSessionStore } from '../stores/sessionStore';
+import type { FileNode } from '../types/fileTree';
 
 export interface RightPanelHandle {
 	refreshHistoryPanel: () => void;
@@ -58,7 +59,7 @@ interface RightPanelProps {
 		activeSessionId: string,
 		setSessions: React.Dispatch<React.SetStateAction<Session[]>>
 	) => void;
-	handleFileClick: (node: any, path: string, activeSession: Session) => Promise<void>;
+	handleFileClick: (node: FileNode, path: string, activeSession: Session) => Promise<void>;
 	expandAllFolders: (
 		activeSessionId: string,
 		activeSession: Session,
@@ -100,7 +101,7 @@ interface RightPanelProps {
 	onResumeAfterError?: () => void;
 	onJumpToAgentSession?: (agentSessionId: string) => void;
 	onResumeSession?: (agentSessionId: string) => void;
-	onOpenSessionAsTab?: (agentSessionId: string) => void;
+	onOpenSessionAsTab?: (agentSessionId: string, projectPath?: string) => void;
 
 	// Modal handlers
 	onOpenAboutModal?: () => void;
@@ -110,7 +111,6 @@ interface RightPanelProps {
 
 	// Document Graph handlers
 	onFocusFileInGraph?: (relativePath: string) => void;
-	onOpenLastDocumentGraph?: () => void;
 }
 
 export const RightPanel = memo(
@@ -138,7 +138,6 @@ export const RightPanel = memo(
 		const fileTreeFilterOpen = useFileExplorerStore((s) => s.fileTreeFilterOpen);
 		const filteredFileTree = useFileExplorerStore((s) => s.filteredFileTree);
 		const selectedFileIndex = useFileExplorerStore((s) => s.selectedFileIndex);
-		const lastGraphFocusFile = useFileExplorerStore((s) => s.lastGraphFocusFilePath);
 		const setFileTreeFilter = useFileExplorerStore((s) => s.setFileTreeFilter);
 		const setFileTreeFilterOpen = useFileExplorerStore((s) => s.setFileTreeFilterOpen);
 		const setSelectedFileIndex = useFileExplorerStore((s) => s.setSelectedFileIndex);
@@ -194,7 +193,6 @@ export const RightPanel = memo(
 			onOpenMarketplace,
 			onLaunchWizard,
 			onFocusFileInGraph,
-			onOpenLastDocumentGraph,
 		} = props;
 
 		// === Values derived from session ===
@@ -527,8 +525,6 @@ export const RightPanel = memo(
 							fileExplorerIconTheme={fileExplorerIconTheme}
 							setShowHiddenFiles={setShowHiddenFiles}
 							onFocusFileInGraph={onFocusFileInGraph}
-							lastGraphFocusFile={lastGraphFocusFile}
-							onOpenLastDocumentGraph={onOpenLastDocumentGraph}
 						/>
 					</div>
 
@@ -594,7 +590,7 @@ export const RightPanel = memo(
 										className="text-xs font-bold uppercase"
 										style={{ color: theme.colors.textMain }}
 									>
-										{currentSessionBatchState.isStopping ? 'Stopping...' : 'Auto Run Active'}
+										{currentSessionBatchState.isStopping ? 'Stopping' : 'Auto Run Active'}
 									</span>
 								)}
 								{currentSessionBatchState.worktreeActive && (

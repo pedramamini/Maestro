@@ -91,6 +91,8 @@ function createMockSession(overrides: Partial<Session> = {}): Session {
 		closedTabHistory: [],
 		filePreviewTabs: [],
 		activeFileTabId: null,
+		browserTabs: [],
+		activeBrowserTabId: null,
 		unifiedTabOrder: [{ type: 'ai' as const, id: 'tab-1' }],
 		unifiedClosedTabHistory: [],
 		busySource: 'user',
@@ -196,6 +198,163 @@ describe('restoreSession — Migration logic', () => {
 		});
 
 		expect(restored!.fileTreeAutoRefreshInterval).toBe(180);
+	});
+
+	it('rehydrates browser tabs with a safe URL, title, and partition', async () => {
+		const session = createMockSession({
+			browserTabs: [
+				{
+					id: 'browser-1',
+					url: '',
+					title: '',
+					createdAt: 1,
+					canGoBack: true,
+					canGoForward: true,
+					isLoading: true,
+				},
+			] as any,
+			activeBrowserTabId: 'browser-1',
+			unifiedTabOrder: [
+				{ type: 'ai' as const, id: 'tab-1' },
+				{ type: 'browser' as const, id: 'browser-1' },
+			],
+		});
+		const { result } = renderHook(() => useSessionRestoration());
+
+		let restored: Session;
+		await act(async () => {
+			restored = await result.current.restoreSession(session);
+		});
+
+		expect(restored!.browserTabs[0].url).toBe('about:blank');
+		expect(restored!.browserTabs[0].title).toBe('New Tab');
+		expect(restored!.browserTabs[0].partition).toContain('persist:maestro-browser-session-');
+		expect(restored!.browserTabs[0].isLoading).toBe(false);
+	});
+
+	it('preserves a safe persisted browser partition and active browser selection', async () => {
+		const session = createMockSession({
+			browserTabs: [
+				{
+					id: 'browser-1',
+					url: 'https://example.com/docs',
+					title: 'Example Docs',
+					createdAt: 1,
+					partition: 'persist:maestro-browser-session-session-1',
+					canGoBack: true,
+					canGoForward: true,
+					isLoading: true,
+					webContentsId: 101,
+				},
+			] as any,
+			activeBrowserTabId: 'browser-1',
+			unifiedTabOrder: [
+				{ type: 'ai' as const, id: 'tab-1' },
+				{ type: 'browser' as const, id: 'browser-1' },
+			],
+		});
+		const { result } = renderHook(() => useSessionRestoration());
+
+		let restored: Session;
+		await act(async () => {
+			restored = await result.current.restoreSession(session);
+		});
+
+		expect(restored!.browserTabs[0].partition).toBe('persist:maestro-browser-session-session-1');
+		expect(restored!.browserTabs[0].webContentsId).toBeUndefined();
+		expect(restored!.activeBrowserTabId).toBe('browser-1');
+		expect(restored!.unifiedTabOrder).toEqual([
+			{ type: 'ai', id: 'tab-1' },
+			{ type: 'browser', id: 'browser-1' },
+		]);
+	});
+
+	it('restores active browser selection for legacy sessions with no unified tab order', async () => {
+		const session = createMockSession({
+			browserTabs: [
+				{
+					id: 'browser-1',
+					url: 'localhost:5173',
+					title: '',
+					createdAt: 1,
+					canGoBack: true,
+					canGoForward: false,
+					isLoading: true,
+					partition: undefined,
+				},
+			] as any,
+			activeBrowserTabId: 'browser-1',
+			unifiedTabOrder: undefined as any,
+		});
+		const { result } = renderHook(() => useSessionRestoration());
+
+		let restored: Session;
+		await act(async () => {
+			restored = await result.current.restoreSession(session);
+		});
+
+		expect(restored!.activeBrowserTabId).toBe('browser-1');
+		expect(restored!.browserTabs[0]).toMatchObject({
+			url: 'http://localhost:5173/',
+			title: 'localhost:5173',
+			partition: 'persist:maestro-browser-session-session-1',
+			canGoBack: false,
+			canGoForward: false,
+			isLoading: false,
+		});
+		expect(restored!.unifiedTabOrder).toEqual([
+			{ type: 'ai', id: 'tab-1' },
+			{ type: 'browser', id: 'browser-1' },
+		]);
+	});
+
+	it('clears stale active browser references when the restored browser tab is missing', async () => {
+		const session = createMockSession({
+			activeBrowserTabId: 'browser-missing',
+			unifiedTabOrder: [
+				{ type: 'ai' as const, id: 'tab-1' },
+				{ type: 'browser' as const, id: 'browser-missing' },
+			],
+		});
+		const { result } = renderHook(() => useSessionRestoration());
+
+		let restored: Session;
+		await act(async () => {
+			restored = await result.current.restoreSession(session);
+		});
+
+		expect(restored!.activeBrowserTabId).toBeNull();
+		expect(restored!.unifiedTabOrder).toEqual([{ type: 'ai', id: 'tab-1' }]);
+	});
+
+	it('repairs unified tab order for restored browser tabs without changing active AI focus', async () => {
+		const session = createMockSession({
+			browserTabs: [
+				{
+					id: 'browser-1',
+					url: 'https://example.com',
+					title: 'Example',
+					createdAt: 1,
+					canGoBack: false,
+					canGoForward: false,
+					isLoading: false,
+				},
+			] as any,
+			unifiedTabOrder: [{ type: 'ai' as const, id: 'tab-1' }],
+		});
+		const { result } = renderHook(() => useSessionRestoration());
+
+		let restored: Session;
+		await act(async () => {
+			restored = await result.current.restoreSession(session);
+		});
+
+		expect(restored!.activeTabId).toBe('tab-1');
+		expect(restored!.activeBrowserTabId).toBeNull();
+		expect(restored!.unifiedTabOrder).toEqual([
+			{ type: 'ai', id: 'tab-1' },
+			{ type: 'browser', id: 'browser-1' },
+		]);
 	});
 
 	it('migrates toolType terminal to claude-code', async () => {
@@ -317,6 +476,53 @@ describe('restoreSession — Corruption recovery', () => {
 		});
 
 		expect(restored!.activeFileTabId).toBe('valid-file-tab');
+	});
+
+	it('gives active file selection precedence over stale browser selection in ai mode', async () => {
+		const session = createMockSession({
+			inputMode: 'ai',
+			filePreviewTabs: [
+				{
+					id: 'file-1',
+					path: '/projects/myapp/README.md',
+					name: 'README.md',
+					content: '# docs',
+					scrollTop: 0,
+					searchQuery: '',
+					editMode: false,
+					createdAt: 1,
+					lastModified: 1,
+					isLoading: false,
+				},
+			] as any,
+			activeFileTabId: 'file-1',
+			browserTabs: [
+				{
+					id: 'browser-1',
+					url: 'https://example.com',
+					title: 'Example',
+					createdAt: 1,
+					canGoBack: false,
+					canGoForward: false,
+					isLoading: false,
+				},
+			] as any,
+			activeBrowserTabId: 'browser-1',
+			unifiedTabOrder: [
+				{ type: 'ai' as const, id: 'tab-1' },
+				{ type: 'file' as const, id: 'file-1' },
+				{ type: 'browser' as const, id: 'browser-1' },
+			],
+		});
+		const { result } = renderHook(() => useSessionRestoration());
+
+		let restored: Session;
+		await act(async () => {
+			restored = await result.current.restoreSession(session);
+		});
+
+		expect(restored!.activeFileTabId).toBe('file-1');
+		expect(restored!.activeBrowserTabId).toBeNull();
 	});
 });
 

@@ -5,15 +5,24 @@
  * - Engine runtime controls (enable/disable, stop runs)
  * - Status and activity log queries
  * - YAML configuration management (read, write, validate)
+ *
+ * This module is a thin transport layer: business logic and filesystem I/O
+ * live in domain modules (cue-engine, cue-config-repository,
+ * pipeline-layout-store). Each handler should be a 1-line delegation.
  */
 
-import * as fs from 'fs';
+import { ipcMain } from 'electron';
 import * as path from 'path';
-import { app, ipcMain } from 'electron';
 import * as yaml from 'js-yaml';
 import { withIpcErrorLogging, type CreateHandlerOptions } from '../../utils/ipcHandler';
-import { validateCueConfig, resolveCueConfigPath } from '../../cue/cue-yaml-loader';
-import { CUE_CONFIG_PATH, MAESTRO_DIR, CUE_PROMPTS_DIR } from '../../../shared/maestro-paths';
+import { validateCueConfig } from '../../cue/cue-yaml-loader';
+import {
+	deleteCueConfigFile,
+	readCueConfigFile,
+	writeCueConfigFile,
+	writeCuePromptFile,
+} from '../../cue/config/cue-config-repository';
+import { loadPipelineLayout, savePipelineLayout } from '../../cue/pipeline-layout-store';
 import type { CueEngine } from '../../cue/cue-engine';
 import type {
 	CueGraphSession,
@@ -191,11 +200,8 @@ export function registerCueHandlers(deps: CueHandlerDependencies): void {
 		withIpcErrorLogging(
 			handlerOpts('readYaml'),
 			async (options: { projectRoot: string }): Promise<string | null> => {
-				const filePath = resolveCueConfigPath(options.projectRoot);
-				if (!filePath) {
-					return null;
-				}
-				return fs.readFileSync(filePath, 'utf-8');
+				const file = readCueConfigFile(options.projectRoot);
+				return file ? file.raw : null;
 			}
 		)
 	);
@@ -211,28 +217,25 @@ export function registerCueHandlers(deps: CueHandlerDependencies): void {
 				content: string;
 				promptFiles?: Record<string, string>;
 			}): Promise<void> => {
-				const maestroDir = path.join(options.projectRoot, MAESTRO_DIR);
-				if (!fs.existsSync(maestroDir)) {
-					fs.mkdirSync(maestroDir, { recursive: true });
-				}
-				const filePath = path.join(options.projectRoot, CUE_CONFIG_PATH);
-				fs.writeFileSync(filePath, options.content, 'utf-8');
-
-				// Write external prompt files
 				if (options.promptFiles) {
-					const promptsDir = path.join(options.projectRoot, CUE_PROMPTS_DIR);
-					if (!fs.existsSync(promptsDir)) {
-						fs.mkdirSync(promptsDir, { recursive: true });
-					}
+					const promptsBase = path.resolve(options.projectRoot, '.maestro/prompts');
 					for (const [relativePath, content] of Object.entries(options.promptFiles)) {
-						const absPath = path.join(options.projectRoot, relativePath);
-						const dir = path.dirname(absPath);
-						if (!fs.existsSync(dir)) {
-							fs.mkdirSync(dir, { recursive: true });
+						if (path.isAbsolute(relativePath)) {
+							throw new Error(
+								`cue:writeYaml: promptFiles key must be a relative path, got "${relativePath}"`
+							);
 						}
-						fs.writeFileSync(absPath, content, 'utf-8');
+						const target = path.resolve(options.projectRoot, relativePath);
+						if (!target.startsWith(promptsBase + path.sep) && target !== promptsBase) {
+							throw new Error(
+								`cue:writeYaml: promptFiles key "${relativePath}" resolves outside the .maestro/prompts directory`
+							);
+						}
+						writeCuePromptFile(options.projectRoot, relativePath, content);
 					}
 				}
+
+				writeCueConfigFile(options.projectRoot, options.content);
 			}
 		)
 	);
@@ -243,12 +246,7 @@ export function registerCueHandlers(deps: CueHandlerDependencies): void {
 		withIpcErrorLogging(
 			handlerOpts('deleteYaml'),
 			async (options: { projectRoot: string }): Promise<boolean> => {
-				const filePath = resolveCueConfigPath(options.projectRoot);
-				if (!filePath) {
-					return false;
-				}
-				fs.unlinkSync(filePath);
-				return true;
+				return deleteCueConfigFile(options.projectRoot);
 			}
 		)
 	);
@@ -270,15 +268,13 @@ export function registerCueHandlers(deps: CueHandlerDependencies): void {
 		)
 	);
 
-	const layoutFilePath = path.join(app.getPath('userData'), 'cue-pipeline-layout.json');
-
 	// Save pipeline layout (node positions, viewport, selected pipeline)
 	ipcMain.handle(
 		'cue:savePipelineLayout',
 		withIpcErrorLogging(
 			handlerOpts('savePipelineLayout'),
 			async (options: { layout: PipelineLayoutState }): Promise<void> => {
-				fs.writeFileSync(layoutFilePath, JSON.stringify(options.layout, null, 2), 'utf-8');
+				savePipelineLayout(options.layout);
 			}
 		)
 	);
@@ -289,11 +285,7 @@ export function registerCueHandlers(deps: CueHandlerDependencies): void {
 		withIpcErrorLogging(
 			handlerOpts('loadPipelineLayout'),
 			async (): Promise<PipelineLayoutState | null> => {
-				if (!fs.existsSync(layoutFilePath)) {
-					return null;
-				}
-				const content = fs.readFileSync(layoutFilePath, 'utf-8');
-				return JSON.parse(content) as PipelineLayoutState;
+				return loadPipelineLayout();
 			}
 		)
 	);

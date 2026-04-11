@@ -121,6 +121,10 @@ export interface DirectorNotesData {
 }
 
 /** Cue modal data */
+export interface QuitConfirmModalData {
+	activeTerminalTasks?: string[];
+}
+
 export interface CueModalData {
 	initialTab?: 'dashboard' | 'pipeline';
 }
@@ -275,6 +279,7 @@ export interface ModalDataMap {
 	directorNotes: DirectorNotesData;
 	cueModal: CueModalData;
 	cueYamlEditor: CueYamlEditorData;
+	quitConfirm: QuitConfirmModalData;
 }
 
 // Helper type to get data type for a modal ID
@@ -609,8 +614,8 @@ export function getModalActions() {
 		closeConfirmation: () => closeModal('confirm'),
 
 		// Quit Confirmation Modal
-		setQuitConfirmModalOpen: (open: boolean) =>
-			open ? openModal('quitConfirm') : closeModal('quitConfirm'),
+		setQuitConfirmModalOpen: (open: boolean, data?: { activeTerminalTasks?: string[] }) =>
+			open ? openModal('quitConfirm', data) : closeModal('quitConfirm'),
 
 		// Rename Instance Modal
 		setRenameInstanceModalOpen: (open: boolean) => {
@@ -862,6 +867,7 @@ export function useModalActions() {
 	const confirmModalOpen = useModalStore(selectModalOpen('confirm'));
 	const confirmData = useModalStore(selectModalData('confirm'));
 	const quitConfirmModalOpen = useModalStore(selectModalOpen('quitConfirm'));
+	const quitConfirmData = useModalStore(selectModalData('quitConfirm'));
 	const renameInstanceModalOpen = useModalStore(selectModalOpen('renameInstance'));
 	const renameInstanceData = useModalStore(selectModalData('renameInstance'));
 	const renameTabModalOpen = useModalStore(selectModalOpen('renameTab'));
@@ -983,6 +989,7 @@ export function useModalActions() {
 
 		// Quit Confirmation Modal
 		quitConfirmModalOpen,
+		activeTerminalTasks: (quitConfirmData?.activeTerminalTasks as string[]) ?? [],
 
 		// Rename Instance Modal
 		renameInstanceModalOpen,

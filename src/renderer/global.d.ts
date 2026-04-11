@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unused-vars */
 /**
  * Global type declarations for the renderer process.
  * This file makes the window.maestro API available throughout the renderer.
@@ -7,6 +8,32 @@
 declare module '*.md?raw' {
 	const content: string;
 	export default content;
+}
+
+interface HTMLWebViewElement extends HTMLElement {
+	src: string;
+	partition: string;
+	canGoBack: () => boolean;
+	canGoForward: () => boolean;
+	goBack: () => void;
+	goForward: () => void;
+	reload: () => void;
+	stop: () => void;
+	getURL: () => string;
+	getTitle: () => string;
+	isLoading: () => boolean;
+	getWebContentsId?: () => number;
+}
+
+declare namespace JSX {
+	interface IntrinsicElements {
+		webview: React.DetailedHTMLProps<React.HTMLAttributes<HTMLElement>, HTMLElement> & {
+			allowpopups?: boolean | 'true' | 'false';
+			partition?: string;
+			src?: string;
+			useragent?: string;
+		};
+	}
 }
 
 type AutoRunTreeNode = {
@@ -317,6 +344,7 @@ interface MaestroAPI {
 				cueSessionName?: string;
 				cueSubscriptionName?: string;
 				cueEventType?: string;
+				childProcesses?: Array<{ pid: number; command: string }>;
 			}>
 		>;
 		onData: (callback: (sessionId: string, data: string) => void) => () => void;
@@ -908,7 +936,8 @@ interface MaestroAPI {
 		discoverSlashCommands: (
 			agentId: string,
 			cwd: string,
-			customPath?: string
+			customPath?: string,
+			sshRemoteId?: string
 		) => Promise<{ name: string; prompt?: string }[] | null>;
 	};
 	// Agent Sessions API - all methods accept optional sshRemoteId for SSH remote session storage access

@@ -29,8 +29,8 @@ import { FastifyInstance, FastifyRequest } from 'fastify';
 import { randomUUID } from 'crypto';
 import path from 'path';
 import { existsSync, readFileSync } from 'fs';
-import { getLocalIpAddressSync } from '../utils/networkUtils';
 import { logger } from '../utils/logger';
+import { getLocalIpAddress } from '../utils/networkUtils';
 import { captureException } from '../utils/sentry';
 import { WebSocketMessageHandler } from './handlers';
 import { BroadcastService } from './services';
@@ -574,8 +574,8 @@ export class WebServer {
 		}
 
 		try {
-			// Detect local IP address for LAN accessibility (sync - no network delay)
-			this.localIpAddress = getLocalIpAddressSync();
+			// Detect local IP address for LAN accessibility
+			this.localIpAddress = await getLocalIpAddress();
 			logger.info(`Using IP address: ${this.localIpAddress}`, LOG_CONTEXT);
 
 			// Setup middleware and routes (must be done before listen)

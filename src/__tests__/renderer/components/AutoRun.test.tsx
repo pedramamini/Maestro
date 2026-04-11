@@ -801,12 +801,12 @@ describe('AutoRun', () => {
 			expect(onStopBatchRun).toHaveBeenCalled();
 		});
 
-		it('shows Stopping... when isStopping is true', () => {
+		it('shows Stopping when isStopping is true', () => {
 			const batchRunState = createBatchRunState({ isStopping: true });
 			const props = createDefaultProps({ batchRunState });
 			renderWithProvider(<AutoRun {...props} />);
 
-			expect(screen.getByText('Stopping...')).toBeInTheDocument();
+			expect(screen.getByText('Stopping')).toBeInTheDocument();
 		});
 	});
 

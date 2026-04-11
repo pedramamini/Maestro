@@ -365,7 +365,7 @@ export function AutoRunExpandedModal({
 								) : (
 									<Square className="w-3.5 h-3.5" />
 								)}
-								{isStopping ? 'Stopping...' : 'Stop'}
+								{isStopping ? 'Stopping' : 'Stop'}
 							</button>
 						) : (
 							<button

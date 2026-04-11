@@ -738,7 +738,7 @@ export function useBatchHandlers(deps: UseBatchHandlersDeps): UseBatchHandlersRe
 		if (!window.maestro?.app?.onQuitConfirmationRequest) {
 			return;
 		}
-		const unsubscribe = window.maestro.app.onQuitConfirmationRequest(() => {
+		const unsubscribe = window.maestro.app.onQuitConfirmationRequest(async () => {
 			// Get all busy AI sessions (agents that are actively thinking)
 			const currentSessions = useSessionStore.getState().sessions;
 			const busyAgents = currentSessions.filter(
@@ -751,10 +751,28 @@ export function useBatchHandlers(deps: UseBatchHandlersDeps): UseBatchHandlersRe
 				return batchState?.isRunning;
 			});
 
-			if (busyAgents.length === 0 && !hasActiveAutoRuns) {
+			// Check for terminal processes with active child tasks (e.g., long-running builds, tests)
+			let activeTerminalTasks: string[] = [];
+			try {
+				const activeProcesses = await window.maestro.process.getActiveProcesses();
+				activeTerminalTasks = activeProcesses
+					.filter((p) => p.isTerminal && p.childProcesses && p.childProcesses.length > 0)
+					.flatMap((p) => {
+						const session = currentSessions.find((s) => p.sessionId.startsWith(s.id));
+						const agentName = session?.name ?? 'Terminal';
+						return p.childProcesses!.map((child) => {
+							const cmdBasename = child.command.split('/').pop() || child.command;
+							return `${agentName}: ${cmdBasename}`;
+						});
+					});
+			} catch {
+				// If we can't fetch processes, proceed without terminal task info
+			}
+
+			if (busyAgents.length === 0 && !hasActiveAutoRuns && activeTerminalTasks.length === 0) {
 				window.maestro.app.confirmQuit();
 			} else {
-				getModalActions().setQuitConfirmModalOpen(true);
+				getModalActions().setQuitConfirmModalOpen(true, { activeTerminalTasks });
 			}
 		});
 

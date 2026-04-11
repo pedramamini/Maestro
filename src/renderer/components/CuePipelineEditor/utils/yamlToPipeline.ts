@@ -15,7 +15,7 @@ import type {
 	EdgeMode,
 } from '../../../../shared/cue-pipeline-types';
 import { getNextPipelineColor } from '../../../../shared/cue-pipeline-types';
-import type { CueSubscription } from '../../../../main/cue/cue-types';
+import type { CueSubscription } from '../../../../shared/cue';
 
 /** Minimal graph session input - compatible with both local and cue-types CueGraphSession */
 interface GraphSessionInput {

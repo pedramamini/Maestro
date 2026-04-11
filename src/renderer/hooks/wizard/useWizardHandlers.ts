@@ -236,7 +236,8 @@ export function useWizardHandlers(deps: UseWizardHandlersDeps): UseWizardHandler
 				const agentSlashCommands = await window.maestro.agents.discoverSlashCommands(
 					currentSession.toolType,
 					currentSession.cwd,
-					currentSession.customPath
+					currentSession.customPath,
+					currentSession.sshRemote?.id
 				);
 				if (cancelled) return;
 
@@ -1183,6 +1184,8 @@ export function useWizardHandlers(deps: UseWizardHandlersDeps): UseWizardHandler
 				closedTabHistory: [],
 				filePreviewTabs: [],
 				activeFileTabId: null,
+				browserTabs: [],
+				activeBrowserTabId: null,
 				terminalTabs: [],
 				activeTerminalTabId: null,
 				unifiedTabOrder: [{ type: 'ai' as const, id: initialTabId }],
