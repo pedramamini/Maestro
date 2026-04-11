@@ -55,12 +55,6 @@ export interface IProcessManager {
 const activeModeratorSessions = new Map<string, string>();
 
 /**
- * Stale session threshold in milliseconds (30 minutes).
- * Sessions older than this are considered stale and will be cleaned up.
- */
-const STALE_SESSION_THRESHOLD_MS = 30 * 60 * 1000;
-
-/**
  * Tracks last activity time for each moderator session.
  * Maps groupChatId -> timestamp
  */
@@ -70,38 +64,6 @@ const sessionActivityTimestamps = new Map<string, number>();
  * Cleanup interval reference for clearing on shutdown.
  */
 let cleanupIntervalId: NodeJS.Timeout | null = null;
-
-/**
- * Starts periodic cleanup of stale moderator sessions.
- * Should be called once during application initialization.
- */
-export function startSessionCleanup(): void {
-	if (cleanupIntervalId) return; // Already running
-
-	// Run cleanup every 10 minutes
-	cleanupIntervalId = setInterval(
-		() => {
-			const now = Date.now();
-			const staleIds: string[] = [];
-
-			for (const [groupChatId, timestamp] of sessionActivityTimestamps) {
-				if (now - timestamp > STALE_SESSION_THRESHOLD_MS) {
-					staleIds.push(groupChatId);
-				}
-			}
-
-			for (const id of staleIds) {
-				activeModeratorSessions.delete(id);
-				sessionActivityTimestamps.delete(id);
-			}
-
-			if (staleIds.length > 0) {
-				console.log(`[GroupChatModerator] Cleaned up ${staleIds.length} stale session(s)`);
-			}
-		},
-		10 * 60 * 1000
-	);
-}
 
 /**
  * Stops the periodic session cleanup.

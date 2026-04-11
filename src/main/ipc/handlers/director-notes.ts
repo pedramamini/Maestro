@@ -36,7 +36,7 @@ const LOG_CONTEXT = '[DirectorNotes]';
  * Strips markdown formatting characters and control sequences that could
  * be interpreted as prompt instructions by the AI agent.
  */
-export function sanitizeDisplayName(name: string): string {
+function sanitizeDisplayName(name: string): string {
 	return (
 		name
 			// Strip markdown headers, bold, italic, links, images

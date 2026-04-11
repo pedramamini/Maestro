@@ -308,15 +308,8 @@ export function getGroupChatReadOnlyState(groupChatId: string): boolean {
 /**
  * Sets the read-only state for a group chat.
  */
-export function setGroupChatReadOnlyState(groupChatId: string, readOnly: boolean): void {
+function setGroupChatReadOnlyState(groupChatId: string, readOnly: boolean): void {
 	groupChatReadOnlyState.set(groupChatId, readOnly);
-}
-
-/**
- * Gets the pending participants for a group chat.
- */
-export function getPendingParticipants(groupChatId: string): Set<string> {
-	return pendingParticipantResponses.get(groupChatId) || new Set();
 }
 
 /**

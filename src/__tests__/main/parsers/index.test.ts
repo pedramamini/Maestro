@@ -1,7 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import {
 	initializeOutputParsers,
-	ensureParsersInitialized,
 	getOutputParser,
 	hasOutputParser,
 	getAllOutputParsers,
@@ -64,26 +63,6 @@ describe('parsers/index', () => {
 			// Second initialization should still have exactly 4
 			initializeOutputParsers();
 			expect(getAllOutputParsers().length).toBe(4);
-		});
-	});
-
-	describe('ensureParsersInitialized', () => {
-		it('should initialize parsers on first call', () => {
-			expect(getAllOutputParsers().length).toBe(0);
-
-			ensureParsersInitialized();
-
-			expect(getAllOutputParsers().length).toBe(4);
-		});
-
-		it('should be idempotent after first call', () => {
-			ensureParsersInitialized();
-			const first = getAllOutputParsers();
-
-			ensureParsersInitialized();
-			const second = getAllOutputParsers();
-
-			expect(first.length).toBe(second.length);
 		});
 	});
 

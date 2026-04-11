@@ -33,7 +33,7 @@ export interface ExecResult {
  *   to prevent percent-sign escaping issues in arguments
  * - Executables (.exe, .com) can run directly
  */
-export function needsWindowsShell(command: string): boolean {
+function needsWindowsShell(command: string): boolean {
 	const lowerCommand = command.toLowerCase();
 
 	// Batch files always need shell

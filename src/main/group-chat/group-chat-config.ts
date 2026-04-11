@@ -26,7 +26,7 @@ export function setGetCustomShellPathCallback(callback: () => string | undefined
  * Gets the custom shell path using the registered callback.
  * Returns undefined if no callback is registered or if the callback returns undefined.
  */
-export function getCustomShellPath(): string | undefined {
+function getCustomShellPath(): string | undefined {
 	return getCustomShellPathCallback?.();
 }
 

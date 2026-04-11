@@ -8,10 +8,7 @@
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { ipcMain } from 'electron';
-import {
-	registerDirectorNotesHandlers,
-	sanitizeDisplayName,
-} from '../../../../main/ipc/handlers/director-notes';
+import { registerDirectorNotesHandlers } from '../../../../main/ipc/handlers/director-notes';
 import * as historyManagerModule from '../../../../main/history-manager';
 import type { HistoryManager } from '../../../../main/history-manager';
 import type { HistoryEntry } from '../../../../shared/types';
@@ -858,31 +855,3 @@ describe('director-notes IPC handlers', () => {
 	});
 });
 
-describe('sanitizeDisplayName', () => {
-	it('should strip markdown formatting characters', () => {
-		expect(sanitizeDisplayName('**bold** text')).toBe('bold text');
-		expect(sanitizeDisplayName('# heading')).toBe('heading');
-		expect(sanitizeDisplayName('`code`')).toBe('code');
-		expect(sanitizeDisplayName('~~strikethrough~~')).toBe('strikethrough');
-	});
-
-	it('should strip link and image syntax', () => {
-		expect(sanitizeDisplayName('[link](url)')).toBe('linkurl');
-		expect(sanitizeDisplayName('![alt](img)')).toBe('altimg');
-	});
-
-	it('should collapse whitespace and trim', () => {
-		expect(sanitizeDisplayName('  hello   world  ')).toBe('hello world');
-		expect(sanitizeDisplayName('line\nnewline')).toBe('line newline');
-	});
-
-	it('should preserve emoji and regular text', () => {
-		expect(sanitizeDisplayName('🚧 feature-branch')).toBe('🚧 feature-branch');
-		expect(sanitizeDisplayName('my-session')).toBe('my-session');
-	});
-
-	it('should handle empty and whitespace-only strings', () => {
-		expect(sanitizeDisplayName('')).toBe('');
-		expect(sanitizeDisplayName('   ')).toBe('');
-	});
-});

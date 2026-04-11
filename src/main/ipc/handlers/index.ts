@@ -7,8 +7,6 @@
  * Each handler module exports a register function that sets up the relevant ipcMain.handle calls.
  */
 
-import { BrowserWindow, App } from 'electron';
-import Store from 'electron-store';
 import { registerGitHandlers, GitHandlerDependencies } from './git';
 import { registerAutorunHandlers } from './autorun';
 import { registerPlaybooksHandlers } from './playbooks';

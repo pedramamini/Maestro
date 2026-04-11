@@ -1277,10 +1277,3 @@ export function registerAutorunHandlers(
 
 	logger.debug(`${LOG_CONTEXT} Auto Run IPC handlers registered`);
 }
-
-/**
- * Get the current number of active watchers (for testing/debugging)
- */
-export function getAutoRunWatcherCount(): number {
-	return autoRunWatchers.size;
-}

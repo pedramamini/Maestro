@@ -169,7 +169,7 @@ function getConfigDir(): string {
 /**
  * Get the group chats directory path
  */
-export function getGroupChatsDir(): string {
+function getGroupChatsDir(): string {
 	return path.join(getConfigDir(), 'group-chats');
 }
 

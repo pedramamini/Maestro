@@ -38,7 +38,7 @@ export type { AgentError, AgentErrorType } from '../../shared/types';
  * @param id - The string to check
  * @returns True if the string is a valid ToolType
  */
-export function isValidToolType(id: string): id is ToolType {
+function isValidToolType(id: string): id is ToolType {
 	return isValidAgentId(id);
 }
 

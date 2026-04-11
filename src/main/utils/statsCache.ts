@@ -95,7 +95,7 @@ export const STATS_CACHE_VERSION = 2;
  * @param projectPath - The project directory path
  * @returns Absolute path to the cache JSON file
  */
-export function getStatsCachePath(projectPath: string): string {
+function getStatsCachePath(projectPath: string): string {
 	const encodedPath = encodeClaudeProjectPath(projectPath);
 	return path.join(app.getPath('userData'), 'stats-cache', `${encodedPath}.json`);
 }
@@ -186,7 +186,7 @@ export const GLOBAL_STATS_CACHE_VERSION = 3;
  * Get the cache file path for global stats.
  * @returns Absolute path to the global stats cache JSON file
  */
-export function getGlobalStatsCachePath(): string {
+function getGlobalStatsCachePath(): string {
 	return path.join(app.getPath('userData'), 'stats-cache', 'global-stats.json');
 }
 
