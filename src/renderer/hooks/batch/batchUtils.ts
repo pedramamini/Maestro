@@ -15,6 +15,8 @@ export async function loadBatchUtilsPrompts(force = false): Promise<void> {
 	}
 	cachedAutorunDefaultPrompt = result.content!;
 	batchUtilsPromptsLoaded = true;
+	// Update the exported binding so consumers see the loaded value
+	DEFAULT_BATCH_PROMPT = cachedAutorunDefaultPrompt;
 }
 
 function getAutorunDefaultPrompt(): string {
@@ -22,7 +24,8 @@ function getAutorunDefaultPrompt(): string {
 }
 
 // Default batch processing prompt (exported for use by BatchRunnerModal and playbook management)
-export const DEFAULT_BATCH_PROMPT = getAutorunDefaultPrompt();
+// Uses `let` so the binding can be updated after async IPC load completes
+export let DEFAULT_BATCH_PROMPT: string = getAutorunDefaultPrompt();
 
 // Regex to count unchecked markdown checkboxes: - [ ] task (also * [ ])
 const UNCHECKED_TASK_REGEX = /^[\s]*[-*]\s*\[\s*\]\s*.+$/gm;
