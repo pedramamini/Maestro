@@ -1061,7 +1061,15 @@ describe('process IPC handlers', () => {
 			expect(mockProcessManager.spawn).toHaveBeenCalledWith(
 				expect.objectContaining({
 					command: 'ssh',
-					args: expect.arrayContaining(['devuser@dev.example.com']),
+					args: expect.arrayContaining([
+						'devuser@dev.example.com',
+						'-o',
+						'StrictHostKeyChecking=accept-new',
+						'-o',
+						'ConnectTimeout=10',
+						'-o',
+						'ClearAllForwardings=yes',
+					]),
 					toolType: 'terminal',
 				})
 			);
@@ -1094,10 +1102,13 @@ describe('process IPC handlers', () => {
 			const hostIndex = spawnCall.args.indexOf('devuser@dev.example.com');
 			expect(tIndex).toBeGreaterThanOrEqual(0);
 			expect(tIndex).toBeLessThan(hostIndex);
-			// Remote command to cd and exec shell must be the last arg
+			// Destination must appear before the remote command
 			const lastArg = spawnCall.args[spawnCall.args.length - 1];
 			expect(lastArg).toContain('/remote/project');
 			expect(lastArg).toContain('exec $SHELL');
+			// SSH options must be present
+			expect(spawnCall.args).toContain('StrictHostKeyChecking=accept-new');
+			expect(spawnCall.args).toContain('ConnectTimeout=10');
 		});
 
 		it('should include port flag for non-default SSH port', async () => {
@@ -1119,6 +1130,9 @@ describe('process IPC handlers', () => {
 			const portIndex = spawnCall.args.indexOf('-p');
 			expect(portIndex).toBeGreaterThanOrEqual(0);
 			expect(spawnCall.args[portIndex + 1]).toBe('2222');
+			// Port must appear before destination
+			const hostIndex = spawnCall.args.indexOf('devuser@dev.example.com');
+			expect(portIndex).toBeLessThan(hostIndex);
 		});
 
 		it('should include identity file flag when privateKeyPath is set', async () => {
@@ -1139,6 +1153,9 @@ describe('process IPC handlers', () => {
 			const keyIndex = spawnCall.args.indexOf('-i');
 			expect(keyIndex).toBeGreaterThanOrEqual(0);
 			expect(spawnCall.args[keyIndex + 1]).toBe('~/.ssh/id_ed25519');
+			// Identity file must appear before destination
+			const hostIndex = spawnCall.args.indexOf('devuser@dev.example.com');
+			expect(keyIndex).toBeLessThan(hostIndex);
 		});
 
 		it('should return failure when SSH is enabled but remote config not found', async () => {
