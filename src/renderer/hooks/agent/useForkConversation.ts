@@ -182,7 +182,6 @@ You are continuing this conversation from the fork point above. Briefly acknowle
 							groupId: newSession.groupId,
 							activeTabId: newTabId,
 							conductorProfile,
-							readOnlyMode: false,
 						});
 					}
 
