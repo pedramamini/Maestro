@@ -58,17 +58,8 @@ export interface CueExecutionConfig {
  * Orchestrates: template context → variable substitution → spawn spec → process.
  */
 export async function executeCuePrompt(config: CueExecutionConfig): Promise<CueRunResult> {
-	const {
-		runId,
-		session,
-		subscription,
-		event,
-		promptPath,
-		templateContext,
-		timeoutMs,
-		sshRemoteConfig,
-		onLog,
-	} = config;
+	const { runId, session, subscription, event, promptPath, templateContext, timeoutMs, onLog } =
+		config;
 
 	const startedAt = new Date().toISOString();
 	const startTime = Date.now();
@@ -121,12 +112,13 @@ export async function executeCuePrompt(config: CueExecutionConfig): Promise<CueR
 		`[CUE] Executing run ${runId}: "${subscription.name}" → ${spec.command} (${event.type})`
 	);
 
+	const sshActuallyUsed = !!spec.sshRemoteUsed;
 	const processResult = await runProcess(runId, spec, {
 		toolType: config.toolType,
 		timeoutMs,
-		sshRemoteEnabled: sshRemoteConfig?.enabled,
-		sshStdinScript: spec.sshStdinScript,
-		stdinPrompt: spec.stdinPrompt,
+		sshRemoteEnabled: sshActuallyUsed,
+		sshStdinScript: sshActuallyUsed ? spec.sshStdinScript : undefined,
+		stdinPrompt: sshActuallyUsed ? spec.stdinPrompt : undefined,
 		onLog,
 	});
 

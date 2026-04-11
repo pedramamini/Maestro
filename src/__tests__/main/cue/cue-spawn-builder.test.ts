@@ -218,12 +218,17 @@ describe('cue-spawn-builder', () => {
 		});
 
 		it('includes process.env in the spec env', async () => {
-			const result = await buildSpawnSpec(createConfig(), 'prompt');
+			// Seed a unique env var to avoid platform-fragile assertions (e.g. PATH)
+			process.env.__CUE_SPAWN_TEST__ = 'test-value';
+			try {
+				const result = await buildSpawnSpec(createConfig(), 'prompt');
 
-			expect(result.ok).toBe(true);
-			if (result.ok) {
-				// process.env.PATH should be present
-				expect(result.spec.env.PATH).toBeDefined();
+				expect(result.ok).toBe(true);
+				if (result.ok) {
+					expect(result.spec.env.__CUE_SPAWN_TEST__).toBe('test-value');
+				}
+			} finally {
+				delete process.env.__CUE_SPAWN_TEST__;
 			}
 		});
 
