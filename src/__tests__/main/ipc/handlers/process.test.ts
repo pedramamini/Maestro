@@ -1058,21 +1058,29 @@ describe('process IPC handlers', () => {
 				},
 			});
 
-			expect(mockProcessManager.spawn).toHaveBeenCalledWith(
-				expect.objectContaining({
-					command: 'ssh',
-					args: expect.arrayContaining([
-						'devuser@dev.example.com',
-						'-o',
-						'StrictHostKeyChecking=accept-new',
-						'-o',
-						'ConnectTimeout=10',
-						'-o',
-						'ClearAllForwardings=yes',
-					]),
-					toolType: 'terminal',
-				})
-			);
+			const spawnCall = mockProcessManager.spawn.mock.calls[0][0];
+			expect(spawnCall.command).toBe('ssh');
+			expect(spawnCall.toolType).toBe('terminal');
+			const args: string[] = spawnCall.args;
+
+			// Verify SSH options appear before destination and in correct paired order
+			const hostIndex = args.indexOf('devuser@dev.example.com');
+			expect(hostIndex).toBeGreaterThan(0);
+
+			const expectedOptions = [
+				['StrictHostKeyChecking=accept-new'],
+				['ConnectTimeout=10'],
+				['ClearAllForwardings=yes'],
+			];
+			let lastOptionIndex = -1;
+			for (const [value] of expectedOptions) {
+				const oIndex = args.indexOf('-o', lastOptionIndex + 1);
+				expect(oIndex).toBeGreaterThan(lastOptionIndex);
+				expect(oIndex).toBeLessThan(hostIndex);
+				expect(args[oIndex + 1]).toBe(value);
+				lastOptionIndex = oIndex + 1;
+			}
+
 			expect(mockProcessManager.spawnTerminalTab).not.toHaveBeenCalled();
 			expect(result).toEqual({ pid: 5001, success: true });
 		});

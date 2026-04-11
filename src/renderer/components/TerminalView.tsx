@@ -88,10 +88,13 @@ export const TerminalView = memo(
 		// triggers many tabs at once) into a single toast with a count.
 		const notifySpawnFailure = useCallback((message: string) => {
 			spawnFailureCountRef.current++;
-			// Keep the most recent message; prefer SSH-specific messages over generic ones
-			if (!spawnFailureLastMessageRef.current) {
-				spawnFailureLastMessageRef.current = message;
-			} else if (message.startsWith('SSH ')) {
+			// Always store the most recent message, but never let a non-SSH message
+			// overwrite an SSH-specific one (SSH messages take precedence).
+			if (
+				!spawnFailureLastMessageRef.current ||
+				message.startsWith('SSH ') ||
+				!spawnFailureLastMessageRef.current.startsWith('SSH ')
+			) {
 				spawnFailureLastMessageRef.current = message;
 			}
 			if (spawnFailureTimerRef.current) {
