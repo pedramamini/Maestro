@@ -41,6 +41,7 @@ import { useAgentCapabilities, useScrollIntoView } from '../hooks';
 import { getProviderDisplayName } from '../utils/sessionValidation';
 import { filterSlashCommands, highlightSlashCommand } from '../utils/search';
 import { getReadOnlyModeLabel, getReadOnlyModeTooltip } from '../../shared/agentMetadata';
+import { highlightSlashCommand } from '../utils/search';
 
 interface SlashCommand {
 	command: string;
