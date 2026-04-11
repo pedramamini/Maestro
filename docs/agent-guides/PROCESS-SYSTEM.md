@@ -363,7 +363,7 @@ Tracks which sessions are visible in the web interface:
 
 ### Callback Registry (`managers/CallbackRegistry.ts`)
 
-Centralizes 17 callback types (getSessions, getSessionDetail, writeToSession, executeCommand, interruptSession, switchMode, selectSession, selectTab, newTab, closeTab, renameTab, starTab, reorderTab, toggleBookmark, getTheme, getCustomCommands, getHistory).
+Centralizes all web-server callback types. Core categories include: session/tab operations (`getSessions`, `getSessionDetail`, `writeToSession`, `executeCommand`, `interruptSession`, `switchMode`, `selectSession`, `selectTab`, `newTab`, `closeTab`, `renameTab`, `starTab`, `reorderTab`, `toggleBookmark`, `renameSession`), UI/config (`getTheme`, `getCustomCommands`, `getSettings`, `setSetting`), history/autorun (`getHistory`, `getAutoRunDocs`, `getAutoRunDocContent`), groups/group chat (`getGroups`, `renameGroup`, `getGroupChats`, `startGroupChat`, `getGroupChatState`), git (`getGitStatus`, `getGitDiff`), and cue/usage (`getCueSubscriptions`, `toggleCueSubscription`, `getCueActivity`, `getUsageDashboard`, `getAchievements`).
 
 ### Web Server Factory (`web-server-factory.ts`)
 
@@ -384,5 +384,5 @@ Central type definitions for the entire web-server module:
 - Session types: `SessionData`, `SessionDetail`, `SessionBroadcastData`
 - UI types: `AITabData`, `LiveSessionInfo`, `CustomAICommand`, `AutoRunState`
 - Client types: `WebClient`, `WebClientMessage`
-- 17 callback type aliases for all web server operations
+- Callback type aliases for all web server operations (see `CallbackRegistry.ts` for the full list)
 - Usage and response types: `SessionUsageStats`, `LastResponsePreview`

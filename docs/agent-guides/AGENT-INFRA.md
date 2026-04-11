@@ -1,4 +1,4 @@
-<!-- Verified 2026-04-10 against origin/rc (06e5a2eb3) -->
+<!-- Verified 2026-04-09 against origin/rc (06e5a2eb3) -->
 
 # Agent Infrastructure Reference
 
@@ -68,19 +68,27 @@ COMBINED_CONTEXT_AGENTS: ReadonlySet<AgentId>; // Agents with combined I/O conte
 Each agent definition includes CLI configuration:
 
 ```typescript
-interface AgentDefinition {
+// AgentDefinition is derived from AgentConfig:
+// export type AgentDefinition = Omit<AgentConfig, 'available' | 'path' | 'capabilities'>;
+//
+// AgentConfig (in definitions.ts) contains:
+interface AgentConfig {
 	id: string;
 	name: string;
 	binaryName: string; // Binary to look for (e.g., 'claude', 'codex')
 	command: string; // Default command to execute
-	args: string[]; // Base CLI args (always included)
+	args: string[]; // Base args always included (excludes batch mode prefix)
+	available: boolean; // (runtime only — not on AgentDefinition)
+	path?: string; // (runtime only — not on AgentDefinition)
+	customPath?: string; // User-specified custom path
 	requiresPty?: boolean; // Whether agent needs pseudo-terminal
+	configOptions?: AgentConfigOption[]; // Agent-specific configuration
 	hidden?: boolean; // Hide from UI (terminal is hidden)
-	configOptions?: AgentConfigOption[]; // User-configurable settings
+	capabilities: AgentCapabilities; // (runtime only — not on AgentDefinition)
 
 	// Argument builders (optional per agent)
-	batchModePrefix?: string[]; // Args before base args for batch mode (e.g., ['run'] for OpenCode)
-	batchModeArgs?: string[]; // Args only in batch mode
+	batchModePrefix?: string[]; // Args added before base args for batch mode (e.g., ['run'] for OpenCode)
+	batchModeArgs?: string[]; // Args only applied in batch mode
 	jsonOutputArgs?: string[]; // Args for JSON output format
 	resumeArgs?: (sessionId: string) => string[]; // Build resume flags
 	readOnlyArgs?: string[]; // Read-only mode flags
@@ -101,6 +109,7 @@ interface AgentDefinition {
 Agent-specific UI settings using discriminated union types:
 
 ```typescript
+// All options share BaseConfigOption { key, label, description }.
 type AgentConfigOption =
 	| {
 			type: 'checkbox';
@@ -108,16 +117,23 @@ type AgentConfigOption =
 			label: string;
 			description: string;
 			default: boolean;
-			argBuilder?;
+			argBuilder?: (value: boolean) => string[];
 	  }
-	| { type: 'text'; key: string; label: string; description: string; default: string; argBuilder? }
+	| {
+			type: 'text';
+			key: string;
+			label: string;
+			description: string;
+			default: string;
+			argBuilder?: (value: string) => string[];
+	  }
 	| {
 			type: 'number';
 			key: string;
 			label: string;
 			description: string;
 			default: number;
-			argBuilder?;
+			argBuilder?: (value: number) => string[];
 	  }
 	| {
 			type: 'select';
@@ -125,8 +141,9 @@ type AgentConfigOption =
 			label: string;
 			description: string;
 			default: string;
-			options: string[];
-			argBuilder?;
+			options?: string[]; // Optional when dynamic is true
+			dynamic?: boolean; // Fetched at runtime via discoverConfigOptions()
+			argBuilder?: (value: string) => string[];
 	  };
 ```
 
@@ -134,36 +151,47 @@ The `argBuilder` function converts the setting value to CLI arguments.
 
 ### Agent-Specific Examples
 
-**Claude Code** args: `['--output-format', 'stream-json', '--verbose']`
+**Claude Code** args: `['--print', '--verbose', '--output-format', 'stream-json', '--dangerously-skip-permissions']`
 
-- batchModePrefix: `['--print']`
+- No `batchModePrefix` — `--print` is part of base `args`
 - resumeArgs: `(id) => ['--resume', id]`
 - readOnlyArgs: `['--permission-mode', 'plan']`
-- jsonOutputArgs: `['--output-format', 'stream-json']`
+- modelArgs: `(id) => ['--model', id]`
 
-**Codex** args: `['exec', '--json']`
+**Codex** args: `[]` (interactive mode has no base args)
 
-- batchModeArgs: `['--skip-git-repo-check']`
+- batchModePrefix: `['exec']`
+- batchModeArgs: `['--dangerously-bypass-approvals-and-sandbox', '--skip-git-repo-check']`
+- jsonOutputArgs: `['--json']`
 - resumeArgs: `(id) => ['resume', id]`
-- readOnlyArgs: `['--sandbox', 'read-only']`
+- readOnlyArgs: `['--sandbox', 'read-only', '--dangerously-bypass-approvals-and-sandbox', '--skip-git-repo-check']`
 - modelArgs: `(id) => ['-m', id]`
 - imageArgs: `(path) => ['-i', path]`
-- yoloModeArgs: `['--full-auto']`
+- workingDirArgs: `(dir) => ['-C', dir]`
+- yoloModeArgs: `['--dangerously-bypass-approvals-and-sandbox']`
 
-**OpenCode** args: `['run', '--format', 'json']`
+**OpenCode** args: `[]`
 
+- batchModePrefix: `['run']`
+- jsonOutputArgs: `['--format', 'json']`
 - resumeArgs: `(id) => ['--session', id]`
 - readOnlyArgs: `['--agent', 'plan']`
 - modelArgs: `(id) => ['--model', id]`
-- promptArgs: `(prompt) => ['-p', prompt]`
-- noPromptSeparator: `true`
+- imageArgs: `(path) => ['-f', path]`
+- Note: No `promptArgs` — prompt is positional. `noPromptSeparator` is NOT set on OpenCode (it uses the default `--` separator; see comment in definitions.ts)
 
-**Factory Droid** args: `['exec', '-o', 'stream-json']`
+**Factory Droid** args: `[]`
 
+- batchModePrefix: `['exec']`
+- batchModeArgs: `['--skip-permissions-unsafe']`
+- jsonOutputArgs: `['-o', 'stream-json']`
 - resumeArgs: `(id) => ['-s', id]`
-- readOnlyArgs: `[]` (no auto flags = read-only)
+- readOnlyArgs: `[]` (exec is read-only by default)
 - modelArgs: `(id) => ['-m', id]`
 - imageArgs: `(path) => ['-f', path]`
+- workingDirArgs: `(dir) => ['--cwd', dir]`
+- yoloModeArgs: `['--skip-permissions-unsafe']`
+- noPromptSeparator: `true`
 
 ---
 
@@ -196,31 +224,33 @@ interface AgentCapabilities {
 	supportsGroupChatModeration: boolean; // Group chat moderator
 	usesJsonLineOutput: boolean; // JSONL output format
 	usesCombinedContextWindow: boolean; // Combined I/O context
+	supportsAppendSystemPrompt: boolean; // --append-system-prompt flag
 	imageResumeMode?: 'prompt-embed'; // How to handle images on resume
 }
 ```
 
 ### Capability Matrix (Active Agents)
 
-| Capability       | Claude Code | Codex | OpenCode | Factory Droid |
-| ---------------- | :---------: | :---: | :------: | :-----------: |
-| Resume           |      Y      |   Y   |    Y     |       Y       |
-| Read-Only        |      Y      |   Y   |    Y     |       Y       |
-| JSON Output      |      Y      |   Y   |    Y     |       Y       |
-| Session ID       |      Y      |   Y   |    Y     |       Y       |
-| Image Input      |      Y      |   Y   |    Y     |       Y       |
-| Session Storage  |      Y      |   Y   |    Y     |       Y       |
-| Cost Tracking    |      Y      |   N   |    Y     |       N       |
-| Usage Stats      |      Y      |   Y   |    Y     |       Y       |
-| Batch Mode       |      Y      |   Y   |    Y     |       Y       |
-| Requires Prompt  |      N      |   Y   |    Y     |       Y       |
-| Model Selection  |      N      |   Y   |    Y     |       Y       |
-| Thinking Display |      Y      |   Y   |    Y     |       Y       |
-| Context Merge    |      Y      |   Y   |    Y     |       Y       |
-| Wizard           |      Y      |   Y   |    Y     |       N       |
-| Group Chat       |      Y      |   Y   |    Y     |       Y       |
-| JSONL Output     |      N      |   Y   |    Y     |       Y       |
-| Combined Context |      N      |   Y   |    N     |       N       |
+| Capability        | Claude Code | Codex | OpenCode | Factory Droid |
+| ----------------- | :---------: | :---: | :------: | :-----------: |
+| Resume            |      Y      |   Y   |    Y     |       Y       |
+| Read-Only         |      Y      |   Y   |    Y     |       Y       |
+| JSON Output       |      Y      |   Y   |    Y     |       Y       |
+| Session ID        |      Y      |   Y   |    Y     |       Y       |
+| Image Input       |      Y      |   Y   |    Y     |       Y       |
+| Session Storage   |      Y      |   Y   |    Y     |       Y       |
+| Cost Tracking     |      Y      |   N   |    Y     |       N       |
+| Usage Stats       |      Y      |   Y   |    Y     |       Y       |
+| Batch Mode        |      Y      |   Y   |    Y     |       Y       |
+| Requires Prompt   |      N      |   Y   |    Y     |       Y       |
+| Model Selection   |      Y      |   Y   |    Y     |       Y       |
+| Thinking Display  |      Y      |   Y   |    Y     |       Y       |
+| Context Merge     |      Y      |   Y   |    Y     |       Y       |
+| Wizard            |      Y      |   Y   |    Y     |       N       |
+| Group Chat        |      Y      |   Y   |    Y     |       Y       |
+| JSONL Output      |      N      |   Y   |    Y     |       Y       |
+| Combined Context  |      N      |   Y   |    N     |       N       |
+| Append Sys Prompt |      Y      |   N   |    N     |       N       |
 
 ### Access Functions
 
@@ -457,12 +487,12 @@ Subclasses implement:
 
 ### Storage Implementations
 
-| Storage                      | File                               | Session Location                     | Format                |
-| ---------------------------- | ---------------------------------- | ------------------------------------ | --------------------- |
-| `ClaudeSessionStorage`       | `claude-session-storage.ts`        | `~/.claude/projects/<encoded-path>/` | Stream-JSON JSONL     |
-| `CodexSessionStorage`        | `codex-session-storage.ts`         | `~/.codex/sessions/YYYY/MM/DD/`      | JSONL events          |
-| `OpenCodeSessionStorage`     | `opencode-session-storage.ts`      | `~/.local/share/opencode/storage/`   | JSON files            |
-| `FactoryDroidSessionStorage` | `factory-droid-session-storage.ts` | `~/.factory/sessions/`               | JSONL + settings.json |
+| Storage                      | File                               | Session Location                                                     | Format                  |
+| ---------------------------- | ---------------------------------- | -------------------------------------------------------------------- | ----------------------- |
+| `ClaudeSessionStorage`       | `claude-session-storage.ts`        | `~/.claude/projects/<encoded-path>/`                                 | Stream-JSON JSONL       |
+| `CodexSessionStorage`        | `codex-session-storage.ts`         | `~/.codex/sessions/YYYY/MM/DD/`                                      | JSONL events            |
+| `OpenCodeSessionStorage`     | `opencode-session-storage.ts`      | `~/.local/share/opencode/opencode.db` (v1.2+) or `storage/` (legacy) | SQLite (or legacy JSON) |
+| `FactoryDroidSessionStorage` | `factory-droid-session-storage.ts` | `~/.factory/sessions/`                                               | JSONL + settings.json   |
 
 ### Registry Functions
 
@@ -555,24 +585,36 @@ Agent processes are spawned and managed by `ProcessManager` (`src/main/process-m
 
 ### ProcessConfig (Spawn Request)
 
+Defined in `src/main/process-manager/types.ts`. Note: `toolType` is `string` (not `ToolType`), and resume/model/read-only/yolo/custom-path handling happens upstream in the IPC handler before the config reaches `ProcessManager.spawn()`.
+
 ```typescript
 interface ProcessConfig {
 	sessionId: string;
-	toolType: ToolType;
+	toolType: string;
 	cwd: string;
 	command: string;
 	args: string[];
+	requiresPty?: boolean;
 	prompt?: string;
+	shell?: string;
+	shellArgs?: string;
+	shellEnvVars?: Record<string, string>;
 	images?: string[];
-	agentSessionId?: string; // For resume
-	readOnlyMode?: boolean;
-	modelId?: string;
-	yoloMode?: boolean;
-	sessionCustomPath?: string;
-	sessionCustomArgs?: string;
-	sessionCustomEnvVars?: Record<string, string>;
-	sessionCustomModel?: string;
-	sessionCustomContextWindow?: number;
-	sessionSshRemoteConfig?: AgentSshRemoteConfig;
+	imageArgs?: (imagePath: string) => string[];
+	promptArgs?: (prompt: string) => string[];
+	contextWindow?: number;
+	customEnvVars?: Record<string, string>;
+	noPromptSeparator?: boolean;
+	sshRemoteId?: string;
+	sshRemoteHost?: string;
+	querySource?: 'user' | 'auto';
+	tabId?: string;
+	projectPath?: string;
+	runInShell?: boolean;
+	sendPromptViaStdin?: boolean;
+	sendPromptViaStdinRaw?: boolean;
+	sshStdinScript?: string;
+	cols?: number;
+	rows?: number;
 }
 ```

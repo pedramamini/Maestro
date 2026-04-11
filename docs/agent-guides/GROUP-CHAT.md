@@ -30,7 +30,7 @@ The group chat system enables multi-agent collaboration through a hub-and-spoke 
 ### Message Flow
 
 1. User submits a message via the renderer
-2. The IPC handler (`groupChat:sendMessage`) calls `routeUserMessage()`
+2. The IPC handler (`groupChat:sendToModerator`) calls `routeUserMessage()`
 3. The router auto-adds any `@mentioned` agents not yet in the chat (matching against available Maestro sessions)
 4. The message is appended to the pipe-delimited chat log
 5. A moderator batch process is spawned with the full system prompt, participant list, chat history, and user message
@@ -282,45 +282,54 @@ Registered in `src/main/ipc/handlers/groupChat.ts`. All handler names are prefix
 
 ### CRUD
 
-| Handler                           | Description                                               |
-| --------------------------------- | --------------------------------------------------------- |
-| `groupChat:create`                | Creates a new group chat with name and moderator agent ID |
-| `groupChat:list`                  | Lists all group chats                                     |
-| `groupChat:load`                  | Loads a single group chat by ID                           |
-| `groupChat:delete`                | Deletes a group chat and all data                         |
-| `groupChat:rename`                | Renames a group chat                                      |
-| `groupChat:updateModeratorConfig` | Updates moderator custom config                           |
+| Handler             | Description                                               |
+| ------------------- | --------------------------------------------------------- |
+| `groupChat:create`  | Creates a new group chat with name and moderator agent ID |
+| `groupChat:list`    | Lists all group chats                                     |
+| `groupChat:load`    | Loads a single group chat by ID                           |
+| `groupChat:delete`  | Deletes a group chat and all data                         |
+| `groupChat:archive` | Archives a group chat (soft delete)                       |
+| `groupChat:rename`  | Renames a group chat                                      |
+| `groupChat:update`  | Updates group chat metadata (name, moderator config)      |
 
 ### Chat Operations
 
-| Handler                 | Description                               |
-| ----------------------- | ----------------------------------------- |
-| `groupChat:sendMessage` | Routes user message through the moderator |
-| `groupChat:getMessages` | Gets all messages from the chat log       |
-| `groupChat:saveImage`   | Saves an image attachment                 |
+| Handler                     | Description                                 |
+| --------------------------- | ------------------------------------------- |
+| `groupChat:sendToModerator` | Routes a user message through the moderator |
+| `groupChat:appendMessage`   | Appends a message to the chat log           |
+| `groupChat:getMessages`     | Gets all messages from the chat log         |
+| `groupChat:saveImage`       | Saves an image attachment                   |
+| `groupChat:getImages`       | Lists saved image attachments for the chat  |
 
 ### Moderator
 
-| Handler                    | Description                              |
-| -------------------------- | ---------------------------------------- |
-| `groupChat:startModerator` | Spawns the moderator agent               |
-| `groupChat:stopModerator`  | Kills the moderator and all participants |
+| Handler                           | Description                                          |
+| --------------------------------- | ---------------------------------------------------- |
+| `groupChat:startModerator`        | Spawns the moderator agent                           |
+| `groupChat:stopModerator`         | Kills the moderator                                  |
+| `groupChat:stopAll`               | Kills moderator + all participants                   |
+| `groupChat:getModeratorSessionId` | Returns the moderator's provider session ID (if any) |
+| `groupChat:reportAutoRunComplete` | Signal from an Auto Run batch run that it finished   |
 
 ### Participants
 
-| Handler                       | Description                               |
-| ----------------------------- | ----------------------------------------- |
-| `groupChat:addParticipant`    | Adds a participant agent                  |
-| `groupChat:removeParticipant` | Removes a participant                     |
-| `groupChat:sendToParticipant` | Sends a message to a specific participant |
+| Handler                             | Description                                 |
+| ----------------------------------- | ------------------------------------------- |
+| `groupChat:addParticipant`          | Adds a participant agent                    |
+| `groupChat:removeParticipant`       | Removes a participant                       |
+| `groupChat:sendToParticipant`       | Sends a message to a specific participant   |
+| `groupChat:resetParticipantContext` | Clears a participant's conversation context |
 
 ### History
 
-| Handler                        | Description                    |
-| ------------------------------ | ------------------------------ |
-| `groupChat:getHistory`         | Gets activity history entries  |
-| `groupChat:deleteHistoryEntry` | Deletes a single history entry |
-| `groupChat:clearHistory`       | Clears all history             |
+| Handler                        | Description                                  |
+| ------------------------------ | -------------------------------------------- |
+| `groupChat:getHistory`         | Gets activity history entries                |
+| `groupChat:addHistoryEntry`    | Appends a new history entry                  |
+| `groupChat:deleteHistoryEntry` | Deletes a single history entry               |
+| `groupChat:clearHistory`       | Clears all history                           |
+| `groupChat:getHistoryFilePath` | Returns the on-disk path of the history file |
 
 ### Emitter System
 

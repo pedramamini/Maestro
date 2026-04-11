@@ -16,6 +16,7 @@ Cue is an event-driven automation system that triggers AI agent prompts in respo
 
 | Event Type            | Description                                               | Source Module                                  |
 | --------------------- | --------------------------------------------------------- | ---------------------------------------------- |
+| `app.startup`         | Fires once per process lifecycle on Electron launch       | `cue-session-runtime-service` (runtime loop)   |
 | `time.heartbeat`      | Periodic interval timer ("run every N minutes")           | `triggers/cue-heartbeat-trigger-source.ts`     |
 | `time.scheduled`      | Cron-like triggers (specific times/days)                  | `triggers/cue-scheduled-trigger-source.ts`     |
 | `file.changed`        | File system change via chokidar watcher                   | `triggers/cue-file-watcher-trigger-source.ts`  |
@@ -41,7 +42,7 @@ Thin re-export shim. Most type definitions have moved to `src/shared/cue/` (cano
 
 Canonical types now live in `src/shared/cue/contracts.ts` (re-exported via `src/shared/cue/index.ts`):
 
-- `CueEventType` - Union of all 7 trigger types
+- `CueEventType` - Union of all 8 trigger types (including `app.startup`)
 - `CueSubscription` - A trigger-prompt pairing with optional filter, fan-out, schedule, watch pattern, etc.
 - `CueSettings` - Global config: `timeout_minutes` (default 30), `timeout_on_fail` ("break"/"continue"), `max_concurrent` (default 1), `queue_size` (default 10)
 - `CueConfig` - Top-level parsed YAML: `{ subscriptions, settings }`
@@ -65,17 +66,17 @@ Constructor dependencies (`CueEngineDeps`):
 - `onLog()` - Logging callback
 - `onPreventSleep()` / `onAllowSleep()` - Power management integration
 
-Key methods:
+Key public methods:
 
-- `start()` / `stop()` - Enable/disable the engine; initializes DB, scans sessions, starts heartbeat
-- `initSession()` - Loads YAML config, sets up watchers/timers/pollers per subscription type
-- `refreshSession()` - Hot-reloads YAML (tears down old, re-initializes)
-- `removeSession()` - Tears down all subscriptions, clears queue
-- `notifyAgentCompleted()` - Handles `agent.completed` triggers; routes to fan-in tracker or direct dispatch
-- `dispatchSubscription()` - Central dispatch: handles fan-out expansion, routes to run manager
-- `getStatus()` - Returns `CueSessionStatus[]` for all sessions
-- `getGraphData()` - Returns `CueGraphSession[]` for pipeline visualization
-- `triggerSubscription()` - Manual "Run Now" by subscription name
+- `start(reason?)` / `stop()` - Enable/disable the engine; `reason` (`'system-boot'` vs `'user-toggle'`) gates whether `app.startup` fires
+- `refreshSession(sessionId, projectRoot)` - Hot-reloads YAML via `sessionRuntimeService` (tears down old, re-initializes)
+- `removeSession(sessionId)` - Delegates to `sessionRuntimeService` to tear down all subscriptions and clear queue
+- `notifyAgentCompleted(sessionId, completionData?)` - Handles `agent.completed` triggers; routes to `completionService`
+- `getStatus()` / `getActiveRuns()` / `getActivityLog()` / `getQueueStatus()` / `getSettings()` / `getGraphData()` - Read-only projections via `queryService`
+- `stopRun(runId)` / `stopAll()` / `isEnabled()` / `clearQueue()` / `clearFanInState()` / `hasCompletionSubscribers()` - Run/state control
+- `triggerSubscription(subscriptionName)` - Manual "Run Now" by subscription name
+
+Note: per-session `initSession` and central `dispatchSubscription` are not exposed as public `CueEngine` methods — they live on `CueSessionRuntimeService` and `CueDispatchService` respectively, invoked internally by `start()` and by trigger-source callbacks.
 
 Composed submodules (created in constructor):
 

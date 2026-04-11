@@ -70,7 +70,7 @@ src/web/
 │   ├── logger.ts             # Web-specific logger
 │   ├── serviceWorker.ts      # PWA offline support
 │   └── viewState.ts          # View state persistence (localStorage)
-├── mobile/                   # Mobile-optimized React app (~38 components)
+├── mobile/                   # Mobile-optimized React app (~39 components)
 │   ├── App.tsx               # Mobile app root (defines MobileHeader internally)
 │   ├── index.tsx             # Mobile entry point
 │   ├── constants.ts          # Haptic patterns, breakpoints

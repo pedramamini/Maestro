@@ -196,7 +196,7 @@ interface Theme {
 
 Three modes with built-in themes:
 
-**Dark**: dracula, monokai, nord, tokyo-night, catppuccin-mocha, gruvbox-dark
+**Dark**: dracula, monokai, nord, tokyo-night, catppuccin-mocha, gruvbox-dark, solarized-dark
 
 **Light**: github-light, solarized-light, one-light, gruvbox-light, catppuccin-latte, ayu-light
 

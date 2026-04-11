@@ -315,14 +315,14 @@ User customizations are stored in `{userData}/speckit-customizations.json`.
 
 Registered in `src/main/ipc/handlers/speckit.ts`:
 
-| Handler                     | Description                                 |
-| --------------------------- | ------------------------------------------- |
-| `speckit:getCommands`       | Get all SpecKit commands with their prompts |
-| `speckit:getCommand`        | Get a single command by ID                  |
-| `speckit:saveCustomization` | Save a user's custom prompt for a command   |
-| `speckit:resetCommand`      | Reset a command to its bundled default      |
-| `speckit:refreshFromGitHub` | Fetch latest prompts from GitHub            |
-| `speckit:getMetadata`       | Get version/source metadata                 |
+| Handler               | Description                                 |
+| --------------------- | ------------------------------------------- |
+| `speckit:getMetadata` | Get version/source metadata                 |
+| `speckit:getPrompts`  | Get all SpecKit commands with their prompts |
+| `speckit:getCommand`  | Get a single command by ID                  |
+| `speckit:savePrompt`  | Save a user's custom prompt for a command   |
+| `speckit:resetPrompt` | Reset a command to its bundled default      |
+| `speckit:refresh`     | Fetch latest prompts from GitHub            |
 
 ### Renderer Component
 
@@ -391,14 +391,14 @@ User customizations are stored in `{userData}/openspec-customizations.json`.
 
 Registered in `src/main/ipc/handlers/openspec.ts`:
 
-| Handler                      | Description                                  |
-| ---------------------------- | -------------------------------------------- |
-| `openspec:getCommands`       | Get all OpenSpec commands with their prompts |
-| `openspec:getCommand`        | Get a single command by ID                   |
-| `openspec:saveCustomization` | Save a user's custom prompt for a command    |
-| `openspec:resetCommand`      | Reset a command to its bundled default       |
-| `openspec:refreshFromGitHub` | Fetch latest prompts from GitHub             |
-| `openspec:getMetadata`       | Get version/source metadata                  |
+| Handler                | Description                                  |
+| ---------------------- | -------------------------------------------- |
+| `openspec:getMetadata` | Get version/source metadata                  |
+| `openspec:getPrompts`  | Get all OpenSpec commands with their prompts |
+| `openspec:getCommand`  | Get a single command by ID                   |
+| `openspec:savePrompt`  | Save a user's custom prompt for a command    |
+| `openspec:resetPrompt` | Reset a command to its bundled default       |
+| `openspec:refresh`     | Fetch latest prompts from GitHub             |
 
 ### Renderer Component
 

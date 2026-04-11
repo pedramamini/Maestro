@@ -335,7 +335,7 @@ src/main/stores/
   defaults.ts    # Default values for all stores
   instances.ts   # Store instance creation and initialization
   getters.ts     # Public getter functions
-  utils.ts       # Utility functions (getDefaultShell, getCustomSyncPath, getEarlySettings)
+  utils.ts       # Utility functions (getCustomSyncPath, getEarlySettings)
 ```
 
 `initializeStores()` must be called before any store getter. The `app.setPath('userData', ...)` calls must happen before initialization.
@@ -359,11 +359,13 @@ autoUpdater.allowPrerelease = false; // Stable channel only
 1. `initAutoUpdater(window)` is called from window manager (production only)
 2. Event handlers are registered for `update-available`, `update-not-available`, `download-progress`, `update-downloaded`, `error`
 3. Status changes are sent to renderer via `updates:status` IPC event
-4. Renderer can trigger actions via IPC:
-   - `updates:checkAutoUpdater` - Check for updates
-   - `updates:download` - Start downloading
+4. Renderer triggers actions via the `window.maestro.updates` API (see `src/main/preload/system.ts:createUpdatesApi`). The exposed IPC channels are:
+   - `updates:check` - Trigger a manual GitHub-API version check (registered in `src/main/ipc/handlers/system.ts`)
+   - `updates:download` - Start downloading the available update
    - `updates:install` - Install and restart
-   - `updates:getStatus` - Get current status
+   - `updates:getStatus` - Get current `UpdateStatus`
+   - `updates:setAllowPrerelease` - Toggle beta channel opt-in
+   - `updates:checkAutoUpdater` - Invoke `electron-updater` directly (registered separately in `src/main/auto-updater.ts`, distinct from the manual GitHub-API path)
 
 ### Status States
 
@@ -430,8 +432,8 @@ Defined in `src/main/wakatime-manager.ts`.
 
 ### Heartbeat Mechanism
 
-- Triggered by `query-complete` process events
-- Debounced per session: maximum 1 heartbeat per 2 minutes (matches WakaTime's deduplication window)
+- Triggered by `data`, `thinking-chunk`, and `query-complete` process events (see `wakatime-listener.ts`)
+- Debounced per session in `WakaTimeManager`: maximum 1 heartbeat per 2 minutes (`HEARTBEAT_DEBOUNCE_MS`, matches WakaTime's deduplication window)
 - Sends heartbeats with:
   - Project name (derived from session working directory)
   - Language (mapped from file extension via `EXTENSION_LANGUAGE_MAP`)
@@ -457,7 +459,7 @@ Registered in `src/main/ipc/handlers/wakatime.ts`:
 
 ### Process Listener
 
-`setupWakaTimeListener()` in `src/main/process-listeners/wakatime-listener.ts` connects the process manager's `query-complete` event to the WakaTime heartbeat manager.
+`setupWakaTimeListener()` in `src/main/process-listeners/wakatime-listener.ts` subscribes to the process manager's `data`, `thinking-chunk`, `tool-execution`, `usage`, `query-complete`, and `exit` events, sending heartbeats and flushing file-level activity through the WakaTime manager.
 
 ## History Manager
 
@@ -512,6 +514,7 @@ All IPC handlers are registered in `setupIpcHandlers()` within `src/main/index.t
 | `registerPlaybooksHandlers()`     | `playbooks.ts`      | Main window, app                                                     |
 | `registerHistoryHandlers()`       | `history.ts`        | (uses HistoryManager singleton)                                      |
 | `registerDirectorNotesHandlers()` | `director-notes.ts` | Process manager, agent detector, agent configs                       |
+| `registerCueHandlers()`           | `cue.ts`            | Cue engine                                                           |
 | `registerAgentsHandlers()`        | `agents.ts`         | Agent detector, agent configs, settings                              |
 | `registerProcessHandlers()`       | `process.ts`        | Process manager, agent detector, agent configs, settings, sessions   |
 | `registerPersistenceHandlers()`   | `persistence.ts`    | Settings, sessions, groups stores, web server                        |
@@ -522,6 +525,7 @@ All IPC handlers are registered in `setupIpcHandlers()` within `src/main/index.t
 | `registerDebugHandlers()`         | `debug.ts`          | Main window, agent detector, process manager, web server, stores     |
 | `registerSpeckitHandlers()`       | `speckit.ts`        | (none)                                                               |
 | `registerOpenSpecHandlers()`      | `openspec.ts`       | (none)                                                               |
+| `registerBmadHandlers()`          | `bmad.ts`           | (none)                                                               |
 | `registerContextHandlers()`       | `context.ts`        | Main window, process manager, agent detector, agent configs          |
 | `registerMarketplaceHandlers()`   | `marketplace.ts`    | App, settings store                                                  |
 | `registerStatsHandlers()`         | `stats.ts`          | Main window, settings store                                          |
@@ -529,12 +533,13 @@ All IPC handlers are registered in `setupIpcHandlers()` within `src/main/index.t
 | `registerSshRemoteHandlers()`     | `ssh-remote.ts`     | Settings store                                                       |
 | `registerFilesystemHandlers()`    | `filesystem.ts`     | (none)                                                               |
 | `registerAgentErrorHandlers()`    | `agent-error.ts`    | (none)                                                               |
-| `registerNotificationsHandlers()` | `notifications.ts`  | (none)                                                               |
+| `registerNotificationsHandlers()` | `notifications.ts`  | Main window                                                          |
 | `registerAttachmentsHandlers()`   | `attachments.ts`    | App                                                                  |
 | `registerLeaderboardHandlers()`   | `leaderboard.ts`    | App, settings store                                                  |
 | `registerSymphonyHandlers()`      | `symphony.ts`       | App, main window, sessions store                                     |
 | `registerTabNamingHandlers()`     | `tabNaming.ts`      | Process manager, agent detector, agent configs, settings             |
 | `registerWakatimeHandlers()`      | `wakatime.ts`       | WakaTime manager                                                     |
+| `registerFeedbackHandlers()`      | `feedback.ts`       | Process manager, agent detector, web server, settings, stores        |
 
 After handler registration, additional callbacks are set for the group chat router:
 
@@ -592,26 +597,27 @@ The `performCleanup()` function runs synchronously from `before-quit` (async ope
 
 ## Key Source Files
 
-| File                                       | Purpose                                                    |
-| ------------------------------------------ | ---------------------------------------------------------- |
-| `src/main/index.ts`                        | Entry point, startup sequence, IPC wiring                  |
-| `src/main/app-lifecycle/index.ts`          | Lifecycle module barrel                                    |
-| `src/main/app-lifecycle/window-manager.ts` | BrowserWindow creation, crash detection, auto-updater init |
-| `src/main/app-lifecycle/quit-handler.ts`   | Quit confirmation flow and cleanup                         |
-| `src/main/app-lifecycle/error-handlers.ts` | Global uncaught exception handlers                         |
-| `src/main/app-lifecycle/cli-watcher.ts`    | CLI activity file watcher                                  |
-| `src/main/stores/index.ts`                 | Store module barrel                                        |
-| `src/main/stores/types.ts`                 | Store type definitions                                     |
-| `src/main/stores/instances.ts`             | Store initialization                                       |
-| `src/main/stores/getters.ts`               | Store getter functions                                     |
-| `src/main/stores/defaults.ts`              | Store default values                                       |
-| `src/main/stores/utils.ts`                 | Store utilities (early settings, shell detection)          |
-| `src/main/auto-updater.ts`                 | electron-updater integration                               |
-| `src/main/power-manager.ts`                | System sleep prevention                                    |
-| `src/main/wakatime-manager.ts`             | WakaTime heartbeat integration                             |
-| `src/main/history-manager.ts`              | Per-session history storage and migration                  |
-| `src/main/process-manager/`                | Process spawning (PTY + child_process)                     |
-| `src/main/process-listeners/`              | Process event routing                                      |
-| `src/main/ipc/handlers/`                   | All IPC handler modules                                    |
-| `src/main/utils/sentry.ts`                 | Sentry utilities and memory monitoring                     |
-| `src/main/utils/logger.ts`                 | Structured logging                                         |
+| File                                         | Purpose                                                    |
+| -------------------------------------------- | ---------------------------------------------------------- |
+| `src/main/index.ts`                          | Entry point, startup sequence, IPC wiring                  |
+| `src/main/app-lifecycle/index.ts`            | Lifecycle module barrel                                    |
+| `src/main/app-lifecycle/window-manager.ts`   | BrowserWindow creation, crash detection, auto-updater init |
+| `src/main/app-lifecycle/quit-handler.ts`     | Quit confirmation flow and cleanup                         |
+| `src/main/app-lifecycle/error-handlers.ts`   | Global uncaught exception handlers                         |
+| `src/main/app-lifecycle/cli-watcher.ts`      | CLI activity file watcher                                  |
+| `src/main/app-lifecycle/settings-watcher.ts` | External settings-file change detection                    |
+| `src/main/stores/index.ts`                   | Store module barrel                                        |
+| `src/main/stores/types.ts`                   | Store type definitions                                     |
+| `src/main/stores/instances.ts`               | Store initialization                                       |
+| `src/main/stores/getters.ts`                 | Store getter functions                                     |
+| `src/main/stores/defaults.ts`                | Store default values                                       |
+| `src/main/stores/utils.ts`                   | Store utilities (early settings, custom sync path)         |
+| `src/main/auto-updater.ts`                   | electron-updater integration                               |
+| `src/main/power-manager.ts`                  | System sleep prevention                                    |
+| `src/main/wakatime-manager.ts`               | WakaTime heartbeat integration                             |
+| `src/main/history-manager.ts`                | Per-session history storage and migration                  |
+| `src/main/process-manager/`                  | Process spawning (PTY + child_process)                     |
+| `src/main/process-listeners/`                | Process event routing                                      |
+| `src/main/ipc/handlers/`                     | All IPC handler modules                                    |
+| `src/main/utils/sentry.ts`                   | Sentry utilities and memory monitoring                     |
+| `src/main/utils/logger.ts`                   | Structured logging                                         |

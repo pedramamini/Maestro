@@ -8,7 +8,7 @@ Covers four smaller subsystems: Context Providers, Renderer Types, Web Utilities
 
 ## 1. Context Providers (`src/renderer/contexts/`)
 
-Four React context files (~770 lines total) that provide cross-component state without prop drilling. All follow the same pattern: create context with `null` default, provider component wraps hook logic, consumer hook throws if used outside provider.
+Four React context files (~770 lines total, see per-file counts below) that provide cross-component state without prop drilling. All follow the same pattern: create context with `null` default, provider component wraps hook logic, consumer hook throws if used outside provider.
 
 ### When to Use Context vs. Store
 
@@ -17,7 +17,7 @@ Four React context files (~770 lines total) that provide cross-component state w
 
 The dividing line: contexts own _derived/polled data_ or _popup/modal coordination_. Stores own _simple toggles and flags_.
 
-### GitStatusContext.tsx (254 lines)
+### GitStatusContext.tsx (253 lines)
 
 Centralizes git status polling for all sessions. Splits data into three focused sub-contexts to minimize re-renders:
 
@@ -39,7 +39,7 @@ Centralizes git status polling for all sessions. Splits data into three focused 
 
 The underlying data comes from `useGitStatusPolling` hook which polls via IPC.
 
-### InlineWizardContext.tsx (178 lines)
+### InlineWizardContext.tsx (177 lines)
 
 Wraps `useInlineWizard` hook to make `/wizard` slash command state available globally. The inline wizard creates or iterates on Auto Run documents within an existing session conversation, unlike the full-screen onboarding wizard (`MaestroWizard.tsx`).
 
@@ -56,7 +56,7 @@ Wraps `useInlineWizard` hook to make `/wizard` slash command state available glo
 
 **Usage:** 2 consumers (App.tsx, useWizardHandlers reference)
 
-### InputContext.tsx (252 lines)
+### InputContext.tsx (251 lines)
 
 Manages completion popup and command history state extracted from App.tsx. Four completion subsystems:
 
@@ -73,7 +73,7 @@ Manages completion popup and command history state extracted from App.tsx. Four 
 
 **Usage:** 3 consumers (App.tsx, useInputHandlers, useInputKeyDown)
 
-### LayerStackContext.tsx (90 lines)
+### LayerStackContext.tsx (89 lines)
 
 Provides global modal/overlay layer stack management with centralized Escape key handling. The provider installs a capture-phase keydown listener that delegates Escape to the topmost layer's `onEscape` handler.
 
@@ -89,7 +89,7 @@ This is the most widely used context. The layer type system is defined in `src/r
 
 Four type files defining the core data model for the renderer process.
 
-### index.ts (~943 lines) - Core Type Definitions
+### index.ts (~999 lines) - Core Type Definitions
 
 The central type file. Contains the `Session` interface (the largest type at ~200 fields) and all supporting types. Organized as:
 
@@ -124,7 +124,7 @@ The central type file. Contains the `Session` interface (the largest type at ~20
 - `WorktreeConfig extends BaseWorktreeConfig` - adds `ghPath` field
 - `BatchRunConfig` - renderer version adds `worktree` and `worktreeTarget` fields not in the shared version
 
-### contextMerge.ts (178 lines)
+### contextMerge.ts (177 lines)
 
 Types for context merge/transfer operations between sessions:
 
@@ -134,7 +134,7 @@ Types for context merge/transfer operations between sessions:
 - `DuplicateInfo` / `DuplicateDetectionResult` - Duplicate detection across contexts
 - `SummarizeRequest` / `SummarizeResult` / `SummarizeProgress` - Context summarization
 
-### layer.ts (108 lines)
+### layer.ts (107 lines)
 
 Type system for the LayerStackContext:
 
@@ -142,7 +142,7 @@ Type system for the LayerStackContext:
 - `FocusTrapMode` = 'strict' | 'lenient' | 'none'
 - `BaseLayer`, `ModalLayer`, `OverlayLayer` - Layer hierarchy
 - `Layer` = discriminated union
-- `LayerInput` = input types (without auto-generated `id`)
+- `LayerInput` = `ModalLayerInput | OverlayLayerInput` (discriminated union of `Omit<Layer, 'id'>` variants)
 - Type guards: `isModalLayer()`, `isOverlayLayer()`
 
 ### fileTree.ts (7 lines)
@@ -165,7 +165,7 @@ export interface FileNode {
 
 Utilities for the web/mobile interface (PWA). These serve the `src/web/` subsystem only and have no overlap with renderer utilities.
 
-### config.ts (153 lines)
+### config.ts (152 lines)
 
 Configuration management for the web interface. Reads server-injected `window.__MAESTRO_CONFIG__` containing security token, session ID, and API base paths.
 
@@ -179,7 +179,7 @@ Configuration management for the web interface. Reads server-injected `window.__
 - `getDashboardUrl()` / `getSessionUrl(sessionId, tabId?)` - Navigation URLs
 - `updateUrlForSessionTab(sessionId, tabId?)` - Updates URL bar without page reload via `history.replaceState`
 
-### cssCustomProperties.ts (270 lines)
+### cssCustomProperties.ts (275 lines)
 
 Converts Maestro theme colors to CSS custom properties for dynamic theming in the web interface. Maps camelCase color keys to `--maestro-*` CSS variables.
 
@@ -195,7 +195,7 @@ Converts Maestro theme colors to CSS custom properties for dynamic theming in th
 - `cssVar(property, fallback?)` - Returns `var(--maestro-*, fallback)` string for inline styles
 - `THEME_CSS_PROPERTIES` - Array of all 13 CSS variable names
 
-### logger.ts (171 lines)
+### logger.ts (170 lines)
 
 Structured logging for the web/PWA interface. All logs prefixed with `[WebUI]`. Uses `BaseLogLevel` and `LOG_LEVEL_PRIORITY` from `shared/logger-types.ts` for consistency with the main process logger.
 
@@ -203,7 +203,7 @@ Structured logging for the web/PWA interface. All logs prefixed with `[WebUI]`. 
 
 Default minimum level: `warn`. Exposed on `window.__webLogger` in development for debugging.
 
-### serviceWorker.ts (181 lines)
+### serviceWorker.ts (180 lines)
 
 Service worker lifecycle management for offline PWA capability.
 
@@ -216,7 +216,7 @@ Service worker lifecycle management for offline PWA capability.
 - `skipWaiting()` - Activates waiting worker (for user-confirmed updates)
 - `pingServiceWorker()` - Health check with 1-second timeout
 
-### viewState.ts (199 lines)
+### viewState.ts (198 lines)
 
 Persists web UI state to `localStorage` across page refreshes. Two storage keys: `maestro-web-view-state` (view state) and `maestro-web-scroll-state` (scroll positions).
 
@@ -229,13 +229,13 @@ Persists web UI state to `localStorage` across page refreshes. Two storage keys:
 - `debouncedSaveViewState(partial, delay=300)` - 300ms debounce
 - `debouncedSaveScrollPosition(view, position, delay=500)` - 500ms debounce (scroll events fire frequently)
 
-### index.ts (27 lines)
+### index.ts (26 lines)
 
 Barrel file re-exporting from `cssCustomProperties` and `serviceWorker`. Does NOT re-export `config`, `logger`, or `viewState` - those are imported directly by consumers.
 
 ---
 
-## 4. Symphony Runner (`src/main/services/symphony-runner.ts`, 439 lines)
+## 4. Symphony Runner (`src/main/services/symphony-runner.ts`, 443 lines)
 
 Orchestrates open-source contributions via Maestro Symphony. This is a main-process service that handles the git/GitHub workflow for contributing to repositories.
 
