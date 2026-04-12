@@ -91,6 +91,8 @@ export interface ModalHandlersReturn {
 	handleOpenAboutModal: () => void;
 	handleOpenBatchRunner: () => void;
 	handleOpenMarketplace: () => void;
+	handleOpenFeedbackModal: () => void;
+	handleCloseFeedbackModal: () => void;
 
 	// Session list openers
 	handleEditAgent: (session: Session) => void;
@@ -459,6 +461,14 @@ export function useModalHandlers(
 
 	const handleOpenAboutModal = useCallback(() => {
 		getModalActions().setAboutModalOpen(true);
+	}, []);
+
+	const handleOpenFeedbackModal = useCallback(() => {
+		getModalActions().setFeedbackModalOpen(true);
+	}, []);
+
+	const handleCloseFeedbackModal = useCallback(() => {
+		getModalActions().setFeedbackModalOpen(false);
 	}, []);
 
 	const handleOpenBatchRunner = useCallback(() => {
@@ -913,6 +923,8 @@ export function useModalHandlers(
 		handleOpenAboutModal,
 		handleOpenBatchRunner,
 		handleOpenMarketplace,
+		handleOpenFeedbackModal,
+		handleCloseFeedbackModal,
 
 		// Session list openers
 		handleEditAgent,

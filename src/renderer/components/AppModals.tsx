@@ -50,6 +50,7 @@ import type { GroomingProgress, MergeResult } from '../types/contextMerge';
 
 // Info/Display Modal Components
 import { AboutModal } from './AboutModal';
+import { FeedbackModal } from './FeedbackModal';
 import { ShortcutsHelpModal } from './ShortcutsHelpModal';
 import { UpdateCheckModal } from './UpdateCheckModal';
 
@@ -162,6 +163,10 @@ export interface AppInfoModalsProps {
 	defaultStatsTimeRange?: 'day' | 'week' | 'month' | 'year' | 'all';
 	/** Enable colorblind-friendly colors for dashboard charts */
 	colorBlindMode?: boolean;
+
+	// Feedback Modal
+	feedbackModalOpen: boolean;
+	onCloseFeedbackModal: () => void;
 }
 
 /**
@@ -196,6 +201,9 @@ export const AppInfoModals = memo(function AppInfoModals({
 	isLeaderboardRegistered,
 	leaderboardRegistration,
 	onSwitchToSession,
+	// Feedback Modal
+	feedbackModalOpen,
+	onCloseFeedbackModal,
 	// Update Check Modal
 	updateCheckModalOpen,
 	onCloseUpdateCheckModal,
@@ -224,6 +232,16 @@ export const AppInfoModals = memo(function AppInfoModals({
 					onClose={onCloseShortcutsHelp}
 					hasNoAgents={hasNoAgents}
 					keyboardMasteryStats={keyboardMasteryStats}
+				/>
+			)}
+
+			{/* --- FEEDBACK MODAL --- */}
+			{feedbackModalOpen && (
+				<FeedbackModal
+					theme={theme}
+					sessions={sessions}
+					onClose={onCloseFeedbackModal}
+					onSwitchToSession={onSwitchToSession}
 				/>
 			)}
 
@@ -797,6 +815,7 @@ export interface AppUtilityModalsProps {
 	setSettingsTab: (tab: SettingsTab) => void;
 	setShortcutsHelpOpen: (open: boolean) => void;
 	setAboutModalOpen: (open: boolean) => void;
+	setFeedbackModalOpen: (open: boolean) => void;
 	setLogViewerOpen: (open: boolean) => void;
 	setProcessMonitorOpen: (open: boolean) => void;
 	setUsageDashboardOpen: (open: boolean) => void;
@@ -1010,6 +1029,7 @@ export const AppUtilityModals = memo(function AppUtilityModals({
 	setSettingsTab,
 	setShortcutsHelpOpen,
 	setAboutModalOpen,
+	setFeedbackModalOpen,
 	setLogViewerOpen,
 	setProcessMonitorOpen,
 	setUsageDashboardOpen,
@@ -1172,6 +1192,7 @@ export const AppUtilityModals = memo(function AppUtilityModals({
 					setSettingsTab={setSettingsTab}
 					setShortcutsHelpOpen={setShortcutsHelpOpen}
 					setAboutModalOpen={setAboutModalOpen}
+					setFeedbackModalOpen={setFeedbackModalOpen}
 					setLogViewerOpen={setLogViewerOpen}
 					setProcessMonitorOpen={setProcessMonitorOpen}
 					setUsageDashboardOpen={setUsageDashboardOpen}
@@ -1810,6 +1831,8 @@ export interface AppModalsProps {
 	defaultStatsTimeRange?: 'day' | 'week' | 'month' | 'year' | 'all';
 	/** Enable colorblind-friendly colors for dashboard charts */
 	colorBlindMode?: boolean;
+	feedbackModalOpen: boolean;
+	onCloseFeedbackModal: () => void;
 
 	// --- AppConfirmModals props ---
 	confirmModalMessage: string;
@@ -1918,6 +1941,7 @@ export interface AppModalsProps {
 	setSettingsTab: (tab: SettingsTab) => void;
 	setShortcutsHelpOpen: (open: boolean) => void;
 	setAboutModalOpen: (open: boolean) => void;
+	setFeedbackModalOpen: (open: boolean) => void;
 	setLogViewerOpen: (open: boolean) => void;
 	setProcessMonitorOpen: (open: boolean) => void;
 	setUsageDashboardOpen: (open: boolean) => void;
@@ -2226,6 +2250,8 @@ export const AppModals = memo(function AppModals(props: AppModalsProps) {
 		onCloseUsageDashboard,
 		defaultStatsTimeRange,
 		colorBlindMode,
+		feedbackModalOpen,
+		onCloseFeedbackModal,
 		// Confirm modals
 		confirmModalMessage,
 		confirmModalOnConfirm,
@@ -2297,6 +2323,7 @@ export const AppModals = memo(function AppModals(props: AppModalsProps) {
 		setSettingsTab,
 		setShortcutsHelpOpen,
 		setAboutModalOpen,
+		setFeedbackModalOpen,
 		setLogViewerOpen,
 		setProcessMonitorOpen,
 		setUsageDashboardOpen,
@@ -2486,6 +2513,8 @@ export const AppModals = memo(function AppModals(props: AppModalsProps) {
 				defaultStatsTimeRange={defaultStatsTimeRange}
 				colorBlindMode={colorBlindMode}
 				onSwitchToSession={setActiveSessionId}
+				feedbackModalOpen={feedbackModalOpen}
+				onCloseFeedbackModal={onCloseFeedbackModal}
 			/>
 
 			{/* Confirmation Modals */}
@@ -2605,6 +2634,7 @@ export const AppModals = memo(function AppModals(props: AppModalsProps) {
 				setSettingsTab={setSettingsTab}
 				setShortcutsHelpOpen={setShortcutsHelpOpen}
 				setAboutModalOpen={setAboutModalOpen}
+				setFeedbackModalOpen={setFeedbackModalOpen}
 				setLogViewerOpen={setLogViewerOpen}
 				setProcessMonitorOpen={setProcessMonitorOpen}
 				setUsageDashboardOpen={setUsageDashboardOpen}

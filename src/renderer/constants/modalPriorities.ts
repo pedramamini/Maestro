@@ -188,6 +188,9 @@ export const MODAL_PRIORITIES = {
 	/** About/info modal */
 	ABOUT: 600,
 
+	/** Feedback modal */
+	FEEDBACK: 595,
+
 	/** Update check modal */
 	UPDATE_CHECK: 610,
 

@@ -220,7 +220,9 @@ export type ModalId =
 	// Platform Warnings
 	| 'windowsWarning'
 	// Director's Notes
-	| 'directorNotes';
+	| 'directorNotes'
+	// Feedback
+	| 'feedback';
 
 /**
  * Type mapping from ModalId to its data type.
@@ -515,6 +517,9 @@ export function getModalActions() {
 
 		// About Modal
 		setAboutModalOpen: (open: boolean) => (open ? openModal('about') : closeModal('about')),
+
+		// Feedback Modal
+		setFeedbackModalOpen: (open: boolean) => (open ? openModal('feedback') : closeModal('feedback')),
 
 		// Update Check Modal
 		setUpdateCheckModalOpen: (open: boolean) =>
@@ -850,6 +855,7 @@ export function useModalActions() {
 	const symphonyModalOpen = useModalStore(selectModalOpen('symphony'));
 	const windowsWarningModalOpen = useModalStore(selectModalOpen('windowsWarning'));
 	const directorNotesOpen = useModalStore(selectModalOpen('directorNotes'));
+	const feedbackModalOpen = useModalStore(selectModalOpen('feedback'));
 
 	// Get stable actions
 	const actions = getModalActions();
@@ -1017,6 +1023,9 @@ export function useModalActions() {
 
 		// Director's Notes Modal
 		directorNotesOpen,
+
+		// Feedback Modal
+		feedbackModalOpen,
 
 		// Lightbox ref replacements (now stored as data)
 		lightboxIsGroupChat: lightboxData?.isGroupChat ?? false,

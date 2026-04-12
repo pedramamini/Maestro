@@ -228,6 +228,9 @@ function MaestroConsoleInner() {
 		// About Modal
 		aboutModalOpen,
 		setAboutModalOpen,
+		// Feedback Modal
+		feedbackModalOpen,
+		setFeedbackModalOpen,
 		// Update Check Modal
 		setUpdateCheckModalOpen,
 		// standingOvationData, firstRunCelebrationData — now self-sourced in AppOverlays (Tier 1A)
@@ -908,6 +911,8 @@ function MaestroConsoleInner() {
 		handleOpenAboutModal,
 		handleOpenBatchRunner,
 		handleOpenMarketplace,
+		handleOpenFeedbackModal,
+		handleCloseFeedbackModal,
 		handleEditAgent,
 		handleOpenCreatePRSession,
 		handleStartTour,
@@ -2592,6 +2597,8 @@ function MaestroConsoleInner() {
 					hasNoAgents={hasNoAgents}
 					keyboardMasteryStats={keyboardMasteryStats}
 					onCloseAboutModal={handleCloseAboutModal}
+					feedbackModalOpen={feedbackModalOpen}
+					onCloseFeedbackModal={handleCloseFeedbackModal}
 					autoRunStats={autoRunStats}
 					usageStats={usageStats}
 					handsOnTimeMs={totalActiveTimeMs}
@@ -2675,6 +2682,7 @@ function MaestroConsoleInner() {
 					setSettingsTab={setSettingsTab}
 					setShortcutsHelpOpen={setShortcutsHelpOpen}
 					setAboutModalOpen={setAboutModalOpen}
+					setFeedbackModalOpen={setFeedbackModalOpen}
 					setLogViewerOpen={setLogViewerOpen}
 					setProcessMonitorOpen={setProcessMonitorOpen}
 					setUsageDashboardOpen={setUsageDashboardOpen}
