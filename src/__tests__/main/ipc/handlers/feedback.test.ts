@@ -195,5 +195,54 @@ describe('feedback IPC handlers', () => {
 
 			expect(result).toEqual({ success: false, error: expect.any(String) });
 		});
+
+		it('returns failure and does not write when sessionId is empty', async () => {
+			const result = await handlers.get('feedback:submit')!(null, {
+				sessionId: '',
+				feedbackText: 'Some feedback',
+			});
+
+			expect(result).toEqual({ success: false, error: expect.any(String) });
+			expect(mockProcessManager.write).not.toHaveBeenCalled();
+		});
+
+		it('returns failure and does not write when sessionId is missing', async () => {
+			const result = await handlers.get('feedback:submit')!(null, {
+				feedbackText: 'Some feedback',
+			});
+
+			expect(result).toEqual({ success: false, error: expect.any(String) });
+			expect(mockProcessManager.write).not.toHaveBeenCalled();
+		});
+
+		it('returns failure and does not write when feedbackText is empty', async () => {
+			const result = await handlers.get('feedback:submit')!(null, {
+				sessionId: 'session-1',
+				feedbackText: '',
+			});
+
+			expect(result).toEqual({ success: false, error: expect.any(String) });
+			expect(mockProcessManager.write).not.toHaveBeenCalled();
+		});
+
+		it('returns failure and does not write when feedbackText is whitespace only', async () => {
+			const result = await handlers.get('feedback:submit')!(null, {
+				sessionId: 'session-1',
+				feedbackText: '   ',
+			});
+
+			expect(result).toEqual({ success: false, error: expect.any(String) });
+			expect(mockProcessManager.write).not.toHaveBeenCalled();
+		});
+
+		it('returns failure and does not write when feedbackText exceeds 5000 characters', async () => {
+			const result = await handlers.get('feedback:submit')!(null, {
+				sessionId: 'session-1',
+				feedbackText: 'a'.repeat(5001),
+			});
+
+			expect(result).toEqual({ success: false, error: expect.any(String) });
+			expect(mockProcessManager.write).not.toHaveBeenCalled();
+		});
 	});
 });
