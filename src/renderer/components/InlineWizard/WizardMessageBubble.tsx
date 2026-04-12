@@ -57,7 +57,6 @@ export interface WizardMessageBubbleProps {
 	) => void;
 }
 
-
 /**
  * WizardMessageBubble - Individual conversation message display for inline wizard
  *

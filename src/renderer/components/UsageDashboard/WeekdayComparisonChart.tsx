@@ -26,8 +26,6 @@ interface WeekdayComparisonChartProps {
 	colorBlindMode?: boolean;
 }
 
-
-
 export const WeekdayComparisonChart = memo(function WeekdayComparisonChart({
 	data,
 	theme,

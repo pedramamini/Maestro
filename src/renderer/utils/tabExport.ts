@@ -10,7 +10,10 @@
 import { marked } from 'marked';
 import type { AITab, LogEntry, Theme, UsageStats } from '../types';
 import { getTabDisplayName } from './tabHelpers';
-import { formatDurationCompact, formatTimestamp as formatTimestampShared } from '../../shared/formatters';
+import {
+	formatDurationCompact,
+	formatTimestamp as formatTimestampShared,
+} from '../../shared/formatters';
 
 // Configure marked for GFM (tables, strikethrough, etc.)
 marked.setOptions({

@@ -59,8 +59,6 @@ function calculateMovingAverage(values: number[], windowSize: number): number[] 
 	return result;
 }
 
-
-
 /**
  * Format duration for Y-axis labels (shorter format)
  */

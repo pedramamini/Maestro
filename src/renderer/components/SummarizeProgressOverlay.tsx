@@ -46,8 +46,6 @@ export interface SummarizeProgressOverlayProps {
 	startTime: number;
 }
 
-
-
 /**
  * Elapsed time display component with auto-updating timer
  */

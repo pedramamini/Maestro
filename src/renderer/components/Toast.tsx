@@ -10,8 +10,6 @@ interface ToastContainerProps {
 	onSessionClick?: (sessionId: string, tabId?: string) => void;
 }
 
-
-
 const ToastItem = memo(function ToastItem({
 	toast,
 	theme,

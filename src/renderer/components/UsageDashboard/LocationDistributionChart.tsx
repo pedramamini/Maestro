@@ -35,8 +35,6 @@ interface LocationDistributionChartProps {
 	colorBlindMode?: boolean;
 }
 
-
-
 /**
  * Get a color for remote sessions that contrasts with accent (local)
  */

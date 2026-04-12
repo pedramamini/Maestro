@@ -38,8 +38,6 @@ function formatHour(hour: number): string {
 	return `${hour - 12}pm`;
 }
 
-
-
 export const PeakHoursChart = memo(function PeakHoursChart({
 	data,
 	theme,

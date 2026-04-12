@@ -39,7 +39,6 @@ interface SourceDistributionChartProps {
 	colorBlindMode?: boolean;
 }
 
-
 /**
  * Get a secondary color for auto source that contrasts with accent
  * Uses a desaturated/muted version of a complementary color

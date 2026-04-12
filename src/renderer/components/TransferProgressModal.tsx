@@ -72,8 +72,6 @@ export interface TransferProgressModalProps {
 	onComplete?: () => void;
 }
 
-
-
 /**
  * Elapsed time display component with auto-updating timer
  */

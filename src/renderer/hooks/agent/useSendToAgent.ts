@@ -48,7 +48,6 @@ export type { TransferState } from '../../stores/operationStore';
  */
 const MAX_CONTEXT_TOKENS_WARNING = 100000;
 
-
 /**
  * Request to transfer context to another agent
  */

@@ -43,8 +43,6 @@ interface AutoRunStatsProps {
 	columns?: number;
 }
 
-
-
 /**
  * Single metric card component
  */

@@ -27,8 +27,6 @@ interface AgentEfficiencyChartProps {
 	colorBlindMode?: boolean;
 }
 
-
-
 /**
  * Format agent type display name
  */

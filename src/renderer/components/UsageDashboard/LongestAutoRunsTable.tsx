@@ -44,8 +44,6 @@ interface LongestAutoRunsTableProps {
 
 const MAX_ROWS = 25;
 
-
-
 /**
  * Format agent type to display name
  */

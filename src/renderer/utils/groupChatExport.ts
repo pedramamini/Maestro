@@ -8,7 +8,10 @@
 
 import { marked } from 'marked';
 import type { GroupChat, GroupChatMessage, GroupChatHistoryEntry, Theme } from '../types';
-import { formatDurationCompact, formatTimestamp as formatTimestampShared } from '../../shared/formatters';
+import {
+	formatDurationCompact,
+	formatTimestamp as formatTimestampShared,
+} from '../../shared/formatters';
 
 // Configure marked for GFM (tables, strikethrough, etc.)
 marked.setOptions({

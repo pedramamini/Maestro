@@ -63,8 +63,6 @@ interface AgentUsageChartProps {
 	sessions?: Session[];
 }
 
-
-
 /**
  * Format duration for Y-axis labels (shorter format)
  */

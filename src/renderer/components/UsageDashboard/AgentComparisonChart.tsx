@@ -70,7 +70,6 @@ function getAgentColor(
 	return additionalColors[(index - 1) % additionalColors.length];
 }
 
-
 export const AgentComparisonChart = memo(function AgentComparisonChart({
 	data,
 	theme,

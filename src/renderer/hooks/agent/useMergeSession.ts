@@ -42,7 +42,6 @@ export type { MergeState, TabMergeState } from '../../stores/operationStore';
  */
 const MAX_CONTEXT_TOKENS_WARNING = 100000;
 
-
 /**
  * Request to merge two sessions/tabs
  */

@@ -127,8 +127,6 @@ function formatCacheAge(cacheAgeMs: number | null): string {
 	return 'just now';
 }
 
-
-
 function formatDate(isoString: string): string {
 	return new Date(isoString).toLocaleDateString('en-US', {
 		month: 'short',

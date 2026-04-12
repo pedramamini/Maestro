@@ -54,8 +54,6 @@ function formatRelativeTime(timestamp: number): string {
 	return `${days}d ago`;
 }
 
-
-
 const STATUS_COLORS: Record<string, { bg: string; text: string }> = {
 	triggered: { bg: '#fbbf2420', text: '#fbbf24' },
 	running: { bg: '#3b82f620', text: '#3b82f6' },

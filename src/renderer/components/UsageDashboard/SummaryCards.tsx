@@ -45,8 +45,6 @@ interface SummaryCardsProps {
 	sessions?: Session[];
 }
 
-
-
 /**
  * Single metric card component
  */

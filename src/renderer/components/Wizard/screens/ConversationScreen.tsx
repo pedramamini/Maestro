@@ -51,7 +51,6 @@ interface ConversationScreenProps {
 	setShowThinking: (value: boolean | ((prev: boolean) => boolean)) => void;
 }
 
-
 /**
  * Patterns that indicate the AI said it will do something asynchronously.
  * This is a UX problem because the wizard can't actually support async operations -

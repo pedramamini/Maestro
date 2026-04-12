@@ -201,8 +201,6 @@ function build4HourBlockGrid(
 	return { dayColumns: columns, maxCount, maxDuration };
 }
 
-
-
 /**
  * Calculate intensity level (0-4) from a value and max value
  * Level 0 = no activity, 1-4 = increasing activity

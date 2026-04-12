@@ -59,8 +59,6 @@ interface FirstRunCelebrationProps {
 	disableConfetti?: boolean;
 }
 
-
-
 /**
  * FirstRunCelebration - Modal celebrating the user's first Auto Run completion
  */

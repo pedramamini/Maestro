@@ -64,7 +64,6 @@ export interface ResponseViewerProps {
 	sessionName?: string;
 }
 
-
 /**
  * Language mapping for common file extensions and language identifiers
  */
@@ -685,7 +684,9 @@ export function ResponseViewer({
 								{activeSessionName}
 							</span>
 						)}
-						<span style={{ opacity: 0.7 }}>{formatTimestamp(displayResponse.timestamp, 'datetime')}</span>
+						<span style={{ opacity: 0.7 }}>
+							{formatTimestamp(displayResponse.timestamp, 'datetime')}
+						</span>
 					</div>
 				</div>
 
