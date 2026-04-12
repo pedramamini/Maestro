@@ -73,7 +73,9 @@ export function MaestroPromptsTab({
 					}
 				} else {
 					const msg = result.error || 'Failed to load prompts';
-					captureMessage(`MaestroPromptsTab load failed: ${msg}`, { extra: { error: result.error } });
+					captureMessage(`MaestroPromptsTab load failed: ${msg}`, {
+						extra: { error: result.error },
+					});
 					setError(msg);
 				}
 			} catch (err) {
@@ -146,7 +148,9 @@ export function MaestroPromptsTab({
 				setSuccessMessage('Changes saved');
 			} else {
 				const msg = result.error || 'Failed to save prompt';
-				captureMessage(`MaestroPromptsTab save failed: ${msg}`, { extra: { promptId: selectedPrompt.id, error: result.error } });
+				captureMessage(`MaestroPromptsTab save failed: ${msg}`, {
+					extra: { promptId: selectedPrompt.id, error: result.error },
+				});
 				setError(msg);
 			}
 		} catch (err) {
@@ -187,7 +191,9 @@ export function MaestroPromptsTab({
 				setSuccessMessage('Reset to default');
 			} else {
 				const msg = result.error || 'Failed to reset prompt';
-				captureMessage(`MaestroPromptsTab reset failed: ${msg}`, { extra: { promptId: selectedPrompt.id, error: result.error } });
+				captureMessage(`MaestroPromptsTab reset failed: ${msg}`, {
+					extra: { promptId: selectedPrompt.id, error: result.error },
+				});
 				setError(msg);
 			}
 		} catch (err) {

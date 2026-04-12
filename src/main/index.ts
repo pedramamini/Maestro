@@ -415,14 +415,20 @@ app.whenReady().then(async () => {
 					migratedPrompt = `${currentPrompt}\n\n${newSection}`;
 				}
 				await savePrompt('group-chat-moderator-system', migratedPrompt);
-				logger.info('Migrated moderator standing instructions into prompt customization', 'Startup');
+				logger.info(
+					'Migrated moderator standing instructions into prompt customization',
+					'Startup'
+				);
 			}
 		} catch (err) {
 			await captureException(err instanceof Error ? err : new Error(String(err)), {
 				migratedKey,
 				standingInstructionsSlice: standingInstructions.slice(0, 200),
 			});
-			logger.warn('Failed to persist migrated moderator standing instructions, continuing startup', 'Startup');
+			logger.warn(
+				'Failed to persist migrated moderator standing instructions, continuing startup',
+				'Startup'
+			);
 		}
 
 		store.set(migratedKey, true);

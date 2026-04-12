@@ -54,7 +54,10 @@ let initialized = false;
 let writeLock: Promise<void> = Promise.resolve();
 function withWriteLock<T>(fn: () => Promise<T>): Promise<T> {
 	const next = writeLock.then(fn, fn);
-	writeLock = next.then(() => {}, () => {});
+	writeLock = next.then(
+		() => {},
+		() => {}
+	);
 	return next;
 }
 
@@ -90,7 +93,10 @@ async function loadUserCustomizations(): Promise<StoredData | null> {
 		}
 		// Any other error (malformed JSON, permission denied, disk corruption)
 		// is a real problem — log it so users know their customizations failed to load
-		logger.error(`Failed to load prompt customizations from ${filePath}: ${String(error)}`, LOG_CONTEXT);
+		logger.error(
+			`Failed to load prompt customizations from ${filePath}: ${String(error)}`,
+			LOG_CONTEXT
+		);
 		throw error;
 	}
 }
