@@ -37,7 +37,7 @@ import { getSlashCommandDescription } from '../../constants/app';
 import { validateNewSession } from '../../utils/sessionValidation';
 import { parseSynopsis } from '../../../shared/synopsis';
 
-let cachedAutorunSynopsisPrompt: string = '';
+let cachedAutorunSynopsisPrompt: string | null = null;
 let wizardHandlersPromptsLoaded = false;
 
 export async function loadWizardHandlersPrompts(force = false): Promise<void> {
@@ -52,6 +52,9 @@ export async function loadWizardHandlersPrompts(force = false): Promise<void> {
 }
 
 function getAutorunSynopsisPrompt(): string {
+	if (!wizardHandlersPromptsLoaded || cachedAutorunSynopsisPrompt === null) {
+		return '';
+	}
 	return cachedAutorunSynopsisPrompt;
 }
 import { formatRelativeTime } from '../../../shared/formatters';

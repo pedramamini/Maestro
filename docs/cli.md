@@ -209,7 +209,7 @@ The prompts most relevant to CLI playbook execution are:
 
 To customize these prompts, either use the desktop app's **Maestro Prompts** tab or edit the JSON file directly:
 
-```
+```text
 # macOS
 ~/Library/Application Support/Maestro/core-prompts-customizations.json
 

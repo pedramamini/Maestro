@@ -93,6 +93,7 @@ import { updateParticipant, loadGroupChat, updateGroupChat } from './group-chat/
 import { stopSessionCleanup } from './group-chat/group-chat-moderator';
 import { needsSessionRecovery, initiateSessionRecovery } from './group-chat/session-recovery';
 import { initializePrompts, getPrompt, savePrompt } from './prompt-manager';
+import { captureException } from './utils/sentry';
 import { initializeSessionStorages } from './storage';
 import { initializeOutputParsers } from './parsers';
 import { calculateContextTokens } from './parsers/usage-aggregator';
@@ -379,6 +380,9 @@ app.whenReady().then(async () => {
 		await initializePrompts();
 	} catch (error) {
 		logger.error(`Critical: Failed to initialize prompts: ${error}`, 'Startup');
+		await captureException(error instanceof Error ? error : new Error(String(error)), {
+			operation: 'startup:initializePrompts',
+		});
 		const { dialog } = await import('electron');
 		dialog.showErrorBox(
 			'Startup Error',
@@ -395,9 +399,22 @@ app.whenReady().then(async () => {
 	if (standingInstructions && !store.get(migratedKey, false)) {
 		const currentPrompt = getPrompt('group-chat-moderator-system');
 
-		// Guard against double-append: only migrate if the section isn't already present
-		if (!currentPrompt.includes('## Standing Instructions')) {
-			const migratedPrompt = `${currentPrompt}\n\n## Standing Instructions\n\nThe following instructions apply to ALL group chat sessions. Follow them consistently:\n\n${standingInstructions}`;
+		// Only migrate if the exact standing instructions content isn't already in the prompt
+		if (!currentPrompt.includes(standingInstructions)) {
+			// If there's an existing Standing Instructions section with different content, replace it
+			const sectionHeader = '## Standing Instructions';
+			const newSection = `${sectionHeader}\n\nThe following instructions apply to ALL group chat sessions. Follow them consistently:\n\n${standingInstructions}`;
+
+			let migratedPrompt: string;
+			if (currentPrompt.includes(sectionHeader)) {
+				// Replace existing section (from header to end of prompt or next ## heading)
+				migratedPrompt = currentPrompt.replace(
+					/## Standing Instructions[\s\S]*?(?=\n## |\s*$)/,
+					newSection
+				);
+			} else {
+				migratedPrompt = `${currentPrompt}\n\n${newSection}`;
+			}
 			await savePrompt('group-chat-moderator-system', migratedPrompt);
 			logger.info('Migrated moderator standing instructions into prompt customization', 'Startup');
 		}

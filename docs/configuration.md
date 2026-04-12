@@ -18,14 +18,14 @@ Settings are organized into tabs:
 | **Themes**                      | Dark, light, and vibe mode themes, custom theme builder with import/export                                                                                                                           |
 | **Notifications**               | OS notifications, custom command notifications, toast notification duration                                                                                                                          |
 | **AI Commands**                 | View and edit slash commands, [Spec-Kit](./speckit-commands), [OpenSpec](./openspec-commands), and [BMAD](./bmad-commands) prompts                                                                   |
-| **Maestro Prompts**             | Browse and edit the 23 core system prompts (wizard, auto run, group chat, context, etc.). Changes take effect immediately; reset to bundled defaults at any time                                     |
+| **Maestro Prompts**             | Browse and edit the 23 core system prompts (wizard, Auto Run, group chat, context, etc.). Changes take effect immediately; reset to bundled defaults at any time                                     |
 | **SSH Hosts**                   | Configure remote hosts for [SSH agent execution](./ssh-remote-execution)                                                                                                                             |
 | **Environment**                 | Global environment variables that cascade to all agents and terminal sessions                                                                                                                        |
 | **WakaTime** _(in General tab)_ | WakaTime integration toggle, API key, detailed file tracking                                                                                                                                         |
 
 ## Maestro Prompts
 
-Maestro ships with 23 core system prompts that control wizard conversations, auto run behavior, group chat moderation, context management, and more. You can customize any of them via the **Maestro Prompts** tab in Settings.
+Maestro ships with 23 core system prompts that control wizard conversations, Auto Run behavior, group chat moderation, context management, and more. You can customize any of them via the **Maestro Prompts** tab in Settings.
 
 **To edit a prompt:**
 

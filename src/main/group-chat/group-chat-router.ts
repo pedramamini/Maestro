@@ -760,9 +760,9 @@ export async function routeUserMessage(
 				conductorProfile: '',
 			};
 
-			// Substitute {{CONDUCTOR_PROFILE}} template variable
+			// Substitute {{CONDUCTOR_PROFILE}} template variable (global to catch all occurrences)
 			const baseSystemPrompt = getModeratorSystemPrompt().replace(
-				'{{CONDUCTOR_PROFILE}}',
+				/\{\{CONDUCTOR_PROFILE\}\}/g,
 				moderatorSettings.conductorProfile || '(No conductor profile set)'
 			);
 
@@ -1694,7 +1694,7 @@ export async function spawnModeratorSynthesis(
 		conductorProfile: '',
 	};
 	const synthBasePrompt = getModeratorSystemPrompt().replace(
-		'{{CONDUCTOR_PROFILE}}',
+		/\{\{CONDUCTOR_PROFILE\}\}/g,
 		synthModeratorSettings.conductorProfile || '(No conductor profile set)'
 	);
 

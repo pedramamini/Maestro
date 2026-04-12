@@ -64,6 +64,9 @@ export function registerPromptsHandlers(): void {
 	// Save user's edit to a prompt (immediate effect)
 	ipcMain.handle('prompts:save', async (_, id: string, content: string) => {
 		try {
+			if (!arePromptsInitialized()) {
+				return { success: false, error: 'Prompts not yet initialized' };
+			}
 			await savePrompt(id, content);
 			return { success: true };
 		} catch (error) {
@@ -75,6 +78,9 @@ export function registerPromptsHandlers(): void {
 	// Reset a prompt to bundled default (immediate effect)
 	ipcMain.handle('prompts:reset', async (_, id: string) => {
 		try {
+			if (!arePromptsInitialized()) {
+				return { success: false, error: 'Prompts not yet initialized' };
+			}
 			const content = await resetPrompt(id);
 			return { success: true, content };
 		} catch (error) {

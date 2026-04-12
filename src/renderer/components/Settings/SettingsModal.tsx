@@ -635,7 +635,9 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 						)}
 
 						{activeTab === 'prompts' && (
-							<MaestroPromptsTab theme={theme} initialSelectedPromptId={initialSelectedPromptId} />
+							<div data-setting-id="prompts-editor">
+								<MaestroPromptsTab theme={theme} initialSelectedPromptId={initialSelectedPromptId} />
+							</div>
 						)}
 
 						{activeTab === 'ssh' && (

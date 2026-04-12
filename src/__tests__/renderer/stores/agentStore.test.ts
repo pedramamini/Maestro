@@ -115,7 +115,10 @@ const mockClearError = vi.fn().mockResolvedValue(undefined);
 				'image-only-default': 'Describe this image',
 				'commit-command': '',
 			};
-			return Promise.resolve({ success: true, content: prompts[id] ?? '' });
+			if (id in prompts) {
+				return Promise.resolve({ success: true, content: prompts[id] });
+			}
+			return Promise.resolve({ success: false, error: `Unknown prompt: ${id}` });
 		}),
 	},
 };

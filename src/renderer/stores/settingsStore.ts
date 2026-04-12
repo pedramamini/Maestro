@@ -67,15 +67,24 @@ export async function loadSettingsStorePrompts(force = false): Promise<void> {
 	// Patch the live Zustand store so the /commit command reflects the current prompt.
 	// On first load: the store was created with an empty prompt from module-load time.
 	// On refresh (force=true): the user edited/reset the prompt in Settings.
-	// In both cases, update the built-in commit command in the store.
 	const currentCommands = useSettingsStore.getState().customAICommands;
 	const commitCmd = currentCommands.find((c) => c.id === 'commit');
 	if (commitCmd && commitCmd.prompt !== cachedCommitCommandPrompt) {
-		useSettingsStore.setState({
-			customAICommands: currentCommands.map((c) =>
-				c.id === 'commit' ? { ...c, prompt: cachedCommitCommandPrompt } : c
-			),
-		});
+		// If user has a non-empty custom prompt from AI Commands (old way) that differs
+		// from the bundled default, migrate it into the prompt customization store
+		// instead of silently overwriting it.
+		if (commitCmd.prompt && !force) {
+			// Save the user's AI Commands override as a prompt customization
+			window.maestro.prompts.save('commit-command', commitCmd.prompt);
+			cachedCommitCommandPrompt = commitCmd.prompt;
+		} else {
+			// First load (empty) or refresh (user edited via Maestro Prompts) — update store
+			useSettingsStore.setState({
+				customAICommands: currentCommands.map((c) =>
+					c.id === 'commit' ? { ...c, prompt: cachedCommitCommandPrompt } : c
+				),
+			});
+		}
 	}
 }
 

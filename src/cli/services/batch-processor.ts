@@ -158,6 +158,8 @@ export async function* runPlaybook(
 		pid: process.pid,
 	});
 
+	try {
+
 	// Emit start event
 	yield {
 		type: 'start',
@@ -826,4 +828,9 @@ export async function* runPlaybook(
 		totalElapsedMs: Date.now() - batchStartTime,
 		totalCost,
 	};
+
+	} finally {
+		// Ensure CLI activity is always unregistered even if the generator throws
+		unregisterCliActivity(session.id);
+	}
 }

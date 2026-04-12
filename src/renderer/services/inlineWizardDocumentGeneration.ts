@@ -16,8 +16,8 @@ import { logger } from '../utils/logger';
 import { getStdinFlags } from '../utils/spawnHelpers';
 import { substituteTemplateVariables, type TemplateContext } from '../utils/templateVariables';
 
-let cachedWizardDocumentGenerationPrompt: string = '';
-let cachedWizardInlineIterateGenerationPrompt: string = '';
+let cachedWizardDocumentGenerationPrompt: string | null = null;
+let cachedWizardInlineIterateGenerationPrompt: string | null = null;
 let inlineWizardDocGenPromptsLoaded = false;
 
 export async function loadInlineWizardDocGenPrompts(force = false): Promise<void> {
@@ -42,10 +42,16 @@ export async function loadInlineWizardDocGenPrompts(force = false): Promise<void
 }
 
 function getWizardDocumentGenerationPrompt(): string {
+	if (!inlineWizardDocGenPromptsLoaded || cachedWizardDocumentGenerationPrompt === null) {
+		return '';
+	}
 	return cachedWizardDocumentGenerationPrompt;
 }
 
 function getWizardInlineIterateGenerationPrompt(): string {
+	if (!inlineWizardDocGenPromptsLoaded || cachedWizardInlineIterateGenerationPrompt === null) {
+		return '';
+	}
 	return cachedWizardInlineIterateGenerationPrompt;
 }
 import { deriveSshRemoteId } from '../components/Wizard/services/phaseGenerator';

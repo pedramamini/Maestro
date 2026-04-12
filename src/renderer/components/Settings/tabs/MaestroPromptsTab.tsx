@@ -8,6 +8,7 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import type { Theme } from '../../../constants/themes';
 import { refreshRendererPrompts } from '../../../services/promptInit';
+import { captureException, captureMessage } from '../../../utils/sentry';
 import './MaestroPromptsTab.css';
 
 interface CorePrompt {
@@ -71,9 +72,14 @@ export function MaestroPromptsTab({
 						setEditedContent(target.content);
 					}
 				} else {
-					setError(result.error || 'Failed to load prompts');
+					const msg = result.error || 'Failed to load prompts';
+					captureMessage(`MaestroPromptsTab load failed: ${msg}`, { extra: { error: result.error } });
+					setError(msg);
 				}
 			} catch (err) {
+				captureException(err instanceof Error ? err : new Error(String(err)), {
+					extra: { context: 'MaestroPromptsTab.loadPrompts' },
+				});
 				setError(String(err));
 			}
 		})();
@@ -139,9 +145,14 @@ export function MaestroPromptsTab({
 				setHasUnsavedChanges(false);
 				setSuccessMessage('Changes saved');
 			} else {
-				setError(result.error || 'Failed to save prompt');
+				const msg = result.error || 'Failed to save prompt';
+				captureMessage(`MaestroPromptsTab save failed: ${msg}`, { extra: { promptId: selectedPrompt.id, error: result.error } });
+				setError(msg);
 			}
 		} catch (err) {
+			captureException(err instanceof Error ? err : new Error(String(err)), {
+				extra: { context: 'MaestroPromptsTab.savePrompt', promptId: selectedPrompt.id },
+			});
 			setError(String(err));
 		} finally {
 			setIsSaving(false);
@@ -175,9 +186,14 @@ export function MaestroPromptsTab({
 				setHasUnsavedChanges(false);
 				setSuccessMessage('Reset to default');
 			} else {
-				setError(result.error || 'Failed to reset prompt');
+				const msg = result.error || 'Failed to reset prompt';
+				captureMessage(`MaestroPromptsTab reset failed: ${msg}`, { extra: { promptId: selectedPrompt.id, error: result.error } });
+				setError(msg);
 			}
 		} catch (err) {
+			captureException(err instanceof Error ? err : new Error(String(err)), {
+				extra: { context: 'MaestroPromptsTab.resetPrompt', promptId: selectedPrompt.id },
+			});
 			setError(String(err));
 		} finally {
 			setIsResetting(false);

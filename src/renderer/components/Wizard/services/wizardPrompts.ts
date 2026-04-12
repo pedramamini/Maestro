@@ -12,8 +12,8 @@ import {
 } from '../../../utils/templateVariables';
 import { PLAYBOOKS_DIR } from '../../../../shared/maestro-paths';
 
-let cachedWizardSystemPrompt: string = '';
-let cachedWizardSystemContinuationPrompt: string = '';
+let cachedWizardSystemPrompt: string | null = null;
+let cachedWizardSystemContinuationPrompt: string | null = null;
 let wizardPromptsLoaded = false;
 
 export async function loadWizardPrompts(force = false): Promise<void> {
@@ -38,10 +38,16 @@ export async function loadWizardPrompts(force = false): Promise<void> {
 }
 
 export function getWizardSystemPrompt(): string {
+	if (!wizardPromptsLoaded || cachedWizardSystemPrompt === null) {
+		return '';
+	}
 	return cachedWizardSystemPrompt;
 }
 
 export function getWizardSystemContinuationPrompt(): string {
+	if (!wizardPromptsLoaded || cachedWizardSystemContinuationPrompt === null) {
+		return '';
+	}
 	return cachedWizardSystemContinuationPrompt;
 }
 

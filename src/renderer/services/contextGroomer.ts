@@ -22,8 +22,8 @@ import {
 	estimateTokenCount,
 	calculateTotalTokens,
 } from '../utils/contextExtractor';
-let cachedContextGroomingPrompt: string = '';
-let cachedContextTransferPrompt: string = '';
+let cachedContextGroomingPrompt: string | null = null;
+let cachedContextTransferPrompt: string | null = null;
 let contextGroomerPromptsLoaded = false;
 
 export async function loadContextGroomerPrompts(force = false): Promise<void> {
@@ -46,10 +46,16 @@ export async function loadContextGroomerPrompts(force = false): Promise<void> {
 }
 
 function getContextGroomingPrompt(): string {
+	if (!contextGroomerPromptsLoaded || cachedContextGroomingPrompt === null) {
+		return '';
+	}
 	return cachedContextGroomingPrompt;
 }
 
 function getContextTransferPrompt(): string {
+	if (!contextGroomerPromptsLoaded || cachedContextTransferPrompt === null) {
+		return '';
+	}
 	return cachedContextTransferPrompt;
 }
 

@@ -143,7 +143,7 @@ export const CORE_PROMPTS: PromptDefinition[] = [
 		description: 'Context summarization prompt',
 		category: 'context',
 	},
-	// System
+	// System (UI/meta)
 	{
 		id: 'tab-naming',
 		filename: 'tab-naming.md',

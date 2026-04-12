@@ -74,14 +74,15 @@ async function loadUserCustomizations(): Promise<StoredData | null> {
 	try {
 		const content = await fs.readFile(filePath, 'utf-8');
 		return JSON.parse(content) as StoredData;
-	} catch (error: any) {
+	} catch (error: unknown) {
 		// File not existing is expected (no customizations yet)
-		if (error?.code === 'ENOENT') {
+		const err = error as NodeJS.ErrnoException | undefined;
+		if (err?.code === 'ENOENT') {
 			return null;
 		}
 		// Any other error (malformed JSON, permission denied, disk corruption)
 		// is a real problem — log it so users know their customizations failed to load
-		logger.error(`Failed to load prompt customizations from ${filePath}: ${error}`, LOG_CONTEXT);
+		logger.error(`Failed to load prompt customizations from ${filePath}: ${String(error)}`, LOG_CONTEXT);
 		throw error;
 	}
 }

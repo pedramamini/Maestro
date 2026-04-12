@@ -35,7 +35,7 @@ import {
 	parseGroomedOutput,
 	estimateTextTokenCount,
 } from '../utils/contextExtractor';
-let cachedContextSummarizePrompt: string = '';
+let cachedContextSummarizePrompt: string | null = null;
 let contextSummarizerPromptsLoaded = false;
 
 export async function loadContextSummarizerPrompts(force = false): Promise<void> {
@@ -50,6 +50,9 @@ export async function loadContextSummarizerPrompts(force = false): Promise<void>
 }
 
 function getContextSummarizePrompt(): string {
+	if (!contextSummarizerPromptsLoaded || cachedContextSummarizePrompt === null) {
+		return '';
+	}
 	return cachedContextSummarizePrompt;
 }
 

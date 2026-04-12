@@ -14,7 +14,7 @@ import {
 } from '../../../utils/templateVariables';
 import { getStdinFlags } from '../../../utils/spawnHelpers';
 
-let cachedPhaseGenDocPrompt: string = '';
+let cachedPhaseGenDocPrompt: string | null = null;
 let phaseGeneratorPromptsLoaded = false;
 
 export async function loadPhaseGeneratorPrompts(force = false): Promise<void> {
@@ -29,6 +29,9 @@ export async function loadPhaseGeneratorPrompts(force = false): Promise<void> {
 }
 
 function getWizardDocumentGenerationPrompt(): string {
+	if (!phaseGeneratorPromptsLoaded || cachedPhaseGenDocPrompt === null) {
+		return '';
+	}
 	return cachedPhaseGenDocPrompt;
 }
 

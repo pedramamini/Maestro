@@ -50,7 +50,7 @@ import { formatRelativeTime } from '../../../shared/formatters';
 import { parseSynopsis } from '../../../shared/synopsis';
 import type { RightPanelHandle } from '../../components/RightPanel';
 
-let cachedAutorunSynopsisPrompt: string = '';
+let cachedAutorunSynopsisPrompt: string | null = null;
 let agentListenersPromptsLoaded = false;
 
 export async function loadAgentListenersPrompts(force = false): Promise<void> {
@@ -65,6 +65,9 @@ export async function loadAgentListenersPrompts(force = false): Promise<void> {
 }
 
 function getAutorunSynopsisPrompt(): string {
+	if (!agentListenersPromptsLoaded || cachedAutorunSynopsisPrompt === null) {
+		return '';
+	}
 	return cachedAutorunSynopsisPrompt;
 }
 import { useGroupChatStore } from '../../stores/groupChatStore';

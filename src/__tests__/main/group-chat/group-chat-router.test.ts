@@ -58,12 +58,8 @@ vi.mock('../../../main/prompt-manager', () => ({
 			'group-chat-moderator-synthesis': 'group-chat-moderator-synthesis.md',
 		};
 		const filename = filenameMap[id];
-		if (!filename) return `mock prompt for ${id}`;
-		try {
-			return fs.readFileSync(path.join(promptsDir, filename), 'utf-8');
-		} catch {
-			return `mock prompt for ${id}`;
-		}
+		if (!filename) throw new Error(`Unknown prompt ID in test mock: ${id}`);
+		return fs.readFileSync(path.join(promptsDir, filename), 'utf-8');
 	}),
 }));
 

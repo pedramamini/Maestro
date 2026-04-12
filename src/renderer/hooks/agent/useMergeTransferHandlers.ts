@@ -25,7 +25,7 @@ import { substituteTemplateVariables } from '../../utils/templateVariables';
 import { gitService } from '../../services/git';
 import { useSettingsStore } from '../../stores/settingsStore';
 
-let cachedMergeTransferSystemPrompt: string = '';
+let cachedMergeTransferSystemPrompt: string | null = null;
 let mergeTransferPromptsLoaded = false;
 
 export async function loadMergeTransferPrompts(force = false): Promise<void> {
@@ -39,7 +39,7 @@ export async function loadMergeTransferPrompts(force = false): Promise<void> {
 	mergeTransferPromptsLoaded = true;
 }
 
-function getMaestroSystemPrompt(): string {
+function getMaestroSystemPrompt(): string | null {
 	return cachedMergeTransferSystemPrompt;
 }
 import { useMergeSessionWithSessions } from './useMergeSession';
@@ -511,8 +511,9 @@ You are taking over this conversation. Based on the context above, provide a bri
 
 					// Prepare Maestro system prompt separately for token-efficient delivery
 					let appendSystemPrompt: string | undefined;
-					if (getMaestroSystemPrompt()) {
-						appendSystemPrompt = substituteTemplateVariables(getMaestroSystemPrompt(), {
+					const systemPrompt = getMaestroSystemPrompt();
+					if (systemPrompt) {
+						appendSystemPrompt = substituteTemplateVariables(systemPrompt, {
 							session: targetSession,
 							gitBranch,
 							groupId: targetSession.groupId,

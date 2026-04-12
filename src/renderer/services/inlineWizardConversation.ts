@@ -19,8 +19,8 @@ import {
 	getConfidenceColor,
 } from '../components/Wizard/services/wizardPrompts';
 
-let cachedWizardInlineIteratePrompt: string = '';
-let cachedWizardInlineNewPrompt: string = '';
+let cachedWizardInlineIteratePrompt: string | null = null;
+let cachedWizardInlineNewPrompt: string | null = null;
 let inlineWizardConversationPromptsLoaded = false;
 
 export async function loadInlineWizardConversationPrompts(force = false): Promise<void> {
@@ -43,10 +43,16 @@ export async function loadInlineWizardConversationPrompts(force = false): Promis
 }
 
 function getWizardInlineIteratePrompt(): string {
+	if (!inlineWizardConversationPromptsLoaded || cachedWizardInlineIteratePrompt === null) {
+		return '';
+	}
 	return cachedWizardInlineIteratePrompt;
 }
 
 function getWizardInlineNewPrompt(): string {
+	if (!inlineWizardConversationPromptsLoaded || cachedWizardInlineNewPrompt === null) {
+		return '';
+	}
 	return cachedWizardInlineNewPrompt;
 }
 
