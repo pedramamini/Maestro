@@ -140,6 +140,7 @@ export interface AppInfoModalsProps {
 	onOpenLeaderboardRegistration: () => void;
 	isLeaderboardRegistered: boolean;
 	leaderboardRegistration?: LeaderboardRegistration | null;
+	onSwitchToSession: (sessionId: string) => void;
 
 	// Update Check Modal
 	updateCheckModalOpen: boolean;
@@ -194,6 +195,7 @@ export const AppInfoModals = memo(function AppInfoModals({
 	onOpenLeaderboardRegistration,
 	isLeaderboardRegistered,
 	leaderboardRegistration,
+	onSwitchToSession,
 	// Update Check Modal
 	updateCheckModalOpen,
 	onCloseUpdateCheckModal,
@@ -236,6 +238,8 @@ export const AppInfoModals = memo(function AppInfoModals({
 					onOpenLeaderboardRegistration={onOpenLeaderboardRegistration}
 					isLeaderboardRegistered={isLeaderboardRegistered}
 					leaderboardRegistration={leaderboardRegistration}
+					sessions={sessions}
+					onSwitchToSession={onSwitchToSession}
 				/>
 			)}
 
@@ -2481,6 +2485,7 @@ export const AppModals = memo(function AppModals(props: AppModalsProps) {
 				onCloseUsageDashboard={onCloseUsageDashboard}
 				defaultStatsTimeRange={defaultStatsTimeRange}
 				colorBlindMode={colorBlindMode}
+				onSwitchToSession={setActiveSessionId}
 			/>
 
 			{/* Confirmation Modals */}
