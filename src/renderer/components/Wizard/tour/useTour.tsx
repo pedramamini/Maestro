@@ -19,7 +19,8 @@ export interface TourUIAction {
 		| 'closeRightPanel'
 		| 'openHamburgerMenu'
 		| 'closeHamburgerMenu'
-		| 'setInputMode';
+		| 'setInputMode'
+		| 'ensureAiTab';
 	value?: string;
 }
 

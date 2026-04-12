@@ -1837,4 +1837,52 @@ describe('QuickActionsModal', () => {
 			expect(zuluIdx).toBeLessThan(gcIdx);
 		});
 	});
+
+	describe('Move to First/Last Position with browser tabs', () => {
+		it('shows Move to First when browser tab is at last position', () => {
+			const session = createMockSession({
+				activeBrowserTabId: 'browser-1',
+				browserTabs: [{ id: 'browser-1', url: 'https://example.com', title: 'Example' }],
+				unifiedTabOrder: [
+					{ type: 'ai', id: 'tab-1' },
+					{ type: 'browser', id: 'browser-1' },
+				],
+			});
+			const onMoveTabToFirst = vi.fn();
+			const onMoveTabToLast = vi.fn();
+			const props = createDefaultProps({
+				sessions: [session],
+				onMoveTabToFirst,
+				onMoveTabToLast,
+			});
+			render(<QuickActionsModal {...props} />);
+
+			// Browser tab is at index 1 (last) — should show Move to First but not Move to Last
+			expect(screen.getByText('Move to First Position')).toBeInTheDocument();
+			expect(screen.queryByText('Move to Last Position')).not.toBeInTheDocument();
+		});
+
+		it('shows Move to Last when browser tab is at first position', () => {
+			const session = createMockSession({
+				activeBrowserTabId: 'browser-1',
+				browserTabs: [{ id: 'browser-1', url: 'https://example.com', title: 'Example' }],
+				unifiedTabOrder: [
+					{ type: 'browser', id: 'browser-1' },
+					{ type: 'ai', id: 'tab-1' },
+				],
+			});
+			const onMoveTabToFirst = vi.fn();
+			const onMoveTabToLast = vi.fn();
+			const props = createDefaultProps({
+				sessions: [session],
+				onMoveTabToFirst,
+				onMoveTabToLast,
+			});
+			render(<QuickActionsModal {...props} />);
+
+			// Browser tab is at index 0 (first) — should show Move to Last but not Move to First
+			expect(screen.queryByText('Move to First Position')).not.toBeInTheDocument();
+			expect(screen.getByText('Move to Last Position')).toBeInTheDocument();
+		});
+	});
 });

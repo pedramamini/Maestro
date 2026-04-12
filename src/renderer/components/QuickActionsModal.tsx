@@ -260,14 +260,22 @@ export const QuickActionsModal = memo(function QuickActionsModal(props: QuickAct
 	const activeSession = sessions.find((s) => s.id === activeSessionId);
 
 	// Compute the active tab's position in the unified tab order for command palette conditions.
-	// This works for AI, file, and terminal tabs.
+	// This works for AI, file, terminal, and browser tabs.
 	const isTerminalMode = activeSession?.inputMode === 'terminal';
-	const hasActiveTab = !!(isAiMode || isTerminalMode || activeSession?.activeFileTabId);
+	const hasActiveTab = !!(
+		isAiMode ||
+		isTerminalMode ||
+		activeSession?.activeFileTabId ||
+		activeSession?.activeBrowserTabId
+	);
 	const activeUnifiedIndex = (() => {
 		if (!activeSession) return -1;
-		let type: 'ai' | 'file' | 'terminal';
+		let type: 'ai' | 'file' | 'terminal' | 'browser';
 		let id: string | undefined;
-		if (isTerminalMode && activeSession.activeTerminalTabId) {
+		if (activeSession.activeBrowserTabId) {
+			type = 'browser';
+			id = activeSession.activeBrowserTabId;
+		} else if (isTerminalMode && activeSession.activeTerminalTabId) {
 			type = 'terminal';
 			id = activeSession.activeTerminalTabId;
 		} else if (activeSession.activeFileTabId) {

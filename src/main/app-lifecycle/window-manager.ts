@@ -300,11 +300,13 @@ export function createWindowManager(deps: WindowManagerDependencies): WindowMana
 					if(window.__maestroShortcutListenerInstalled)return;
 					window.__maestroShortcutListenerInstalled=true;
 					document.addEventListener('keydown',function(e){
-						if(!(e.metaKey||e.ctrlKey))return;
+						var hasMod=e.metaKey||e.ctrlKey;
+						var hasAlt=e.altKey;
+						if(!hasMod&&!hasAlt)return;
 						if(e.defaultPrevented)return;
 						var k=e.key.toLowerCase();
-						var te=!e.altKey&&!e.shiftKey&&'acvxzf'.indexOf(k)!==-1;
-						var re=!e.altKey&&e.shiftKey&&k==='z';
+						var te=hasMod&&!hasAlt&&!e.shiftKey&&'acvxzf'.indexOf(k)!==-1;
+						var re=hasMod&&!hasAlt&&e.shiftKey&&k==='z';
 						if(te||re)return;
 						console.log('__MAESTRO_KEY__'+JSON.stringify({
 							key:e.key,code:e.code,
@@ -318,8 +320,9 @@ export function createWindowManager(deps: WindowManagerDependencies): WindowMana
 				};
 				guest.on('dom-ready', injectShortcutListener);
 				guest.on('did-navigate', injectShortcutListener);
+				// console-message args: (event, level, message, line, sourceId)
 				guest.on('console-message', (...args: unknown[]) => {
-					const message = typeof args[1] === 'string' ? args[1] : String(args[1] ?? '');
+					const message = typeof args[2] === 'string' ? args[2] : String(args[2] ?? '');
 					const prefix = '__MAESTRO_KEY__';
 					if (!message.startsWith(prefix)) return;
 					try {

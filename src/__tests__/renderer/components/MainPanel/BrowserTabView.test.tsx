@@ -38,6 +38,7 @@ type MockWebview = HTMLElement & {
 	getTitle: ReturnType<typeof vi.fn>;
 	isLoading: ReturnType<typeof vi.fn>;
 	getWebContentsId: ReturnType<typeof vi.fn>;
+	executeJavaScript: ReturnType<typeof vi.fn>;
 };
 
 describe('BrowserTabView', () => {
@@ -317,6 +318,105 @@ describe('BrowserTabView', () => {
 		expect(window.maestro.shell.openExternal).not.toHaveBeenCalled();
 		expect(preventDefault).not.toHaveBeenCalled();
 		expect(onUpdateTab).not.toHaveBeenCalled();
+	});
+
+	describe('address bar scroll auto-hide', () => {
+		function setupWebview(onUpdateTab: ReturnType<typeof vi.fn>) {
+			render(<BrowserTabView tab={mockTab} theme={mockTheme} onUpdateTab={onUpdateTab} />);
+			const webview = getWebview();
+			webview.canGoBack = vi.fn(() => false);
+			webview.canGoForward = vi.fn(() => false);
+			webview.getURL = vi.fn(() => 'https://example.com');
+			webview.getTitle = vi.fn(() => 'Example');
+			webview.isLoading = vi.fn(() => false);
+			webview.getWebContentsId = vi.fn(() => 99);
+			webview.executeJavaScript = vi.fn().mockResolvedValue(undefined);
+			return webview;
+		}
+
+		it('injects scroll listener on dom-ready', async () => {
+			const onUpdateTab = vi.fn();
+			const webview = setupWebview(onUpdateTab);
+
+			await act(async () => {
+				webview.dispatchEvent(new Event('dom-ready'));
+			});
+
+			expect(webview.executeJavaScript).toHaveBeenCalledWith(
+				expect.stringContaining('__maestroScrollListenerInstalled')
+			);
+		});
+
+		it('hides address bar on scroll-down console message', async () => {
+			const onUpdateTab = vi.fn();
+			const webview = setupWebview(onUpdateTab);
+
+			await act(async () => {
+				webview.dispatchEvent(new Event('dom-ready'));
+			});
+
+			const addressBar = screen.getByLabelText('Browser URL').closest('[class*="overflow-hidden"]');
+			expect(addressBar).toBeTruthy();
+
+			// Simulate scroll-down message from guest
+			await act(async () => {
+				webview.dispatchEvent(
+					Object.assign(new Event('console-message'), { message: '__MAESTRO_SCROLL__1' })
+				);
+			});
+
+			expect(addressBar).toHaveStyle({ maxHeight: '0' });
+		});
+
+		it('reveals address bar on scroll-up console message', async () => {
+			const onUpdateTab = vi.fn();
+			const webview = setupWebview(onUpdateTab);
+
+			await act(async () => {
+				webview.dispatchEvent(new Event('dom-ready'));
+			});
+
+			const addressBar = screen.getByLabelText('Browser URL').closest('[class*="overflow-hidden"]');
+
+			// Hide first
+			await act(async () => {
+				webview.dispatchEvent(
+					Object.assign(new Event('console-message'), { message: '__MAESTRO_SCROLL__1' })
+				);
+			});
+			expect(addressBar).toHaveStyle({ maxHeight: '0' });
+
+			// Scroll up — reveal
+			await act(async () => {
+				webview.dispatchEvent(
+					Object.assign(new Event('console-message'), { message: '__MAESTRO_SCROLL__0' })
+				);
+			});
+			expect(addressBar).toHaveStyle({ maxHeight: '200px' });
+		});
+
+		it('reveals address bar when address input is focused', async () => {
+			const onUpdateTab = vi.fn();
+			const webview = setupWebview(onUpdateTab);
+
+			await act(async () => {
+				webview.dispatchEvent(new Event('dom-ready'));
+			});
+
+			const addressBar = screen.getByLabelText('Browser URL').closest('[class*="overflow-hidden"]');
+
+			// Hide via scroll
+			await act(async () => {
+				webview.dispatchEvent(
+					Object.assign(new Event('console-message'), { message: '__MAESTRO_SCROLL__1' })
+				);
+			});
+			expect(addressBar).toHaveStyle({ maxHeight: '0' });
+
+			// Focus address input — should reveal
+			fireEvent.focus(screen.getByLabelText('Browser URL'));
+			expect(addressBar).toHaveStyle({ maxHeight: '200px' });
+		});
 	});
 
 	it('keeps typed input separate from navigation updates until submitted', async () => {

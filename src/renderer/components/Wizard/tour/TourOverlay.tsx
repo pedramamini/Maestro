@@ -15,7 +15,7 @@ import { useLayerStack } from '../../../contexts/LayerStackContext';
 import { MODAL_PRIORITIES } from '../../../constants/modalPriorities';
 import { TourStep } from './TourStep';
 import { TourWelcome } from './TourWelcome';
-import { useTour, type TourStepConfig } from './useTour';
+import { useTour, type TourStepConfig, type TourUIAction } from './useTour';
 
 interface TourOverlayProps {
 	theme: Theme;
@@ -161,6 +161,13 @@ export function TourOverlay({
 			tourStartedRef.current = true;
 			maxStepViewedRef.current = 1; // Reset to 1 (first step)
 			setShowWelcome(true); // Reset to welcome screen when tour opens
+			// Ensure the active session is showing an AI tab so input area steps have
+			// their target elements in the DOM (terminal/browser tabs hide the input area)
+			window.dispatchEvent(
+				new CustomEvent<TourUIAction>('tour:action', {
+					detail: { type: 'ensureAiTab' },
+				})
+			);
 			if (onTourStartRef.current) {
 				onTourStartRef.current();
 			}

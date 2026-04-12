@@ -20,6 +20,7 @@ type ElectronWebviewElement = HTMLElement & {
 	getTitle: () => string;
 	isLoading: () => boolean;
 	getWebContentsId?: () => number;
+	executeJavaScript: (code: string) => Promise<unknown>;
 };
 
 interface BrowserTabViewProps {
@@ -57,6 +58,7 @@ export const BrowserTabView = React.memo(function BrowserTabView({
 	const isAddressFocusedRef = useRef(false);
 	const [addressValue, setAddressValue] = useState(tab.url);
 	const [addressError, setAddressError] = useState<string | null>(null);
+	const [addressBarHidden, setAddressBarHidden] = useState(false);
 
 	useEffect(() => {
 		latestTabRef.current = tab;
@@ -176,11 +178,43 @@ export const BrowserTabView = React.memo(function BrowserTabView({
 				webContentsId: webview.getWebContentsId?.(),
 			});
 		};
+		// Scroll-triggered address bar auto-hide: inject a scroll listener into the
+		// guest page that reports scroll direction via console.log. When the user
+		// scrolls down the address bar collapses; scrolling up or reaching the top
+		// reveals it again.
+		const scrollInjection = `(function(){
+			if(window.__maestroScrollListenerInstalled)return;
+			window.__maestroScrollListenerInstalled=true;
+			var lastY=window.scrollY,hidden=false,ticking=false;
+			window.addEventListener('scroll',function(){
+				if(ticking)return;
+				ticking=true;
+				requestAnimationFrame(function(){
+					var y=window.scrollY;
+					if(y<=0&&hidden){hidden=false;console.log('__MAESTRO_SCROLL__0');}
+					else if(y-lastY>10&&!hidden){hidden=true;console.log('__MAESTRO_SCROLL__1');}
+					else if(lastY-y>10&&hidden){hidden=false;console.log('__MAESTRO_SCROLL__0');}
+					lastY=y;ticking=false;
+				});
+			},{passive:true});
+		})();`;
+		const injectScrollListener = () => {
+			webview.executeJavaScript(scrollInjection).catch(() => {});
+		};
+		const handleConsoleMessage = (event: Event) => {
+			const msg = (event as Event & { message?: string }).message;
+			if (msg === '__MAESTRO_SCROLL__1') setAddressBarHidden(true);
+			else if (msg === '__MAESTRO_SCROLL__0') setAddressBarHidden(false);
+		};
+
 		const handleDomReady = () => {
 			isDomReadyRef.current = true;
 			syncWebviewLayout(webview);
 			updateNavigationState();
+			setAddressBarHidden(false);
+			injectScrollListener();
 		};
+		webview.addEventListener('console-message', handleConsoleMessage);
 		webview.addEventListener('did-start-loading', handleStartLoading);
 		webview.addEventListener('did-stop-loading', handleStopLoading);
 		webview.addEventListener('did-start-navigation', handleNavigationStart);
@@ -206,6 +240,7 @@ export const BrowserTabView = React.memo(function BrowserTabView({
 		return () => {
 			isDomReadyRef.current = false;
 			resizeObserver?.disconnect();
+			webview.removeEventListener('console-message', handleConsoleMessage);
 			webview.removeEventListener('did-start-loading', handleStartLoading);
 			webview.removeEventListener('did-stop-loading', handleStopLoading);
 			webview.removeEventListener('did-start-navigation', handleNavigationStart);
@@ -258,6 +293,7 @@ export const BrowserTabView = React.memo(function BrowserTabView({
 
 	const handleAddressFocus = useCallback((event: React.FocusEvent<HTMLInputElement>) => {
 		isAddressFocusedRef.current = true;
+		setAddressBarHidden(false);
 		event.currentTarget.select();
 	}, []);
 
@@ -298,89 +334,104 @@ export const BrowserTabView = React.memo(function BrowserTabView({
 	return (
 		<div className="flex-1 min-h-0 flex flex-col" data-testid="browser-tab-view">
 			<div
-				className="shrink-0 flex items-center gap-2 px-3 py-2 border-b"
-				style={{ backgroundColor: theme.colors.bgSidebar, borderColor: theme.colors.border }}
+				className="shrink-0 overflow-hidden"
+				style={{
+					maxHeight: addressBarHidden ? 0 : 200,
+					opacity: addressBarHidden ? 0 : 1,
+					transition: 'max-height 0.2s ease-out, opacity 0.15s ease-out',
+				}}
 			>
-				<button
-					type="button"
-					onClick={handleBack}
-					disabled={!tab.canGoBack}
-					className="flex items-center justify-center w-8 h-8 rounded transition-colors disabled:opacity-40"
-					style={{ color: theme.colors.textMain }}
-					title="Back"
+				<div
+					className="flex items-center gap-2 px-3 py-2 border-b"
+					style={{
+						backgroundColor: theme.colors.bgSidebar,
+						borderColor: theme.colors.border,
+					}}
 				>
-					<ArrowLeft className="w-4 h-4" />
-				</button>
-				<button
-					type="button"
-					onClick={handleForward}
-					disabled={!tab.canGoForward}
-					className="flex items-center justify-center w-8 h-8 rounded transition-colors disabled:opacity-40"
-					style={{ color: theme.colors.textMain }}
-					title="Forward"
-				>
-					<ArrowRight className="w-4 h-4" />
-				</button>
-				<button
-					type="button"
-					onClick={handleReload}
-					className="flex items-center justify-center w-8 h-8 rounded transition-colors"
-					style={{ color: theme.colors.textMain }}
-					title={tab.isLoading ? 'Stop' : 'Reload'}
-				>
-					{tab.isLoading ? (
-						<Loader2 className="w-4 h-4 animate-spin" />
-					) : (
-						<RotateCw className="w-4 h-4" />
-					)}
-				</button>
-				<form className="flex-1 min-w-0" onSubmit={handleSubmit}>
-					<label className="sr-only" htmlFor={`browser-tab-address-${tab.id}`}>
-						Browser URL
-					</label>
-					<div className="flex flex-col gap-1">
-						<div
-							className="flex items-center gap-2 rounded-md border px-3 py-1.5"
-							style={{ backgroundColor: theme.colors.bgMain, borderColor: theme.colors.border }}
-						>
-							{tab.favicon ? (
-								<img alt="" className="w-4 h-4 shrink-0" src={tab.favicon} />
-							) : (
-								<Globe className="w-4 h-4 shrink-0" style={{ color: theme.colors.textDim }} />
-							)}
-							<input
-								id={`browser-tab-address-${tab.id}`}
-								aria-label="Browser URL"
-								aria-invalid={addressError ? 'true' : 'false'}
-								value={addressValue}
-								onChange={(event) => {
-									setAddressValue(event.target.value);
-									if (addressError) setAddressError(null);
+					<button
+						type="button"
+						onClick={handleBack}
+						disabled={!tab.canGoBack}
+						className="flex items-center justify-center w-8 h-8 rounded transition-colors disabled:opacity-40"
+						style={{ color: theme.colors.textMain }}
+						title="Back"
+					>
+						<ArrowLeft className="w-4 h-4" />
+					</button>
+					<button
+						type="button"
+						onClick={handleForward}
+						disabled={!tab.canGoForward}
+						className="flex items-center justify-center w-8 h-8 rounded transition-colors disabled:opacity-40"
+						style={{ color: theme.colors.textMain }}
+						title="Forward"
+					>
+						<ArrowRight className="w-4 h-4" />
+					</button>
+					<button
+						type="button"
+						onClick={handleReload}
+						className="flex items-center justify-center w-8 h-8 rounded transition-colors"
+						style={{ color: theme.colors.textMain }}
+						title={tab.isLoading ? 'Stop' : 'Reload'}
+					>
+						{tab.isLoading ? (
+							<Loader2 className="w-4 h-4 animate-spin" />
+						) : (
+							<RotateCw className="w-4 h-4" />
+						)}
+					</button>
+					<form className="flex-1 min-w-0" onSubmit={handleSubmit}>
+						<label className="sr-only" htmlFor={`browser-tab-address-${tab.id}`}>
+							Browser URL
+						</label>
+						<div className="flex flex-col gap-1">
+							<div
+								className="flex items-center gap-2 rounded-md border px-3 py-1.5"
+								style={{
+									backgroundColor: theme.colors.bgMain,
+									borderColor: theme.colors.border,
 								}}
-								onFocus={handleAddressFocus}
-								onBlur={handleAddressBlur}
-								className="w-full bg-transparent outline-none text-sm"
-								style={{ color: theme.colors.textMain }}
-								placeholder="Enter a URL or search term"
-							/>
+							>
+								{tab.favicon ? (
+									<img alt="" className="w-4 h-4 shrink-0" src={tab.favicon} />
+								) : (
+									<Globe className="w-4 h-4 shrink-0" style={{ color: theme.colors.textDim }} />
+								)}
+								<input
+									id={`browser-tab-address-${tab.id}`}
+									aria-label="Browser URL"
+									aria-invalid={addressError ? 'true' : 'false'}
+									value={addressValue}
+									onChange={(event) => {
+										setAddressValue(event.target.value);
+										if (addressError) setAddressError(null);
+									}}
+									onFocus={handleAddressFocus}
+									onBlur={handleAddressBlur}
+									className="w-full bg-transparent outline-none text-sm"
+									style={{ color: theme.colors.textMain }}
+									placeholder="Enter a URL or search term"
+								/>
+							</div>
+							{addressError ? (
+								<p role="alert" className="px-1 text-xs" style={{ color: '#f87171' }}>
+									{addressError}
+								</p>
+							) : null}
 						</div>
-						{addressError ? (
-							<p role="alert" className="px-1 text-xs" style={{ color: '#f87171' }}>
-								{addressError}
-							</p>
-						) : null}
-					</div>
-				</form>
-				<button
-					type="button"
-					onClick={handleOpenExternal}
-					disabled={tab.url === DEFAULT_BROWSER_TAB_URL}
-					className="flex items-center justify-center w-8 h-8 rounded transition-colors disabled:opacity-40"
-					style={{ color: theme.colors.textMain }}
-					title="Open in External Browser"
-				>
-					<ExternalLink className="w-4 h-4" />
-				</button>
+					</form>
+					<button
+						type="button"
+						onClick={handleOpenExternal}
+						disabled={tab.url === DEFAULT_BROWSER_TAB_URL}
+						className="flex items-center justify-center w-8 h-8 rounded transition-colors disabled:opacity-40"
+						style={{ color: theme.colors.textMain }}
+						title="Open in External Browser"
+					>
+						<ExternalLink className="w-4 h-4" />
+					</button>
+				</div>
 			</div>
 
 			<div ref={hostRef} className="flex-1 min-h-0 overflow-hidden" data-testid="browser-tab-host">
