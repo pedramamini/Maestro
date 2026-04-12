@@ -62,6 +62,7 @@ export interface GroupChatHandlersReturn {
 		}
 	) => Promise<void>;
 	deleteGroupChatWithConfirmation: (id: string) => void;
+	handleDeleteAllArchivedGroupChats: () => void;
 
 	// Navigation
 	handleProcessMonitorNavigateToGroupChat: (groupChatId: string) => void;
@@ -584,6 +585,30 @@ export function useGroupChatHandlers(): GroupChatHandlersReturn {
 	);
 
 	// =======================================================================
+	// Delete all archived group chats
+	// =======================================================================
+
+	const handleDeleteAllArchivedGroupChats = useCallback(() => {
+		const { groupChats } = useGroupChatStore.getState();
+		const archivedChats = groupChats.filter((c) => c.archived);
+		if (archivedChats.length === 0) return;
+
+		useModalStore.getState().openModal('confirm', {
+			message: `Are you sure you want to delete all ${archivedChats.length} archived group chat${archivedChats.length !== 1 ? 's' : ''}? This action cannot be undone.`,
+			onConfirm: async () => {
+				const { activeGroupChatId, setGroupChats } = useGroupChatStore.getState();
+				const archivedIds = new Set(archivedChats.map((c) => c.id));
+				// Delete all archived chats
+				await Promise.all(archivedChats.map((c) => window.maestro.groupChat.delete(c.id)));
+				setGroupChats((prev) => prev.filter((c) => !archivedIds.has(c.id)));
+				if (activeGroupChatId && archivedIds.has(activeGroupChatId)) {
+					handleCloseGroupChat();
+				}
+			},
+		});
+	}, [handleCloseGroupChat]);
+
+	// =======================================================================
 	// Delete with confirmation (keyboard shortcut / CMD+K)
 	// =======================================================================
 
@@ -808,6 +833,7 @@ export function useGroupChatHandlers(): GroupChatHandlersReturn {
 		handleRenameGroupChat,
 		handleUpdateGroupChat,
 		deleteGroupChatWithConfirmation,
+		handleDeleteAllArchivedGroupChats,
 
 		// Navigation
 		handleProcessMonitorNavigateToGroupChat,
