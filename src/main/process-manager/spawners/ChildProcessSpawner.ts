@@ -345,6 +345,7 @@ export class ChildProcessSpawner {
 				argsContain('stream-json') ||
 				argsContain('--json') ||
 				(argsContain('--format') && argsContain('json')) ||
+				(argsContain('--output-format') && argsContain('json')) ||
 				(hasImages && !!prompt) ||
 				!!config.sendPromptViaStdin ||
 				!!config.sshStdinScript;
