@@ -945,7 +945,8 @@ const COPILOT_CLI_ERROR_PATTERNS: AgentErrorPatterns = {
 	agent_crashed: [
 		{
 			pattern: /model.*not available|model.*not found/i,
-			message: 'The selected model is not available. Try a different model.',
+			message:
+				'The selected model is not available. Check that it is enabled at https://github.com/settings/copilot/features or try a different model.',
 			recoverable: true,
 		},
 		{
