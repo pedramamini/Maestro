@@ -397,26 +397,32 @@ app.whenReady().then(async () => {
 	const migratedKey = 'moderatorStandingInstructionsMigrated';
 
 	if (standingInstructions && !store.get(migratedKey, false)) {
-		const currentPrompt = getPrompt('group-chat-moderator-system');
+		try {
+			const currentPrompt = getPrompt('group-chat-moderator-system');
 
-		// Only migrate if the exact standing instructions content isn't already in the prompt
-		if (!currentPrompt.includes(standingInstructions)) {
-			// If there's an existing Standing Instructions section with different content, replace it
-			const sectionHeader = '## Standing Instructions';
-			const newSection = `${sectionHeader}\n\nThe following instructions apply to ALL group chat sessions. Follow them consistently:\n\n${standingInstructions}`;
+			// Only migrate if the exact standing instructions content isn't already in the prompt
+			if (!currentPrompt.includes(standingInstructions)) {
+				const sectionHeader = '## Standing Instructions';
+				const newSection = `${sectionHeader}\n\nThe following instructions apply to ALL group chat sessions. Follow them consistently:\n\n${standingInstructions}`;
 
-			let migratedPrompt: string;
-			if (currentPrompt.includes(sectionHeader)) {
-				// Replace existing section (from header to end of prompt or next ## heading)
-				migratedPrompt = currentPrompt.replace(
-					/## Standing Instructions[\s\S]*?(?=\n## |\s*$)/,
-					newSection
-				);
-			} else {
-				migratedPrompt = `${currentPrompt}\n\n${newSection}`;
+				let migratedPrompt: string;
+				if (currentPrompt.includes(sectionHeader)) {
+					migratedPrompt = currentPrompt.replace(
+						/## Standing Instructions[\s\S]*?(?=\n## |\s*$)/,
+						newSection
+					);
+				} else {
+					migratedPrompt = `${currentPrompt}\n\n${newSection}`;
+				}
+				await savePrompt('group-chat-moderator-system', migratedPrompt);
+				logger.info('Migrated moderator standing instructions into prompt customization', 'Startup');
 			}
-			await savePrompt('group-chat-moderator-system', migratedPrompt);
-			logger.info('Migrated moderator standing instructions into prompt customization', 'Startup');
+		} catch (err) {
+			await captureException(err instanceof Error ? err : new Error(String(err)), {
+				migratedKey,
+				standingInstructionsSlice: standingInstructions.slice(0, 200),
+			});
+			logger.warn('Failed to persist migrated moderator standing instructions, continuing startup', 'Startup');
 		}
 
 		store.set(migratedKey, true);

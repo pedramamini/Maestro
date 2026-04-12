@@ -36,7 +36,7 @@ async function getCustomizedPrompt(id: string): Promise<string | null> {
 		const raw = await fs.readFile(customizationsPath, 'utf-8');
 		const data = JSON.parse(raw);
 		const entry = data?.prompts?.[id];
-		if (entry?.isModified && entry?.content) {
+		if (entry?.isModified && typeof entry?.content === 'string') {
 			return entry.content;
 		}
 	} catch {
@@ -52,7 +52,7 @@ async function getCliPrompt(id: string): Promise<string> {
 
 	// Check user customizations first (same precedence as Electron prompt-manager)
 	const customized = await getCustomizedPrompt(id);
-	if (customized) {
+	if (customized !== null) {
 		cliPromptCache.set(id, customized);
 		return customized;
 	}

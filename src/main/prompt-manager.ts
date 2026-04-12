@@ -50,6 +50,14 @@ interface StoredData {
 const promptCache = new Map<string, { content: string; isModified: boolean }>();
 let initialized = false;
 
+// Serialize disk writes to prevent concurrent read-modify-write races
+let writeLock: Promise<void> = Promise.resolve();
+function withWriteLock<T>(fn: () => Promise<T>): Promise<T> {
+	const next = writeLock.then(fn, fn);
+	writeLock = next.then(() => {}, () => {});
+	return next;
+}
+
 // ============================================================================
 // Path Helpers
 // ============================================================================
@@ -185,14 +193,15 @@ export async function savePrompt(id: string, content: string): Promise<void> {
 		throw new Error(`Unknown prompt ID: ${id}`);
 	}
 
-	// Update disk
-	const customizations = (await loadUserCustomizations()) || { prompts: {} };
-	customizations.prompts[id] = {
-		content,
-		isModified: true,
-		modifiedAt: new Date().toISOString(),
-	};
-	await saveUserCustomizations(customizations);
+	await withWriteLock(async () => {
+		const customizations = (await loadUserCustomizations()) || { prompts: {} };
+		customizations.prompts[id] = {
+			content,
+			isModified: true,
+			modifiedAt: new Date().toISOString(),
+		};
+		await saveUserCustomizations(customizations);
+	});
 
 	// Update in-memory cache immediately
 	promptCache.set(id, { content, isModified: true });
@@ -216,11 +225,13 @@ export async function resetPrompt(id: string): Promise<string> {
 	const bundledContent = await fs.readFile(filePath, 'utf-8');
 
 	// Only remove customization after confirming bundled file is readable
-	const customizations = await loadUserCustomizations();
-	if (customizations?.prompts?.[id]) {
-		delete customizations.prompts[id];
-		await saveUserCustomizations(customizations);
-	}
+	await withWriteLock(async () => {
+		const customizations = await loadUserCustomizations();
+		if (customizations?.prompts?.[id]) {
+			delete customizations.prompts[id];
+			await saveUserCustomizations(customizations);
+		}
+	});
 
 	// Update in-memory cache immediately
 	promptCache.set(id, { content: bundledContent, isModified: false });

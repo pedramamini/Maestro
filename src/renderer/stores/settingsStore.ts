@@ -75,8 +75,10 @@ export async function loadSettingsStorePrompts(force = false): Promise<void> {
 		// instead of silently overwriting it.
 		if (commitCmd.prompt && !force) {
 			// Save the user's AI Commands override as a prompt customization
-			window.maestro.prompts.save('commit-command', commitCmd.prompt);
-			cachedCommitCommandPrompt = commitCmd.prompt;
+			const saveResult = await window.maestro.prompts.save('commit-command', commitCmd.prompt);
+			if (saveResult.success) {
+				cachedCommitCommandPrompt = commitCmd.prompt;
+			}
 		} else {
 			// First load (empty) or refresh (user edited via Maestro Prompts) — update store
 			useSettingsStore.setState({
