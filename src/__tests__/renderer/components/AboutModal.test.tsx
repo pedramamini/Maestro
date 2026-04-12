@@ -62,6 +62,22 @@ vi.mock('lucide-react', () => ({
 			📖
 		</span>
 	),
+	MessageSquarePlus: ({
+		className,
+		style,
+	}: {
+		className?: string;
+		style?: React.CSSProperties;
+	}) => (
+		<span data-testid="message-square-plus-icon" className={className} style={style}>
+			💬
+		</span>
+	),
+	ArrowLeft: ({ className, style }: { className?: string; style?: React.CSSProperties }) => (
+		<span data-testid="arrow-left-icon" className={className} style={style}>
+			←
+		</span>
+	),
 }));
 
 // Mock the avatar import

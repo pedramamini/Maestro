@@ -911,7 +911,6 @@ function MaestroConsoleInner() {
 		handleOpenAboutModal,
 		handleOpenBatchRunner,
 		handleOpenMarketplace,
-		handleOpenFeedbackModal,
 		handleCloseFeedbackModal,
 		handleEditAgent,
 		handleOpenCreatePRSession,
