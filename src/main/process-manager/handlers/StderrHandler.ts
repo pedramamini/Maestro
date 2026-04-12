@@ -108,14 +108,30 @@ export class StderrHandler {
 			}
 
 			// Copilot CLI emits MCP server startup messages, shell profile banners,
-			// and other initialization noise to stderr. Suppress it — error detection
-			// has already happened above, so real errors are already captured.
+			// and other initialization noise to stderr. Only suppress known benign
+			// patterns — let real errors through for upstream detection and Sentry.
 			if (toolType === 'copilot-cli' && outputParser) {
-				logger.info('[ProcessManager] Suppressing stderr for copilot-cli', 'ProcessManager', {
+				const benignPatterns = [
+					/^Pseudo-terminal/i,
+					/^Warning:.*known hosts/i,
+					/mcp.*server/i,
+					/^Reading prompt from stdin/i,
+					/^\s*$/,
+				];
+				const isBenign = benignPatterns.some((p) => p.test(cleanedStderr));
+				if (isBenign) {
+					logger.debug(
+						'[ProcessManager] Suppressing benign stderr for copilot-cli',
+						'ProcessManager',
+						{ sessionId }
+					);
+					return;
+				}
+				// Non-benign stderr — log as warning and let it flow through
+				logger.warn('[ProcessManager] copilot-cli stderr', 'ProcessManager', {
 					sessionId,
-					stderrPreview: cleanedStderr.substring(0, 100),
+					stderr: cleanedStderr,
 				});
-				return;
 			}
 
 			// Codex writes both Rust tracing diagnostics and actual responses to stderr.

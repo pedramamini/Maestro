@@ -65,7 +65,7 @@ To add a new IPC capability:
 | IPC handlers       | `src/main/index.ts`, `src/main/preload.ts`                                                    |
 | Keyboard shortcuts | `src/renderer/constants/shortcuts.ts`, `App.tsx`                                              |
 | Settings           | `src/renderer/hooks/useSettings.ts`                                                           |
-| Themes             | `src/renderer/constants/themes.ts`, `src/shared/theme-types.ts`                               |
+| Themes             | `src/shared/themes.ts`, `src/shared/theme-types.ts`                                           |
 | Modal priorities   | `src/renderer/constants/modalPriorities.ts`                                                   |
 | Agent definitions  | `src/shared/agentIds.ts`, `src/main/agents/definitions.ts`, `src/main/agents/capabilities.ts` |
 | Output parsers     | `src/main/parsers/`, `src/main/parsers/index.ts`                                              |

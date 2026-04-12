@@ -33,6 +33,7 @@
 import path from 'path';
 import os from 'os';
 import fs from 'fs/promises';
+import { readFileSync } from 'fs';
 import { logger } from '../utils/logger';
 import { BaseSessionStorage, type SearchableMessage } from './base-session-storage';
 import type {
@@ -244,7 +245,7 @@ export class CopilotCliSessionStorage extends BaseSessionStorage {
 	 * Read messages from a specific session.
 	 */
 	async readSessionMessages(
-		_projectPath: string,
+		projectPath: string,
 		sessionId: string,
 		options?: SessionReadOptions,
 		sshConfig?: SshRemoteConfig
@@ -259,6 +260,24 @@ export class CopilotCliSessionStorage extends BaseSessionStorage {
 			return { messages: [], total: 0, hasMore: false };
 		}
 		const sessionDir = path.join(getCopilotSessionDir(), sessionId);
+
+		// Verify session belongs to the requested project
+		if (projectPath) {
+			const workspacePath = path.join(sessionDir, 'workspace.yaml');
+			try {
+				const yamlContent = await fs.readFile(workspacePath, 'utf-8');
+				const meta = parseWorkspaceYaml(yamlContent);
+				if (
+					meta.cwd &&
+					path.resolve(meta.cwd).toLowerCase() !== path.resolve(projectPath).toLowerCase()
+				) {
+					return { messages: [], total: 0, hasMore: false };
+				}
+			} catch {
+				// If workspace.yaml can't be read, allow access (session may be incomplete)
+			}
+		}
+
 		const eventsPath = path.join(sessionDir, 'events.jsonl');
 
 		const events = await this.loadSessionEvents(eventsPath);
@@ -309,7 +328,7 @@ export class CopilotCliSessionStorage extends BaseSessionStorage {
 	 * Get the file path for a session.
 	 */
 	getSessionPath(
-		_projectPath: string,
+		projectPath: string,
 		sessionId: string,
 		sshConfig?: SshRemoteConfig
 	): string | null {
@@ -322,6 +341,25 @@ export class CopilotCliSessionStorage extends BaseSessionStorage {
 		if (!isValidSessionId(sessionId)) {
 			return null;
 		}
+
+		// Verify session belongs to the requested project
+		if (projectPath) {
+			const sessionDir = path.join(getCopilotSessionDir(), sessionId);
+			const workspacePath = path.join(sessionDir, 'workspace.yaml');
+			try {
+				const yamlContent = readFileSync(workspacePath, 'utf-8');
+				const meta = parseWorkspaceYaml(yamlContent);
+				if (
+					meta.cwd &&
+					path.resolve(meta.cwd).toLowerCase() !== path.resolve(projectPath).toLowerCase()
+				) {
+					return null;
+				}
+			} catch {
+				// If workspace.yaml can't be read, allow access
+			}
+		}
+
 		return path.join(getCopilotSessionDir(), sessionId, 'events.jsonl');
 	}
 

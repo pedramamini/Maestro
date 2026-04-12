@@ -11,6 +11,9 @@ import {
 	CodexOutputParser,
 } from '../../../main/parsers';
 
+// Expected number of output parsers (Claude, OpenCode, Codex, Factory Droid, Copilot CLI)
+const EXPECTED_PARSER_COUNT = 5;
+
 describe('parsers/index', () => {
 	beforeEach(() => {
 		clearParserRegistry();
@@ -53,17 +56,17 @@ describe('parsers/index', () => {
 			initializeOutputParsers();
 
 			const parsers = getAllOutputParsers();
-			expect(parsers.length).toBe(5); // Claude, OpenCode, Codex, Factory Droid, Copilot CLI
+			expect(parsers.length).toBe(EXPECTED_PARSER_COUNT); // Claude, OpenCode, Codex, Factory Droid, Copilot CLI
 		});
 
 		it('should clear existing parsers before registering', () => {
 			// First initialization
 			initializeOutputParsers();
-			expect(getAllOutputParsers().length).toBe(5);
+			expect(getAllOutputParsers().length).toBe(EXPECTED_PARSER_COUNT);
 
 			// Second initialization should still have exactly 5
 			initializeOutputParsers();
-			expect(getAllOutputParsers().length).toBe(5);
+			expect(getAllOutputParsers().length).toBe(EXPECTED_PARSER_COUNT);
 		});
 	});
 
@@ -73,7 +76,7 @@ describe('parsers/index', () => {
 
 			ensureParsersInitialized();
 
-			expect(getAllOutputParsers().length).toBe(5);
+			expect(getAllOutputParsers().length).toBe(EXPECTED_PARSER_COUNT);
 		});
 
 		it('should be idempotent after first call', () => {

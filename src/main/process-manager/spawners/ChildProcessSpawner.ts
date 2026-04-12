@@ -347,8 +347,7 @@ export class ChildProcessSpawner {
 				(argsContain('--format') && argsContain('json')) ||
 				(hasImages && !!prompt) ||
 				!!config.sendPromptViaStdin ||
-				!!config.sshStdinScript ||
-				!!outputParser; // Agents with output parsers use streaming JSONL, not batch JSON
+				!!config.sshStdinScript;
 
 			logger.debug('[ProcessManager] Output parser lookup', 'ProcessManager', {
 				sessionId,

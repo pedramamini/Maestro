@@ -642,7 +642,7 @@ export function registerProcessHandlers(deps: ProcessHandlerDependencies): void 
 					imageArgs: agent?.imageArgs, // Function to build image CLI args (for Codex, OpenCode)
 					promptArgs: agent?.promptArgs, // Function to build prompt args (e.g., ['-p', prompt] for OpenCode)
 					noPromptSeparator: agent?.noPromptSeparator, // Some agents don't support '--' before prompt
-					sendPromptViaStdinRaw: agent?.sendPromptViaStdinRaw, // Send prompt via stdin as raw text (avoids shell escaping)
+					sendPromptViaStdinRaw: config.sendPromptViaStdinRaw ?? agent?.sendPromptViaStdinRaw, // Prefer per-request flag, fall back to agent default
 					// Stats tracking: use cwd as projectPath if not explicitly provided
 					projectPath: config.cwd,
 					// SSH remote context (for SSH-specific error messages)

@@ -950,7 +950,7 @@ const COPILOT_CLI_ERROR_PATTERNS: AgentErrorPatterns = {
 			recoverable: true,
 		},
 		{
-			pattern: /copilot.*command not found/i,
+			pattern: /copilot.*command not found|command not found.*copilot/i,
 			message: 'Copilot CLI not found. Ensure it is installed and in your PATH.',
 			recoverable: false,
 		},

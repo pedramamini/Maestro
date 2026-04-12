@@ -363,7 +363,12 @@ export class AgentDetector {
 				case 'copilot-cli': {
 					// Fetch available models from models.dev API (open-source model database)
 					try {
-						const response = await fetch('https://models.dev/api.json');
+						const controller = new AbortController();
+						const timeout = setTimeout(() => controller.abort(), 3000);
+						const response = await fetch('https://models.dev/api.json', {
+							signal: controller.signal,
+						});
+						clearTimeout(timeout);
 						if (response.ok) {
 							const data = (await response.json()) as Record<string, unknown>;
 							const copilotProvider = data?.['github-copilot'] as

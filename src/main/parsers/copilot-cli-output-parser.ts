@@ -281,11 +281,12 @@ export class CopilotCliOutputParser implements AgentOutputParser {
 			// ---- Error events ----
 
 			default: {
-				// Check for error-like events
+				// Check for error-like events (including session.error which holds message at data.message)
 				if (msg.type?.includes('error') || msg.error) {
+					const errorSource = msg.error || msg.data?.message || msg.data;
 					return {
 						type: 'error',
-						text: extractErrorText(msg.error),
+						text: extractErrorText(errorSource),
 						raw: msg,
 					};
 				}

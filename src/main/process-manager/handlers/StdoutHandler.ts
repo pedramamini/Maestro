@@ -238,10 +238,9 @@ export class StdoutHandler {
 			this.bufferManager.emitDataBuffered(sessionId, line);
 		} else {
 			// Suppressed non-JSON line for JSONL agent
-			logger.info('[StdoutHandler] SUPPRESSED non-JSON line for JSONL agent', 'ProcessManager', {
+			logger.debug('[StdoutHandler] Suppressed non-JSON line for JSONL agent', 'ProcessManager', {
 				sessionId,
 				toolType: managedProcess.toolType,
-				linePreview: line.substring(0, 80),
 			});
 		}
 	}

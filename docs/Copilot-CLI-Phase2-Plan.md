@@ -18,9 +18,9 @@ If the JSONL output schema doesn't match the parser's assumptions, **fix the par
 
 ## JSON Schema Investigation (Do This First)
 
-Run: `copilot -p "Say hello in one sentence" --output-format json --allow-all`
+Run: `echo "Say hello in one sentence" | copilot --output-format json --allow-all`
 
-Capture the full output and document the actual JSONL event types. The parser in `src/main/parsers/copilot-cli-output-parser.ts` uses heuristic type matching. Refine it to match the actual schema:
+Pipe the prompt via stdin (not `-p`) to match the transport used by the Maestro integration (`sendPromptViaStdinRaw`). Capture the full output and document the actual JSONL event types. Re-validate the parser at `src/main/parsers/copilot-cli-output-parser.ts` against the piped-stdin JSONL output to ensure heuristic matching is refined to the actual schema emitted by the stdin path:
 
 1. What event type contains the session ID? (e.g., `session.started`, `init`, `thread.started`)
 2. What event type contains streaming text? (e.g., `content.delta`, `assistant.message`, `text`)

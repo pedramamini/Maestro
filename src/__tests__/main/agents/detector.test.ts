@@ -5,6 +5,7 @@ import {
 	AgentConfigOption,
 	AgentCapabilities,
 } from '../../../main/agents';
+import { AGENT_IDS } from '../../../shared/agentIds';
 
 // Mock dependencies
 vi.mock('../../../main/utils/execFile', () => ({
@@ -322,8 +323,8 @@ describe('agent-detector', () => {
 
 			const agents = await detector.detectAgents();
 
-			// Should have all 9 agents (terminal, claude-code, codex, gemini-cli, qwen3-coder, opencode, factory-droid, aider, copilot-cli)
-			expect(agents.length).toBe(9);
+			// Should have all agents defined in AGENT_IDS
+			expect(agents.length).toBe(AGENT_IDS.length);
 
 			const agentIds = agents.map((a) => a.id);
 			expect(agentIds).toContain('terminal');
