@@ -25,9 +25,7 @@ import type { ProcessManager } from '../../process-manager';
 
 const LOG_CONTEXT = '[Feedback]';
 
-const handlerOpts = (
-	operation: string
-): Pick<CreateHandlerOptions, 'context' | 'operation'> => ({
+const handlerOpts = (operation: string): Pick<CreateHandlerOptions, 'context' | 'operation'> => ({
 	context: LOG_CONTEXT,
 	operation,
 });

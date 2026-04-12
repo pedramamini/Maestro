@@ -61,9 +61,7 @@ export function FeedbackView({ theme, sessions, onCancel, onSubmitSuccess }: Fee
 		if (result.success) {
 			onSubmitSuccess(selectedSessionId);
 		} else {
-			setSubmitError(
-				'The selected agent is no longer running. Please select another agent.'
-			);
+			setSubmitError('The selected agent is no longer running. Please select another agent.');
 			setSubmitting(false);
 		}
 	}, [selectedSessionId, feedbackText, checkAuth, onSubmitSuccess]);
@@ -81,10 +79,7 @@ export function FeedbackView({ theme, sessions, onCancel, onSubmitSuccess }: Fee
 	if (authChecking) {
 		return (
 			<div className="flex items-center justify-center py-12">
-				<Loader2
-					className="w-4 h-4 animate-spin"
-					style={{ color: theme.colors.textDim }}
-				/>
+				<Loader2 className="w-4 h-4 animate-spin" style={{ color: theme.colors.textDim }} />
 			</div>
 		);
 	}
@@ -133,10 +128,7 @@ export function FeedbackView({ theme, sessions, onCancel, onSubmitSuccess }: Fee
 
 	const isDisabled = !!authError;
 	const canSubmit =
-		!isDisabled &&
-		!submitting &&
-		feedbackText.trim().length > 0 &&
-		selectedSessionId.length > 0;
+		!isDisabled && !submitting && feedbackText.trim().length > 0 && selectedSessionId.length > 0;
 
 	const charCount = feedbackText.length;
 	const formattedCount = charCount.toLocaleString();
@@ -161,10 +153,7 @@ export function FeedbackView({ theme, sessions, onCancel, onSubmitSuccess }: Fee
 			<div className={isDisabled ? 'opacity-40 pointer-events-none' : ''}>
 				{/* Agent selector */}
 				<div className="mb-3">
-					<label
-						className="block text-xs font-medium mb-1"
-						style={{ color: theme.colors.textDim }}
-					>
+					<label className="block text-xs font-medium mb-1" style={{ color: theme.colors.textDim }}>
 						Agent to file feedback from
 					</label>
 					<select
@@ -179,11 +168,7 @@ export function FeedbackView({ theme, sessions, onCancel, onSubmitSuccess }: Fee
 						}}
 					>
 						{runningSessions.map((s) => (
-							<option
-								key={s.id}
-								value={s.id}
-								style={{ backgroundColor: theme.colors.bgActivity }}
-							>
+							<option key={s.id} value={s.id} style={{ backgroundColor: theme.colors.bgActivity }}>
 								{s.name} ({s.toolType})
 							</option>
 						))}
@@ -192,10 +177,7 @@ export function FeedbackView({ theme, sessions, onCancel, onSubmitSuccess }: Fee
 
 				{/* Feedback textarea */}
 				<div className="mb-1">
-					<label
-						className="block text-xs font-medium mb-1"
-						style={{ color: theme.colors.textDim }}
-					>
+					<label className="block text-xs font-medium mb-1" style={{ color: theme.colors.textDim }}>
 						Feedback
 					</label>
 					<textarea

@@ -13,7 +13,13 @@ import {
 	MessageSquarePlus,
 	ArrowLeft,
 } from 'lucide-react';
-import type { Theme, AutoRunStats, MaestroUsageStats, LeaderboardRegistration, Session } from '../types';
+import type {
+	Theme,
+	AutoRunStats,
+	MaestroUsageStats,
+	LeaderboardRegistration,
+	Session,
+} from '../types';
 import { FeedbackView } from './FeedbackView';
 import type { GlobalAgentStats } from '../../shared/types';
 import { MODAL_PRIORITIES } from '../constants/modalPriorities';
@@ -236,292 +242,294 @@ export function AboutModal({
 					}}
 				/>
 			) : (
-			<div className="space-y-4">
-				{/* Logo and Title */}
-				<div className="flex items-center gap-4">
-					<Wand2 className="w-12 h-12" style={{ color: theme.colors.accent }} />
-					<div>
-						<div className="flex items-baseline gap-2">
-							<h1
-								className="text-2xl font-bold tracking-widest"
-								style={{ color: theme.colors.textMain }}
-							>
-								MAESTRO
-							</h1>
-							<span className="text-xs font-mono" style={{ color: theme.colors.textDim }}>
-								v{__APP_VERSION__}
-								{__COMMIT_HASH__ && ` (${__COMMIT_HASH__})`}
-							</span>
-						</div>
-						<p className="text-xs opacity-70" style={{ color: theme.colors.textDim }}>
-							Agent Orchestration Command Center
-						</p>
-					</div>
-				</div>
-
-				{/* Achievements Section */}
-				<AchievementCard
-					theme={theme}
-					autoRunStats={autoRunStats}
-					globalStats={globalStats}
-					usageStats={usageStats}
-					handsOnTimeMs={handsOnTimeMs}
-					leaderboardRegistration={leaderboardRegistration}
-					onEscapeWithBadgeOpen={(handler) => {
-						badgeEscapeHandlerRef.current = handler;
-					}}
-				/>
-
-				{/* Global Usage Stats - show loading or stats from all Claude projects */}
-				<div
-					className="p-4 rounded border"
-					style={{ borderColor: theme.colors.border, backgroundColor: theme.colors.bgActivity }}
-				>
-					<div className="flex items-center gap-2 mb-3">
-						<BarChart3 className="w-4 h-4" style={{ color: theme.colors.accent }} />
-						<span className="text-sm font-bold" style={{ color: theme.colors.textMain }}>
-							Global Statistics
-						</span>
-						{!isStatsComplete && (
-							<Loader2 className="w-3 h-3 animate-spin" style={{ color: theme.colors.textDim }} />
-						)}
-					</div>
-					{loading ? (
-						<div className="flex items-center justify-center py-4 gap-2">
-							<Loader2 className="w-4 h-4 animate-spin" style={{ color: theme.colors.textDim }} />
-							<span className="text-xs" style={{ color: theme.colors.textDim }}>
-								Loading stats...
-							</span>
-						</div>
-					) : globalStats ? (
-						<div className="space-y-3 text-xs">
-							{/* Totals Grid */}
-							<div className="grid grid-cols-2 gap-3">
-								{/* Sessions & Messages */}
-								<div className="flex justify-between">
-									<span style={{ color: theme.colors.textDim }}>Sessions</span>
-									<span className="font-mono font-bold" style={{ color: theme.colors.textMain }}>
-										{formatTokensCompact(globalStats.totalSessions)}
-									</span>
-								</div>
-								<div className="flex justify-between">
-									<span style={{ color: theme.colors.textDim }}>Messages</span>
-									<span className="font-mono font-bold" style={{ color: theme.colors.textMain }}>
-										{formatTokensCompact(globalStats.totalMessages)}
-									</span>
-								</div>
-
-								{/* Tokens */}
-								<div className="flex justify-between">
-									<span style={{ color: theme.colors.textDim }}>Input Tokens</span>
-									<span className="font-mono font-bold" style={{ color: theme.colors.textMain }}>
-										{formatTokensCompact(globalStats.totalInputTokens)}
-									</span>
-								</div>
-								<div className="flex justify-between">
-									<span style={{ color: theme.colors.textDim }}>Output Tokens</span>
-									<span className="font-mono font-bold" style={{ color: theme.colors.textMain }}>
-										{formatTokensCompact(globalStats.totalOutputTokens)}
-									</span>
-								</div>
-
-								{/* Cache Tokens (if any) */}
-								{(globalStats.totalCacheReadTokens > 0 ||
-									globalStats.totalCacheCreationTokens > 0) && (
-									<>
-										<div className="flex justify-between">
-											<span style={{ color: theme.colors.textDim }}>Cache Read</span>
-											<span
-												className="font-mono font-bold"
-												style={{ color: theme.colors.textMain }}
-											>
-												{formatTokensCompact(globalStats.totalCacheReadTokens)}
-											</span>
-										</div>
-										<div className="flex justify-between">
-											<span style={{ color: theme.colors.textDim }}>Cache Creation</span>
-											<span
-												className="font-mono font-bold"
-												style={{ color: theme.colors.textMain }}
-											>
-												{formatTokensCompact(globalStats.totalCacheCreationTokens)}
-											</span>
-										</div>
-									</>
-								)}
-
-								{/* Active Time & Total Cost - show cost only if we have cost data */}
-								{(handsOnTimeMs > 0 || globalStats.hasCostData) && (
-									<div
-										className="flex justify-between col-span-2 pt-2 border-t"
-										style={{ borderColor: theme.colors.border }}
-									>
-										{handsOnTimeMs > 0 && (
-											<span style={{ color: theme.colors.textDim }}>
-												Hands-on Time: {formatDuration(handsOnTimeMs)}
-											</span>
-										)}
-										{!handsOnTimeMs && globalStats.hasCostData && (
-											<span style={{ color: theme.colors.textDim }}>Total Cost</span>
-										)}
-										{globalStats.hasCostData && (
-											<span
-												className={`font-mono font-bold ${!isStatsComplete ? 'animate-pulse' : ''}`}
-												style={{ color: theme.colors.success }}
-											>
-												$
-												{(globalStats.totalCostUsd ?? 0).toLocaleString('en-US', {
-													minimumFractionDigits: 2,
-													maximumFractionDigits: 2,
-												})}
-											</span>
-										)}
-									</div>
-								)}
-							</div>
-						</div>
-					) : (
-						<div className="text-xs text-center py-2" style={{ color: theme.colors.textDim }}>
-							No sessions found
-						</div>
-					)}
-				</div>
-
-				{/* Action Links */}
-				<div className="flex gap-2">
-					{/* Project Link */}
-					<button
-						onClick={() =>
-							window.maestro.shell.openExternal('https://github.com/RunMaestro/Maestro')
-						}
-						className="flex-1 flex items-center justify-between p-3 rounded border hover:bg-white/5 transition-colors"
-						style={{ borderColor: theme.colors.border }}
-					>
-						<div className="flex items-center gap-2">
-							<FileCode className="w-4 h-4" style={{ color: theme.colors.accent }} />
-							<span className="text-sm font-medium" style={{ color: theme.colors.textMain }}>
-								GitHub
-							</span>
-						</div>
-						<ExternalLink className="w-4 h-4" style={{ color: theme.colors.textDim }} />
-					</button>
-
-					{/* Leaderboard Registration */}
-					{onOpenLeaderboardRegistration && (
-						<button
-							onClick={onOpenLeaderboardRegistration}
-							className="flex-1 flex items-center justify-between p-3 rounded border hover:bg-white/5 transition-colors"
-							style={{
-								borderColor: isLeaderboardRegistered ? theme.colors.success : theme.colors.accent,
-								backgroundColor: isLeaderboardRegistered ? `${theme.colors.success}10` : undefined,
-							}}
-						>
-							<div className="flex items-center gap-2">
-								<Trophy
-									className="w-4 h-4"
-									style={{ color: isLeaderboardRegistered ? theme.colors.success : '#FFD700' }}
-								/>
-								<span className="text-sm font-medium" style={{ color: theme.colors.textMain }}>
-									{isLeaderboardRegistered ? 'Leaderboard' : 'Join Leaderboard'}
+				<div className="space-y-4">
+					{/* Logo and Title */}
+					<div className="flex items-center gap-4">
+						<Wand2 className="w-12 h-12" style={{ color: theme.colors.accent }} />
+						<div>
+							<div className="flex items-baseline gap-2">
+								<h1
+									className="text-2xl font-bold tracking-widest"
+									style={{ color: theme.colors.textMain }}
+								>
+									MAESTRO
+								</h1>
+								<span className="text-xs font-mono" style={{ color: theme.colors.textDim }}>
+									v{__APP_VERSION__}
+									{__COMMIT_HASH__ && ` (${__COMMIT_HASH__})`}
 								</span>
 							</div>
-							{isLeaderboardRegistered ? (
-								<Check className="w-4 h-4" style={{ color: theme.colors.success }} />
-							) : (
-								<ExternalLink className="w-4 h-4" style={{ color: theme.colors.textDim }} />
-							)}
-						</button>
-					)}
-				</div>
-
-				{/* Divider */}
-				<div className="border-t" style={{ borderColor: theme.colors.border }} />
-
-				{/* Creator Section - side by side layout */}
-				<div
-					className="flex items-center gap-4 p-3 rounded border"
-					style={{ borderColor: theme.colors.border, backgroundColor: theme.colors.bgActivity }}
-				>
-					{/* Left side - Creator info */}
-					<div className="flex items-center gap-3 flex-1">
-						<img
-							src={pedramAvatar}
-							alt="Pedram Amini"
-							className="w-12 h-12 rounded-full border-2"
-							style={{ borderColor: theme.colors.accent }}
-						/>
-						<div>
-							<div className="text-sm font-bold" style={{ color: theme.colors.textMain }}>
-								Pedram Amini
-							</div>
-							<div className="text-xs opacity-70 mb-1" style={{ color: theme.colors.textDim }}>
-								Founder, Hacker, Investor, Advisor
-							</div>
-							<div className="flex items-center gap-2 text-xs">
-								<button
-									onClick={() =>
-										window.maestro.shell.openExternal('https://github.com/pedramamini')
-									}
-									className="inline-flex items-center gap-1 hover:underline cursor-pointer"
-									style={{
-										color: theme.colors.accent,
-										background: 'none',
-										border: 'none',
-										padding: 0,
-									}}
-								>
-									GitHub
-								</button>
-								<span style={{ color: theme.colors.textDim }}>·</span>
-								<button
-									onClick={() =>
-										window.maestro.shell.openExternal('https://www.linkedin.com/in/pedramamini/')
-									}
-									className="inline-flex items-center gap-1 hover:underline cursor-pointer"
-									style={{
-										color: theme.colors.accent,
-										background: 'none',
-										border: 'none',
-										padding: 0,
-									}}
-								>
-									LinkedIn
-								</button>
-							</div>
+							<p className="text-xs opacity-70" style={{ color: theme.colors.textDim }}>
+								Agent Orchestration Command Center
+							</p>
 						</div>
 					</div>
 
-					{/* Vertical divider */}
-					<div className="h-14 w-px" style={{ backgroundColor: theme.colors.border }} />
+					{/* Achievements Section */}
+					<AchievementCard
+						theme={theme}
+						autoRunStats={autoRunStats}
+						globalStats={globalStats}
+						usageStats={usageStats}
+						handsOnTimeMs={handsOnTimeMs}
+						leaderboardRegistration={leaderboardRegistration}
+						onEscapeWithBadgeOpen={(handler) => {
+							badgeEscapeHandlerRef.current = handler;
+						}}
+					/>
 
-					{/* Right side - Made in Austin */}
-					<div className="flex flex-col items-center justify-center px-2">
-						<span className="text-xs mb-2" style={{ color: theme.colors.textDim }}>
-							Made in Austin, TX
-						</span>
-						{/* Texas Flag - Lone Star Flag */}
+					{/* Global Usage Stats - show loading or stats from all Claude projects */}
+					<div
+						className="p-4 rounded border"
+						style={{ borderColor: theme.colors.border, backgroundColor: theme.colors.bgActivity }}
+					>
+						<div className="flex items-center gap-2 mb-3">
+							<BarChart3 className="w-4 h-4" style={{ color: theme.colors.accent }} />
+							<span className="text-sm font-bold" style={{ color: theme.colors.textMain }}>
+								Global Statistics
+							</span>
+							{!isStatsComplete && (
+								<Loader2 className="w-3 h-3 animate-spin" style={{ color: theme.colors.textDim }} />
+							)}
+						</div>
+						{loading ? (
+							<div className="flex items-center justify-center py-4 gap-2">
+								<Loader2 className="w-4 h-4 animate-spin" style={{ color: theme.colors.textDim }} />
+								<span className="text-xs" style={{ color: theme.colors.textDim }}>
+									Loading stats...
+								</span>
+							</div>
+						) : globalStats ? (
+							<div className="space-y-3 text-xs">
+								{/* Totals Grid */}
+								<div className="grid grid-cols-2 gap-3">
+									{/* Sessions & Messages */}
+									<div className="flex justify-between">
+										<span style={{ color: theme.colors.textDim }}>Sessions</span>
+										<span className="font-mono font-bold" style={{ color: theme.colors.textMain }}>
+											{formatTokensCompact(globalStats.totalSessions)}
+										</span>
+									</div>
+									<div className="flex justify-between">
+										<span style={{ color: theme.colors.textDim }}>Messages</span>
+										<span className="font-mono font-bold" style={{ color: theme.colors.textMain }}>
+											{formatTokensCompact(globalStats.totalMessages)}
+										</span>
+									</div>
+
+									{/* Tokens */}
+									<div className="flex justify-between">
+										<span style={{ color: theme.colors.textDim }}>Input Tokens</span>
+										<span className="font-mono font-bold" style={{ color: theme.colors.textMain }}>
+											{formatTokensCompact(globalStats.totalInputTokens)}
+										</span>
+									</div>
+									<div className="flex justify-between">
+										<span style={{ color: theme.colors.textDim }}>Output Tokens</span>
+										<span className="font-mono font-bold" style={{ color: theme.colors.textMain }}>
+											{formatTokensCompact(globalStats.totalOutputTokens)}
+										</span>
+									</div>
+
+									{/* Cache Tokens (if any) */}
+									{(globalStats.totalCacheReadTokens > 0 ||
+										globalStats.totalCacheCreationTokens > 0) && (
+										<>
+											<div className="flex justify-between">
+												<span style={{ color: theme.colors.textDim }}>Cache Read</span>
+												<span
+													className="font-mono font-bold"
+													style={{ color: theme.colors.textMain }}
+												>
+													{formatTokensCompact(globalStats.totalCacheReadTokens)}
+												</span>
+											</div>
+											<div className="flex justify-between">
+												<span style={{ color: theme.colors.textDim }}>Cache Creation</span>
+												<span
+													className="font-mono font-bold"
+													style={{ color: theme.colors.textMain }}
+												>
+													{formatTokensCompact(globalStats.totalCacheCreationTokens)}
+												</span>
+											</div>
+										</>
+									)}
+
+									{/* Active Time & Total Cost - show cost only if we have cost data */}
+									{(handsOnTimeMs > 0 || globalStats.hasCostData) && (
+										<div
+											className="flex justify-between col-span-2 pt-2 border-t"
+											style={{ borderColor: theme.colors.border }}
+										>
+											{handsOnTimeMs > 0 && (
+												<span style={{ color: theme.colors.textDim }}>
+													Hands-on Time: {formatDuration(handsOnTimeMs)}
+												</span>
+											)}
+											{!handsOnTimeMs && globalStats.hasCostData && (
+												<span style={{ color: theme.colors.textDim }}>Total Cost</span>
+											)}
+											{globalStats.hasCostData && (
+												<span
+													className={`font-mono font-bold ${!isStatsComplete ? 'animate-pulse' : ''}`}
+													style={{ color: theme.colors.success }}
+												>
+													$
+													{(globalStats.totalCostUsd ?? 0).toLocaleString('en-US', {
+														minimumFractionDigits: 2,
+														maximumFractionDigits: 2,
+													})}
+												</span>
+											)}
+										</div>
+									)}
+								</div>
+							</div>
+						) : (
+							<div className="text-xs text-center py-2" style={{ color: theme.colors.textDim }}>
+								No sessions found
+							</div>
+						)}
+					</div>
+
+					{/* Action Links */}
+					<div className="flex gap-2">
+						{/* Project Link */}
 						<button
-							onClick={() => window.maestro.shell.openExternal('https://www.sanjacsaloon.com')}
-							className="hover:opacity-100 transition-opacity cursor-pointer"
-							style={{ background: 'none', border: 'none', padding: 0 }}
+							onClick={() =>
+								window.maestro.shell.openExternal('https://github.com/RunMaestro/Maestro')
+							}
+							className="flex-1 flex items-center justify-between p-3 rounded border hover:bg-white/5 transition-colors"
+							style={{ borderColor: theme.colors.border }}
 						>
-							<svg viewBox="0 0 150 100" className="w-10 h-7" style={{ opacity: 0.7 }}>
-								{/* Blue vertical stripe */}
-								<rect x="0" y="0" width="50" height="100" fill="#002868" />
-								{/* White horizontal stripe */}
-								<rect x="50" y="0" width="100" height="50" fill="#FFFFFF" />
-								{/* Red horizontal stripe */}
-								<rect x="50" y="50" width="100" height="50" fill="#BF0A30" />
-								{/* White five-pointed star */}
-								<polygon
-									points="25,15 29.5,30 45,30 32.5,40 37,55 25,45 13,55 17.5,40 5,30 20.5,30"
-									fill="#FFFFFF"
-								/>
-							</svg>
+							<div className="flex items-center gap-2">
+								<FileCode className="w-4 h-4" style={{ color: theme.colors.accent }} />
+								<span className="text-sm font-medium" style={{ color: theme.colors.textMain }}>
+									GitHub
+								</span>
+							</div>
+							<ExternalLink className="w-4 h-4" style={{ color: theme.colors.textDim }} />
 						</button>
+
+						{/* Leaderboard Registration */}
+						{onOpenLeaderboardRegistration && (
+							<button
+								onClick={onOpenLeaderboardRegistration}
+								className="flex-1 flex items-center justify-between p-3 rounded border hover:bg-white/5 transition-colors"
+								style={{
+									borderColor: isLeaderboardRegistered ? theme.colors.success : theme.colors.accent,
+									backgroundColor: isLeaderboardRegistered
+										? `${theme.colors.success}10`
+										: undefined,
+								}}
+							>
+								<div className="flex items-center gap-2">
+									<Trophy
+										className="w-4 h-4"
+										style={{ color: isLeaderboardRegistered ? theme.colors.success : '#FFD700' }}
+									/>
+									<span className="text-sm font-medium" style={{ color: theme.colors.textMain }}>
+										{isLeaderboardRegistered ? 'Leaderboard' : 'Join Leaderboard'}
+									</span>
+								</div>
+								{isLeaderboardRegistered ? (
+									<Check className="w-4 h-4" style={{ color: theme.colors.success }} />
+								) : (
+									<ExternalLink className="w-4 h-4" style={{ color: theme.colors.textDim }} />
+								)}
+							</button>
+						)}
+					</div>
+
+					{/* Divider */}
+					<div className="border-t" style={{ borderColor: theme.colors.border }} />
+
+					{/* Creator Section - side by side layout */}
+					<div
+						className="flex items-center gap-4 p-3 rounded border"
+						style={{ borderColor: theme.colors.border, backgroundColor: theme.colors.bgActivity }}
+					>
+						{/* Left side - Creator info */}
+						<div className="flex items-center gap-3 flex-1">
+							<img
+								src={pedramAvatar}
+								alt="Pedram Amini"
+								className="w-12 h-12 rounded-full border-2"
+								style={{ borderColor: theme.colors.accent }}
+							/>
+							<div>
+								<div className="text-sm font-bold" style={{ color: theme.colors.textMain }}>
+									Pedram Amini
+								</div>
+								<div className="text-xs opacity-70 mb-1" style={{ color: theme.colors.textDim }}>
+									Founder, Hacker, Investor, Advisor
+								</div>
+								<div className="flex items-center gap-2 text-xs">
+									<button
+										onClick={() =>
+											window.maestro.shell.openExternal('https://github.com/pedramamini')
+										}
+										className="inline-flex items-center gap-1 hover:underline cursor-pointer"
+										style={{
+											color: theme.colors.accent,
+											background: 'none',
+											border: 'none',
+											padding: 0,
+										}}
+									>
+										GitHub
+									</button>
+									<span style={{ color: theme.colors.textDim }}>·</span>
+									<button
+										onClick={() =>
+											window.maestro.shell.openExternal('https://www.linkedin.com/in/pedramamini/')
+										}
+										className="inline-flex items-center gap-1 hover:underline cursor-pointer"
+										style={{
+											color: theme.colors.accent,
+											background: 'none',
+											border: 'none',
+											padding: 0,
+										}}
+									>
+										LinkedIn
+									</button>
+								</div>
+							</div>
+						</div>
+
+						{/* Vertical divider */}
+						<div className="h-14 w-px" style={{ backgroundColor: theme.colors.border }} />
+
+						{/* Right side - Made in Austin */}
+						<div className="flex flex-col items-center justify-center px-2">
+							<span className="text-xs mb-2" style={{ color: theme.colors.textDim }}>
+								Made in Austin, TX
+							</span>
+							{/* Texas Flag - Lone Star Flag */}
+							<button
+								onClick={() => window.maestro.shell.openExternal('https://www.sanjacsaloon.com')}
+								className="hover:opacity-100 transition-opacity cursor-pointer"
+								style={{ background: 'none', border: 'none', padding: 0 }}
+							>
+								<svg viewBox="0 0 150 100" className="w-10 h-7" style={{ opacity: 0.7 }}>
+									{/* Blue vertical stripe */}
+									<rect x="0" y="0" width="50" height="100" fill="#002868" />
+									{/* White horizontal stripe */}
+									<rect x="50" y="0" width="100" height="50" fill="#FFFFFF" />
+									{/* Red horizontal stripe */}
+									<rect x="50" y="50" width="100" height="50" fill="#BF0A30" />
+									{/* White five-pointed star */}
+									<polygon
+										points="25,15 29.5,30 45,30 32.5,40 37,55 25,45 13,55 17.5,40 5,30 20.5,30"
+										fill="#FFFFFF"
+									/>
+								</svg>
+							</button>
+						</div>
 					</div>
 				</div>
-			</div>
 			)}
 		</Modal>
 	);

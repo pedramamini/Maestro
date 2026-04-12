@@ -519,7 +519,8 @@ export function getModalActions() {
 		setAboutModalOpen: (open: boolean) => (open ? openModal('about') : closeModal('about')),
 
 		// Feedback Modal
-		setFeedbackModalOpen: (open: boolean) => (open ? openModal('feedback') : closeModal('feedback')),
+		setFeedbackModalOpen: (open: boolean) =>
+			open ? openModal('feedback') : closeModal('feedback'),
 
 		// Update Check Modal
 		setUpdateCheckModalOpen: (open: boolean) =>

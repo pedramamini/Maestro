@@ -1,8 +1,8 @@
 The user has submitted the following feedback about Maestro:
 
 ---
-{{FEEDBACK}}
----
+
+## {{FEEDBACK}}
 
 Your job is to turn this raw feedback into a well-structured GitHub issue on RunMaestro/Maestro. Do not ask for clarification — work with what is provided.
 
@@ -21,12 +21,15 @@ Your job is to turn this raw feedback into a well-structured GitHub issue on Run
      - **Additional Context** — anything else relevant
 
 3. **Ensure the label exists** — run this command first:
+
    ```
    gh label create "Maestro-feedback" --repo RunMaestro/Maestro --description "User feedback submitted via Maestro" --color "0E8A16"
    ```
+
    If the label already exists, this command will fail — that's fine, continue.
 
 4. **Create the issue**:
+
    ```
    gh issue create --repo RunMaestro/Maestro --label "Maestro-feedback" --title "TITLE" --body "BODY"
    ```
