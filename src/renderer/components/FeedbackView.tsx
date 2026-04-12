@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Loader2 } from 'lucide-react';
 import type { Theme, Session } from '../types';
 
@@ -61,7 +61,9 @@ export function FeedbackView({ theme, sessions, onCancel, onSubmitSuccess }: Fee
 		if (result.success) {
 			onSubmitSuccess(selectedSessionId);
 		} else {
-			setSubmitError(result.error ?? 'Submission failed. Please try again.');
+			setSubmitError(
+				'The selected agent is no longer running. Please select another agent.'
+			);
 			setSubmitting(false);
 		}
 	}, [selectedSessionId, feedbackText, checkAuth, onSubmitSuccess]);
@@ -80,9 +82,51 @@ export function FeedbackView({ theme, sessions, onCancel, onSubmitSuccess }: Fee
 		return (
 			<div className="flex items-center justify-center py-12">
 				<Loader2
-					className="w-6 h-6 animate-spin"
+					className="w-4 h-4 animate-spin"
 					style={{ color: theme.colors.textDim }}
 				/>
+			</div>
+		);
+	}
+
+	// No running agents — show placeholder message instead of form
+	if (runningSessions.length === 0) {
+		return (
+			<div className="space-y-4">
+				<div
+					className="text-xs px-3 py-3 rounded border text-center"
+					style={{
+						color: theme.colors.textDim,
+						borderColor: theme.colors.border,
+					}}
+				>
+					No running agents available. Start an agent first, then try again.
+				</div>
+				<div className="flex justify-end gap-2 pt-1">
+					<button
+						type="button"
+						onClick={onCancel}
+						className="px-3 py-1.5 rounded text-xs border transition-colors hover:bg-white/5"
+						style={{
+							color: theme.colors.textDim,
+							borderColor: theme.colors.border,
+						}}
+					>
+						Cancel
+					</button>
+					<button
+						type="button"
+						disabled
+						className="px-3 py-1.5 rounded text-xs flex items-center gap-1.5 transition-colors"
+						style={{
+							color: theme.colors.textDim,
+							backgroundColor: theme.colors.border,
+							cursor: 'not-allowed',
+						}}
+					>
+						Send Feedback
+					</button>
+				</div>
 			</div>
 		);
 	}
@@ -92,8 +136,10 @@ export function FeedbackView({ theme, sessions, onCancel, onSubmitSuccess }: Fee
 		!isDisabled &&
 		!submitting &&
 		feedbackText.trim().length > 0 &&
-		selectedSessionId.length > 0 &&
-		runningSessions.length > 0;
+		selectedSessionId.length > 0;
+
+	const charCount = feedbackText.length;
+	const formattedCount = charCount.toLocaleString();
 
 	return (
 		<div className="space-y-4">
@@ -124,7 +170,7 @@ export function FeedbackView({ theme, sessions, onCancel, onSubmitSuccess }: Fee
 					<select
 						value={selectedSessionId}
 						onChange={(e) => setSelectedSessionId(e.target.value)}
-						disabled={submitting || runningSessions.length === 0}
+						disabled={submitting}
 						className="w-full px-2 py-1.5 rounded text-xs border bg-transparent outline-none"
 						style={{
 							color: theme.colors.textMain,
@@ -132,21 +178,15 @@ export function FeedbackView({ theme, sessions, onCancel, onSubmitSuccess }: Fee
 							backgroundColor: 'transparent',
 						}}
 					>
-						{runningSessions.length === 0 ? (
-							<option value="" disabled>
-								No running agents — start one first
+						{runningSessions.map((s) => (
+							<option
+								key={s.id}
+								value={s.id}
+								style={{ backgroundColor: theme.colors.bgActivity }}
+							>
+								{s.name} ({s.toolType})
 							</option>
-						) : (
-							runningSessions.map((s) => (
-								<option
-									key={s.id}
-									value={s.id}
-									style={{ backgroundColor: theme.colors.bgActivity }}
-								>
-									{s.name} ({s.toolType})
-								</option>
-							))
-						)}
+						))}
 					</select>
 				</div>
 
@@ -176,17 +216,14 @@ export function FeedbackView({ theme, sessions, onCancel, onSubmitSuccess }: Fee
 							minHeight: '120px',
 						}}
 					/>
-					{feedbackText.length > 4000 && (
+					{charCount > 4000 && (
 						<div
 							className="text-xs text-right mt-0.5"
 							style={{
-								color:
-									feedbackText.length >= 5000
-										? theme.colors.error
-										: theme.colors.textDim,
+								color: charCount >= 5000 ? theme.colors.error : theme.colors.textDim,
 							}}
 						>
-							{feedbackText.length} / 5000
+							{formattedCount} / 5,000
 						</div>
 					)}
 				</div>
@@ -231,7 +268,7 @@ export function FeedbackView({ theme, sessions, onCancel, onSubmitSuccess }: Fee
 						cursor: canSubmit ? 'pointer' : 'not-allowed',
 					}}
 				>
-					{submitting && <Loader2 className="w-3 h-3 animate-spin" />}
+					{submitting && <Loader2 className="w-4 h-4 animate-spin" />}
 					Send Feedback
 				</button>
 			</div>
