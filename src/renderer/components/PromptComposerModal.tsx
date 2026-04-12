@@ -200,47 +200,40 @@ export function PromptComposerModal({
 		return items;
 	}, [sessions, groups]);
 
-	// Combined filtered mentions: file suggestions + agent/group suggestions
+	// Filtered mentions: file suggestions (agent chat) OR agent/group suggestions (group chat)
 	const filteredMentions = useMemo(() => {
-		const items: MentionItem[] = [];
+		// Group chat mode: show agent/group mentions only
+		if (hasAgentMentions) {
+			if (!mentionFilter) return agentMentionItems;
+			const filterLower = mentionFilter.toLowerCase();
+			return agentMentionItems.filter((item) => {
+				if (item.type === 'group') {
+					return (
+						item.group.name.toLowerCase().includes(filterLower) ||
+						item.mentionName.toLowerCase().includes(filterLower)
+					);
+				}
+				if (item.type === 'agent') {
+					return (
+						item.name.toLowerCase().includes(filterLower) ||
+						item.mentionName.toLowerCase().includes(filterLower)
+					);
+				}
+				return false;
+			});
+		}
 
-		// File suggestions (always available when activeSession exists)
+		// Agent chat mode: show file suggestions only
 		const fileSuggestions = getFileSuggestions(mentionFilter);
-		for (const s of fileSuggestions) {
-			items.push({
+		return fileSuggestions.map(
+			(s): MentionItem => ({
 				type: 'file',
 				fileType: s.type,
 				displayText: s.displayText,
 				fullPath: s.fullPath,
 				source: s.source,
-			});
-		}
-
-		// Agent/group suggestions (group chat mode)
-		if (hasAgentMentions) {
-			const filterLower = mentionFilter.toLowerCase();
-			for (const item of agentMentionItems) {
-				if (!mentionFilter) {
-					items.push(item);
-				} else if (item.type === 'group') {
-					if (
-						item.group.name.toLowerCase().includes(filterLower) ||
-						item.mentionName.toLowerCase().includes(filterLower)
-					) {
-						items.push(item);
-					}
-				} else if (item.type === 'agent') {
-					if (
-						item.name.toLowerCase().includes(filterLower) ||
-						item.mentionName.toLowerCase().includes(filterLower)
-					) {
-						items.push(item);
-					}
-				}
-			}
-		}
-
-		return items;
+			})
+		);
 	}, [mentionFilter, getFileSuggestions, hasAgentMentions, agentMentionItems]);
 
 	// Scroll selected mention into view
@@ -655,7 +648,7 @@ export function PromptComposerModal({
 						style={{ color: theme.colors.textMain }}
 						placeholder={
 							hasAgentMentions
-								? 'Write your prompt here... (@ to mention files or agents)'
+								? 'Write your prompt here... (@ to mention agents)'
 								: 'Write your prompt here... (@ to reference files)'
 						}
 					/>

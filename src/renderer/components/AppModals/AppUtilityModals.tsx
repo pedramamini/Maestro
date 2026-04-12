@@ -200,6 +200,7 @@ export interface AppUtilityModalsProps {
 	onTabSelect: (tabId: string) => void;
 	onFileTabSelect?: (tabId: string) => void;
 	onTerminalTabSelect?: (tabId: string) => void;
+	onBrowserTabSelect?: (tabId: string) => void;
 	onNamedSessionSelect: (
 		agentSessionId: string,
 		projectPath: string,
@@ -402,6 +403,7 @@ export const AppUtilityModals = memo(function AppUtilityModals({
 	onTabSelect,
 	onFileTabSelect,
 	onTerminalTabSelect,
+	onBrowserTabSelect,
 	onNamedSessionSelect,
 	colorBlindMode,
 	// FileSearchModal
@@ -627,15 +629,18 @@ export const AppUtilityModals = memo(function AppUtilityModals({
 					tabs={activeSession.aiTabs}
 					fileTabs={activeSession.filePreviewTabs}
 					terminalTabs={activeSession.terminalTabs}
+					browserTabs={activeSession.browserTabs}
 					activeTabId={activeSession.activeTabId}
 					activeFileTabId={activeSession.activeFileTabId}
 					activeTerminalTabId={activeSession.activeTerminalTabId}
+					activeBrowserTabId={activeSession.activeBrowserTabId}
 					projectRoot={activeSession.projectRoot}
 					agentId={activeSession.toolType}
 					shortcut={tabShortcuts.tabSwitcher}
 					onTabSelect={onTabSelect}
 					onFileTabSelect={onFileTabSelect}
 					onTerminalTabSelect={onTerminalTabSelect}
+					onBrowserTabSelect={onBrowserTabSelect}
 					onNamedSessionSelect={onNamedSessionSelect}
 					onClose={onCloseTabSwitcher}
 					colorBlindMode={colorBlindMode}
@@ -678,9 +683,9 @@ export const AppUtilityModals = memo(function AppUtilityModals({
 					supportsThinking={promptSupportsThinking}
 					enterToSend={promptEnterToSend}
 					onToggleEnterToSend={onPromptToggleEnterToSend}
-					activeSession={activeSession}
-					sessions={sessions}
-					groups={groups}
+					activeSession={activeGroupChatId ? undefined : activeSession}
+					sessions={activeGroupChatId ? sessions : undefined}
+					groups={activeGroupChatId ? groups : undefined}
 				/>
 			)}
 

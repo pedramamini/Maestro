@@ -1199,7 +1199,7 @@ describe('PromptComposerModal', () => {
 			);
 
 			expect(
-				screen.getByPlaceholderText('Write your prompt here... (@ to mention files or agents)')
+				screen.getByPlaceholderText('Write your prompt here... (@ to mention agents)')
 			).toBeInTheDocument();
 		});
 
@@ -1218,7 +1218,7 @@ describe('PromptComposerModal', () => {
 			);
 
 			const textarea = screen.getByPlaceholderText(
-				'Write your prompt here... (@ to mention files or agents)'
+				'Write your prompt here... (@ to mention agents)'
 			);
 			fireEvent.change(textarea, { target: { value: '@' } });
 
@@ -1241,7 +1241,7 @@ describe('PromptComposerModal', () => {
 			);
 
 			const textarea = screen.getByPlaceholderText(
-				'Write your prompt here... (@ to mention files or agents)'
+				'Write your prompt here... (@ to mention agents)'
 			);
 			fireEvent.change(textarea, { target: { value: '@Age' } });
 
@@ -1264,7 +1264,7 @@ describe('PromptComposerModal', () => {
 			);
 
 			const textarea = screen.getByPlaceholderText(
-				'Write your prompt here... (@ to mention files or agents)'
+				'Write your prompt here... (@ to mention agents)'
 			) as HTMLTextAreaElement;
 			fireEvent.change(textarea, { target: { value: '@' } });
 			fireEvent.click(screen.getByText('@Agent1'));
@@ -1287,7 +1287,7 @@ describe('PromptComposerModal', () => {
 			);
 
 			const textarea = screen.getByPlaceholderText(
-				'Write your prompt here... (@ to mention files or agents)'
+				'Write your prompt here... (@ to mention agents)'
 			) as HTMLTextAreaElement;
 			fireEvent.change(textarea, { target: { value: '@' } });
 			fireEvent.keyDown(textarea, { key: 'Tab' });
@@ -1310,7 +1310,7 @@ describe('PromptComposerModal', () => {
 			);
 
 			const textarea = screen.getByPlaceholderText(
-				'Write your prompt here... (@ to mention files or agents)'
+				'Write your prompt here... (@ to mention agents)'
 			) as HTMLTextAreaElement;
 			fireEvent.change(textarea, { target: { value: '@' } });
 			fireEvent.keyDown(textarea, { key: 'ArrowDown' });
@@ -1334,7 +1334,7 @@ describe('PromptComposerModal', () => {
 			);
 
 			const textarea = screen.getByPlaceholderText(
-				'Write your prompt here... (@ to mention files or agents)'
+				'Write your prompt here... (@ to mention agents)'
 			);
 			fireEvent.change(textarea, { target: { value: '@' } });
 			expect(screen.getByText('@Agent1')).toBeInTheDocument();
@@ -1361,7 +1361,7 @@ describe('PromptComposerModal', () => {
 			);
 
 			const textarea = screen.getByPlaceholderText(
-				'Write your prompt here... (@ to mention files or agents)'
+				'Write your prompt here... (@ to mention agents)'
 			);
 			fireEvent.change(textarea, { target: { value: '@' } });
 
@@ -1389,7 +1389,7 @@ describe('PromptComposerModal', () => {
 			);
 
 			const textarea = screen.getByPlaceholderText(
-				'Write your prompt here... (@ to mention files or agents)'
+				'Write your prompt here... (@ to mention agents)'
 			) as HTMLTextAreaElement;
 			fireEvent.change(textarea, { target: { value: '@' } });
 			fireEvent.click(screen.getByText('@TEAM'));

@@ -200,6 +200,7 @@ export function useTabHandlers(): TabHandlersReturn {
 		activeSession?.aiTabs,
 		activeSession?.filePreviewTabs,
 		activeSession?.terminalTabs,
+		activeSession?.browserTabs,
 		activeSession?.unifiedTabOrder,
 	]);
 

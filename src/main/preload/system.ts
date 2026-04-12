@@ -209,6 +209,25 @@ export function createAppApi() {
 		 * Fired when the app is activated via a deep link from OS notification clicks,
 		 * external apps, or CLI commands.
 		 */
+		/**
+		 * Listen for keyboard shortcuts forwarded from browser tab webviews.
+		 * When a webview has focus, keystrokes don't reach the renderer's window
+		 * event listener, so the main process intercepts them and forwards here.
+		 */
+		onBrowserTabShortcutKey: (
+			callback: (input: {
+				key: string;
+				code: string;
+				meta: boolean;
+				control: boolean;
+				alt: boolean;
+				shift: boolean;
+			}) => void
+		): (() => void) => {
+			const handler = (_: unknown, input: Parameters<typeof callback>[0]) => callback(input);
+			ipcRenderer.on('browser-tab:shortcutKey', handler);
+			return () => ipcRenderer.removeListener('browser-tab:shortcutKey', handler);
+		},
 		onDeepLink: (callback: (deepLink: ParsedDeepLink) => void): (() => void) => {
 			const handler = (_: unknown, deepLink: ParsedDeepLink) => callback(deepLink);
 			ipcRenderer.on('app:deepLink', handler);

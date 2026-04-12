@@ -492,7 +492,7 @@ export const MainPanel = React.memo(
 			<>
 				<ErrorBoundary>
 					<div
-						className="flex-1 flex flex-col relative"
+						className="flex-1 flex flex-col relative isolate"
 						style={{
 							minWidth: '400px',
 							backgroundColor: theme.colors.bgMain,

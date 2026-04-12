@@ -1075,7 +1075,7 @@ export const InputArea = React.memo(function InputArea(props: InputAreaProps) {
 								/>
 								{/* Model pill — quick-change dropdown */}
 								{session.inputMode === 'ai' && onModelChange && availableModels.length > 0 && (
-									<div className="relative" ref={modelMenuRef}>
+									<div className="relative" ref={modelMenuRef} data-tour="model-selector">
 										<button
 											onClick={() => {
 												setModelMenuOpen(!modelMenuOpen);
@@ -1128,7 +1128,7 @@ export const InputArea = React.memo(function InputArea(props: InputAreaProps) {
 								{session.inputMode === 'ai' &&
 									onEffortChange &&
 									availableEfforts.some((e) => e !== '') && (
-										<div className="relative" ref={effortMenuRef}>
+										<div className="relative" ref={effortMenuRef} data-tour="effort-selector">
 											<button
 												onClick={() => {
 													setEffortMenuOpen(!effortMenuOpen);
@@ -1179,7 +1179,7 @@ export const InputArea = React.memo(function InputArea(props: InputAreaProps) {
 									)}
 							</div>
 
-							<div className="flex items-center gap-2 ml-auto">
+							<div className="flex items-center gap-2 ml-auto" data-tour="toolbar-toggles">
 								{/* Save to History toggle - AI mode only */}
 								{session.inputMode === 'ai' && onToggleTabSaveToHistory && (
 									<button

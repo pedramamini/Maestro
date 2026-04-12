@@ -1024,6 +1024,35 @@ export function useMainKeyboardHandler(): UseMainKeyboardHandlerReturn {
 		return () => window.removeEventListener('keydown', handleKeyDown);
 	}, []); // Empty dependencies - handler reads from ref
 
+	// Forward keyboard shortcuts from browser tab webviews.
+	// When a <webview> has focus, keystrokes are trapped in its guest process.
+	// The main process forwards unhandled app shortcuts here via IPC.
+	// We blur the webview first (so the app can manage focus for the new
+	// tab/panel), then re-dispatch as a synthetic KeyboardEvent.
+	useEffect(() => {
+		if (!window.maestro?.app?.onBrowserTabShortcutKey) return;
+		return window.maestro.app.onBrowserTabShortcutKey((input) => {
+			// Release focus from the webview so downstream handlers (e.g. Cmd+T
+			// creating a new tab) can move focus to the correct element.
+			const focused = document.activeElement;
+			if (focused && focused.tagName === 'WEBVIEW') {
+				(focused as HTMLElement).blur();
+			}
+			window.dispatchEvent(
+				new KeyboardEvent('keydown', {
+					key: input.key,
+					code: input.code,
+					metaKey: input.meta,
+					ctrlKey: input.control,
+					altKey: input.alt,
+					shiftKey: input.shift,
+					bubbles: true,
+					cancelable: true,
+				})
+			);
+		});
+	}, []);
+
 	// Track Opt+Cmd modifier keys to show session jump number badges
 	// Uses ref to read current state without adding it to deps (avoids re-registering
 	// listeners every time the modifier state toggles)

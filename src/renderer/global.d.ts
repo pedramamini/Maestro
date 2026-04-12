@@ -1257,6 +1257,16 @@ interface MaestroAPI {
 		confirmQuit: () => void;
 		cancelQuit: () => void;
 		onSystemResume: (callback: () => void) => () => void;
+		onBrowserTabShortcutKey: (
+			callback: (input: {
+				key: string;
+				code: string;
+				meta: boolean;
+				control: boolean;
+				alt: boolean;
+				shift: boolean;
+			}) => void
+		) => () => void;
 		/** @see ParsedDeepLink in src/shared/types.ts — keep in sync */
 		onDeepLink: (
 			callback: (deepLink: {

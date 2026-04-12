@@ -562,6 +562,7 @@ const mockMaestro = {
 		confirmQuit: vi.fn(),
 		cancelQuit: vi.fn(),
 		onSystemResume: vi.fn().mockReturnValue(() => {}),
+		onBrowserTabShortcutKey: vi.fn().mockReturnValue(() => {}),
 	},
 	wakatime: {
 		checkCli: vi.fn().mockResolvedValue({ available: false }),

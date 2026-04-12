@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { AlertTriangle, Copy, Check, X } from 'lucide-react';
 import type { AgentConfig, ToolType } from '../../types';
 import type { SshRemoteConfig, AgentSshRemoteConfig } from '../../../shared/types';
@@ -355,268 +355,265 @@ export function EditAgentModal({
 		return !!instanceName.trim() && validation.valid;
 	}, [instanceName, validation.valid]);
 
-	// Handle keyboard shortcuts
-	const handleKeyDown = useCallback(
-		(e: React.KeyboardEvent) => {
-			// Handle Cmd+Enter or Cmd+S for saving
+	// Handle keyboard shortcuts via window listener (Modal stops propagation on its backdrop)
+	useEffect(() => {
+		if (!isOpen) return;
+		const handler = (e: KeyboardEvent) => {
 			if ((e.metaKey || e.ctrlKey) && (e.key === 'Enter' || e.key === 's') && !e.shiftKey) {
 				e.preventDefault();
-				e.stopPropagation();
 				if (isFormValid) {
 					handleSave();
 				}
-				return;
 			}
-		},
-		[handleSave, isFormValid]
-	);
+		};
+		window.addEventListener('keydown', handler, true);
+		return () => window.removeEventListener('keydown', handler, true);
+	}, [isOpen, isFormValid, handleSave]);
 
 	if (!isOpen || !session) return null;
 
 	const agentName = getAgentDisplayName(selectedToolType);
 
 	return (
-		<div onKeyDown={handleKeyDown} role="group" aria-label="Edit agent dialog">
-			<Modal
-				theme={theme}
-				title={`Edit Agent: ${session.name}`}
-				priority={MODAL_PRIORITIES.NEW_INSTANCE}
-				onClose={onClose}
-				width={600}
-				initialFocusRef={nameInputRef}
-				customHeader={
+		<Modal
+			theme={theme}
+			title={`Edit Agent: ${session.name}`}
+			priority={MODAL_PRIORITIES.NEW_INSTANCE}
+			onClose={onClose}
+			width={600}
+			initialFocusRef={nameInputRef}
+			customHeader={
+				<div
+					className="p-4 border-b flex items-center justify-between shrink-0"
+					style={{ borderColor: theme.colors.border }}
+				>
+					<h2 className="text-sm font-bold" style={{ color: theme.colors.textMain }}>
+						Edit Agent: {session.name}
+					</h2>
+					<div className="flex items-center gap-2">
+						<button
+							type="button"
+							onClick={handleCopySessionId}
+							className="flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-mono font-bold uppercase transition-colors hover:opacity-80"
+							style={{
+								backgroundColor: copiedId
+									? theme.colors.success + '20'
+									: theme.colors.accent + '20',
+								color: copiedId ? theme.colors.success : theme.colors.accent,
+								border: `1px solid ${copiedId ? theme.colors.success : theme.colors.accent}40`,
+							}}
+							title={copiedId ? 'Copied!' : `Click to copy: ${session.id}`}
+						>
+							{copiedId ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
+							<span>{session.id.slice(0, 8)}</span>
+						</button>
+						<button
+							type="button"
+							onClick={onClose}
+							className="p-1 rounded hover:bg-white/10 transition-colors"
+							style={{ color: theme.colors.textDim }}
+							aria-label="Close modal"
+						>
+							<X className="w-4 h-4" />
+						</button>
+					</div>
+				</div>
+			}
+			footer={
+				<ModalFooter
+					theme={theme}
+					onCancel={onClose}
+					onConfirm={handleSave}
+					confirmLabel="Save Changes"
+					confirmDisabled={!isFormValid}
+				/>
+			}
+		>
+			<div className="space-y-5">
+				{/* Agent Name */}
+				<FormInput
+					ref={nameInputRef}
+					id="edit-agent-name-input"
+					theme={theme}
+					label="Agent Name"
+					value={instanceName}
+					onChange={setInstanceName}
+					placeholder=""
+					error={validation.errorField === 'name' ? validation.error : undefined}
+					heightClass="p-2"
+				/>
+
+				{/* Agent Provider */}
+				<div>
 					<div
-						className="p-4 border-b flex items-center justify-between shrink-0"
-						style={{ borderColor: theme.colors.border }}
+						className="block text-xs font-bold opacity-70 uppercase mb-2"
+						style={{ color: theme.colors.textMain }}
 					>
-						<h2 className="text-sm font-bold" style={{ color: theme.colors.textMain }}>
-							Edit Agent: {session.name}
-						</h2>
-						<div className="flex items-center gap-2">
-							<button
-								type="button"
-								onClick={handleCopySessionId}
-								className="flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-mono font-bold uppercase transition-colors hover:opacity-80"
-								style={{
-									backgroundColor: copiedId
-										? theme.colors.success + '20'
-										: theme.colors.accent + '20',
-									color: copiedId ? theme.colors.success : theme.colors.accent,
-									border: `1px solid ${copiedId ? theme.colors.success : theme.colors.accent}40`,
-								}}
-								title={copiedId ? 'Copied!' : `Click to copy: ${session.id}`}
-							>
-								{copiedId ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
-								<span>{session.id.slice(0, 8)}</span>
-							</button>
-							<button
-								type="button"
-								onClick={onClose}
-								className="p-1 rounded hover:bg-white/10 transition-colors"
-								style={{ color: theme.colors.textDim }}
-								aria-label="Close modal"
-							>
-								<X className="w-4 h-4" />
-							</button>
-						</div>
+						Agent Provider
 					</div>
-				}
-				footer={
-					<ModalFooter
-						theme={theme}
-						onCancel={onClose}
-						onConfirm={handleSave}
-						confirmLabel="Save Changes"
-						confirmDisabled={!isFormValid}
-					/>
-				}
-			>
-				<div className="space-y-5">
-					{/* Agent Name */}
-					<FormInput
-						ref={nameInputRef}
-						id="edit-agent-name-input"
-						theme={theme}
-						label="Agent Name"
-						value={instanceName}
-						onChange={setInstanceName}
-						placeholder=""
-						error={validation.errorField === 'name' ? validation.error : undefined}
-						heightClass="p-2"
-					/>
-
-					{/* Agent Provider */}
-					<div>
+					<select
+						value={selectedToolType}
+						onChange={(e) => setSelectedToolType(e.target.value as ToolType)}
+						className="w-full p-2 rounded border bg-transparent outline-none text-sm"
+						style={{
+							borderColor: theme.colors.border,
+							color: theme.colors.textMain,
+							backgroundColor: theme.colors.bgMain,
+						}}
+					>
+						{SUPPORTED_AGENTS.map((agentId) => (
+							<option key={agentId} value={agentId}>
+								{getAgentDisplayName(agentId)}
+							</option>
+						))}
+					</select>
+					{providerChanged && (
 						<div
-							className="block text-xs font-bold opacity-70 uppercase mb-2"
-							style={{ color: theme.colors.textMain }}
-						>
-							Agent Provider
-						</div>
-						<select
-							value={selectedToolType}
-							onChange={(e) => setSelectedToolType(e.target.value as ToolType)}
-							className="w-full p-2 rounded border bg-transparent outline-none text-sm"
+							className="mt-2 p-2 rounded border text-xs flex items-start gap-2"
 							style={{
-								borderColor: theme.colors.border,
-								color: theme.colors.textMain,
-								backgroundColor: theme.colors.bgMain,
+								borderColor: theme.colors.warning + '60',
+								backgroundColor: theme.colors.warning + '10',
+								color: theme.colors.warning,
 							}}
 						>
-							{SUPPORTED_AGENTS.map((agentId) => (
-								<option key={agentId} value={agentId}>
-									{getAgentDisplayName(agentId)}
-								</option>
-							))}
-						</select>
-						{providerChanged && (
-							<div
-								className="mt-2 p-2 rounded border text-xs flex items-start gap-2"
-								style={{
-									borderColor: theme.colors.warning + '60',
-									backgroundColor: theme.colors.warning + '10',
-									color: theme.colors.warning,
-								}}
-							>
-								<AlertTriangle className="w-3.5 h-3.5 mt-0.5 shrink-0" />
-								<span>
-									Changing the provider will clear your session list (tabs). Your history panel data
-									will persist.
-								</span>
-							</div>
-						)}
-					</div>
-
-					{/* Working Directory (read-only) */}
-					<div>
-						<div
-							className="block text-xs font-bold opacity-70 uppercase mb-2"
-							style={{ color: theme.colors.textMain }}
-						>
-							Working Directory
-						</div>
-						<div
-							className="p-2 rounded border font-mono text-sm overflow-hidden text-ellipsis"
-							style={{
-								borderColor: theme.colors.border,
-								color: theme.colors.textDim,
-								backgroundColor: theme.colors.bgActivity,
-							}}
-							title={session.projectRoot}
-						>
-							{session.projectRoot}
-						</div>
-						<p className="mt-1 text-xs" style={{ color: theme.colors.textDim }}>
-							Directory cannot be changed. Create a new agent for a different directory.
-						</p>
-						{/* Remote path validation status (only shown when SSH is enabled) */}
-						{isSshEnabled && (
-							<RemotePathStatus
-								theme={theme}
-								validation={remotePathValidation}
-								remoteHost={sshRemoteHost || 'remote'}
-							/>
-						)}
-					</div>
-
-					{/* Nudge Message */}
-					<NudgeMessageField theme={theme} value={nudgeMessage} onChange={setNudgeMessage} />
-
-					{/* Agent Configuration (custom path, args, env vars, agent-specific settings) */}
-					{/* Per-session config (path, args, env vars) saved on modal save, not on blur */}
-					{agent && (
-						<div>
-							<div
-								className="block text-xs font-bold opacity-70 uppercase mb-2"
-								style={{ color: theme.colors.textMain }}
-							>
-								{agentName} Settings
-							</div>
-							<AgentConfigPanel
-								theme={theme}
-								agent={agent}
-								customPath={customPath}
-								onCustomPathChange={setCustomPath}
-								onCustomPathBlur={() => {
-									/* Saved on modal save */
-								}}
-								customArgs={customArgs}
-								onCustomArgsChange={setCustomArgs}
-								onCustomArgsBlur={() => {
-									/* Saved on modal save */
-								}}
-								customEnvVars={customEnvVars}
-								onEnvVarKeyChange={(oldKey, newKey, value) => {
-									const newVars = { ...customEnvVars };
-									delete newVars[oldKey];
-									newVars[newKey] = value;
-									setCustomEnvVars(newVars);
-								}}
-								onEnvVarValueChange={(key, value) => {
-									setCustomEnvVars((prev) => ({ ...prev, [key]: value }));
-								}}
-								onEnvVarRemove={(key) => {
-									const newVars = { ...customEnvVars };
-									delete newVars[key];
-									setCustomEnvVars(newVars);
-								}}
-								onEnvVarAdd={() => {
-									let newKey = 'NEW_VAR';
-									let counter = 1;
-									while (customEnvVars[newKey]) {
-										newKey = `NEW_VAR_${counter}`;
-										counter++;
-									}
-									setCustomEnvVars((prev) => ({ ...prev, [newKey]: '' }));
-								}}
-								onEnvVarsBlur={() => {
-									/* Saved on modal save */
-								}}
-								agentConfig={agentConfig}
-								onConfigChange={(key, value) => {
-									setAgentConfig((prev) => ({ ...prev, [key]: value }));
-								}}
-								onConfigBlur={(key, value) => {
-									// Both model and contextWindow are now saved per-session on modal save
-									// Other config options (if any) can still be saved at agent level
-									const updatedConfig = { ...agentConfig, [key]: value };
-									const {
-										model: _model,
-										contextWindow: _contextWindow,
-										...otherConfig
-									} = updatedConfig;
-									if (Object.keys(otherConfig).length > 0) {
-										void window.maestro.agents
-											.setConfig(selectedToolType, otherConfig)
-											.catch((error) => {
-												console.error(`Failed to persist config for ${selectedToolType}:`, error);
-											});
-									}
-								}}
-								availableModels={availableModels}
-								loadingModels={loadingModels}
-								onRefreshModels={refreshModels}
-								dynamicOptions={editDynamicOptions}
-								loadingDynamicOptions={editLoadingDynamicOptions}
-								onRefreshAgent={handleRefreshAgent}
-								refreshingAgent={refreshingAgent}
-								showBuiltInEnvVars
-								isSshEnabled={isSshEnabled}
-							/>
+							<AlertTriangle className="w-3.5 h-3.5 mt-0.5 shrink-0" />
+							<span>
+								Changing the provider will clear your session list (tabs). Your history panel data
+								will persist.
+							</span>
 						</div>
 					)}
+				</div>
 
-					{/* SSH Remote Execution - Top Level */}
-					{sshRemotes.length > 0 && (
-						<SshRemoteSelector
+				{/* Working Directory (read-only) */}
+				<div>
+					<div
+						className="block text-xs font-bold opacity-70 uppercase mb-2"
+						style={{ color: theme.colors.textMain }}
+					>
+						Working Directory
+					</div>
+					<div
+						className="p-2 rounded border font-mono text-sm overflow-hidden text-ellipsis"
+						style={{
+							borderColor: theme.colors.border,
+							color: theme.colors.textDim,
+							backgroundColor: theme.colors.bgActivity,
+						}}
+						title={session.projectRoot}
+					>
+						{session.projectRoot}
+					</div>
+					<p className="mt-1 text-xs" style={{ color: theme.colors.textDim }}>
+						Directory cannot be changed. Create a new agent for a different directory.
+					</p>
+					{/* Remote path validation status (only shown when SSH is enabled) */}
+					{isSshEnabled && (
+						<RemotePathStatus
 							theme={theme}
-							sshRemotes={sshRemotes}
-							sshRemoteConfig={sshRemoteConfig}
-							onSshRemoteConfigChange={setSshRemoteConfig}
+							validation={remotePathValidation}
+							remoteHost={sshRemoteHost || 'remote'}
 						/>
 					)}
 				</div>
-			</Modal>
-		</div>
+
+				{/* Nudge Message */}
+				<NudgeMessageField theme={theme} value={nudgeMessage} onChange={setNudgeMessage} />
+
+				{/* Agent Configuration (custom path, args, env vars, agent-specific settings) */}
+				{/* Per-session config (path, args, env vars) saved on modal save, not on blur */}
+				{agent && (
+					<div>
+						<div
+							className="block text-xs font-bold opacity-70 uppercase mb-2"
+							style={{ color: theme.colors.textMain }}
+						>
+							{agentName} Settings
+						</div>
+						<AgentConfigPanel
+							theme={theme}
+							agent={agent}
+							customPath={customPath}
+							onCustomPathChange={setCustomPath}
+							onCustomPathBlur={() => {
+								/* Saved on modal save */
+							}}
+							customArgs={customArgs}
+							onCustomArgsChange={setCustomArgs}
+							onCustomArgsBlur={() => {
+								/* Saved on modal save */
+							}}
+							customEnvVars={customEnvVars}
+							onEnvVarKeyChange={(oldKey, newKey, value) => {
+								const newVars = { ...customEnvVars };
+								delete newVars[oldKey];
+								newVars[newKey] = value;
+								setCustomEnvVars(newVars);
+							}}
+							onEnvVarValueChange={(key, value) => {
+								setCustomEnvVars((prev) => ({ ...prev, [key]: value }));
+							}}
+							onEnvVarRemove={(key) => {
+								const newVars = { ...customEnvVars };
+								delete newVars[key];
+								setCustomEnvVars(newVars);
+							}}
+							onEnvVarAdd={() => {
+								let newKey = 'NEW_VAR';
+								let counter = 1;
+								while (customEnvVars[newKey]) {
+									newKey = `NEW_VAR_${counter}`;
+									counter++;
+								}
+								setCustomEnvVars((prev) => ({ ...prev, [newKey]: '' }));
+							}}
+							onEnvVarsBlur={() => {
+								/* Saved on modal save */
+							}}
+							agentConfig={agentConfig}
+							onConfigChange={(key, value) => {
+								setAgentConfig((prev) => ({ ...prev, [key]: value }));
+							}}
+							onConfigBlur={(key, value) => {
+								// Both model and contextWindow are now saved per-session on modal save
+								// Other config options (if any) can still be saved at agent level
+								const updatedConfig = { ...agentConfig, [key]: value };
+								const {
+									model: _model,
+									contextWindow: _contextWindow,
+									...otherConfig
+								} = updatedConfig;
+								if (Object.keys(otherConfig).length > 0) {
+									void window.maestro.agents
+										.setConfig(selectedToolType, otherConfig)
+										.catch((error) => {
+											console.error(`Failed to persist config for ${selectedToolType}:`, error);
+										});
+								}
+							}}
+							availableModels={availableModels}
+							loadingModels={loadingModels}
+							onRefreshModels={refreshModels}
+							dynamicOptions={editDynamicOptions}
+							loadingDynamicOptions={editLoadingDynamicOptions}
+							onRefreshAgent={handleRefreshAgent}
+							refreshingAgent={refreshingAgent}
+							showBuiltInEnvVars
+							isSshEnabled={isSshEnabled}
+						/>
+					</div>
+				)}
+
+				{/* SSH Remote Execution - Top Level */}
+				{sshRemotes.length > 0 && (
+					<SshRemoteSelector
+						theme={theme}
+						sshRemotes={sshRemotes}
+						sshRemoteConfig={sshRemoteConfig}
+						onSshRemoteConfigChange={setSshRemoteConfig}
+					/>
+				)}
+			</div>
+		</Modal>
 	);
 }

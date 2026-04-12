@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Folder, AlertTriangle } from 'lucide-react';
 import type { AgentConfig, Session, ToolType } from '../../types';
 import type { SshRemoteConfig, AgentSshRemoteConfig } from '../../../shared/types';
@@ -460,13 +460,13 @@ export function NewInstanceModal({
 		customAgentPaths,
 	]);
 
-	// Handle keyboard shortcuts
-	const handleKeyDown = useCallback(
-		(e: React.KeyboardEvent) => {
+	// Handle keyboard shortcuts via window listener (Modal stops propagation on its backdrop)
+	useEffect(() => {
+		if (!isOpen) return;
+		const handler = (e: KeyboardEvent) => {
 			// Handle Cmd+O for folder picker (disabled when SSH remote is active)
 			if ((e.key === 'o' || e.key === 'O') && (e.metaKey || e.ctrlKey)) {
 				e.preventDefault();
-				e.stopPropagation();
 				if (!isSshEnabled) {
 					handleSelectFolder();
 				}
@@ -475,15 +475,14 @@ export function NewInstanceModal({
 			// Handle Cmd+Enter or Cmd+S for creating agent
 			if ((e.metaKey || e.ctrlKey) && (e.key === 'Enter' || e.key === 's') && !e.shiftKey) {
 				e.preventDefault();
-				e.stopPropagation();
 				if (isFormValid) {
 					handleCreate();
 				}
-				return;
 			}
-		},
-		[handleSelectFolder, handleCreate, isFormValid, isSshEnabled]
-	);
+		};
+		window.addEventListener('keydown', handler, true);
+		return () => window.removeEventListener('keydown', handler, true);
+	}, [isOpen, handleSelectFolder, handleCreate, isFormValid, isSshEnabled]);
 
 	// Sort agents: supported first, then coming soon at the bottom
 	const sortedAgents = useMemo(() => {
@@ -585,259 +584,257 @@ export function NewInstanceModal({
 	if (!isOpen) return null;
 
 	return (
-		<div onKeyDown={handleKeyDown} role="group" aria-label="Create new agent dialog">
-			<Modal
-				theme={theme}
-				title="Create New Agent"
-				priority={MODAL_PRIORITIES.NEW_INSTANCE}
-				onClose={onClose}
-				width={600}
-				initialFocusRef={nameInputRef}
-				footer={
-					<ModalFooter
-						theme={theme}
-						onCancel={onClose}
-						onConfirm={handleCreate}
-						confirmLabel="Create Agent"
-						confirmDisabled={!isFormValid}
-					/>
-				}
-			>
-				<div className="space-y-5">
-					{/* Agent Name */}
-					<FormInput
-						ref={nameInputRef}
-						id="agent-name-input"
-						theme={theme}
-						label="Agent Name"
-						value={instanceName}
-						onChange={setInstanceName}
-						placeholder=""
-						error={validation.errorField === 'name' ? validation.error : undefined}
-						heightClass="p-2"
-					/>
+		<Modal
+			theme={theme}
+			title="Create New Agent"
+			priority={MODAL_PRIORITIES.NEW_INSTANCE}
+			onClose={onClose}
+			width={600}
+			initialFocusRef={nameInputRef}
+			footer={
+				<ModalFooter
+					theme={theme}
+					onCancel={onClose}
+					onConfirm={handleCreate}
+					confirmLabel="Create Agent"
+					confirmDisabled={!isFormValid}
+				/>
+			}
+		>
+			<div className="space-y-5">
+				{/* Agent Name */}
+				<FormInput
+					ref={nameInputRef}
+					id="agent-name-input"
+					theme={theme}
+					label="Agent Name"
+					value={instanceName}
+					onChange={setInstanceName}
+					placeholder=""
+					error={validation.errorField === 'name' ? validation.error : undefined}
+					heightClass="p-2"
+				/>
 
-					{/* Agent Selection */}
-					<AgentPickerGrid
-						theme={theme}
-						loading={loading}
-						sshConnectionError={sshConnectionError}
-						sortedAgents={sortedAgents}
-						selectedAgent={selectedAgent}
-						expandedAgent={expandedAgent}
-						refreshingAgent={refreshingAgent}
-						debugInfo={debugInfo}
-						customAgentPaths={customAgentPaths}
-						customAgentArgs={customAgentArgs}
-						customAgentEnvVars={customAgentEnvVars}
-						agentConfigs={agentConfigs}
-						availableModels={availableModels}
-						loadingModels={loadingModels}
-						onAgentSelect={(agentId) => setSelectedAgent(agentId)}
-						onAgentExpand={(agentId) => setExpandedAgent(agentId)}
-						onRefreshAgent={handleRefreshAgent}
-						onDismissDebug={() => setDebugInfo(null)}
-						onCustomPathChange={(agentId, value) => {
-							setCustomAgentPaths((prev) => ({ ...prev, [agentId]: value }));
-						}}
-						onCustomArgsChange={(agentId, value) => {
-							setCustomAgentArgs((prev) => ({ ...prev, [agentId]: value }));
-						}}
-						onEnvVarKeyChange={(agentId, oldKey, newKey, value) => {
-							const currentVars = { ...customAgentEnvVars[agentId] };
-							delete currentVars[oldKey];
-							currentVars[newKey] = value;
+				{/* Agent Selection */}
+				<AgentPickerGrid
+					theme={theme}
+					loading={loading}
+					sshConnectionError={sshConnectionError}
+					sortedAgents={sortedAgents}
+					selectedAgent={selectedAgent}
+					expandedAgent={expandedAgent}
+					refreshingAgent={refreshingAgent}
+					debugInfo={debugInfo}
+					customAgentPaths={customAgentPaths}
+					customAgentArgs={customAgentArgs}
+					customAgentEnvVars={customAgentEnvVars}
+					agentConfigs={agentConfigs}
+					availableModels={availableModels}
+					loadingModels={loadingModels}
+					onAgentSelect={(agentId) => setSelectedAgent(agentId)}
+					onAgentExpand={(agentId) => setExpandedAgent(agentId)}
+					onRefreshAgent={handleRefreshAgent}
+					onDismissDebug={() => setDebugInfo(null)}
+					onCustomPathChange={(agentId, value) => {
+						setCustomAgentPaths((prev) => ({ ...prev, [agentId]: value }));
+					}}
+					onCustomArgsChange={(agentId, value) => {
+						setCustomAgentArgs((prev) => ({ ...prev, [agentId]: value }));
+					}}
+					onEnvVarKeyChange={(agentId, oldKey, newKey, value) => {
+						const currentVars = { ...customAgentEnvVars[agentId] };
+						delete currentVars[oldKey];
+						currentVars[newKey] = value;
+						setCustomAgentEnvVars((prev) => ({
+							...prev,
+							[agentId]: currentVars,
+						}));
+					}}
+					onEnvVarValueChange={(agentId, key, value) => {
+						setCustomAgentEnvVars((prev) => ({
+							...prev,
+							[agentId]: {
+								...prev[agentId],
+								[key]: value,
+							},
+						}));
+					}}
+					onEnvVarRemove={(agentId, key) => {
+						const currentVars = { ...customAgentEnvVars[agentId] };
+						delete currentVars[key];
+						if (Object.keys(currentVars).length > 0) {
 							setCustomAgentEnvVars((prev) => ({
 								...prev,
 								[agentId]: currentVars,
 							}));
-						}}
-						onEnvVarValueChange={(agentId, key, value) => {
-							setCustomAgentEnvVars((prev) => ({
-								...prev,
-								[agentId]: {
-									...prev[agentId],
-									[key]: value,
-								},
-							}));
-						}}
-						onEnvVarRemove={(agentId, key) => {
-							const currentVars = { ...customAgentEnvVars[agentId] };
-							delete currentVars[key];
-							if (Object.keys(currentVars).length > 0) {
-								setCustomAgentEnvVars((prev) => ({
-									...prev,
-									[agentId]: currentVars,
-								}));
-							} else {
-								setCustomAgentEnvVars((prev) => {
-									const newVars = { ...prev };
-									delete newVars[agentId];
-									return newVars;
-								});
-							}
-						}}
-						onEnvVarAdd={(agentId) => {
-							const currentVars = customAgentEnvVars[agentId] || {};
-							let newKey = 'NEW_VAR';
-							let counter = 1;
-							while (currentVars[newKey]) {
-								newKey = `NEW_VAR_${counter}`;
-								counter++;
-							}
-							setCustomAgentEnvVars((prev) => ({
-								...prev,
-								[agentId]: {
-									...prev[agentId],
-									[newKey]: '',
-								},
-							}));
-						}}
-						onConfigChange={(agentId, key, value) => {
-							setAgentConfigs((prev) => ({
-								...prev,
-								[agentId]: {
-									...prev[agentId],
-									[key]: value,
-								},
-							}));
-						}}
-						onConfigBlur={(agentId, key, value) => {
-							const updatedConfig = {
-								...(agentConfigs[agentId] || {}),
+						} else {
+							setCustomAgentEnvVars((prev) => {
+								const newVars = { ...prev };
+								delete newVars[agentId];
+								return newVars;
+							});
+						}
+					}}
+					onEnvVarAdd={(agentId) => {
+						const currentVars = customAgentEnvVars[agentId] || {};
+						let newKey = 'NEW_VAR';
+						let counter = 1;
+						while (currentVars[newKey]) {
+							newKey = `NEW_VAR_${counter}`;
+							counter++;
+						}
+						setCustomAgentEnvVars((prev) => ({
+							...prev,
+							[agentId]: {
+								...prev[agentId],
+								[newKey]: '',
+							},
+						}));
+					}}
+					onConfigChange={(agentId, key, value) => {
+						setAgentConfigs((prev) => ({
+							...prev,
+							[agentId]: {
+								...prev[agentId],
 								[key]: value,
-							};
-							void window.maestro.agents.setConfig(agentId, updatedConfig).catch((error) => {
-								console.error(`Failed to persist config for ${agentId}:`, error);
-							});
-						}}
-						onRefreshModels={(agentId) => loadModelsForAgent(agentId, true)}
-						onTransferPendingSshConfig={(agentId) => {
-							setAgentSshRemoteConfigs((prev) => {
-								const pendingConfig = prev['_pending_'];
-								if (pendingConfig && !prev[agentId]) {
-									return {
-										...prev,
-										[agentId]: pendingConfig,
-									};
-								}
-								return prev;
-							});
-						}}
-						onLoadModelsForAgent={(agentId) => loadModelsForAgent(agentId)}
-						dynamicOptions={dynamicOptions}
-						loadingDynamicOptions={loadingDynamicOptions}
-						onLoadDynamicOptionsForAgent={loadDynamicOptionsForAgent}
-					/>
+							},
+						}));
+					}}
+					onConfigBlur={(agentId, key, value) => {
+						const updatedConfig = {
+							...(agentConfigs[agentId] || {}),
+							[key]: value,
+						};
+						void window.maestro.agents.setConfig(agentId, updatedConfig).catch((error) => {
+							console.error(`Failed to persist config for ${agentId}:`, error);
+						});
+					}}
+					onRefreshModels={(agentId) => loadModelsForAgent(agentId, true)}
+					onTransferPendingSshConfig={(agentId) => {
+						setAgentSshRemoteConfigs((prev) => {
+							const pendingConfig = prev['_pending_'];
+							if (pendingConfig && !prev[agentId]) {
+								return {
+									...prev,
+									[agentId]: pendingConfig,
+								};
+							}
+							return prev;
+						});
+					}}
+					onLoadModelsForAgent={(agentId) => loadModelsForAgent(agentId)}
+					dynamicOptions={dynamicOptions}
+					loadingDynamicOptions={loadingDynamicOptions}
+					onLoadDynamicOptionsForAgent={loadDynamicOptionsForAgent}
+				/>
 
-					{/* Working Directory */}
-					<FormInput
-						theme={theme}
-						label="Working Directory"
-						value={workingDir}
-						onChange={handleWorkingDirChange}
-						placeholder={
-							isSshEnabled
-								? `Enter remote path${sshRemoteHost ? ` on ${sshRemoteHost}` : ''} (e.g., /home/user/project)`
-								: 'Select directory...'
-						}
-						error={validation.errorField === 'directory' ? validation.error : undefined}
-						monospace
-						heightClass="p-2"
-						addon={
-							<button
-								onClick={isSshEnabled ? undefined : handleSelectFolder}
-								disabled={isSshEnabled}
-								className={`p-2 rounded border transition-colors ${isSshEnabled ? 'opacity-40 cursor-not-allowed' : 'hover:bg-opacity-10'}`}
-								style={{ borderColor: theme.colors.border, color: theme.colors.textMain }}
-								title={
-									isSshEnabled
-										? `Folder picker unavailable for SSH remote${sshRemoteHost ? ` (${sshRemoteHost})` : ''}. Enter the remote path manually.`
-										: `Browse folders (${formatShortcutKeys(['Meta', 'o'])})`
-								}
-							>
-								<Folder className="w-5 h-5" />
-							</button>
-						}
-					/>
-
-					{/* Remote path validation status (only shown when SSH is enabled) */}
-					{isSshEnabled && workingDir.trim() && (
-						<RemotePathStatus
-							theme={theme}
-							validation={remotePathValidation}
-							remoteHost={sshRemoteHost}
-						/>
-					)}
-
-					{/* Directory Warning with Acknowledgment */}
-					{validation.warning && validation.warningField === 'directory' && (
-						<div
-							className="p-3 rounded border"
-							style={{
-								backgroundColor: theme.colors.warning + '15',
-								borderColor: theme.colors.warning + '50',
-							}}
+				{/* Working Directory */}
+				<FormInput
+					theme={theme}
+					label="Working Directory"
+					value={workingDir}
+					onChange={handleWorkingDirChange}
+					placeholder={
+						isSshEnabled
+							? `Enter remote path${sshRemoteHost ? ` on ${sshRemoteHost}` : ''} (e.g., /home/user/project)`
+							: 'Select directory...'
+					}
+					error={validation.errorField === 'directory' ? validation.error : undefined}
+					monospace
+					heightClass="p-2"
+					addon={
+						<button
+							onClick={isSshEnabled ? undefined : handleSelectFolder}
+							disabled={isSshEnabled}
+							className={`p-2 rounded border transition-colors ${isSshEnabled ? 'opacity-40 cursor-not-allowed' : 'hover:bg-opacity-10'}`}
+							style={{ borderColor: theme.colors.border, color: theme.colors.textMain }}
+							title={
+								isSshEnabled
+									? `Folder picker unavailable for SSH remote${sshRemoteHost ? ` (${sshRemoteHost})` : ''}. Enter the remote path manually.`
+									: `Browse folders (${formatShortcutKeys(['Meta', 'o'])})`
+							}
 						>
-							<div className="flex items-start gap-2">
-								<AlertTriangle
-									className="w-4 h-4 flex-shrink-0 mt-0.5"
-									style={{ color: theme.colors.warning }}
-								/>
-								<div className="flex-1">
-									<p className="text-sm" style={{ color: theme.colors.textMain }}>
-										{validation.warning}
-									</p>
-									<p className="text-xs mt-2" style={{ color: theme.colors.textDim }}>
-										We recommend using a unique directory for each managed agent.
-									</p>
-									<label className="flex items-center gap-2 mt-3 cursor-pointer">
-										<input
-											type="checkbox"
-											checked={directoryWarningAcknowledged}
-											onChange={(e) => setDirectoryWarningAcknowledged(e.target.checked)}
-											className="w-4 h-4 rounded"
-											style={{ accentColor: theme.colors.warning }}
-										/>
-										<span className="text-sm" style={{ color: theme.colors.textMain }}>
-											I understand the risk and want to proceed
-										</span>
-									</label>
-								</div>
+							<Folder className="w-5 h-5" />
+						</button>
+					}
+				/>
+
+				{/* Remote path validation status (only shown when SSH is enabled) */}
+				{isSshEnabled && workingDir.trim() && (
+					<RemotePathStatus
+						theme={theme}
+						validation={remotePathValidation}
+						remoteHost={sshRemoteHost}
+					/>
+				)}
+
+				{/* Directory Warning with Acknowledgment */}
+				{validation.warning && validation.warningField === 'directory' && (
+					<div
+						className="p-3 rounded border"
+						style={{
+							backgroundColor: theme.colors.warning + '15',
+							borderColor: theme.colors.warning + '50',
+						}}
+					>
+						<div className="flex items-start gap-2">
+							<AlertTriangle
+								className="w-4 h-4 flex-shrink-0 mt-0.5"
+								style={{ color: theme.colors.warning }}
+							/>
+							<div className="flex-1">
+								<p className="text-sm" style={{ color: theme.colors.textMain }}>
+									{validation.warning}
+								</p>
+								<p className="text-xs mt-2" style={{ color: theme.colors.textDim }}>
+									We recommend using a unique directory for each managed agent.
+								</p>
+								<label className="flex items-center gap-2 mt-3 cursor-pointer">
+									<input
+										type="checkbox"
+										checked={directoryWarningAcknowledged}
+										onChange={(e) => setDirectoryWarningAcknowledged(e.target.checked)}
+										className="w-4 h-4 rounded"
+										style={{ accentColor: theme.colors.warning }}
+									/>
+									<span className="text-sm" style={{ color: theme.colors.textMain }}>
+										I understand the risk and want to proceed
+									</span>
+								</label>
 							</div>
 						</div>
-					)}
+					</div>
+				)}
 
-					{/* SSH Remote Execution - Top Level */}
-					{/* Show SSH selector when remotes are configured, regardless of agent selection */}
-					{/* This allows users to see and configure SSH settings even while troubleshooting agent detection */}
-					{/* Uses '_pending_' key when no agent selected, transfers to agent when selected */}
-					{sshRemotes.length > 0 && (
-						<SshRemoteSelector
-							theme={theme}
-							sshRemotes={sshRemotes}
-							sshRemoteConfig={
-								agentSshRemoteConfigs[selectedAgent] || agentSshRemoteConfigs['_pending_']
-							}
-							onSshRemoteConfigChange={(config) => {
-								setAgentSshRemoteConfigs((prev) => {
-									const newConfigs: Record<string, AgentSshRemoteConfig> = {
-										...prev,
-										_pending_: config,
-									};
-									if (selectedAgent) {
-										newConfigs[selectedAgent] = config;
-									}
-									return newConfigs;
-								});
-							}}
-						/>
-					)}
+				{/* SSH Remote Execution - Top Level */}
+				{/* Show SSH selector when remotes are configured, regardless of agent selection */}
+				{/* This allows users to see and configure SSH settings even while troubleshooting agent detection */}
+				{/* Uses '_pending_' key when no agent selected, transfers to agent when selected */}
+				{sshRemotes.length > 0 && (
+					<SshRemoteSelector
+						theme={theme}
+						sshRemotes={sshRemotes}
+						sshRemoteConfig={
+							agentSshRemoteConfigs[selectedAgent] || agentSshRemoteConfigs['_pending_']
+						}
+						onSshRemoteConfigChange={(config) => {
+							setAgentSshRemoteConfigs((prev) => {
+								const newConfigs: Record<string, AgentSshRemoteConfig> = {
+									...prev,
+									_pending_: config,
+								};
+								if (selectedAgent) {
+									newConfigs[selectedAgent] = config;
+								}
+								return newConfigs;
+							});
+						}}
+					/>
+				)}
 
-					{/* Nudge Message */}
-					<NudgeMessageField theme={theme} value={nudgeMessage} onChange={setNudgeMessage} />
-				</div>
-			</Modal>
-		</div>
+				{/* Nudge Message */}
+				<NudgeMessageField theme={theme} value={nudgeMessage} onChange={setNudgeMessage} />
+			</div>
+		</Modal>
 	);
 }

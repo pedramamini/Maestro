@@ -45,10 +45,12 @@ interface BrowserTabGuestContents {
 	setWindowOpenHandler: (
 		handler: ({ url }: { url: string }) => { action: 'deny' | 'allow' }
 	) => void;
-	on: (
-		event: string,
+	on(
+		event: 'will-navigate' | 'will-redirect',
 		handler: (event: { preventDefault: () => void }, url: string) => void
-	) => void;
+	): void;
+	on(event: string, handler: (...args: any[]) => void): void;
+	executeJavaScript(code: string): Promise<unknown>;
 }
 
 function isAllowedBrowserTabUrl(rawUrl: string): boolean {
@@ -283,6 +285,50 @@ export function createWindowManager(deps: WindowManagerDependencies): WindowMana
 
 			mainWindow.webContents.on('did-attach-webview', (_event, guestContents) => {
 				attachBrowserTabGuestSecurity(guestContents as BrowserTabGuestContents);
+
+				// Forward app shortcuts from the webview guest process to the renderer.
+				// When a <webview> has focus, keyboard events are trapped in its guest
+				// Chromium process and never reach the renderer's window keydown handler.
+				//
+				// Strategy: inject a bubble-phase keydown listener into the guest page.
+				// After all page handlers have run, if the page did NOT call preventDefault
+				// on a Meta/Ctrl keystroke, it means the page doesn't use that shortcut —
+				// so we forward it to the app. If the page DID preventDefault, the page's
+				// shortcut takes precedence and we leave it alone.
+				const guest = guestContents as BrowserTabGuestContents;
+				const shortcutInjection = `(function(){
+					if(window.__maestroShortcutListenerInstalled)return;
+					window.__maestroShortcutListenerInstalled=true;
+					document.addEventListener('keydown',function(e){
+						if(!(e.metaKey||e.ctrlKey))return;
+						if(e.defaultPrevented)return;
+						var k=e.key.toLowerCase();
+						var te=!e.altKey&&!e.shiftKey&&'acvxzf'.indexOf(k)!==-1;
+						var re=!e.altKey&&e.shiftKey&&k==='z';
+						if(te||re)return;
+						console.log('__MAESTRO_KEY__'+JSON.stringify({
+							key:e.key,code:e.code,
+							meta:e.metaKey,control:e.ctrlKey,
+							alt:e.altKey,shift:e.shiftKey
+						}));
+					},false);
+				})();`;
+				const injectShortcutListener = () => {
+					guest.executeJavaScript(shortcutInjection).catch(() => {});
+				};
+				guest.on('dom-ready', injectShortcutListener);
+				guest.on('did-navigate', injectShortcutListener);
+				guest.on('console-message', (...args: unknown[]) => {
+					const message = typeof args[1] === 'string' ? args[1] : String(args[1] ?? '');
+					const prefix = '__MAESTRO_KEY__';
+					if (!message.startsWith(prefix)) return;
+					try {
+						const input = JSON.parse(message.slice(prefix.length));
+						mainWindow.webContents.send('browser-tab:shortcutKey', input);
+					} catch {
+						// Malformed message, ignore
+					}
+				});
 			});
 
 			// Deny all popup/new-window requests — external links use IPC shell:openExternal

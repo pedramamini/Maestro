@@ -319,8 +319,7 @@ describe('EditAgentModal', () => {
 			expect(screen.getByDisplayValue('My Agent')).toBeInTheDocument();
 		});
 
-		const dialog = screen.getByRole('group');
-		fireEvent.keyDown(dialog, { key: 'Enter', metaKey: true });
+		fireEvent.keyDown(window, { key: 'Enter', metaKey: true });
 
 		expect(onSave).toHaveBeenCalled();
 	});
@@ -341,8 +340,7 @@ describe('EditAgentModal', () => {
 			expect(screen.getByDisplayValue('My Agent')).toBeInTheDocument();
 		});
 
-		const dialog = screen.getByRole('group');
-		fireEvent.keyDown(dialog, { key: 's', metaKey: true });
+		fireEvent.keyDown(window, { key: 's', metaKey: true });
 
 		expect(onSave).toHaveBeenCalled();
 	});
@@ -360,11 +358,10 @@ describe('EditAgentModal', () => {
 		);
 
 		await waitFor(() => {
-			expect(screen.getByRole('group')).toBeInTheDocument();
+			expect(screen.getByRole('dialog')).toBeInTheDocument();
 		});
 
-		const dialog = screen.getByRole('group');
-		fireEvent.keyDown(dialog, { key: 'Enter', metaKey: true });
+		fireEvent.keyDown(window, { key: 'Enter', metaKey: true });
 
 		expect(onSave).not.toHaveBeenCalled();
 	});

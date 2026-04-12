@@ -289,6 +289,7 @@ export interface AppModalsProps {
 	onTabSelect: (tabId: string) => void;
 	onFileTabSelect?: (tabId: string) => void;
 	onTerminalTabSelect?: (tabId: string) => void;
+	onBrowserTabSelect?: (tabId: string) => void;
 	onNamedSessionSelect: (
 		agentSessionId: string,
 		projectPath: string,
@@ -684,6 +685,7 @@ export const AppModals = memo(function AppModals(props: AppModalsProps) {
 		onTabSelect,
 		onFileTabSelect,
 		onTerminalTabSelect,
+		onBrowserTabSelect,
 		onNamedSessionSelect,
 		filteredFileTree,
 		fileExplorerExpanded,
@@ -1011,6 +1013,7 @@ export const AppModals = memo(function AppModals(props: AppModalsProps) {
 				onTabSelect={onTabSelect}
 				onFileTabSelect={onFileTabSelect}
 				onTerminalTabSelect={onTerminalTabSelect}
+				onBrowserTabSelect={onBrowserTabSelect}
 				onNamedSessionSelect={onNamedSessionSelect}
 				colorBlindMode={colorBlindMode}
 				fuzzyFileSearchOpen={fuzzyFileSearchOpen}
