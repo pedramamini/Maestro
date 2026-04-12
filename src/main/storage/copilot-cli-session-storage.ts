@@ -150,7 +150,13 @@ export class CopilotCliSessionStorage extends BaseSessionStorage {
 		const sessions: AgentSessionInfo[] = [];
 
 		// Normalize the project path for comparison
-		const normalizedProjectPath = path.resolve(projectPath).toLowerCase();
+		// Only case-fold on Windows where the filesystem is case-insensitive
+		const isWindows = process.platform === 'win32';
+		const normalizePath = (p: string) => {
+			const resolved = path.resolve(p);
+			return isWindows ? resolved.toLowerCase() : resolved;
+		};
+		const normalizedProjectPath = normalizePath(projectPath);
 
 		for (const entry of entries) {
 			if (!entry.isDirectory()) continue;
@@ -168,8 +174,7 @@ export class CopilotCliSessionStorage extends BaseSessionStorage {
 				if (!meta.cwd) {
 					continue;
 				}
-				const normalizedCwd = path.resolve(meta.cwd).toLowerCase();
-				if (normalizedCwd !== normalizedProjectPath) {
+				if (normalizePath(meta.cwd) !== normalizedProjectPath) {
 					continue;
 				}
 
@@ -265,18 +270,21 @@ export class CopilotCliSessionStorage extends BaseSessionStorage {
 
 		// Verify session belongs to the requested project
 		if (projectPath) {
+			const isWindows = process.platform === 'win32';
+			const normalizePath = (p: string) => {
+				const resolved = path.resolve(p);
+				return isWindows ? resolved.toLowerCase() : resolved;
+			};
 			const workspacePath = path.join(sessionDir, 'workspace.yaml');
 			try {
 				const yamlContent = await fs.readFile(workspacePath, 'utf-8');
 				const meta = parseWorkspaceYaml(yamlContent);
-				if (
-					meta.cwd &&
-					path.resolve(meta.cwd).toLowerCase() !== path.resolve(projectPath).toLowerCase()
-				) {
+				if (meta.cwd && normalizePath(meta.cwd) !== normalizePath(projectPath)) {
 					return { messages: [], total: 0, hasMore: false };
 				}
 			} catch {
-				// If workspace.yaml can't be read, allow access (session may be incomplete)
+				// Fail closed — if workspace.yaml can't be read, deny access
+				return { messages: [], total: 0, hasMore: false };
 			}
 		}
 
@@ -346,19 +354,22 @@ export class CopilotCliSessionStorage extends BaseSessionStorage {
 
 		// Verify session belongs to the requested project
 		if (projectPath) {
+			const isWindows = process.platform === 'win32';
+			const normalizePath = (p: string) => {
+				const resolved = path.resolve(p);
+				return isWindows ? resolved.toLowerCase() : resolved;
+			};
 			const sessionDir = path.join(getCopilotSessionDir(), sessionId);
 			const workspacePath = path.join(sessionDir, 'workspace.yaml');
 			try {
 				const yamlContent = readFileSync(workspacePath, 'utf-8');
 				const meta = parseWorkspaceYaml(yamlContent);
-				if (
-					meta.cwd &&
-					path.resolve(meta.cwd).toLowerCase() !== path.resolve(projectPath).toLowerCase()
-				) {
+				if (meta.cwd && normalizePath(meta.cwd) !== normalizePath(projectPath)) {
 					return null;
 				}
 			} catch {
-				// If workspace.yaml can't be read, allow access
+				// Fail closed — if workspace.yaml can't be read, deny access
+				return null;
 			}
 		}
 

@@ -47,11 +47,12 @@ Update `CopilotCliRawMessage` interface and `transformMessage()` method to match
 
 1. Investigate session file format at `~/.copilot/session-state/` (may also be `~/.copilot/sessions/`)
 2. Extend `BaseSessionStorage` from `src/main/storage/base-session-storage.ts`
-3. Implement required methods:
-   - `listSessions(projectPath, options)` — list session files, extract metadata (title, date, agent)
-   - `readSessionMessages(projectPath, sessionId, options)` — parse session file into `SessionMessage[]`
-   - `searchSessions(projectPath, query)` — search session content
-   - `getGlobalStats()` — aggregate usage statistics (optional)
+3. Implement required abstract methods:
+   - `listSessions(projectPath, sshConfig?)` — list session directories, extract metadata from workspace.yaml
+   - `readSessionMessages(projectPath, sessionId, options?, sshConfig?)` — parse events.jsonl into `SessionMessage[]`
+   - `getSessionPath(projectPath, sessionId, sshConfig?)` — resolve the file path for a session
+   - `deleteMessagePair(projectPath, sessionId, messageId, fallbackContent?, sshConfig?)` — remove a message pair
+   - `getSearchableMessages(sessionId, projectPath, sshConfig?)` — load messages in simplified format for search
 4. Register in `initializeSessionStorages()` in `src/main/storage/index.ts`
 
 **Reference**: Follow `codex-session-storage.ts` or `factory-droid-session-storage.ts` patterns.

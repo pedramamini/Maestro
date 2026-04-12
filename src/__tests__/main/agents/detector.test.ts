@@ -970,8 +970,8 @@ describe('agent-detector', () => {
 
 			const result = await detectPromise;
 			expect(result).toBeDefined();
-			// Should have all 9 agents (terminal, claude-code, codex, gemini-cli, qwen3-coder, opencode, factory-droid, aider, copilot-cli)
-			expect(result.length).toBe(9);
+			// Should have all agents defined in AGENT_IDS
+			expect(result.length).toBe(AGENT_IDS.length);
 		});
 
 		it('should handle very long PATH', async () => {
