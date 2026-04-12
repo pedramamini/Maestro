@@ -283,7 +283,8 @@ describe('CopilotCliOutputParser', () => {
 					})
 				);
 
-				// The result event should have accumulated tokens
+				// Per-event tokens are reported on each assistant.message (not accumulated on parser)
+				// Token accumulation is handled per-session by StdoutHandler on ManagedProcess
 				const resultEvent = parser.parseJsonLine(
 					JSON.stringify({
 						type: 'result',
@@ -294,17 +295,8 @@ describe('CopilotCliOutputParser', () => {
 				);
 
 				expect(resultEvent?.type).toBe('usage');
-				expect(resultEvent?.usage?.outputTokens).toBe(150); // 100 + 50
-
-				// After result, tokens should be reset for next session
-				const nextResult = parser.parseJsonLine(
-					JSON.stringify({
-						type: 'result',
-						sessionId: 'test-session-2',
-						exitCode: 0,
-					})
-				);
-				expect(nextResult?.usage?.outputTokens).toBe(0); // reset
+				// Result event no longer carries accumulated tokens — that's per-session
+				expect(resultEvent?.usage).toBeUndefined();
 			});
 		});
 
@@ -390,28 +382,29 @@ describe('CopilotCliOutputParser', () => {
 
 		describe('result', () => {
 			it('should parse as usage event with sessionId and report tokens even without usage field', () => {
-				// First accumulate some tokens
-				parser.parseJsonLine(
+				// Per-event tokens are reported on assistant.message, not accumulated on parser
+				const msgEvent = parser.parseJsonLine(
 					JSON.stringify({
 						type: 'assistant.message',
 						data: { content: 'Hello', toolRequests: [], outputTokens: 10 },
 					})
 				);
+				expect(msgEvent?.usage?.outputTokens).toBe(10);
 
 				const line = JSON.stringify({
 					type: 'result',
 					timestamp: '2026-04-01T03:03:56.134Z',
 					sessionId: '18353c52-1a96-4ce6-ab90-1b99310f746f',
 					exitCode: 0,
-					// No usage field — tokens should still be reported
+					// No usage field — accumulation is per-session on ManagedProcess
 				});
 
 				const event = parser.parseJsonLine(line);
 				expect(event).not.toBeNull();
 				expect(event?.type).toBe('usage');
 				expect(event?.sessionId).toBe('18353c52-1a96-4ce6-ab90-1b99310f746f');
-				expect(event?.usage).not.toBeNull();
-				expect(event?.usage?.outputTokens).toBe(10);
+				// Result event no longer carries accumulated tokens
+				expect(event?.usage).toBeUndefined();
 			});
 		});
 
@@ -726,9 +719,10 @@ describe('CopilotCliOutputParser', () => {
 			expect(resultEvents).toHaveLength(1);
 			expect(resultEvents[0].text).toBe('The package is named maestro.');
 
-			// Verify accumulated tokens
-			const usageEvent = events.find((e) => e.type === 'usage');
-			expect(usageEvent?.usage?.outputTokens).toBe(120); // 100 + 20
+			// Verify per-event tokens are reported on assistant.message events
+			// (accumulation is handled per-session by StdoutHandler, not the parser)
+			const textResults = events.filter((e) => e.type === 'result');
+			expect(textResults[0].usage?.outputTokens).toBe(20); // per-event, not accumulated
 		});
 	});
 });

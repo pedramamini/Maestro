@@ -225,13 +225,6 @@ export interface AgentOutputParser {
 	 * @returns AgentError if an error was detected, null otherwise
 	 */
 	detectErrorFromExit(exitCode: number, stderr: string, stdout: string): AgentError | null;
-
-	/**
-	 * Reset internal parser state. Called on process exit to prevent stale
-	 * state (e.g., accumulated token counts) from leaking into the next session.
-	 * Optional — only needed for parsers that accumulate state across events.
-	 */
-	resetState?(): void;
 }
 
 /**

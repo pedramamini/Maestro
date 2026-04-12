@@ -273,6 +273,25 @@ export class StdoutHandler {
 			managedProcess.streamedText = '';
 		}
 
+		// Accumulate per-event output tokens for copilot-cli on ManagedProcess
+		// (avoids singleton parser state that leaks across concurrent sessions)
+		if (managedProcess.toolType === 'copilot-cli' && event.usage?.outputTokens) {
+			managedProcess.copilotAccumulatedTokens =
+				(managedProcess.copilotAccumulatedTokens || 0) + event.usage.outputTokens;
+		}
+
+		// For copilot-cli result events, inject the per-session accumulated tokens
+		if (
+			managedProcess.toolType === 'copilot-cli' &&
+			event.type === 'usage' &&
+			managedProcess.copilotAccumulatedTokens
+		) {
+			event.usage = {
+				inputTokens: 0,
+				outputTokens: managedProcess.copilotAccumulatedTokens,
+			};
+		}
+
 		// Extract usage
 		const usage = outputParser.extractUsage(event);
 		if (usage) {

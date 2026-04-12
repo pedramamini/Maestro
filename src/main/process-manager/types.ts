@@ -78,6 +78,8 @@ export interface ManagedProcess {
 	sshRemoteHost?: string;
 	dataBuffer?: string;
 	dataBufferTimeout?: NodeJS.Timeout;
+	/** Per-session accumulated output tokens for copilot-cli (avoids singleton parser state) */
+	copilotAccumulatedTokens?: number;
 }
 
 export interface UsageTotals {

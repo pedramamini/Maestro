@@ -100,17 +100,6 @@ const MAX_TOOL_OUTPUT_LENGTH = 10000;
 export class CopilotCliOutputParser implements AgentOutputParser {
 	readonly agentId: ToolType = 'copilot-cli';
 
-	// Accumulate output tokens from assistant.message events for usage reporting
-	private accumulatedOutputTokens = 0;
-
-	/**
-	 * Reset internal state. Called on process exit to prevent stale token
-	 * counts from leaking into the next session (parser is a singleton).
-	 */
-	resetState(): void {
-		this.accumulatedOutputTokens = 0;
-	}
-
 	/**
 	 * Parse a single JSON line from Copilot CLI output.
 	 */
@@ -184,8 +173,8 @@ export class CopilotCliOutputParser implements AgentOutputParser {
 				const toolRequests = (msg.data?.toolRequests as CopilotCliToolRequest[]) || [];
 				const outputTokens = (msg.data?.outputTokens as number) || 0;
 
-				// Track output tokens for usage reporting
-				this.accumulatedOutputTokens += outputTokens;
+				// Per-event usage (accumulated per-session by StdoutHandler on ManagedProcess)
+				const perEventUsage = outputTokens ? { inputTokens: 0, outputTokens } : undefined;
 
 				// If the message has tool requests but no text, emit tool_use blocks
 				if (toolRequests.length > 0 && !content) {
@@ -196,6 +185,7 @@ export class CopilotCliOutputParser implements AgentOutputParser {
 							id: tr.toolCallId,
 							input: tr.arguments,
 						})),
+						usage: perEventUsage,
 						raw: msg,
 					};
 				}
@@ -210,6 +200,7 @@ export class CopilotCliOutputParser implements AgentOutputParser {
 							id: tr.toolCallId,
 							input: tr.arguments,
 						})),
+						usage: perEventUsage,
 						raw: msg,
 					};
 				}
@@ -219,6 +210,7 @@ export class CopilotCliOutputParser implements AgentOutputParser {
 					type: 'result',
 					text: content,
 					isPartial: false,
+					usage: perEventUsage,
 					raw: msg,
 				};
 			}
@@ -268,22 +260,14 @@ export class CopilotCliOutputParser implements AgentOutputParser {
 			// ---- Result (session complete) ----
 
 			case 'result': {
-				const event: ParsedEvent = {
+				// Result event signals session completion.
+				// Token accumulation is handled per-session by StdoutHandler on
+				// ManagedProcess.copilotAccumulatedTokens (not on the singleton parser).
+				return {
 					type: 'usage',
 					sessionId: msg.sessionId,
 					raw: msg,
 				};
-
-				// Always report accumulated output tokens, regardless of msg.usage
-				event.usage = {
-					inputTokens: 0,
-					outputTokens: this.accumulatedOutputTokens,
-				};
-
-				// Reset for next session (parser is a singleton)
-				this.accumulatedOutputTokens = 0;
-
-				return event;
 			}
 
 			// ---- Error events ----

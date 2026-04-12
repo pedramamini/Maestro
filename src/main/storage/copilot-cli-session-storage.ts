@@ -178,7 +178,13 @@ export class CopilotCliSessionStorage extends BaseSessionStorage {
 					continue;
 				}
 
-				const sessionId = meta.id || entry.name;
+				// Validate session ID — prefer meta.id, fall back to directory name
+				const candidateId = meta.id || entry.name;
+				if (!isValidSessionId(candidateId)) {
+					logger.debug(`Skipping session with invalid ID: ${candidateId}`, LOG_CONTEXT);
+					continue;
+				}
+				const sessionId = candidateId;
 				const summary = meta.summary || '';
 				const createdAt = meta.created_at || '';
 				const updatedAt = meta.updated_at || createdAt;
