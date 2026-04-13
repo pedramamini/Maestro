@@ -303,7 +303,9 @@ export function NodeConfigPanel({
 						nodeId={selectedNode.id}
 						data={selectedNode.data as CliOutputNodeData}
 						theme={theme}
-						onUpdateNode={onUpdateNode as unknown as (nodeId: string, data: Partial<CliOutputNodeData>) => void}
+						onUpdateNode={
+							onUpdateNode as unknown as (nodeId: string, data: Partial<CliOutputNodeData>) => void
+						}
 						expanded={expanded}
 					/>
 				)}

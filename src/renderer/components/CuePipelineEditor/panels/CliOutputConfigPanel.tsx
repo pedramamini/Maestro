@@ -31,12 +31,9 @@ export function CliOutputConfigPanel({
 		setTarget(data.target || '');
 	}, [data.target]);
 
-	const { debouncedCallback: debouncedSave } = useDebouncedCallback(
-		(value: unknown) => {
-			onUpdateNode(nodeId, { target: value as string });
-		},
-		300
-	);
+	const { debouncedCallback: debouncedSave } = useDebouncedCallback((value: unknown) => {
+		onUpdateNode(nodeId, { target: value as string });
+	}, 300);
 
 	const handleTargetChange = useCallback(
 		(e: React.ChangeEvent<HTMLInputElement>) => {
