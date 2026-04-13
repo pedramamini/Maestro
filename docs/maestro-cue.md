@@ -20,6 +20,7 @@ A few examples of what you can automate with Cue:
 - **Triage new GitHub PRs** — poll for new pull requests and prompt an agent to review the diff
 - **Track TODO progress** — scan markdown files for unchecked tasks and prompt an agent to work on the next one
 - **Fan out deployments** — when a build completes, trigger multiple deploy agents simultaneously
+- **Trigger from the CLI** — run `maestro-cli cue trigger` to fire a subscription on demand from scripts, CI/CD, or other agents
 
 ## Enabling Cue
 
@@ -139,7 +140,7 @@ Cue is configured via a `.maestro/cue.yaml` file placed inside the `.maestro/` d
 
 ## Event Types
 
-Cue supports eight event types that trigger subscriptions:
+Cue supports nine event types that trigger subscriptions:
 
 | Event Type            | Trigger                             | Key Fields                        |
 | --------------------- | ----------------------------------- | --------------------------------- |
@@ -151,6 +152,7 @@ Cue supports eight event types that trigger subscriptions:
 | `task.pending`        | Unchecked markdown tasks found      | `watch` (glob pattern)            |
 | `github.pull_request` | New PR opened on GitHub             | `repo` (optional)                 |
 | `github.issue`        | New issue opened on GitHub          | `repo` (optional)                 |
+| `cli.trigger`         | Manual trigger via `maestro-cli`    | —                                 |
 
 See [Event Types](./maestro-cue-events) for detailed documentation and examples for each type.
 
@@ -203,6 +205,7 @@ Filter by CUE entries in the History panel or in Director's Notes (when both Enc
 
 - **GitHub CLI (`gh`)** — Required only for `github.pull_request` and `github.issue` events. Must be installed and authenticated (`gh auth login`).
 - **File watching** — `file.changed` and `task.pending` events use filesystem watchers. No additional dependencies required.
+- **CLI triggers** — `cli.trigger` events require `maestro-cli` to be installed. See the [CLI documentation](./cli#cue-automation) for setup.
 
 ## Tips
 

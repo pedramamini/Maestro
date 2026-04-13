@@ -65,7 +65,7 @@ Each subscription is a trigger-prompt pairing. When the trigger fires, Cue sends
 | Field    | Type   | Description                                                                   |
 | -------- | ------ | ----------------------------------------------------------------------------- |
 | `name`   | string | Unique identifier. Used in logs, history, and as a reference in chains        |
-| `event`  | string | One of the eight [event types](./maestro-cue-events)                          |
+| `event`  | string | One of the nine [event types](./maestro-cue-events)                           |
 | `prompt` | string | The prompt to send as inline text. Required unless `prompt_file` is specified |
 
 <Note>

@@ -19,6 +19,7 @@ import { refreshAutoRun } from './commands/refresh-auto-run';
 import { status } from './commands/status';
 import { autoRun } from './commands/auto-run';
 import { cueTrigger } from './commands/cue-trigger';
+import { cueList } from './commands/cue-list';
 import { createAgent } from './commands/create-agent';
 import { removeAgent } from './commands/remove-agent';
 import { listSshRemotes } from './commands/list-ssh-remotes';
@@ -185,6 +186,7 @@ cue
 	.option('--json', 'Output as JSON (for scripting)')
 	.action(cueTrigger);
 
+<<<<<<< HEAD
 // Director's Notes commands
 const directorNotes = program
 	.command('director-notes')
@@ -207,6 +209,13 @@ directorNotes
 	.option('-f, --format <type>', 'Output format: json, markdown, text (default: text)')
 	.option('--json', 'Output as JSON (shorthand for --format json)')
 	.action(directorNotesSynopsis);
+=======
+cue
+	.command('list')
+	.description('List all Cue subscriptions across agents')
+	.option('--json', 'Output as JSON (for scripting)')
+	.action(cueList);
+>>>>>>> dc6377aa9 (feat: add cue list command, wire triggerSubscription callback, and document cli.trigger)
 
 // Status command - check if Maestro desktop app is running and reachable
 program

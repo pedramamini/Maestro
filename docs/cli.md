@@ -555,6 +555,58 @@ maestro-cli status
 
 Returns the app version, uptime, and connection status.
 
+## Cue Automation
+
+Interact with Maestro Cue subscriptions directly from the command line.
+
+### Listing Subscriptions
+
+List all Cue subscriptions across all agents:
+
+```bash
+maestro-cli cue list
+
+# JSON output (for scripting)
+maestro-cli cue list --json
+```
+
+Shows each subscription's name, event type, agent, enabled status, and last trigger time.
+
+### Triggering a Subscription
+
+Manually trigger a Cue subscription by name, bypassing its normal event conditions:
+
+```bash
+# Trigger a subscription
+maestro-cli cue trigger <subscription-name>
+
+# Trigger with a custom prompt (overrides the configured prompt)
+maestro-cli cue trigger <subscription-name> --prompt "Deploy to staging only"
+
+# JSON output (for scripting)
+maestro-cli cue trigger <subscription-name> --json
+```
+
+| Flag                  | Description                                          |
+| --------------------- | ---------------------------------------------------- |
+| `-p, --prompt <text>` | Override the subscription's configured prompt        |
+| `--json`              | Output as JSON (for scripting and CI/CD integration) |
+
+The `--prompt` flag is especially useful for `cli.trigger` subscriptions, where the prompt text is available in the subscription's template as `{{CUE_CLI_PROMPT}}`.
+
+**Examples:**
+
+```bash
+# Trigger a review pipeline after finishing work
+maestro-cli cue trigger "code-review" --prompt "Review the changes in the auth module"
+
+# Trigger a deploy from CI
+maestro-cli cue trigger "deploy" --prompt "Deploy commit abc123 to production" --json
+
+# Re-run a failed automation
+maestro-cli cue trigger "lint-on-save"
+```
+
 ## Scheduling with Cron
 
 ```bash
@@ -576,6 +628,7 @@ This means agents can:
 - **Refresh the file tree** after creating or modifying files
 - **Configure and launch auto-runs** with documents they create
 - **Send messages** to other agents for inter-agent coordination
+- **Discover Cue subscriptions** with `cue list` and **trigger automation pipelines** with `cue trigger`
 
 When a user asks an agent to change a Maestro setting, the agent can use the CLI directly rather than instructing the user to navigate the settings modal. Changes take effect instantly.
 

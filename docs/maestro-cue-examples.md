@@ -538,3 +538,86 @@ subscriptions:
       If the output says "NO_ACTIVITY", respond with "Nothing to summarize."
       Otherwise, create a concise executive summary of the development activity.
 ```
+
+---
+
+## CLI-Triggered Code Review
+
+Set up an on-demand code review that agents or CI can trigger from the command line.
+
+**Agents needed:** `reviewer`
+
+The `reviewer` agent's `.maestro/cue.yaml`:
+
+```yaml
+subscriptions:
+  - name: code-review
+    event: cli.trigger
+    label: Code Review
+    prompt: |
+      Review the current git diff and provide feedback.
+
+      {{CUE_CLI_PROMPT}}
+
+      Steps:
+      1. Run `git diff` to see the changes
+      2. Check for correctness, security issues, and style
+      3. Summarize what changed and flag any concerns
+    enabled: true
+```
+
+**Triggering:**
+
+```bash
+# Basic review using the configured prompt
+maestro-cli cue trigger code-review
+
+# Review with specific focus
+maestro-cli cue trigger code-review --prompt "Focus on the auth module changes"
+```
+
+---
+
+## CI/CD Deploy Pipeline
+
+Trigger a deploy from CI or scripts, passing the environment as the prompt.
+
+**Agents needed:** `deployer`
+
+The `deployer` agent's `.maestro/cue.yaml`:
+
+```yaml
+subscriptions:
+  - name: deploy
+    event: cli.trigger
+    label: Deploy
+    prompt: |
+      Deploy the current branch.
+      Target: {{CUE_CLI_PROMPT}}
+
+      1. Run the test suite
+      2. Build the project
+      3. Deploy to the specified environment
+      4. Verify the deployment is healthy
+    enabled: true
+
+  - name: post-deploy-verify
+    event: agent.completed
+    source_session: 'deployer'
+    filter:
+      triggeredBy: 'deploy'
+      status: completed
+    prompt: |
+      The deploy just finished. Run smoke tests and verify the deployment is healthy.
+      Report any issues immediately.
+```
+
+**Triggering from CI:**
+
+```bash
+# From a CI pipeline
+maestro-cli cue trigger deploy --prompt "staging" --json
+
+# From a release script
+maestro-cli cue trigger deploy --prompt "production"
+```
