@@ -14,7 +14,6 @@ import {
 import type { Theme, AutoRunStats, MaestroUsageStats, LeaderboardRegistration } from '../types';
 import type { GlobalAgentStats } from '../../shared/types';
 import { MODAL_PRIORITIES } from '../constants/modalPriorities';
-import pedramAvatar from '../assets/pedram-avatar.png';
 import { AchievementCard } from './AchievementCard';
 import { formatTokensCompact } from '../utils/formatters';
 import { Modal } from './ui/Modal';
@@ -381,64 +380,12 @@ export function AboutModal({
 				{/* Divider */}
 				<div className="border-t" style={{ borderColor: theme.colors.border }} />
 
-				{/* Creator Section - side by side layout */}
-				<div
-					className="flex items-center gap-4 p-3 rounded border"
-					style={{ borderColor: theme.colors.border, backgroundColor: theme.colors.bgActivity }}
-				>
-					{/* Left side - Creator info */}
-					<div className="flex items-center gap-3 flex-1">
-						<img
-							src={pedramAvatar}
-							alt="Pedram Amini"
-							className="w-12 h-12 rounded-full border-2"
-							style={{ borderColor: theme.colors.accent }}
-						/>
-						<div>
-							<div className="text-sm font-bold" style={{ color: theme.colors.textMain }}>
-								Pedram Amini
-							</div>
-							<div className="text-xs opacity-70 mb-1" style={{ color: theme.colors.textDim }}>
-								Founder, Hacker, Investor, Advisor
-							</div>
-							<div className="flex items-center gap-2 text-xs">
-								<button
-									onClick={() => openUrl('https://github.com/pedramamini')}
-									className="inline-flex items-center gap-1 hover:underline cursor-pointer"
-									style={{
-										color: theme.colors.accent,
-										background: 'none',
-										border: 'none',
-										padding: 0,
-									}}
-								>
-									GitHub
-								</button>
-								<span style={{ color: theme.colors.textDim }}>·</span>
-								<button
-									onClick={() => openUrl('https://www.linkedin.com/in/pedramamini/')}
-									className="inline-flex items-center gap-1 hover:underline cursor-pointer"
-									style={{
-										color: theme.colors.accent,
-										background: 'none',
-										border: 'none',
-										padding: 0,
-									}}
-								>
-									LinkedIn
-								</button>
-							</div>
-						</div>
-					</div>
-
-					{/* Vertical divider */}
-					<div className="h-14 w-px" style={{ backgroundColor: theme.colors.border }} />
-
-					{/* Right side - Made in Austin */}
-					<div className="flex flex-col items-center justify-center px-2">
-						<span className="text-xs mb-2" style={{ color: theme.colors.textDim }}>
-							Made in Austin, TX
-						</span>
+				{/* Origin Section - centered */}
+				<div className="flex flex-col items-center gap-2 py-1">
+					<span className="text-xs" style={{ color: theme.colors.textMain }}>
+						Born in Austin, TX
+					</span>
+					<div className="flex items-center gap-4">
 						{/* Texas Flag - Lone Star Flag */}
 						<button
 							onClick={() => openUrl('https://www.sanjacsaloon.com')}
@@ -446,19 +393,56 @@ export function AboutModal({
 							style={{ background: 'none', border: 'none', padding: 0 }}
 						>
 							<svg viewBox="0 0 150 100" className="w-10 h-7" style={{ opacity: 0.7 }}>
-								{/* Blue vertical stripe */}
 								<rect x="0" y="0" width="50" height="100" fill="#002868" />
-								{/* White horizontal stripe */}
 								<rect x="50" y="0" width="100" height="50" fill="#FFFFFF" />
-								{/* Red horizontal stripe */}
 								<rect x="50" y="50" width="100" height="50" fill="#BF0A30" />
-								{/* White five-pointed star */}
 								<polygon
 									points="25,15 29.5,30 45,30 32.5,40 37,55 25,45 13,55 17.5,40 5,30 20.5,30"
 									fill="#FFFFFF"
 								/>
 							</svg>
 						</button>
+						{/* American Flag */}
+						<svg viewBox="0 0 150 100" className="w-10 h-7" style={{ opacity: 0.7 }}>
+							{/* Red and white stripes */}
+							<rect x="0" y="0" width="150" height="100" fill="#BF0A30" />
+							<rect x="0" y="7.69" width="150" height="7.69" fill="#FFFFFF" />
+							<rect x="0" y="23.08" width="150" height="7.69" fill="#FFFFFF" />
+							<rect x="0" y="38.46" width="150" height="7.69" fill="#FFFFFF" />
+							<rect x="0" y="53.85" width="150" height="7.69" fill="#FFFFFF" />
+							<rect x="0" y="69.23" width="150" height="7.69" fill="#FFFFFF" />
+							<rect x="0" y="84.62" width="150" height="7.69" fill="#FFFFFF" />
+							{/* Blue canton */}
+							<rect x="0" y="0" width="60" height="53.85" fill="#002868" />
+							{/* Stars - simplified 5 rows */}
+							<circle cx="6" cy="5" r="2" fill="#FFFFFF" />
+							<circle cx="18" cy="5" r="2" fill="#FFFFFF" />
+							<circle cx="30" cy="5" r="2" fill="#FFFFFF" />
+							<circle cx="42" cy="5" r="2" fill="#FFFFFF" />
+							<circle cx="54" cy="5" r="2" fill="#FFFFFF" />
+							<circle cx="12" cy="13" r="2" fill="#FFFFFF" />
+							<circle cx="24" cy="13" r="2" fill="#FFFFFF" />
+							<circle cx="36" cy="13" r="2" fill="#FFFFFF" />
+							<circle cx="48" cy="13" r="2" fill="#FFFFFF" />
+							<circle cx="6" cy="21" r="2" fill="#FFFFFF" />
+							<circle cx="18" cy="21" r="2" fill="#FFFFFF" />
+							<circle cx="30" cy="21" r="2" fill="#FFFFFF" />
+							<circle cx="42" cy="21" r="2" fill="#FFFFFF" />
+							<circle cx="54" cy="21" r="2" fill="#FFFFFF" />
+							<circle cx="12" cy="29" r="2" fill="#FFFFFF" />
+							<circle cx="24" cy="29" r="2" fill="#FFFFFF" />
+							<circle cx="36" cy="29" r="2" fill="#FFFFFF" />
+							<circle cx="48" cy="29" r="2" fill="#FFFFFF" />
+							<circle cx="6" cy="37" r="2" fill="#FFFFFF" />
+							<circle cx="18" cy="37" r="2" fill="#FFFFFF" />
+							<circle cx="30" cy="37" r="2" fill="#FFFFFF" />
+							<circle cx="42" cy="37" r="2" fill="#FFFFFF" />
+							<circle cx="54" cy="37" r="2" fill="#FFFFFF" />
+							<circle cx="12" cy="45" r="2" fill="#FFFFFF" />
+							<circle cx="24" cy="45" r="2" fill="#FFFFFF" />
+							<circle cx="36" cy="45" r="2" fill="#FFFFFF" />
+							<circle cx="48" cy="45" r="2" fill="#FFFFFF" />
+						</svg>
 					</div>
 				</div>
 			</div>
