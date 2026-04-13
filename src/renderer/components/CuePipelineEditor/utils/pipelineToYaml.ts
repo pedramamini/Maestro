@@ -14,6 +14,7 @@ import type {
 	PipelineEdge,
 	TriggerNodeData,
 	AgentNodeData,
+	CliOutputNodeData,
 } from '../../../../shared/cue-pipeline-types';
 import type { CueSubscription, CueSettings } from '../../../../shared/cue';
 import { cuePromptFilePath } from '../../../../shared/maestro-paths';
@@ -62,6 +63,25 @@ function buildAdjacency(pipeline: CuePipeline): {
 
 function findTriggerNodes(pipeline: CuePipeline): PipelineNode[] {
 	return pipeline.nodes.filter((n) => n.type === 'trigger');
+}
+
+/**
+ * Finds a cli_output node connected to the given agent node via an outgoing edge.
+ * Returns the CliOutputNodeData if found, otherwise undefined.
+ */
+function findCliOutputForAgent(
+	agentId: string,
+	outgoing: Map<string, PipelineEdge[]>,
+	nodeMap: Map<string, PipelineNode>
+): CliOutputNodeData | undefined {
+	const edges = outgoing.get(agentId) ?? [];
+	for (const edge of edges) {
+		const target = nodeMap.get(edge.target);
+		if (target?.type === 'cli_output') {
+			return target.data as CliOutputNodeData;
+		}
+	}
+	return undefined;
 }
 
 function getEdgeModeComment(edge: PipelineEdge): string | null {
@@ -160,6 +180,13 @@ export function pipelineToYamlSubscriptions(pipeline: CuePipeline): CueSubscript
 			const triggerEdge = triggerOutgoing.find((e) => e.target === agent.id);
 			sub.prompt = triggerEdge?.prompt ?? agentData.inputPrompt ?? '';
 			if (agentData.outputPrompt) sub.output_prompt = agentData.outputPrompt;
+
+			// Check for cli_output node connected to this agent
+			const cliOutput = findCliOutputForAgent(agent.id, outgoing, nodeMap);
+			if (cliOutput) {
+				sub.cli_output = { target: cliOutput.target };
+			}
+
 			subscriptions.push(sub);
 			visited.add(agent.id);
 
@@ -258,6 +285,12 @@ function buildChain(
 				: (targetData.inputPrompt ?? ''),
 			output_prompt: targetData.outputPrompt || undefined,
 		};
+
+		// Check for cli_output node connected to this agent
+		const cliOutput = findCliOutputForAgent(target.id, outgoing, nodeMap);
+		if (cliOutput) {
+			sub.cli_output = { target: cliOutput.target };
+		}
 
 		if (incomingAgentEdges.length > 1) {
 			// Fan-in: multiple source sessions
@@ -361,6 +394,7 @@ export function pipelinesToYaml(
 				record.fan_in_timeout_on_fail = sub.fan_in_timeout_on_fail;
 			if (sub.include_output_from != null) record.include_output_from = sub.include_output_from;
 			if (sub.forward_output_from != null) record.forward_output_from = sub.forward_output_from;
+			if (sub.cli_output != null) record.cli_output = sub.cli_output;
 
 			// Save prompts as external files.
 			// Use sub.name as the suffix key so multiple triggers targeting the same agent

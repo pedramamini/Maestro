@@ -11,6 +11,7 @@ import type {
 	PipelineEdge,
 	TriggerNodeData,
 	AgentNodeData,
+	CliOutputNodeData,
 	CueEventType,
 	EdgeMode,
 } from '../../../../shared/cue-pipeline-types';
@@ -44,6 +45,7 @@ interface GraphSessionInput {
 		fan_in_timeout_on_fail?: 'break' | 'continue';
 		include_output_from?: string[];
 		forward_output_from?: string[];
+		cli_output?: { target: string };
 	}>;
 }
 
@@ -455,6 +457,37 @@ export function subscriptionsToPipelines(
 						edge.forwardOutput = true;
 					}
 					edges.push(edge);
+				}
+			}
+		}
+
+		// After all nodes and edges are created, add cli_output nodes for subscriptions
+		// that have a cli_output field. Position them after the last agent in the chain.
+		for (const sub of sorted) {
+			if (sub.cli_output?.target) {
+				// Find the agent node this cli_output belongs to
+				const targetSessionName = findTargetSession(sub, subs, sessions);
+				const agentNode = targetSessionName ? sessionToNode.get(targetSessionName) : undefined;
+				if (agentNode) {
+					const cliOutputId = `cli-output-${nodeMap.size}`;
+					const cliOutputNode: PipelineNode = {
+						id: cliOutputId,
+						type: 'cli_output',
+						position: {
+							x: agentNode.position.x + LAYOUT.stepSpacing,
+							y: agentNode.position.y,
+						},
+						data: {
+							target: sub.cli_output.target,
+						} as CliOutputNodeData,
+					};
+					nodeMap.set(cliOutputId, cliOutputNode);
+					edges.push({
+						id: `edge-${edgeCount++}`,
+						source: agentNode.id,
+						target: cliOutputId,
+						mode: 'pass' as EdgeMode,
+					});
 				}
 			}
 		}
