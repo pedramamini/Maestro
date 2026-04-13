@@ -24,6 +24,33 @@ vi.mock('../../../main/utils/sentry', () => ({
 	captureException: (...args: unknown[]) => mockCaptureException(...args),
 }));
 
+// Track calls to the promisified execFile.
+// We provide a real callback-style function so `promisify(execFile)` works,
+// and capture calls via a separate spy for assertions.
+const { mockExecFileAsync, execFileMock } = vi.hoisted(() => {
+	const mockExecFileAsync = vi.fn<(cmd: string, args: string[]) => Promise<{ stdout: string; stderr: string }>>();
+	mockExecFileAsync.mockResolvedValue({ stdout: '{}', stderr: '' });
+
+	// A callback-style function whose promisified form delegates to mockExecFileAsync
+	const execFileMock = vi.fn(function execFile(
+		cmd: string,
+		args: string[],
+		cb: (err: Error | null, stdout: string, stderr: string) => void
+	) {
+		mockExecFileAsync(cmd, args).then(
+			(result) => cb(null, result.stdout, result.stderr),
+			(err) => cb(err instanceof Error ? err : new Error(String(err)), '', '')
+		);
+	});
+
+	return { mockExecFileAsync, execFileMock };
+});
+
+vi.mock('child_process', () => ({
+	default: { execFile: execFileMock },
+	execFile: execFileMock,
+}));
+
 let uuidCounter = 0;
 vi.mock('crypto', () => ({
 	randomUUID: vi.fn(() => `run-${++uuidCounter}`),
@@ -807,6 +834,166 @@ describe('createCueRunManager', () => {
 			manager.stopRun(runId);
 
 			expect(manager.getActiveRunCount('session-1')).toBe(1);
+		});
+	});
+
+	describe('Phase 3: CLI Output delivery', () => {
+		beforeEach(() => {
+			mockExecFileAsync.mockResolvedValue({ stdout: '{}', stderr: '' });
+		});
+
+		it('triggers execFile with correct arguments when run succeeds', async () => {
+			const deps = createDeps();
+			const manager = createCueRunManager(deps);
+
+			manager.execute(
+				'session-1',
+				'prompt',
+				createEvent(),
+				'test-sub',
+				undefined, // outputPrompt
+				undefined, // chainDepth
+				{ target: 'agent-42' }
+			);
+			await vi.advanceTimersByTimeAsync(0);
+
+			expect(mockExecFileAsync).toHaveBeenCalledTimes(1);
+			expect(mockExecFileAsync).toHaveBeenCalledWith(
+				'maestro-cli',
+				['send', 'agent-42', 'output', '--live', '--json']
+			);
+		});
+
+		it('is skipped when run fails', async () => {
+			const deps = createDeps({
+				onCueRun: vi.fn(async () => makeResult({ status: 'failed', exitCode: 1 })),
+			});
+			const manager = createCueRunManager(deps);
+
+			manager.execute(
+				'session-1',
+				'prompt',
+				createEvent(),
+				'test-sub',
+				undefined,
+				undefined,
+				{ target: 'agent-42' }
+			);
+			await vi.advanceTimersByTimeAsync(0);
+
+			expect(mockExecFileAsync).not.toHaveBeenCalled();
+		});
+
+		it('delivery failure does not change run status', async () => {
+			mockExecFileAsync.mockRejectedValue(new Error('Connection refused'));
+			const deps = createDeps();
+			const manager = createCueRunManager(deps);
+
+			manager.execute(
+				'session-1',
+				'prompt',
+				createEvent(),
+				'test-sub',
+				undefined,
+				undefined,
+				{ target: 'agent-42' }
+			);
+			await vi.advanceTimersByTimeAsync(0);
+
+			// Run still completes successfully despite CLI output failure
+			expect(deps.onRunCompleted).toHaveBeenCalledWith(
+				'session-1',
+				expect.objectContaining({ status: 'completed' }),
+				'test-sub',
+				undefined
+			);
+			// Warning is logged
+			expect(deps.onLog).toHaveBeenCalledWith(
+				'warn',
+				expect.stringContaining('CLI output delivery failed')
+			);
+		});
+
+		it('substitutes template variables in target before execution', async () => {
+			const deps = createDeps();
+			const manager = createCueRunManager(deps);
+			const event = createEvent({
+				payload: { sourceAgentId: 'resolved-agent-99' },
+			});
+
+			manager.execute(
+				'session-1',
+				'prompt',
+				event,
+				'test-sub',
+				undefined,
+				undefined,
+				{ target: '{{CUE_SOURCE_AGENT_ID}}' }
+			);
+			await vi.advanceTimersByTimeAsync(0);
+
+			expect(mockExecFileAsync).toHaveBeenCalledTimes(1);
+			// The template variable should be resolved to the event payload value
+			expect(mockExecFileAsync).toHaveBeenCalledWith(
+				'maestro-cli',
+				['send', 'resolved-agent-99', 'output', '--live', '--json']
+			);
+		});
+
+		it('is not called when cliOutput is not provided', async () => {
+			const deps = createDeps();
+			const manager = createCueRunManager(deps);
+
+			// No cliOutput argument
+			manager.execute('session-1', 'prompt', createEvent(), 'test-sub');
+			await vi.advanceTimersByTimeAsync(0);
+
+			expect(mockExecFileAsync).not.toHaveBeenCalled();
+		});
+
+		it('truncates stdout to 100,000 characters', async () => {
+			const longOutput = 'x'.repeat(150_000);
+			const deps = createDeps({
+				onCueRun: vi.fn(async () => makeResult({ stdout: longOutput })),
+			});
+			const manager = createCueRunManager(deps);
+
+			manager.execute(
+				'session-1',
+				'prompt',
+				createEvent(),
+				'test-sub',
+				undefined,
+				undefined,
+				{ target: 'agent-42' }
+			);
+			await vi.advanceTimersByTimeAsync(0);
+
+			expect(mockExecFileAsync).toHaveBeenCalledTimes(1);
+			const passedArgs = mockExecFileAsync.mock.calls[0][1] as string[];
+			// The stdout argument (index 2) should be truncated to 100k chars
+			expect(passedArgs[2].length).toBe(100_000);
+		});
+
+		it('logs success message on delivery', async () => {
+			const deps = createDeps();
+			const manager = createCueRunManager(deps);
+
+			manager.execute(
+				'session-1',
+				'prompt',
+				createEvent(),
+				'test-sub',
+				undefined,
+				undefined,
+				{ target: 'agent-42' }
+			);
+			await vi.advanceTimersByTimeAsync(0);
+
+			expect(deps.onLog).toHaveBeenCalledWith(
+				'cue',
+				expect.stringContaining('CLI output delivered to agent-42')
+			);
 		});
 	});
 });
