@@ -41,6 +41,8 @@ import {
 	Lock,
 	Star,
 } from 'lucide-react';
+import { GhostIconButton } from './ui/GhostIconButton';
+import { Spinner } from './ui/Spinner';
 import type { Theme, Session } from '../types';
 import type {
 	RegisteredRepository,
@@ -147,12 +149,12 @@ function getStatusInfo(status: ContributionStatus): {
 	icon: React.ReactNode;
 } {
 	const icons: Record<string, React.ReactNode> = {
-		cloning: <Loader2 className="w-3 h-3 animate-spin" />,
-		creating_pr: <Loader2 className="w-3 h-3 animate-spin" />,
+		cloning: <Spinner size={12} />,
+		creating_pr: <Spinner size={12} />,
 		running: <Play className="w-3 h-3" />,
 		paused: <Pause className="w-3 h-3" />,
 		completed: <CheckCircle className="w-3 h-3" />,
-		completing: <Loader2 className="w-3 h-3 animate-spin" />,
+		completing: <Spinner size={12} />,
 		ready_for_review: <GitPullRequest className="w-3 h-3" />,
 		failed: <AlertCircle className="w-3 h-3" />,
 		cancelled: <X className="w-3 h-3" />,
@@ -571,13 +573,9 @@ function RepositoryDetailView({
 				style={{ borderColor: theme.colors.border }}
 			>
 				<div className="flex items-center gap-3">
-					<button
-						onClick={onBack}
-						className="p-1.5 rounded hover:bg-white/10 transition-colors"
-						title="Back (Esc)"
-					>
+					<GhostIconButton onClick={onBack} padding="p-1.5" title="Back (Esc)">
 						<ArrowLeft className="w-5 h-5" style={{ color: theme.colors.textDim }} />
-					</button>
+					</GhostIconButton>
 					<div className="flex items-center gap-2">
 						<Music className="w-5 h-5" style={{ color: theme.colors.accent }} />
 						<h2 className="text-lg font-semibold" style={{ color: theme.colors.textMain }}>
@@ -593,14 +591,13 @@ function RepositoryDetailView({
 						<span>{categoryInfo.emoji}</span>
 						<span>{categoryInfo.label}</span>
 					</span>
-					<button
-						type="button"
-						className="p-1.5 rounded hover:bg-white/10 transition-colors"
-						title="View repository on GitHub"
+					<GhostIconButton
 						onClick={() => handleOpenExternal(repo.url)}
+						padding="p-1.5"
+						title="View repository on GitHub"
 					>
 						<ExternalLink className="w-5 h-5" style={{ color: theme.colors.textDim }} />
-					</button>
+					</GhostIconButton>
 				</div>
 			</div>
 
@@ -718,12 +715,7 @@ function RepositoryDetailView({
 									style={{ color: theme.colors.textDim }}
 								>
 									<span>Available Issues ({availableIssues.length})</span>
-									{isLoadingIssues && (
-										<Loader2
-											className="w-3 h-3 animate-spin"
-											style={{ color: theme.colors.accent }}
-										/>
-									)}
+									{isLoadingIssues && <Spinner size={12} color={theme.colors.accent} />}
 								</h4>
 								{availableIssues.length === 0 && blockedIssues.length === 0 ? (
 									<p className="text-sm text-center py-4" style={{ color: theme.colors.textDim }}>
@@ -869,10 +861,7 @@ function RepositoryDetailView({
 								<style>{proseStyles}</style>
 								{isLoadingDocument ? (
 									<div className="flex items-center justify-center h-32">
-										<Loader2
-											className="w-6 h-6 animate-spin"
-											style={{ color: theme.colors.accent }}
-										/>
+										<Spinner size={24} color={theme.colors.accent} />
 									</div>
 								) : documentPreview ? (
 									<div
@@ -957,7 +946,7 @@ function RepositoryDetailView({
 					>
 						{isStarting ? (
 							<>
-								<Loader2 className="w-4 h-4 animate-spin" />
+								<Spinner size={16} />
 								Starting...
 							</>
 						) : (
@@ -1867,13 +1856,9 @@ export function SymphonyModal({
 										style={{ color: theme.colors.textDim }}
 									/>
 								</button>
-								<button
-									onClick={onClose}
-									className="p-1.5 rounded hover:bg-white/10 transition-colors"
-									title="Close (Esc)"
-								>
+								<GhostIconButton onClick={onClose} padding="p-1.5" title="Close (Esc)">
 									<X className="w-4 h-4" style={{ color: theme.colors.textDim }} />
-								</button>
+								</GhostIconButton>
 							</div>
 						</div>
 
@@ -2387,10 +2372,7 @@ export function SymphonyModal({
 						>
 							{isCheckingGh ? (
 								<div className="flex items-center gap-3 py-4">
-									<Loader2
-										className="w-5 h-5 animate-spin"
-										style={{ color: theme.colors.textDim }}
-									/>
+									<Spinner size={20} color={theme.colors.textDim} />
 									<span className="text-sm" style={{ color: theme.colors.textDim }}>
 										Checking prerequisites…
 									</span>
