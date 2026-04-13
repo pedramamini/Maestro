@@ -161,7 +161,7 @@ describe('feedback IPC handlers', () => {
 			expect(result).toEqual({ success: true });
 			expect(mockProcessManager.write).toHaveBeenCalledWith(
 				'session-1',
-				expect.stringContaining('Great app!')
+				'Please file this feedback on GitHub: Great app!\n'
 			);
 		});
 
@@ -169,7 +169,7 @@ describe('feedback IPC handlers', () => {
 			await callSubmit({ sessionId: 'session-1', feedbackText: 'Fix the bug please' });
 
 			const writtenPrompt: string = mockProcessManager.write.mock.calls[0][1];
-			expect(writtenPrompt).toContain('Fix the bug please');
+			expect(writtenPrompt).toBe('Please file this feedback on GitHub: Fix the bug please\n');
 		});
 
 		it('returns failure when process manager is unavailable', async () => {
@@ -243,6 +243,30 @@ describe('feedback IPC handlers', () => {
 
 			expect(result).toEqual({ success: false, error: expect.any(String) });
 			expect(mockProcessManager.write).not.toHaveBeenCalled();
+		});
+
+		it('returns failure and does not write when sessionId is whitespace only', async () => {
+			const result = await handlers.get('feedback:submit')!(null, {
+				sessionId: '  ',
+				feedbackText: 'Some feedback',
+			});
+
+			expect(result).toEqual({ success: false, error: expect.any(String) });
+			expect(mockProcessManager.write).not.toHaveBeenCalled();
+		});
+
+		it('accepts feedbackText of exactly 5000 characters', async () => {
+			const feedbackText = 'a'.repeat(5000);
+			const result = await handlers.get('feedback:submit')!(null, {
+				sessionId: 'session-1',
+				feedbackText,
+			});
+
+			expect(result).toEqual({ success: true });
+			expect(mockProcessManager.write).toHaveBeenCalledWith(
+				'session-1',
+				`Please file this feedback on GitHub: ${'a'.repeat(5000)}\n`
+			);
 		});
 	});
 });
