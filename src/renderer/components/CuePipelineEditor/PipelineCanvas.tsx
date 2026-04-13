@@ -32,6 +32,7 @@ import type {
 import type { CueSettings } from '../../../shared/cue';
 import { TriggerNode, type TriggerNodeDataProps } from './nodes/TriggerNode';
 import { AgentNode, type AgentNodeDataProps } from './nodes/AgentNode';
+import { CliOutputNode } from './nodes/CliOutputNode';
 import { edgeTypes } from './edges/PipelineEdge';
 import { TriggerDrawer } from './drawers/TriggerDrawer';
 import { AgentDrawer } from './drawers/AgentDrawer';
@@ -43,6 +44,7 @@ import { EVENT_COLORS } from './cueEventConstants';
 const nodeTypes = {
 	trigger: TriggerNode,
 	agent: AgentNode,
+	cli_output: CliOutputNode,
 };
 
 export interface PipelineCanvasProps {
@@ -293,6 +295,9 @@ export const PipelineCanvas = React.memo(function PipelineCanvas({
 						if (node.type === 'agent') {
 							const data = node.data as AgentNodeDataProps;
 							return data.pipelineColor ?? theme.colors.accent;
+						}
+						if (node.type === 'cli_output') {
+							return theme.colors.textDim;
 						}
 						return theme.colors.accent;
 					}}

@@ -10,10 +10,12 @@ import type {
 	CuePipelineState,
 	TriggerNodeData,
 	AgentNodeData,
+	CliOutputNodeData,
 } from '../../../../shared/cue-pipeline-types';
 import type { Theme } from '../../../../shared/theme-types';
 import type { TriggerNodeDataProps } from '../nodes/TriggerNode';
 import type { AgentNodeDataProps } from '../nodes/AgentNode';
+import type { CliOutputNodeDataProps } from '../nodes/CliOutputNode';
 import type { PipelineEdgeData } from '../edges/PipelineEdge';
 
 // ─── Trigger config summary ──────────────────────────────────────────────────
@@ -199,7 +201,7 @@ export function convertToReactFlowNodes(
 					data: nodeData,
 					dragHandle: '.drag-handle',
 				});
-			} else {
+			} else if (pNode.type === 'agent') {
 				const agentData = pNode.data as AgentNodeData;
 				const pipelineColors = agentPipelineMap.get(agentData.sessionId) ?? [pipeline.color];
 				const hasOutgoingEdge = pipeline.edges.some((e) => e.source === pNode.id);
@@ -233,6 +235,24 @@ export function convertToReactFlowNodes(
 				nodes.push({
 					id: compositeId,
 					type: 'agent',
+					position: { x: pNode.position.x, y: pNode.position.y + yOffset },
+					data: nodeData,
+					dragHandle: '.drag-handle',
+				});
+			} else if (pNode.type === 'cli_output') {
+				const cliData = pNode.data as CliOutputNodeData;
+				const nodeData: CliOutputNodeDataProps = {
+					compositeId,
+					target: cliData.target,
+					pipelineColor: pipeline.color,
+					pipelineCount: 1,
+					pipelineColors: [pipeline.color],
+					onConfigure: onConfigureNode,
+					theme,
+				};
+				nodes.push({
+					id: compositeId,
+					type: 'cli_output',
 					position: { x: pNode.position.x, y: pNode.position.y + yOffset },
 					data: nodeData,
 					dragHandle: '.drag-handle',

@@ -70,13 +70,17 @@ export interface AgentNodeData {
 	fanInTimeoutOnFail?: 'break' | 'continue';
 }
 
-type PipelineNodeType = 'trigger' | 'agent';
+export interface CliOutputNodeData {
+	target: string;
+}
+
+export type PipelineNodeType = 'trigger' | 'agent' | 'cli_output';
 
 export interface PipelineNode {
 	id: string;
 	type: PipelineNodeType;
 	position: PipelineNodePosition;
-	data: TriggerNodeData | AgentNodeData;
+	data: TriggerNodeData | AgentNodeData | CliOutputNodeData;
 }
 
 export interface PipelineEdge {
