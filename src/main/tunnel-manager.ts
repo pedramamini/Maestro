@@ -54,7 +54,7 @@ class TunnelManager {
 			]);
 
 			let resolved = false;
-			let stderrBuffer = '';
+			let outputBuffer = '';
 
 			// Timeout after 30 seconds
 			const timeout = setTimeout(() => {
@@ -68,15 +68,17 @@ class TunnelManager {
 
 			const handleOutput = (data: Buffer) => {
 				const output = data.toString();
-				stderrBuffer += output;
+				outputBuffer += output;
 				logger.info(`cloudflared output: ${output}`, 'TunnelManager');
 
 				// Look for the trycloudflare.com URL in accumulated buffer
-				const urlMatch = stderrBuffer.match(/https:\/\/[a-z0-9-]+\.trycloudflare\.com/i);
+				const urlMatch = outputBuffer.match(/https:\/\/[a-z0-9-]+\.trycloudflare\.com/i);
 				if (urlMatch && !resolved) {
 					this.url = urlMatch[0];
 					clearTimeout(timeout);
 					resolved = true;
+					this.process?.stderr?.off('data', handleOutput);
+					this.process?.stdout?.off('data', handleOutput);
 					logger.info(`Tunnel established: ${this.url}`, 'TunnelManager');
 					resolve({ success: true, url: this.url });
 				}
