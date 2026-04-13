@@ -400,9 +400,9 @@ describe('TabBar', () => {
 			);
 
 			fireEvent.click(screen.getByTitle('New tab…'));
-			expect(screen.getByText('New Browser Tab')).toBeInTheDocument();
+			expect(screen.getByText('New Browser')).toBeInTheDocument();
 
-			fireEvent.click(screen.getByText('New Browser Tab'));
+			fireEvent.click(screen.getByText('New Browser'));
 			expect(mockOnNewBrowserTab).toHaveBeenCalled();
 		});
 

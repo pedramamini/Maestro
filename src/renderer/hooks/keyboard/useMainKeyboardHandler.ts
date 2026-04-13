@@ -265,6 +265,9 @@ export function useMainKeyboardHandler(): UseMainKeyboardHandlerReturn {
 					e.altKey && (e.metaKey || e.ctrlKey) && !e.shiftKey && codeKeyLower === 't';
 				// Allow toggleMode (Cmd+J) to switch to terminal view from file preview
 				const isToggleModeShortcut = ctx.isShortcut(e, 'toggleMode');
+				// Allow focusBrowserAddress (Cmd+L) to focus address bar when browser tab is active overlay
+				const isBrowserAddressShortcut =
+					ctx.isTabShortcut(e, 'focusBrowserAddress') && !!ctx.activeSession?.activeBrowserTabId;
 				// Allow font size shortcuts (Cmd+=/+, Cmd+-, Cmd+0) even when modals/overlays are open
 				const isFontSizeShortcut =
 					(e.metaKey || e.ctrlKey) &&
@@ -307,6 +310,7 @@ export function useMainKeyboardHandler(): UseMainKeyboardHandlerReturn {
 						!isTabManagementShortcut &&
 						!isTabSwitcherShortcut &&
 						!isToggleModeShortcut &&
+						!isBrowserAddressShortcut &&
 						!isFontSizeShortcut
 					) {
 						return;

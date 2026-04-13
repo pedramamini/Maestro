@@ -11,6 +11,8 @@ interface NewTabPopoverProps {
 	onNewTerminalTab?: () => void;
 	/** Shortcut keys config for new tab */
 	newTabKeys: string[];
+	/** Shortcut keys config for new browser tab */
+	browserTabKeys: string[];
 	/** Shortcut keys config for terminal toggle */
 	terminalKeys: string[];
 	/** Whether the tab container is overflowing (makes the button sticky) */
@@ -28,6 +30,7 @@ export const NewTabPopover = memo(function NewTabPopover({
 	onNewBrowserTab,
 	onNewTerminalTab,
 	newTabKeys,
+	browserTabKeys,
 	terminalKeys,
 	isOverflowing,
 }: NewTabPopoverProps) {
@@ -131,7 +134,10 @@ export const NewTabPopover = memo(function NewTabPopover({
 								onClick={() => closeAndDo(onNewBrowserTab)}
 							>
 								<Globe className="w-3.5 h-3.5" style={{ color: theme.colors.textDim }} />
-								New Browser Tab
+								New Browser
+								<span className="ml-auto text-xs" style={{ color: theme.colors.textDim }}>
+									{formatShortcutKeys(browserTabKeys)}
+								</span>
 							</button>
 						)}
 						<button

@@ -297,6 +297,20 @@ describe('tabHelpers', () => {
 
 			expect(result.session.activeTabId).toBe(result.tab.id);
 		});
+
+		it('clears activeBrowserTabId when creating a new AI tab', () => {
+			const existingTab = createMockTab({ id: 'existing-tab' });
+			const session = createMockSession({
+				aiTabs: [existingTab],
+				activeTabId: 'existing-tab',
+				activeBrowserTabId: 'browser-1',
+			});
+
+			const result = createTab(session);
+
+			expect(result.session.activeBrowserTabId).toBeNull();
+			expect(result.session.activeTabId).toBe(result.tab.id);
+		});
 	});
 
 	describe('closeTab', () => {

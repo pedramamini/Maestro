@@ -53,7 +53,7 @@ async function launchApp(
 
 async function createBrowserTab(window: Page): Promise<void> {
 	await window.getByTitle('New tab…').click();
-	await window.getByRole('button', { name: 'New Browser Tab' }).click();
+	await window.getByRole('button', { name: /New Browser/ }).click();
 	await expect(getVisibleAddressInput(window)).toBeVisible();
 }
 

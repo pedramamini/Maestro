@@ -450,6 +450,7 @@ export function createTab(
 		aiTabs: [...(session.aiTabs || []), newTab],
 		activeTabId: newTab.id,
 		activeFileTabId: null,
+		activeBrowserTabId: null,
 		activeTerminalTabId: null,
 		inputMode: 'ai' as const,
 		unifiedTabOrder: [...(session.unifiedTabOrder || []), newTabRef],
