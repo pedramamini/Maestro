@@ -36,6 +36,7 @@ import { SkinnySidebar } from './SkinnySidebar';
 import { LiveOverlayPanel } from './LiveOverlayPanel';
 import { useSessionCategories } from '../../hooks/session/useSessionCategories';
 import { useSessionFilterMode } from '../../hooks/session/useSessionFilterMode';
+import { useEventListener } from '../../hooks/utils/useEventListener';
 
 // ============================================================================
 // SessionContextMenu - Right-click context menu for session items
@@ -405,26 +406,21 @@ function SessionListInner(props: SessionListProps) {
 	}, [liveOverlayOpen, menuOpen]);
 
 	// Listen for tour UI actions to control hamburger menu state
-	useEffect(() => {
-		const handleTourAction = (event: Event) => {
-			const customEvent = event as CustomEvent<{ type: string; value?: string }>;
-			const { type } = customEvent.detail;
+	useEventListener('tour:action', (event: Event) => {
+		const customEvent = event as CustomEvent<{ type: string; value?: string }>;
+		const { type } = customEvent.detail;
 
-			switch (type) {
-				case 'openHamburgerMenu':
-					setMenuOpen(true);
-					break;
-				case 'closeHamburgerMenu':
-					setMenuOpen(false);
-					break;
-				default:
-					break;
-			}
-		};
-
-		window.addEventListener('tour:action', handleTourAction);
-		return () => window.removeEventListener('tour:action', handleTourAction);
-	}, []);
+		switch (type) {
+			case 'openHamburgerMenu':
+				setMenuOpen(true);
+				break;
+			case 'closeHamburgerMenu':
+				setMenuOpen(false);
+				break;
+			default:
+				break;
+		}
+	});
 
 	// Get git file change counts per session from focused context
 	// Using useGitFileStatus instead of full useGitStatus reduces re-renders
