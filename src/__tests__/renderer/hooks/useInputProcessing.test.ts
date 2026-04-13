@@ -878,7 +878,7 @@ describe('useInputProcessing', () => {
 	});
 
 	describe('forced parallel execution', () => {
-		it('bypasses queue when forceParallel is true and setting is enabled', async () => {
+		it('queues with forceParallel flag when tab is busy', async () => {
 			useSettingsStore.setState({ forcedParallelExecution: true } as any);
 
 			const busySession = createMockSession({
@@ -896,11 +896,42 @@ describe('useInputProcessing', () => {
 				await result.current.processInput(undefined, { forceParallel: true });
 			});
 
-			// Should NOT queue — should process immediately (spawn called)
+			// Should queue (tab is busy) but with forceParallel flag
+			expect(mockSetSessions).toHaveBeenCalled();
+			const setSessionsCall = mockSetSessions.mock.calls[0][0];
+			const updatedSessions = setSessionsCall([busySession]);
+			expect(updatedSessions[0].executionQueue.length).toBe(1);
+			expect(updatedSessions[0].executionQueue[0].forceParallel).toBe(true);
+		});
+
+		it('sends immediately when tab is idle even if session is busy', async () => {
+			useSettingsStore.setState({ forcedParallelExecution: true } as any);
+
+			// Session busy (another tab running), but active tab is idle
+			const busySession = createMockSession({
+				state: 'busy',
+				aiTabs: [
+					createMockTab({ id: 'tab-1', state: 'idle' }),
+					createMockTab({ id: 'tab-2', state: 'busy' }),
+				],
+				activeTabId: 'tab-1',
+			});
+			const deps = createDeps({
+				activeSession: busySession,
+				sessionsRef: { current: [busySession] },
+				inputValue: 'forced message',
+			});
+			const { result } = renderHook(() => useInputProcessing(deps));
+
+			await act(async () => {
+				await result.current.processInput(undefined, { forceParallel: true });
+			});
+
+			// Tab is idle — should send immediately, skipping cross-tab wait
 			expect(window.maestro.process.spawn).toHaveBeenCalled();
 		});
 
-		it('bypasses queue when forceParallel is true and AutoRun is active', async () => {
+		it('sends immediately when forceParallel and AutoRun is active but tab is idle', async () => {
 			useSettingsStore.setState({ forcedParallelExecution: true } as any);
 
 			const runningBatchState: BatchRunState = {
@@ -922,7 +953,7 @@ describe('useInputProcessing', () => {
 				await result.current.processInput(undefined, { forceParallel: true });
 			});
 
-			// Should process immediately, not queue
+			// Tab is idle — should send immediately, skipping AutoRun wait
 			expect(window.maestro.process.spawn).toHaveBeenCalled();
 		});
 

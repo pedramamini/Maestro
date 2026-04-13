@@ -226,6 +226,8 @@ export interface QueuedItem {
 	tabName?: string; // Tab name at time of queuing (for display)
 	// Read-only mode tracking (for parallel execution bypass)
 	readOnlyMode?: boolean; // True if queued from a read-only tab
+	// Force parallel: dispatches immediately when this tab finishes, skipping cross-tab wait
+	forceParallel?: boolean;
 }
 
 export interface WorkLogItem {

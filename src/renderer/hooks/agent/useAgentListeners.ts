@@ -596,6 +596,7 @@ export function useAgentListeners(deps: UseAgentListenersDeps): void {
 										source: 'user',
 										text: nextItem.text,
 										images: nextItem.images,
+										...(nextItem.forceParallel && { forceParallel: true }),
 									};
 									updatedAiTabs = updatedAiTabs.map((tab) =>
 										tab.id === targetTab.id

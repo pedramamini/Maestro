@@ -443,9 +443,10 @@ export function useInputProcessing(deps: UseInputProcessingDeps): UseInputProces
 				// Write mode tabs must wait for any busy tab to finish
 				// EXCEPTION: Write commands bypass queue when all running/queued items are read-only
 				// ALSO: Always queue write commands when AutoRun is active (to prevent file conflicts)
-				// EXCEPTION: Forced parallel bypasses all queue logic (user explicitly chose to send immediately)
+				// FORCE PARALLEL: queues only when THIS tab is busy (skips cross-tab and AutoRun wait).
+				// When the tab finishes, the queued item dispatches immediately without waiting for other tabs.
 				const shouldQueue = forceParallel
-					? false
+					? activeTab?.state === 'busy' // Force parallel: only queue if THIS tab is busy
 					: isReadOnlyMode
 						? activeTab?.state === 'busy' // Read-only: only queue if THIS tab is busy
 						: (activeSession.state === 'busy' && !canWriteBypassQueue()) || isAutoRunActive; // Write mode: queue if busy OR AutoRun active
@@ -476,6 +477,7 @@ export function useInputProcessing(deps: UseInputProcessingDeps): UseInputProces
 								? activeTab.agentSessionId.split('-')[0].toUpperCase()
 								: 'New'),
 						readOnlyMode: isReadOnlyMode,
+						...(forceParallel && { forceParallel: true }),
 					};
 
 					// Add to queue - will be processed when:
@@ -889,15 +891,12 @@ export function useInputProcessing(deps: UseInputProcessingDeps): UseInputProces
 			const targetPid = currentMode === 'ai' ? activeSession.aiPid : activeSession.terminalPid;
 			// For batch mode (Claude), include tab ID in session ID to prevent process collision
 			// This ensures each tab's process has a unique identifier
-			// For forced parallel sends, append a unique suffix so concurrent spawns from the same
-			// tab get distinct process keys and don't clobber each other's bookkeeping
 			const activeTabForSpawn = getActiveTab(activeSession);
 			const isForceParallel =
 				options?.forceParallel === true && useSettingsStore.getState().forcedParallelExecution;
-			const forceParallelSuffix = isForceParallel ? `-fp-${Date.now()}` : '';
 			const targetSessionId =
 				currentMode === 'ai'
-					? `${activeSession.id}-ai-${activeTabForSpawn?.id || 'default'}${forceParallelSuffix}`
+					? `${activeSession.id}-ai-${activeTabForSpawn?.id || 'default'}`
 					: `${activeSession.id}-terminal`;
 
 			// Check if this is an AI agent in batch mode
