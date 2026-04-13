@@ -229,8 +229,20 @@ subscriptions:
 			expect(result.errors).toHaveLength(0);
 		});
 
-		it('rejects non-object config', () => {
+		it('treats null config as valid empty config', () => {
 			const result = validateCueConfig(null);
+			expect(result.valid).toBe(true);
+			expect(result.errors).toHaveLength(0);
+		});
+
+		it('treats undefined config as valid empty config', () => {
+			const result = validateCueConfig(undefined);
+			expect(result.valid).toBe(true);
+			expect(result.errors).toHaveLength(0);
+		});
+
+		it('rejects non-object config', () => {
+			const result = validateCueConfig('string');
 			expect(result.valid).toBe(false);
 			expect(result.errors[0]).toContain('non-null object');
 		});

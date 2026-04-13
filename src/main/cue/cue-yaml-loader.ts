@@ -151,7 +151,12 @@ export function watchCueYaml(projectRoot: string, onChange: () => void): () => v
 export function validateCueConfig(config: unknown): { valid: boolean; errors: string[] } {
 	const errors: string[] = [];
 
-	if (!config || typeof config !== 'object') {
+	// Treat null/undefined as an empty config (e.g., comment-only or empty YAML file)
+	if (config === null || config === undefined) {
+		return { valid: true, errors: [] };
+	}
+
+	if (typeof config !== 'object') {
 		return { valid: false, errors: ['Config must be a non-null object'] };
 	}
 
