@@ -27,7 +27,7 @@ To add support for a new agent, follow this checklist. The agent completeness te
 1. **Add agent ID** to `src/shared/agentIds.ts` → `AGENT_IDS` tuple
 2. **Add agent definition** to `src/main/agents/definitions.ts` → `AGENT_DEFINITIONS` array
 3. **Define capabilities** in `src/main/agents/capabilities.ts` → `AGENT_CAPABILITIES` record (23 boolean fields)
-4. **Add display name & beta status** to `src/shared/agentMetadata.ts` → `AGENT_DISPLAY_NAMES` record, optionally add to `BETA_AGENTS` set
+4. **Add display name & beta status** to `src/shared/agentMetadata.ts` - add entry to the internal `AGENT_DISPLAY_NAMES` record and optionally to `BETA_AGENTS` set (both are module-private; use `getAgentDisplayName()` and `isBetaAgent()` to read them)
 5. **Add context window default** (if applicable) to `src/shared/agentConstants.ts` → `DEFAULT_CONTEXT_WINDOWS`
 6. **Sync renderer interfaces** — add any new capability flags to `AgentCapabilities` in `src/renderer/hooks/agent/useAgentCapabilities.ts`, `src/renderer/types/index.ts`, and `src/renderer/global.d.ts`
 
@@ -337,14 +337,14 @@ const AGENT_DEFINITIONS: AgentConfig[] = [
 Edit `src/shared/agentMetadata.ts`:
 
 ```typescript
-// Add to AGENT_DISPLAY_NAMES record
-export const AGENT_DISPLAY_NAMES: Record<AgentId, string> = {
+// Add to the internal AGENT_DISPLAY_NAMES record (not exported - use getAgentDisplayName() to read)
+const AGENT_DISPLAY_NAMES: Record<AgentId, string> = {
 	// ... existing agents
 	'your-agent': 'Your Agent',
 };
 
-// If beta, add to BETA_AGENTS set
-export const BETA_AGENTS: ReadonlySet<AgentId> = new Set([
+// If beta, add to the internal BETA_AGENTS set (not exported - use isBetaAgent() to read)
+const BETA_AGENTS: ReadonlySet<AgentId> = new Set([
 	'codex',
 	'opencode',
 	'factory-droid',

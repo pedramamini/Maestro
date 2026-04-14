@@ -57,8 +57,8 @@ Centralized in `src/shared/agentMetadata.ts` (importable from any process):
 
 - `getAgentDisplayName(agentId)` — human-readable name with fallback
 - `isBetaAgent(agentId)` — beta badge check
-- `AGENT_DISPLAY_NAMES` — full `Record<AgentId, string>` map
-- `BETA_AGENTS` — `ReadonlySet<AgentId>`
+- `AGENT_DISPLAY_NAMES` — internal `Record<AgentId, string>` map (not exported, use `getAgentDisplayName()`)
+- `BETA_AGENTS` — internal `ReadonlySet<AgentId>` (not exported, use `isBetaAgent()`)
 
 ## Agent-Specific Details
 
@@ -97,7 +97,7 @@ To add support for a new agent:
 1. Add agent ID to `src/shared/agentIds.ts` → `AGENT_IDS` tuple
 2. Add agent definition to `src/main/agents/definitions.ts` → `AGENT_DEFINITIONS`
 3. Define capabilities in `src/main/agents/capabilities.ts` → `AGENT_CAPABILITIES` (23 boolean flags)
-4. Add display name and beta status to `src/shared/agentMetadata.ts` → `AGENT_DISPLAY_NAMES`, `BETA_AGENTS`
+4. Add display name and beta status to `src/shared/agentMetadata.ts` (internal maps, accessed via `getAgentDisplayName()` / `isBetaAgent()`)
 5. Add context window default to `src/shared/agentConstants.ts` → `DEFAULT_CONTEXT_WINDOWS`
 6. Sync `AgentCapabilities` interface in renderer: `useAgentCapabilities.ts`, `types/index.ts`, `global.d.ts`
 7. (If `supportsJsonOutput`) Create output parser in `src/main/parsers/{agent}-output-parser.ts`, register in `src/main/parsers/index.ts`
