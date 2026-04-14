@@ -448,11 +448,9 @@ describe('ProcessMonitor', () => {
 			render(<ProcessMonitor theme={theme} sessions={[session]} groups={[]} onClose={onClose} />);
 
 			await waitFor(() => {
-				expect(screen.queryByText('Loading processes...')).not.toBeInTheDocument();
+				expect(screen.getByText('UNGROUPED AGENTS')).toBeInTheDocument();
+				expect(screen.getByText('Test Session')).toBeInTheDocument();
 			});
-
-			expect(screen.getByText('UNGROUPED AGENTS')).toBeInTheDocument();
-			expect(screen.getByText('Test Session')).toBeInTheDocument();
 		});
 
 		it('should display grouped sessions with processes', async () => {
@@ -467,11 +465,9 @@ describe('ProcessMonitor', () => {
 			);
 
 			await waitFor(() => {
-				expect(screen.queryByText('Loading processes...')).not.toBeInTheDocument();
+				expect(screen.getByText('Test Group')).toBeInTheDocument();
+				expect(screen.getByText('Test Session')).toBeInTheDocument();
 			});
-
-			expect(screen.getByText('Test Group')).toBeInTheDocument();
-			expect(screen.getByText('Test Session')).toBeInTheDocument();
 		});
 
 		it('should show session count in group', async () => {
