@@ -133,7 +133,7 @@ export function useAgentCapabilities(
  */
 export function hasCapabilityCached(agentId: string, capability: keyof AgentCapabilities): boolean {
 	const cached = capabilitiesCache.get(agentId);
-	if (!cached) return DEFAULT_CAPABILITIES[capability] as boolean;
+	if (!cached) return !!DEFAULT_CAPABILITIES[capability];
 	return !!cached[capability];
 }
 
