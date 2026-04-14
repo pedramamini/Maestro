@@ -296,29 +296,33 @@ function CuePipelineEditorInner({
 	}, [pipelineState.selectedPipelineId, reactFlowInstance]);
 
 	// ─── Initial viewport (saved viewport OR fit view) ──────────────────────
-	// Apply the initial viewport exactly once after ReactFlow has measured the
-	// first batch of nodes. `useNodesInitialized` returns true once every
-	// rendered node has reported its dimensions — fitting before that point
-	// produces a collapsed viewport (the symptom was "canvas appears empty on
-	// first open; switching pipelines fixes it", because the selection-change
-	// fitView ran later, after measurements had completed).
+	// Two distinct paths with different timing requirements:
 	//
-	// If usePipelineLayout stashed a saved viewport, restore it here (single
-	// source of truth — previously `setViewport` and `fitView` raced on
-	// separate timeouts). Otherwise fall back to `fitView`.
+	//   - Saved viewport: a pure (x, y, zoom) restore. setViewport doesn't read
+	//     node geometry, so it can — and SHOULD — fire immediately on mount.
+	//     Waiting for nodesInitialized would briefly show the wrong viewport
+	//     before snapping to the saved one.
+	//   - fitView fallback: computes bounds from rendered node dimensions. Must
+	//     wait for `useNodesInitialized()` — fitting before measurement
+	//     completes produced the original "canvas appears empty on first open"
+	//     symptom (selection-change fitView later "fixed" it because nodes
+	//     were measured by then).
 	const nodesInitialized = useNodesInitialized();
 	const hasInitialFitRef = useRef(false);
 	useEffect(() => {
 		if (hasInitialFitRef.current) return;
-		if (!nodesInitialized || computedNodes.length === 0) return;
-		hasInitialFitRef.current = true;
 		const saved = pendingSavedViewportRef.current;
 		if (saved) {
+			// Restore immediately — setViewport doesn't depend on measurement.
 			pendingSavedViewportRef.current = null;
 			reactFlowInstance.setViewport(saved);
-		} else {
-			reactFlowInstance.fitView({ padding: 0.15, duration: 200 });
+			hasInitialFitRef.current = true;
+			return;
 		}
+		// fitView path: must wait for nodes to be measured.
+		if (!nodesInitialized || computedNodes.length === 0) return;
+		reactFlowInstance.fitView({ padding: 0.15, duration: 200 });
+		hasInitialFitRef.current = true;
 	}, [nodesInitialized, computedNodes.length, reactFlowInstance, pendingSavedViewportRef]);
 
 	// ─── Canvas callbacks ────────────────────────────────────────────────────

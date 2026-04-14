@@ -207,7 +207,20 @@ export function safeRecordCueEvent(event: Parameters<typeof recordCueEvent>[0]):
 		// Persist warns to Sentry too — DB write failures here are silent at
 		// runtime (callers must remain non-fatal) but accumulate observability
 		// gaps if not surfaced; keep returning without throwing.
-		captureException(err, { operation: 'safeRecordCueEvent', event });
+		// Strip event.payload before reporting: for agent.completed runs it
+		// contains the upstream agent's stdout (sourceOutput), which can carry
+		// user content / secrets. Send only identifiers + size.
+		const sanitizedEvent = {
+			id: event.id,
+			type: event.type,
+			triggerName: event.triggerName,
+			sessionId: event.sessionId,
+			subscriptionName: event.subscriptionName,
+			status: event.status,
+			payloadSize: event.payload?.length ?? 0,
+			payloadRedacted: event.payload != null,
+		};
+		captureException(err, { operation: 'safeRecordCueEvent', event: sanitizedEvent });
 	}
 }
 

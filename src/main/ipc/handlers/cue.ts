@@ -24,6 +24,7 @@ import {
 	writeCuePromptFile,
 } from '../../cue/config/cue-config-repository';
 import { loadPipelineLayout, savePipelineLayout } from '../../cue/pipeline-layout-store';
+import { captureException } from '../../utils/sentry';
 import type { CueEngine } from '../../cue/cue-engine';
 import type {
 	CueGraphSession,
@@ -238,13 +239,12 @@ export function registerCueHandlers(deps: CueHandlerDependencies): void {
 					}
 				}
 
-				writeCueConfigFile(options.projectRoot, options.content);
-
-				// Also keep any prompt_file / output_prompt_file paths the YAML
-				// itself references — callers may write a YAML that references
-				// pre-existing prompt files without re-passing them in promptFiles.
-				// Without this union the prune below would delete those referenced
-				// files as if they were orphans.
+				// Parse the YAML BEFORE writing so we can derive the full
+				// referenced-paths keep-set up front — and so a parse failure
+				// becomes a hard skip on pruning instead of a partial keep-set
+				// that could mass-delete prompt files referenced only inside
+				// options.content (and not duplicated in options.promptFiles).
+				let parseSucceeded = true;
 				try {
 					const parsed = yaml.load(options.content) as
 						| { subscriptions?: Array<Record<string, unknown>> }
@@ -264,15 +264,24 @@ export function registerCueHandlers(deps: CueHandlerDependencies): void {
 							}
 						}
 					}
-				} catch {
-					// Already wrote the YAML — if we can't re-parse it for prune
-					// purposes, fall back to keepPaths as derived from promptFiles
-					// alone. Pruning is best-effort and never blocks the save.
+				} catch (parseErr) {
+					parseSucceeded = false;
+					captureException(parseErr, {
+						operation: 'cue:writeYaml.parseForPrune',
+						projectRoot: options.projectRoot,
+					});
 				}
 
-				// Remove any `.md` files under .maestro/prompts/ that the new YAML no
-				// longer references (handles pipeline/agent renames and deletions).
-				pruneOrphanedPromptFiles(options.projectRoot, keepPaths);
+				writeCueConfigFile(options.projectRoot, options.content);
+
+				// Only prune when we have an authoritative keep-set. If the YAML
+				// failed to parse, the keep-set may be missing prompt files the
+				// YAML actually references — running prune anyway risks
+				// mass-deleting files we'd lose forever. The next successful save
+				// (with valid YAML) will catch up.
+				if (parseSucceeded) {
+					pruneOrphanedPromptFiles(options.projectRoot, keepPaths);
+				}
 			}
 		)
 	);

@@ -88,9 +88,13 @@ export type IpcMethodOptions<T> = IpcMethodOptionsWithDefault<T> | IpcMethodOpti
  * });
  */
 export async function createIpcMethod<T>(options: IpcMethodOptions<T>): Promise<T> {
+	// Only catch the IPC call itself. The previous shape wrapped the transform
+	// in the same try/catch, which silently converted programmer errors in
+	// transform() into the swallow-path defaultValue — masking real bugs. The
+	// transform now runs outside the catch so its exceptions propagate.
+	let result: T;
 	try {
-		const result = await options.call();
-		return options.transform ? options.transform(result) : result;
+		result = await options.call();
 	} catch (error) {
 		console.error(`${options.errorContext} error:`, error);
 		if (options.rethrow) {
@@ -103,6 +107,7 @@ export async function createIpcMethod<T>(options: IpcMethodOptions<T>): Promise<
 		void captureException(error, { extra: { context: options.errorContext } });
 		return options.defaultValue as T;
 	}
+	return options.transform ? options.transform(result) : result;
 }
 
 // ============================================================================

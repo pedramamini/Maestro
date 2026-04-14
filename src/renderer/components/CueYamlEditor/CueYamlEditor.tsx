@@ -73,11 +73,21 @@ export function CueYamlEditor({
 						setValidationErrors(validationResult.errors);
 					}
 				} catch (err: unknown) {
-					// Validation failure on load is non-fatal — but unexpected
-					// IPC errors should still surface to telemetry.
+					// Gate the Save button when validation fails to actually run —
+					// otherwise isValid keeps its initial `true` and the user
+					// could save unvalidated YAML. Surface the error to telemetry
+					// AND to the user via setValidationErrors so they know what
+					// happened. Not re-thrown: the outer catch handles readYaml
+					// failures, not validateYaml; consolidating recovery here.
 					captureException(err, {
 						extra: { operation: 'cueYamlEditor.loadValidate', projectRoot },
 					});
+					if (!cancelled) {
+						setIsValid(false);
+						setValidationErrors([
+							`Failed to validate YAML: ${err instanceof Error ? err.message : String(err)}`,
+						]);
+					}
 				}
 			} catch (err: unknown) {
 				if (cancelled) return;
@@ -154,9 +164,16 @@ export function CueYamlEditor({
 					setIsValid(result.valid);
 					setValidationErrors(result.errors);
 				} catch (err: unknown) {
+					// Same gating as loadValidate: don't leave isValid=true after
+					// a validation failure or the user could save unvalidated
+					// content from a refresh.
 					captureException(err, {
 						extra: { operation: 'cueYamlEditor.refreshValidate', projectRoot },
 					});
+					setIsValid(false);
+					setValidationErrors([
+						`Failed to validate YAML: ${err instanceof Error ? err.message : String(err)}`,
+					]);
 				}
 			}
 		} catch (err: unknown) {

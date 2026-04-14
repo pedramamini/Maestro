@@ -112,6 +112,15 @@ export interface PipelineLayoutState {
 	pipelines: CuePipeline[];
 	selectedPipelineId: string | null;
 	viewport?: PipelineViewport;
+	/**
+	 * Set of project roots that the most recent successful save wrote to.
+	 * Persisted alongside the layout so we can re-seed lastWrittenRootsRef on
+	 * editor mount even when an agent that previously wrote to a root has been
+	 * renamed or removed since (in which case sessionId/sessionName lookup
+	 * would otherwise miss the root and a future "delete the orphaned pipeline"
+	 * save would leave a stale YAML at that root).
+	 */
+	writtenRoots?: string[];
 }
 
 /** Session data with subscriptions for the Cue graph/pipeline visualization */

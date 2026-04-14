@@ -73,7 +73,7 @@ export function usePipelineLayout({
 	const pipelineStateRef = useRef(pipelineState);
 	pipelineStateRef.current = pipelineState;
 
-	// Debounced layout persistence (positions + viewport)
+	// Debounced layout persistence (positions + viewport + written roots)
 	const persistLayout = useCallback(() => {
 		if (layoutSaveTimerRef.current) clearTimeout(layoutSaveTimerRef.current);
 		layoutSaveTimerRef.current = setTimeout(() => {
@@ -83,6 +83,11 @@ export function usePipelineLayout({
 				pipelines: state.pipelines,
 				selectedPipelineId: state.selectedPipelineId,
 				viewport,
+				// Persist the written-roots snapshot so the next mount can
+				// reseed lastWrittenRootsRef even if the originating agent has
+				// been renamed/removed (sessionId/Name lookup would miss the
+				// root in that case, leaving stale YAML uncleared).
+				writtenRoots: [...lastWrittenRootsRef.current],
 			};
 			cueService
 				.savePipelineLayout(layout as unknown as Record<string, unknown>)
@@ -90,7 +95,7 @@ export function usePipelineLayout({
 					captureException(err, { extra: { operation: 'savePipelineLayout' } });
 				});
 		}, 500);
-	}, [reactFlowInstance]);
+	}, [reactFlowInstance, lastWrittenRootsRef]);
 
 	// Clean up debounce timer on unmount
 	useEffect(() => {
@@ -151,11 +156,23 @@ export function usePipelineLayout({
 				pipelinesForRoots = livePipelines;
 			}
 
-			// Seed lastWrittenRootsRef from the loaded pipelines so the very first
-			// save in this session knows which roots existed before any edits —
-			// otherwise deleting the only pipeline in a root and saving wouldn't
-			// know to clear that root's stale YAML.
+			// Seed lastWrittenRootsRef from two sources, unioned:
+			//   1. The persisted writtenRoots set from the previous save —
+			//      authoritative even when the originating agent has since been
+			//      renamed or deleted (the session lookup below would miss it
+			//      in that case, leaving stale YAML at that root uncleared).
+			//   2. Session-resolved roots from the just-loaded pipelines —
+			//      catches any roots that aren't in writtenRoots yet (e.g.
+			//      first-ever editor open with pre-existing pipelines, or
+			//      writtenRoots was cleared/missing on disk).
 			const loadedRoots = new Set<string>();
+			if (savedLayout?.writtenRoots && Array.isArray(savedLayout.writtenRoots)) {
+				for (const root of savedLayout.writtenRoots) {
+					if (typeof root === 'string' && root.length > 0) {
+						loadedRoots.add(root);
+					}
+				}
+			}
 			const sessionsById = new Map(sessions.map((s) => [s.id, s]));
 			const sessionsByName = new Map(sessions.map((s) => [s.name, s]));
 			for (const pipeline of pipelinesForRoots) {
