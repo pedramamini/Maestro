@@ -9,7 +9,10 @@ import * as yaml from 'js-yaml';
 import type { CueConfig } from './cue-types';
 import { readCueConfigFile, watchCueConfigFile } from './config/cue-config-repository';
 import { materializeCueConfig, parseCueConfigDocument } from './config/cue-config-normalizer';
-import { validateCueConfigDocument } from './config/cue-config-validator';
+import {
+	partitionValidSubscriptions,
+	validateCueConfigDocument,
+} from './config/cue-config-validator';
 
 export { resolveCueConfigPath } from './config/cue-config-repository';
 
@@ -60,23 +63,46 @@ export function loadCueConfigDetailed(projectRoot: string): LoadCueConfigDetaile
 		};
 	}
 
-	const validation = validateCueConfigDocument(parsed);
-	if (!validation.valid) {
-		return { ok: false, reason: 'invalid', errors: validation.errors };
+	// Lenient partition: config-level errors (missing subscriptions array, bad
+	// settings) are still fatal, but per-subscription errors only drop that one
+	// subscription. A single malformed subscription must not block valid
+	// pipelines belonging to other agents that share the same project root.
+	const partitioned = partitionValidSubscriptions(parsed);
+	if (partitioned.configErrors.length > 0) {
+		return { ok: false, reason: 'invalid', errors: partitioned.configErrors };
 	}
 
 	const document = parseCueConfigDocument(file.raw, projectRoot);
 	if (!document) {
-		// Should be unreachable since validation passed, but guard defensively.
+		// Should be unreachable since the config-level shape passed, but guard defensively.
 		return {
 			ok: false,
 			reason: 'parse-error',
-			message: 'Cue config could not be normalized after validation',
+			message: 'Cue config could not be normalized',
 		};
 	}
 
-	const materialized = materializeCueConfig(document);
-	return { ok: true, config: materialized.config, warnings: materialized.warnings };
+	// Drop normalized subscriptions whose source-YAML index was rejected.
+	const skippedIndices = new Set(partitioned.subscriptionErrors.map((entry) => entry.index));
+	const filteredDocument =
+		skippedIndices.size === 0
+			? document
+			: {
+					...document,
+					subscriptions: document.subscriptions.filter((_, idx) => !skippedIndices.has(idx)),
+				};
+
+	const materialized = materializeCueConfig(filteredDocument);
+
+	// Surface skipped subscriptions as warnings so the user sees what was
+	// excluded and can fix the YAML, but the rest of the config still loads.
+	const warnings = [...materialized.warnings];
+	for (const entry of partitioned.subscriptionErrors) {
+		const detail = entry.errors.join('; ');
+		warnings.push(`Skipped invalid subscription at index ${entry.index} — ${detail}`);
+	}
+
+	return { ok: true, config: materialized.config, warnings };
 }
 
 /**

@@ -20,8 +20,14 @@ vi.mock('../../../../renderer/utils/sentry', () => ({
 }));
 
 const mockPersistLayout = vi.fn();
+const mockPendingSavedViewportRef = {
+	current: null as null | { x: number; y: number; zoom: number },
+};
 vi.mock('../../../../renderer/hooks/cue/usePipelineLayout', () => ({
-	usePipelineLayout: vi.fn(() => ({ persistLayout: mockPersistLayout })),
+	usePipelineLayout: vi.fn(() => ({
+		persistLayout: mockPersistLayout,
+		pendingSavedViewportRef: mockPendingSavedViewportRef,
+	})),
 }));
 
 vi.mock('../../../../renderer/components/CuePipelineEditor/utils/pipelineToYaml', () => ({
@@ -96,14 +102,23 @@ function createDefaultParams(overrides?: Partial<UsePipelineStateParams>): UsePi
 }
 
 function makeTriggerNode(id: string, eventType = 'file.changed' as const): PipelineNode {
+	// Provide event-appropriate defaults so the per-event trigger config
+	// validation (introduced to prevent broken YAML being saved) doesn't
+	// fail tests that aren't asserting on trigger config specifics.
+	const defaults: Record<string, Record<string, unknown>> = {
+		'file.changed': { watch: '**/*' },
+		'task.pending': { watch: '**/*.md' },
+		'time.heartbeat': { interval_minutes: 5 },
+		'time.scheduled': { schedule_times: ['09:00'] },
+	};
 	return {
 		id,
 		type: 'trigger',
 		position: { x: 0, y: 0 },
 		data: {
 			eventType,
-			label: 'File Change',
-			config: {},
+			label: eventType,
+			config: defaults[eventType] ?? {},
 		},
 	};
 }

@@ -6,7 +6,7 @@
  */
 
 import { useCallback, useEffect, useRef } from 'react';
-import type { ReactFlowInstance } from 'reactflow';
+import type { ReactFlowInstance, Viewport } from 'reactflow';
 import type {
 	CuePipelineState,
 	CueGraphSession,
@@ -31,6 +31,19 @@ export interface UsePipelineLayoutParams {
 
 export interface UsePipelineLayoutReturn {
 	persistLayout: () => void;
+	/**
+	 * Pending saved viewport from disk, captured during initial restore.
+	 * CuePipelineEditor reads this once nodes have been measured and either
+	 * applies it via `setViewport` or falls back to `fitView`. Consumed (set
+	 * back to null) after the first read to prevent re-application.
+	 *
+	 * Owning the viewport-apply step in the component (rather than scheduling
+	 * `setViewport` on a timeout here) eliminates the race against ReactFlow's
+	 * node measurement — the previous implementation could set or fit the
+	 * viewport before nodes were measured, leaving the canvas appearing empty
+	 * on first open.
+	 */
+	pendingSavedViewportRef: React.MutableRefObject<Viewport | null>;
 }
 
 export function usePipelineLayout({
@@ -45,6 +58,7 @@ export function usePipelineLayout({
 	const layoutSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 	const hasRestoredLayoutRef = useRef(false);
 	const latestRestoreIdRef = useRef(0);
+	const pendingSavedViewportRef = useRef<Viewport | null>(null);
 
 	// Keep a ref to current pipeline state for layout persistence (avoids unstable callback)
 	const pipelineStateRef = useRef(pipelineState);
@@ -113,14 +127,12 @@ export function usePipelineLayout({
 				setPipelineState(merged);
 				savedStateRef.current = JSON.stringify(merged.pipelines);
 
-				// Restore viewport if available
+				// Stash the saved viewport for the editor to apply once ReactFlow
+				// has measured the restored nodes. Applying it here on a timeout
+				// raced against `fitView` and — more importantly — against node
+				// measurement, which caused the initial canvas to appear empty.
 				if (savedLayout.viewport) {
-					const viewportToRestore = savedLayout.viewport;
-					setTimeout(() => {
-						if (reqId === latestRestoreIdRef.current) {
-							reactFlowInstance.setViewport(viewportToRestore);
-						}
-					}, 100);
+					pendingSavedViewportRef.current = savedLayout.viewport;
 				}
 			} else {
 				setPipelineState({ pipelines: livePipelines, selectedPipelineId: livePipelines[0].id });
@@ -134,5 +146,5 @@ export function usePipelineLayout({
 		loadLayout();
 	}, [graphSessions, sessions]);
 
-	return { persistLayout };
+	return { persistLayout, pendingSavedViewportRef };
 }

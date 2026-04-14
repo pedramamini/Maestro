@@ -399,7 +399,10 @@ describe('cue-executor', () => {
 				expect.any(Array),
 				expect.objectContaining({
 					cwd: '/projects/test',
-					stdio: ['pipe', 'pipe', 'pipe'],
+					// Local mode uses 'ignore' for stdin so agents like Codex don't
+					// emit "Reading additional input from stdin..." into the run
+					// output before observing EOF.
+					stdio: ['ignore', 'pipe', 'pipe'],
 				})
 			);
 

@@ -46,6 +46,14 @@ const nodeTypes = {
 
 export interface PipelineCanvasProps {
 	theme: Theme;
+	/**
+	 * When true (All Pipelines view), the canvas is fully read-only:
+	 * nodes can't be dragged, connected, selected, or edited; no config
+	 * panels render even if a selection is already set. The parent also
+	 * guards each edit callback, so this is defense-in-depth at the
+	 * ReactFlow interaction layer.
+	 */
+	isReadOnly?: boolean;
 	// ReactFlow
 	nodes: Node[];
 	edges: Edge[];
@@ -109,6 +117,7 @@ export interface PipelineCanvasProps {
 
 export const PipelineCanvas = React.memo(function PipelineCanvas({
 	theme,
+	isReadOnly = false,
 	nodes,
 	edges,
 	onNodesChange,
@@ -251,6 +260,11 @@ export const PipelineCanvas = React.memo(function PipelineCanvas({
 				onDragOver={onDragOver}
 				onDrop={onDrop}
 				connectionMode={ConnectionMode.Loose}
+				// All Pipelines view is read-only. These ReactFlow props are the
+				// first line of defense — the parent also guards each callback.
+				nodesDraggable={!isReadOnly}
+				nodesConnectable={!isReadOnly}
+				elementsSelectable={!isReadOnly}
 				style={{
 					backgroundColor: theme.colors.bgMain,
 				}}
@@ -365,8 +379,11 @@ export const PipelineCanvas = React.memo(function PipelineCanvas({
 				/>
 			)}
 
-			{/* Config panels */}
-			{selectedNode &&
+			{/* Config panels — suppressed in read-only (All Pipelines) view so
+			    any selection carried over from a previous single-pipeline view
+			    does not expose editable fields. */}
+			{!isReadOnly &&
+				selectedNode &&
 				!selectedEdge &&
 				(() => {
 					const selectedPipeline = pipelines.find((pl) =>
@@ -394,7 +411,7 @@ export const PipelineCanvas = React.memo(function PipelineCanvas({
 						/>
 					);
 				})()}
-			{selectedEdge && !selectedNode && (
+			{!isReadOnly && selectedEdge && !selectedNode && (
 				<EdgeConfigPanel
 					selectedEdge={selectedEdge}
 					theme={theme}

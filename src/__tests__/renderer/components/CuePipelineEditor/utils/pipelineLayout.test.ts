@@ -80,6 +80,22 @@ describe('mergePipelinesWithSavedLayout', () => {
 		expect(result.selectedPipelineId).toBe('p1');
 	});
 
+	it('falls back to first pipeline when saved selectedPipelineId no longer exists', () => {
+		// Repro for the "pipeline vanished after save" bug: createPipeline assigned
+		// a timestamp-based id (`pipeline-1700000000000`) that the next YAML reload
+		// regenerates as `pipeline-MyPipeline`. The saved layout still references
+		// the old timestamp id; without this fallback the canvas renders empty
+		// because convertToReactFlowNodes skips every pipeline whose id != selected.
+		const livePipelines = [makePipeline({ id: 'pipeline-MyPipeline' })];
+		const savedLayout: PipelineLayoutState = {
+			pipelines: [makePipeline({ id: 'pipeline-1700000000000' })],
+			selectedPipelineId: 'pipeline-1700000000000',
+		};
+
+		const result = mergePipelinesWithSavedLayout(livePipelines, savedLayout);
+		expect(result.selectedPipelineId).toBe('pipeline-MyPipeline');
+	});
+
 	it('merges saved node positions with live pipeline data', () => {
 		const livePipelines = [makePipeline()];
 		const savedLayout: PipelineLayoutState = {

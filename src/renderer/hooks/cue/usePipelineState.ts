@@ -7,12 +7,13 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { ReactFlowInstance } from 'reactflow';
+import type { ReactFlowInstance, Viewport } from 'reactflow';
 import type {
 	CuePipelineState,
 	CuePipeline,
 	CueGraphSession,
 	PipelineEdge as PipelineEdgeType,
+	PipelineNode,
 	TriggerNodeData,
 	AgentNodeData,
 	CueEventType,
@@ -53,6 +54,64 @@ export const DEFAULT_TRIGGER_LABELS: Record<CueEventType, string> = {
 	'cli.trigger': 'CLI Trigger',
 };
 
+/**
+ * Validate trigger node config against the YAML schema's per-event
+ * requirements. Catches misconfigured triggers (e.g. a `time.scheduled`
+ * trigger with no `schedule_times`) at SAVE time so they never hit disk —
+ * otherwise the YAML loader rejects the whole file on next launch and
+ * blocks valid pipelines belonging to other agents in the same project.
+ */
+function validateTriggerConfig(
+	pipelineName: string,
+	trigger: PipelineNode,
+	errors: string[]
+): void {
+	const data = trigger.data as TriggerNodeData;
+	const cfg = data.config ?? {};
+	const label = data.customLabel ? `"${data.customLabel}"` : `${data.eventType}`;
+	switch (data.eventType) {
+		case 'time.heartbeat':
+			if (
+				typeof cfg.interval_minutes !== 'number' ||
+				!Number.isFinite(cfg.interval_minutes) ||
+				cfg.interval_minutes <= 0
+			) {
+				errors.push(`"${pipelineName}": ${label} trigger needs a positive interval (minutes)`);
+			}
+			break;
+		case 'time.scheduled':
+			if (!Array.isArray(cfg.schedule_times) || cfg.schedule_times.length === 0) {
+				errors.push(
+					`"${pipelineName}": ${label} trigger needs at least one schedule time (e.g. 09:00)`
+				);
+			}
+			break;
+		case 'file.changed':
+			if (!cfg.watch || (typeof cfg.watch === 'string' && cfg.watch.trim().length === 0)) {
+				errors.push(`"${pipelineName}": ${label} trigger needs a "watch" glob pattern`);
+			}
+			break;
+		case 'task.pending':
+			if (!cfg.watch || (typeof cfg.watch === 'string' && cfg.watch.trim().length === 0)) {
+				errors.push(`"${pipelineName}": ${label} trigger needs a "watch" glob pattern`);
+			}
+			break;
+		case 'github.pull_request':
+		case 'github.issue':
+			// repo is optional in the YAML schema (defaults to current repo via gh CLI)
+			// but if provided it must be non-empty.
+			if (
+				cfg.repo !== undefined &&
+				(typeof cfg.repo !== 'string' || cfg.repo.trim().length === 0)
+			) {
+				errors.push(
+					`"${pipelineName}": ${label} trigger has an empty "repo" — leave blank or set "owner/repo"`
+				);
+			}
+			break;
+	}
+}
+
 /** Validates pipeline graph before save. Returns array of error messages. */
 export function validatePipelines(pipelines: CuePipeline[]): string[] {
 	const errors: string[] = [];
@@ -74,6 +133,10 @@ export function validatePipelines(pipelines: CuePipeline[]): string[] {
 		}
 		if (agents.length === 0) {
 			errors.push(`"${pipeline.name}": needs at least one agent`);
+		}
+
+		for (const trigger of triggers) {
+			validateTriggerConfig(pipeline.name, trigger, errors);
 		}
 
 		// Check for disconnected agents (no incoming edge)
@@ -176,6 +239,8 @@ export interface UsePipelineStateReturn {
 	setShowSettings: React.Dispatch<React.SetStateAction<boolean>>;
 	runningPipelineIds: Set<string>;
 	persistLayout: () => void;
+	/** Saved viewport awaiting application once ReactFlow has measured nodes. */
+	pendingSavedViewportRef: React.MutableRefObject<Viewport | null>;
 	handleSave: () => Promise<void>;
 	handleDiscard: () => Promise<void>;
 	createPipeline: () => void;
@@ -222,7 +287,7 @@ export function usePipelineState({
 	const [showSettings, setShowSettings] = useState(false);
 
 	// Layout persistence (composed hook)
-	const { persistLayout } = usePipelineLayout({
+	const { persistLayout, pendingSavedViewportRef } = usePipelineLayout({
 		reactFlowInstance,
 		graphSessions,
 		sessions,
@@ -255,6 +320,20 @@ export function usePipelineState({
 	useEffect(() => {
 		useCueDirtyStore.getState().setPipelineDirty(isDirty);
 	}, [isDirty]);
+
+	// Safety net: if `selectedPipelineId` ever points at a pipeline that no
+	// longer exists in `pipelines`, reset to "All Pipelines" so the canvas
+	// stays populated. This was the user-visible "pipeline vanished after
+	// save" symptom — `convertToReactFlowNodes` skips every pipeline whose id
+	// doesn't match the selected id, so a stale selection caused the entire
+	// canvas to render empty until the editor was remounted (tab switch).
+	useEffect(() => {
+		const sel = pipelineState.selectedPipelineId;
+		if (sel === null) return;
+		if (pipelineState.pipelines.length === 0) return;
+		if (pipelineState.pipelines.some((p) => p.id === sel)) return;
+		setPipelineState((prev) => ({ ...prev, selectedPipelineId: null }));
+	}, [pipelineState.pipelines, pipelineState.selectedPipelineId]);
 
 	const handleSave = useCallback(async () => {
 		// Validate graph shape first
@@ -672,6 +751,7 @@ export function usePipelineState({
 		setShowSettings,
 		runningPipelineIds,
 		persistLayout,
+		pendingSavedViewportRef,
 		handleSave,
 		handleDiscard,
 		createPipeline,

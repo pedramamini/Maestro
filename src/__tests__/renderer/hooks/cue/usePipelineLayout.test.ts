@@ -159,7 +159,7 @@ describe('usePipelineLayout', () => {
 		expect(setPipelineState).toHaveBeenCalledTimes(1);
 	});
 
-	it('restores viewport when saved layout has viewport', async () => {
+	it('stashes saved viewport in pendingSavedViewportRef for the editor to apply once nodes are measured', async () => {
 		const livePipelines = [makePipeline('p1')];
 		mockGraphSessionsToPipelines.mockReturnValue(livePipelines as any);
 
@@ -178,18 +178,56 @@ describe('usePipelineLayout', () => {
 			} as unknown as UsePipelineLayoutParams['reactFlowInstance'],
 		});
 
-		renderHook(() => usePipelineLayout(params));
+		const { result } = renderHook(() => usePipelineLayout(params));
 
 		await act(async () => {
 			await vi.advanceTimersByTimeAsync(200);
 		});
 
-		// The viewport restore is inside a setTimeout(fn, 100)
-		act(() => {
-			vi.advanceTimersByTime(100);
+		// Hook no longer applies the viewport directly — that's the editor's job,
+		// gated on ReactFlow's useNodesInitialized so nodes have been measured first.
+		expect(setViewport).not.toHaveBeenCalled();
+		expect(result.current.pendingSavedViewportRef.current).toEqual({
+			x: 100,
+			y: 200,
+			zoom: 1.5,
+		});
+	});
+
+	it('leaves pendingSavedViewportRef null when saved layout has no viewport', async () => {
+		const livePipelines = [makePipeline('p1')];
+		mockGraphSessionsToPipelines.mockReturnValue(livePipelines as any);
+
+		const savedLayout = {
+			pipelines: [makePipeline('p1')],
+			selectedPipelineId: 'p1',
+			// no `viewport` key
+		};
+		(window as any).maestro.cue.loadPipelineLayout.mockResolvedValue(savedLayout);
+
+		const params = createDefaultParams();
+		const { result } = renderHook(() => usePipelineLayout(params));
+
+		await act(async () => {
+			await vi.advanceTimersByTimeAsync(200);
 		});
 
-		expect(setViewport).toHaveBeenCalledWith({ x: 100, y: 200, zoom: 1.5 });
+		expect(result.current.pendingSavedViewportRef.current).toBeNull();
+	});
+
+	it('leaves pendingSavedViewportRef null when there is no saved layout at all', async () => {
+		const livePipelines = [makePipeline('p1')];
+		mockGraphSessionsToPipelines.mockReturnValue(livePipelines as any);
+		(window as any).maestro.cue.loadPipelineLayout.mockResolvedValue(null);
+
+		const params = createDefaultParams();
+		const { result } = renderHook(() => usePipelineLayout(params));
+
+		await act(async () => {
+			await vi.advanceTimersByTimeAsync(200);
+		});
+
+		expect(result.current.pendingSavedViewportRef.current).toBeNull();
 	});
 
 	it('uses first pipeline when no saved layout exists', async () => {

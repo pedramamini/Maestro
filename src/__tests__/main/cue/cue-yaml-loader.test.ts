@@ -334,23 +334,47 @@ subscriptions:
 			}
 		});
 
-		it('returns { ok: false, reason: "invalid", errors } when validation fails', () => {
+		it('skips per-subscription validation errors and surfaces them as warnings', () => {
+			// Lenient loader: a single broken subscription must not block valid
+			// subs in the same YAML. The bad sub is dropped, others load, and
+			// the failure is surfaced as a warning so the user can fix it.
 			mockExistsSync.mockReturnValue(true);
 			mockReadFileSync.mockReturnValue(`
 subscriptions:
   - name: bad-sub
     event: time.heartbeat
     prompt: Hi
+  - name: good-sub
+    event: time.heartbeat
+    prompt: Check status
+    interval_minutes: 5
 `);
-			// Missing interval_minutes for time.heartbeat — validator rejects this.
+
+			const result = loadCueConfigDetailed('/projects/test');
+
+			expect(result.ok).toBe(true);
+			if (result.ok) {
+				expect(result.config.subscriptions.map((s) => s.name)).toEqual(['good-sub']);
+				expect(result.warnings).toEqual(
+					expect.arrayContaining([
+						expect.stringMatching(/Skipped invalid subscription.*interval_minutes/),
+					])
+				);
+			}
+		});
+
+		it('returns { ok: false, reason: "invalid" } only for config-level errors', () => {
+			mockExistsSync.mockReturnValue(true);
+			mockReadFileSync.mockReturnValue(`
+subscriptions: not-an-array
+`);
 
 			const result = loadCueConfigDetailed('/projects/test');
 
 			expect(result.ok).toBe(false);
 			if (!result.ok && result.reason === 'invalid') {
-				expect(result.errors.length).toBeGreaterThan(0);
 				expect(result.errors).toEqual(
-					expect.arrayContaining([expect.stringMatching(/interval_minutes/)])
+					expect.arrayContaining([expect.stringMatching(/subscriptions/)])
 				);
 			}
 		});

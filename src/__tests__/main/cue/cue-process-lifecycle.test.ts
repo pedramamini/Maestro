@@ -115,12 +115,14 @@ describe('cue-process-lifecycle', () => {
 			const resultPromise = runProcess('run-1', spec, createOptions());
 			await vi.advanceTimersByTimeAsync(0);
 
+			// Local mode: stdin is `'ignore'` so agents like Codex don't print
+			// "Reading additional input from stdin..." into the run output.
 			expect(mockSpawn).toHaveBeenCalledWith(
 				'claude',
 				['--print', '--', 'test prompt'],
 				expect.objectContaining({
 					cwd: '/projects/test',
-					stdio: ['pipe', 'pipe', 'pipe'],
+					stdio: ['ignore', 'pipe', 'pipe'],
 				})
 			);
 

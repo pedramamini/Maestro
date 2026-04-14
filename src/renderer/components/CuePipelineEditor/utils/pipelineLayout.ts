@@ -44,11 +44,29 @@ export function mergePipelinesWithSavedLayout(
 		};
 	});
 
+	// Validate the saved selection against the live pipelines. After a save,
+	// `pipelineToYaml`/`subscriptionsToPipelines` regenerates pipeline IDs from
+	// the subscription names, so any selectedPipelineId that was created via
+	// `createPipeline` (timestamp-based) becomes stale. A stale selection
+	// causes `convertToReactFlowNodes` to skip every pipeline, leaving the
+	// canvas appearing empty. Fall back to the first pipeline so the user
+	// always sees their work.
+	let resolvedSelected: string | null;
+	if ('selectedPipelineId' in savedLayout) {
+		const saved = savedLayout.selectedPipelineId;
+		if (saved === null) {
+			resolvedSelected = null;
+		} else if (mergedPipelines.some((p) => p.id === saved)) {
+			resolvedSelected = saved;
+		} else {
+			resolvedSelected = mergedPipelines[0]?.id ?? null;
+		}
+	} else {
+		resolvedSelected = mergedPipelines[0]?.id ?? null;
+	}
+
 	return {
 		pipelines: mergedPipelines,
-		selectedPipelineId:
-			'selectedPipelineId' in savedLayout
-				? savedLayout.selectedPipelineId
-				: (mergedPipelines[0]?.id ?? null),
+		selectedPipelineId: resolvedSelected,
 	};
 }

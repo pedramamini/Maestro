@@ -152,11 +152,21 @@ export function runProcess(
 
 	return new Promise<ProcessRunResult>((resolve) => {
 		let child: ChildProcess;
+		// Only attach a writable stdin pipe when the SSH wrapper actually
+		// needs to write a script or prompt down it. In local mode the prompt
+		// is already passed as a CLI argument, and leaving stdin as an open
+		// pipe causes some agents (notably Codex `exec`) to emit "Reading
+		// additional input from stdin..." into the run output before they
+		// observe EOF. `'ignore'` gives the child /dev/null for stdin so it
+		// never tries to read — Claude already behaves correctly with either,
+		// so this is safe across all agents.
+		const needsStdinWrite = sshRemoteEnabled && (Boolean(sshStdinScript) || Boolean(stdinPrompt));
+		const stdinMode: 'pipe' | 'ignore' = needsStdinWrite ? 'pipe' : 'ignore';
 		try {
 			child = spawn(spec.command, spec.args, {
 				cwd: spec.cwd,
 				env: spec.env,
-				stdio: ['pipe', 'pipe', 'pipe'],
+				stdio: [stdinMode, 'pipe', 'pipe'],
 			});
 		} catch (err) {
 			captureException(err, { operation: 'cue:spawn', runId, command: spec.command });
