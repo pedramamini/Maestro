@@ -3088,6 +3088,38 @@ interface MaestroAPI {
 		checkCli: () => Promise<{ available: boolean; version?: string }>;
 		validateApiKey: (key: string) => Promise<{ valid: boolean }>;
 	};
+
+	// Maestro CLI API (status check + install/update)
+	maestroCli: {
+		checkStatus: () => Promise<{
+			expectedVersion: string;
+			installed: boolean;
+			inPath: boolean;
+			commandPath: string | null;
+			installedVersion: string | null;
+			versionMatch: boolean;
+			needsInstallOrUpdate: boolean;
+			installDir: string;
+			bundledCliPath: string | null;
+		}>;
+		installOrUpdate: () => Promise<{
+			success: boolean;
+			status: {
+				expectedVersion: string;
+				installed: boolean;
+				inPath: boolean;
+				commandPath: string | null;
+				installedVersion: string | null;
+				versionMatch: boolean;
+				needsInstallOrUpdate: boolean;
+				installDir: string;
+				bundledCliPath: string | null;
+			};
+			pathUpdated: boolean;
+			restartRequired: boolean;
+			shellFilesUpdated: string[];
+		}>;
+	};
 }
 
 declare global {

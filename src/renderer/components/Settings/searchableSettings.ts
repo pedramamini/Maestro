@@ -74,6 +74,14 @@ export const GENERAL_SETTINGS: SearchableSetting[] = [
 		keywords: ['github', 'gh', 'cli', 'git', 'path'],
 	},
 	{
+		id: 'general-maestro-cli',
+		tab: 'general',
+		tabLabel: 'General',
+		label: 'Maestro CLI',
+		description: 'Check PATH/version and install or update maestro-cli for the current user',
+		keywords: ['maestro-cli', 'cli', 'path', 'version', 'install', 'update'],
+	},
+	{
 		id: 'general-input-behavior',
 		tab: 'general',
 		tabLabel: 'General',
