@@ -1316,6 +1316,7 @@ function SessionListInner(props: SessionListProps) {
 				shortcuts={shortcuts}
 				showUnreadAgentsOnly={showUnreadAgentsOnly}
 				hasUnreadAgents={hasUnreadAgents}
+				sidebarWidth={leftSidebarWidthState}
 				addNewSession={addNewSession}
 				openFeedback={props.openFeedback}
 				setLeftSidebarOpen={setLeftSidebarOpen}
