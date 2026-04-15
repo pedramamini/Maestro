@@ -909,6 +909,9 @@ export function registerProcessHandlers(deps: ProcessHandlerDependencies): void 
 								: sshResult.config.host
 						);
 
+						// Build remote command parts
+						const remoteParts: string[] = [];
+
 						// Remote command (must come after destination)
 						if (workingDirOverride) {
 							// Handle leading ~ by using $HOME outside of quotes so the remote shell expands it
@@ -917,8 +920,23 @@ export function registerProcessHandlers(deps: ProcessHandlerDependencies): void 
 								: workingDirOverride === '~'
 									? '"$HOME"'
 									: shellEscape(workingDirOverride);
-							sshArgs.push(`cd ${cdPath} && exec "$SHELL"`);
+							remoteParts.push(`cd ${cdPath}`);
 						}
+
+						// Export merged env vars on the remote side
+						const envExports: string[] = [];
+						for (const [key, value] of Object.entries(mergedEnvVars)) {
+							if (/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(key)) {
+								envExports.push(`export ${key}=${shellEscape(value)}`);
+							}
+						}
+						if (envExports.length > 0) {
+							remoteParts.push(envExports.join(' && '));
+						}
+
+						remoteParts.push('exec "$SHELL"');
+						sshArgs.push(remoteParts.join(' && '));
+
 						return processManager.spawn({
 							sessionId: config.sessionId,
 							toolType: 'terminal',

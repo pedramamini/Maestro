@@ -1123,7 +1123,7 @@ describe('process IPC handlers', () => {
 			// Destination must appear before the remote command
 			const lastArg = spawnCall.args[spawnCall.args.length - 1];
 			// Path must be shell-escaped (single-quoted) to prevent injection
-			expect(lastArg).toBe('cd \'/remote/project\' && exec "$SHELL"');
+			expect(lastArg).toContain("cd '/remote/project'");
 			expect(lastArg).toContain('exec "$SHELL"');
 			// SSH options must be present
 			expect(spawnCall.args).toContain('StrictHostKeyChecking=accept-new');
@@ -1151,7 +1151,8 @@ describe('process IPC handlers', () => {
 			const spawnCall = mockProcessManager.spawn.mock.calls[0][0];
 			const lastArg = spawnCall.args[spawnCall.args.length - 1];
 			// Single-quoted path prevents command substitution
-			expect(lastArg).toBe('cd \'/tmp/$(whoami)\' && exec "$SHELL"');
+			expect(lastArg).toContain("cd '/tmp/$(whoami)'");
+			expect(lastArg).toContain('exec "$SHELL"');
 		});
 
 		it('should expand tilde in workingDirOverride for remote shell', async () => {
@@ -1175,7 +1176,8 @@ describe('process IPC handlers', () => {
 			const spawnCall = mockProcessManager.spawn.mock.calls[0][0];
 			const lastArg = spawnCall.args[spawnCall.args.length - 1];
 			// Tilde must expand via $HOME, not be single-quoted (which suppresses expansion)
-			expect(lastArg).toBe('cd "$HOME"/\'project\' && exec "$SHELL"');
+			expect(lastArg).toContain('cd "$HOME"/\'project\'');
+			expect(lastArg).toContain('exec "$SHELL"');
 		});
 
 		it('should handle bare tilde workingDirOverride', async () => {
@@ -1198,7 +1200,8 @@ describe('process IPC handlers', () => {
 
 			const spawnCall = mockProcessManager.spawn.mock.calls[0][0];
 			const lastArg = spawnCall.args[spawnCall.args.length - 1];
-			expect(lastArg).toBe('cd "$HOME" && exec "$SHELL"');
+			expect(lastArg).toContain('cd "$HOME"');
+			expect(lastArg).toContain('exec "$SHELL"');
 		});
 
 		it('should include port flag for non-default SSH port', async () => {
@@ -1297,6 +1300,119 @@ describe('process IPC handlers', () => {
 
 			expect(mockProcessManager.spawnTerminalTab).toHaveBeenCalled();
 			expect(mockProcessManager.spawn).not.toHaveBeenCalled();
+		});
+
+		it('should export merged env vars in the remote command for SSH terminals', async () => {
+			mockSettingsStore.get.mockImplementation((key: string, defaultValue: unknown) => {
+				if (key === 'sshRemotes') return [mockSshRemoteForTerminal];
+				if (key === 'shellEnvVars') return { GLOBAL_VAR: 'from-global' };
+				return defaultValue;
+			});
+			mockAgentConfigsStore.get.mockReturnValue({
+				'claude-code': { customEnvVars: { AGENT_VAR: 'from-agent' } },
+			});
+			mockProcessManager.spawn.mockReturnValue({ pid: 5020, success: true });
+
+			const handler = handlers.get('process:spawnTerminalTab');
+			await handler!({} as any, {
+				sessionId: 'session-1-terminal-tab-1',
+				cwd: '/local/project',
+				toolType: 'claude-code',
+				sessionCustomEnvVars: { SESSION_VAR: 'from-session' },
+				sessionSshRemoteConfig: {
+					enabled: true,
+					remoteId: 'remote-1',
+					workingDirOverride: '/remote/project',
+				},
+			});
+
+			const spawnCall = mockProcessManager.spawn.mock.calls[0][0];
+			const lastArg = spawnCall.args[spawnCall.args.length - 1];
+			// All env var layers must be exported in the remote command
+			expect(lastArg).toContain("export GLOBAL_VAR='from-global'");
+			expect(lastArg).toContain("export AGENT_VAR='from-agent'");
+			expect(lastArg).toContain("export SESSION_VAR='from-session'");
+			expect(lastArg).toContain("cd '/remote/project'");
+			expect(lastArg).toContain('exec "$SHELL"');
+		});
+
+		it('should export env vars even without workingDirOverride for SSH terminals', async () => {
+			mockSettingsStore.get.mockImplementation((key: string, defaultValue: unknown) => {
+				if (key === 'sshRemotes') return [mockSshRemoteForTerminal];
+				if (key === 'shellEnvVars') return {};
+				return defaultValue;
+			});
+			mockAgentConfigsStore.get.mockReturnValue({
+				'claude-code': { customEnvVars: { MY_VAR: 'my-value' } },
+			});
+			mockProcessManager.spawn.mockReturnValue({ pid: 5021, success: true });
+
+			const handler = handlers.get('process:spawnTerminalTab');
+			await handler!({} as any, {
+				sessionId: 'session-1-terminal-tab-1',
+				cwd: '/local/project',
+				toolType: 'claude-code',
+				sessionSshRemoteConfig: {
+					enabled: true,
+					remoteId: 'remote-1',
+				},
+			});
+
+			const spawnCall = mockProcessManager.spawn.mock.calls[0][0];
+			const lastArg = spawnCall.args[spawnCall.args.length - 1];
+			expect(lastArg).toContain("export MY_VAR='my-value'");
+			expect(lastArg).toContain('exec "$SHELL"');
+		});
+
+		it('should shell-escape env var values in SSH terminal remote command', async () => {
+			mockSettingsStore.get.mockImplementation((key: string, defaultValue: unknown) => {
+				if (key === 'sshRemotes') return [mockSshRemoteForTerminal];
+				if (key === 'shellEnvVars') return { TRICKY: "val'ue with spaces" };
+				return defaultValue;
+			});
+			mockProcessManager.spawn.mockReturnValue({ pid: 5022, success: true });
+
+			const handler = handlers.get('process:spawnTerminalTab');
+			await handler!({} as any, {
+				sessionId: 'session-1-terminal-tab-1',
+				cwd: '/local/project',
+				sessionSshRemoteConfig: {
+					enabled: true,
+					remoteId: 'remote-1',
+				},
+			});
+
+			const spawnCall = mockProcessManager.spawn.mock.calls[0][0];
+			const lastArg = spawnCall.args[spawnCall.args.length - 1];
+			// Value must be shell-escaped (single-quoted with internal quotes escaped)
+			expect(lastArg).toContain('export TRICKY=');
+			expect(lastArg).not.toContain("val'ue"); // Raw quote must not appear
+		});
+
+		it('should skip env vars with invalid names in SSH terminal remote command', async () => {
+			mockSettingsStore.get.mockImplementation((key: string, defaultValue: unknown) => {
+				if (key === 'sshRemotes') return [mockSshRemoteForTerminal];
+				if (key === 'shellEnvVars')
+					return { VALID_VAR: 'ok', '123BAD': 'skip', 'ALSO VALID NOT': 'skip' };
+				return defaultValue;
+			});
+			mockProcessManager.spawn.mockReturnValue({ pid: 5023, success: true });
+
+			const handler = handlers.get('process:spawnTerminalTab');
+			await handler!({} as any, {
+				sessionId: 'session-1-terminal-tab-1',
+				cwd: '/local/project',
+				sessionSshRemoteConfig: {
+					enabled: true,
+					remoteId: 'remote-1',
+				},
+			});
+
+			const spawnCall = mockProcessManager.spawn.mock.calls[0][0];
+			const lastArg = spawnCall.args[spawnCall.args.length - 1];
+			expect(lastArg).toContain("export VALID_VAR='ok'");
+			expect(lastArg).not.toContain('123BAD');
+			expect(lastArg).not.toContain('ALSO VALID NOT');
 		});
 	});
 
