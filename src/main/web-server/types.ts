@@ -659,3 +659,24 @@ export type GetUsageDashboardCallback = (
 	timeRange: 'day' | 'week' | 'month' | 'all'
 ) => Promise<UsageDashboardData>;
 export type GetAchievementsCallback = () => Promise<AchievementData[]>;
+
+// =============================================================================
+// Director's Notes Callback Types
+// =============================================================================
+
+export interface DirectorNotesSynopsisResult {
+	success: boolean;
+	synopsis: string;
+	generatedAt?: number;
+	stats?: {
+		agentCount: number;
+		entryCount: number;
+		durationMs: number;
+	};
+	error?: string;
+}
+
+export type GenerateDirectorNotesSynopsisCallback = (
+	lookbackDays: number,
+	provider: string
+) => Promise<DirectorNotesSynopsisResult>;
