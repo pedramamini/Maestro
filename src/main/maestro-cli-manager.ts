@@ -129,7 +129,11 @@ export class MaestroCliManager {
 			rcFiles.add('.profile');
 		}
 
-		const expectedEntry = '$HOME/.local/bin';
+		const normalizedInstallDir = path.resolve(installDir);
+		const normalizedHome = path.resolve(home);
+		const expectedEntry = normalizedInstallDir.startsWith(`${normalizedHome}${path.sep}`)
+			? `$HOME/${path.relative(normalizedHome, normalizedInstallDir).replace(/\\/g, '/')}`
+			: normalizedInstallDir.replace(/\\/g, '/');
 		const exportLine = `export PATH="${expectedEntry}:$PATH"`;
 
 		let updated = false;

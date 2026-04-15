@@ -50,6 +50,8 @@ export interface GeneralTabProps {
 }
 
 export function GeneralTab({ theme, isOpen }: GeneralTabProps) {
+	const appVersion = typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : 'unknown';
+
 	const {
 		// Conductor Profile
 		conductorProfile,
@@ -579,7 +581,7 @@ export function GeneralTab({ theme, isOpen }: GeneralTabProps) {
 				>
 					<div className="text-xs opacity-70">
 						Check whether <code>maestro-cli</code> is available in your PATH and whether its version
-						matches Maestro v{maestroCliStatus?.expectedVersion || __APP_VERSION__}.
+						matches Maestro v{maestroCliStatus?.expectedVersion || appVersion}.
 					</div>
 
 					{maestroCliStatus && !maestroCliChecking && (
