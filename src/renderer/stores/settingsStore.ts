@@ -572,7 +572,7 @@ export const useSettingsStore = create<SettingsStore>()((set, get) => {
 		// ============================================================================
 
 		setConductorProfile: (value) => {
-			const trimmed = value.slice(0, 1000);
+			const trimmed = value.slice(0, 5000);
 			set({ conductorProfile: trimmed });
 			window.maestro.settings.set('conductorProfile', trimmed);
 		},

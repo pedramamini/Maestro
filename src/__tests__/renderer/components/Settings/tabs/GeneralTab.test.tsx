@@ -3,7 +3,7 @@
  *
  * Tests the general settings tab including:
  * - Section rendering (About Me, Shell, Log Level, GitHub CLI, etc.)
- * - Conductor Profile textarea with character count and limit
+ * - Conductor Profile textarea with character count and 5000-char limit
  * - Shell detection, selection, and configuration
  * - Custom shell path, arguments, and environment variables
  * - Log level toggle buttons
@@ -204,14 +204,14 @@ describe('GeneralTab', () => {
 			expect(textarea).toBeInTheDocument();
 		});
 
-		it('should display character count as 0/1000 when empty', async () => {
+		it('should display character count as 0/5000 when empty', async () => {
 			render(<GeneralTab theme={mockTheme} isOpen={true} />);
 
 			await act(async () => {
 				await vi.advanceTimersByTimeAsync(100);
 			});
 
-			expect(screen.getByText('0/1000')).toBeInTheDocument();
+			expect(screen.getByText('0/5000')).toBeInTheDocument();
 		});
 
 		it('should display character count matching profile length', async () => {
@@ -222,10 +222,10 @@ describe('GeneralTab', () => {
 				await vi.advanceTimersByTimeAsync(100);
 			});
 
-			expect(screen.getByText('11/1000')).toBeInTheDocument();
+			expect(screen.getByText('11/5000')).toBeInTheDocument();
 		});
 
-		it('should have maxLength of 1000 on the textarea', async () => {
+		it('should have maxLength of 5000 on the textarea', async () => {
 			render(<GeneralTab theme={mockTheme} isOpen={true} />);
 
 			await act(async () => {
@@ -233,7 +233,7 @@ describe('GeneralTab', () => {
 			});
 
 			const textarea = screen.getByPlaceholderText(/I'm a senior developer/) as HTMLTextAreaElement;
-			expect(textarea.maxLength).toBe(1000);
+			expect(textarea.maxLength).toBe(5000);
 		});
 
 		it('should call setConductorProfile when text changes', async () => {

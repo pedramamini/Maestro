@@ -649,13 +649,13 @@ describe('settingsStore', () => {
 	// ========================================================================
 
 	describe('setters with validation', () => {
-		it('setConductorProfile trims to 1000 characters', () => {
-			const longProfile = 'a'.repeat(1500);
+		it('setConductorProfile trims to 5000 characters', () => {
+			const longProfile = 'a'.repeat(6000);
 			useSettingsStore.getState().setConductorProfile(longProfile);
-			expect(useSettingsStore.getState().conductorProfile).toBe('a'.repeat(1000));
+			expect(useSettingsStore.getState().conductorProfile).toBe('a'.repeat(5000));
 			expect(window.maestro.settings.set).toHaveBeenCalledWith(
 				'conductorProfile',
-				'a'.repeat(1000)
+				'a'.repeat(5000)
 			);
 		});
 

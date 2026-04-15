@@ -204,7 +204,7 @@ export function GeneralTab({ theme, isOpen }: GeneralTabProps) {
 				<p className="text-xs opacity-50 mb-2">
 					Tell us a little about yourself so that agents created under Maestro know how to work and
 					communicate with you. As the conductor, you orchestrate the symphony of AI agents.
-					(Optional, max 1000 characters)
+					(Optional, max 5000 characters)
 				</p>
 				<div className="relative">
 					<textarea
@@ -217,16 +217,16 @@ export function GeneralTab({ theme, isOpen }: GeneralTabProps) {
 							color: theme.colors.textMain,
 							minHeight: '100px',
 						}}
-						maxLength={1000}
+						maxLength={5000}
 					/>
 					<div
 						className="absolute bottom-2 right-2 text-xs px-1 rounded"
 						style={{
-							color: conductorProfile.length > 900 ? theme.colors.warning : theme.colors.textDim,
+							color: conductorProfile.length > 4500 ? theme.colors.warning : theme.colors.textDim,
 							backgroundColor: theme.colors.bgSidebar,
 						}}
 					>
-						{conductorProfile.length}/1000
+						{conductorProfile.length}/5000
 					</div>
 				</div>
 			</div>
