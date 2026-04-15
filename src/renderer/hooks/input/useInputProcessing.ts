@@ -78,6 +78,8 @@ export interface UseInputProcessingDeps {
 	automaticTabNamingEnabled?: boolean;
 	/** Conductor profile (user's About Me from settings) */
 	conductorProfile?: string;
+	/** Record a sent AI message into the in-memory per-session history */
+	recordMessageToHistory?: (sessionId: string, message: string) => void;
 }
 
 /**
@@ -140,6 +142,7 @@ export function useInputProcessing(deps: UseInputProcessingDeps): UseInputProces
 		onSkillsCommand,
 		automaticTabNamingEnabled,
 		conductorProfile,
+		recordMessageToHistory,
 	} = deps;
 
 	// Ref for the processInput function so external code can access the latest version
@@ -388,6 +391,9 @@ export function useInputProcessing(deps: UseInputProcessingDeps): UseInputProces
 				// Capture staged images before clearing
 				const imagesToSend = stagedImages.length > 0 ? [...stagedImages] : undefined;
 
+				// Record to history before clearing
+				recordMessageToHistory?.(activeSessionId, effectiveInputValue);
+
 				// Clear input
 				setInputValue('');
 				setStagedImages([]);
@@ -493,6 +499,9 @@ export function useInputProcessing(deps: UseInputProcessingDeps): UseInputProces
 							};
 						})
 					);
+
+					// Record to history before clearing
+					recordMessageToHistory?.(activeSessionId, effectiveInputValue);
 
 					// Clear input
 					setInputValue('');
@@ -871,6 +880,11 @@ export function useInputProcessing(deps: UseInputProcessingDeps): UseInputProces
 			// Use effectiveInputValue (without nudge) since nudge should be hidden from UI
 			window.maestro.web.broadcastUserInput(activeSession.id, effectiveInputValue, currentMode);
 
+			// Record AI messages to in-memory input history (excludes terminal commands)
+			if (currentMode === 'ai') {
+				recordMessageToHistory?.(activeSessionId, effectiveInputValue);
+			}
+
 			setInputValue('');
 			setStagedImages([]);
 
@@ -1228,6 +1242,7 @@ export function useInputProcessing(deps: UseInputProcessingDeps): UseInputProces
 			flushBatchedUpdates,
 			onHistoryCommand,
 			onWizardCommand,
+			recordMessageToHistory,
 		]
 	);
 
