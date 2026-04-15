@@ -1,12 +1,9 @@
 import { useCallback } from 'react';
 import type { Session, LogEntry } from '../../types';
 import { createMergedSession, getTabDisplayName, getActiveTab } from '../../utils/tabHelpers';
-import { useSettingsStore } from '../../stores/settingsStore';
 import { notifyToast } from '../../stores/notificationStore';
-import { substituteTemplateVariables } from '../../utils/templateVariables';
-import { gitService } from '../../services/git';
 import { captureException } from '../../utils/sentry';
-import { getStdinFlags } from '../../utils/spawnHelpers';
+import { getStdinFlags, prepareMaestroSystemPrompt } from '../../utils/spawnHelpers';
 
 export function useForkConversation(
 	sessions: Session[],
@@ -165,33 +162,10 @@ You are continuing this conversation from the fork point above. Briefly acknowle
 
 					const effectivePrompt = contextMessage;
 
-					let gitBranch: string | undefined;
-					if (session.isGitRepo) {
-						try {
-							const status = await gitService.getStatus(session.cwd);
-							gitBranch = status.branch;
-						} catch (error) {
-							captureException(error, {
-								extra: {
-									cwd: session.cwd,
-									operation: 'git-status-for-fork',
-								},
-							});
-						}
-					}
-
-					const conductorProfile = useSettingsStore.getState().conductorProfile;
-					let appendSystemPrompt: string | undefined;
-					const systemPromptResult = await window.maestro.prompts.get('maestro-system-prompt');
-					if (systemPromptResult.success && systemPromptResult.content) {
-						appendSystemPrompt = substituteTemplateVariables(systemPromptResult.content, {
-							session: newSession,
-							gitBranch,
-							groupId: newSession.groupId,
-							activeTabId: newTabId,
-							conductorProfile,
-						});
-					}
+					const appendSystemPrompt = await prepareMaestroSystemPrompt({
+						session: newSession,
+						activeTabId: newTabId,
+					});
 
 					const spawnSessionId = `${newSession.id}-ai-${newTabId}`;
 					await window.maestro.process.spawn({

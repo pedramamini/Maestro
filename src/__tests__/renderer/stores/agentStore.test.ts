@@ -13,7 +13,6 @@ import {
 	selectAgentsDetected,
 	getAgentState,
 	getAgentActions,
-	loadAgentStorePrompts,
 } from '../../../renderer/stores/agentStore';
 import type { ProcessQueuedItemDeps } from '../../../renderer/stores/agentStore';
 import { useSessionStore } from '../../../renderer/stores/sessionStore';
@@ -157,7 +156,6 @@ function resetStores() {
 beforeEach(async () => {
 	resetStores();
 	vi.clearAllMocks();
-	await loadAgentStorePrompts(true);
 });
 
 // ============================================================================

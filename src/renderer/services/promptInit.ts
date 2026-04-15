@@ -12,13 +12,11 @@ import { captureException } from '../utils/sentry';
 
 // Stores
 import { loadSettingsStorePrompts } from '../stores/settingsStore';
-import { loadAgentStorePrompts } from '../stores/agentStore';
 
 // Hooks
 import { loadInputProcessingPrompts } from '../hooks/input/useInputProcessing';
 import { loadWizardHandlersPrompts } from '../hooks/wizard/useWizardHandlers';
 import { loadAgentListenersPrompts } from '../hooks/agent/useAgentListeners';
-import { loadMergeTransferPrompts } from '../hooks/agent/useMergeTransferHandlers';
 import { loadBatchUtilsPrompts } from '../hooks/batch/batchUtils';
 
 // Services
@@ -36,12 +34,10 @@ async function loadAll(force = false): Promise<void> {
 	await Promise.all([
 		// Stores
 		loadSettingsStorePrompts(force),
-		loadAgentStorePrompts(force),
 		// Hooks
 		loadInputProcessingPrompts(force),
 		loadWizardHandlersPrompts(force),
 		loadAgentListenersPrompts(force),
-		loadMergeTransferPrompts(force),
 		loadBatchUtilsPrompts(force),
 		// Services
 		loadContextGroomerPrompts(force),

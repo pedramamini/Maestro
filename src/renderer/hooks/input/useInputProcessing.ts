@@ -8,7 +8,7 @@ import type {
 	BatchRunState,
 } from '../../types';
 import { getActiveTab, extractQuickTabName } from '../../utils/tabHelpers';
-import { getStdinFlags } from '../../utils/spawnHelpers';
+import { getStdinFlags, prepareMaestroSystemPrompt } from '../../utils/spawnHelpers';
 import { generateId } from '../../utils/ids';
 import { substituteTemplateVariables } from '../../utils/templateVariables';
 import { filterYoloArgs } from '../../utils/agentArgs';
@@ -17,25 +17,17 @@ import { gitService } from '../../services/git';
 import { useSettingsStore } from '../../stores/settingsStore';
 
 let cachedImageOnlyPrompt: string = '';
-let cachedInputMaestroSystemPrompt: string = '';
 let inputProcessingPromptsLoaded = false;
 
 export async function loadInputProcessingPrompts(force = false): Promise<void> {
 	if (inputProcessingPromptsLoaded && !force) return;
 
-	const [imageResult, systemResult] = await Promise.all([
-		window.maestro.prompts.get('image-only-default'),
-		window.maestro.prompts.get('maestro-system-prompt'),
-	]);
+	const imageResult = await window.maestro.prompts.get('image-only-default');
 
 	if (!imageResult.success) {
 		throw new Error(`Failed to load image-only-default prompt: ${imageResult.error}`);
 	}
-	if (!systemResult.success) {
-		throw new Error(`Failed to load maestro-system-prompt: ${systemResult.error}`);
-	}
 	cachedImageOnlyPrompt = imageResult.content!;
-	cachedInputMaestroSystemPrompt = systemResult.content!;
 	inputProcessingPromptsLoaded = true;
 	// Update the exported binding so consumers see the loaded value
 	DEFAULT_IMAGE_ONLY_PROMPT = cachedImageOnlyPrompt;
@@ -43,10 +35,6 @@ export async function loadInputProcessingPrompts(force = false): Promise<void> {
 
 function getImageOnlyPrompt(): string {
 	return cachedImageOnlyPrompt;
-}
-
-function getInputMaestroSystemPrompt(): string {
-	return cachedInputMaestroSystemPrompt;
 }
 
 /**
@@ -1023,53 +1011,11 @@ export function useInputProcessing(deps: UseInputProcessingDeps): UseInputProces
 
 						// For NEW sessions (no agentSessionId), prepare Maestro system prompt separately
 						// This introduces Maestro and sets directory restrictions for the agent
-						const isNewSession = !tabAgentSessionId;
-						let appendSystemPrompt: string | undefined;
-						if (isNewSession && getInputMaestroSystemPrompt()) {
-							// Get git branch for template substitution
-							let gitBranch: string | undefined;
-							if (freshSession.isGitRepo) {
-								try {
-									const status = await gitService.getStatus(freshSession.cwd);
-									gitBranch = status.branch;
-								} catch {
-									// Ignore git errors
-								}
-							}
-
-							// Get history file path for task recall
-							// Skip for SSH sessions — the local path is unreachable from the remote host
-							let historyFilePath: string | undefined;
-							const isSSH =
-								freshSession.sshRemoteId || freshSession.sessionSshRemoteConfig?.enabled;
-							if (!isSSH) {
-								try {
-									historyFilePath =
-										(await window.maestro.history.getFilePath(freshSession.id)) || undefined;
-								} catch {
-									// Ignore history errors
-								}
-							}
-
-							// Substitute template variables in the system prompt
-							console.log('[useInputProcessing] Template substitution context:', {
-								sessionId: freshSession.id,
-								sessionName: freshSession.name,
-								autoRunFolderPath: freshSession.autoRunFolderPath,
-								fullPath: freshSession.fullPath,
-								cwd: freshSession.cwd,
-								parentSessionId: freshSession.parentSessionId,
-								historyFilePath,
-							});
-							appendSystemPrompt = substituteTemplateVariables(getInputMaestroSystemPrompt(), {
-								session: freshSession,
-								gitBranch,
-								groupId: freshSession.groupId,
-								activeTabId: freshSession.activeTabId,
-								historyFilePath,
-								conductorProfile,
-							});
-						}
+						const appendSystemPrompt = await prepareMaestroSystemPrompt({
+							session: freshSession,
+							activeTabId: freshSession.activeTabId,
+							agentSessionId: tabAgentSessionId,
+						});
 
 						const { sendPromptViaStdin, sendPromptViaStdinRaw } = getStdinFlags({
 							isSshSession:
