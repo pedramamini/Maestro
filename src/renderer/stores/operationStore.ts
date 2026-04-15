@@ -252,4 +252,3 @@ export const useOperationStore = create<OperationStore>()((set) => ({
 			globalTransferInProgress: false,
 		}),
 }));
-

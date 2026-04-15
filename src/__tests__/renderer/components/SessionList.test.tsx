@@ -20,9 +20,7 @@ import { useSessionStore } from '../../../renderer/stores/sessionStore';
 import { useSettingsStore } from '../../../renderer/stores/settingsStore';
 
 // Deep-cloned default autoRunStats captured from a fresh store (no longer exported).
-const DEFAULT_AUTO_RUN_STATS = JSON.parse(
-	JSON.stringify(useSettingsStore.getState().autoRunStats)
-);
+const DEFAULT_AUTO_RUN_STATS = JSON.parse(JSON.stringify(useSettingsStore.getState().autoRunStats));
 import { useBatchStore } from '../../../renderer/stores/batchStore';
 import { useModalStore } from '../../../renderer/stores/modalStore';
 import type { BatchRunState } from '../../../renderer/types';

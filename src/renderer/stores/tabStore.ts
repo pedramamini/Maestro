@@ -527,4 +527,3 @@ export const useTabStore = create<TabStore>()((set) => ({
 		updateFileTab(tabId, { editMode: !tab.editMode });
 	},
 }));
-

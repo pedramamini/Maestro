@@ -134,4 +134,3 @@ export const useFileExplorerStore = create<FileExplorerStore>()((set, get) => ({
 
 	setIsGraphViewOpen: (open) => set({ isGraphViewOpen: open }),
 }));
-

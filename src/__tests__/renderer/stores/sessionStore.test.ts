@@ -502,7 +502,6 @@ describe('sessionStore', () => {
 				expect(session).toBeUndefined();
 			});
 		});
-
 	});
 
 	// ========================================================================
@@ -680,16 +679,12 @@ describe('sessionStore', () => {
 
 			// Bookmark
 			useSessionStore.getState().toggleBookmark('lifecycle');
-			expect(
-				useSessionStore.getState().sessions.filter((s) => s.bookmarked)
-			).toHaveLength(1);
+			expect(useSessionStore.getState().sessions.filter((s) => s.bookmarked)).toHaveLength(1);
 
 			// Remove
 			useSessionStore.getState().removeSession('lifecycle');
 			expect(useSessionStore.getState().sessions).toHaveLength(0);
-			expect(
-				useSessionStore.getState().sessions.filter((s) => s.bookmarked)
-			).toHaveLength(0);
+			expect(useSessionStore.getState().sessions.filter((s) => s.bookmarked)).toHaveLength(0);
 		});
 
 		it('handles group lifecycle: create → add sessions → collapse → remove', () => {
@@ -704,9 +699,7 @@ describe('sessionStore', () => {
 				.getState()
 				.addSession(createMockSession({ id: 'b', groupId: 'g1', name: 'DB' }));
 
-			expect(
-				useSessionStore.getState().sessions.filter((s) => s.groupId === 'g1')
-			).toHaveLength(2);
+			expect(useSessionStore.getState().sessions.filter((s) => s.groupId === 'g1')).toHaveLength(2);
 
 			// Collapse
 			useSessionStore.getState().toggleGroupCollapsed('g1');

@@ -426,7 +426,6 @@ describe('operationStore', () => {
 				expect(selectIsAnyMerging(useOperationStore.getState())).toBe(true);
 			});
 		});
-
 	});
 
 	// ==========================================================================

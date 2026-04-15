@@ -278,4 +278,3 @@ export function notifyToast(toast: Omit<Toast, 'id' | 'timestamp'>): string {
 
 	return id;
 }
-

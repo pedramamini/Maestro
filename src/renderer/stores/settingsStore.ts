@@ -1986,4 +1986,3 @@ export async function loadAllSettings(): Promise<void> {
 		useSettingsStore.setState({ settingsLoaded: true });
 	}
 }
-

@@ -300,9 +300,7 @@ describe('modalStore', () => {
 		});
 
 		it('provides full entry via modals map', () => {
-			const { result } = renderHook(() =>
-				useModalStore((s) => s.modals.get('settings'))
-			);
+			const { result } = renderHook(() => useModalStore((s) => s.modals.get('settings')));
 
 			expect(result.current).toBeUndefined();
 
