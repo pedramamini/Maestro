@@ -25,6 +25,7 @@ import { cueService } from '../../services/cue';
 import { captureException } from '../../utils/sentry';
 import { notifyToast } from '../../stores/notificationStore';
 import type { CuePipelineSessionInfo as SessionInfo } from '../../../shared/cue-pipeline-types';
+import { computeCommonAncestorPath, isDescendantOrEqual } from '../../../shared/cue-path-utils';
 
 const SAVE_SUCCESS_IDLE_DELAY_MS = 2000;
 const SAVE_ERROR_IDLE_DELAY_MS = 3000;
@@ -158,10 +159,22 @@ export function usePipelinePersistence({
 				continue;
 			}
 			if (roots.size > 1) {
-				errors.push(
-					`"${pipeline.name}": agents span multiple project roots (${[...roots].join(', ')}) — a Cue pipeline must live in a single project.`
-				);
-				continue;
+				// When all roots are subdirectories of a common ancestor, the
+				// pipeline can live at that ancestor's .maestro/cue.yaml. This
+				// enables cross-directory pipelines (e.g. project/ + project/Digest)
+				// while preserving the single-owner invariant.
+				const commonRoot = computeCommonAncestorPath([...roots]);
+				const allDescendants =
+					commonRoot !== null && [...roots].every((r) => isDescendantOrEqual(r, commonRoot));
+				if (!allDescendants) {
+					errors.push(
+						`"${pipeline.name}": agents span unrelated project roots (${[...roots].join(', ')}) — a Cue pipeline must live in a single project.`
+					);
+					continue;
+				}
+				// Collapse to the common ancestor root for YAML output.
+				roots.clear();
+				roots.add(commonRoot);
 			}
 			if (missingRoot) {
 				errors.push(
@@ -254,10 +267,16 @@ export function usePipelinePersistence({
 				rootsCleared++;
 			}
 
-			// Refresh every session whose project root was touched so the engine
-			// reloads the freshly written YAML into its in-memory registry.
+			// Refresh every session whose project root was touched — or is a
+			// descendant of a touched root — so the engine reloads the freshly
+			// written YAML. Descendant sessions need refreshing because they
+			// inherit their config from the ancestor root via fallback.
 			for (const session of sessions) {
-				if (session.projectRoot && touchedRoots.has(session.projectRoot)) {
+				if (!session.projectRoot) continue;
+				const needsRefresh =
+					touchedRoots.has(session.projectRoot) ||
+					[...touchedRoots].some((root) => isDescendantOrEqual(session.projectRoot!, root));
+				if (needsRefresh) {
 					await cueService.refreshSession(session.id, session.projectRoot);
 				}
 			}

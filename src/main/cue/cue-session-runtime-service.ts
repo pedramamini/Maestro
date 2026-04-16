@@ -1,10 +1,11 @@
 import type { MainLogLevel } from '../../shared/logger-types';
 import type { SessionInfo } from '../../shared/types';
-import { loadCueConfigDetailed, watchCueYaml } from './cue-yaml-loader';
+import { findAncestorCueConfigRoot, loadCueConfigDetailed, watchCueYaml } from './cue-yaml-loader';
 import { createCueEvent, type CueEvent, type CueSubscription } from './cue-types';
 import {
 	countActiveSubscriptions,
 	hasTimeBasedSubscriptions,
+	isSubscriptionParticipant,
 	type SessionState,
 } from './cue-session-state';
 import type { CueSessionRegistry } from './cue-session-registry';
@@ -97,7 +98,42 @@ export function createCueSessionRuntimeService(
 			registry.unregister(session.id);
 		}
 
-		const loadResult = loadCueConfigDetailed(session.projectRoot);
+		let loadResult = loadCueConfigDetailed(session.projectRoot);
+		let ancestorRoot: string | undefined;
+
+		// When the session's own directory has no cue.yaml, check ancestor
+		// directories. This enables sub-agents (e.g. project/Digest) to
+		// participate in pipelines defined at a parent root (e.g. project/).
+		if (!loadResult.ok && loadResult.reason === 'missing') {
+			const ancestor = findAncestorCueConfigRoot(session.projectRoot);
+			if (ancestor) {
+				const ancestorResult = loadCueConfigDetailed(ancestor);
+				if (ancestorResult.ok) {
+					// Only include subscriptions that explicitly target this
+					// session (via agent_id or fan_out). Unowned (shared)
+					// subscriptions belong to the ancestor's own session —
+					// including them here would duplicate trigger sources.
+					const targeted = ancestorResult.config.subscriptions.filter(
+						(sub) =>
+							sub.agent_id !== undefined && isSubscriptionParticipant(sub, session.id, session.name)
+					);
+
+					if (targeted.length > 0) {
+						loadResult = {
+							ok: true,
+							config: { ...ancestorResult.config, subscriptions: targeted },
+							warnings: ancestorResult.warnings,
+						};
+						ancestorRoot = ancestor;
+						deps.onLog(
+							'cue',
+							`[CUE] "${session.name}" using ancestor config from "${ancestor}" (${targeted.length} targeted subscription(s))`
+						);
+					}
+				}
+			}
+		}
+
 		if (!loadResult.ok) {
 			// Distinguish missing (silent) from parse / validation failures (loud).
 			if (loadResult.reason === 'parse-error') {
@@ -130,12 +166,15 @@ export function createCueSessionRuntimeService(
 
 		const state: SessionState = {
 			config,
+			configRoot: ancestorRoot,
 			triggerSources: [],
 			yamlWatcher: null,
 			sleepPrevented: false,
 		};
 
-		state.yamlWatcher = watchCueYaml(session.projectRoot, () => {
+		// Watch the cue.yaml at the config's actual location (ancestor or own root).
+		const watchRoot = ancestorRoot ?? session.projectRoot;
+		state.yamlWatcher = watchCueYaml(watchRoot, () => {
 			deps.onRefreshRequested(session.id, session.projectRoot);
 		});
 

@@ -11,6 +11,10 @@ import type { CueTriggerSource } from './triggers/cue-trigger-source';
  */
 export interface SessionState {
 	config: CueConfig;
+	/** When the config was loaded from an ancestor directory (not the session's own
+	 *  projectRoot), this records the ancestor root so refreshes reload from the
+	 *  correct location. Undefined when the config lives at the session's own root. */
+	configRoot?: string;
 	triggerSources: CueTriggerSource[];
 	yamlWatcher: (() => void) | null;
 	sleepPrevented: boolean;
