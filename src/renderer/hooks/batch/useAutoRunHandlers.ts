@@ -418,10 +418,10 @@ export function useAutoRunHandlers(
 				filename + '.md',
 				sshRemoteId
 			);
-				if (!result.success || !result.content) return 0;
-				return countMarkdownTasks(result.content).unchecked;
-				// Note: Use primitive values (remoteId) not object refs (sessionSshRemoteConfig) to avoid infinite re-render loops
-			},
+			if (!result.success || !result.content) return 0;
+			return countMarkdownTasks(result.content).unchecked;
+			// Note: Use primitive values (remoteId) not object refs (sessionSshRemoteConfig) to avoid infinite re-render loops
+		},
 		[
 			activeSession?.autoRunFolderPath,
 			activeSession?.sshRemoteId,

@@ -232,7 +232,7 @@ describe('agent-capabilities', () => {
 			expect(hasCapability('claude-code', 'supportsWizard')).toBe(true);
 			expect(hasCapability('codex', 'supportsWizard')).toBe(true);
 			expect(hasCapability('opencode', 'supportsWizard')).toBe(true);
-			expect(hasCapability('factory-droid', 'supportsWizard')).toBe(false);
+			expect(hasCapability('factory-droid', 'supportsWizard')).toBe(true);
 			expect(hasCapability('terminal', 'supportsWizard')).toBe(false);
 
 			// supportsGroupChatModeration

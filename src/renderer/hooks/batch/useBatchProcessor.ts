@@ -30,6 +30,7 @@ import { useDocumentProcessor } from './useDocumentProcessor';
 
 // Debounce delay for batch state updates (Quick Win 1)
 const BATCH_STATE_DEBOUNCE_MS = 200;
+const AUTO_RUN_PROGRESS_POLL_INTERVAL_MS = 3000;
 
 // Regex to match checked markdown checkboxes for reset-on-completion
 // Matches both [x] and [X] with various checkbox formats (standard and GitHub-style)
@@ -411,7 +412,7 @@ export function useBatchProcessor({
 	const timeTracking = useTimeTracking({
 		getActiveSessionIds: useCallback(() => {
 			return Object.entries(useBatchStore.getState().batchRunStates)
-				.filter(([_, state]) => state.isRunning)
+				.filter(([, state]) => state.isRunning && !state.errorPaused)
 				.map(([sessionId]) => sessionId);
 		}, []),
 		onTimeUpdate: useCallback(
@@ -984,9 +985,11 @@ export function useBatchProcessor({
 						// Poll all documents during task execution for real-time progress.
 						let progressPollActive = true;
 						let progressPollInFlight = false;
+						let progressPollGeneration = 0;
 						let progressPollTimeout: ReturnType<typeof setTimeout> | null = null;
 						const stopProgressPolling = () => {
 							progressPollActive = false;
+							progressPollGeneration++;
 							if (progressPollTimeout) {
 								clearTimeout(progressPollTimeout);
 								progressPollTimeout = null;
@@ -994,6 +997,7 @@ export function useBatchProcessor({
 						};
 						const runProgressPoll = async () => {
 							if (!progressPollActive || progressPollInFlight) return;
+							const generationAtStart = progressPollGeneration;
 							progressPollInFlight = true;
 							try {
 								let polledTotal = 0;
@@ -1003,6 +1007,7 @@ export function useBatchProcessor({
 									polledTotal += r.taskCount + r.checkedCount;
 									polledChecked += r.checkedCount;
 								}
+								if (!progressPollActive || generationAtStart !== progressPollGeneration) return;
 								updateBatchStateAndBroadcastRef.current!(sessionId, (prev) => {
 									const prevState = prev[sessionId] || DEFAULT_BATCH_STATE;
 									if (
@@ -1032,6 +1037,7 @@ export function useBatchProcessor({
 										sshRemoteId
 									);
 									if (selectedDocResult.success) {
+										if (!progressPollActive || generationAtStart !== progressPollGeneration) return;
 										const nextContent = selectedDocResult.content || '';
 										if (nextContent !== currentSession.autoRunContent) {
 											onUpdateSession(sessionId, {
@@ -1045,16 +1051,17 @@ export function useBatchProcessor({
 								// Ignore polling errors — agent may be modifying file
 							} finally {
 								progressPollInFlight = false;
-								if (progressPollActive) {
+								if (progressPollActive && generationAtStart === progressPollGeneration) {
 									progressPollTimeout = setTimeout(() => {
 										void runProgressPoll();
-									}, 3000);
+									}, AUTO_RUN_PROGRESS_POLL_INTERVAL_MS);
 								}
 							}
 						};
+						progressPollGeneration++;
 						progressPollTimeout = setTimeout(() => {
 							void runProgressPoll();
-						}, 3000);
+						}, AUTO_RUN_PROGRESS_POLL_INTERVAL_MS);
 
 						try {
 							const taskResult = await documentProcessor.processTask(

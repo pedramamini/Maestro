@@ -294,7 +294,7 @@ export function useAgentExecution(deps: UseAgentExecutionDeps): UseAgentExecutio
 										console.warn('[spawnAgentForSession] Failed to record query stats:', err);
 									});
 
-								const didExitCleanly = code === 0;
+								const didExitCleanly = code === 0 || code === undefined;
 								const exitError = didExitCleanly
 									? undefined
 									: `Auto Run task exited with code ${code}`;
