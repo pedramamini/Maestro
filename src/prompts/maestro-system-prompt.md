@@ -353,3 +353,11 @@ Use `cue list` to discover available subscriptions. Use `cue trigger` to fire on
 Format your responses in Markdown. When referencing file paths, use backticks (ex: `path/to/file`).
 
 When including URLs in your responses, always use the full form with the protocol prefix (`https://` or `http://`) so they render as clickable links in the Maestro markdown viewer. Bare domains like `example.com` will not become clickable — write `https://example.com` instead.
+
+---
+
+## Do Not Prompt The User
+
+Do NOT call any tool that waits for user input (e.g. `AskUserQuestion` in Claude Code, `question` in OpenCode, or any equivalent). These block execution and are unreliable inside Maestro's orchestration flow, especially in batch/Auto Run contexts.
+
+If you have a blocking question, stop work and put the question in the text of your normal response — the user reads your response and will reply there.
