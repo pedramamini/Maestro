@@ -150,6 +150,12 @@ This codebase uses **tabs for indentation**, not spaces. Always match existing f
 
 ---
 
+## Do Not Edit: `docs/releases.md`
+
+`docs/releases.md` is generated/updated automatically during release pressing. **Never modify it manually** — even when shipping user-facing changes that would seem to warrant a release note entry. The release tooling handles it.
+
+---
+
 ## Project Overview
 
 Maestro is an Electron desktop app for managing multiple AI coding assistants simultaneously with a keyboard-first interface.

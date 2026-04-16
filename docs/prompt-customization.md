@@ -8,6 +8,8 @@ Maestro ships with 23 core system prompts that control wizard conversations, Aut
 
 ## Opening the Prompt Editor
 
+![Maestro Prompts settings tab](./screenshots/settings-prompts.png)
+
 1. Open **Settings** (`Cmd+,` / `Ctrl+,`)
 2. Select the **Maestro Prompts** tab
 3. Browse prompts by category in the left sidebar
