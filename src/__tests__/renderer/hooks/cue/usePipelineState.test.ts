@@ -882,6 +882,48 @@ describe('usePipelineState', () => {
 		expect(mockWriteYaml).not.toHaveBeenCalled();
 	});
 
+	it('validation errors persist across subsequent re-renders (regression: dirty-tracking wipe)', async () => {
+		// Previously the dirty-tracking effect depended on the `persistence` object
+		// identity, which changes every render. When handleSave set validationErrors
+		// and React re-rendered, the effect fired and immediately cleared them —
+		// the banner flashed for one frame. Guard: errors survive a post-save
+		// re-render so the user can actually read them.
+		const { result, rerender } = renderHook(() =>
+			usePipelineState(createDefaultParams({ sessions: [] }))
+		);
+
+		await waitFor(() => expect(mockGetSettings).toHaveBeenCalled());
+
+		act(() => {
+			result.current.setPipelineState({
+				pipelines: [
+					makePipeline({
+						nodes: [
+							makeTriggerNode('t1'),
+							makeAgentNode('a1', 'Agent 1', { inputPrompt: 'do stuff' }),
+						],
+						edges: [makeEdge('e1', 't1', 'a1')],
+					}),
+				],
+				selectedPipelineId: 'p1',
+			});
+		});
+
+		await act(async () => {
+			await result.current.handleSave();
+		});
+
+		expect(result.current.validationErrors.length).toBeGreaterThan(0);
+
+		// Force extra renders the way a parent re-render would. Without the fix
+		// the dirty-tracking effect would fire and wipe validationErrors.
+		rerender();
+		rerender();
+		rerender();
+
+		expect(result.current.validationErrors.length).toBeGreaterThan(0);
+	});
+
 	it('handleSave succeeds with valid pipeline and project root', async () => {
 		const sessions = [
 			{ id: 's1', name: 'Agent 1', toolType: 'claude-code', projectRoot: '/test/project' },

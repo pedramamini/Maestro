@@ -169,14 +169,21 @@ export function usePipelineState({
 	});
 
 	// ── Composition-owned effects ─────────────────────────────────────────
-	// Track dirty state when pipelines change
+	// Track dirty state when pipelines change.
+	//
+	// NOTE: we deliberately do NOT clear validationErrors here. `persistence`
+	// returns a new object identity every render, so adding it to deps (which
+	// we previously did, to reach `setValidationErrors`) caused this effect to
+	// fire on every re-render. The moment `handleSave` surfaced validation
+	// errors, the resulting re-render immediately wiped them — the banner
+	// flashed for one frame and was gone. Errors are re-computed on the next
+	// save attempt; leaving them visible until then is the intended UX.
 	useEffect(() => {
 		const currentSnapshot = JSON.stringify(pipelineState.pipelines);
 		if (savedStateRef.current && currentSnapshot !== savedStateRef.current) {
 			setIsDirty(true);
-			persistence.setValidationErrors([]);
 		}
-	}, [pipelineState.pipelines, persistence]);
+	}, [pipelineState.pipelines]);
 
 	// Push dirty state into the shared store so CueModal can read it without prop-drilling
 	useEffect(() => {
