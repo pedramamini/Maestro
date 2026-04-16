@@ -166,7 +166,7 @@ export function usePipelinePersistence({
 				const commonRoot = computeCommonAncestorPath([...roots]);
 				const allDescendants =
 					commonRoot !== null && [...roots].every((r) => isDescendantOrEqual(r, commonRoot));
-				if (!allDescendants || commonRoot === null) {
+				if (!allDescendants) {
 					errors.push(
 						`"${pipeline.name}": agents span unrelated project roots (${[...roots].join(', ')}) — a Cue pipeline must live in a single project.`
 					);

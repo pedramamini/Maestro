@@ -1,5 +1,4 @@
 import { describe, it, expect } from 'vitest';
-import * as path from 'path';
 import { computeCommonAncestorPath, isDescendantOrEqual } from '../../shared/cue-path-utils';
 
 describe('computeCommonAncestorPath', () => {
