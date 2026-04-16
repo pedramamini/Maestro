@@ -92,6 +92,7 @@ export function useAutoRunDocumentLoader(): UseAutoRunDocumentLoaderReturn {
 				setAutoRunDocumentList([]);
 				setAutoRunDocumentTree([]);
 				setAutoRunDocumentTaskCounts(new Map());
+				setAutoRunIsLoadingDocuments(false);
 				return;
 			}
 
@@ -105,44 +106,49 @@ export function useAutoRunDocumentLoader(): UseAutoRunDocumentLoaderReturn {
 			setAutoRunDocumentList([]);
 			setAutoRunDocumentTree([]);
 			setAutoRunDocumentTaskCounts(new Map());
-			const listResult = await window.maestro.autorun.listDocs(
-				activeSession.autoRunFolderPath,
-				sshRemoteId
-			);
-			if (currentLoadSequence !== loadSequenceRef.current) return;
-			if (listResult.success) {
-				const files = listResult.files || [];
-				setAutoRunDocumentList(files);
-				setAutoRunDocumentTree(listResult.tree || []);
-
-				// Load task counts for all documents
-				const counts = await loadTaskCounts(activeSession.autoRunFolderPath, files, sshRemoteId);
-				if (currentLoadSequence !== loadSequenceRef.current) return;
-				setAutoRunDocumentTaskCounts(counts);
-			}
-			setAutoRunIsLoadingDocuments(false);
-
-			// Always load content from disk when switching sessions
-			// This ensures we have fresh data and prevents stale content from showing
-			if (activeSession.autoRunSelectedFile) {
-				const contentResult = await window.maestro.autorun.readDoc(
+			try {
+				const listResult = await window.maestro.autorun.listDocs(
 					activeSession.autoRunFolderPath,
-					activeSession.autoRunSelectedFile + '.md',
 					sshRemoteId
 				);
 				if (currentLoadSequence !== loadSequenceRef.current) return;
-				const newContent = contentResult.success ? contentResult.content || '' : '';
-				setSessions((prev) =>
-					prev.map((s) =>
-						s.id === activeSession.id
-							? {
-									...s,
-									autoRunContent: newContent,
-									autoRunContentVersion: (s.autoRunContentVersion || 0) + 1,
-								}
-							: s
-					)
-				);
+				if (listResult.success) {
+					const files = listResult.files || [];
+					setAutoRunDocumentList(files);
+					setAutoRunDocumentTree(listResult.tree || []);
+
+					// Load task counts for all documents
+					const counts = await loadTaskCounts(activeSession.autoRunFolderPath, files, sshRemoteId);
+					if (currentLoadSequence !== loadSequenceRef.current) return;
+					setAutoRunDocumentTaskCounts(counts);
+				}
+
+				// Always load content from disk when switching sessions
+				// This ensures we have fresh data and prevents stale content from showing
+				if (activeSession.autoRunSelectedFile) {
+					const contentResult = await window.maestro.autorun.readDoc(
+						activeSession.autoRunFolderPath,
+						activeSession.autoRunSelectedFile + '.md',
+						sshRemoteId
+					);
+					if (currentLoadSequence !== loadSequenceRef.current) return;
+					const newContent = contentResult.success ? contentResult.content || '' : '';
+					setSessions((prev) =>
+						prev.map((s) =>
+							s.id === activeSession.id
+								? {
+										...s,
+										autoRunContent: newContent,
+										autoRunContentVersion: (s.autoRunContentVersion || 0) + 1,
+									}
+								: s
+						)
+					);
+				}
+			} finally {
+				if (currentLoadSequence === loadSequenceRef.current) {
+					setAutoRunIsLoadingDocuments(false);
+				}
 			}
 		};
 

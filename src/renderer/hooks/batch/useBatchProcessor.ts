@@ -27,6 +27,7 @@ import { notifyToast } from '../../stores/notificationStore';
 import { useTimeTracking } from './useTimeTracking';
 import { useWorktreeManager } from './useWorktreeManager';
 import { useDocumentProcessor } from './useDocumentProcessor';
+import type { AgentSpawnErrorKind } from '../agent/useAgentExecution';
 
 // Debounce delay for batch state updates (Quick Win 1)
 const BATCH_STATE_DEBOUNCE_MS = 200;
@@ -75,6 +76,8 @@ interface UseBatchProcessorProps {
 		agentSessionId?: string;
 		usageStats?: UsageStats;
 		contextUsage?: number;
+		error?: string;
+		errorKind?: AgentSpawnErrorKind;
 	}>;
 	onAddHistoryEntry: (entry: Omit<HistoryEntry, 'id'>) => void | Promise<void>;
 	onComplete?: (info: BatchCompleteInfo) => void;
@@ -1107,11 +1110,12 @@ export function useBatchProcessor({
 								elapsedTimeMs,
 								agentSessionId,
 								success,
-								errorMessage,
+								errorKind,
 							} = taskResult;
 
-							// Detect stalling: if document content is unchanged and no tasks were checked off
-							const isWatchdogFailure = !!errorMessage && /(stalled|timed out)/i.test(errorMessage);
+							// Detect stalling using structured agent error kinds (not user-facing error text).
+							const isWatchdogFailure =
+								errorKind === 'watchdog-stalled' || errorKind === 'watchdog-timeout';
 							if (isWatchdogFailure) {
 								consecutiveNoChangeCount = MAX_CONSECUTIVE_NO_CHANGES;
 							} else if (!documentChanged && tasksCompletedThisRun === 0) {
@@ -1841,12 +1845,19 @@ export function useBatchProcessor({
 	 */
 	const killBatchRun = useCallback(
 		async (sessionId: string) => {
+			console.assert(
+				!sessionId.includes('-batch-'),
+				'[BatchProcessor:killBatchRun] sessionId must not contain "-batch-"'
+			);
+
 			// 1. Kill all active batch processes for this session and wait for termination before cleanup.
 			// Batch process session IDs are generated as: `${sessionId}-batch-${timestamp}`.
 			try {
 				const activeProcesses = await window.maestro.process.getActiveProcesses();
 				const batchProcessIds = activeProcesses
 					.filter(
+						// Intentional scope: kill the root session process and any descendant
+						// auto-run task processes prefixed with `${sessionId}-batch-`.
 						(proc) =>
 							proc.sessionId === sessionId || proc.sessionId.startsWith(`${sessionId}-batch-`)
 					)

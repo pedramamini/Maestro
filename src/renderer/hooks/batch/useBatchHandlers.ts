@@ -78,7 +78,10 @@ export interface UseBatchHandlersDeps {
 	spawnAgentForSession: (
 		sessionId: string,
 		prompt: string,
-		cwdOverride?: string
+		cwdOverride?: string,
+		options?: {
+			isAutoRun?: boolean;
+		}
 	) => Promise<AgentSpawnResult>;
 	/** Ref to RightPanel for refreshing history after batch tasks */
 	rightPanelRef: React.RefObject<RightPanelHandle | null>;
@@ -202,7 +205,8 @@ export function useBatchHandlers(deps: UseBatchHandlersDeps): UseBatchHandlersRe
 				.getState()
 				.setSessions((prev) => prev.map((s) => (s.id === sessionId ? { ...s, ...updates } : s)));
 		},
-		onSpawnAgent: spawnAgentForSession,
+		onSpawnAgent: (sessionId, prompt, cwdOverride) =>
+			spawnAgentForSession(sessionId, prompt, cwdOverride, { isAutoRun: true }),
 		onAddHistoryEntry: async (entry) => {
 			await window.maestro.history.add({
 				...entry,

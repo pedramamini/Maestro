@@ -16,6 +16,7 @@ import { useCallback } from 'react';
 import type { Session, UsageStats } from '../../types';
 import { substituteTemplateVariables, TemplateContext } from '../../utils/templateVariables';
 import { countMarkdownTasks } from './batchUtils';
+import type { AgentSpawnErrorKind } from '../agent/useAgentExecution';
 
 /**
  * Configuration for document processing
@@ -142,6 +143,11 @@ export interface TaskResult {
 	 * Optional failure detail from the agent run.
 	 */
 	errorMessage?: string;
+
+	/**
+	 * Structured failure category from the agent run.
+	 */
+	errorKind?: AgentSpawnErrorKind;
 }
 
 /**
@@ -182,6 +188,7 @@ export interface DocumentProcessorCallbacks {
 		usageStats?: UsageStats;
 		contextUsage?: number;
 		error?: string;
+		errorKind?: AgentSpawnErrorKind;
 	}>;
 }
 
@@ -444,6 +451,7 @@ export function useDocumentProcessor(): UseDocumentProcessorReturn {
 				addedUncheckedTasks,
 				totalTasksChange,
 				errorMessage: result.error,
+				errorKind: result.errorKind,
 			};
 		},
 		[readDocAndCountTasks]

@@ -24,7 +24,16 @@ export interface AgentSpawnResult {
 	contextUsage?: number;
 	/** Optional error detail when the run fails */
 	error?: string;
+	/** Structured error category for downstream handling */
+	errorKind?: AgentSpawnErrorKind;
 }
+
+export type AgentSpawnErrorKind =
+	| 'watchdog-stalled'
+	| 'watchdog-timeout'
+	| 'process-exit'
+	| 'process-exit-unknown'
+	| 'spawn-failed';
 
 const BATCH_INACTIVITY_TIMEOUT_MS = 10 * 60 * 1000; // 10 minutes without output
 const BATCH_HARD_TIMEOUT_MS = 60 * 60 * 1000; // 60 minutes wall clock per task
@@ -58,7 +67,10 @@ export interface UseAgentExecutionReturn {
 	spawnAgentForSession: (
 		sessionId: string,
 		prompt: string,
-		cwdOverride?: string
+		cwdOverride?: string,
+		options?: {
+			isAutoRun?: boolean;
+		}
 	) => Promise<AgentSpawnResult>;
 	/** Spawn an agent with a prompt for the active session */
 	spawnAgentWithPrompt: (prompt: string) => Promise<AgentSpawnResult>;
@@ -176,7 +188,14 @@ export function useAgentExecution(deps: UseAgentExecutionDeps): UseAgentExecutio
 	 * @param cwdOverride - Optional override for working directory (e.g., for worktree mode)
 	 */
 	const spawnAgentForSession = useCallback(
-		async (sessionId: string, prompt: string, cwdOverride?: string): Promise<AgentSpawnResult> => {
+		async (
+			sessionId: string,
+			prompt: string,
+			cwdOverride?: string,
+			options?: {
+				isAutoRun?: boolean;
+			}
+		): Promise<AgentSpawnResult> => {
 			// Use sessionsRef to get latest sessions (fixes stale closure when called right after session creation)
 			const session = sessionsRef.current.find((s) => s.id === sessionId);
 			if (!session) return { success: false };
@@ -214,7 +233,7 @@ export function useAgentExecution(deps: UseAgentExecutionDeps): UseAgentExecutio
 					let taskUsageStats: UsageStats | undefined;
 					let lastUsageEvent: UsageStats | undefined; // Last (non-accumulated) event for context estimation
 					const queryStartTime = Date.now(); // Track start time for stats
-					const isBatchProcess = targetSessionId.includes('-batch-');
+					const isBatchProcess = options?.isAutoRun ?? false;
 					let lastOutputAt = Date.now();
 					let settled = false;
 					let inactivityTimer: ReturnType<typeof setInterval> | null = null;
@@ -273,7 +292,7 @@ export function useAgentExecution(deps: UseAgentExecutionDeps): UseAgentExecutio
 					);
 
 					cleanupFns.push(
-						window.maestro.process.onExit((sid: string, code: number) => {
+						window.maestro.process.onExit((sid: string, code: number | null | undefined) => {
 							if (sid === targetSessionId) {
 								// Record query stats for Auto Run queries
 								const queryDuration = Date.now() - queryStartTime;
@@ -294,10 +313,17 @@ export function useAgentExecution(deps: UseAgentExecutionDeps): UseAgentExecutio
 										console.warn('[spawnAgentForSession] Failed to record query stats:', err);
 									});
 
-								const didExitCleanly = code === 0 || code === undefined;
+								const didExitCleanly = code === 0;
+								const exitErrorKind = didExitCleanly
+									? undefined
+									: code == null
+										? ('process-exit-unknown' as const)
+										: ('process-exit' as const);
 								const exitError = didExitCleanly
 									? undefined
-									: `Auto Run task exited with code ${code}`;
+									: code == null
+										? 'Agent task exited without a status code'
+										: `Agent task exited with code ${code}`;
 
 								// Estimate context usage from the last single-turn event (not accumulated totals)
 								const taskContextUsage = lastUsageEvent
@@ -425,6 +451,7 @@ export function useAgentExecution(deps: UseAgentExecutionDeps): UseAgentExecutio
 												usageStats: taskUsageStats,
 												contextUsage: taskContextUsage,
 												error: exitError,
+												errorKind: exitErrorKind,
 											});
 										} else {
 											// Queue still processing - check again
@@ -442,6 +469,7 @@ export function useAgentExecution(deps: UseAgentExecutionDeps): UseAgentExecutio
 										usageStats: taskUsageStats,
 										contextUsage: taskContextUsage,
 										error: exitError,
+										errorKind: exitErrorKind,
 									});
 								}
 							}
@@ -457,7 +485,8 @@ export function useAgentExecution(deps: UseAgentExecutionDeps): UseAgentExecutio
 							window.maestro.process.kill(targetSessionId).catch(() => {});
 							resolveOnce({
 								success: false,
-								error: `Auto Run task stalled: no output for ${Math.floor(BATCH_INACTIVITY_TIMEOUT_MS / 60000)} minutes`,
+								error: `Agent task stalled: no output for ${Math.floor(BATCH_INACTIVITY_TIMEOUT_MS / 60000)} minutes`,
+								errorKind: 'watchdog-stalled',
 								response: responseText,
 								agentSessionId,
 								usageStats: taskUsageStats,
@@ -469,7 +498,8 @@ export function useAgentExecution(deps: UseAgentExecutionDeps): UseAgentExecutio
 							window.maestro.process.kill(targetSessionId).catch(() => {});
 							resolveOnce({
 								success: false,
-								error: `Auto Run task timed out after ${Math.floor(BATCH_HARD_TIMEOUT_MS / 60000)} minutes`,
+								error: `Agent task timed out after ${Math.floor(BATCH_HARD_TIMEOUT_MS / 60000)} minutes`,
+								errorKind: 'watchdog-timeout',
 								response: responseText,
 								agentSessionId,
 								usageStats: taskUsageStats,
@@ -512,6 +542,7 @@ export function useAgentExecution(deps: UseAgentExecutionDeps): UseAgentExecutio
 							resolveOnce({
 								success: false,
 								error: err instanceof Error ? err.message : String(err),
+								errorKind: 'spawn-failed',
 							});
 						});
 				});
@@ -530,7 +561,7 @@ export function useAgentExecution(deps: UseAgentExecutionDeps): UseAgentExecutio
 	const spawnAgentWithPrompt = useCallback(
 		async (prompt: string): Promise<AgentSpawnResult> => {
 			if (!activeSession) return { success: false };
-			return spawnAgentForSession(activeSession.id, prompt);
+			return spawnAgentForSession(activeSession.id, prompt, undefined, { isAutoRun: false });
 		},
 		[activeSession, spawnAgentForSession]
 	);
