@@ -13,7 +13,7 @@
 import { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import type { Theme } from '../../types';
-import { useLayerStack } from '../../contexts/LayerStackContext';
+import { useModalLayer } from '../../hooks/ui/useModalLayer';
 import { MODAL_PRIORITIES } from '../../constants/modalPriorities';
 import { useCue } from '../../hooks/useCue';
 import type { CueSessionStatus } from '../../hooks/useCue';
@@ -37,8 +37,6 @@ export interface CueModalProps {
 }
 
 export function CueModal({ theme, onClose, cueShortcutKeys }: CueModalProps) {
-	const { registerLayer, unregisterLayer } = useLayerStack();
-	const layerIdRef = useRef<string>();
 	const onCloseRef = useRef(onClose);
 	onCloseRef.current = onClose;
 
@@ -89,37 +87,20 @@ export function CueModal({ theme, onClose, cueShortcutKeys }: CueModalProps) {
 	const showHelpRef = useRef(false);
 	showHelpRef.current = showHelp;
 
-	// Register layer on mount
-	useEffect(() => {
-		const id = registerLayer({
-			type: 'modal',
-			priority: MODAL_PRIORITIES.CUE_MODAL,
-			blocksLowerLayers: true,
-			capturesFocus: true,
-			focusTrap: 'strict',
-			onEscape: () => {
-				if (showHelpRef.current) {
-					setShowHelp(false);
-					return;
-				}
-				if (useCueDirtyStore.getState().pipelineDirty) {
-					getModalActions().showConfirmation(
-						'You have unsaved changes in the pipeline editor. Discard and close?',
-						() => onCloseRef.current()
-					);
-					return;
-				}
-				onCloseRef.current();
-			},
-		});
-		layerIdRef.current = id;
-
-		return () => {
-			if (layerIdRef.current) {
-				unregisterLayer(layerIdRef.current);
-			}
-		};
-	}, [registerLayer, unregisterLayer]);
+	useModalLayer(MODAL_PRIORITIES.CUE_MODAL, undefined, () => {
+		if (showHelpRef.current) {
+			setShowHelp(false);
+			return;
+		}
+		if (useCueDirtyStore.getState().pipelineDirty) {
+			getModalActions().showConfirmation(
+				'You have unsaved changes in the pipeline editor. Discard and close?',
+				() => onCloseRef.current()
+			);
+			return;
+		}
+		onCloseRef.current();
+	});
 
 	// Read initial tab from modal data (e.g., when navigating from YAML editor)
 	const cueModalData = useModalStore(selectModalData('cueModal'));

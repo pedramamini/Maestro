@@ -34,6 +34,7 @@ import {
 import { Spinner } from '../ui/Spinner';
 import type { Theme } from '../../types';
 import { useLayerStack } from '../../contexts/LayerStackContext';
+import { useModalLayer } from '../../hooks/ui/useModalLayer';
 import { MODAL_PRIORITIES } from '../../constants/modalPriorities';
 import { Modal, ModalFooter } from '../ui/Modal';
 import { useDebouncedCallback } from '../../hooks/utils';
@@ -353,19 +354,10 @@ export function DocumentGraphView({
 	/**
 	 * Register with layer stack for Escape handling
 	 */
-	useEffect(() => {
-		if (isOpen) {
-			const id = registerLayer({
-				type: 'modal',
-				priority: MODAL_PRIORITIES.DOCUMENT_GRAPH,
-				blocksLowerLayers: true,
-				capturesFocus: true,
-				focusTrap: 'lenient',
-				onEscape: handleEscapeRequest,
-			});
-			return () => unregisterLayer(id);
-		}
-	}, [isOpen, registerLayer, unregisterLayer, handleEscapeRequest]);
+	useModalLayer(MODAL_PRIORITIES.DOCUMENT_GRAPH, undefined, handleEscapeRequest, {
+		focusTrap: 'lenient',
+		enabled: isOpen,
+	});
 
 	/**
 	 * Register depth slider dropdown with layer stack when open

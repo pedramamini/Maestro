@@ -20,7 +20,7 @@ import { GhostIconButton } from './ui/GhostIconButton';
 import type { Theme, Session } from '../types';
 import type { MergeResult } from '../types/contextMerge';
 import { fuzzyMatchWithScore } from '../utils/search';
-import { useLayerStack } from '../contexts/LayerStackContext';
+import { useModalLayer } from '../hooks/ui/useModalLayer';
 import { useListNavigation } from '../hooks';
 import { MODAL_PRIORITIES } from '../constants/modalPriorities';
 import { formatTokensCompact } from '../utils/formatters';
@@ -177,7 +177,6 @@ export function MergeSessionModal({
 
 	// Refs
 	const inputRef = useRef<HTMLInputElement>(null);
-	const layerIdRef = useRef<string>();
 	const onCloseRef = useRef(onClose);
 	const scrollContainerRef = useRef<HTMLDivElement>(null);
 	const selectedItemRef = useRef<HTMLButtonElement>(null);
@@ -187,35 +186,13 @@ export function MergeSessionModal({
 		onCloseRef.current = onClose;
 	});
 
-	const { registerLayer, unregisterLayer, updateLayerHandler } = useLayerStack();
-
 	// Register layer on mount
-	useEffect(() => {
-		if (!isOpen) return;
-
-		layerIdRef.current = registerLayer({
-			type: 'modal',
-			priority: MODAL_PRIORITIES.MERGE_SESSION,
-			blocksLowerLayers: true,
-			capturesFocus: true,
-			focusTrap: 'strict',
-			ariaLabel: 'Merge Session Contexts',
-			onEscape: () => onCloseRef.current(),
-		});
-
-		return () => {
-			if (layerIdRef.current) {
-				unregisterLayer(layerIdRef.current);
-			}
-		};
-	}, [isOpen, registerLayer, unregisterLayer]);
-
-	// Update handler when onClose changes
-	useEffect(() => {
-		if (layerIdRef.current) {
-			updateLayerHandler(layerIdRef.current, () => onCloseRef.current());
-		}
-	}, [updateLayerHandler]);
+	useModalLayer(
+		MODAL_PRIORITIES.MERGE_SESSION,
+		'Merge Session Contexts',
+		() => onCloseRef.current(),
+		{ enabled: isOpen }
+	);
 
 	// Focus input on mount
 	useEffect(() => {

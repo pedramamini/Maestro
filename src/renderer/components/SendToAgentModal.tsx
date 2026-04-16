@@ -20,7 +20,7 @@ import { Spinner } from './ui/Spinner';
 import type { Theme, Session, ToolType } from '../types';
 import type { MergeResult } from '../types/contextMerge';
 import { fuzzyMatchWithScore } from '../utils/search';
-import { useLayerStack } from '../contexts/LayerStackContext';
+import { useModalLayer } from '../hooks/ui/useModalLayer';
 import { MODAL_PRIORITIES } from '../constants/modalPriorities';
 import { formatTokensCompact } from '../utils/formatters';
 import { estimateTokensFromLogs } from '../../shared/formatters';
@@ -144,7 +144,6 @@ export function SendToAgentModal({
 
 	// Refs
 	const inputRef = useRef<HTMLInputElement>(null);
-	const layerIdRef = useRef<string>();
 	const onCloseRef = useRef(onClose);
 	const selectedItemRef = useRef<HTMLButtonElement>(null);
 
@@ -158,35 +157,13 @@ export function SendToAgentModal({
 		setSelectedIndex(0);
 	}, []);
 
-	const { registerLayer, unregisterLayer, updateLayerHandler } = useLayerStack();
-
 	// Register layer on mount
-	useEffect(() => {
-		if (!isOpen) return;
-
-		layerIdRef.current = registerLayer({
-			type: 'modal',
-			priority: MODAL_PRIORITIES.SEND_TO_AGENT,
-			blocksLowerLayers: true,
-			capturesFocus: true,
-			focusTrap: 'strict',
-			ariaLabel: 'Send Context to Agent',
-			onEscape: () => onCloseRef.current(),
-		});
-
-		return () => {
-			if (layerIdRef.current) {
-				unregisterLayer(layerIdRef.current);
-			}
-		};
-	}, [isOpen, registerLayer, unregisterLayer]);
-
-	// Update handler when onClose changes
-	useEffect(() => {
-		if (layerIdRef.current) {
-			updateLayerHandler(layerIdRef.current, () => onCloseRef.current());
-		}
-	}, [updateLayerHandler]);
+	useModalLayer(
+		MODAL_PRIORITIES.SEND_TO_AGENT,
+		'Send Context to Agent',
+		() => onCloseRef.current(),
+		{ enabled: isOpen }
+	);
 
 	// Focus input on mount
 	useEffect(() => {

@@ -53,7 +53,7 @@ import type {
 } from '../../shared/symphony-types';
 import { SYMPHONY_CATEGORIES, SYMPHONY_BLOCKING_LABEL } from '../../shared/symphony-constants';
 import { COLORBLIND_AGENT_PALETTE } from '../constants/colorblindPalettes';
-import { useLayerStack } from '../contexts/LayerStackContext';
+import { useModalLayer } from '../hooks/ui/useModalLayer';
 import { MODAL_PRIORITIES } from '../constants/modalPriorities';
 import { useSymphony } from '../hooks/symphony';
 import { useContributorStats, type Achievement } from '../hooks/symphony/useContributorStats';
@@ -1300,7 +1300,6 @@ export function SymphonyModal({
 	sessions,
 	onSelectSession,
 }: SymphonyModalProps) {
-	const { registerLayer, unregisterLayer } = useLayerStack();
 	const onCloseRef = useRef(onClose);
 	onCloseRef.current = onClose;
 
@@ -1396,28 +1395,20 @@ export function SymphonyModal({
 	handleBackRef.current = handleBack;
 
 	// Layer stack
-	useEffect(() => {
-		if (isOpen) {
-			const id = registerLayer({
-				type: 'modal',
-				priority: MODAL_PRIORITIES.SYMPHONY ?? 710,
-				blocksLowerLayers: true,
-				capturesFocus: true,
-				focusTrap: 'strict',
-				ariaLabel: 'Maestro Symphony',
-				onEscape: () => {
-					if (showHelpRef.current) {
-						setShowHelp(false);
-					} else if (showDetailViewRef.current) {
-						handleBackRef.current();
-					} else {
-						onCloseRef.current();
-					}
-				},
-			});
-			return () => unregisterLayer(id);
-		}
-	}, [isOpen, registerLayer, unregisterLayer]);
+	useModalLayer(
+		MODAL_PRIORITIES.SYMPHONY ?? 710,
+		'Maestro Symphony',
+		() => {
+			if (showHelpRef.current) {
+				setShowHelp(false);
+			} else if (showDetailViewRef.current) {
+				handleBackRef.current();
+			} else {
+				onCloseRef.current();
+			}
+		},
+		{ enabled: isOpen }
+	);
 
 	// Focus tile grid for keyboard navigation (keyboard-first design)
 	useEffect(() => {
@@ -1643,9 +1634,10 @@ export function SymphonyModal({
 				return;
 			}
 
-			// Escape from search returns focus to grid
+			// Escape from search returns focus to grid (stop propagation to prevent modal close)
 			if (e.key === 'Escape' && e.target instanceof HTMLInputElement) {
 				e.preventDefault();
+				e.stopPropagation();
 				(e.target as HTMLInputElement).blur();
 				tileGridRef.current?.focus();
 				return;

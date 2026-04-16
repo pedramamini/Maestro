@@ -21,7 +21,7 @@ import {
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import type { Theme } from '../types';
-import { useLayerStack } from '../contexts/LayerStackContext';
+import { useModalLayer } from '../hooks/ui/useModalLayer';
 import { MODAL_PRIORITIES } from '../constants/modalPriorities';
 import { formatShortcutKeys } from '../utils/shortcutFormatter';
 import { formatDurationVerbose as formatDuration } from '../../shared/formatters';
@@ -73,8 +73,6 @@ export function FirstRunCelebration({
 	disableConfetti = false,
 }: FirstRunCelebrationProps): JSX.Element {
 	const containerRef = useRef<HTMLDivElement>(null);
-	const { registerLayer, unregisterLayer, updateLayerHandler } = useLayerStack();
-	const layerIdRef = useRef<string>();
 	const onCloseRef = useRef(onClose);
 	onCloseRef.current = onClose;
 
@@ -185,33 +183,16 @@ export function FirstRunCelebration({
 	}, [handleClose]);
 
 	// Register with layer stack
-	useEffect(() => {
-		const id = registerLayer({
-			type: 'modal',
-			priority: MODAL_PRIORITIES.STANDING_OVATION, // Use same high priority as standing ovation
-			blocksLowerLayers: true,
-			capturesFocus: true,
-			focusTrap: 'strict',
-			ariaLabel: 'First Auto Run Celebration',
-			onEscape: () => handleClose(),
-		});
-		layerIdRef.current = id;
+	useModalLayer(
+		MODAL_PRIORITIES.STANDING_OVATION, // Use same high priority as standing ovation
+		'First Auto Run Celebration',
+		handleClose
+	);
 
+	// Focus container on mount
+	useEffect(() => {
 		containerRef.current?.focus();
-
-		return () => {
-			if (layerIdRef.current) {
-				unregisterLayer(layerIdRef.current);
-			}
-		};
-	}, [registerLayer, unregisterLayer, handleClose]);
-
-	// Update escape handler when handleClose changes
-	useEffect(() => {
-		if (layerIdRef.current) {
-			updateLayerHandler(layerIdRef.current, handleClose);
-		}
-	}, [updateLayerHandler, handleClose]);
+	}, []);
 
 	return (
 		<>

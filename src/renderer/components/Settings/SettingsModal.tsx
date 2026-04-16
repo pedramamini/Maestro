@@ -15,7 +15,7 @@ import {
 } from 'lucide-react';
 import { useSettings } from '../../hooks';
 import type { Theme, LLMProvider } from '../../types';
-import { useLayerStack } from '../../contexts/LayerStackContext';
+import { useModalLayer } from '../../hooks/ui/useModalLayer';
 import { MODAL_PRIORITIES } from '../../constants/modalPriorities';
 import { AICommandsPanel } from '../AICommandsPanel';
 import { MaestroPromptsTab } from './tabs/MaestroPromptsTab';
@@ -158,8 +158,6 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 	);
 
 	// Layer stack integration
-	const { registerLayer, unregisterLayer } = useLayerStack();
-	const layerIdRef = useRef<string>();
 	const isRecordingShortcutRef = useRef(false);
 	const promptsEscapeHandlerRef = useRef<(() => boolean) | null>(null);
 
@@ -175,33 +173,18 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 	onCloseRef.current = onClose;
 
 	// Register layer when modal opens
-	useEffect(() => {
-		if (!isOpen) return;
-
-		const id = registerLayer({
-			type: 'modal',
-			priority: MODAL_PRIORITIES.SETTINGS,
-			blocksLowerLayers: true,
-			capturesFocus: true,
-			focusTrap: 'strict',
-			ariaLabel: 'Settings',
-			onEscape: () => {
-				// If recording a shortcut, ShortcutsTab handles its own escape via onKeyDownCapture
-				if (isRecordingShortcutRef.current) return;
-				// Let prompts tab handle layered escape (help → expanded → list → close)
-				if (promptsEscapeHandlerRef.current?.()) return;
-				onCloseRef.current();
-			},
-		});
-
-		layerIdRef.current = id;
-
-		return () => {
-			if (layerIdRef.current) {
-				unregisterLayer(layerIdRef.current);
-			}
-		};
-	}, [isOpen, registerLayer, unregisterLayer]); // Removed onClose from deps
+	useModalLayer(
+		MODAL_PRIORITIES.SETTINGS,
+		'Settings',
+		() => {
+			// If recording a shortcut, ShortcutsTab handles its own escape via onKeyDownCapture
+			if (isRecordingShortcutRef.current) return;
+			// Let prompts tab handle layered escape (help -> expanded -> list -> close)
+			if (promptsEscapeHandlerRef.current?.()) return;
+			onCloseRef.current();
+		},
+		{ enabled: isOpen }
+	);
 
 	// Tab navigation with Cmd+Shift+[ and ]
 	useEffect(() => {

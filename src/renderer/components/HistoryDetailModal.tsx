@@ -19,7 +19,7 @@ import {
 } from 'lucide-react';
 import type { Theme, HistoryEntry } from '../types';
 import type { FileNode } from '../types/fileTree';
-import { useLayerStack } from '../contexts/LayerStackContext';
+import { useModalLayer } from '../hooks/ui/useModalLayer';
 import { MODAL_PRIORITIES } from '../constants/modalPriorities';
 import { formatElapsedTime } from '../utils/formatters';
 import { formatTimestamp } from '../../shared/formatters';
@@ -66,8 +66,6 @@ export function HistoryDetailModal({
 	projectRoot,
 	onFileClick,
 }: HistoryDetailModalProps) {
-	const { registerLayer, unregisterLayer, updateLayerHandler } = useLayerStack();
-	const layerIdRef = useRef<string>();
 	const onCloseRef = useRef(onClose);
 	onCloseRef.current = onClose;
 	const [copiedSessionId, setCopiedSessionId] = useState(false);
@@ -100,35 +98,13 @@ export function HistoryDetailModal({
 		}
 	}, [hasNext, filteredEntries, currentIndex, onNavigate]);
 
-	// Register layer on mount
-	useEffect(() => {
-		const id = registerLayer({
-			type: 'modal',
-			priority: MODAL_PRIORITIES.CONFIRM, // Use same priority as confirm modal
-			blocksLowerLayers: true,
-			capturesFocus: true,
-			focusTrap: 'strict',
-			onEscape: () => {
-				onCloseRef.current();
-			},
-		});
-		layerIdRef.current = id;
-
-		return () => {
-			if (layerIdRef.current) {
-				unregisterLayer(layerIdRef.current);
-			}
-		};
-	}, [registerLayer, unregisterLayer]);
-
-	// Keep escape handler up to date
-	useEffect(() => {
-		if (layerIdRef.current) {
-			updateLayerHandler(layerIdRef.current, () => {
-				onCloseRef.current();
-			});
+	useModalLayer(MODAL_PRIORITIES.CONFIRM, undefined, () => {
+		if (showDeleteConfirm) {
+			setShowDeleteConfirm(false);
+			return;
 		}
-	}, [onClose, updateLayerHandler]);
+		onCloseRef.current();
+	});
 
 	// Focus delete button when confirmation modal appears
 	useEffect(() => {

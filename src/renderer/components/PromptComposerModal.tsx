@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState, useMemo, useCallback } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
 	X,
 	PenLine,
@@ -15,7 +15,7 @@ import {
 } from 'lucide-react';
 import { GhostIconButton } from './ui/GhostIconButton';
 import type { Theme, ThinkingMode, Session, Group } from '../types';
-import { useLayerStack } from '../contexts/LayerStackContext';
+import { useModalLayer } from '../hooks/ui/useModalLayer';
 import { MODAL_PRIORITIES } from '../constants/modalPriorities';
 import { estimateTokenCount } from '../../shared/formatters';
 import { getReadOnlyModeLabel, getReadOnlyModeTooltip } from '../../shared/agentMetadata';
@@ -111,7 +111,6 @@ export function PromptComposerModal({
 	const fileInputRef = useRef<HTMLInputElement>(null);
 	const mentionListRef = useRef<HTMLDivElement>(null);
 	const selectedMentionRef = useRef<HTMLButtonElement>(null);
-	const { registerLayer, unregisterLayer } = useLayerStack();
 	const hasAgentMentions = sessions != null && sessions.length > 0;
 
 	// File @mention completion (same as InputArea)
@@ -148,28 +147,21 @@ export function PromptComposerModal({
 	}, [isOpen]);
 
 	// Register with layer stack for Escape handling
-	useEffect(() => {
-		if (isOpen) {
-			const id = registerLayer({
-				type: 'modal',
-				priority: MODAL_PRIORITIES.PROMPT_COMPOSER,
-				blocksLowerLayers: true,
-				capturesFocus: true,
-				focusTrap: 'strict',
-				onEscape: () => {
-					// If mention dropdown is open, close it instead of the modal
-					if (showMentionsRef.current) {
-						setShowMentions(false);
-						return;
-					}
-					// Save the current value back before closing
-					onSubmitRef.current(valueRef.current);
-					onCloseRef.current();
-				},
-			});
-			return () => unregisterLayer(id);
-		}
-	}, [isOpen, registerLayer, unregisterLayer]);
+	useModalLayer(
+		MODAL_PRIORITIES.PROMPT_COMPOSER,
+		undefined,
+		() => {
+			// If mention dropdown is open, close it instead of the modal
+			if (showMentionsRef.current) {
+				setShowMentions(false);
+				return;
+			}
+			// Save the current value back before closing
+			onSubmitRef.current(valueRef.current);
+			onCloseRef.current();
+		},
+		{ enabled: isOpen }
+	);
 
 	// Build agent/group mentionable items (group chat mode)
 	const agentMentionItems = useMemo(() => {

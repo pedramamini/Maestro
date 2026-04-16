@@ -4,7 +4,7 @@ import { X, History, Sparkles, Clapperboard, HelpCircle } from 'lucide-react';
 import { GhostIconButton } from '../ui/GhostIconButton';
 import { Spinner } from '../ui/Spinner';
 import type { Theme } from '../../types';
-import { useLayerStack } from '../../contexts/LayerStackContext';
+import { useModalLayer } from '../../hooks/ui/useModalLayer';
 import { MODAL_PRIORITIES } from '../../constants/modalPriorities';
 import { OverviewTab, type TabFocusHandle } from './OverviewTab';
 import { hasCachedSynopsis } from './AIOverviewTab';
@@ -52,8 +52,6 @@ export function DirectorNotesModal({
 	const [overviewGenerating, setOverviewGenerating] = useState(false);
 
 	// Layer stack registration for Escape handling
-	const { registerLayer, unregisterLayer } = useLayerStack();
-	const layerIdRef = useRef<string>();
 	const modalRef = useRef<HTMLDivElement>(null);
 
 	// Tab content refs for focus management
@@ -84,29 +82,22 @@ export function DirectorNotesModal({
 	activeTabRef.current = activeTab;
 
 	// Register modal layer
-	useEffect(() => {
-		layerIdRef.current = registerLayer({
-			type: 'modal',
-			priority: MODAL_PRIORITIES.DIRECTOR_NOTES,
-			blocksLowerLayers: true,
-			capturesFocus: true,
-			focusTrap: 'lenient',
-			onEscape: () => {
-				// Delegate Escape to the active tab first (e.g. to close search)
-				const tabRef =
-					activeTabRef.current === 'history'
-						? historyTabRef
-						: activeTabRef.current === 'overview'
-							? overviewTabRef
-							: null;
-				if (tabRef?.current?.onEscape?.()) return;
-				onCloseRef.current();
-			},
-		});
-		return () => {
-			if (layerIdRef.current) unregisterLayer(layerIdRef.current);
-		};
-	}, [registerLayer, unregisterLayer]);
+	useModalLayer(
+		MODAL_PRIORITIES.DIRECTOR_NOTES,
+		undefined,
+		() => {
+			// Delegate Escape to the active tab first (e.g. to close search)
+			const tabRef =
+				activeTabRef.current === 'history'
+					? historyTabRef
+					: activeTabRef.current === 'overview'
+						? overviewTabRef
+						: null;
+			if (tabRef?.current?.onEscape?.()) return;
+			onCloseRef.current();
+		},
+		{ focusTrap: 'lenient' }
+	);
 
 	// Focus the active tab content when tab changes (including initial mount)
 	useEffect(() => {

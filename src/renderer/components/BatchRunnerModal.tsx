@@ -16,7 +16,7 @@ import {
 } from 'lucide-react';
 import { Spinner } from './ui/Spinner';
 import type { Theme, BatchDocumentEntry, BatchRunConfig, WorktreeRunTarget } from '../types';
-import { useLayerStack } from '../contexts/LayerStackContext';
+import { useModalLayer } from '../hooks/ui/useModalLayer';
 import { MODAL_PRIORITIES } from '../constants/modalPriorities';
 import { TEMPLATE_VARIABLES } from '../utils/templateVariables';
 import { PlaybookDeleteConfirmModal } from './PlaybookDeleteConfirmModal';
@@ -248,9 +248,6 @@ export function BatchRunnerModal(props: BatchRunnerModalProps) {
 		onApplyPlaybook: handleApplyPlaybook,
 	});
 
-	const { registerLayer, unregisterLayer, updateLayerHandler } = useLayerStack();
-	const layerIdRef = useRef<string>();
-
 	// Use ref for getDocumentTaskCount to avoid dependency issues
 	const getDocumentTaskCountRef = useRef(getDocumentTaskCount);
 	getDocumentTaskCountRef.current = getDocumentTaskCount;
@@ -291,60 +288,15 @@ export function BatchRunnerModal(props: BatchRunnerModalProps) {
 	const hasValidPrompt = validateAgentPromptHasTaskReference(prompt);
 	const isPromptEmpty = !prompt || !prompt.trim();
 
-	// Register layer on mount
-	useEffect(() => {
-		const id = registerLayer({
-			type: 'modal',
-			priority: MODAL_PRIORITIES.BATCH_RUNNER,
-			blocksLowerLayers: true,
-			capturesFocus: true,
-			focusTrap: 'strict',
-			onEscape: () => {
-				if (showDeleteConfirmModal) {
-					handleCancelDeletePlaybook();
-				} else if (showSavePlaybookModal) {
-					setShowSavePlaybookModal(false);
-				} else {
-					handleCloseWithConfirmation();
-				}
-			},
-		});
-		layerIdRef.current = id;
-
-		return () => {
-			if (layerIdRef.current) {
-				unregisterLayer(layerIdRef.current);
-			}
-		};
-	}, [
-		registerLayer,
-		unregisterLayer,
-		showSavePlaybookModal,
-		showDeleteConfirmModal,
-		handleCancelDeletePlaybook,
-		handleCloseWithConfirmation,
-	]);
-
-	// Update handler when dependencies change
-	useEffect(() => {
-		if (layerIdRef.current) {
-			updateLayerHandler(layerIdRef.current, () => {
-				if (showDeleteConfirmModal) {
-					handleCancelDeletePlaybook();
-				} else if (showSavePlaybookModal) {
-					setShowSavePlaybookModal(false);
-				} else {
-					handleCloseWithConfirmation();
-				}
-			});
+	useModalLayer(MODAL_PRIORITIES.BATCH_RUNNER, undefined, () => {
+		if (showDeleteConfirmModal) {
+			handleCancelDeletePlaybook();
+		} else if (showSavePlaybookModal) {
+			setShowSavePlaybookModal(false);
+		} else {
+			handleCloseWithConfirmation();
 		}
-	}, [
-		handleCloseWithConfirmation,
-		updateLayerHandler,
-		showSavePlaybookModal,
-		showDeleteConfirmModal,
-		handleCancelDeletePlaybook,
-	]);
+	});
 
 	// Focus textarea on mount
 	useEffect(() => {

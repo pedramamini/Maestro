@@ -3,7 +3,7 @@ import { ExternalLink, Trophy, Clock, Star, Share2, Copy, Download, Check } from
 import confetti from 'canvas-confetti';
 import type { Theme, ThemeMode } from '../types';
 import type { ConductorBadge } from '../constants/conductorBadges';
-import { useLayerStack } from '../contexts/LayerStackContext';
+import { useModalLayer } from '../hooks/ui/useModalLayer';
 import { MODAL_PRIORITIES } from '../constants/modalPriorities';
 import { AnimatedMaestro } from './MaestroSilhouette';
 import {
@@ -44,8 +44,6 @@ export function StandingOvationOverlay({
 	isLeaderboardRegistered,
 	disableConfetti = false,
 }: StandingOvationOverlayProps) {
-	const { registerLayer, unregisterLayer, updateLayerHandler } = useLayerStack();
-	const layerIdRef = useRef<string>();
 	const containerRef = useRef<HTMLDivElement>(null);
 	const onCloseRef = useRef(onClose);
 	onCloseRef.current = onClose;
@@ -144,37 +142,19 @@ export function StandingOvationOverlay({
 	}, [isClosing, onClose, fireConfetti]);
 
 	// Register with layer stack
+	useModalLayer(MODAL_PRIORITIES.STANDING_OVATION, 'Standing Ovation Achievement', () =>
+		handleCloseRef.current()
+	);
+
+	// Focus container on mount
 	useEffect(() => {
-		const id = registerLayer({
-			type: 'modal',
-			priority: MODAL_PRIORITIES.STANDING_OVATION,
-			blocksLowerLayers: true,
-			capturesFocus: true,
-			focusTrap: 'strict',
-			ariaLabel: 'Standing Ovation Achievement',
-			onEscape: () => handleCloseRef.current(),
-		});
-		layerIdRef.current = id;
-
 		containerRef.current?.focus();
-
-		return () => {
-			if (layerIdRef.current) {
-				unregisterLayer(layerIdRef.current);
-			}
-		};
-	}, [registerLayer, unregisterLayer]);
+	}, []);
 
 	// Update close handler ref when handleTakeABow changes
 	useEffect(() => {
 		handleCloseRef.current = handleTakeABow;
 	}, [handleTakeABow]);
-
-	useEffect(() => {
-		if (layerIdRef.current) {
-			updateLayerHandler(layerIdRef.current, () => handleCloseRef.current());
-		}
-	}, [updateLayerHandler]);
 
 	// Generate shareable achievement card as canvas using theme colors
 	const generateShareImage = useCallback(async (): Promise<HTMLCanvasElement> => {

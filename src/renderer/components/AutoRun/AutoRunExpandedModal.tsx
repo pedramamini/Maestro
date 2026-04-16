@@ -15,7 +15,7 @@ import {
 import { GhostIconButton } from '../ui/GhostIconButton';
 import { Spinner } from '../ui/Spinner';
 import type { Theme, BatchRunState, SessionState, Shortcut } from '../../types';
-import { useLayerStack } from '../../contexts/LayerStackContext';
+import { useModalLayer } from '../../hooks/ui/useModalLayer';
 import { MODAL_PRIORITIES } from '../../constants/modalPriorities';
 import { AutoRun } from './AutoRun';
 import type { AutoRunHandle } from './types';
@@ -94,8 +94,6 @@ export function AutoRunExpandedModal({
 	onOpenMarketplace,
 	...autoRunProps
 }: AutoRunExpandedModalProps) {
-	const { registerLayer, unregisterLayer, updateLayerHandler } = useLayerStack();
-	const layerIdRef = useRef<string>();
 	const onCloseRef = useRef(onClose);
 	const handleCloseRef = useRef<() => void>(() => {});
 	const autoRunRef = useRef<AutoRunHandle>(null);
@@ -178,35 +176,9 @@ export function AutoRunExpandedModal({
 		onClose();
 	}, [handleRevert, onClose]);
 
-	// Register layer on mount
-	useEffect(() => {
-		const id = registerLayer({
-			type: 'modal',
-			priority: MODAL_PRIORITIES.AUTORUN_EXPANDED,
-			blocksLowerLayers: true,
-			capturesFocus: true,
-			focusTrap: 'strict',
-			onEscape: () => {
-				handleCloseRef.current();
-			},
-		});
-		layerIdRef.current = id;
-
-		return () => {
-			if (layerIdRef.current) {
-				unregisterLayer(layerIdRef.current);
-			}
-		};
-	}, [registerLayer, unregisterLayer]);
-
-	// Keep escape handler up to date
-	useEffect(() => {
-		if (layerIdRef.current) {
-			updateLayerHandler(layerIdRef.current, () => {
-				handleCloseRef.current();
-			});
-		}
-	}, [handleClose, updateLayerHandler]);
+	useModalLayer(MODAL_PRIORITIES.AUTORUN_EXPANDED, undefined, () => {
+		handleCloseRef.current();
+	});
 
 	// Focus the AutoRun component on mount
 	useEffect(() => {

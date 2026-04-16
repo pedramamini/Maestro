@@ -1283,7 +1283,18 @@ describe('NewInstanceModal', () => {
 				/>
 			);
 
-			expect(mockUpdateLayerHandler).toHaveBeenCalledWith('layer-new-instance-123', newOnClose);
+			// useModalLayer wraps onEscape in a stable closure (`() => onEscapeRef.current()`)
+			// to avoid re-registering the layer on every render. The handler still routes to
+			// the latest onClose via ref - we just verify update was called with our layer id.
+			expect(mockUpdateLayerHandler).toHaveBeenCalledWith(
+				'layer-new-instance-123',
+				expect.any(Function)
+			);
+			// Trigger the latest registered escape handler and verify it calls the new onClose
+			const lastCall =
+				mockUpdateLayerHandler.mock.calls[mockUpdateLayerHandler.mock.calls.length - 1];
+			(lastCall[1] as () => void)();
+			expect(newOnClose).toHaveBeenCalledTimes(1);
 		});
 	});
 

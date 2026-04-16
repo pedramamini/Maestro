@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { X, FileText, Variable, ChevronDown, ChevronRight } from 'lucide-react';
 import { GhostIconButton } from './ui/GhostIconButton';
 import type { Theme } from '../types';
-import { useLayerStack } from '../contexts/LayerStackContext';
+import { useModalLayer } from '../hooks/ui/useModalLayer';
 import { MODAL_PRIORITIES } from '../constants/modalPriorities';
 import { TEMPLATE_VARIABLES } from '../utils/templateVariables';
 import { useTemplateAutocomplete } from '../hooks';
@@ -27,7 +27,6 @@ export function AgentPromptComposerModal({
 	const [value, setValue] = useState(initialValue);
 	const [variablesExpanded, setVariablesExpanded] = useState(false);
 	const textareaRef = useRef<HTMLTextAreaElement>(null);
-	const { registerLayer, unregisterLayer } = useLayerStack();
 	const onCloseRef = useRef(onClose);
 	onCloseRef.current = onClose;
 	const onSubmitRef = useRef(onSubmit);
@@ -68,28 +67,21 @@ export function AgentPromptComposerModal({
 	}, [isOpen]);
 
 	// Register with layer stack for Escape handling
-	useEffect(() => {
-		if (isOpen) {
-			const id = registerLayer({
-				type: 'modal',
-				priority: MODAL_PRIORITIES.AGENT_PROMPT_COMPOSER,
-				blocksLowerLayers: true,
-				capturesFocus: true,
-				focusTrap: 'strict',
-				onEscape: () => {
-					// If autocomplete is open, close it instead of the modal
-					if (autocompleteState.isOpen) {
-						closeAutocomplete();
-						return;
-					}
-					// Save the current value back before closing
-					onSubmitRef.current(valueRef.current);
-					onCloseRef.current();
-				},
-			});
-			return () => unregisterLayer(id);
-		}
-	}, [isOpen, registerLayer, unregisterLayer, autocompleteState.isOpen, closeAutocomplete]);
+	useModalLayer(
+		MODAL_PRIORITIES.AGENT_PROMPT_COMPOSER,
+		undefined,
+		() => {
+			// If autocomplete is open, close it instead of the modal
+			if (autocompleteState.isOpen) {
+				closeAutocomplete();
+				return;
+			}
+			// Save the current value back before closing
+			onSubmitRef.current(valueRef.current);
+			onCloseRef.current();
+		},
+		{ enabled: isOpen }
+	);
 
 	if (!isOpen) return null;
 

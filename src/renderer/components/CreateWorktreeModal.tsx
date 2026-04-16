@@ -3,7 +3,7 @@ import { X, GitBranch, AlertTriangle } from 'lucide-react';
 import { GhostIconButton } from './ui/GhostIconButton';
 import { Spinner } from './ui/Spinner';
 import type { Theme, Session, GhCliStatus } from '../types';
-import { useLayerStack } from '../contexts/LayerStackContext';
+import { useModalLayer } from '../hooks/ui/useModalLayer';
 import { MODAL_PRIORITIES } from '../constants/modalPriorities';
 import { openUrl } from '../utils/openUrl';
 
@@ -28,9 +28,13 @@ export function CreateWorktreeModal({
 	session,
 	onCreateWorktree,
 }: CreateWorktreeModalProps) {
-	const { registerLayer, unregisterLayer } = useLayerStack();
 	const onCloseRef = useRef(onClose);
 	onCloseRef.current = onClose;
+
+	useModalLayer(MODAL_PRIORITIES.CREATE_WORKTREE, undefined, () => onCloseRef.current(), {
+		focusTrap: 'lenient',
+		enabled: isOpen,
+	});
 
 	// Form state
 	const [branchName, setBranchName] = useState('');
@@ -42,21 +46,6 @@ export function CreateWorktreeModal({
 
 	// Input ref for auto-focus
 	const inputRef = useRef<HTMLInputElement>(null);
-
-	// Register with layer stack for Escape handling
-	useEffect(() => {
-		if (isOpen) {
-			const id = registerLayer({
-				type: 'modal',
-				priority: MODAL_PRIORITIES.CREATE_WORKTREE,
-				onEscape: () => onCloseRef.current(),
-				blocksLowerLayers: true,
-				capturesFocus: true,
-				focusTrap: 'lenient',
-			});
-			return () => unregisterLayer(id);
-		}
-	}, [isOpen, registerLayer, unregisterLayer]);
 
 	// Check gh CLI status and reset state on open
 	useEffect(() => {

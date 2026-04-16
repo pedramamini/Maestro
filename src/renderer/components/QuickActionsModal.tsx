@@ -2,7 +2,7 @@ import React, { memo, useState, useEffect, useRef, useCallback } from 'react';
 import { Search } from 'lucide-react';
 import type { Session, Group, Theme, Shortcut, RightPanelTab, SettingsTab } from '../types';
 import type { GroupChat } from '../../shared/group-chat-types';
-import { useLayerStack } from '../contexts/LayerStackContext';
+import { useModalLayer } from '../hooks/ui/useModalLayer';
 import { notifyToast } from '../stores/notificationStore';
 import { useModalStore } from '../stores/modalStore';
 import { QUICK_ACTION_PROMPTS } from '../../shared/promptDefinitions';
@@ -257,10 +257,7 @@ export const QuickActionsModal = memo(function QuickActionsModal(props: QuickAct
 	const inputRef = useRef<HTMLInputElement>(null);
 	const selectedItemRef = useRef<HTMLButtonElement>(null);
 	const scrollContainerRef = useRef<HTMLDivElement>(null);
-	const layerIdRef = useRef<string>();
 	const modalRef = useRef<HTMLDivElement>(null);
-
-	const { registerLayer, unregisterLayer, updateLayerHandler } = useLayerStack();
 	const activeSession = sessions.find((s) => s.id === activeSessionId);
 
 	// Compute the active tab's position in the unified tab order for command palette conditions.
@@ -296,44 +293,15 @@ export const QuickActionsModal = memo(function QuickActionsModal(props: QuickAct
 	})();
 	const unifiedTabCount = activeSession?.unifiedTabOrder?.length ?? 0;
 
-	// Register layer on mount (handler will be updated by separate effect)
-	useEffect(() => {
-		layerIdRef.current = registerLayer({
-			type: 'modal',
-			priority: MODAL_PRIORITIES.QUICK_ACTION,
-			blocksLowerLayers: true,
-			capturesFocus: true,
-			focusTrap: 'strict',
-			ariaLabel: 'Quick Actions',
-			onEscape: () => setQuickActionOpen(false), // Initial handler, updated below
-		});
-
-		return () => {
-			if (layerIdRef.current) {
-				unregisterLayer(layerIdRef.current);
-			}
-		};
-	}, [registerLayer, unregisterLayer, setQuickActionOpen]);
-
-	// Update handler when mode changes - use a ref-based approach to avoid stale closure
-	const handleEscapeRef = useRef<() => void>(() => setQuickActionOpen(false));
-	useEffect(() => {
-		handleEscapeRef.current = () => {
-			// Handle escape based on current mode
-			if (mode === 'move-to-group') {
-				setMode('main');
-				// Note: Selection will be reset by the search/mode change useEffect
-			} else {
-				setQuickActionOpen(false);
-			}
-		};
-	}, [mode, setQuickActionOpen]);
-
-	useEffect(() => {
-		if (layerIdRef.current) {
-			updateLayerHandler(layerIdRef.current, () => handleEscapeRef.current());
+	// Register layer on mount - escape behavior depends on current mode
+	useModalLayer(MODAL_PRIORITIES.QUICK_ACTION, 'Quick Actions', () => {
+		if (mode === 'move-to-group') {
+			setMode('main');
+			// Note: Selection will be reset by the search/mode change useEffect
+		} else {
+			setQuickActionOpen(false);
 		}
-	}, [updateLayerHandler]);
+	});
 
 	// Focus input on mount
 	useEffect(() => {
