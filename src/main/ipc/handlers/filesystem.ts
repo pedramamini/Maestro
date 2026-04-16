@@ -107,30 +107,68 @@ export function registerFilesystemHandlers(): void {
 			if (!result.success) {
 				throw new Error(result.error || 'Failed to read remote directory');
 			}
-			// Map remote entries to match local format (isFile derived from !isDirectory && !isSymlink)
-			// Include full path for recursive directory scanning (e.g., document graph)
-			// Use POSIX path joining for remote paths (always forward slashes)
-			return result.data!.map((entry) => ({
-				name: entry.name.normalize('NFC'),
-				isDirectory: entry.isDirectory,
-				isFile: !entry.isDirectory && !entry.isSymlink,
-				// Preserve raw filesystem name in path for correct remote operations
-				path: dirPath.endsWith('/') ? `${dirPath}${entry.name}` : `${dirPath}/${entry.name}`,
-			}));
-		}
+				// Map remote entries to match local format.
+				// For symlinks, resolve target type via remote stat so directory/file links remain visible.
+				return await Promise.all(
+					result.data!.map(async (entry) => {
+						const fullPath = dirPath.endsWith('/') ? `${dirPath}${entry.name}` : `${dirPath}/${entry.name}`;
+						let isDirectory = entry.isDirectory;
+						let isFile = !entry.isDirectory && !entry.isSymlink;
+						if (entry.isSymlink) {
+							const statResult = await statRemote(fullPath, sshConfig);
+							if (statResult.success && statResult.data) {
+								isDirectory = statResult.data.isDirectory;
+								isFile = !statResult.data.isDirectory;
+							} else {
+								// Broken symlink or inaccessible target: keep entry visible as symlink
+								isDirectory = false;
+								isFile = false;
+							}
+						}
+						return {
+							name: entry.name.normalize('NFC'),
+							isDirectory,
+							isFile,
+							...(entry.isSymlink ? { isSymlink: true } : {}),
+							// Preserve raw filesystem name in path for correct remote operations
+							path: fullPath,
+						};
+					})
+				);
+			}
 
-		// Local: use standard fs operations
-		const entries = await fs.readdir(dirPath, { withFileTypes: true });
-		// Convert Dirent objects to plain objects for IPC serialization
-		// Include full path for recursive directory scanning (e.g., document graph)
-		return entries.map((entry: any) => ({
-			name: entry.name.normalize('NFC'),
-			isDirectory: entry.isDirectory(),
-			isFile: entry.isFile(),
-			// Preserve raw filesystem name in path for correct local operations
-			path: path.join(dirPath, entry.name),
-		}));
-	});
+			// Local: use standard fs operations
+			const entries = await fs.readdir(dirPath, { withFileTypes: true });
+			// Convert Dirent objects to plain objects for IPC serialization.
+			// Resolve symlink targets so linked directories/files are not dropped.
+			return await Promise.all(
+				entries.map(async (entry: any) => {
+					const fullPath = path.join(dirPath, entry.name);
+					let isDirectory = entry.isDirectory();
+					let isFile = entry.isFile();
+					const isSymlink = entry.isSymbolicLink?.() === true;
+					if (isSymlink) {
+						try {
+							const targetStats = await fs.stat(fullPath);
+							isDirectory = targetStats.isDirectory();
+							isFile = targetStats.isFile();
+						} catch {
+							// Broken symlink: keep visible, but neither file nor directory
+							isDirectory = false;
+							isFile = false;
+						}
+					}
+					return {
+						name: entry.name.normalize('NFC'),
+						isDirectory,
+						isFile,
+						...(isSymlink ? { isSymlink: true } : {}),
+						// Preserve raw filesystem name in path for correct local operations
+						path: fullPath,
+					};
+				})
+			);
+		});
 
 	// Read file contents (supports SSH remote, with image base64 encoding)
 	ipcMain.handle('fs:readFile', async (_, filePath: string, sshRemoteId?: string) => {

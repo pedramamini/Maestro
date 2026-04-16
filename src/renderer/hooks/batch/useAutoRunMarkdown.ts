@@ -14,6 +14,7 @@ import { MermaidRenderer } from '../../components/MermaidRenderer';
 import { AttachmentImage } from '../../components/AutoRun/AttachmentImage';
 import React from 'react';
 import { openUrl } from '../../utils/openUrl';
+import { countMarkdownTasks } from './batchUtils';
 
 export interface UseAutoRunMarkdownParams {
 	theme: Theme;
@@ -67,13 +68,8 @@ export function useAutoRunMarkdown({
 
 	// 2. Parse task counts from saved content only (not live during editing)
 	const taskCounts = useMemo(() => {
-		const completedRegex = /^[\s]*[-*]\s*\[x\]/gim;
-		const uncheckedRegex = /^[\s]*[-*]\s*\[\s\]/gim;
-		const completedMatches = savedContent.match(completedRegex) || [];
-		const uncheckedMatches = savedContent.match(uncheckedRegex) || [];
-		const completed = completedMatches.length;
-		const total = completed + uncheckedMatches.length;
-		return { completed, total };
+		const counts = countMarkdownTasks(savedContent);
+		return { completed: counts.checked, total: counts.total };
 	}, [savedContent]);
 
 	// 3. Token counting based on saved content only (not live during editing)

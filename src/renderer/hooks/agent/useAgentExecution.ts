@@ -22,7 +22,13 @@ export interface AgentSpawnResult {
 	usageStats?: UsageStats;
 	/** Context usage percentage estimated from the last usage event (not accumulated) */
 	contextUsage?: number;
+	/** Optional error detail when the run fails */
+	error?: string;
 }
+
+const BATCH_INACTIVITY_TIMEOUT_MS = 10 * 60 * 1000; // 10 minutes without output
+const BATCH_HARD_TIMEOUT_MS = 60 * 60 * 1000; // 60 minutes wall clock per task
+const BATCH_WATCHDOG_CHECK_MS = 15 * 1000; // Check every 15 seconds
 
 /**
  * Dependencies for the useAgentExecution hook.
@@ -201,29 +207,50 @@ export function useAgentExecution(deps: UseAgentExecutionDeps): UseAgentExecutio
 				// Batch operations run in isolation and should not affect the main UI state.
 				// The batch progress is tracked separately via BatchRunState in useBatchProcessor.
 
-				// Create a promise that resolves when the agent completes
-				return new Promise((resolve) => {
-					let agentSessionId: string | undefined;
-					let responseText = '';
-					let taskUsageStats: UsageStats | undefined;
-					let lastUsageEvent: UsageStats | undefined; // Last (non-accumulated) event for context estimation
-					const queryStartTime = Date.now(); // Track start time for stats
+					// Create a promise that resolves when the agent completes
+					return new Promise((resolve) => {
+						let agentSessionId: string | undefined;
+						let responseText = '';
+						let taskUsageStats: UsageStats | undefined;
+						let lastUsageEvent: UsageStats | undefined; // Last (non-accumulated) event for context estimation
+						const queryStartTime = Date.now(); // Track start time for stats
+						const isBatchProcess = targetSessionId.includes('-batch-');
+						let lastOutputAt = Date.now();
+						let settled = false;
+						let inactivityTimer: ReturnType<typeof setInterval> | null = null;
+						let hardTimeoutTimer: ReturnType<typeof setTimeout> | null = null;
 
-					// Array to collect cleanup functions as listeners are registered
-					const cleanupFns: (() => void)[] = [];
+						// Array to collect cleanup functions as listeners are registered
+						const cleanupFns: (() => void)[] = [];
 
-					const cleanup = () => {
-						cleanupFns.forEach((fn) => fn());
-					};
-
-					// Set up listeners for this specific agent run
-					cleanupFns.push(
-						window.maestro.process.onData((sid: string, data: string) => {
-							if (sid === targetSessionId) {
-								responseText += data;
+						const cleanup = () => {
+							cleanupFns.forEach((fn) => fn());
+							if (inactivityTimer) {
+								clearInterval(inactivityTimer);
+								inactivityTimer = null;
 							}
-						})
-					);
+							if (hardTimeoutTimer) {
+								clearTimeout(hardTimeoutTimer);
+								hardTimeoutTimer = null;
+							}
+						};
+
+						const resolveOnce = (result: AgentSpawnResult) => {
+							if (settled) return;
+							settled = true;
+							cleanup();
+							resolve(result);
+						};
+
+						// Set up listeners for this specific agent run
+						cleanupFns.push(
+							window.maestro.process.onData((sid: string, data: string) => {
+								if (sid === targetSessionId) {
+									lastOutputAt = Date.now();
+									responseText += data;
+								}
+							})
+						);
 
 					cleanupFns.push(
 						window.maestro.process.onSessionId((sid: string, capturedId: string) => {
@@ -245,16 +272,13 @@ export function useAgentExecution(deps: UseAgentExecutionDeps): UseAgentExecutio
 						})
 					);
 
-					cleanupFns.push(
-						window.maestro.process.onExit((sid: string) => {
-							if (sid === targetSessionId) {
-								// Clean up listeners
-								cleanup();
-
-								// Record query stats for Auto Run queries
-								const queryDuration = Date.now() - queryStartTime;
-								const activeTab = getActiveTab(session);
-								window.maestro.stats
+						cleanupFns.push(
+							window.maestro.process.onExit((sid: string) => {
+								if (sid === targetSessionId) {
+									// Record query stats for Auto Run queries
+									const queryDuration = Date.now() - queryStartTime;
+									const activeTab = getActiveTab(session);
+									window.maestro.stats
 									.recordQuery({
 										sessionId: sessionId, // Use the original session ID, not the batch ID
 										agentType: session.toolType,
@@ -377,44 +401,74 @@ export function useAgentExecution(deps: UseAgentExecutionDeps): UseAgentExecutio
 								// race with queued manual writes. Worktree mode can skip this since it operates
 								// in a separate directory with no file conflicts.
 								// Note: cwdOverride is set when worktree is enabled
-								if (hasQueuedItems && !cwdOverride) {
+									if (hasQueuedItems && !cwdOverride) {
 									// Wait for queue to drain by polling session state
 									// The queue is processed sequentially, so we wait until session becomes idle
-									const waitForQueueDrain = () => {
-										const checkSession = sessionsRef.current.find((s) => s.id === sessionId);
-										if (
-											!checkSession ||
-											checkSession.state === 'idle' ||
-											checkSession.executionQueue.length === 0
-										) {
-											// Queue drained or session idle - safe to continue batch
-											resolve({
-												success: true,
-												response: responseText,
-												agentSessionId,
-												usageStats: taskUsageStats,
-												contextUsage: taskContextUsage,
-											});
-										} else {
-											// Queue still processing - check again
-											setTimeout(waitForQueueDrain, 100);
+										const waitForQueueDrain = () => {
+											if (settled) return;
+											const checkSession = sessionsRef.current.find((s) => s.id === sessionId);
+											if (
+												!checkSession ||
+												checkSession.state === 'idle' ||
+												checkSession.executionQueue.length === 0
+											) {
+												// Queue drained or session idle - safe to continue batch
+												resolveOnce({
+													success: true,
+													response: responseText,
+													agentSessionId,
+													usageStats: taskUsageStats,
+													contextUsage: taskContextUsage,
+												});
+											} else {
+												// Queue still processing - check again
+												setTimeout(waitForQueueDrain, 100);
 										}
 									};
 									// Start polling after a short delay to let state update propagate
-									setTimeout(waitForQueueDrain, 50);
-								} else {
-									// No queued items or worktree mode - resolve immediately
-									resolve({
-										success: true,
-										response: responseText,
-										agentSessionId,
-										usageStats: taskUsageStats,
-										contextUsage: taskContextUsage,
+										setTimeout(waitForQueueDrain, 50);
+									} else {
+										// No queued items or worktree mode - resolve immediately
+										resolveOnce({
+											success: true,
+											response: responseText,
+											agentSessionId,
+											usageStats: taskUsageStats,
+											contextUsage: taskContextUsage,
 									});
 								}
 							}
 						})
-					);
+						);
+
+						// Watchdog for hung Auto Run batch tasks:
+						// detect long silence or excessive wall-clock runtime and force-kill.
+						if (isBatchProcess) {
+							inactivityTimer = setInterval(() => {
+								if (settled) return;
+								if (Date.now() - lastOutputAt <= BATCH_INACTIVITY_TIMEOUT_MS) return;
+								window.maestro.process.kill(targetSessionId).catch(() => {});
+								resolveOnce({
+									success: false,
+									error: `Auto Run task stalled: no output for ${Math.floor(BATCH_INACTIVITY_TIMEOUT_MS / 60000)} minutes`,
+									response: responseText,
+									agentSessionId,
+									usageStats: taskUsageStats,
+								});
+							}, BATCH_WATCHDOG_CHECK_MS);
+
+							hardTimeoutTimer = setTimeout(() => {
+								if (settled) return;
+								window.maestro.process.kill(targetSessionId).catch(() => {});
+								resolveOnce({
+									success: false,
+									error: `Auto Run task timed out after ${Math.floor(BATCH_HARD_TIMEOUT_MS / 60000)} minutes`,
+									response: responseText,
+									agentSessionId,
+									usageStats: taskUsageStats,
+								});
+							}, BATCH_HARD_TIMEOUT_MS);
+						}
 
 					// Spawn the agent for batch processing
 					// Use effectiveCwd which may be a worktree path for parallel execution
@@ -426,7 +480,7 @@ export function useAgentExecution(deps: UseAgentExecutionDeps): UseAgentExecutio
 					});
 
 					// Batch processing (Auto Run) should NOT use read-only mode - it needs to make changes
-					window.maestro.process
+						window.maestro.process
 						.spawn({
 							sessionId: targetSessionId,
 							toolType: session.toolType,
@@ -447,16 +501,15 @@ export function useAgentExecution(deps: UseAgentExecutionDeps): UseAgentExecutio
 							sendPromptViaStdin,
 							sendPromptViaStdinRaw,
 						})
-						.catch(() => {
-							cleanup();
-							resolve({ success: false });
-						});
-				});
-			} catch (error) {
-				console.error('Error spawning agent:', error);
-				return { success: false };
-			}
-		},
+							.catch(() => {
+								resolveOnce({ success: false });
+							});
+					});
+				} catch (error) {
+					console.error('Error spawning agent:', error);
+					return { success: false, error: error instanceof Error ? error.message : String(error) };
+				}
+			},
 		[accumulateUsageStats, processQueuedItemRef, sessionsRef, setSessions]
 	); // Uses sessionsRef for latest sessions
 

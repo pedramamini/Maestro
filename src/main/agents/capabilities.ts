@@ -357,7 +357,7 @@ export const AGENT_CAPABILITIES: Record<string, AgentCapabilities> = {
 		supportsThinkingDisplay: true, // Emits thinking content in messages - Verified
 		supportsContextMerge: true, // Can receive merged context via prompts
 		supportsContextExport: true, // Session files are exportable
-		supportsWizard: false, // Not yet integrated with wizard
+			supportsWizard: true, // Supports wizard structured output flow
 		supportsGroupChatModeration: true, // Can serve as group chat moderator
 		usesJsonLineOutput: true, // Uses JSONL output format
 		usesCombinedContextWindow: false, // Depends on model provider

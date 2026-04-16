@@ -160,6 +160,7 @@ interface DirectoryEntry {
 	name: string;
 	isDirectory: boolean;
 	isFile: boolean;
+	isSymlink?: boolean;
 	path: string;
 }
 

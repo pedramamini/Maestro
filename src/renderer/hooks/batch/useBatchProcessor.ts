@@ -486,7 +486,10 @@ export function useBatchProcessor({
 	const activeBatchSessionIds = useMemo(
 		() =>
 			Object.entries(batchRunStates)
-				.filter(([, state]) => state.isRunning)
+				.filter(
+					([, state]) =>
+						state.isRunning && !state.errorPaused && state.processingState !== 'PAUSED_ERROR'
+				)
 				.map(([sessionId]) => sessionId),
 		[batchRunStates]
 	);
@@ -1087,16 +1090,16 @@ export function useBatchProcessor({
 						// session registration, re-reading document, and synopsis generation
 
 						// Poll all documents every 3s during agent processing for real-time progress
-						const progressPollInterval = setInterval(async () => {
-							try {
-								let polledTotal = 0;
-								let polledChecked = 0;
+							const progressPollInterval = setInterval(async () => {
+								try {
+									let polledTotal = 0;
+									let polledChecked = 0;
 								for (const doc of documents) {
 									const r = await readDocAndCountTasks(folderPath, doc.filename, sshRemoteId);
 									polledTotal += r.taskCount + r.checkedCount;
 									polledChecked += r.checkedCount;
 								}
-								updateBatchStateAndBroadcastRef.current!(sessionId, (prev) => {
+									updateBatchStateAndBroadcastRef.current!(sessionId, (prev) => {
 									const prevState = prev[sessionId] || DEFAULT_BATCH_STATE;
 									if (
 										polledChecked === prevState.completedTasksAcrossAllDocs &&
@@ -1112,11 +1115,33 @@ export function useBatchProcessor({
 											totalTasksAcrossAllDocs: Math.max(0, polledTotal),
 										},
 									};
-								});
-							} catch {
-								// Ignore polling errors — agent may be modifying file
-							}
-						}, 3000);
+									});
+
+									// Keep the displayed document content fresh during batch runs, even if
+									// file watcher events are coalesced or dropped.
+									const currentSession = sessionsRef.current.find((s) => s.id === sessionId);
+									const selectedDoc = currentSession?.autoRunSelectedFile;
+									if (selectedDoc) {
+										const selectedDocResult = await window.maestro.autorun.readDoc(
+											folderPath,
+											selectedDoc + '.md',
+											sshRemoteId
+										);
+										if (selectedDocResult.success) {
+											const nextContent = selectedDocResult.content || '';
+											if (nextContent !== currentSession.autoRunContent) {
+												onUpdateSession(sessionId, {
+													autoRunContent: nextContent,
+													autoRunContentVersion:
+														(currentSession.autoRunContentVersion || 0) + 1,
+												});
+											}
+										}
+									}
+								} catch {
+									// Ignore polling errors — agent may be modifying file
+								}
+							}, 3000);
 
 						try {
 							const taskResult = await documentProcessor.processTask(
@@ -1149,25 +1174,30 @@ export function useBatchProcessor({
 							anyTasksProcessedThisIteration = true;
 
 							// Extract results from processTask
-							const {
-								tasksCompletedThisRun,
-								addedUncheckedTasks,
-								newRemainingTasks,
-								documentChanged,
-								newCheckedCount,
-								shortSummary,
-								fullSynopsis,
-								usageStats,
-								contextUsage,
-								elapsedTimeMs,
-								agentSessionId,
-								success,
-							} = taskResult;
+								const {
+									tasksCompletedThisRun,
+									addedUncheckedTasks,
+									newRemainingTasks,
+									documentChanged,
+									newCheckedCount,
+									shortSummary,
+									fullSynopsis,
+									usageStats,
+									contextUsage,
+									elapsedTimeMs,
+									agentSessionId,
+									success,
+									errorMessage,
+								} = taskResult;
 
-							// Detect stalling: if document content is unchanged and no tasks were checked off
-							if (!documentChanged && tasksCompletedThisRun === 0) {
-								consecutiveNoChangeCount++;
-							} else {
+								// Detect stalling: if document content is unchanged and no tasks were checked off
+								const isWatchdogFailure =
+									!!errorMessage && /(stalled|timed out)/i.test(errorMessage);
+								if (isWatchdogFailure) {
+									consecutiveNoChangeCount = MAX_CONSECUTIVE_NO_CHANGES;
+								} else if (!documentChanged && tasksCompletedThisRun === 0) {
+									consecutiveNoChangeCount++;
+								} else {
 								// Reset counter on any document change or task completion
 								consecutiveNoChangeCount = 0;
 							}
@@ -1898,9 +1928,23 @@ export function useBatchProcessor({
 		async (sessionId: string) => {
 			console.log('[BatchProcessor:killBatchRun] Force killing session:', sessionId);
 
-			// 1. Kill the agent process and wait for termination before cleaning up state
+			// 1. Kill all active batch processes for this session and wait for termination before cleanup.
+			// Batch process session IDs are generated as: `${sessionId}-batch-${timestamp}`.
 			try {
-				await window.maestro.process.kill(sessionId);
+				const activeProcesses = await window.maestro.process.getActiveProcesses();
+				const batchProcessIds = activeProcesses
+					.filter(
+						(proc) =>
+							proc.sessionId === sessionId || proc.sessionId.startsWith(`${sessionId}-batch-`)
+					)
+					.map((proc) => proc.sessionId);
+
+				// Fallback to legacy direct ID in case process listing is stale.
+				if (batchProcessIds.length === 0) {
+					batchProcessIds.push(sessionId);
+				}
+
+				await Promise.allSettled(batchProcessIds.map((id) => window.maestro.process.kill(id)));
 			} catch (error) {
 				console.error('[BatchProcessor:killBatchRun] Failed to kill process:', error);
 			}

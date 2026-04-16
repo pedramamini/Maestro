@@ -137,6 +137,11 @@ export interface TaskResult {
 	 * This correctly accounts for both completed tasks and newly added tasks.
 	 */
 	totalTasksChange: number;
+
+	/**
+	 * Optional failure detail from the agent run.
+	 */
+	errorMessage?: string;
 }
 
 /**
@@ -176,6 +181,7 @@ export interface DocumentProcessorCallbacks {
 		agentSessionId?: string;
 		usageStats?: UsageStats;
 		contextUsage?: number;
+		error?: string;
 	}>;
 }
 
@@ -416,10 +422,10 @@ export function useDocumentProcessor(): UseDocumentProcessorReturn {
 						fullSynopsis = responseText;
 					}
 				}
-			} else if (!result.success) {
-				shortSummary = `[${filename}] Task failed`;
-				fullSynopsis = result.response || shortSummary;
-			}
+				} else if (!result.success) {
+					shortSummary = `[${filename}] Task failed`;
+					fullSynopsis = result.error || result.response || shortSummary;
+				}
 
 			return {
 				success: result.success,
@@ -432,11 +438,12 @@ export function useDocumentProcessor(): UseDocumentProcessorReturn {
 				shortSummary,
 				fullSynopsis,
 				documentChanged,
-				contentAfterTask,
-				newCheckedCount,
-				addedUncheckedTasks,
-				totalTasksChange,
-			};
+					contentAfterTask,
+					newCheckedCount,
+					addedUncheckedTasks,
+					totalTasksChange,
+					errorMessage: result.error,
+				};
 		},
 		[readDocAndCountTasks]
 	);

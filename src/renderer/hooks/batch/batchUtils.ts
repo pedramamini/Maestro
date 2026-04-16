@@ -27,23 +27,72 @@ function getAutorunDefaultPrompt(): string {
 // Uses `let` so the binding can be updated after async IPC load completes
 export let DEFAULT_BATCH_PROMPT: string = getAutorunDefaultPrompt();
 
-// Regex to count unchecked markdown checkboxes: - [ ] task (also * [ ])
-const UNCHECKED_TASK_REGEX = /^[\s]*[-*]\s*\[\s*\]\s*.+$/gm;
+// Regex to count unchecked markdown checkboxes: - [ ] task (also * [ ] or + [ ])
+const UNCHECKED_TASK_REGEX = /^[\s]*[-*+]\s*\[\s*\]\s*.+$/;
 
-// Regex to count checked markdown checkboxes: - [x] task (also * [x])
-const CHECKED_TASK_COUNT_REGEX = /^[\s]*[-*]\s*\[[xX✓✔]\]\s*.+$/gm;
+// Regex to count checked markdown checkboxes: - [x] task (also * [x] or + [x])
+const CHECKED_TASK_COUNT_REGEX = /^[\s]*[-*+]\s*\[[xX✓✔]\]\s*.+$/;
 
 // Regex to match checked markdown checkboxes for reset-on-completion
 // Matches both [x] and [X] with various checkbox formats (standard and GitHub-style)
 const CHECKED_TASK_REGEX = /^(\s*[-*]\s*)\[[xX✓✔]\]/gm;
+
+export interface MarkdownTaskCounts {
+	checked: number;
+	unchecked: number;
+	total: number;
+}
+
+/**
+ * Count markdown checkbox tasks while ignoring fenced code blocks.
+ * This prevents example snippets from affecting Auto Run progress.
+ */
+export function countMarkdownTasks(content: string): MarkdownTaskCounts {
+	const normalizedContent = content.replace(/\r\n?/g, '\n');
+	let checked = 0;
+	let unchecked = 0;
+	let inFencedCode = false;
+	let fenceChar: '`' | '~' | null = null;
+
+	for (const line of normalizedContent.split('\n')) {
+		const trimmed = line.trimStart();
+		const fenceMatch = trimmed.match(/^([`~]{3,})/);
+		if (fenceMatch) {
+			const currentFenceChar = fenceMatch[1][0] as '`' | '~';
+			if (!inFencedCode) {
+				inFencedCode = true;
+				fenceChar = currentFenceChar;
+				continue;
+			}
+			if (fenceChar === currentFenceChar) {
+				inFencedCode = false;
+				fenceChar = null;
+				continue;
+			}
+		}
+
+		if (inFencedCode) continue;
+
+		if (CHECKED_TASK_COUNT_REGEX.test(line)) {
+			checked++;
+		} else if (UNCHECKED_TASK_REGEX.test(line)) {
+			unchecked++;
+		}
+	}
+
+	return {
+		checked,
+		unchecked,
+		total: checked + unchecked,
+	};
+}
 
 /**
  * Count unchecked tasks in markdown content
  * Matches lines like: - [ ] task description
  */
 export function countUnfinishedTasks(content: string): number {
-	const matches = content.match(UNCHECKED_TASK_REGEX);
-	return matches ? matches.length : 0;
+	return countMarkdownTasks(content).unchecked;
 }
 
 /**
@@ -51,8 +100,7 @@ export function countUnfinishedTasks(content: string): number {
  * Matches lines like: - [x] task description
  */
 export function countCheckedTasks(content: string): number {
-	const matches = content.match(CHECKED_TASK_COUNT_REGEX);
-	return matches ? matches.length : 0;
+	return countMarkdownTasks(content).checked;
 }
 
 /**
