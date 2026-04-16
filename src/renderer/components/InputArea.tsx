@@ -1103,9 +1103,12 @@ export const InputArea = React.memo(function InputArea(props: InputAreaProps) {
 													borderColor: theme.colors.border,
 												}}
 											>
-												{availableModels.map((model) => (
+												{(availableModels.includes('')
+													? availableModels
+													: ['', ...availableModels]
+												).map((model) => (
 													<button
-														key={model}
+														key={model || '__default__'}
 														onClick={() => {
 															onModelChange(model);
 															setModelMenuOpen(false);
