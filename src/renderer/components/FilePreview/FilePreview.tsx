@@ -1031,7 +1031,7 @@ export const FilePreview = React.memo(
 												setJqError(null);
 												setTimeout(() => searchInputRef.current?.focus(), 0);
 											}}
-											className="flex items-center gap-1 px-2 py-2 rounded border text-xs font-medium whitespace-nowrap transition-colors"
+											className="flex items-center gap-1 px-2 rounded border text-xs font-medium whitespace-nowrap transition-colors self-stretch"
 											style={{
 												borderColor:
 													searchMode === 'jq' ? theme.colors.accent : theme.colors.border,
@@ -1151,8 +1151,14 @@ export const FilePreview = React.memo(
 											)}
 											<button
 												onClick={() => setShowJqHelp((p) => !p)}
-												className="px-1.5 py-0.5 rounded text-xs hover:bg-white/10 transition-colors"
-												style={{ color: showJqHelp ? theme.colors.accent : theme.colors.textDim }}
+												className="flex items-center justify-center px-2 rounded border text-xs font-medium transition-colors self-stretch"
+												style={{
+													borderColor: showJqHelp ? theme.colors.accent : theme.colors.border,
+													backgroundColor: showJqHelp
+														? theme.colors.accent + '20'
+														: theme.colors.bgSidebar,
+													color: showJqHelp ? theme.colors.accent : theme.colors.textDim,
+												}}
 												title="Show syntax help"
 											>
 												?
