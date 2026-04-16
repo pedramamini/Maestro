@@ -7,6 +7,7 @@ import { LayerStackProvider } from '../../../renderer/contexts/LayerStackContext
 import type { Theme, Session, Group } from '../../../renderer/types';
 import { createMockSession as baseCreateMockSession } from '../../helpers/mockSession';
 
+import { mockTheme } from '../../helpers/mockTheme';
 // Mock useAtMentionCompletion hook
 const mockGetSuggestions = vi.fn().mockReturnValue([]);
 vi.mock('../../../renderer/hooks/input/useAtMentionCompletion', () => ({
@@ -54,26 +55,6 @@ vi.mock('lucide-react', () => ({
 }));
 
 // Mock theme
-const mockTheme: Theme = {
-	id: 'test-dark',
-	name: 'Test Dark',
-	mode: 'dark',
-	colors: {
-		bgMain: '#1a1a1a',
-		bgSidebar: '#252525',
-		border: '#333333',
-		textMain: '#ffffff',
-		textDim: '#888888',
-		textFaint: '#555555',
-		accent: '#4a9eff',
-		accentForeground: '#ffffff',
-		buttonBg: '#333333',
-		buttonHover: '#444444',
-		headerBg: '#202020',
-		scrollbarTrack: '#1a1a1a',
-		scrollbarThumb: '#444444',
-	},
-};
 
 const lightTheme: Theme = {
 	id: 'test-light',

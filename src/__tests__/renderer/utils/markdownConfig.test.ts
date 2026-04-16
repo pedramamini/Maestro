@@ -23,6 +23,7 @@ import {
 } from '../../../renderer/utils/markdownConfig';
 import type { Theme } from '../../../shared/theme-types';
 
+import { mockTheme } from '../../helpers/mockTheme';
 /**
  * Tests for markdown configuration utilities.
  *
@@ -36,27 +37,6 @@ import type { Theme } from '../../../shared/theme-types';
 // ---------------------------------------------------------------------------
 // Fixtures
 // ---------------------------------------------------------------------------
-
-const mockTheme: Theme = {
-	id: 'dracula',
-	name: 'Dracula',
-	mode: 'dark',
-	colors: {
-		textMain: '#ffffff',
-		textDim: '#888888',
-		accent: '#0066ff',
-		accentDim: 'rgba(0, 102, 255, 0.2)',
-		accentText: '#0066ff',
-		accentForeground: '#ffffff',
-		success: '#00cc00',
-		warning: '#ffaa00',
-		error: '#ff0000',
-		bgMain: '#1a1a1a',
-		bgSidebar: '#2a2a2a',
-		bgActivity: '#333333',
-		border: '#444444',
-	},
-};
 
 // ---------------------------------------------------------------------------
 // generateProseStyles

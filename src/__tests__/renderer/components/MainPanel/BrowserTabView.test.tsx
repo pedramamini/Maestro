@@ -5,15 +5,7 @@ import { BrowserTabView } from '../../../../renderer/components/MainPanel/Browse
 import type { BrowserTab, Theme } from '../../../../renderer/types';
 import { DEFAULT_BROWSER_TAB_URL } from '../../../../renderer/utils/browserTabPersistence';
 
-const mockTheme = {
-	colors: {
-		bgMain: '#101010',
-		bgSidebar: '#181818',
-		border: '#303030',
-		textMain: '#ffffff',
-		textDim: '#8a8a8a',
-	},
-} as Theme;
+import { mockTheme } from '../../../helpers/mockTheme';
 
 const mockTab: BrowserTab = {
 	id: 'browser-1',

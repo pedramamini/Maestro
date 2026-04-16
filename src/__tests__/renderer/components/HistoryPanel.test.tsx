@@ -21,11 +21,13 @@ import React from 'react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
 import { HistoryPanel, HistoryPanelHandle } from '../../../renderer/components/HistoryPanel';
-import type { Theme, Session, HistoryEntry, HistoryEntryType } from '../../../renderer/types';
+import type { Session, HistoryEntry, HistoryEntryType } from '../../../renderer/types';
+import type { Session, HistoryEntry, HistoryEntryType } from '../../../renderer/types';
 import { createMockSession as baseCreateMockSession } from '../../helpers/mockSession';
 import { useUIStore } from '../../../renderer/stores/uiStore';
 import { useSettingsStore } from '../../../renderer/stores/settingsStore';
 
+import { mockTheme } from '../../helpers/mockTheme';
 // Mock child components
 vi.mock('../../../renderer/components/HistoryDetailModal', () => ({
 	HistoryDetailModal: ({
@@ -107,25 +109,6 @@ vi.mock('../../../renderer/components/HistoryHelpModal', () => ({
 }));
 
 // Create mock theme
-const mockTheme: Theme = {
-	id: 'test-theme',
-	name: 'Test Theme',
-	mode: 'dark',
-	colors: {
-		bgMain: '#1e1e1e',
-		bgSidebar: '#252526',
-		bgActivity: '#333333',
-		textMain: '#ffffff',
-		textDim: '#808080',
-		accent: '#007acc',
-		border: '#404040',
-		success: '#4ec9b0',
-		warning: '#dcdcaa',
-		error: '#f14c4c',
-		buttonBg: '#0e639c',
-		buttonText: '#ffffff',
-	},
-};
 
 const createMockSession = (overrides: Partial<Session> = {}): Session =>
 	baseCreateMockSession({
