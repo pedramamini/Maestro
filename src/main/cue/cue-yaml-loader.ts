@@ -5,9 +5,14 @@
  * are implemented in responsibility-focused config modules.
  */
 
+import * as path from 'path';
 import * as yaml from 'js-yaml';
 import type { CueConfig } from './cue-types';
-import { readCueConfigFile, watchCueConfigFile } from './config/cue-config-repository';
+import {
+	readCueConfigFile,
+	resolveCueConfigPath,
+	watchCueConfigFile,
+} from './config/cue-config-repository';
 import { materializeCueConfig, parseCueConfigDocument } from './config/cue-config-normalizer';
 import {
 	partitionValidSubscriptions,
@@ -165,4 +170,30 @@ export function watchCueYaml(projectRoot: string, onChange: () => void): () => v
  */
 export function validateCueConfig(config: unknown): { valid: boolean; errors: string[] } {
 	return validateCueConfigDocument(config);
+}
+
+/** Maximum number of parent directories to walk when searching for an ancestor config. */
+const ANCESTOR_SEARCH_DEPTH = 5;
+
+/**
+ * Walk parent directories from `projectRoot` looking for a cue.yaml.
+ * Returns the ancestor's project root if found, `null` otherwise.
+ *
+ * Stops at filesystem root or after {@link ANCESTOR_SEARCH_DEPTH} levels.
+ * Does NOT return `projectRoot` itself — only strict ancestors.
+ */
+export function findAncestorCueConfigRoot(projectRoot: string): string | null {
+	let current = path.resolve(projectRoot);
+
+	for (let depth = 0; depth < ANCESTOR_SEARCH_DEPTH; depth++) {
+		const parent = path.dirname(current);
+		if (parent === current) break; // reached filesystem root
+		current = parent;
+
+		if (resolveCueConfigPath(current) !== null) {
+			return current;
+		}
+	}
+
+	return null;
 }

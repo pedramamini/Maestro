@@ -31,6 +31,7 @@ vi.mock('fs', () => ({
 
 // Must import after mocks
 import {
+	findAncestorCueConfigRoot,
 	loadCueConfig,
 	loadCueConfigDetailed,
 	watchCueYaml,
@@ -1702,6 +1703,61 @@ subscriptions:
 			expect(result.errors).toEqual(
 				expect.arrayContaining([expect.stringContaining('"name" is required')])
 			);
+		});
+	});
+
+	describe('findAncestorCueConfigRoot', () => {
+		it('returns null when no ancestor has a cue config', () => {
+			mockExistsSync.mockReturnValue(false);
+			const result = findAncestorCueConfigRoot('/projects/parent/child');
+			expect(result).toBeNull();
+		});
+
+		it('finds a parent directory with .maestro/cue.yaml', () => {
+			mockExistsSync.mockImplementation((p: string) => {
+				const s = String(p);
+				// Parent has .maestro/cue.yaml, child does not
+				return s === '/projects/parent/.maestro/cue.yaml';
+			});
+			const result = findAncestorCueConfigRoot('/projects/parent/child');
+			expect(result).toBe('/projects/parent');
+		});
+
+		it('does not return the input directory itself', () => {
+			// Even if the input dir has a cue.yaml, it should only look at ancestors
+			mockExistsSync.mockImplementation((p: string) => {
+				return String(p) === '/projects/parent/child/.maestro/cue.yaml';
+			});
+			const result = findAncestorCueConfigRoot('/projects/parent/child');
+			expect(result).toBeNull();
+		});
+
+		it('finds grandparent config when parent has none', () => {
+			mockExistsSync.mockImplementation((p: string) => {
+				return String(p) === '/projects/.maestro/cue.yaml';
+			});
+			const result = findAncestorCueConfigRoot('/projects/parent/child');
+			expect(result).toBe('/projects');
+		});
+
+		it('stops after depth limit even if ancestor exists further up', () => {
+			// Place cue.yaml 6 levels up — beyond the 5-level search depth
+			mockExistsSync.mockImplementation((p: string) => {
+				return String(p) === '/a/.maestro/cue.yaml';
+			});
+			const result = findAncestorCueConfigRoot('/a/b/c/d/e/f/g');
+			// /a is 6 levels up from /a/b/c/d/e/f/g — should not be found
+			expect(result).toBeNull();
+		});
+
+		it('finds ancestor with legacy maestro-cue.yaml', () => {
+			mockExistsSync.mockImplementation((p: string) => {
+				const s = String(p);
+				// No canonical, but legacy exists at parent
+				return s === '/projects/parent/maestro-cue.yaml';
+			});
+			const result = findAncestorCueConfigRoot('/projects/parent/child');
+			expect(result).toBe('/projects/parent');
 		});
 	});
 });
