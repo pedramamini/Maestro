@@ -61,16 +61,16 @@ export function useAutoRunDocumentLoader(): UseAutoRunDocumentLoaderReturn {
 							folderPath,
 							docPath + '.md',
 							sshRemoteId
-							);
-							if (result.success && result.content) {
-								const taskCount = countMarkdownTasks(result.content);
-								if (taskCount.total > 0) {
-									counts.set(docPath, {
-										completed: taskCount.checked,
-										total: taskCount.total,
-									});
-								}
+						);
+						if (result.success && result.content) {
+							const taskCount = countMarkdownTasks(result.content);
+							if (taskCount.total > 0) {
+								counts.set(docPath, {
+									completed: taskCount.checked,
+									total: taskCount.total,
+								});
 							}
+						}
 					} catch {
 						// Ignore errors for individual documents
 					}
@@ -174,7 +174,8 @@ export function useAutoRunDocumentLoader(): UseAutoRunDocumentLoaderReturn {
 
 		let disposed = false;
 		let unsubscribe = () => {};
-		let remotePollInterval: ReturnType<typeof setInterval> | null = null;
+		let remotePollTimeout: ReturnType<typeof setTimeout> | null = null;
+		let isRefreshing = false;
 
 		const refreshAutoRunData = async () => {
 			const listResult = await window.maestro.autorun.listDocs(folderPath, sshRemoteId);
@@ -218,9 +219,21 @@ export function useAutoRunDocumentLoader(): UseAutoRunDocumentLoaderReturn {
 
 			// SSH remote sessions don't support file watchers; fall back to polling.
 			if ((watchResult as any)?.isRemote) {
-				remotePollInterval = setInterval(() => {
-					void refreshAutoRunData();
-				}, 3000);
+				const runRemotePoll = async () => {
+					if (disposed || isRefreshing) return;
+					isRefreshing = true;
+					try {
+						await refreshAutoRunData();
+					} finally {
+						isRefreshing = false;
+						if (!disposed) {
+							remotePollTimeout = setTimeout(() => {
+								void runRemotePoll();
+							}, 3000);
+						}
+					}
+				};
+				void runRemotePoll();
 				return;
 			}
 
@@ -236,9 +249,9 @@ export function useAutoRunDocumentLoader(): UseAutoRunDocumentLoaderReturn {
 		// Cleanup: stop watching when folder changes or unmount
 		return () => {
 			disposed = true;
-			if (remotePollInterval) {
-				clearInterval(remotePollInterval);
-				remotePollInterval = null;
+			if (remotePollTimeout) {
+				clearTimeout(remotePollTimeout);
+				remotePollTimeout = null;
 			}
 			window.maestro.autorun.unwatchFolder(folderPath);
 			unsubscribe();

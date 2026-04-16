@@ -35,7 +35,7 @@ const CHECKED_TASK_COUNT_REGEX = /^[\s]*[-*+]\s*\[[xX✓✔]\]\s*.+$/;
 
 // Regex to match checked markdown checkboxes for reset-on-completion
 // Matches both [x] and [X] with various checkbox formats (standard and GitHub-style)
-const CHECKED_TASK_REGEX = /^(\s*[-*]\s*)\[[xX✓✔]\]/gm;
+const CHECKED_TASK_REGEX = /^(\s*[-*+]\s*)\[[xX✓✔]\]/gm;
 
 export interface MarkdownTaskCounts {
 	checked: number;
@@ -53,6 +53,7 @@ export function countMarkdownTasks(content: string): MarkdownTaskCounts {
 	let unchecked = 0;
 	let inFencedCode = false;
 	let fenceChar: '`' | '~' | null = null;
+	let openFenceLength = 0;
 
 	for (const line of normalizedContent.split('\n')) {
 		const trimmed = line.trimStart();
@@ -62,11 +63,13 @@ export function countMarkdownTasks(content: string): MarkdownTaskCounts {
 			if (!inFencedCode) {
 				inFencedCode = true;
 				fenceChar = currentFenceChar;
+				openFenceLength = fenceMatch[1].length;
 				continue;
 			}
-			if (fenceChar === currentFenceChar) {
+			if (fenceChar === currentFenceChar && fenceMatch[1].length >= openFenceLength) {
 				inFencedCode = false;
 				fenceChar = null;
+				openFenceLength = 0;
 				continue;
 			}
 		}

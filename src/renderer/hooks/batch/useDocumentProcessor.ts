@@ -15,7 +15,7 @@
 import { useCallback } from 'react';
 import type { Session, UsageStats } from '../../types';
 import { substituteTemplateVariables, TemplateContext } from '../../utils/templateVariables';
-import { countUnfinishedTasks, countCheckedTasks } from './batchUtils';
+import { countMarkdownTasks } from './batchUtils';
 
 /**
  * Configuration for document processing
@@ -262,11 +262,12 @@ export function useDocumentProcessor(): UseDocumentProcessorReturn {
 			if (!result.success || !result.content) {
 				return { content: '', taskCount: 0, checkedCount: 0 };
 			}
+			const taskCounts = countMarkdownTasks(result.content);
 
 			return {
 				content: result.content,
-				taskCount: countUnfinishedTasks(result.content),
-				checkedCount: countCheckedTasks(result.content),
+				taskCount: taskCounts.unchecked,
+				checkedCount: taskCounts.checked,
 			};
 		},
 		[]
@@ -422,10 +423,10 @@ export function useDocumentProcessor(): UseDocumentProcessorReturn {
 						fullSynopsis = responseText;
 					}
 				}
-				} else if (!result.success) {
-					shortSummary = `[${filename}] Task failed`;
-					fullSynopsis = result.error || result.response || shortSummary;
-				}
+			} else if (!result.success) {
+				shortSummary = `[${filename}] Task failed`;
+				fullSynopsis = result.error || result.response || shortSummary;
+			}
 
 			return {
 				success: result.success,
@@ -438,12 +439,12 @@ export function useDocumentProcessor(): UseDocumentProcessorReturn {
 				shortSummary,
 				fullSynopsis,
 				documentChanged,
-					contentAfterTask,
-					newCheckedCount,
-					addedUncheckedTasks,
-					totalTasksChange,
-					errorMessage: result.error,
-				};
+				contentAfterTask,
+				newCheckedCount,
+				addedUncheckedTasks,
+				totalTasksChange,
+				errorMessage: result.error,
+			};
 		},
 		[readDocAndCountTasks]
 	);

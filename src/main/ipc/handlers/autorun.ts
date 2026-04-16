@@ -232,6 +232,13 @@ async function scanDirectoryRemote(
 		const entryRelativePath = relativePath ? `${relativePath}/${entry.name}` : entry.name;
 
 		if (isDirectory) {
+			// Avoid infinite recursion on remote symlink cycles.
+			// We currently don't have remote realpath canonicalization in remote-fs,
+			// so skip descending into symlinked directories.
+			if (entry.isSymlink) {
+				continue;
+			}
+
 			// Recursively scan subdirectory
 			// Use forward slashes for remote paths (Unix style)
 			const children = await scanDirectoryRemote(
@@ -497,15 +504,6 @@ export function registerAutorunHandlers(
 		createIpcHandler(
 			handlerOpts('writeDoc'),
 			async (folderPath: string, filename: string, content: string, sshRemoteId?: string) => {
-				// DEBUG: Log all write attempts to trace cross-session contamination
-				logger.info(
-					`[DEBUG] writeDoc called: folder=${folderPath}, file=${filename}, content.length=${content.length}, content.slice(0,50)="${content.slice(0, 50).replace(/\n/g, '\\n')}"`,
-					LOG_CONTEXT
-				);
-				console.log(
-					`[DEBUG writeDoc] folder=${folderPath}, file=${filename}, content.length=${content.length}`
-				);
-
 				// Decode any URL-encoded characters to catch encoded traversal attempts
 				let decodedFilename: string;
 				try {
@@ -913,17 +911,17 @@ export function registerAutorunHandlers(
 					};
 				}
 
-					// Local: Stop any existing watcher for this folder
-					if (autoRunWatchers.has(folderPath)) {
-						autoRunWatchers.get(folderPath)?.close();
-						autoRunWatchers.delete(folderPath);
-						const debouncePrefix = `${folderPath}:`;
-						for (const [key, timer] of autoRunWatchDebounceTimers) {
-							if (!key.startsWith(debouncePrefix)) continue;
-							clearTimeout(timer);
-							autoRunWatchDebounceTimers.delete(key);
-						}
+				// Local: Stop any existing watcher for this folder
+				if (autoRunWatchers.has(folderPath)) {
+					autoRunWatchers.get(folderPath)?.close();
+					autoRunWatchers.delete(folderPath);
+					const debouncePrefix = `${folderPath}:`;
+					for (const [key, timer] of autoRunWatchDebounceTimers) {
+						if (!key.startsWith(debouncePrefix)) continue;
+						clearTimeout(timer);
+						autoRunWatchDebounceTimers.delete(key);
 					}
+				}
 
 				// Create folder if it doesn't exist (agent will create files in it)
 				try {
@@ -978,8 +976,8 @@ export function registerAutorunHandlers(
 								eventType,
 							});
 							logger.info(`Auto Run file changed: ${filename} (${eventType})`, LOG_CONTEXT);
-							}
-						}, 300); // 300ms debounce
+						}
+					}, 300); // 300ms debounce
 					autoRunWatchDebounceTimers.set(debounceKey, timer);
 				};
 
@@ -1002,21 +1000,21 @@ export function registerAutorunHandlers(
 	// Stop watching an Auto Run folder
 	ipcMain.handle(
 		'autorun:unwatchFolder',
-			createIpcHandler(handlerOpts('unwatchFolder', false), async (folderPath: string) => {
-				if (autoRunWatchers.has(folderPath)) {
-					autoRunWatchers.get(folderPath)?.close();
-					autoRunWatchers.delete(folderPath);
-					logger.info(`Stopped watching Auto Run folder: ${folderPath}`, LOG_CONTEXT);
-				}
-				const debouncePrefix = `${folderPath}:`;
-				for (const [key, timer] of autoRunWatchDebounceTimers) {
-					if (!key.startsWith(debouncePrefix)) continue;
-					clearTimeout(timer);
-					autoRunWatchDebounceTimers.delete(key);
-				}
-				return {};
-			})
-		);
+		createIpcHandler(handlerOpts('unwatchFolder', false), async (folderPath: string) => {
+			if (autoRunWatchers.has(folderPath)) {
+				autoRunWatchers.get(folderPath)?.close();
+				autoRunWatchers.delete(folderPath);
+				logger.info(`Stopped watching Auto Run folder: ${folderPath}`, LOG_CONTEXT);
+			}
+			const debouncePrefix = `${folderPath}:`;
+			for (const [key, timer] of autoRunWatchDebounceTimers) {
+				if (!key.startsWith(debouncePrefix)) continue;
+				clearTimeout(timer);
+				autoRunWatchDebounceTimers.delete(key);
+			}
+			return {};
+		})
+	);
 
 	// Create a backup copy of a document (for reset-on-completion)
 	// Supports SSH remote execution via optional sshRemoteId parameter

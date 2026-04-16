@@ -99,10 +99,7 @@ export function selectHasAnyActiveBatch(s: BatchStoreState): boolean {
 /** List of session IDs with active batches */
 export function selectActiveBatchSessionIds(s: BatchStoreState): string[] {
 	return Object.entries(s.batchRunStates)
-		.filter(
-			([, state]) =>
-				state.isRunning && !state.errorPaused && state.processingState !== 'PAUSED_ERROR'
-		)
+		.filter(([, state]) => state.isRunning && !state.errorPaused)
 		.map(([sessionId]) => sessionId);
 }
 

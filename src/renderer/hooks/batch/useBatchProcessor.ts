@@ -232,28 +232,7 @@ export function useBatchProcessor({
 	// Dispatch batch actions through the store. The store applies batchReducer
 	// synchronously, eliminating the need for manual ref syncing.
 	const dispatch = useCallback((action: BatchAction) => {
-		const prevStates = useBatchStore.getState().batchRunStates;
 		useBatchStore.getState().dispatchBatch(action);
-		const newStates = useBatchStore.getState().batchRunStates;
-
-		// DEBUG: Log dispatch to trace state updates
-		if (
-			action.type === 'START_BATCH' ||
-			action.type === 'UPDATE_PROGRESS' ||
-			action.type === 'SET_STOPPING' ||
-			action.type === 'COMPLETE_BATCH'
-		) {
-			const sessionId = action.sessionId;
-			console.log('[BatchProcessor:dispatch]', action.type, {
-				sessionId,
-				prevIsRunning: prevStates[sessionId]?.isRunning,
-				newIsRunning: newStates[sessionId]?.isRunning,
-				prevIsStopping: prevStates[sessionId]?.isStopping,
-				newIsStopping: newStates[sessionId]?.isStopping,
-				prevCompleted: prevStates[sessionId]?.completedTasksAcrossAllDocs,
-				newCompleted: newStates[sessionId]?.completedTasksAcrossAllDocs,
-			});
-		}
 	}, []);
 
 	// Custom prompts per session — lives in batchStore
@@ -286,10 +265,8 @@ export function useBatchProcessor({
 	// This handles React 18 StrictMode double-render and ensures ref is always correct
 	useEffect(() => {
 		isMountedRef.current = true;
-		console.log('[BatchProcessor] Mounted, isMountedRef set to true');
 		return () => {
 			isMountedRef.current = false;
-			console.log('[BatchProcessor] Unmounting, isMountedRef set to false');
 
 			// Reject all pending error resolution promises with 'abort' to unblock any waiting async code
 			// This prevents memory leaks from promises that would never resolve
@@ -352,14 +329,6 @@ export function useBatchProcessor({
 						const currentState = useBatchStore.getState().batchRunStates;
 						const newState = updater(currentState);
 						newStateForSession = newState[sessionId] || null;
-
-						// DEBUG: Log to trace progress updates
-						console.log('[BatchProcessor:onUpdate] Debounce fired:', {
-							sessionId,
-							refHasSession: !!currentState[sessionId],
-							refCompletedTasks: currentState[sessionId]?.completedTasksAcrossAllDocs,
-							newCompletedTasks: newStateForSession?.completedTasksAcrossAllDocs,
-						});
 
 						// Dispatch UPDATE_PROGRESS with the computed changes
 						// For complex state changes, we extract the session's new state and dispatch appropriately
@@ -486,10 +455,7 @@ export function useBatchProcessor({
 	const activeBatchSessionIds = useMemo(
 		() =>
 			Object.entries(batchRunStates)
-				.filter(
-					([, state]) =>
-						state.isRunning && !state.errorPaused && state.processingState !== 'PAUSED_ERROR'
-				)
+				.filter(([, state]) => state.isRunning && !state.errorPaused)
 				.map(([sessionId]) => sessionId),
 		[batchRunStates]
 	);
@@ -518,85 +484,11 @@ export function useBatchProcessor({
 		(
 			sessionId: string,
 			updater: (prev: Record<string, BatchRunState>) => Record<string, BatchRunState>,
-			_immediate: boolean = false
+			immediate: boolean = false
 		) => {
-			// DEBUG: Bypass debouncing entirely to test if that's the issue
-			// Apply update directly without debouncing
-			const currentState = useBatchStore.getState().batchRunStates;
-			const newState = updater(currentState);
-			const newStateForSession = newState[sessionId] || null;
-
-			console.log('[BatchProcessor:updateBatchStateAndBroadcast] DIRECT update (no debounce)', {
-				sessionId,
-				prevCompleted: currentState[sessionId]?.completedTasksAcrossAllDocs,
-				newCompleted: newStateForSession?.completedTasksAcrossAllDocs,
-			});
-
-			if (newStateForSession) {
-				const prevSessionState = currentState[sessionId] || DEFAULT_BATCH_STATE;
-
-				dispatch({
-					type: 'UPDATE_PROGRESS',
-					sessionId,
-					payload: {
-						currentDocumentIndex:
-							newStateForSession.currentDocumentIndex !== prevSessionState.currentDocumentIndex
-								? newStateForSession.currentDocumentIndex
-								: undefined,
-						currentDocTasksTotal:
-							newStateForSession.currentDocTasksTotal !== prevSessionState.currentDocTasksTotal
-								? newStateForSession.currentDocTasksTotal
-								: undefined,
-						currentDocTasksCompleted:
-							newStateForSession.currentDocTasksCompleted !==
-							prevSessionState.currentDocTasksCompleted
-								? newStateForSession.currentDocTasksCompleted
-								: undefined,
-						totalTasksAcrossAllDocs:
-							newStateForSession.totalTasksAcrossAllDocs !==
-							prevSessionState.totalTasksAcrossAllDocs
-								? newStateForSession.totalTasksAcrossAllDocs
-								: undefined,
-						completedTasksAcrossAllDocs:
-							newStateForSession.completedTasksAcrossAllDocs !==
-							prevSessionState.completedTasksAcrossAllDocs
-								? newStateForSession.completedTasksAcrossAllDocs
-								: undefined,
-						totalTasks:
-							newStateForSession.totalTasks !== prevSessionState.totalTasks
-								? newStateForSession.totalTasks
-								: undefined,
-						completedTasks:
-							newStateForSession.completedTasks !== prevSessionState.completedTasks
-								? newStateForSession.completedTasks
-								: undefined,
-						currentTaskIndex:
-							newStateForSession.currentTaskIndex !== prevSessionState.currentTaskIndex
-								? newStateForSession.currentTaskIndex
-								: undefined,
-						sessionIds:
-							newStateForSession.sessionIds !== prevSessionState.sessionIds
-								? newStateForSession.sessionIds
-								: undefined,
-						accumulatedElapsedMs:
-							newStateForSession.accumulatedElapsedMs !== prevSessionState.accumulatedElapsedMs
-								? newStateForSession.accumulatedElapsedMs
-								: undefined,
-						lastActiveTimestamp:
-							newStateForSession.lastActiveTimestamp !== prevSessionState.lastActiveTimestamp
-								? newStateForSession.lastActiveTimestamp
-								: undefined,
-						loopIteration:
-							newStateForSession.loopIteration !== prevSessionState.loopIteration
-								? newStateForSession.loopIteration
-								: undefined,
-					},
-				});
-			}
-
-			broadcastAutoRunState(sessionId, newStateForSession);
+			_scheduleDebouncedUpdate(sessionId, updater, immediate);
 		},
-		[broadcastAutoRunState]
+		[_scheduleDebouncedUpdate]
 	);
 
 	// Update ref to always have latest updateBatchStateAndBroadcast (fixes HMR stale closure)
@@ -1089,17 +981,29 @@ export function useBatchProcessor({
 						// This handles: template substitution, document expansion, agent spawning,
 						// session registration, re-reading document, and synopsis generation
 
-						// Poll all documents every 3s during agent processing for real-time progress
-							const progressPollInterval = setInterval(async () => {
-								try {
-									let polledTotal = 0;
-									let polledChecked = 0;
+						// Poll all documents during task execution for real-time progress.
+						let progressPollActive = true;
+						let progressPollInFlight = false;
+						let progressPollTimeout: ReturnType<typeof setTimeout> | null = null;
+						const stopProgressPolling = () => {
+							progressPollActive = false;
+							if (progressPollTimeout) {
+								clearTimeout(progressPollTimeout);
+								progressPollTimeout = null;
+							}
+						};
+						const runProgressPoll = async () => {
+							if (!progressPollActive || progressPollInFlight) return;
+							progressPollInFlight = true;
+							try {
+								let polledTotal = 0;
+								let polledChecked = 0;
 								for (const doc of documents) {
 									const r = await readDocAndCountTasks(folderPath, doc.filename, sshRemoteId);
 									polledTotal += r.taskCount + r.checkedCount;
 									polledChecked += r.checkedCount;
 								}
-									updateBatchStateAndBroadcastRef.current!(sessionId, (prev) => {
+								updateBatchStateAndBroadcastRef.current!(sessionId, (prev) => {
 									const prevState = prev[sessionId] || DEFAULT_BATCH_STATE;
 									if (
 										polledChecked === prevState.completedTasksAcrossAllDocs &&
@@ -1115,33 +1019,42 @@ export function useBatchProcessor({
 											totalTasksAcrossAllDocs: Math.max(0, polledTotal),
 										},
 									};
-									});
+								});
 
-									// Keep the displayed document content fresh during batch runs, even if
-									// file watcher events are coalesced or dropped.
-									const currentSession = sessionsRef.current.find((s) => s.id === sessionId);
-									const selectedDoc = currentSession?.autoRunSelectedFile;
-									if (selectedDoc) {
-										const selectedDocResult = await window.maestro.autorun.readDoc(
-											folderPath,
-											selectedDoc + '.md',
-											sshRemoteId
-										);
-										if (selectedDocResult.success) {
-											const nextContent = selectedDocResult.content || '';
-											if (nextContent !== currentSession.autoRunContent) {
-												onUpdateSession(sessionId, {
-													autoRunContent: nextContent,
-													autoRunContentVersion:
-														(currentSession.autoRunContentVersion || 0) + 1,
-												});
-											}
+								// Keep the displayed document content fresh during batch runs, even if
+								// file watcher events are coalesced or dropped.
+								const currentSession = sessionsRef.current.find((s) => s.id === sessionId);
+								const selectedDoc = currentSession?.autoRunSelectedFile;
+								if (selectedDoc) {
+									const selectedDocResult = await window.maestro.autorun.readDoc(
+										folderPath,
+										selectedDoc + '.md',
+										sshRemoteId
+									);
+									if (selectedDocResult.success) {
+										const nextContent = selectedDocResult.content || '';
+										if (nextContent !== currentSession.autoRunContent) {
+											onUpdateSession(sessionId, {
+												autoRunContent: nextContent,
+												autoRunContentVersion: (currentSession.autoRunContentVersion || 0) + 1,
+											});
 										}
 									}
-								} catch {
-									// Ignore polling errors — agent may be modifying file
 								}
-							}, 3000);
+							} catch {
+								// Ignore polling errors — agent may be modifying file
+							} finally {
+								progressPollInFlight = false;
+								if (progressPollActive) {
+									progressPollTimeout = setTimeout(() => {
+										void runProgressPoll();
+									}, 3000);
+								}
+							}
+						};
+						progressPollTimeout = setTimeout(() => {
+							void runProgressPoll();
+						}, 3000);
 
 						try {
 							const taskResult = await documentProcessor.processTask(
@@ -1164,7 +1077,7 @@ export function useBatchProcessor({
 								}
 							);
 
-							clearInterval(progressPollInterval);
+							stopProgressPolling();
 
 							// Track agent session IDs
 							if (taskResult.agentSessionId) {
@@ -1174,30 +1087,29 @@ export function useBatchProcessor({
 							anyTasksProcessedThisIteration = true;
 
 							// Extract results from processTask
-								const {
-									tasksCompletedThisRun,
-									addedUncheckedTasks,
-									newRemainingTasks,
-									documentChanged,
-									newCheckedCount,
-									shortSummary,
-									fullSynopsis,
-									usageStats,
-									contextUsage,
-									elapsedTimeMs,
-									agentSessionId,
-									success,
-									errorMessage,
-								} = taskResult;
+							const {
+								tasksCompletedThisRun,
+								addedUncheckedTasks,
+								newRemainingTasks,
+								documentChanged,
+								newCheckedCount,
+								shortSummary,
+								fullSynopsis,
+								usageStats,
+								contextUsage,
+								elapsedTimeMs,
+								agentSessionId,
+								success,
+								errorMessage,
+							} = taskResult;
 
-								// Detect stalling: if document content is unchanged and no tasks were checked off
-								const isWatchdogFailure =
-									!!errorMessage && /(stalled|timed out)/i.test(errorMessage);
-								if (isWatchdogFailure) {
-									consecutiveNoChangeCount = MAX_CONSECUTIVE_NO_CHANGES;
-								} else if (!documentChanged && tasksCompletedThisRun === 0) {
-									consecutiveNoChangeCount++;
-								} else {
+							// Detect stalling: if document content is unchanged and no tasks were checked off
+							const isWatchdogFailure = !!errorMessage && /(stalled|timed out)/i.test(errorMessage);
+							if (isWatchdogFailure) {
+								consecutiveNoChangeCount = MAX_CONSECUTIVE_NO_CHANGES;
+							} else if (!documentChanged && tasksCompletedThisRun === 0) {
+								consecutiveNoChangeCount++;
+							} else {
 								// Reset counter on any document change or task completion
 								consecutiveNoChangeCount = 0;
 							}
@@ -1398,7 +1310,7 @@ export function useBatchProcessor({
 							remainingTasks = newRemainingTasks;
 							docContent = taskResult.contentAfterTask;
 						} catch (error) {
-							clearInterval(progressPollInterval);
+							stopProgressPolling();
 							console.error(
 								`[BatchProcessor] Error running task in ${docEntry.filename} for session ${sessionId}:`,
 								error
@@ -1827,9 +1739,6 @@ export function useBatchProcessor({
 			// Critical: Always flush debounced updates and dispatch COMPLETE_BATCH to clean up state.
 			// These operations are safe regardless of mount state - React handles reducer dispatches gracefully,
 			// and broadcasts are external calls that don't affect React state.
-			console.log(
-				'[BatchProcessor:startBatchRun] Flushing debounced updates before COMPLETE_BATCH'
-			);
 			flushDebouncedUpdate(sessionId);
 
 			// Reset state for this session using COMPLETE_BATCH action
@@ -1901,7 +1810,6 @@ export function useBatchProcessor({
 	 */
 	const stopBatchRun = useCallback(
 		(sessionId: string) => {
-			console.log('[BatchProcessor:stopBatchRun] Called with sessionId:', sessionId);
 			stopRequestedRefs.current[sessionId] = true;
 			const errorResolution = errorResolutionRefs.current[sessionId];
 			if (errorResolution) {
@@ -1926,8 +1834,6 @@ export function useBatchProcessor({
 	 */
 	const killBatchRun = useCallback(
 		async (sessionId: string) => {
-			console.log('[BatchProcessor:killBatchRun] Force killing session:', sessionId);
-
 			// 1. Kill all active batch processes for this session and wait for termination before cleanup.
 			// Batch process session IDs are generated as: `${sessionId}-batch-${timestamp}`.
 			try {
