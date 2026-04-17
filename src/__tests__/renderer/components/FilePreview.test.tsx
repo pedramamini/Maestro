@@ -3,6 +3,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, act } from '@testing-library/react';
 import { FilePreview } from '../../../renderer/components/FilePreview';
 import { formatShortcutKeys } from '../../../renderer/utils/shortcutFormatter';
+import { useSettingsStore } from '../../../renderer/stores/settingsStore';
 
 // Mock lucide-react icons
 vi.mock('lucide-react', () => ({
@@ -188,6 +189,7 @@ const defaultProps = {
 describe('FilePreview', () => {
 	beforeEach(() => {
 		vi.clearAllMocks();
+		useSettingsStore.setState({ bionifyReadingMode: false });
 		// Reset useClickOutside call counter so each test starts fresh
 		useClickOutsideCallCount = 0;
 		mockContainerClickOutside.callback = null;
@@ -307,6 +309,43 @@ describe('FilePreview', () => {
 			render(<FilePreview {...defaultProps} sshRemoteId="remote-host-1" />);
 
 			expect(screen.queryByTitle('Open in Default App')).not.toBeInTheDocument();
+		});
+	});
+
+	describe('readable text preview', () => {
+		it('applies Bionify spans to .txt previews when reading mode is enabled', () => {
+			useSettingsStore.setState({ bionifyReadingMode: true });
+
+			const { container } = render(
+				<FilePreview
+					{...defaultProps}
+					file={{
+						name: 'notes.txt',
+						content: 'Readable text preview content',
+						path: '/test/notes.txt',
+					}}
+				/>
+			);
+
+			expect(document.querySelectorAll('.bionify-word').length).toBeGreaterThan(0);
+			expect(container.textContent).toContain('Readable text preview content');
+			expect(screen.queryByTestId('syntax-highlighter')).not.toBeInTheDocument();
+		});
+
+		it('keeps readable .txt previews plain when reading mode is disabled', () => {
+			render(
+				<FilePreview
+					{...defaultProps}
+					file={{
+						name: 'notes.txt',
+						content: 'Readable text preview content',
+						path: '/test/notes.txt',
+					}}
+				/>
+			);
+
+			expect(screen.getByText('Readable text preview content')).toBeInTheDocument();
+			expect(document.querySelector('.bionify-word')).not.toBeInTheDocument();
 		});
 	});
 

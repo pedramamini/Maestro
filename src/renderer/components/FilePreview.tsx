@@ -52,6 +52,8 @@ import { remarkFrontmatterTable } from '../utils/remarkFrontmatterTable';
 import { REMARK_GFM_PLUGINS, createMarkdownComponents } from '../utils/markdownConfig';
 import type { FileNode } from '../types/fileTree';
 import { isImageFile } from '../../shared/gitUtils';
+import { useSettingsStore } from '../stores/settingsStore';
+import { BionifyText } from '../utils/bionifyReadingMode';
 
 // Global cache for loaded images to prevent re-fetching and flickering
 // Maps resolved path -> { dataUrl, dimensions }
@@ -184,6 +186,31 @@ const getLanguageFromFilename = (filename: string): string => {
 	};
 	return languageMap[ext || ''] || 'text';
 };
+
+const READABLE_TEXT_EXTENSIONS = new Set(['txt', 'text', 'rst', 'adoc', 'asc', 'mdx']);
+const READABLE_TEXT_BASENAMES = new Set([
+	'readme',
+	'changelog',
+	'contributing',
+	'license',
+	'copying',
+	'authors',
+	'notice',
+	'todo',
+]);
+
+function isReadableTextPreview(filename: string): boolean {
+	const lowerFilename = filename.toLowerCase();
+	const ext = lowerFilename.includes('.') ? lowerFilename.split('.').pop() : '';
+	if (ext && READABLE_TEXT_EXTENSIONS.has(ext)) {
+		return true;
+	}
+
+	const basename = lowerFilename.includes('.')
+		? lowerFilename.slice(0, lowerFilename.indexOf('.'))
+		: lowerFilename;
+	return READABLE_TEXT_BASENAMES.has(basename);
+}
 
 // Check if content appears to be binary (contains null bytes or high concentration of non-printable chars)
 const isBinaryContent = (content: string): boolean => {
@@ -767,12 +794,14 @@ export const FilePreview = React.memo(
 
 		// Track if content has been modified
 		const hasChanges = markdownEditMode && editContent !== file?.content;
+		const bionifyReadingMode = useSettingsStore((s) => s.bionifyReadingMode);
 
 		const { registerLayer, unregisterLayer, updateLayerHandler } = useLayerStack();
 
 		// Compute derived values - must be before any early returns but after hooks
 		const language = file ? getLanguageFromFilename(file.name) : '';
 		const isMarkdown = language === 'markdown';
+		const isReadableText = file ? !isMarkdown && isReadableTextPreview(file.name) : false;
 		const isCsv = language === 'csv';
 		const csvDelimiter = file?.name.toLowerCase().endsWith('.tsv') ? '\t' : ',';
 		const isImage = file ? isImageFile(file.name) : false;
@@ -871,6 +900,7 @@ export const FilePreview = React.memo(
 				customLanguageRenderers: {
 					mermaid: ({ code, theme: t }) => <MermaidRenderer chart={code} theme={t} />,
 				},
+				enableBionifyReadingMode: bionifyReadingMode,
 				onFileClick: (filePath, options) => onFileClick?.(filePath, options),
 				onExternalLinkClick: (href) => {
 					if (/^file:\/\//.test(href)) {
@@ -922,7 +952,7 @@ export const FilePreview = React.memo(
 				// Fixes MAESTRO-8Q
 				details: ({ node: _node, onToggle: _onToggle, ...props }: any) => <details {...props} />,
 			};
-		}, [onFileClick, theme, cwd, file, showRemoteImages, sshRemoteId]);
+		}, [bionifyReadingMode, onFileClick, theme, cwd, file, showRemoteImages, sshRemoteId]);
 
 		// Extract directory path without filename
 		const directoryPath = file ? file.path.substring(0, file.path.lastIndexOf('/')) : '';
@@ -1191,7 +1221,14 @@ export const FilePreview = React.memo(
 
 		// Highlight search matches in syntax-highlighted code
 		useEffect(() => {
-			if (!searchQuery.trim() || !codeContainerRef.current || isMarkdown || isImage || isCsv) {
+			if (
+				!searchQuery.trim() ||
+				!codeContainerRef.current ||
+				isMarkdown ||
+				isReadableText ||
+				isImage ||
+				isCsv
+			) {
 				setTotalMatches(0);
 				setCurrentMatchIndex(0);
 				matchElementsRef.current = [];
@@ -1275,12 +1312,25 @@ export const FilePreview = React.memo(
 				});
 				matchElementsRef.current = [];
 			};
-		}, [searchQuery, file?.content, isMarkdown, isImage, isCsv, theme.colors.accent]);
+		}, [
+			searchQuery,
+			file?.content,
+			isMarkdown,
+			isReadableText,
+			isImage,
+			isCsv,
+			theme.colors.accent,
+		]);
 
 		// Search matches in markdown preview mode - use CSS Custom Highlight API
 		useEffect(() => {
-			if (!isMarkdown || markdownEditMode || !searchQuery.trim() || !markdownContainerRef.current) {
-				if (isMarkdown && !markdownEditMode) {
+			if (
+				(!isMarkdown && !isReadableText) ||
+				markdownEditMode ||
+				!searchQuery.trim() ||
+				!markdownContainerRef.current
+			) {
+				if ((isMarkdown || isReadableText) && !markdownEditMode) {
 					setTotalMatches(0);
 					setCurrentMatchIndex(0);
 					matchElementsRef.current = [];
@@ -1394,6 +1444,7 @@ export const FilePreview = React.memo(
 			searchQuery,
 			file?.content,
 			isMarkdown,
+			isReadableText,
 			markdownEditMode,
 			currentMatchIndex,
 			theme.colors.accent,
@@ -2340,6 +2391,19 @@ export const FilePreview = React.memo(
 							>
 								{file.content}
 							</ReactMarkdown>
+						</div>
+					) : isReadableText && !markdownEditMode ? (
+						<div
+							ref={markdownContainerRef}
+							className="prose prose-sm max-w-none whitespace-pre-wrap break-words"
+							style={{ color: theme.colors.textMain }}
+						>
+							<style>{`
+								.prose .bionify-word { display: inline; }
+								.prose .bionify-word-emphasis { font-weight: 700; }
+								.prose .bionify-word-rest { font-weight: 400; opacity: 0.92; }
+							`}</style>
+							<BionifyText enabled={bionifyReadingMode}>{displayContent}</BionifyText>
 						</div>
 					) : (
 						<div ref={codeContainerRef}>

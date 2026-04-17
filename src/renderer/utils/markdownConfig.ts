@@ -22,6 +22,7 @@ import { getSyntaxStyle } from './syntaxTheme';
 import React from 'react';
 import type { Theme } from '../types';
 import { REMARK_GFM_PLUGINS } from '../../shared/markdownPlugins';
+import { BionifyText } from './bionifyReadingMode';
 
 // ============================================================================
 // Types
@@ -70,6 +71,8 @@ export interface MarkdownComponentsOptions {
 		borderRadius?: string;
 		backgroundColor?: string;
 	};
+	/** Apply Bionify reading-mode emphasis to readable prose nodes only */
+	enableBionifyReadingMode?: boolean;
 }
 
 /**
@@ -339,6 +342,7 @@ export function createMarkdownComponents(options: MarkdownComponentsOptions): Pa
 		containerRef,
 		searchHighlight,
 		codeBlockStyle,
+		enableBionifyReadingMode = false,
 	} = options;
 
 	// Reset match counter at start of each render
@@ -352,32 +356,41 @@ export function createMarkdownComponents(options: MarkdownComponentsOptions): Pa
 		return highlightSearchMatches(children, searchHighlight, theme);
 	};
 
+	const withReadableTransforms = (children: React.ReactNode): React.ReactNode => {
+		const highlighted = withHighlight(children);
+		return React.createElement(BionifyText, {
+			enabled: enableBionifyReadingMode,
+			children: highlighted,
+		});
+	};
+
 	const components: Partial<Components> = {
 		// Override paragraph to apply search highlighting
-		p: ({ children }: any) => React.createElement('p', null, withHighlight(children)),
+		p: ({ children }: any) => React.createElement('p', null, withReadableTransforms(children)),
 
 		// Override headings to apply search highlighting
-		h1: ({ children }: any) => React.createElement('h1', null, withHighlight(children)),
-		h2: ({ children }: any) => React.createElement('h2', null, withHighlight(children)),
-		h3: ({ children }: any) => React.createElement('h3', null, withHighlight(children)),
-		h4: ({ children }: any) => React.createElement('h4', null, withHighlight(children)),
-		h5: ({ children }: any) => React.createElement('h5', null, withHighlight(children)),
-		h6: ({ children }: any) => React.createElement('h6', null, withHighlight(children)),
+		h1: ({ children }: any) => React.createElement('h1', null, withReadableTransforms(children)),
+		h2: ({ children }: any) => React.createElement('h2', null, withReadableTransforms(children)),
+		h3: ({ children }: any) => React.createElement('h3', null, withReadableTransforms(children)),
+		h4: ({ children }: any) => React.createElement('h4', null, withReadableTransforms(children)),
+		h5: ({ children }: any) => React.createElement('h5', null, withReadableTransforms(children)),
+		h6: ({ children }: any) => React.createElement('h6', null, withReadableTransforms(children)),
 
 		// Override list items to apply search highlighting
-		li: ({ children }: any) => React.createElement('li', null, withHighlight(children)),
+		li: ({ children }: any) => React.createElement('li', null, withReadableTransforms(children)),
 
 		// Override table cells to apply search highlighting
-		td: ({ children }: any) => React.createElement('td', null, withHighlight(children)),
-		th: ({ children }: any) => React.createElement('th', null, withHighlight(children)),
+		td: ({ children }: any) => React.createElement('td', null, withReadableTransforms(children)),
+		th: ({ children }: any) => React.createElement('th', null, withReadableTransforms(children)),
 
 		// Override blockquote to apply search highlighting
 		blockquote: ({ children }: any) =>
-			React.createElement('blockquote', null, withHighlight(children)),
+			React.createElement('blockquote', null, withReadableTransforms(children)),
 
 		// Override strong/em to apply search highlighting
-		strong: ({ children }: any) => React.createElement('strong', null, withHighlight(children)),
-		em: ({ children }: any) => React.createElement('em', null, withHighlight(children)),
+		strong: ({ children }: any) =>
+			React.createElement('strong', null, withReadableTransforms(children)),
+		em: ({ children }: any) => React.createElement('em', null, withReadableTransforms(children)),
 		// Block code: extract code element from <pre><code>...</code></pre> and render with SyntaxHighlighter
 		pre: ({ children }: any) => {
 			const codeElement = React.Children.toArray(children).find(

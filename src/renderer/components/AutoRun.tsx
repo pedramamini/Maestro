@@ -59,6 +59,7 @@ import {
 import { formatShortcutKeys } from '../utils/shortcutFormatter';
 import { remarkFileLinks, buildFileTreeIndices } from '../utils/remarkFileLinks';
 import { useBatchStore } from '../stores/batchStore';
+import { useSettingsStore } from '../stores/settingsStore';
 
 interface AutoRunProps {
 	theme: Theme;
@@ -522,6 +523,7 @@ const AutoRunInner = forwardRef<AutoRunHandle, AutoRunProps>(function AutoRunInn
 	const batchError = useBatchStore(
 		useCallback((s) => s.batchRunStates[sessionId]?.error, [sessionId])
 	);
+	const bionifyReadingMode = useSettingsStore((s) => s.bionifyReadingMode);
 	const errorDocumentName =
 		batchRunState?.errorDocumentIndex !== undefined
 			? batchRunState.documents[batchRunState.errorDocumentIndex]
@@ -1455,6 +1457,7 @@ const AutoRunInner = forwardRef<AutoRunHandle, AutoRunProps>(function AutoRunInn
 			customLanguageRenderers: {
 				mermaid: ({ code, theme: t }) => <MermaidRenderer chart={code} theme={t} />,
 			},
+			enableBionifyReadingMode: bionifyReadingMode,
 			// Handle internal file links (wiki-style [[links]])
 			onFileClick: handleFileClick,
 			// Open external links in system browser
@@ -1483,7 +1486,7 @@ const AutoRunInner = forwardRef<AutoRunHandle, AutoRunProps>(function AutoRunInn
 				/>
 			),
 		};
-	}, [theme, folderPath, sshRemoteId, openLightboxByFilename, handleFileClick]);
+	}, [bionifyReadingMode, theme, folderPath, sshRemoteId, openLightboxByFilename, handleFileClick]);
 
 	// Search-highlighted components - only used in preview mode with active search
 	// This allows the base components to remain stable during editing
@@ -1498,6 +1501,7 @@ const AutoRunInner = forwardRef<AutoRunHandle, AutoRunProps>(function AutoRunInn
 			customLanguageRenderers: {
 				mermaid: ({ code, theme: t }) => <MermaidRenderer chart={code} theme={t} />,
 			},
+			enableBionifyReadingMode: bionifyReadingMode,
 			onFileClick: handleFileClick,
 			onExternalLinkClick: (href) => {
 				if (/^https?:\/\/|^mailto:/.test(href)) {
@@ -1528,6 +1532,7 @@ const AutoRunInner = forwardRef<AutoRunHandle, AutoRunProps>(function AutoRunInn
 		};
 	}, [
 		theme,
+		bionifyReadingMode,
 		folderPath,
 		sshRemoteId,
 		openLightboxByFilename,
