@@ -213,6 +213,15 @@ export function pipelineToYamlSubscriptions(pipeline: CuePipeline): CueSubscript
 			// session identity). Restrict fan-out to agent targets here; the
 			// pipeline editor already discourages this combination at edit time.
 			const fanOutAgents = agentTargets.filter((n) => n.type === 'agent');
+			// If the graph contains command nodes in the fan-out (shouldn't
+			// normally happen — editor blocks it — but hand-edited JSON could),
+			// surface a dev-facing warning so the silent drop isn't hidden.
+			if (agentTargets.length > fanOutAgents.length) {
+				const dropped = agentTargets.filter((n) => n.type !== 'agent').length;
+				console.warn(
+					`[cue] pipelineToYaml: ${dropped} non-agent fan-out target(s) skipped from "fan_out" in trigger "${triggerData.customLabel ?? triggerData.eventType}" — command nodes are not supported as fan-out targets`
+				);
+			}
 			sub.fan_out = fanOutAgents.map((a) => (a.data as AgentNodeData).sessionName);
 			// Resolve per-agent prompts from edge prompt → agent inputPrompt fallback
 			const perAgentPrompts = fanOutAgents.map((agent) => {

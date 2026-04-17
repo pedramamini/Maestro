@@ -19,6 +19,14 @@ vi.mock('../../../main/utils/sentry', () => ({
 	captureException: (...args: unknown[]) => mockCaptureException(...args),
 }));
 
+// Keep the ssh-spawn-wrapper inert in this suite; the tests exercise the local
+// code path only (no SSH config provided). Mocking here avoids pulling in the
+// transitive ssh-command-builder → execFile chain, which would try to wrap
+// the mocked `child_process` and break at module load.
+vi.mock('../../../main/utils/ssh-spawn-wrapper', () => ({
+	wrapSpawnWithSsh: vi.fn(),
+}));
+
 class MockChildProcess extends EventEmitter {
 	pid = 54321;
 	exitCode: number | null = null;

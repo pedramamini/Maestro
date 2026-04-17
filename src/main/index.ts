@@ -16,7 +16,7 @@ import {
 	getCueProcessList,
 } from './cue/cue-executor';
 import { executeCueShell, stopCueShellRun } from './cue/cue-shell-executor';
-import { executeCueCli } from './cue/cue-cli-executor';
+import { executeCueCli, stopCueCliRun } from './cue/cue-cli-executor';
 import { logger } from './utils/logger';
 import { tunnelManager } from './tunnel-manager';
 import { powerManager } from './power-manager';
@@ -543,6 +543,10 @@ app.whenReady().then(async () => {
 								templateContext,
 								timeoutMs,
 								onLog: cmdLog,
+								// Forward SSH config so shell commands run on the remote
+								// host when the owning session is SSH-remote-enabled.
+								sshRemoteConfig: storedSession.sessionSshRemoteConfig,
+								sshStore: createSshRemoteStoreAdapter(store),
 							})
 						: await executeCueCli({
 								runId,
@@ -553,6 +557,11 @@ app.whenReady().then(async () => {
 								templateContext,
 								timeoutMs,
 								onLog: cmdLog,
+								// CLI mode intentionally stays local: `maestro-cli send`
+								// targets the local Maestro daemon (routing messages to
+								// sessions managed by this app), so SSH wrapping would
+								// point at the wrong daemon and `maestro-cli.js` may not
+								// exist on the remote host.
 							});
 				const cmdHistory = recordCueHistoryEntry(cmdResult, sessionInfo);
 				historyManager.addEntry(storedSession.id, projectRoot, cmdHistory);
@@ -626,7 +635,7 @@ app.whenReady().then(async () => {
 			historyManager.addEntry(storedSession.id, projectRoot, historyEntry);
 			return result;
 		},
-		onStopCueRun: (runId) => stopCueRun(runId) || stopCueShellRun(runId),
+		onStopCueRun: (runId) => stopCueRun(runId) || stopCueShellRun(runId) || stopCueCliRun(runId),
 		onLog: (_level, message, data) => {
 			logger.cue(message, 'Cue', data);
 			// Push activity updates to renderer

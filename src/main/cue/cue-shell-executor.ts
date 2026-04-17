@@ -11,11 +11,13 @@
 
 import { spawn, execFile, execFileSync, type ChildProcess } from 'child_process';
 import type { CueEvent, CueRunResult, CueRunStatus, CueSubscription } from './cue-types';
-import type { SessionInfo } from '../../shared/types';
+import type { AgentSshRemoteConfig, SessionInfo } from '../../shared/types';
 import { substituteTemplateVariables, type TemplateContext } from '../../shared/templateVariables';
 import { buildCueTemplateContext } from './cue-template-context-builder';
 import { captureException } from '../utils/sentry';
 import { isWindows } from '../../shared/platformDetection';
+import { wrapSpawnWithSsh } from '../utils/ssh-spawn-wrapper';
+import type { SshRemoteSettingsStore } from '../utils/ssh-remote-resolver';
 
 const SIGKILL_DELAY_MS = 5000;
 
@@ -30,6 +32,14 @@ export interface CueShellExecutionConfig {
 	templateContext: TemplateContext;
 	timeoutMs: number;
 	onLog: (level: string, message: string) => void;
+	/**
+	 * Session-level SSH remote config. When `enabled`, the shell command runs
+	 * on the remote host (via `bash -c` through the SSH wrapper) with
+	 * `projectRoot` as the remote cwd.
+	 */
+	sshRemoteConfig?: AgentSshRemoteConfig;
+	/** Store adapter used by {@link wrapSpawnWithSsh}. Required for SSH mode. */
+	sshStore?: SshRemoteSettingsStore;
 }
 
 interface ActiveShellProcess {
@@ -87,6 +97,8 @@ export async function executeCueShell(config: CueShellExecutionConfig): Promise<
 		templateContext,
 		timeoutMs,
 		onLog,
+		sshRemoteConfig,
+		sshStore,
 	} = config;
 
 	const startedAt = new Date().toISOString();
@@ -122,15 +134,55 @@ export async function executeCueShell(config: CueShellExecutionConfig): Promise<
 		`[CUE] Executing shell run ${runId}: "${subscription.name}" → ${substitutedCommand} (${event.type})`
 	);
 
+	// Resolve spawn parameters. For SSH-remote sessions, wrap the command so it
+	// executes on the remote host inside `projectRoot` (which is a remote path).
+	// We pass the user's shell string as `bash -c <cmd>` so the remote shell
+	// still parses pipes/quotes/globs — mirroring local `shell: true` behavior.
+	let spawnCommand = substitutedCommand;
+	let spawnArgs: string[] = [];
+	let spawnCwd = projectRoot;
+	let spawnEnv: Record<string, string> = { ...process.env } as Record<string, string>;
+	let useLocalShell = true;
+
+	if (sshRemoteConfig?.enabled && sshStore) {
+		try {
+			const wrapped = await wrapSpawnWithSsh(
+				{
+					command: 'bash',
+					args: ['-c', substitutedCommand],
+					cwd: projectRoot,
+				},
+				sshRemoteConfig,
+				sshStore
+			);
+			if (wrapped.sshRemoteUsed) {
+				spawnCommand = wrapped.command;
+				spawnArgs = wrapped.args;
+				spawnCwd = wrapped.cwd;
+				spawnEnv = { ...process.env, ...(wrapped.customEnvVars || {}) } as Record<string, string>;
+				useLocalShell = false;
+				onLog(
+					'cue',
+					`[CUE] Shell run ${runId} executing on SSH remote "${wrapped.sshRemoteUsed.name}"`
+				);
+			}
+		} catch (err) {
+			captureException(err, { operation: 'cue:shell:sshWrap', runId });
+			return failedResult(`SSH wrap error: ${err instanceof Error ? err.message : String(err)}`);
+		}
+	}
+
 	return new Promise<CueRunResult>((resolve) => {
 		let child: ChildProcess;
 		try {
-			child = spawn(substitutedCommand, [], {
-				cwd: projectRoot,
-				env: { ...process.env } as Record<string, string>,
-				// shell: true makes the user's shell resolve PATH and handle
-				// quoting/pipes/globs.
-				shell: true,
+			child = spawn(spawnCommand, spawnArgs, {
+				cwd: spawnCwd,
+				env: spawnEnv,
+				// For local mode, `shell: true` makes the user's shell resolve
+				// PATH and handle quoting/pipes/globs. For SSH mode, the remote
+				// `/bin/bash -c` inside the wrapper already parses the command,
+				// and the outer spawn just invokes `ssh` — no local shell needed.
+				shell: useLocalShell,
 				stdio: ['ignore', 'pipe', 'pipe'],
 			});
 		} catch (err) {

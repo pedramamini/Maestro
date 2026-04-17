@@ -7,23 +7,56 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { EventEmitter } from 'events';
+import type { ChildProcess } from 'child_process';
 import type { CueEvent, CueSubscription } from '../../../main/cue/cue-types';
 import type { SessionInfo } from '../../../shared/types';
 import type { TemplateContext } from '../../../shared/templateVariables';
 
-const mockExecFileNoThrow = vi.fn();
-mockExecFileNoThrow.mockResolvedValue({ stdout: '', stderr: '', exitCode: 0 });
+class MockChildProcess extends EventEmitter {
+	pid = 54321;
+	exitCode: number | null = null;
+	signalCode: string | null = null;
+	stdout = new EventEmitter();
+	stderr = new EventEmitter();
+	killed = false;
 
-vi.mock('../../../main/utils/execFile', () => ({
-	execFileNoThrow: (...args: unknown[]) => mockExecFileNoThrow(...args),
-}));
+	kill(_signal?: string) {
+		this.killed = true;
+		return true;
+	}
+
+	constructor() {
+		super();
+		(this.stdout as any).setEncoding = vi.fn();
+		(this.stderr as any).setEncoding = vi.fn();
+	}
+}
+
+let mockChild: MockChildProcess;
+const mockSpawn = vi.fn((..._args: unknown[]) => {
+	mockChild = new MockChildProcess();
+	return mockChild as unknown as ChildProcess;
+});
+
+vi.mock('child_process', async (importOriginal) => {
+	const actual = await importOriginal<typeof import('child_process')>();
+	return {
+		...actual,
+		spawn: (...args: unknown[]) => mockSpawn(...args),
+		default: {
+			...actual,
+			spawn: (...args: unknown[]) => mockSpawn(...args),
+		},
+	};
+});
 
 const mockCaptureException = vi.fn();
 vi.mock('../../../main/utils/sentry', () => ({
 	captureException: (...args: unknown[]) => mockCaptureException(...args),
 }));
 
-import { executeCueCli } from '../../../main/cue/cue-cli-executor';
+import { executeCueCli, stopCueCliRun } from '../../../main/cue/cue-cli-executor';
 
 function createSession(): SessionInfo {
 	return {
@@ -87,19 +120,21 @@ function createConfig(overrides: Record<string, unknown> = {}) {
 describe('cue-cli-executor', () => {
 	beforeEach(() => {
 		vi.clearAllMocks();
-		mockExecFileNoThrow.mockResolvedValue({ stdout: '', stderr: '', exitCode: 0 });
 	});
 
 	it('substitutes {{CUE_FROM_AGENT}} in target before invoking maestro-cli send', async () => {
 		const config = createConfig();
-		const result = await executeCueCli(config as any);
+		const promise = executeCueCli(config as any);
+		// Let the microtask scheduler register the close handler before we emit.
+		await Promise.resolve();
+		mockChild.emit('close', 0);
+		const result = await promise;
 
-		expect(mockExecFileNoThrow).toHaveBeenCalledTimes(1);
-		const args = mockExecFileNoThrow.mock.calls[0][1] as string[];
+		expect(mockSpawn).toHaveBeenCalledTimes(1);
+		const args = mockSpawn.mock.calls[0][1] as string[];
 		expect(args[0]).toContain('maestro-cli.js');
 		expect(args[1]).toBe('send');
 		expect(args[2]).toBe('session-research'); // CUE_FROM_AGENT resolved from sourceSessionId
-		// args[3] is the message — defaults to {{CUE_SOURCE_OUTPUT}} which expands to the agent's stdout
 		expect(args[3]).toBe('computed answer = 42');
 		expect(args[4]).toBe('--live');
 		expect(result.status).toBe('completed');
@@ -113,9 +148,12 @@ describe('cue-cli-executor', () => {
 				message: 'Hello from {{CUE_TRIGGER_NAME}}: {{CUE_SOURCE_OUTPUT}}',
 			},
 		});
-		await executeCueCli(config as any);
+		const promise = executeCueCli(config as any);
+		await Promise.resolve();
+		mockChild.emit('close', 0);
+		await promise;
 
-		const args = mockExecFileNoThrow.mock.calls[0][1] as string[];
+		const args = mockSpawn.mock.calls[0][1] as string[];
 		expect(args[2]).toBe('session-A');
 		expect(args[3]).toBe('Hello from cli-test: computed answer = 42');
 	});
@@ -127,21 +165,20 @@ describe('cue-cli-executor', () => {
 		});
 		const result = await executeCueCli(config as any);
 
-		expect(mockExecFileNoThrow).not.toHaveBeenCalled();
+		expect(mockSpawn).not.toHaveBeenCalled();
 		expect(result.status).toBe('failed');
 		expect(result.stderr).toMatch(/empty string/i);
 	});
 
 	it('reports failed status when maestro-cli exits non-zero', async () => {
-		mockExecFileNoThrow.mockResolvedValueOnce({
-			stdout: '',
-			stderr: 'session not found',
-			exitCode: 2,
-		});
 		const config = createConfig({
 			cli: { command: 'send' as const, target: 'literal-session-id' },
 		});
-		const result = await executeCueCli(config as any);
+		const promise = executeCueCli(config as any);
+		await Promise.resolve();
+		mockChild.stderr.emit('data', 'session not found');
+		mockChild.emit('close', 2);
+		const result = await promise;
 
 		expect(result.status).toBe('failed');
 		expect(result.exitCode).toBe(2);
@@ -149,22 +186,23 @@ describe('cue-cli-executor', () => {
 	});
 
 	it('reports failed with null exitCode on spawn-failure string codes (e.g. ENOENT)', async () => {
-		mockExecFileNoThrow.mockResolvedValueOnce({
-			stdout: '',
-			stderr: 'spawn ENOENT',
-			exitCode: 'ENOENT',
-		});
 		const config = createConfig({
 			cli: { command: 'send' as const, target: 'x' },
 		});
-		const result = await executeCueCli(config as any);
+		const promise = executeCueCli(config as any);
+		await Promise.resolve();
+		const err = Object.assign(new Error('spawn ENOENT'), { code: 'ENOENT' });
+		mockChild.emit('error', err);
+		const result = await promise;
 
 		expect(result.status).toBe('failed');
 		expect(result.exitCode).toBeNull();
 	});
 
-	it('reports failed status and captures the exception if execFile throws', async () => {
-		mockExecFileNoThrow.mockRejectedValueOnce(new Error('boom'));
+	it('reports failed status when spawn throws synchronously', async () => {
+		mockSpawn.mockImplementationOnce(() => {
+			throw new Error('boom');
+		});
 		const config = createConfig({
 			cli: { command: 'send' as const, target: 'x' },
 		});
@@ -172,6 +210,22 @@ describe('cue-cli-executor', () => {
 
 		expect(result.status).toBe('failed');
 		expect(result.stderr).toContain('boom');
-		expect(mockCaptureException).toHaveBeenCalled();
+	});
+
+	it('stopCueCliRun signals an active CLI process and returns true', async () => {
+		const config = createConfig();
+		const promise = executeCueCli(config as any);
+		await Promise.resolve();
+
+		const stopped = stopCueCliRun('run-1');
+		expect(stopped).toBe(true);
+		expect(mockChild.killed).toBe(true);
+
+		mockChild.emit('close', null);
+		await promise;
+	});
+
+	it('stopCueCliRun returns false for unknown runId', () => {
+		expect(stopCueCliRun('does-not-exist')).toBe(false);
 	});
 });

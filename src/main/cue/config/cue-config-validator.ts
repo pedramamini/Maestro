@@ -103,6 +103,13 @@ export function validateSubscription(sub: unknown, prefix: string): string[] {
 
 	if (isCommand) {
 		validateCommandField(subRecord.command, prefix, errors);
+		// Fan-out targets sessions, not subscriptions — combining it with
+		// `action: command` would execute the command once per target session,
+		// which is never the user's intent (the pipeline editor already blocks
+		// this; this guard catches hand-edited YAML).
+		if (Array.isArray(subRecord.fan_out) && subRecord.fan_out.length > 0) {
+			errors.push(`${prefix}: "fan_out" is not supported when action is "command"`);
+		}
 	} else {
 		const hasPrompt = typeof subRecord.prompt === 'string';
 		const hasPromptFile = typeof subRecord.prompt_file === 'string';

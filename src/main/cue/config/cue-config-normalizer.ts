@@ -69,7 +69,11 @@ function normalizeCommand(rawCommand: unknown): CueCommand | undefined {
 		return undefined;
 	}
 	const cmd = rawCommand as Record<string, unknown>;
-	if (cmd.mode === 'shell' && typeof cmd.shell === 'string') {
+	if (cmd.mode === 'shell' && typeof cmd.shell === 'string' && cmd.shell.trim().length > 0) {
+		// Reject empty/whitespace-only shell strings here to match the
+		// validator. Without this, a normalized `{ mode: 'shell', shell: '' }`
+		// could reach the executor and fail with a generic "no shell command"
+		// error after validation has already passed.
 		return { mode: 'shell', shell: cmd.shell };
 	}
 	if (cmd.mode === 'cli' && cmd.cli && typeof cmd.cli === 'object' && !Array.isArray(cmd.cli)) {
