@@ -517,6 +517,10 @@ export class WebServer {
 		this.broadcastService.broadcastThemeChange(theme);
 	}
 
+	broadcastBionifyReadingModeChange(enabled: boolean): void {
+		this.broadcastService.broadcastBionifyReadingModeChange(enabled);
+	}
+
 	broadcastCustomCommands(commands: CustomAICommand[]): void {
 		this.broadcastService.broadcastCustomCommands(commands);
 	}
