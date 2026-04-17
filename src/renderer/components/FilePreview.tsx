@@ -25,6 +25,7 @@ import {
 	Loader2,
 	Image,
 	Globe,
+	Wand2,
 	Save,
 	Edit,
 	AlertTriangle,
@@ -795,6 +796,7 @@ export const FilePreview = React.memo(
 		// Track if content has been modified
 		const hasChanges = markdownEditMode && editContent !== file?.content;
 		const bionifyReadingMode = useSettingsStore((s) => s.bionifyReadingMode);
+		const [surfaceBionifyReadingMode, setSurfaceBionifyReadingMode] = useState(bionifyReadingMode);
 
 		const { registerLayer, unregisterLayer, updateLayerHandler } = useLayerStack();
 
@@ -843,7 +845,7 @@ export const FilePreview = React.memo(
 		const isContentTruncated = file?.content && displayContent.length < file.content.length;
 		const hasActiveSearch = searchQuery.trim().length > 0;
 		// Keep rendered text nodes intact while search is active so preview matches remain findable.
-		const effectiveBionifyReadingMode = bionifyReadingMode && !hasActiveSearch;
+		const effectiveBionifyReadingMode = surfaceBionifyReadingMode && !hasActiveSearch;
 		const truncationBanner = isContentTruncated ? (
 			<div
 				className="px-4 py-2 flex items-center gap-2 text-sm"
@@ -886,6 +888,10 @@ export const FilePreview = React.memo(
 			if (!isMarkdown || !file?.content) return [];
 			return extractHeadings(file.content);
 		}, [isMarkdown, file?.content]);
+
+		useEffect(() => {
+			setSurfaceBionifyReadingMode(bionifyReadingMode);
+		}, [bionifyReadingMode, file?.path]);
 
 		const scrollMarkdownToBoundary = useCallback((direction: 'top' | 'bottom') => {
 			// Use contentRef which is the actual scrollable container
@@ -1873,6 +1879,23 @@ export const FilePreview = React.memo(
 										title={showRemoteImages ? 'Hide remote images' : 'Show remote images'}
 									>
 										<Globe className={headerIconClass} />
+									</button>
+								)}
+								{!markdownEditMode && (isMarkdown || isReadableText) && (
+									<button
+										onClick={() => setSurfaceBionifyReadingMode((current) => !current)}
+										className={headerBtnClass}
+										style={{
+											color: surfaceBionifyReadingMode ? theme.colors.accent : theme.colors.textDim,
+										}}
+										title={
+											surfaceBionifyReadingMode
+												? 'Disable Bionify for this preview'
+												: 'Enable Bionify for this preview'
+										}
+										aria-pressed={surfaceBionifyReadingMode}
+									>
+										<Wand2 className={headerIconClass} />
 									</button>
 								)}
 								{/* Toggle between edit and preview/view mode - for any editable text file */}

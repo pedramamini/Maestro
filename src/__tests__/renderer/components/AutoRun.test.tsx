@@ -11,6 +11,7 @@ import { LayerStackProvider } from '../../../renderer/contexts/LayerStackContext
 import { formatShortcutKeys } from '../../../renderer/utils/shortcutFormatter';
 import type { Theme, BatchRunState, SessionState } from '../../../renderer/types';
 import { useBatchStore } from '../../../renderer/stores/batchStore';
+import { useSettingsStore } from '../../../renderer/stores/settingsStore';
 
 // Helper to seed the Zustand batch store so the component's direct store reads
 // (isErrorPaused, batchError) see the expected state for a given session.
@@ -92,6 +93,8 @@ vi.mock('../../../renderer/components/AutoRunDocumentSelector', () => ({
 		onRefresh,
 		onChangeFolder,
 		onCreateDocument,
+		bionifyEnabled,
+		onToggleBionify,
 		isLoading,
 	}: any) => (
 		<div data-testid="document-selector">
@@ -111,6 +114,9 @@ vi.mock('../../../renderer/components/AutoRunDocumentSelector', () => ({
 			</button>
 			<button data-testid="change-folder-btn" onClick={onChangeFolder}>
 				Change
+			</button>
+			<button data-testid="toggle-bionify-btn" onClick={onToggleBionify}>
+				{bionifyEnabled ? 'Bionify On' : 'Bionify Off'}
 			</button>
 			{isLoading && <span data-testid="loading-indicator">Loading...</span>}
 		</div>
@@ -243,6 +249,7 @@ describe('AutoRun', () => {
 	beforeEach(() => {
 		mockMaestro = setupMaestroMock();
 		vi.useFakeTimers({ shouldAdvanceTime: true });
+		useSettingsStore.setState({ bionifyReadingMode: false });
 	});
 
 	afterEach(() => {
@@ -264,6 +271,17 @@ describe('AutoRun', () => {
 			renderWithProvider(<AutoRun {...props} />);
 
 			expect(screen.getByTestId('react-markdown')).toBeInTheDocument();
+		});
+
+		it('allows Bionify to be toggled from the document selector area', () => {
+			const props = createDefaultProps({ mode: 'preview' });
+			renderWithProvider(<AutoRun {...props} />);
+
+			expect(screen.getByTestId('toggle-bionify-btn')).toHaveTextContent('Bionify Off');
+
+			fireEvent.click(screen.getByTestId('toggle-bionify-btn'));
+
+			expect(screen.getByTestId('toggle-bionify-btn')).toHaveTextContent('Bionify On');
 		});
 
 		it('shows "Select Auto Run Folder" button when no folder is configured', () => {

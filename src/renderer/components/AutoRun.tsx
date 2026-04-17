@@ -524,6 +524,7 @@ const AutoRunInner = forwardRef<AutoRunHandle, AutoRunProps>(function AutoRunInn
 		useCallback((s) => s.batchRunStates[sessionId]?.error, [sessionId])
 	);
 	const bionifyReadingMode = useSettingsStore((s) => s.bionifyReadingMode);
+	const [previewBionifyReadingMode, setPreviewBionifyReadingMode] = useState(bionifyReadingMode);
 	const errorDocumentName =
 		batchRunState?.errorDocumentIndex !== undefined
 			? batchRunState.documents[batchRunState.errorDocumentIndex]
@@ -1376,6 +1377,10 @@ const AutoRunInner = forwardRef<AutoRunHandle, AutoRunProps>(function AutoRunInn
 		return { completed, total };
 	}, [savedContent]);
 
+	useEffect(() => {
+		setPreviewBionifyReadingMode(bionifyReadingMode);
+	}, [bionifyReadingMode, selectedFile]);
+
 	// Token counting based on saved content only (not live during editing)
 	// Updates on: document load, save, and external file changes
 	useEffect(() => {
@@ -1457,7 +1462,7 @@ const AutoRunInner = forwardRef<AutoRunHandle, AutoRunProps>(function AutoRunInn
 			customLanguageRenderers: {
 				mermaid: ({ code, theme: t }) => <MermaidRenderer chart={code} theme={t} />,
 			},
-			enableBionifyReadingMode: bionifyReadingMode,
+			enableBionifyReadingMode: previewBionifyReadingMode,
 			// Handle internal file links (wiki-style [[links]])
 			onFileClick: handleFileClick,
 			// Open external links in system browser
@@ -1486,7 +1491,14 @@ const AutoRunInner = forwardRef<AutoRunHandle, AutoRunProps>(function AutoRunInn
 				/>
 			),
 		};
-	}, [bionifyReadingMode, theme, folderPath, sshRemoteId, openLightboxByFilename, handleFileClick]);
+	}, [
+		previewBionifyReadingMode,
+		theme,
+		folderPath,
+		sshRemoteId,
+		openLightboxByFilename,
+		handleFileClick,
+	]);
 
 	// Search-highlighted components - only used in preview mode with active search
 	// This allows the base components to remain stable during editing
@@ -1501,7 +1513,7 @@ const AutoRunInner = forwardRef<AutoRunHandle, AutoRunProps>(function AutoRunInn
 			customLanguageRenderers: {
 				mermaid: ({ code, theme: t }) => <MermaidRenderer chart={code} theme={t} />,
 			},
-			enableBionifyReadingMode: bionifyReadingMode,
+			enableBionifyReadingMode: previewBionifyReadingMode,
 			onFileClick: handleFileClick,
 			onExternalLinkClick: (href) => {
 				if (/^https?:\/\/|^mailto:/.test(href)) {
@@ -1532,7 +1544,7 @@ const AutoRunInner = forwardRef<AutoRunHandle, AutoRunProps>(function AutoRunInn
 		};
 	}, [
 		theme,
-		bionifyReadingMode,
+		previewBionifyReadingMode,
 		folderPath,
 		sshRemoteId,
 		openLightboxByFilename,
@@ -1825,6 +1837,8 @@ const AutoRunInner = forwardRef<AutoRunHandle, AutoRunProps>(function AutoRunInn
 						onRefresh={onRefresh}
 						onChangeFolder={onOpenSetup}
 						onCreateDocument={onCreateDocument}
+						bionifyEnabled={previewBionifyReadingMode}
+						onToggleBionify={() => setPreviewBionifyReadingMode((current) => !current)}
 						isLoading={isLoadingDocuments}
 						documentTaskCounts={documentTaskCounts}
 					/>

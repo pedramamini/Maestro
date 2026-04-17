@@ -18,6 +18,7 @@ vi.mock('lucide-react', () => ({
 	Loader2: () => <span data-testid="loader-icon">Loader2</span>,
 	Image: () => <span data-testid="image-icon">Image</span>,
 	Globe: () => <span data-testid="globe-icon">Globe</span>,
+	Wand2: () => <span data-testid="wand-icon">Wand2</span>,
 	Save: () => <span data-testid="save-icon">Save</span>,
 	Edit: () => <span data-testid="edit-icon">Edit</span>,
 	AlertTriangle: () => <span data-testid="alert-icon">AlertTriangle</span>,
@@ -383,6 +384,26 @@ describe('FilePreview', () => {
 			fireEvent.click(screen.getByText('Load full file'));
 
 			expect(screen.queryByText(/Large file preview truncated/)).not.toBeInTheDocument();
+		});
+
+		it('allows Bionify to be toggled from the file preview header', () => {
+			render(
+				<FilePreview
+					{...defaultProps}
+					file={{
+						name: 'notes.txt',
+						content: 'Readable text preview content',
+						path: '/test/notes.txt',
+					}}
+				/>
+			);
+
+			expect(document.querySelector('.bionify-word')).not.toBeInTheDocument();
+
+			fireEvent.click(screen.getByTitle('Enable Bionify for this preview'));
+
+			expect(screen.getByTitle('Disable Bionify for this preview')).toBeInTheDocument();
+			expect(document.querySelectorAll('.bionify-word').length).toBeGreaterThan(0);
 		});
 	});
 

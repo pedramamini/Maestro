@@ -1,5 +1,13 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { ChevronDown, ChevronRight, RefreshCw, FolderOpen, Plus, Folder } from 'lucide-react';
+import {
+	ChevronDown,
+	ChevronRight,
+	RefreshCw,
+	FolderOpen,
+	Plus,
+	Folder,
+	Wand2,
+} from 'lucide-react';
 import type { Theme } from '../types';
 import { useClickOutside } from '../hooks';
 
@@ -26,6 +34,8 @@ interface AutoRunDocumentSelectorProps {
 	onRefresh: () => void;
 	onChangeFolder: () => void;
 	onCreateDocument: (filename: string) => Promise<boolean>; // Returns true if created successfully
+	bionifyEnabled?: boolean;
+	onToggleBionify?: () => void;
 	isLoading?: boolean;
 	documentTaskCounts?: Map<string, DocumentTaskCount>; // Task counts per document path
 }
@@ -39,6 +49,8 @@ export function AutoRunDocumentSelector({
 	onRefresh,
 	onChangeFolder,
 	onCreateDocument,
+	bionifyEnabled = false,
+	onToggleBionify,
 	isLoading = false,
 	documentTaskCounts,
 }: AutoRunDocumentSelectorProps) {
@@ -356,6 +368,26 @@ export function AutoRunDocumentSelector({
 						</div>
 					)}
 				</div>
+
+				{selectedDocument && onToggleBionify && (
+					<button
+						onClick={onToggleBionify}
+						className="p-2 rounded transition-colors hover:bg-white/10 shrink-0"
+						style={{
+							color: bionifyEnabled ? theme.colors.accent : theme.colors.textDim,
+							border: `1px solid ${bionifyEnabled ? theme.colors.accent : theme.colors.border}`,
+							backgroundColor: bionifyEnabled ? `${theme.colors.accent}15` : 'transparent',
+						}}
+						title={
+							bionifyEnabled
+								? 'Disable Bionify for this document preview'
+								: 'Enable Bionify for this document preview'
+						}
+						aria-pressed={bionifyEnabled}
+					>
+						<Wand2 className="w-4 h-4" />
+					</button>
+				)}
 
 				{/* Create New Document Button */}
 				<button
