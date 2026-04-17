@@ -176,6 +176,20 @@ program
 	.option('--save-as <name>', "Save as a playbook with this name (don't launch)")
 	.option('--launch', 'Start the auto-run immediately (default: just configure)')
 	.option('--reset-on-completion', 'Enable reset-on-completion for all documents')
+	.option(
+		'--worktree',
+		'Run the auto-run inside a git worktree (requires --launch, --branch, --worktree-path)'
+	)
+	.option('--branch <name>', 'Branch name for the worktree (created if it does not exist)')
+	.option(
+		'--worktree-path <path>',
+		'Filesystem path for the worktree (must be a sibling of the repo)'
+	)
+	.option('--create-pr', 'Open a GitHub PR when the auto-run completes successfully')
+	.option(
+		'--pr-target-branch <branch>',
+		'Target branch for the PR (defaults to the repo default branch)'
+	)
 	.action(autoRun);
 
 // Cue commands - interact with Maestro Cue automation

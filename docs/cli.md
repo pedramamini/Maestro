@@ -553,18 +553,43 @@ maestro-cli auto-run doc1.md --loop --max-loops 3 --launch
 
 # Reset task checkboxes on completion (useful with looping)
 maestro-cli auto-run doc1.md --reset-on-completion --loop --launch
+
+# Run the auto-run inside a fresh git worktree on a dedicated branch
+maestro-cli auto-run doc1.md --agent <agent-id> --launch \
+  --worktree --branch feature/auto-x --worktree-path ../repo-auto-x
+
+# Open a PR against the repo's default branch when the auto-run finishes
+maestro-cli auto-run doc1.md --agent <agent-id> --launch \
+  --worktree --branch feature/auto-x --worktree-path ../repo-auto-x \
+  --create-pr
+
+# Target a specific base branch for the PR
+maestro-cli auto-run doc1.md --agent <agent-id> --launch \
+  --worktree --branch feature/auto-x --worktree-path ../repo-auto-x \
+  --create-pr --pr-target-branch develop
 ```
 
-| Flag                    | Description                                              |
-| ----------------------- | -------------------------------------------------------- |
-| `-a, --agent <id>`      | Target agent to run the documents (partial ID supported) |
-| `-s, --session <id>`    | Deprecated — use `--agent` instead                       |
-| `-p, --prompt <text>`   | Custom prompt/instructions for the agent                 |
-| `--loop`                | Enable looping (re-run documents after completion)       |
-| `--max-loops <n>`       | Maximum number of loop iterations (implies `--loop`)     |
-| `--save-as <name>`      | Save the configuration as a named playbook               |
-| `--launch`              | Immediately start the auto-run after configuring         |
-| `--reset-on-completion` | Reset task checkboxes when documents complete            |
+| Flag                          | Description                                                                                     |
+| ----------------------------- | ----------------------------------------------------------------------------------------------- |
+| `-a, --agent <id>`            | Target agent to run the documents (partial ID supported)                                        |
+| `-s, --session <id>`          | Deprecated — use `--agent` instead                                                              |
+| `-p, --prompt <text>`         | Custom prompt/instructions for the agent                                                        |
+| `--loop`                      | Enable looping (re-run documents after completion)                                              |
+| `--max-loops <n>`             | Maximum number of loop iterations (implies `--loop`)                                            |
+| `--save-as <name>`            | Save the configuration as a named playbook                                                      |
+| `--launch`                    | Immediately start the auto-run after configuring                                                |
+| `--reset-on-completion`       | Reset task checkboxes when documents complete                                                   |
+| `--worktree`                  | Run the auto-run inside a git worktree (requires `--launch`, `--branch`, and `--worktree-path`) |
+| `--branch <name>`             | Branch name for the worktree (created if it does not exist)                                     |
+| `--worktree-path <path>`      | Filesystem path for the worktree (must be a sibling of the repo, not nested inside it)          |
+| `--create-pr`                 | Open a GitHub PR when the auto-run completes successfully                                       |
+| `--pr-target-branch <branch>` | Target branch for the PR (defaults to the repo's default branch)                                |
+
+Worktree mode reuses the desktop app's Auto Run pipeline: the app creates the
+worktree (or reuses an existing one on the same repo), checks out the requested
+branch, dispatches the agent inside the worktree, and — when `--create-pr` is
+set — runs `gh pr create` once the batch completes. See
+[Git Worktrees](git-worktrees.md) for more on worktree behavior.
 
 ### Checking Status
 

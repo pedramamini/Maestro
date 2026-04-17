@@ -206,11 +206,26 @@ export function useAppRemoteEventListeners(deps: UseAppRemoteEventListenersDeps)
 					return;
 				}
 
-				const batchConfig = {
+				// Forward worktree configuration when the CLI requests it.
+				// startBatchRun handles worktree setup, branch checkout, and (optionally)
+				// PR creation on completion via the existing git IPC handlers.
+				const worktree: BatchRunConfig['worktree'] | undefined =
+					config.worktree && config.worktree.enabled
+						? {
+								enabled: true,
+								path: config.worktree.path,
+								branchName: config.worktree.branchName,
+								createPROnCompletion: Boolean(config.worktree.createPROnCompletion),
+								prTargetBranch: config.worktree.prTargetBranch || '',
+							}
+						: undefined;
+
+				const batchConfig: BatchRunConfig = {
 					documents,
 					prompt: config.prompt || '',
 					loopEnabled: config.loopEnabled || false,
 					maxLoops: config.maxLoops,
+					...(worktree ? { worktree } : {}),
 				};
 
 				// Send success response immediately - startBatchRun is long-running

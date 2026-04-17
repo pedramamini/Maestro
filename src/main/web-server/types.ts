@@ -304,6 +304,13 @@ export type ConfigureAutoRunCallback = (
 		maxLoops?: number;
 		saveAsPlaybook?: string;
 		launch?: boolean;
+		worktree?: {
+			enabled: boolean;
+			path: string;
+			branchName: string;
+			createPROnCompletion: boolean;
+			prTargetBranch: string;
+		};
 	}
 ) => Promise<{ success: boolean; playbookId?: string; error?: string }>;
 

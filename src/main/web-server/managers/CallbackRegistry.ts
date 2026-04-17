@@ -293,6 +293,13 @@ export class CallbackRegistry {
 			maxLoops?: number;
 			saveAsPlaybook?: string;
 			launch?: boolean;
+			worktree?: {
+				enabled: boolean;
+				path: string;
+				branchName: string;
+				createPROnCompletion: boolean;
+				prTargetBranch: string;
+			};
 		}
 	): Promise<{ success: boolean; playbookId?: string; error?: string }> {
 		if (!this.callbacks.configureAutoRun) return { success: false, error: 'Not configured' };
