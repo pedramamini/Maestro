@@ -155,6 +155,11 @@ export const FIXED_SHORTCUTS: Record<string, Shortcut> = {
 		label: 'Decrease Font Size',
 		keys: ['Meta', '-'],
 	},
+	clearTerminal: {
+		id: 'clearTerminal',
+		label: 'Clear Terminal',
+		keys: ['Meta', 'Shift', 'k'],
+	},
 };
 
 // Terminal tab shortcuts
@@ -163,11 +168,6 @@ export const TERMINAL_SHORTCUTS: Record<string, Shortcut> = {
 		id: 'newTerminalTab',
 		label: 'New Terminal Tab',
 		keys: ['Control', 'Shift', '`'],
-	},
-	clearTerminal: {
-		id: 'clearTerminal',
-		label: 'Clear Terminal',
-		keys: ['Meta', 'Shift', 'k'],
 	},
 };
 

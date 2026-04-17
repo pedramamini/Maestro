@@ -431,12 +431,10 @@ export function useMainKeyboardHandler(): UseMainKeyboardHandlerReturn {
 					trackShortcut('quickAction');
 				}
 			} else if (
-				(e.metaKey || e.ctrlKey) &&
-				e.shiftKey &&
-				e.key.toLowerCase() === 'k' &&
+				ctx.isShortcut(e, 'clearTerminal') &&
 				ctx.activeSession?.inputMode === 'terminal'
 			) {
-				// Cmd+Shift+K clears the active xterm buffer in terminal mode
+				// Clears the active xterm buffer in terminal mode
 				e.preventDefault();
 				ctx.mainPanelRef?.current?.clearActiveTerminal();
 				trackShortcut('clearTerminal');

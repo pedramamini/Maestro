@@ -1984,7 +1984,7 @@ describe('useMainKeyboardHandler', () => {
 				const mockClearActiveTerminal = vi.fn();
 
 				result.current.keyboardHandlerRef.current = createTerminalTabContext({
-					isShortcut: () => false,
+					isShortcut: (_e: KeyboardEvent, actionId: string) => actionId === 'clearTerminal',
 					sessions: [{ id: 'session-1' }],
 					mainPanelRef: { current: { clearActiveTerminal: mockClearActiveTerminal } },
 					recordShortcutUsage: vi.fn().mockReturnValue({ newLevel: null }),
