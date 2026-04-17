@@ -61,4 +61,21 @@ describe('MarkdownRenderer bionify opt-in', () => {
 		expect(document.querySelector('code .bionify-word')).not.toBeInTheDocument();
 		expect(document.querySelector('a .bionify-word')).not.toBeInTheDocument();
 	});
+
+	it('preserves markdown task lists and fenced code blocks when enabled', () => {
+		render(
+			<MarkdownRenderer
+				{...defaultProps}
+				enableBionifyReadingMode={true}
+				content={'- [x] Ship reader tests\n\n```ts\nconst value = 1;\n```'}
+			/>
+		);
+
+		const checkbox = document.querySelector('input[type="checkbox"]') as HTMLInputElement | null;
+		expect(checkbox).not.toBeNull();
+		expect(checkbox?.checked).toBe(true);
+		expect(checkbox?.closest('li')).toHaveTextContent('Ship reader tests');
+		expect(screen.getByTestId('syntax-highlighter')).toHaveTextContent('const value = 1;');
+		expect(document.querySelector('pre .bionify-word')).not.toBeInTheDocument();
+	});
 });

@@ -179,6 +179,25 @@ describe('AgentPromptComposerModal', () => {
 		});
 	});
 
+	describe('reading-mode exclusions', () => {
+		it('keeps the prompt textarea out of bionify reading mode', () => {
+			renderWithLayerStack(
+				<AgentPromptComposerModal
+					isOpen={true}
+					onClose={vi.fn()}
+					theme={theme}
+					initialValue="Editor text should remain raw and selectable."
+					onSubmit={vi.fn()}
+				/>
+			);
+
+			expect(screen.getByRole('textbox')).toHaveValue(
+				'Editor text should remain raw and selectable.'
+			);
+			expect(document.querySelector('.bionify-word')).not.toBeInTheDocument();
+		});
+	});
+
 	describe('rendering', () => {
 		it('returns null when isOpen is false', () => {
 			const { container } = renderWithLayerStack(
