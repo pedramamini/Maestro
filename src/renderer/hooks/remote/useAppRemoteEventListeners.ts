@@ -421,6 +421,7 @@ export function useAppRemoteEventListeners(deps: UseAppRemoteEventListenersDeps)
 				unifiedClosedTabHistory: [],
 				groupId: groupId || undefined,
 				autoRunFolderPath: `${cwd}/${PLAYBOOKS_DIR}`,
+				createdAt: Date.now(),
 			};
 
 			setSessions((prev: Session[]) => [...prev, newSession]);
