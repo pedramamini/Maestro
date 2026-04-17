@@ -8,7 +8,7 @@ function createTempDir(prefix: string): string {
 }
 
 test.describe('Bionify reading mode prototype', () => {
-	test('applies Bionify spans to seeded File Preview and Auto Run prose without changing the chat input', async () => {
+	test('applies Bionify spans to supported reading surfaces while excluding chat and terminal surfaces', async () => {
 		const homeDir = createTempDir('maestro-bionify-home-');
 		const projectDir = path.join(homeDir, 'project');
 		const autoRunDir = path.join(projectDir, 'Auto Run Docs');
@@ -16,9 +16,11 @@ test.describe('Bionify reading mode prototype', () => {
 		const autoRunFilePath = path.join(autoRunDir, 'Phase 1.md');
 		const previewPhrase = 'file preview prose clearly';
 		const autoRunPhrase = 'auto run prose clearly';
+		const terminalSnippet = 'terminal output remains plain text';
 		const now = Date.now();
 		const aiTabId = 'ai-tab-bionify';
 		const fileTabId = 'file-tab-bionify';
+		const terminalTabId = 'terminal-tab-bionify';
 
 		fs.mkdirSync(autoRunDir, { recursive: true });
 
@@ -41,7 +43,7 @@ Reading mode should emphasize this ${autoRunPhrase}.
 		fs.writeFileSync(previewFilePath, previewContent, 'utf-8');
 		fs.writeFileSync(autoRunFilePath, autoRunContent, 'utf-8');
 
-		const session = {
+		const readingSession = {
 			id: 'session-bionify',
 			name: 'Bionify Prototype',
 			toolType: 'codex',
@@ -111,6 +113,59 @@ Reading mode should emphasize this ${autoRunPhrase}.
 			autoRunCursorPosition: 0,
 		};
 
+		const terminalSession = {
+			id: 'session-bionify-terminal',
+			name: 'Bionify Terminal Exclusion',
+			toolType: 'terminal',
+			state: 'idle',
+			cwd: projectDir,
+			fullPath: projectDir,
+			projectRoot: projectDir,
+			aiLogs: [],
+			shellLogs: [
+				{
+					id: 'shell-log-bionify',
+					timestamp: now,
+					source: 'system',
+					text: terminalSnippet,
+				},
+			],
+			workLog: [],
+			contextUsage: 0,
+			inputMode: 'terminal',
+			aiPid: 0,
+			terminalPid: 456,
+			port: 0,
+			isLive: false,
+			changedFiles: [],
+			isGitRepo: false,
+			fileTree: [],
+			fileExplorerExpanded: [],
+			fileExplorerScrollPos: 0,
+			executionQueue: [],
+			activeTimeMs: 0,
+			fileTreeAutoRefreshInterval: 180,
+			aiTabs: [
+				{
+					id: terminalTabId,
+					agentSessionId: null,
+					name: 'Terminal',
+					starred: false,
+					logs: [],
+					inputValue: '',
+					stagedImages: [],
+					createdAt: now,
+					state: 'idle',
+				},
+			],
+			activeTabId: terminalTabId,
+			closedTabHistory: [],
+			filePreviewTabs: [],
+			activeFileTabId: null,
+			unifiedTabOrder: [{ type: 'ai', id: terminalTabId }],
+			unifiedClosedTabHistory: [],
+		};
+
 		const launchEnv = {
 			...process.env,
 			HOME: homeDir,
@@ -132,7 +187,7 @@ Reading mode should emphasize this ${autoRunPhrase}.
 		fs.mkdirSync(userDataPath, { recursive: true });
 		fs.writeFileSync(
 			path.join(userDataPath, 'maestro-sessions.json'),
-			JSON.stringify({ sessions: [session] }, null, '\t'),
+			JSON.stringify({ sessions: [readingSession, terminalSession] }, null, '\t'),
 			'utf-8'
 		);
 		fs.writeFileSync(
@@ -176,7 +231,7 @@ Reading mode should emphasize this ${autoRunPhrase}.
 			await expect
 				.poll(async () => {
 					return await window.evaluate(
-						([fileSnippet, autoRunSnippet]) => {
+						([fileSnippet, autoRunSnippet, chatValue]) => {
 							const blocks = Array.from(
 								document.querySelectorAll('div, section, article, main, aside')
 							);
@@ -184,15 +239,19 @@ Reading mode should emphasize this ${autoRunPhrase}.
 							const autoRunSurface = blocks.find((node) =>
 								node.textContent?.includes(autoRunSnippet)
 							);
+							const composer = Array.from(document.querySelectorAll('textarea')).find((node) =>
+								node.value.includes(chatValue)
+							);
 
 							return {
 								total: document.querySelectorAll('.bionify-word').length,
 								fileSurfaceWords: fileSurface?.querySelectorAll('.bionify-word').length ?? 0,
 								autoRunSurfaceWords: autoRunSurface?.querySelectorAll('.bionify-word').length ?? 0,
 								codeWords: document.querySelectorAll('code .bionify-word').length,
+								composerWords: composer?.querySelectorAll('.bionify-word').length ?? 0,
 							};
 						},
-						[previewPhrase, autoRunPhrase]
+						[previewPhrase, autoRunPhrase, 'Chat input plain text remains editable.']
 					);
 				})
 				.toEqual({
@@ -200,30 +259,57 @@ Reading mode should emphasize this ${autoRunPhrase}.
 					fileSurfaceWords: expect.any(Number),
 					autoRunSurfaceWords: expect.any(Number),
 					codeWords: 0,
+					composerWords: 0,
 				});
 
 			const counts = await window.evaluate(
-				([fileSnippet, autoRunSnippet]) => {
+				([fileSnippet, autoRunSnippet, chatValue]) => {
 					const blocks = Array.from(
 						document.querySelectorAll('div, section, article, main, aside')
 					);
 					const fileSurface = blocks.find((node) => node.textContent?.includes(fileSnippet));
 					const autoRunSurface = blocks.find((node) => node.textContent?.includes(autoRunSnippet));
+					const composer = Array.from(document.querySelectorAll('textarea')).find((node) =>
+						node.value.includes(chatValue)
+					);
 
 					return {
 						total: document.querySelectorAll('.bionify-word').length,
 						fileSurfaceWords: fileSurface?.querySelectorAll('.bionify-word').length ?? 0,
 						autoRunSurfaceWords: autoRunSurface?.querySelectorAll('.bionify-word').length ?? 0,
 						codeWords: document.querySelectorAll('code .bionify-word').length,
+						composerWords: composer?.querySelectorAll('.bionify-word').length ?? 0,
 					};
 				},
-				[previewPhrase, autoRunPhrase]
+				[previewPhrase, autoRunPhrase, 'Chat input plain text remains editable.']
 			);
 
 			expect(counts.total).toBeGreaterThan(0);
 			expect(counts.fileSurfaceWords).toBeGreaterThan(0);
 			expect(counts.autoRunSurfaceWords).toBeGreaterThan(0);
 			expect(counts.codeWords).toBe(0);
+			expect(counts.composerWords).toBe(0);
+
+			await window.getByText('Bionify Terminal Exclusion').click();
+			await expect(window.getByText(terminalSnippet)).toBeVisible();
+
+			const terminalCounts = await window.evaluate((snippet) => {
+				const blocks = Array.from(document.querySelectorAll('div, section, article, main, aside'));
+				const terminalSurface = blocks.find((node) => node.textContent?.includes(snippet));
+
+				return {
+					terminalSurfaceWords: terminalSurface?.querySelectorAll('.bionify-word').length ?? 0,
+					totalTerminalWords: Array.from(document.querySelectorAll('.bionify-word')).filter(
+						(node) =>
+							node.closest('textarea') === null &&
+							node.closest('input') === null &&
+							terminalSurface?.contains(node)
+					).length,
+				};
+			}, terminalSnippet);
+
+			expect(terminalCounts.terminalSurfaceWords).toBe(0);
+			expect(terminalCounts.totalTerminalWords).toBe(0);
 		} finally {
 			await app.close();
 			fs.rmSync(homeDir, { recursive: true, force: true });
