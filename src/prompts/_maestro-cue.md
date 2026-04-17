@@ -10,25 +10,25 @@ Each subscription has a unique `name`, an `event` type, an `enabled` flag, a `pr
 
 ### Event Types
 
-| Event                 | Fires when…                                     | Key config fields                     |
-| --------------------- | ----------------------------------------------- | ------------------------------------- |
-| `app.startup`         | Maestro launches                                | —                                     |
-| `time.heartbeat`      | Every N minutes                                 | `interval_minutes`                    |
-| `time.scheduled`      | At specific clock times (cron-like)             | `schedule_times`, `schedule_days`     |
-| `file.changed`        | Files matching a glob are added/changed/removed | `watch` (glob)                        |
-| `agent.completed`     | An upstream agent finishes a run                | `source_session` (name or names)      |
-| `github.pull_request` | A PR matches a filter (polled)                  | `gh_repo`, `gh_state`, `gh_labels`, … |
-| `github.issue`        | An issue matches a filter (polled)              | `gh_repo`, `gh_state`, `gh_labels`, … |
-| `task.pending`        | Pending `- [ ]` tasks detected in watched files | `watch`                               |
-| `cli.trigger`         | Manually fired via `maestro-cli cue trigger`    | —                                     |
+| Event                 | Fires when…                                     | Key config fields                                     |
+| --------------------- | ----------------------------------------------- | ----------------------------------------------------- |
+| `app.startup`         | Maestro launches                                | —                                                     |
+| `time.heartbeat`      | Every N minutes                                 | `interval_minutes`                                    |
+| `time.scheduled`      | At specific clock times (cron-like)             | `schedule_times`, `schedule_days`                     |
+| `file.changed`        | Files matching a glob are added/changed/removed | `watch` (glob)                                        |
+| `agent.completed`     | An upstream agent finishes a run                | `source_session` (name or names)                      |
+| `github.pull_request` | A PR matches a filter (polled)                  | `repo`, `gh_state`, `label`, `poll_minutes`, `filter` |
+| `github.issue`        | An issue matches a filter (polled)              | `repo`, `gh_state`, `label`, `poll_minutes`, `filter` |
+| `task.pending`        | Pending `- [ ]` tasks detected in watched files | `watch`                                               |
+| `cli.trigger`         | Manually fired via `maestro-cli cue trigger`    | —                                                     |
 
 ### Pipeline Topologies
 
 - **Chain:** A's `agent.completed` fires B. B's `agent.completed` fires C.
 - **Fan-out:** one subscription's `fan_out: [agentA, agentB]` dispatches in parallel with per-target `fan_out_prompts`.
-- **Fan-in:** `source_session: [a, b, c]` fires once ALL listed sources complete. Upstream outputs are available as `{{CUE_OUTPUT_<SESSION_NAME>}}`.
-- **Forwarding:** intermediate agents can pass upstream output downstream via `forwarded_outputs`, accessed as `{{CUE_FORWARDED_<SESSION_NAME>}}`.
-- **`cli_output`:** when set on a subscription, the run's stdout is returned to whoever triggered it (including `maestro-cli send`/`cue trigger` with `--source-agent-id`).
+- **Fan-in:** `source_session: [a, b, c]` fires once ALL listed sources complete (subject to `fan_in_timeout_minutes` / `fan_in_timeout_on_fail`). Each upstream output is available as `{{CUE_OUTPUT_<NAME>}}` (uppercased session name); `include_output_from` narrows which sources contribute to `{{CUE_SOURCE_OUTPUT}}`.
+- **Forwarding:** an intermediate agent can pass an upstream's output through to a downstream agent by listing the source name in `forward_output_from: [<name>]`. The forwarded value is exposed downstream as `{{CUE_FORWARDED_<NAME>}}`.
+- **`cli_output`:** an object `cli_output: { target: "<source-agent-id>" }`. When set, the run's stdout is returned to that agent (typically the one that ran `maestro-cli send` or `cue trigger --source-agent-id`).
 
 ### Template Variables Available in Cue Prompts
 

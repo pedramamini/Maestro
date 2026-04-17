@@ -1903,6 +1903,7 @@ function MaestroConsoleInner() {
 		handleQuickActionsToggleMarkdownEditMode,
 		handleQuickActionsSummarizeAndContinue,
 		handleQuickActionsAutoRunResetTasks,
+		handleQuickActionsClearActiveTerminal,
 		handleQuickActionsCloseCurrentTab,
 		handleQuickActionsMoveTabToFirst,
 		handleQuickActionsMoveTabToLast,
@@ -2730,6 +2731,7 @@ function MaestroConsoleInner() {
 					autoRunSelectedDocument={activeSession?.autoRunSelectedFile ?? null}
 					autoRunCompletedTaskCount={rightPanelRef.current?.getAutoRunCompletedTaskCount() ?? 0}
 					onAutoRunResetTasks={handleQuickActionsAutoRunResetTasks}
+					onClearActiveTerminal={handleQuickActionsClearActiveTerminal}
 					onCloseCurrentTab={handleQuickActionsCloseCurrentTab}
 					onMoveTabToFirst={handleQuickActionsMoveTabToFirst}
 					onMoveTabToLast={handleQuickActionsMoveTabToLast}

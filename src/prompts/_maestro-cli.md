@@ -67,11 +67,11 @@ Configure and optionally launch an auto-run using documents you've created:
 **Important:** Always pass `--agent {{AGENT_ID}}` when launching. Without it, the CLI selects the first available agent, which may not be the one you intended.
 
 ```bash
-# Run a saved playbook by ID
-{{MAESTRO_CLI_PATH}} run-playbook <playbook-id> [--agent <id>] [--launch]
+# Run a saved playbook by id (find ids with `list playbooks`)
+{{MAESTRO_CLI_PATH}} playbook <playbook-id> [--dry-run] [--no-history] [--debug] [--verbose] [--wait] [--json]
 
 # Clean up orphaned playbook data
-{{MAESTRO_CLI_PATH}} clean playbooks
+{{MAESTRO_CLI_PATH}} clean playbooks [--dry-run]
 ```
 
 ### Cue Automation
@@ -105,6 +105,35 @@ Use these after filesystem changes so the user sees updates immediately:
 
 ```bash
 {{MAESTRO_CLI_PATH}} status
+```
+
+### Agents and SSH Remotes
+
+Lifecycle management of Maestro agents and remote-execution targets.
+
+```bash
+# Agents
+{{MAESTRO_CLI_PATH}} create-agent <name> --cwd <path> [-t, --type <agent-type>] [-g, --group <id>] \
+    [--nudge <message>] [--new-session-message <message>] [--custom-path <path>] \
+    [--custom-args <args>] [--env KEY=VALUE]... [--model <model>] [--effort <level>] \
+    [--context-window <size>] [--ssh-remote <id>] [--ssh-cwd <path>] [--json]
+{{MAESTRO_CLI_PATH}} remove-agent <agent-id> [--json]
+
+# SSH remotes (used by agents that execute on a remote host)
+{{MAESTRO_CLI_PATH}} list ssh-remotes [--json]
+{{MAESTRO_CLI_PATH}} create-ssh-remote <name> -H, --host <host> [-p, --port <port>] \
+    [-u, --username <user>] [-k, --key <path>] [--env KEY=VALUE]... [--ssh-config] \
+    [--disabled] [--set-default] [--json]
+{{MAESTRO_CLI_PATH}} remove-ssh-remote <remote-id> [--json]
+```
+
+### Director's Notes
+
+Unified history and AI-generated synopses across all agents.
+
+```bash
+{{MAESTRO_CLI_PATH}} director-notes history [-d, --days <n>] [-f, --format json|markdown|text] [--filter auto|user|cue] [-l, --limit <n>]
+{{MAESTRO_CLI_PATH}} director-notes synopsis [-d, --days <n>] [--json]
 ```
 
 ### Prompts (Self-Reference)

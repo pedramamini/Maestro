@@ -193,18 +193,22 @@ The `prompts get` command returns the same content the desktop app would deliver
 
 ### How Resolution Works
 
-Both directives share the same lookup:
+The two directives use slightly different lookup paths.
 
-1. Maestro first checks the **prompt cache** — any core prompt (bundled or customized) can be referenced by its ID (e.g., `maestro-system-prompt`, `_maestro-cli`).
+**`{{INCLUDE:name}}`** resolves in this order:
+
+1. Maestro first checks the **prompt cache** — any core prompt (bundled or customized) can be referenced by its id (e.g., `maestro-system-prompt`, `_maestro-cli`).
 2. If not found in cache, Maestro looks for a **file on disk** at `<prompts-directory>/<name>.md`.
 
-This means you can create your own reusable prompt fragments by placing `.md` files in the prompts directory (click **Open Folder** in the editor to find it), then reference them from any core prompt.
+This means you can create your own reusable prompt fragments by placing `.md` files in the prompts directory (click **Open Folder** in the editor to find it), then reference them from any core prompt with `{{INCLUDE:name}}`.
+
+**`{{REF:name}}`** only resolves names that are in the core prompt registry. The expansion uses the registered description, so the directive needs metadata that on-disk-only fragments don't have. To use `{{REF:}}` with your own content, edit one of the existing core prompts (e.g., add an `_includes` of your own to the registry by extending the codebase) or stick with `{{INCLUDE:}}` for ad-hoc fragments.
 
 ### Rules
 
 - **Naming convention**: Bundled include fragments use a leading underscore (e.g., `_maestro-cli.md`, `_history-format.md`). Your own fragments can use any name; the underscore is purely a visual signal that the file is meant to be referenced rather than used standalone.
-- **Resolution order**: `{{REF:}}` directives are expanded first (they only consult the prompt registry), then `{{INCLUDE:}}` directives are inlined recursively.
-- **Max depth**: Includes nest up to 3 levels deep. Beyond that, the directive is left as-is.
+- **Resolution order**: `{{REF:}}` directives are expanded first (they consult the in-memory prompt registry only), then `{{INCLUDE:}}` directives are inlined recursively against cache + disk.
+- **Max depth**: `{{INCLUDE:}}` nests up to 3 levels deep. Beyond that, the directive is left as-is.
 - **Circular references**: If prompt A includes B which includes A, the cycle is detected and the second inclusion is skipped.
 - **Missing references**: If a name can't be resolved, the directive text is left unchanged in the output.
 - **Case-sensitive**: The name must match exactly (e.g., `{{INCLUDE:my-fragment}}` looks for `my-fragment` in cache or `my-fragment.md` on disk).
@@ -217,12 +221,12 @@ You can create your own prompt fragments that aren't part of the core set:
 1. Click **Open Folder** in the prompt editor to open the prompts directory.
 2. Create a new `.md` file (e.g., `_my-coding-standards.md` — leading underscore optional but recommended for fragments).
 3. Write your reusable content.
-4. Reference it from any core prompt with `{{INCLUDE:_my-coding-standards}}` (full inlining) or `{{REF:_my-coding-standards}}` (pointer for `maestro-cli prompts get _my-coding-standards`).
+4. Reference it from any core prompt with `{{INCLUDE:_my-coding-standards}}`.
 
-This is useful for shared instructions you want injected into multiple prompts — coding standards, project context, team conventions, response formatting rules, etc.
+This is useful for shared instructions you want injected into multiple prompts — coding standards, project context, team conventions, response formatting rules, etc. (`{{REF:}}` only works against the bundled registry — use `{{INCLUDE:}}` for your own files.)
 
 <Info>
-Custom fragment files in the prompts directory are not shown in the editor's category list — they're referenced via `{{INCLUDE:name}}` or `{{REF:name}}` only. Core prompts are the ones you browse and edit in the sidebar.
+Custom fragment files in the prompts directory are not shown in the editor's category list — they're referenced via `{{INCLUDE:name}}` only. Core prompts are the ones you browse and edit in the sidebar.
 </Info>
 
 ## Resetting Prompts
