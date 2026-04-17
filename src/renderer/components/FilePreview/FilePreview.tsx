@@ -56,6 +56,7 @@ import { useFilePreviewSearch } from '../../hooks/file';
 import { FilePreviewHeader } from './FilePreviewHeader';
 import { ImageViewer } from './ImageViewer';
 import { FilePreviewToc } from './FilePreviewToc';
+import { HighlightedCodeEditor } from './HighlightedCodeEditor';
 
 export const FilePreview = React.memo(
 	forwardRef<FilePreviewHandle, FilePreviewProps>(function FilePreview(
@@ -1251,17 +1252,13 @@ export const FilePreview = React.memo(
 							</div>
 						</div>
 					) : isEditableText && markdownEditMode ? (
-						// Edit mode - show editable textarea for any text file
-						<textarea
+						// Edit mode - syntax-highlighted editor for any text file
+						<HighlightedCodeEditor
 							ref={textareaRef}
 							value={editContent}
-							onChange={(e) => setEditContent(e.target.value)}
-							className="w-full h-full font-mono text-sm resize-none outline-none bg-transparent"
-							style={{
-								color: theme.colors.textMain,
-								caretColor: theme.colors.accent,
-								lineHeight: '1.6',
-							}}
+							onChange={setEditContent}
+							language={language}
+							theme={theme}
 							spellCheck={false}
 							onKeyDown={(e) => {
 								// Handle Cmd+S for save

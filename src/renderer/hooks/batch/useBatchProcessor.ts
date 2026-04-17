@@ -902,11 +902,13 @@ export function useBatchProcessor({
 			let totalOutputTokens = 0;
 			let totalCost = 0;
 
-			// Track consecutive runs where document content didn't change to detect stalling
-			// If the document hash is identical before/after a run (and no tasks checked), the LLM is stuck
+			// Track consecutive runs with no task-level progress (nothing checked off, no tasks
+			// added or removed). Content-level comparison is unreliable because the agent can
+			// mutate the doc (append addenda/explanation text) without doing actual work, which
+			// would reset a content-based counter and hide the stall indefinitely.
 			// Note: This counter is reset per-document, so stalling one document doesn't affect others
 			let consecutiveNoChangeCount = 0;
-			const MAX_CONSECUTIVE_NO_CHANGES = 2; // Skip document after 2 consecutive runs with no changes
+			const MAX_CONSECUTIVE_NO_CHANGES = 3; // Skip document after 3 consecutive runs with no task-level progress
 
 			// Track stalled documents (document filename -> stall reason)
 			const stalledDocuments: Map<string, string> = new Map();
@@ -1164,13 +1166,60 @@ export function useBatchProcessor({
 								success,
 							} = taskResult;
 
-							// Detect stalling: if document content is unchanged and no tasks were checked off
-							if (!documentChanged && tasksCompletedThisRun === 0) {
+							// Detect stalling via task-count invariance: if no tasks were checked off AND
+							// the set of tasks didn't change (none added, none removed), the agent made
+							// no real progress this iteration. This ignores prose/addendum churn in the
+							// document — an agent writing "why I did nothing" into the file doesn't
+							// count as progress.
+							const prevCheckedCount = docCheckedCount;
+							const prevUncheckedCount = remainingTasks;
+							const checkedCountChanged = newCheckedCount !== prevCheckedCount;
+							const uncheckedCountChanged = newRemainingTasks !== prevUncheckedCount;
+							const taskSetChanged = checkedCountChanged || uncheckedCountChanged;
+							const prevNoChangeCount = consecutiveNoChangeCount;
+							const beforeLen = docContent?.length ?? 0;
+							const afterLen = taskResult.contentAfterTask?.length ?? 0;
+							const byteDelta = afterLen - beforeLen;
+
+							if (tasksCompletedThisRun === 0 && !taskSetChanged) {
 								consecutiveNoChangeCount++;
 							} else {
-								// Reset counter on any document change or task completion
 								consecutiveNoChangeCount = 0;
 							}
+
+							// AUTORUN LOG: stall detection trace — logged every iteration so field
+							// reports can reconstruct why the counter did or did not increment.
+							// `appendOnlyNoProgress` flags the "agent appended explanation text instead
+							// of doing work" pattern: doc bytes grew but the task set is unchanged.
+							window.maestro.logger.autorun(
+								`Stall trace: ${docEntry.filename} iter=${loopIteration + 1} counter=${prevNoChangeCount}->${consecutiveNoChangeCount}/${MAX_CONSECUTIVE_NO_CHANGES}`,
+								session.name,
+								{
+									document: docEntry.filename,
+									loopNumber: loopIteration + 1,
+									documentChanged,
+									tasksCompletedThisRun,
+									prevCheckedCount,
+									newCheckedCount,
+									prevUncheckedCount,
+									newUncheckedCount: newRemainingTasks,
+									checkedCountChanged,
+									uncheckedCountChanged,
+									taskSetChanged,
+									contentLenBefore: beforeLen,
+									contentLenAfter: afterLen,
+									byteDelta,
+									counterBefore: prevNoChangeCount,
+									counterAfter: consecutiveNoChangeCount,
+									maxNoChange: MAX_CONSECUTIVE_NO_CHANGES,
+									appendOnlyNoProgress:
+										documentChanged &&
+										tasksCompletedThisRun === 0 &&
+										!taskSetChanged &&
+										byteDelta > 0,
+									success,
+								}
+							);
 
 							// Update counters
 							docTasksCompleted += tasksCompletedThisRun;
@@ -1332,9 +1381,9 @@ export function useBatchProcessor({
 								const stallExplanation = [
 									`**Document Stalled: ${docEntry.filename}**`,
 									'',
-									`The AI agent ran ${consecutiveNoChangeCount} times on this document but made no progress:`,
+									`The AI agent ran ${consecutiveNoChangeCount} times on this document but made no task-level progress:`,
 									`- No tasks were checked off`,
-									`- No changes were made to the document content`,
+									`- No tasks were added or removed`,
 									'',
 									`**What this means:**`,
 									`The remaining tasks in this document may be:`,

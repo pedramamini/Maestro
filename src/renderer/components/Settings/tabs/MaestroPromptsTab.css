@@ -216,6 +216,10 @@
 	outline: none;
 }
 
+.prompt-textarea-preview {
+	cursor: default;
+}
+
 .editor-actions {
 	display: flex;
 	align-items: center;
