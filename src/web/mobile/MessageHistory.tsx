@@ -9,7 +9,7 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 import { ArrowDown } from 'lucide-react';
 import { useThemeColors } from '../components/ThemeProvider';
 import { stripAnsiCodes } from '../../shared/stringUtils';
-import { MobileMarkdownRenderer } from './MobileMarkdownRenderer';
+import { WebReadingContent } from './WebReadingContent';
 
 /** Threshold for character-based truncation */
 const CHAR_TRUNCATE_THRESHOLD = 500;
@@ -350,10 +350,15 @@ export function MessageHistory({
 										{displayText}
 									</div>
 								) : (
-									// AI responses: render as formatted markdown
-									<MobileMarkdownRenderer
+									// There is no dedicated browser-tab reader in the web client yet.
+									// Message history is one of the nearest real browser-adjacent readers,
+									// so route mixed AI output through the shared adapter used by the
+									// full response viewer to avoid double-transforming raw text.
+									<WebReadingContent
 										content={displayText}
 										enableBionifyReadingMode={enableBionifyReadingMode}
+										fontSize={13}
+										gap="8px"
 									/>
 								)}
 								{/* Show truncation indicator at end of text */}

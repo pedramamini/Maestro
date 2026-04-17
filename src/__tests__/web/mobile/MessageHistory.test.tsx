@@ -644,15 +644,30 @@ describe('MessageHistory', () => {
 			expect(messageContent).toHaveStyle({ fontFamily: 'ui-monospace, monospace' });
 		});
 
-		it('renders AI messages through MobileMarkdownRenderer', () => {
-			// AI messages (stdout in ai mode) are rendered through MobileMarkdownRenderer
-			// which wraps content in a paragraph element with its own styling
+		it('renders plain AI messages through the shared reader fallback', () => {
 			const logs: LogEntry[] = [createLogEntry({ source: 'stdout', text: 'AI response' })];
 			render(<MessageHistory logs={logs} inputMode="ai" />);
 
 			const messageContent = screen.getByText('AI response');
-			// The text is wrapped in a <p> element by ReactMarkdown
-			expect(messageContent.tagName.toLowerCase()).toBe('p');
+			expect(messageContent.tagName.toLowerCase()).toBe('div');
+			expect(messageContent).toHaveStyle({
+				whiteSpace: 'pre-wrap',
+			});
+		});
+
+		it('renders markdown-looking AI messages through the markdown renderer', () => {
+			const logs: LogEntry[] = [
+				createLogEntry({
+					source: 'stdout',
+					text: '# Heading\n\nVisit [docs](https://example.com)',
+				}),
+			];
+			render(<MessageHistory logs={logs} inputMode="ai" />);
+
+			expect(screen.getByRole('link', { name: 'docs' })).toHaveAttribute(
+				'href',
+				'https://example.com'
+			);
 		});
 
 		it('applies Bionify emphasis only to AI markdown messages when enabled', () => {

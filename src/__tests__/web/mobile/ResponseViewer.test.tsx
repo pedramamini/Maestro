@@ -335,6 +335,24 @@ describe('ResponseViewer', () => {
 	});
 
 	describe('Code block parsing and syntax highlighting', () => {
+		it('routes markdown-looking responses through the markdown renderer', () => {
+			render(
+				<ResponseViewer
+					isOpen={true}
+					response={createMockResponse({
+						text: '# Heading\n\nVisit [docs](https://example.com)\n\n- one\n- two',
+					})}
+					onClose={vi.fn()}
+				/>
+			);
+
+			expect(screen.getByRole('link', { name: 'docs' })).toHaveAttribute(
+				'href',
+				'https://example.com'
+			);
+			expect(screen.queryByTestId('syntax-highlighter')).not.toBeInTheDocument();
+		});
+
 		it('renders code blocks with syntax highlighting', () => {
 			const textWithCode = 'Some text\n```typescript\nconst x = 1;\n```\nMore text';
 			render(
