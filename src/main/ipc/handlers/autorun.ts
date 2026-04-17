@@ -74,6 +74,29 @@ interface TreeNode {
 }
 
 /**
+ * Directories that are never relevant as Auto Run doc sources.
+ * Prevents scanning virtualenvs, package trees, and build artifacts.
+ */
+const SCAN_EXCLUDED_DIRS = new Set([
+	'node_modules',
+	'venv',
+	'.venv',
+	'env',
+	'.env',
+	'__pycache__',
+	'.git',
+	'dist',
+	'build',
+	'.next',
+	'.nuxt',
+	'coverage',
+	'.cache',
+	'target',
+	'.tox',
+	'site-packages',
+]);
+
+/**
  * Recursively scan directory for markdown files
  */
 async function scanDirectory(dirPath: string, relativePath: string = ''): Promise<TreeNode[]> {
@@ -82,7 +105,7 @@ async function scanDirectory(dirPath: string, relativePath: string = ''): Promis
 
 	// Sort entries: folders first, then files, both alphabetically
 	const sortedEntries = entries
-		.filter((entry) => !entry.name.startsWith('.'))
+		.filter((entry) => !entry.name.startsWith('.') && !SCAN_EXCLUDED_DIRS.has(entry.name))
 		.sort((a, b) => {
 			if (a.isDirectory() && !b.isDirectory()) return -1;
 			if (!a.isDirectory() && b.isDirectory()) return 1;
@@ -136,7 +159,7 @@ async function scanDirectoryRemote(
 
 	// Sort entries: folders first, then files, both alphabetically
 	const sortedEntries = result.data
-		.filter((entry) => !entry.name.startsWith('.'))
+		.filter((entry) => !entry.name.startsWith('.') && !SCAN_EXCLUDED_DIRS.has(entry.name))
 		.sort((a, b) => {
 			if (a.isDirectory && !b.isDirectory) return -1;
 			if (!a.isDirectory && b.isDirectory) return 1;
@@ -215,8 +238,8 @@ async function checkForMarkdownFiles(dirPath: string): Promise<boolean> {
 	const entries = await fs.readdir(dirPath, { withFileTypes: true });
 
 	for (const entry of entries) {
-		// Skip hidden files/folders
-		if (entry.name.startsWith('.')) {
+		// Skip hidden files/folders and excluded directories
+		if (entry.name.startsWith('.') || SCAN_EXCLUDED_DIRS.has(entry.name)) {
 			continue;
 		}
 

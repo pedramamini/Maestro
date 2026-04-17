@@ -223,8 +223,16 @@ export const useAgentStore = create<AgentStore>()((set, get) => ({
 		const logs = targetTab.logs || [];
 		const lastUserLog = [...logs].reverse().find((l) => l.source === 'user');
 
-		if (!lastUserLog || !lastUserLog.text) {
+		if (!lastUserLog) {
 			console.warn('[retryAfterError] No user message found to retry.');
+			return;
+		}
+
+		const hasImages = Array.isArray(lastUserLog.images) && lastUserLog.images.length > 0;
+		const hasText = !!lastUserLog.text?.trim();
+
+		if (!hasText && !hasImages) {
+			console.warn('[retryAfterError] Last user message is empty (no text, no images).');
 			return;
 		}
 
@@ -238,7 +246,7 @@ export const useAgentStore = create<AgentStore>()((set, get) => ({
 			timestamp: Date.now(),
 			tabId: targetTab.id,
 			type: 'message',
-			text: lastUserLog.text,
+			text: !hasText && hasImages ? DEFAULT_IMAGE_ONLY_PROMPT : lastUserLog.text!,
 			images: lastUserLog.images,
 			tabName:
 				targetTab.name ||
@@ -284,6 +292,42 @@ export const useAgentStore = create<AgentStore>()((set, get) => ({
 				.processQueuedItem(sessionId, queuedItem, deps)
 				.catch((err) => {
 					console.error('[retryAfterError] Failed to retry item:', err);
+					import('../utils/sentry').then((mod) => {
+						mod.captureException(err, { extra: { operation: 'retryAfterError' } });
+					});
+
+					// Re-surface the error modal
+					import('./sessionStore').then(({ useSessionStore }) => {
+						useSessionStore.getState().setSessions((prev) =>
+							prev.map((s) => {
+								if (s.id !== sessionId) return s;
+								// Put the error back on the session and target tab
+								const updatedAiTabs = s.aiTabs?.map((tab) =>
+									tab.id === targetTab.id
+										? {
+												...tab,
+												state: 'idle' as const,
+											}
+										: tab
+								);
+								return {
+									...s,
+									state: 'error' as SessionState,
+									busySource: undefined,
+									aiTabs: updatedAiTabs,
+									agentError: {
+										type: 'agent_crashed',
+										message: err instanceof Error ? err.message : String(err),
+										recoverable: true,
+										agentId: s.toolType,
+										timestamp: Date.now(),
+									},
+									agentErrorTabId: targetTab.id,
+									agentErrorPaused: true,
+								};
+							})
+						);
+					});
 				});
 		}, 0);
 	},

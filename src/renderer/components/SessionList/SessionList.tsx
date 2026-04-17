@@ -444,16 +444,18 @@ function SessionListInner(props: SessionListProps) {
 		sortedGroups,
 	} = useSessionCategories(sessionFilter, sortedSessions, showUnreadAgentsOnly, activeSessionId);
 
-	// PERF: Cached callback maps to prevent SessionItem re-renders
-	// These Maps store stable function references keyed by session/editing ID
-	// The callbacks themselves are memoized, so the Map values remain stable
+	// PERF: Stable key derived from session IDs only — changes only when sessions are
+	// added/removed, NOT when a session's name/status/logs change. This prevents the
+	// Maps below from regenerating (and SessionItem from re-rendering) on every state update.
+	const sessionIdsKey = useMemo(() => sessions.map((s) => s.id).join(','), [sessions]);
+
 	const selectHandlers = useMemo(() => {
 		const map = new Map<string, () => void>();
 		sessions.forEach((s) => {
 			map.set(s.id, () => setActiveSessionId(s.id));
 		});
 		return map;
-	}, [sessions, setActiveSessionId]);
+	}, [sessionIdsKey, setActiveSessionId]);
 
 	const dragStartHandlers = useMemo(() => {
 		const map = new Map<string, () => void>();
@@ -461,7 +463,7 @@ function SessionListInner(props: SessionListProps) {
 			map.set(s.id, () => handleDragStart(s.id));
 		});
 		return map;
-	}, [sessions, handleDragStart]);
+	}, [sessionIdsKey, handleDragStart]);
 
 	const contextMenuHandlers = useMemo(() => {
 		const map = new Map<string, (e: React.MouseEvent) => void>();
@@ -469,7 +471,7 @@ function SessionListInner(props: SessionListProps) {
 			map.set(s.id, (e: React.MouseEvent) => handleContextMenu(e, s.id));
 		});
 		return map;
-	}, [sessions, handleContextMenu]);
+	}, [sessionIdsKey, handleContextMenu]);
 
 	const finishRenameHandlers = useMemo(() => {
 		const map = new Map<string, (newName: string) => void>();
@@ -477,7 +479,7 @@ function SessionListInner(props: SessionListProps) {
 			map.set(s.id, (newName: string) => finishRenamingSession(s.id, newName));
 		});
 		return map;
-	}, [sessions, finishRenamingSession]);
+	}, [sessionIdsKey, finishRenamingSession]);
 
 	const toggleBookmarkHandlers = useMemo(() => {
 		const map = new Map<string, () => void>();
@@ -485,7 +487,7 @@ function SessionListInner(props: SessionListProps) {
 			map.set(s.id, () => toggleBookmark(s.id));
 		});
 		return map;
-	}, [sessions, toggleBookmark]);
+	}, [sessionIdsKey, toggleBookmark]);
 
 	// Helper: compute navIndexMap key for a session based on render context
 	const getNavKey = (variant: string, session: Session, groupId?: string): string => {

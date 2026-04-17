@@ -223,12 +223,15 @@ export function AgentErrorModal({
 		[recoveryActions]
 	);
 
+	const [retryInvoked, setRetryInvoked] = useState(false);
+
 	// Auto-retry handler: when countdown completes, invoke the "retry" recovery action
 	const handleCountdownComplete = useCallback(() => {
-		if (retryAction) {
+		if (retryAction && !retryInvoked) {
+			setRetryInvoked(true);
 			retryAction.onClick();
 		}
-	}, [retryAction]);
+	}, [retryAction, retryInvoked]);
 
 	const [autoRetrySettings, setAutoRetrySettings] = useState<{
 		enabled: boolean;
@@ -265,7 +268,10 @@ export function AgentErrorModal({
 		if (!autoRetrySettings.enabled) return null;
 
 		// Exact parsed reset time is always preferred
-		if (error.rateLimitResetAt && error.rateLimitResetAt > Date.now()) {
+		if (error.rateLimitResetAt) {
+			if (error.rateLimitResetAt <= Date.now()) {
+				return null; // Expired, allow immediate retry
+			}
 			return error.rateLimitResetAt;
 		}
 
@@ -360,39 +366,58 @@ export function AgentErrorModal({
 			{/* Recovery Actions - only show if there are actions */}
 			{recoveryActions.length > 0 && (
 				<div className="mt-6 space-y-2">
-					{recoveryActions.map((action, index) => (
-						<button
-							key={action.id}
-							ref={action.primary || (!primaryAction && index === 0) ? primaryButtonRef : undefined}
-							type="button"
-							onClick={action.onClick}
-							className={`w-full flex items-center gap-3 px-4 py-3 rounded border transition-colors text-left ${
-								action.primary ? 'hover:brightness-110' : 'hover:bg-white/5'
-							}`}
-							style={{
-								backgroundColor: action.primary ? theme.colors.accent : 'transparent',
-								borderColor: action.primary ? theme.colors.accent : theme.colors.border,
-								color: action.primary ? theme.colors.accentForeground : theme.colors.textMain,
-							}}
-						>
-							{action.icon || <RefreshCw className="w-4 h-4 shrink-0" />}
-							<div className="flex-1 min-w-0">
-								<div className="text-sm font-medium">{action.label}</div>
-								{action.description && (
-									<div
-										className="text-xs mt-0.5 truncate"
-										style={{
-											color: action.primary
-												? `${theme.colors.accentForeground}99`
-												: theme.colors.textDim,
-										}}
-									>
-										{action.description}
-									</div>
-								)}
-							</div>
-						</button>
-					))}
+					{recoveryActions.map((action, index) => {
+						const isRetry = action.id === 'retry';
+						const isDisabled = isRetry && retryInvoked;
+						return (
+							<button
+								key={action.id}
+								ref={
+									action.primary || (!primaryAction && index === 0) ? primaryButtonRef : undefined
+								}
+								type="button"
+								disabled={isDisabled}
+								onClick={() => {
+									if (isRetry) {
+										if (retryInvoked) return;
+										setRetryInvoked(true);
+									}
+									action.onClick();
+								}}
+								className={`w-full flex items-center gap-3 px-4 py-3 rounded border transition-colors text-left ${
+									action.primary && !isDisabled
+										? 'hover:brightness-110'
+										: !isDisabled
+											? 'hover:bg-white/5'
+											: ''
+								}`}
+								style={{
+									backgroundColor: action.primary ? theme.colors.accent : 'transparent',
+									borderColor: action.primary ? theme.colors.accent : theme.colors.border,
+									color: action.primary ? theme.colors.accentForeground : theme.colors.textMain,
+									opacity: isDisabled ? 0.5 : 1,
+									cursor: isDisabled ? 'not-allowed' : 'pointer',
+								}}
+							>
+								{action.icon || <RefreshCw className="w-4 h-4 shrink-0" />}
+								<div className="flex-1 min-w-0">
+									<div className="text-sm font-medium">{action.label}</div>
+									{action.description && (
+										<div
+											className="text-xs mt-0.5 truncate"
+											style={{
+												color: action.primary
+													? `${theme.colors.accentForeground}99`
+													: theme.colors.textDim,
+											}}
+										>
+											{action.description}
+										</div>
+									)}
+								</div>
+							</button>
+						);
+					})}
 				</div>
 			)}
 

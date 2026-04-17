@@ -10,6 +10,9 @@
 
 import React, { type ReactNode } from 'react';
 import { useState, useRef, useEffect, useCallback } from 'react';
+
+const REGEX_ESCAPE = /[.*+?^${}()|[\]\\]/g;
+const WHITESPACE = /\s+/;
 import { Search, X } from 'lucide-react';
 import type { Theme } from '../../types';
 import { searchSettings, type SearchableSetting } from './searchableSettings';
@@ -214,9 +217,9 @@ export function SettingsSearchResults({
 function highlightMatch(text: string, query: string, theme: Theme): ReactNode {
 	if (!query.trim()) return text;
 
-	const terms = query.toLowerCase().trim().split(/\s+/);
+	const terms = query.toLowerCase().trim().split(WHITESPACE);
 	// Build a regex that matches any of the search terms
-	const escapedTerms = terms.map((t) => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+	const escapedTerms = terms.map((t) => t.replace(REGEX_ESCAPE, '\\$&'));
 	const regex = new RegExp(`(${escapedTerms.join('|')})`, 'gi');
 	const parts = text.split(regex);
 
