@@ -369,7 +369,7 @@ describe('FilePreview', () => {
 		});
 
 		it('shows the truncation banner for large readable text previews and can load the full file', () => {
-			const largeContent = 'y'.repeat(200 * 1024);
+			const largeContent = 'Readable paragraph with plenty of words for truncation. '.repeat(4000);
 
 			render(
 				<FilePreview
@@ -435,6 +435,19 @@ describe('FilePreview', () => {
 			);
 
 			expect(screen.getByTestId('syntax-highlighter')).toBeInTheDocument();
+		});
+
+		it('does not treat other basename-style code files as readable text', () => {
+			const files = [
+				{ name: 'LICENSE.py', content: 'print("license")', path: '/test/LICENSE.py' },
+				{ name: 'TODO.js', content: 'console.log("todo")', path: '/test/TODO.js' },
+			];
+
+			for (const file of files) {
+				const { unmount } = render(<FilePreview {...defaultProps} file={file} />);
+				expect(screen.getByTestId('syntax-highlighter')).toBeInTheDocument();
+				unmount();
+			}
 		});
 	});
 

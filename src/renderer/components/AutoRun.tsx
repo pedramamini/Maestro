@@ -524,7 +524,7 @@ const AutoRunInner = forwardRef<AutoRunHandle, AutoRunProps>(function AutoRunInn
 		useCallback((s) => s.batchRunStates[sessionId]?.error, [sessionId])
 	);
 	const bionifyReadingMode = useSettingsStore((s) => s.bionifyReadingMode);
-	const [previewBionifyReadingMode, setPreviewBionifyReadingMode] = useState(bionifyReadingMode);
+	const [previewBionifyOverride, setPreviewBionifyOverride] = useState<boolean | null>(null);
 	const errorDocumentName =
 		batchRunState?.errorDocumentIndex !== undefined
 			? batchRunState.documents[batchRunState.errorDocumentIndex]
@@ -1377,11 +1377,12 @@ const AutoRunInner = forwardRef<AutoRunHandle, AutoRunProps>(function AutoRunInn
 		return { completed, total };
 	}, [savedContent]);
 	const hasActivePreviewSearch = searchOpen && searchQuery.trim().length > 0;
+	const previewBionifyReadingMode = previewBionifyOverride ?? bionifyReadingMode;
 	const effectivePreviewBionifyReadingMode = previewBionifyReadingMode && !hasActivePreviewSearch;
 
 	useEffect(() => {
-		setPreviewBionifyReadingMode(bionifyReadingMode);
-	}, [bionifyReadingMode, sessionId, folderPath, selectedFile]);
+		setPreviewBionifyOverride(null);
+	}, [sessionId, folderPath, selectedFile]);
 
 	// Token counting based on saved content only (not live during editing)
 	// Updates on: document load, save, and external file changes
@@ -1840,7 +1841,9 @@ const AutoRunInner = forwardRef<AutoRunHandle, AutoRunProps>(function AutoRunInn
 						onChangeFolder={onOpenSetup}
 						onCreateDocument={onCreateDocument}
 						bionifyEnabled={previewBionifyReadingMode}
-						onToggleBionify={() => setPreviewBionifyReadingMode((current) => !current)}
+						onToggleBionify={() =>
+							setPreviewBionifyOverride((current) => !(current ?? bionifyReadingMode))
+						}
 						isLoading={isLoadingDocuments}
 						documentTaskCounts={documentTaskCounts}
 					/>

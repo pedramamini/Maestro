@@ -13,6 +13,8 @@ import type { Theme, BatchRunState, SessionState } from '../../../renderer/types
 import { useBatchStore } from '../../../renderer/stores/batchStore';
 import { useSettingsStore } from '../../../renderer/stores/settingsStore';
 
+const createMarkdownComponentsCalls = vi.hoisted(() => [] as Array<Record<string, unknown>>);
+
 // Helper to seed the Zustand batch store so the component's direct store reads
 // (isErrorPaused, batchError) see the expected state for a given session.
 const seedBatchStore = (sessionId: string, state: Partial<BatchRunState>) => {
@@ -50,6 +52,7 @@ const getByNormalizedText = (text: RegExp) => {
 
 beforeEach(() => {
 	useSettingsStore.setState({ bionifyReadingMode: false });
+	createMarkdownComponentsCalls.length = 0;
 });
 
 // Mock the external dependencies
@@ -62,6 +65,17 @@ vi.mock('react-markdown', () => ({
 vi.mock('remark-gfm', () => ({
 	default: {},
 }));
+
+vi.mock('../../../renderer/utils/markdownConfig', async (importOriginal) => {
+	const actual = await importOriginal<typeof import('../../../renderer/utils/markdownConfig')>();
+	return {
+		...actual,
+		createMarkdownComponents: (options: Record<string, unknown>) => {
+			createMarkdownComponentsCalls.push(options);
+			return actual.createMarkdownComponents(options as any);
+		},
+	};
+});
 
 vi.mock('react-syntax-highlighter', () => ({
 	Prism: ({ children }: { children: string }) => (
@@ -2279,6 +2293,33 @@ describe('Preview Mode with Search', () => {
 		await waitFor(() => {
 			expect(screen.getByText('1/1')).toBeInTheDocument();
 		});
+	});
+
+	it('passes bionify=false to preview markdown components while search is active', async () => {
+		const props = createDefaultProps({ mode: 'preview', content: 'information information' });
+		renderWithProvider(<AutoRun {...props} />);
+
+		fireEvent.click(screen.getByTestId('toggle-bionify-btn'));
+		expect(screen.getByTestId('toggle-bionify-btn')).toHaveTextContent('Bionify On');
+
+		const preview = screen.getByTestId('react-markdown').parentElement!;
+		fireEvent.keyDown(preview, { key: 'f', metaKey: true });
+
+		const searchInput = await screen.findByPlaceholderText(/Search/);
+		fireEvent.change(searchInput, { target: { value: 'information' } });
+
+		await waitFor(() => {
+			expect(screen.getByText('1/2')).toBeInTheDocument();
+		});
+
+		expect(
+			createMarkdownComponentsCalls.some(
+				(call) =>
+					call.searchHighlight &&
+					call.enableBionifyReadingMode === false &&
+					(call.searchHighlight as { query?: string }).query === 'information'
+			)
+		).toBe(true);
 	});
 
 	it('toggles mode with Cmd+E from preview', async () => {

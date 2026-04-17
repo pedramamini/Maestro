@@ -796,7 +796,7 @@ export const FilePreview = React.memo(
 		// Track if content has been modified
 		const hasChanges = markdownEditMode && editContent !== file?.content;
 		const bionifyReadingMode = useSettingsStore((s) => s.bionifyReadingMode);
-		const [surfaceBionifyReadingMode, setSurfaceBionifyReadingMode] = useState(bionifyReadingMode);
+		const [surfaceBionifyOverride, setSurfaceBionifyOverride] = useState<boolean | null>(null);
 
 		const { registerLayer, unregisterLayer, updateLayerHandler } = useLayerStack();
 
@@ -845,6 +845,7 @@ export const FilePreview = React.memo(
 		const isContentTruncated = file?.content && displayContent.length < file.content.length;
 		const hasActiveSearch = searchQuery.trim().length > 0;
 		// Keep rendered text nodes intact while search is active so preview matches remain findable.
+		const surfaceBionifyReadingMode = surfaceBionifyOverride ?? bionifyReadingMode;
 		const effectiveBionifyReadingMode = surfaceBionifyReadingMode && !hasActiveSearch;
 		const truncationBanner = isContentTruncated ? (
 			<div
@@ -890,8 +891,8 @@ export const FilePreview = React.memo(
 		}, [isMarkdown, file?.content]);
 
 		useEffect(() => {
-			setSurfaceBionifyReadingMode(bionifyReadingMode);
-		}, [bionifyReadingMode, file?.path]);
+			setSurfaceBionifyOverride(null);
+		}, [file?.path]);
 
 		const scrollMarkdownToBoundary = useCallback((direction: 'top' | 'bottom') => {
 			// Use contentRef which is the actual scrollable container
@@ -1883,7 +1884,9 @@ export const FilePreview = React.memo(
 								)}
 								{!markdownEditMode && (isMarkdown || isReadableText) && (
 									<button
-										onClick={() => setSurfaceBionifyReadingMode((current) => !current)}
+										onClick={() =>
+											setSurfaceBionifyOverride((current) => !(current ?? bionifyReadingMode))
+										}
 										className={headerBtnClass}
 										style={{
 											color: surfaceBionifyReadingMode ? theme.colors.accent : theme.colors.textDim,
@@ -2446,7 +2449,7 @@ export const FilePreview = React.memo(
 							</ReactMarkdown>
 						</div>
 					) : isReadableText && !markdownEditMode ? (
-						<div ref={codeContainerRef}>
+						<div>
 							{truncationBanner}
 							<BionifyTextBlock
 								ref={markdownContainerRef}
