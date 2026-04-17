@@ -405,6 +405,37 @@ describe('FilePreview', () => {
 			expect(screen.getByTitle('Disable Bionify for this preview')).toBeInTheDocument();
 			expect(document.querySelectorAll('.bionify-word').length).toBeGreaterThan(0);
 		});
+
+		it('routes .mdx files through markdown preview instead of readable text preview', () => {
+			render(
+				<FilePreview
+					{...defaultProps}
+					file={{
+						name: 'notes.mdx',
+						content: '# MDX heading',
+						path: '/test/notes.mdx',
+					}}
+				/>
+			);
+
+			expect(screen.getByTestId('markdown-content')).toBeInTheDocument();
+			expect(screen.queryByTestId('syntax-highlighter')).not.toBeInTheDocument();
+		});
+
+		it('does not treat files with code extensions as readable-text basenames', () => {
+			render(
+				<FilePreview
+					{...defaultProps}
+					file={{
+						name: 'README.ts',
+						content: 'const value = true;',
+						path: '/test/README.ts',
+					}}
+				/>
+			);
+
+			expect(screen.getByTestId('syntax-highlighter')).toBeInTheDocument();
+		});
 	});
 
 	describe('file changed on disk banner', () => {

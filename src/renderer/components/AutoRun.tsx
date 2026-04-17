@@ -1376,10 +1376,12 @@ const AutoRunInner = forwardRef<AutoRunHandle, AutoRunProps>(function AutoRunInn
 		const total = completed + uncheckedMatches.length;
 		return { completed, total };
 	}, [savedContent]);
+	const hasActivePreviewSearch = searchOpen && searchQuery.trim().length > 0;
+	const effectivePreviewBionifyReadingMode = previewBionifyReadingMode && !hasActivePreviewSearch;
 
 	useEffect(() => {
 		setPreviewBionifyReadingMode(bionifyReadingMode);
-	}, [bionifyReadingMode, selectedFile]);
+	}, [bionifyReadingMode, sessionId, folderPath, selectedFile]);
 
 	// Token counting based on saved content only (not live during editing)
 	// Updates on: document load, save, and external file changes
@@ -1462,7 +1464,7 @@ const AutoRunInner = forwardRef<AutoRunHandle, AutoRunProps>(function AutoRunInn
 			customLanguageRenderers: {
 				mermaid: ({ code, theme: t }) => <MermaidRenderer chart={code} theme={t} />,
 			},
-			enableBionifyReadingMode: previewBionifyReadingMode,
+			enableBionifyReadingMode: effectivePreviewBionifyReadingMode,
 			// Handle internal file links (wiki-style [[links]])
 			onFileClick: handleFileClick,
 			// Open external links in system browser
@@ -1492,7 +1494,7 @@ const AutoRunInner = forwardRef<AutoRunHandle, AutoRunProps>(function AutoRunInn
 			),
 		};
 	}, [
-		previewBionifyReadingMode,
+		effectivePreviewBionifyReadingMode,
 		theme,
 		folderPath,
 		sshRemoteId,
@@ -1513,7 +1515,7 @@ const AutoRunInner = forwardRef<AutoRunHandle, AutoRunProps>(function AutoRunInn
 			customLanguageRenderers: {
 				mermaid: ({ code, theme: t }) => <MermaidRenderer chart={code} theme={t} />,
 			},
-			enableBionifyReadingMode: previewBionifyReadingMode,
+			enableBionifyReadingMode: effectivePreviewBionifyReadingMode,
 			onFileClick: handleFileClick,
 			onExternalLinkClick: (href) => {
 				if (/^https?:\/\/|^mailto:/.test(href)) {
@@ -1544,7 +1546,7 @@ const AutoRunInner = forwardRef<AutoRunHandle, AutoRunProps>(function AutoRunInn
 		};
 	}, [
 		theme,
-		previewBionifyReadingMode,
+		effectivePreviewBionifyReadingMode,
 		folderPath,
 		sshRemoteId,
 		openLightboxByFilename,

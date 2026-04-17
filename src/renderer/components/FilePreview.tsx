@@ -164,6 +164,7 @@ const getLanguageFromFilename = (filename: string): string => {
 		jsx: 'jsx',
 		json: 'json',
 		md: 'markdown',
+		mdx: 'markdown',
 		py: 'python',
 		rb: 'ruby',
 		go: 'go',
@@ -188,7 +189,7 @@ const getLanguageFromFilename = (filename: string): string => {
 	return languageMap[ext || ''] || 'text';
 };
 
-const READABLE_TEXT_EXTENSIONS = new Set(['txt', 'text', 'rst', 'adoc', 'asc', 'mdx']);
+const READABLE_TEXT_EXTENSIONS = new Set(['txt', 'text', 'rst', 'adoc', 'asc']);
 const READABLE_TEXT_BASENAMES = new Set([
 	'readme',
 	'changelog',
@@ -202,15 +203,14 @@ const READABLE_TEXT_BASENAMES = new Set([
 
 function isReadableTextPreview(filename: string): boolean {
 	const lowerFilename = filename.toLowerCase();
-	const ext = lowerFilename.includes('.') ? lowerFilename.split('.').pop() : '';
-	if (ext && READABLE_TEXT_EXTENSIONS.has(ext)) {
-		return true;
+	const dotIndex = lowerFilename.lastIndexOf('.');
+
+	if (dotIndex !== -1) {
+		const ext = lowerFilename.slice(dotIndex + 1);
+		return READABLE_TEXT_EXTENSIONS.has(ext);
 	}
 
-	const basename = lowerFilename.includes('.')
-		? lowerFilename.slice(0, lowerFilename.indexOf('.'))
-		: lowerFilename;
-	return READABLE_TEXT_BASENAMES.has(basename);
+	return READABLE_TEXT_BASENAMES.has(lowerFilename);
 }
 
 // Check if content appears to be binary (contains null bytes or high concentration of non-printable chars)

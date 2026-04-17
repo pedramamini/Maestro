@@ -48,6 +48,10 @@ const getByNormalizedText = (text: RegExp) => {
 	};
 };
 
+beforeEach(() => {
+	useSettingsStore.setState({ bionifyReadingMode: false });
+});
+
 // Mock the external dependencies
 vi.mock('react-markdown', () => ({
 	default: ({ children }: { children: string }) => (
@@ -249,7 +253,6 @@ describe('AutoRun', () => {
 	beforeEach(() => {
 		mockMaestro = setupMaestroMock();
 		vi.useFakeTimers({ shouldAdvanceTime: true });
-		useSettingsStore.setState({ bionifyReadingMode: false });
 	});
 
 	afterEach(() => {
