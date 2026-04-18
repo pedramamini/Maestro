@@ -117,10 +117,24 @@ export function createCueSessionRuntimeService(
 		let loadResult = loadCueConfigDetailed(session.projectRoot);
 		let ancestorRoot: string | undefined;
 
-		// When the session's own directory has no cue.yaml, check ancestor
-		// directories. This enables sub-agents (e.g. project/Digest) to
-		// participate in pipelines defined at a parent root (e.g. project/).
-		if (!loadResult.ok && loadResult.reason === 'missing') {
+		// Walk to an ancestor cue.yaml when the session's own directory has
+		// no pipelines to contribute. This enables sub-agents (e.g.
+		// project/Digest) to participate in pipelines defined at a parent
+		// root (e.g. project/).
+		//
+		// Both shapes of "no local pipelines" must trigger the walk:
+		//   1. Local cue.yaml is missing entirely (fresh sub-agent dir).
+		//   2. Local cue.yaml exists but `subscriptions: []`. This is the
+		//      shape `handleSave` writes when it clears a project whose
+		//      pipelines have moved elsewhere (usually consolidated onto a
+		//      common-ancestor root). Without this branch, the empty-but-
+		//      parseable file short-circuits the fallback — the sub-agent
+		//      sees zero subscriptions even though the ancestor has subs
+		//      explicitly targeting it, and manual triggers dispatch 0.
+		const localHasNoPipelines =
+			(!loadResult.ok && loadResult.reason === 'missing') ||
+			(loadResult.ok && loadResult.config.subscriptions.length === 0);
+		if (localHasNoPipelines) {
 			const ancestor = findAncestorCueConfigRoot(session.projectRoot);
 			if (ancestor) {
 				const ancestorResult = loadCueConfigDetailed(ancestor);
