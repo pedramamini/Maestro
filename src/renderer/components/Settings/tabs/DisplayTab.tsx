@@ -16,6 +16,7 @@ import { IgnorePatternsSection } from '../IgnorePatternsSection';
 import { DEFAULT_LOCAL_IGNORE_PATTERNS } from '../../../stores/settingsStore';
 import { Modal } from '../../ui/Modal';
 import { MODAL_PRIORITIES } from '../../../constants/modalPriorities';
+import { DEFAULT_BIONIFY_ALGORITHM } from '../../../utils/bionifyReadingMode';
 
 const BIONIFY_ALGORITHM_PATTERN = /^[+-](\s+\d+){4}\s+(?:0(?:\.\d+)?|1(?:\.0+)?)$/;
 
@@ -66,12 +67,17 @@ export function DisplayTab({ theme }: DisplayTabProps) {
 	const [fontLoading, setFontLoading] = useState(false);
 	const [fontsLoaded, setFontsLoaded] = useState(false);
 	const [showBionifyInfoModal, setShowBionifyInfoModal] = useState(false);
-	const [bionifyAlgorithmDraft, setBionifyAlgorithmDraft] = useState(bionifyAlgorithm);
+	const [bionifyAlgorithmDraft, setBionifyAlgorithmDraft] = useState(
+		bionifyAlgorithm ?? DEFAULT_BIONIFY_ALGORITHM
+	);
 
 	const isBionifyAlgorithmValid = BIONIFY_ALGORITHM_PATTERN.test(bionifyAlgorithmDraft.trim());
 
 	const commitBionifyAlgorithmDraft = () => {
-		if (isBionifyAlgorithmValid && bionifyAlgorithmDraft.trim() !== bionifyAlgorithm) {
+		if (
+			isBionifyAlgorithmValid &&
+			bionifyAlgorithmDraft.trim() !== (bionifyAlgorithm ?? DEFAULT_BIONIFY_ALGORITHM)
+		) {
 			setBionifyAlgorithm(bionifyAlgorithmDraft.trim());
 		}
 	};
