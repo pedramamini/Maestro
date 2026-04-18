@@ -378,9 +378,7 @@ export function AutoRunDocumentSelector({
 						}
 						aria-pressed={bionifyEnabled}
 					>
-						<span className="text-[12px] font-black leading-none">
-							{BIONIFY_BUTTON_LABEL}
-						</span>
+						<span className="text-[12px] font-black leading-none">{BIONIFY_BUTTON_LABEL}</span>
 					</button>
 				)}
 
