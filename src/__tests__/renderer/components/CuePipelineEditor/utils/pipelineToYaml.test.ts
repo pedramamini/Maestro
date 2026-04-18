@@ -1646,3 +1646,236 @@ describe('fan-out per-agent prompt externalization', () => {
 		expect(promptFileLines).toHaveLength(0);
 	});
 });
+
+describe('fan-out with command targets (per-branch emission)', () => {
+	// When a trigger fans out to command nodes, the engine's `fan_out` field
+	// can't address them (commands have no session identity). The serializer
+	// must emit ONE full subscription per direct target instead — each
+	// re-carrying the trigger event config so they arm independently.
+
+	function makeCommandFanOutPipeline() {
+		return makePipeline({
+			name: 'Pipeline 1',
+			nodes: [
+				{
+					id: 'trigger-1',
+					type: 'trigger',
+					position: { x: 0, y: 0 },
+					data: {
+						eventType: 'time.scheduled',
+						label: 'Scheduled',
+						config: { schedule_times: ['07:00'] },
+					},
+				},
+				{
+					id: 'cmd-1',
+					type: 'command',
+					position: { x: 300, y: 0 },
+					data: {
+						name: 'run-script-1',
+						mode: 'shell',
+						shell: './script1.sh',
+						owningSessionId: 's1',
+						owningSessionName: 'Cue Test 1',
+					},
+				},
+				{
+					id: 'cmd-2',
+					type: 'command',
+					position: { x: 300, y: 100 },
+					data: {
+						name: 'run-script-2',
+						mode: 'shell',
+						shell: './script2.sh',
+						owningSessionId: 's2',
+						owningSessionName: 'Cue Test 2',
+					},
+				},
+				{
+					id: 'agent-1',
+					type: 'agent',
+					position: { x: 600, y: 0 },
+					data: {
+						sessionId: 's1',
+						sessionName: 'Cue Test 1',
+						toolType: 'claude-code',
+						inputPrompt: 'Report the script1 output',
+					},
+				},
+				{
+					id: 'agent-2',
+					type: 'agent',
+					position: { x: 600, y: 100 },
+					data: {
+						sessionId: 's2',
+						sessionName: 'Cue Test 2',
+						toolType: 'claude-code',
+						inputPrompt: 'Report the script2 output',
+					},
+				},
+				{
+					id: 'agent-main',
+					type: 'agent',
+					position: { x: 900, y: 50 },
+					data: {
+						sessionId: 's-main',
+						sessionName: 'Cue Test Main',
+						toolType: 'claude-code',
+						inputPrompt: 'Combine both reports',
+					},
+				},
+			],
+			edges: [
+				{ id: 'e1', source: 'trigger-1', target: 'cmd-1', mode: 'pass' },
+				{ id: 'e2', source: 'trigger-1', target: 'cmd-2', mode: 'pass' },
+				{ id: 'e3', source: 'cmd-1', target: 'agent-1', mode: 'pass' },
+				{ id: 'e4', source: 'cmd-2', target: 'agent-2', mode: 'pass' },
+				{ id: 'e5', source: 'agent-1', target: 'agent-main', mode: 'pass' },
+				{ id: 'e6', source: 'agent-2', target: 'agent-main', mode: 'pass' },
+			],
+		});
+	}
+
+	it('emits one sub per direct command target, no fan_out array', () => {
+		const pipeline = makeCommandFanOutPipeline();
+		const subs = pipelineToYamlSubscriptions(pipeline);
+
+		// Collect the two branch subs by looking at initial-trigger subs (event=time.scheduled).
+		const branchSubs = subs.filter((s) => s.event === 'time.scheduled');
+		expect(branchSubs).toHaveLength(2);
+
+		// None of the branch subs should use fan_out — per-branch is the
+		// opposite of fan_out; they're independent subs sharing trigger config.
+		for (const sub of branchSubs) {
+			expect(sub.fan_out).toBeUndefined();
+			expect(sub.action).toBe('command');
+			expect(sub.schedule_times).toEqual(['07:00']);
+		}
+
+		// The two branches carry different command specs for their respective
+		// targets (not a single command run twice).
+		expect(
+			branchSubs.map((s) => (s.command?.mode === 'shell' ? s.command.shell : '')).sort()
+		).toEqual(['./script1.sh', './script2.sh']);
+	});
+
+	it('chain subs after command branches carry source_sub naming the command sub', () => {
+		const pipeline = makeCommandFanOutPipeline();
+		const subs = pipelineToYamlSubscriptions(pipeline);
+
+		// Each agent chain sub has source_sub pointing at its upstream command sub.
+		// Without source_sub, Cmd1's completion would match the chain sub's
+		// source_session AND the chain sub's own completion would re-trigger it.
+		const agentChains = subs.filter(
+			(s) => s.event === 'agent.completed' && !Array.isArray(s.source_session)
+		);
+		// Two single-source chains (one per command→agent branch) + main fan-in not in this filter.
+		expect(agentChains.length).toBeGreaterThanOrEqual(2);
+
+		for (const sub of agentChains) {
+			// source_sub is the name of the command sub that runs before this agent.
+			expect(sub.source_sub).toBeDefined();
+			expect(typeof sub.source_sub === 'string').toBe(true);
+			// And that name matches one of the actual branch sub names.
+			expect(['run-script-1', 'run-script-2']).toContain(sub.source_sub as string);
+		}
+	});
+
+	it('fan-in chain sub lists both upstream agent subs in source_sub', () => {
+		const pipeline = makeCommandFanOutPipeline();
+		const subs = pipelineToYamlSubscriptions(pipeline);
+
+		// The Main agent aggregates Agent1 + Agent2 via fan-in.
+		const fanInSub = subs.find(
+			(s) => s.event === 'agent.completed' && Array.isArray(s.source_session)
+		);
+		expect(fanInSub).toBeDefined();
+		expect(Array.isArray(fanInSub!.source_sub)).toBe(true);
+		const sourceSubs = fanInSub!.source_sub as string[];
+		expect(sourceSubs).toHaveLength(2);
+		// The upstream subs are the chain subs that run Agent1 and Agent2 —
+		// NOT the command subs. Main fires on agent completion, not command.
+		// Every entry must name a sub that actually exists in the output.
+		const allNames = new Set(subs.map((s) => s.name));
+		for (const name of sourceSubs) {
+			expect(allNames.has(name)).toBe(true);
+		}
+	});
+
+	it('preserves each branch trigger event config so branches arm independently', () => {
+		const pipeline = makeCommandFanOutPipeline();
+		const subs = pipelineToYamlSubscriptions(pipeline);
+
+		// Both branch subs must carry the schedule config — the engine arms
+		// each subscription separately, so an absent schedule_times on the
+		// second branch would leave that branch dormant.
+		const branchSubs = subs.filter((s) => s.event === 'time.scheduled');
+		for (const sub of branchSubs) {
+			expect(sub.schedule_times).toEqual(['07:00']);
+		}
+	});
+});
+
+describe('source_sub emission on agent chain subs', () => {
+	// Ensures chain subs generated from plain agent chains also carry
+	// source_sub so completion filtering is always precise, not only when
+	// commands are involved. Prevents regression: if source_sub were only
+	// emitted for command branches, a pure Schedule → A → B chain would
+	// still self-loop on B's completion matching its own source_session.
+
+	it('single trigger -> agent -> agent chain emits source_sub on the downstream chain', () => {
+		const pipeline = makePipeline({
+			name: 'Pipeline 1',
+			nodes: [
+				{
+					id: 'trigger-1',
+					type: 'trigger',
+					position: { x: 0, y: 0 },
+					data: {
+						eventType: 'time.heartbeat',
+						label: 'Heartbeat',
+						config: { interval_minutes: 5 },
+					},
+				},
+				{
+					id: 'agent-a',
+					type: 'agent',
+					position: { x: 300, y: 0 },
+					data: {
+						sessionId: 's-a',
+						sessionName: 'A',
+						toolType: 'claude-code',
+						inputPrompt: 'step A',
+					},
+				},
+				{
+					id: 'agent-b',
+					type: 'agent',
+					position: { x: 600, y: 0 },
+					data: {
+						sessionId: 's-b',
+						sessionName: 'B',
+						toolType: 'claude-code',
+						inputPrompt: 'step B',
+					},
+				},
+			],
+			edges: [
+				{ id: 'e1', source: 'trigger-1', target: 'agent-a', mode: 'pass' },
+				{ id: 'e2', source: 'agent-a', target: 'agent-b', mode: 'pass' },
+			],
+		});
+
+		const subs = pipelineToYamlSubscriptions(pipeline);
+		expect(subs).toHaveLength(2);
+		// Trigger sub runs A directly; no source_sub on initial trigger.
+		expect(subs[0].event).toBe('time.heartbeat');
+		expect(subs[0].source_sub).toBeUndefined();
+		// Chain sub runs B after A completes. source_sub names the trigger
+		// sub that actually ran A — so B fires on A's completion only, not
+		// on B's own future completion.
+		expect(subs[1].event).toBe('agent.completed');
+		expect(subs[1].source_session).toBe('A');
+		expect(subs[1].source_sub).toBe('Pipeline 1');
+	});
+});

@@ -106,6 +106,22 @@ export interface CueSubscription {
 	 *  when IDs are absent OR reference a deleted session. Using stable IDs
 	 *  protects chain edges from breaking when an upstream agent is renamed. */
 	source_session_ids?: string | string[];
+	/** Subscription name(s) whose completion should fire this chain. Narrows
+	 *  `source_session` matching by `event.payload.triggeredBy` so a chain sub
+	 *  fires ONLY on completions produced by the listed upstream subs.
+	 *
+	 *  Why: `source_session` alone matches any run in that session. When a
+	 *  command node shares a session with its downstream agent (`Schedule →
+	 *  Cmd1(owner S1) → Agent1(S1)`), both Cmd1's and Agent1's completions
+	 *  emit `agent.completed` for S1 — without this filter the chain
+	 *  self-triggers on Agent1's own completion, and downstream fan-in subs
+	 *  cross-fire on Cmd1's completion before Agent1 has run.
+	 *
+	 *  When omitted, falls back to session-only matching (legacy behavior).
+	 *  The pipeline-editor serializer sets this on every chain sub so the
+	 *  runtime can distinguish "this agent's upstream completed" from
+	 *  "something else in the same session completed." */
+	source_sub?: string | string[];
 	fan_out?: string[];
 	/** Per-target prompts for a fan-out subscription, one string per entry in
 	 *  `fan_out`. Legacy inline shape — kept for round-tripping YAML written

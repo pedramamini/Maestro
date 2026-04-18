@@ -192,6 +192,12 @@ function normalizeSubscription(
 				sub.source_session_ids.every((value: unknown) => typeof value === 'string'))
 				? (sub.source_session_ids as string | string[])
 				: undefined,
+		source_sub:
+			typeof sub.source_sub === 'string' ||
+			(Array.isArray(sub.source_sub) &&
+				sub.source_sub.every((value: unknown) => typeof value === 'string'))
+				? (sub.source_sub as string | string[])
+				: undefined,
 		fan_out:
 			Array.isArray(sub.fan_out) && sub.fan_out.every((value: unknown) => typeof value === 'string')
 				? (sub.fan_out as string[])

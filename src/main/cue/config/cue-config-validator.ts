@@ -266,6 +266,30 @@ function validateEventSpecificFields(
 				);
 			}
 		}
+		// `source_sub` narrows chain matching by the upstream subscription's
+		// `triggeredBy` value. Optional — when absent the chain matches any
+		// run in the source session(s). When present, reject non-string or
+		// empty values so a malformed YAML entry can't silently disable the
+		// self-loop filter and re-introduce the re-trigger class of bugs.
+		if (sub.source_sub !== undefined) {
+			if (typeof sub.source_sub === 'string') {
+				if (sub.source_sub.trim().length === 0) {
+					errors.push(`${prefix}: "source_sub" must be a non-empty string when provided`);
+				}
+			} else if (Array.isArray(sub.source_sub)) {
+				if (sub.source_sub.length === 0) {
+					errors.push(`${prefix}: "source_sub" must be a non-empty array when provided`);
+				} else if (
+					sub.source_sub.some((name) => typeof name !== 'string' || name.trim().length === 0)
+				) {
+					errors.push(
+						`${prefix}: "source_sub" array must contain only non-empty strings when provided`
+					);
+				}
+			} else {
+				errors.push(`${prefix}: "source_sub" must be a string or array of strings when provided`);
+			}
+		}
 	} else if (event === 'task.pending') {
 		if (!sub.watch || typeof sub.watch !== 'string') {
 			errors.push(

@@ -262,6 +262,35 @@ function isInitialTrigger(sub: CueSubscription): boolean {
 }
 
 /**
+ * Identity key for "initial trigger subs that should share one visual
+ * trigger node." The pipeline-editor serializer emits fan-out to mixed or
+ * command targets as multiple parallel subscriptions that each re-carry the
+ * full trigger event config (see `pipelineToYaml.ts` per-branch path). On
+ * load, subs whose keys match AND whose `pipeline_name` already groups them
+ * into the same pipeline collapse onto a single trigger node with one
+ * outgoing edge per branch — mirroring the edit-time graph.
+ *
+ * Any divergence in event-specific config (a second schedule time, a
+ * different watch glob, etc.) yields a separate key and therefore a
+ * separate trigger node, preserving the author's intent when they truly
+ * wanted two independent triggers in the same pipeline.
+ */
+function triggerGroupKey(sub: CueSubscription): string {
+	return JSON.stringify({
+		event: sub.event,
+		schedule_times: sub.schedule_times ?? null,
+		schedule_days: sub.schedule_days ?? null,
+		interval_minutes: sub.interval_minutes ?? null,
+		watch: sub.watch ?? null,
+		repo: sub.repo ?? null,
+		poll_minutes: sub.poll_minutes ?? null,
+		gh_state: sub.gh_state ?? null,
+		label: sub.label ?? null,
+		filter: sub.filter ?? null,
+	});
+}
+
+/**
  * Maps a CueSubscription's event type to trigger node config fields.
  */
 function extractTriggerConfig(sub: CueSubscription): TriggerNodeData['config'] {
@@ -459,36 +488,65 @@ export function subscriptionsToPipelines(
 
 		// Track the agent node for each session name for deduplication
 		const sessionToNode = new Map<string, PipelineNode>();
+		// Group parallel branch subs (same event config, emitted by the
+		// serializer's per-branch path) back under one visual trigger node.
+		// Keyed by `triggerGroupKey(sub)` so any divergence in event-specific
+		// config produces a fresh trigger instead of collapsing intentionally
+		// independent triggers.
+		const triggerIdByKey = new Map<string, string>();
+		// Count of direct targets already attached to each shared trigger,
+		// used to stagger target Y-positions vertically so parallel branches
+		// render as a visible fan-out rather than stacking on top of each
+		// other.
+		const branchCountForTrigger = new Map<string, number>();
 
 		for (const sub of sorted) {
 			if (isInitialTrigger(sub)) {
-				// Create trigger node
-				const triggerId = `trigger-${triggerCount}`;
-				triggerCount++;
+				const groupKey = triggerGroupKey(sub);
+				const existingTriggerId = triggerIdByKey.get(groupKey);
 
-				const triggerNode: PipelineNode = {
-					id: triggerId,
-					type: 'trigger',
-					position: {
-						x: LAYOUT.triggerX,
-						y: LAYOUT.baseY + (triggerCount - 1) * LAYOUT.verticalSpacing,
-					},
-					data: {
-						eventType: sub.event as CueEventType,
-						label: triggerLabel(sub.event as CueEventType),
-						customLabel: sub.label || undefined,
-						config: extractTriggerConfig(sub),
-						// Bind this visual trigger node to its owning YAML
-						// subscription so the Play button fires the right sub
-						// in multi-trigger pipelines. Without this, every Play
-						// button in the pipeline fired the first sub only (the
-						// one named exactly `pipeline.name`), making chain
-						// triggers — including GitHub PR/Issue polls — unreachable
-						// from the UI.
-						subscriptionName: sub.name,
-					} as TriggerNodeData,
-				};
-				nodeMap.set(triggerId, triggerNode);
+				let triggerId: string;
+				if (existingTriggerId) {
+					// Reuse the existing trigger node for this branch — we'll
+					// append a new outgoing edge to its additional target
+					// below. Don't increment triggerCount; the visual trigger
+					// count tracks unique trigger nodes, not branches.
+					triggerId = existingTriggerId;
+				} else {
+					triggerId = `trigger-${triggerCount}`;
+					triggerCount++;
+					triggerIdByKey.set(groupKey, triggerId);
+
+					const triggerNode: PipelineNode = {
+						id: triggerId,
+						type: 'trigger',
+						position: {
+							x: LAYOUT.triggerX,
+							y: LAYOUT.baseY + (triggerCount - 1) * LAYOUT.verticalSpacing,
+						},
+						data: {
+							eventType: sub.event as CueEventType,
+							label: triggerLabel(sub.event as CueEventType),
+							customLabel: sub.label || undefined,
+							config: extractTriggerConfig(sub),
+							// Bind this visual trigger node to its owning YAML
+							// subscription so the Play button fires the right sub
+							// in multi-trigger pipelines. Without this, every Play
+							// button in the pipeline fired the first sub only (the
+							// one named exactly `pipeline.name`), making chain
+							// triggers — including GitHub PR/Issue polls — unreachable
+							// from the UI.
+							subscriptionName: sub.name,
+						} as TriggerNodeData,
+					};
+					nodeMap.set(triggerId, triggerNode);
+				}
+				// Row index within this trigger's fan-out (0 for first target,
+				// incremented per subsequent branch sub that reuses the
+				// trigger). Used for target Y-positioning below. Read-then-
+				// increment so each branch gets a distinct row.
+				const branchRow = branchCountForTrigger.get(triggerId) ?? 0;
+				branchCountForTrigger.set(triggerId, branchRow + 1);
 				columnIndex = 1;
 
 				if (sub.fan_out && sub.fan_out.length > 0) {
@@ -529,14 +587,17 @@ export function subscriptionsToPipelines(
 						});
 					}
 				} else if (sub.action === 'command') {
-					// Trigger → command node (no agent)
+					// Trigger → command node (no agent). Use the per-trigger
+					// branch row so parallel branches off a shared trigger
+					// (per-branch command fan-out) stagger vertically rather
+					// than stacking on top of each other.
 					const pos = {
 						x: LAYOUT.firstAgentX,
-						y: LAYOUT.baseY + (triggerCount - 1) * LAYOUT.verticalSpacing,
+						y: LAYOUT.baseY + branchRow * LAYOUT.verticalSpacing,
 					};
 					const commandNode = createCommandNode(sub, sessions, nodeMap, pos);
 					sessionColumn.set(commandNode.id, 1);
-					sessionRow.set(commandNode.id, triggerCount - 1);
+					sessionRow.set(commandNode.id, branchRow);
 					edges.push({
 						id: `edge-${edgeCount++}`,
 						source: triggerId,
@@ -559,7 +620,7 @@ export function subscriptionsToPipelines(
 
 					const pos = {
 						x: LAYOUT.firstAgentX,
-						y: LAYOUT.baseY + (triggerCount - 1) * LAYOUT.verticalSpacing,
+						y: LAYOUT.baseY + branchRow * LAYOUT.verticalSpacing,
 					};
 
 					if (!targetSessionName) {
@@ -591,7 +652,7 @@ export function subscriptionsToPipelines(
 					const isReusedAgent = sessionToNode.has(targetSessionName);
 					sessionToNode.set(targetSessionName, agentNode);
 					sessionColumn.set(targetSessionName, 1);
-					sessionRow.set(targetSessionName, triggerCount - 1);
+					sessionRow.set(targetSessionName, branchRow);
 
 					if (sub.output_prompt) {
 						(agentNode.data as AgentNodeData).outputPrompt = sub.output_prompt;

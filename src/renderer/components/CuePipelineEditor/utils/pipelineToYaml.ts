@@ -100,6 +100,81 @@ function getEdgeModeComment(edge: PipelineEdge): string | null {
 }
 
 /**
+ * Populates trigger-event-specific fields on a subscription from the trigger's
+ * visual config. Extracted so single-target, agent fan-out, and per-branch
+ * command fan-out can all emit identical event config without duplicating the
+ * switch statement (per-branch emits N subs that must each re-carry the full
+ * event config to re-arm independently with the engine).
+ */
+function applyTriggerEventConfig(sub: CueSubscription, triggerData: TriggerNodeData): void {
+	if (triggerData.customLabel) {
+		sub.label = triggerData.customLabel;
+	}
+	switch (triggerData.eventType) {
+		case 'time.heartbeat':
+			if (triggerData.config.interval_minutes) {
+				sub.interval_minutes = triggerData.config.interval_minutes;
+			}
+			break;
+		case 'time.scheduled':
+			if (triggerData.config.schedule_times?.length) {
+				sub.schedule_times = triggerData.config.schedule_times;
+			}
+			if (triggerData.config.schedule_days?.length) {
+				sub.schedule_days = triggerData.config.schedule_days as CueSubscription['schedule_days'];
+			}
+			break;
+		case 'file.changed':
+			sub.watch = triggerData.config.watch ?? '**/*';
+			if (triggerData.config.filter) {
+				sub.filter = triggerData.config.filter;
+			}
+			break;
+		case 'github.pull_request':
+		case 'github.issue':
+			if (triggerData.config.repo) sub.repo = triggerData.config.repo;
+			if (triggerData.config.poll_minutes) sub.poll_minutes = triggerData.config.poll_minutes;
+			break;
+		case 'task.pending':
+			sub.watch = triggerData.config.watch ?? '**/*.md';
+			break;
+		case 'agent.completed':
+			// source_session comes from node config, not edges
+			break;
+	}
+}
+
+/**
+ * Sets the trigger-sub's `prompt` / `action` / `command` / `output_prompt`
+ * fields for a direct target. Shared between single-target and per-branch
+ * emission paths.
+ */
+function populateTargetWork(
+	sub: CueSubscription,
+	target: PipelineNode,
+	fallbackName: string,
+	triggerOutgoing: PipelineEdge[]
+): void {
+	if (target.type === 'command') {
+		const cmdData = target.data as CommandNodeData;
+		const cmd = commandNodeDataToCueCommand(cmdData);
+		// User chose this name in the UI; keep it as the subscription name so
+		// the YAML is readable instead of using the auto-generated chain index.
+		sub.name = cmdData.name || fallbackName;
+		// `prompt` is the dispatcher's "has work" sentinel for command actions;
+		// the normalizer back-fills it from the command spec on load.
+		sub.prompt = cmd?.mode === 'shell' ? cmd.shell : cmd?.mode === 'cli' ? cmd.cli.target : '';
+		sub.action = 'command';
+		if (cmd) sub.command = cmd;
+	} else {
+		const agentData = target.data as AgentNodeData;
+		const triggerEdge = triggerOutgoing.find((e) => e.target === target.id);
+		sub.prompt = triggerEdge?.prompt ?? agentData.inputPrompt ?? '';
+		if (agentData.outputPrompt) sub.output_prompt = agentData.outputPrompt;
+	}
+}
+
+/**
  * Lower-level helper: converts a single pipeline into CueSubscription objects.
  */
 export function pipelineToYamlSubscriptions(pipeline: CuePipeline): CueSubscription[] {
@@ -108,8 +183,17 @@ export function pipelineToYamlSubscriptions(pipeline: CuePipeline): CueSubscript
 	const triggers = findTriggerNodes(pipeline);
 	const nodeMap = new Map(pipeline.nodes.map((n) => [n.id, n]));
 
-	// Track visited nodes to avoid duplicates
+	// Track visited nodes to avoid duplicates.
 	const visited = new Set<string>();
+	// Track the subscription name that runs each work node. Used by buildChain
+	// to populate `source_sub` on downstream chain subs so completion-time
+	// filtering can distinguish "this node's upstream completed" from "an
+	// unrelated run in the same session completed." Without this map, a chain
+	// sub waiting on session S fires for ANY run in S — re-triggering itself
+	// when it shares a session with its upstream (the pre-existing
+	// `Cmd(owner=S) → Agent(S)` self-loop), or cross-firing a fan-in on an
+	// upstream command's completion before the intended agent has run.
+	const subNameForNode = new Map<string, string>();
 	let chainIndex = 0;
 
 	for (const trigger of triggers) {
@@ -128,107 +212,67 @@ export function pipelineToYamlSubscriptions(pipeline: CuePipeline): CueSubscript
 		// Filter out unbound commands (no owning session). They can't be serialized
 		// — `agent_id` on the subscription would be empty and the engine rejects
 		// the config. Validation catches this at save time; this is defense-in-depth.
-		const agentTargets = directTargets.filter(
+		const workTargets = directTargets.filter(
 			(n) =>
 				n.type === 'agent' ||
 				(n.type === 'command' && !!(n.data as CommandNodeData).owningSessionId)
 		);
 
-		if (agentTargets.length === 0) continue;
+		if (workTargets.length === 0) continue;
 
-		const subName = chainIndex === 0 ? pipeline.name : `${pipeline.name}-chain-${chainIndex}`;
-		chainIndex++;
+		const makeSubName = () =>
+			chainIndex === 0 ? pipeline.name : `${pipeline.name}-chain-${chainIndex}`;
 
-		const sub: CueSubscription = {
-			name: subName,
-			event: triggerData.eventType,
-			enabled: true,
-			prompt: '',
-		};
+		const allAgents = workTargets.every((n) => n.type === 'agent');
 
-		// Persist trigger's custom label
-		if (triggerData.customLabel) {
-			sub.label = triggerData.customLabel;
-		}
+		if (workTargets.length === 1) {
+			// === Single target: agent or command ===
+			const subName = makeSubName();
+			chainIndex++;
 
-		// Map trigger config fields
-		switch (triggerData.eventType) {
-			case 'time.heartbeat':
-				if (triggerData.config.interval_minutes) {
-					sub.interval_minutes = triggerData.config.interval_minutes;
-				}
-				break;
-			case 'time.scheduled':
-				if (triggerData.config.schedule_times?.length) {
-					sub.schedule_times = triggerData.config.schedule_times;
-				}
-				if (triggerData.config.schedule_days?.length) {
-					sub.schedule_days = triggerData.config.schedule_days as CueSubscription['schedule_days'];
-				}
-				break;
-			case 'file.changed':
-				sub.watch = triggerData.config.watch ?? '**/*';
-				if (triggerData.config.filter) {
-					sub.filter = triggerData.config.filter;
-				}
-				break;
-			case 'github.pull_request':
-			case 'github.issue':
-				if (triggerData.config.repo) sub.repo = triggerData.config.repo;
-				if (triggerData.config.poll_minutes) sub.poll_minutes = triggerData.config.poll_minutes;
-				break;
-			case 'task.pending':
-				sub.watch = triggerData.config.watch ?? '**/*.md';
-				break;
-			case 'agent.completed':
-				// source_session comes from node config, not edges
-				break;
-		}
+			const sub: CueSubscription = {
+				name: subName,
+				event: triggerData.eventType,
+				enabled: true,
+				prompt: '',
+			};
+			applyTriggerEventConfig(sub, triggerData);
 
-		if (agentTargets.length === 1) {
-			// Single target — agent or command
-			const target = agentTargets[0];
-			if (target.type === 'command') {
-				const cmdData = target.data as CommandNodeData;
-				const cmd = commandNodeDataToCueCommand(cmdData);
-				// User chose this name in the UI; keep it as the subscription name so
-				// the YAML is readable instead of using the auto-generated chain index.
-				sub.name = cmdData.name || subName;
-				// `prompt` is the dispatcher's "has work" sentinel for command actions;
-				// the normalizer back-fills it from the command spec on load.
-				sub.prompt = cmd?.mode === 'shell' ? cmd.shell : cmd?.mode === 'cli' ? cmd.cli.target : '';
-				sub.action = 'command';
-				if (cmd) sub.command = cmd;
-			} else {
-				const agentData = target.data as AgentNodeData;
-				// Use edge prompt if available (per-trigger prompt), fallback to agent node prompt
-				const triggerEdge = triggerOutgoing.find((e) => e.target === target.id);
-				sub.prompt = triggerEdge?.prompt ?? agentData.inputPrompt ?? '';
-				if (agentData.outputPrompt) sub.output_prompt = agentData.outputPrompt;
-			}
+			const target = workTargets[0];
+			populateTargetWork(sub, target, subName, triggerOutgoing);
 
 			subscriptions.push(sub);
 			visited.add(target.id);
+			subNameForNode.set(target.id, sub.name);
 
-			// Follow the chain from this target
-			buildChain(target, pipeline.name, subscriptions, outgoing, incoming, nodeMap, visited);
+			buildChain(
+				target,
+				pipeline.name,
+				subscriptions,
+				outgoing,
+				incoming,
+				nodeMap,
+				visited,
+				subNameForNode
+			);
 			chainIndex = subscriptions.length;
-		} else {
-			// Fan-out: multiple targets from trigger. Command targets are NOT
-			// supported in fan-out (the engine's `fan_out` field targets sessions
-			// by name, not subscriptions, and a command node doesn't have its own
-			// session identity). Restrict fan-out to agent targets here; the
-			// pipeline editor already discourages this combination at edit time.
-			const fanOutAgents = agentTargets.filter((n) => n.type === 'agent');
-			// If the graph contains command nodes in the fan-out (shouldn't
-			// normally happen — editor blocks it — but hand-edited JSON could),
-			// surface a dev-facing warning so the silent drop isn't hidden.
-			if (agentTargets.length > fanOutAgents.length) {
-				const dropped = agentTargets.filter((n) => n.type !== 'agent').length;
-				console.warn(
-					`[cue] pipelineToYaml: ${dropped} non-agent fan-out target(s) skipped from "fan_out" in trigger "${triggerData.customLabel ?? triggerData.eventType}" — command nodes are not supported as fan-out targets`
-				);
-			}
+		} else if (allAgents) {
+			// === Fan-out to agents only — canonical `fan_out` shape ===
+			// The engine's fan_out array addresses sessions by name, which
+			// only makes sense for agent targets (commands have no session
+			// identity of their own). One sub handles N agents at runtime.
+			const subName = makeSubName();
+			chainIndex++;
+
+			const sub: CueSubscription = {
+				name: subName,
+				event: triggerData.eventType,
+				enabled: true,
+				prompt: '',
+			};
+			applyTriggerEventConfig(sub, triggerData);
+
+			const fanOutAgents = workTargets;
 			sub.fan_out = fanOutAgents.map((a) => (a.data as AgentNodeData).sessionName);
 			// Resolve per-agent prompts from edge prompt → agent inputPrompt fallback.
 			const perAgentPrompts = fanOutAgents.map((agent) => {
@@ -281,15 +325,100 @@ export function pipelineToYamlSubscriptions(pipeline: CuePipeline): CueSubscript
 			}
 			subscriptions.push(sub);
 
-			for (const agent of agentTargets) {
+			for (const agent of fanOutAgents) {
 				visited.add(agent.id);
+				subNameForNode.set(agent.id, sub.name);
 			}
 
 			// Follow chains from each fan-out target
-			for (const agent of agentTargets) {
-				buildChain(agent, pipeline.name, subscriptions, outgoing, incoming, nodeMap, visited);
+			for (const agent of fanOutAgents) {
+				buildChain(
+					agent,
+					pipeline.name,
+					subscriptions,
+					outgoing,
+					incoming,
+					nodeMap,
+					visited,
+					subNameForNode
+				);
 			}
 			chainIndex = subscriptions.length;
+		} else {
+			// === Per-branch fan-out: any target is a command ===
+			// `fan_out` can't carry command targets — the engine addresses
+			// fan_out by session name and commands have no session of their
+			// own. Instead we emit one fully-independent subscription per
+			// direct target, each re-carrying the trigger's event config so
+			// they each arm with the engine. On reload, `yamlToPipeline`
+			// groups branch subs that share `pipeline_name` + identical
+			// trigger event config back onto a single visual trigger node.
+			for (const target of workTargets) {
+				const branchName = makeSubName();
+				chainIndex++;
+
+				const branchSub: CueSubscription = {
+					name: branchName,
+					event: triggerData.eventType,
+					enabled: true,
+					prompt: '',
+				};
+				applyTriggerEventConfig(branchSub, triggerData);
+				populateTargetWork(branchSub, target, branchName, triggerOutgoing);
+
+				subscriptions.push(branchSub);
+				visited.add(target.id);
+				subNameForNode.set(target.id, branchSub.name);
+
+				buildChain(
+					target,
+					pipeline.name,
+					subscriptions,
+					outgoing,
+					incoming,
+					nodeMap,
+					visited,
+					subNameForNode
+				);
+				chainIndex = subscriptions.length;
+			}
+		}
+	}
+
+	// Post-pass: populate `source_sub` on every chain subscription now that
+	// `subNameForNode` holds entries for every work node in the pipeline.
+	// Doing this inline during buildChain's recursion is unsafe — a fan-in
+	// target reached through the first branch has upstream work nodes from
+	// OTHER branches whose subs haven't been emitted yet. Deferring the
+	// lookup guarantees every upstream sub name is known.
+	//
+	// `source_sub` narrows completion matching: a chain sub fires only on
+	// completions produced by the listed upstream subs, not on any run in
+	// the source session (which was the pre-existing self-loop / cross-fire
+	// failure mode — see `CueSubscription.source_sub` docs for the full
+	// rationale).
+	const targetNodeBySubName = new Map<string, string>();
+	for (const [nodeId, name] of subNameForNode) {
+		targetNodeBySubName.set(name, nodeId);
+	}
+	for (const sub of subscriptions) {
+		if (sub.event !== 'agent.completed') continue;
+		const targetNodeId = targetNodeBySubName.get(sub.name);
+		if (!targetNodeId) continue;
+		const targetIncoming = incoming.get(targetNodeId) ?? [];
+		const incomingWorkEdges = targetIncoming.filter((e) => {
+			const src = nodeMap.get(e.source);
+			return src?.type === 'agent' || src?.type === 'command';
+		});
+		const sourceSubNames = incomingWorkEdges
+			.map((e) => subNameForNode.get(e.source))
+			.filter((name): name is string => !!name);
+		if (sourceSubNames.length > 0) {
+			// Dedupe and preserve insertion order so YAML round-trips stably
+			// when two incoming edges originate from the same upstream sub
+			// (pathological but possible).
+			const unique = Array.from(new Set(sourceSubNames));
+			sub.source_sub = unique.length === 1 ? unique[0] : unique;
 		}
 	}
 
@@ -303,7 +432,8 @@ function buildChain(
 	outgoing: Map<string, PipelineEdge[]>,
 	incoming: Map<string, PipelineEdge[]>,
 	nodeMap: Map<string, PipelineNode>,
-	visited: Set<string>
+	visited: Set<string>,
+	subNameForNode: Map<string, string>
 ): void {
 	const fromOutgoing = outgoing.get(fromNode.id) ?? [];
 	if (fromOutgoing.length === 0) return;
@@ -431,10 +561,29 @@ function buildChain(
 			}
 		}
 
+		// `source_sub` is intentionally NOT set here. It's populated in a
+		// post-pass at the end of `pipelineToYamlSubscriptions` because a
+		// fan-in chain sub reached through the first branch can't see the
+		// second branch's upstream sub names yet — those subs haven't been
+		// pushed when `buildChain` recurses into the fan-in target from
+		// branch 1. Deferring the lookup until every sub has been emitted
+		// guarantees all upstream names are known before we resolve
+		// `source_sub` list membership.
+
 		subscriptions.push(sub);
+		subNameForNode.set(target.id, sub.name);
 
 		// Continue the chain
-		buildChain(target, pipelineName, subscriptions, outgoing, incoming, nodeMap, visited);
+		buildChain(
+			target,
+			pipelineName,
+			subscriptions,
+			outgoing,
+			incoming,
+			nodeMap,
+			visited,
+			subNameForNode
+		);
 	}
 }
 
@@ -483,6 +632,7 @@ export function pipelinesToYaml(
 			if (sub.poll_minutes != null) record.poll_minutes = sub.poll_minutes;
 			if (sub.source_session != null) record.source_session = sub.source_session;
 			if (sub.source_session_ids != null) record.source_session_ids = sub.source_session_ids;
+			if (sub.source_sub != null) record.source_sub = sub.source_sub;
 			if (sub.fan_out != null) record.fan_out = sub.fan_out;
 			// Per-agent fan-out prompts: prefer externalized files over the
 			// legacy inline array. Emitting both would be redundant — the
@@ -636,14 +786,28 @@ function buildSubAgentMap(pipeline: CuePipeline): Map<string, string> {
 			visited.add(agentTargets[0].id);
 			buildSubAgentMapChain(agentTargets[0], pipeline.name, result, outgoing, nodeMap, visited);
 			chainIndex = result.size;
-		} else {
-			// Fan-out: use first agent name for the subscription
+		} else if (agentTargets.every((n) => n.type === 'agent')) {
+			// Fan-out (all agents) — one sub handles N targets; key by first agent.
 			result.set(subKeyFor(agentTargets[0], subName), getChainSessionName(agentTargets[0]));
 			for (const agent of agentTargets) visited.add(agent.id);
 			for (const agent of agentTargets) {
 				buildSubAgentMapChain(agent, pipeline.name, result, outgoing, nodeMap, visited);
 			}
 			chainIndex = result.size;
+		} else {
+			// Per-branch fan-out (mixed or command targets) — one sub per
+			// target, each sub keyed to its own target. Must mirror
+			// `pipelineToYamlSubscriptions`'s per-branch naming so the map
+			// built here stays aligned with the emitted sub names.
+			for (const target of agentTargets) {
+				const branchName =
+					chainIndex === 0 ? pipeline.name : `${pipeline.name}-chain-${chainIndex}`;
+				chainIndex++;
+				result.set(subKeyFor(target, branchName), getChainSessionName(target));
+				visited.add(target.id);
+				buildSubAgentMapChain(target, pipeline.name, result, outgoing, nodeMap, visited);
+				chainIndex = result.size;
+			}
 		}
 	}
 
@@ -684,14 +848,29 @@ function buildSubAgentIdMap(pipeline: CuePipeline): Map<string, string> {
 			visited.add(agentTargets[0].id);
 			buildSubAgentIdMapChain(agentTargets[0], pipeline.name, result, outgoing, nodeMap, visited);
 			chainIndex = result.size;
-		} else {
-			// Fan-out: use first agent's ID for the subscription
+		} else if (agentTargets.every((n) => n.type === 'agent')) {
+			// Fan-out (all agents) — one sub, first agent's id on the
+			// subscription. Downstream chain subs attribute to their own
+			// targets via `buildSubAgentIdMapChain`.
 			result.set(subKeyFor(agentTargets[0], subName), getOwningSessionId(agentTargets[0]));
 			for (const agent of agentTargets) visited.add(agent.id);
 			for (const agent of agentTargets) {
 				buildSubAgentIdMapChain(agent, pipeline.name, result, outgoing, nodeMap, visited);
 			}
 			chainIndex = result.size;
+		} else {
+			// Per-branch fan-out — each branch sub gets its target's owning id
+			// as `agent_id`, matching how `pipelineToYamlSubscriptions` emits
+			// the parallel branch subs.
+			for (const target of agentTargets) {
+				const branchName =
+					chainIndex === 0 ? pipeline.name : `${pipeline.name}-chain-${chainIndex}`;
+				chainIndex++;
+				result.set(subKeyFor(target, branchName), getOwningSessionId(target));
+				visited.add(target.id);
+				buildSubAgentIdMapChain(target, pipeline.name, result, outgoing, nodeMap, visited);
+				chainIndex = result.size;
+			}
 		}
 	}
 

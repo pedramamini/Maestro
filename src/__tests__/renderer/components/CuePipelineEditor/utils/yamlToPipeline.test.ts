@@ -1110,3 +1110,82 @@ describe('trigger node subscriptionName population', () => {
 		expect((triggerNode.data as { subscriptionName?: string }).subscriptionName).toBe('solo');
 	});
 });
+
+describe('subscriptionsToPipelines — parallel branch subs share a trigger node', () => {
+	// The serializer emits `Schedule → [Cmd1, Cmd2]` as two independent
+	// subscriptions that share the trigger event config but name distinct
+	// targets. On load, those subs must collapse back onto a single visual
+	// trigger with two outgoing edges — otherwise the graph grows a phantom
+	// trigger per reload and confuses the user.
+
+	it('groups command-branch subs under one trigger when event config matches', () => {
+		const subs: CueSubscription[] = [
+			{
+				name: 'run-script-1',
+				event: 'time.scheduled',
+				enabled: true,
+				prompt: './script1.sh',
+				action: 'command',
+				command: { mode: 'shell', shell: './script1.sh' },
+				schedule_times: ['07:00'],
+				agent_id: 'session-0',
+				pipeline_name: 'Pipeline 1',
+			},
+			{
+				name: 'run-script-2',
+				event: 'time.scheduled',
+				enabled: true,
+				prompt: './script2.sh',
+				action: 'command',
+				command: { mode: 'shell', shell: './script2.sh' },
+				schedule_times: ['07:00'],
+				agent_id: 'session-1',
+				pipeline_name: 'Pipeline 1',
+			},
+		];
+		const sessions = makeSessions('Cue Test 1', 'Cue Test 2');
+
+		const pipelines = subscriptionsToPipelines(subs, sessions);
+		expect(pipelines).toHaveLength(1);
+
+		const triggers = pipelines[0].nodes.filter((n) => n.type === 'trigger');
+		const commands = pipelines[0].nodes.filter((n) => n.type === 'command');
+		// Collapsed onto a single trigger, two outgoing edges to two commands.
+		expect(triggers).toHaveLength(1);
+		expect(commands).toHaveLength(2);
+		const triggerId = triggers[0].id;
+		const edgesFromTrigger = pipelines[0].edges.filter((e) => e.source === triggerId);
+		expect(edgesFromTrigger).toHaveLength(2);
+	});
+
+	it('keeps triggers separate when event config diverges', () => {
+		// A pipeline that legitimately has two independent triggers (different
+		// schedule times) must NOT be collapsed — the grouping is keyed on
+		// identical event config, not on pipeline name alone.
+		const subs: CueSubscription[] = [
+			{
+				name: 'morning',
+				event: 'time.scheduled',
+				enabled: true,
+				prompt: 'morning work',
+				schedule_times: ['07:00'],
+				agent_id: 'session-0',
+				pipeline_name: 'Pipeline 1',
+			},
+			{
+				name: 'evening',
+				event: 'time.scheduled',
+				enabled: true,
+				prompt: 'evening work',
+				schedule_times: ['19:00'],
+				agent_id: 'session-0',
+				pipeline_name: 'Pipeline 1',
+			},
+		];
+		const sessions = makeSessions('worker');
+
+		const pipelines = subscriptionsToPipelines(subs, sessions);
+		const triggers = pipelines[0].nodes.filter((n) => n.type === 'trigger');
+		expect(triggers).toHaveLength(2);
+	});
+});
