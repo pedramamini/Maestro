@@ -175,7 +175,7 @@ interface LogItemProps {
 	// Publish to GitHub Gist (AI mode only, non-user messages, requires gh CLI)
 	ghCliAvailable?: boolean;
 	onPublishGist?: (text: string) => void;
-	// Fork conversation from this message (AI mode only, user and ai source messages)
+	// Fork conversation from this message (AI mode only, user messages and AI responses — source 'user' | 'ai' | 'stdout')
 	onForkConversation?: (logId: string) => void;
 	// Message alignment
 	userMessageAlignment: 'left' | 'right';

@@ -19,13 +19,32 @@ export function useForkConversation(
 			const sourceTab = getActiveTab(session);
 			if (!sourceTab) return;
 
-			// 1. Resolve the raw log index from the log ID
+			// 1. Resolve the raw log index from the log ID.
 			//    The caller passes a log ID (not a visual index) so that search-filtering
 			//    and consecutive-entry collapsing in the UI cannot shift the fork point.
 			const rawLogIndex = sourceTab.logs.findIndex((l) => l.id === logId);
 			if (rawLogIndex === -1) return;
 
-			const slicedLogs = sourceTab.logs.slice(0, rawLogIndex + 1);
+			// AI responses may span multiple raw stdout entries when chunks arrive
+			// more than 500ms apart (see useBatchedSessionUpdates). The UI's
+			// `collapsedLogs` merges consecutive non-user/tool/thinking entries into
+			// one visual block keyed by the FIRST entry's id, so the clicked logId
+			// points at the first chunk. Extend endIndex forward through the rest of
+			// that block so the fork context includes the full AI response.
+			let endIndex = rawLogIndex;
+			const clickedSource = sourceTab.logs[rawLogIndex].source;
+			if (clickedSource !== 'user' && clickedSource !== 'tool' && clickedSource !== 'thinking') {
+				while (
+					endIndex + 1 < sourceTab.logs.length &&
+					sourceTab.logs[endIndex + 1].source !== 'user' &&
+					sourceTab.logs[endIndex + 1].source !== 'tool' &&
+					sourceTab.logs[endIndex + 1].source !== 'thinking'
+				) {
+					endIndex++;
+				}
+			}
+
+			const slicedLogs = sourceTab.logs.slice(0, endIndex + 1);
 			if (slicedLogs.length === 0) return;
 
 			// 2. Format sliced logs as context (user, ai, stdout, and tool sources).
