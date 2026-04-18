@@ -142,7 +142,10 @@ function normalizeSubscription(
 				sub.source_session_ids.every((value: unknown) => typeof value === 'string'))
 				? (sub.source_session_ids as string | string[])
 				: undefined,
-		fan_out: Array.isArray(sub.fan_out) ? sub.fan_out : undefined,
+		fan_out:
+			Array.isArray(sub.fan_out) && sub.fan_out.every((value: unknown) => typeof value === 'string')
+				? (sub.fan_out as string[])
+				: undefined,
 		fan_out_prompts: resolvedFanOutPrompts,
 		fan_out_prompt_files: fanOutPromptFiles,
 		filter: normalizeFilter(sub.filter),

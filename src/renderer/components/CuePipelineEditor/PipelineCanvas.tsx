@@ -301,6 +301,11 @@ export const PipelineCanvas = React.memo(function PipelineCanvas({
 						if (node.type === 'cli_output') {
 							return theme.colors.textDim;
 						}
+						// Error nodes (unresolved agent/source) stand out in the
+						// minimap so the user spots them when zoomed out.
+						if (node.type === 'error') {
+							return theme.colors.error ?? '#ef4444';
+						}
 						return theme.colors.accent;
 					}}
 				/>

@@ -120,6 +120,10 @@ export function usePipelinePersistence({
 			p.nodes.some((n) => n.type === 'error')
 		);
 		if (pipelinesWithErrors.length > 0) {
+			// Clear any stale validation errors from a previous save attempt so
+			// the banner doesn't keep showing rules the user has already fixed
+			// while the unresolved-agent toast is the actionable blocker.
+			setValidationErrors([]);
 			notifyToast({
 				type: 'warning',
 				title: 'Resolve unresolved agents before saving',

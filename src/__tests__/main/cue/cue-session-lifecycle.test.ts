@@ -13,12 +13,22 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import type { CueConfig, CueEvent, CueRunResult } from '../../../main/cue/cue-types';
 
-// Mock the yaml loader
+// Mock the yaml loader. Tests that need to exercise the "parse-error" or
+// "invalid" branches of loadCueConfigDetailed can override `mockDetailedResult`
+// to return the relevant shape; otherwise the helper mirrors the old
+// ok-or-missing semantics driven by `mockLoadCueConfig`.
 const mockLoadCueConfig = vi.fn<(projectRoot: string) => CueConfig | null>();
+type DetailedResult =
+	| { ok: true; config: CueConfig; warnings: string[] }
+	| { ok: false; reason: 'missing' }
+	| { ok: false; reason: 'parse-error'; message: string }
+	| { ok: false; reason: 'invalid'; errors: string[] };
+let mockDetailedResult: DetailedResult | null = null;
 const mockWatchCueYaml = vi.fn<(projectRoot: string, onChange: () => void) => () => void>();
 vi.mock('../../../main/cue/cue-yaml-loader', () => ({
 	loadCueConfig: (...args: unknown[]) => mockLoadCueConfig(args[0] as string),
 	loadCueConfigDetailed: (...args: unknown[]) => {
+		if (mockDetailedResult) return mockDetailedResult;
 		const config = mockLoadCueConfig(args[0] as string);
 		return config
 			? { ok: true as const, config, warnings: [] as string[] }
@@ -69,12 +79,14 @@ describe('CueEngine session lifecycle', () => {
 	beforeEach(() => {
 		vi.clearAllMocks();
 		vi.useFakeTimers();
+		mockDetailedResult = null;
 		mockWatchCueYaml.mockReturnValue(vi.fn());
 		mockCreateCueFileWatcher.mockReturnValue(vi.fn());
 	});
 
 	afterEach(() => {
 		vi.useRealTimers();
+		mockDetailedResult = null;
 	});
 
 	it('removeSession clears queued events', async () => {
@@ -768,6 +780,75 @@ describe('CueEngine session lifecycle', () => {
 
 			const cleared = mockClearGitHubSeenForSubscription.mock.calls.map(([id]) => id);
 			expect(cleared).toEqual(['session-1:drop-me']);
+		});
+
+		it('refreshSession PRESERVES cue_github_seen rows on parse errors (mid-edit YAML)', () => {
+			// Regression guard: parse/validation errors are transient — the
+			// user is mid-edit and will fix shortly. Clearing seen rows in
+			// that window would cause the GitHub poller to re-notify for
+			// every already-seen PR/issue on the next successful load.
+			// Only file-truly-missing should clear.
+			mockClearGitHubSeenForSubscription.mockClear();
+			const initialConfig = createMockConfig({
+				subscriptions: [
+					{
+						name: 'watch-prs',
+						event: 'github.pull_request',
+						enabled: true,
+						prompt: '',
+						repo: 'org/repo',
+						poll_minutes: 5,
+					},
+				],
+			});
+			mockLoadCueConfig.mockReturnValue(initialConfig);
+			const deps = createMockDeps();
+			const engine = new CueEngine(deps);
+			engine.start();
+
+			// User saves a malformed YAML — parse error. Loader returns
+			// parse-error, NOT missing.
+			mockLoadCueConfig.mockReturnValue(null);
+			mockDetailedResult = {
+				ok: false,
+				reason: 'parse-error',
+				message: 'bad indentation',
+			};
+			engine.refreshSession('session-1', '/projects/test');
+
+			// NOTHING cleared — the broken config will be fixed momentarily
+			// and we don't want to lose seen state.
+			expect(mockClearGitHubSeenForSubscription).not.toHaveBeenCalled();
+		});
+
+		it('refreshSession PRESERVES cue_github_seen rows on validation errors', () => {
+			mockClearGitHubSeenForSubscription.mockClear();
+			const initialConfig = createMockConfig({
+				subscriptions: [
+					{
+						name: 'watch-issues',
+						event: 'github.issue',
+						enabled: true,
+						prompt: '',
+						repo: 'org/repo',
+						poll_minutes: 5,
+					},
+				],
+			});
+			mockLoadCueConfig.mockReturnValue(initialConfig);
+			const deps = createMockDeps();
+			const engine = new CueEngine(deps);
+			engine.start();
+
+			mockLoadCueConfig.mockReturnValue(null);
+			mockDetailedResult = {
+				ok: false,
+				reason: 'invalid',
+				errors: ['subscriptions[0]: missing required field'],
+			};
+			engine.refreshSession('session-1', '/projects/test');
+
+			expect(mockClearGitHubSeenForSubscription).not.toHaveBeenCalled();
 		});
 
 		it('removeSession clears startup keys so re-adding the session can re-fire', () => {

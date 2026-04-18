@@ -40,8 +40,7 @@ import {
 	subscriptionsToPipelines,
 	graphSessionsToPipelines,
 } from '../../../renderer/components/CuePipelineEditor/utils/yamlToPipeline';
-import { loadCueConfigDetailed } from '../../../main/cue/cue-yaml-loader';
-import { validateCueConfig } from '../../../main/cue/cue-yaml-loader';
+import { loadCueConfigDetailed, validateCueConfig } from '../../../main/cue/cue-yaml-loader';
 import {
 	parseCueConfigDocument,
 	materializeCueConfig,

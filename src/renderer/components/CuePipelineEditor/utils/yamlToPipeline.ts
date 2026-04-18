@@ -172,41 +172,45 @@ function resolveChainSourcePositions(
 	for (let i = 0; i < positions; i++) {
 		const id = ids[i];
 		const legacyName = names[i];
+		const hasId = typeof id === 'string' && id.length > 0;
+		const hasName = typeof legacyName === 'string' && legacyName.length > 0;
 
-		if (typeof id === 'string' && id.length > 0) {
+		// When an ID was written, it is authoritative. If the ID doesn't match
+		// any live session we MUST surface the position as unresolved and never
+		// fall through to name-based resolution — that would be the "silent
+		// identity swap" failure mode. Example: agent `uuid-A "Deploy"` deleted,
+		// a NEW agent `uuid-B "Deploy"` recreated with the same visible name.
+		// Name-match would happily rewire the chain to the new agent, hiding
+		// the fact that the user's original reference is gone.
+		if (hasId) {
 			const matched = sessions.find((s) => s.id === id);
 			if (matched) {
 				resolved.push({ kind: 'resolved', sessionName: matched.name });
 				continue;
 			}
+			resolved.push({
+				kind: 'unresolved',
+				unresolvedId: id,
+				unresolvedName: hasName ? legacyName : undefined,
+			});
+			continue;
 		}
-		if (typeof legacyName === 'string' && legacyName.length > 0) {
+		if (hasName) {
 			const matchedByName = sessions.find((s) => s.name === legacyName);
 			if (matchedByName) {
 				resolved.push({ kind: 'resolved', sessionName: matchedByName.name });
 				continue;
 			}
-			// Name is present but no matching session exists. Still emit the
-			// legacy name so the downstream code can create an agent-shaped
-			// placeholder via `getOrCreateAgentNode` — that path has existed
-			// since before this commit and doesn't fail, it just renders a
-			// node with a name but no sessionId. For STRICT unresolved cases
-			// (no ID, no matching name session, no live session at all) we
-			// still emit it as resolved-with-legacy-name to preserve
-			// backwards-compatible rendering. True "unresolved" only fires
-			// when an ID was specified and failed.
-			if (typeof id === 'string' && id.length > 0) {
-				resolved.push({
-					kind: 'unresolved',
-					unresolvedId: id,
-					unresolvedName: legacyName,
-				});
-			} else {
-				resolved.push({ kind: 'resolved', sessionName: legacyName });
-			}
+			// Legacy YAML with name only and no matching live session: emit
+			// the name so the downstream code creates a placeholder agent
+			// node. This is backwards compat for pre-source_session_ids YAML
+			// — without an ID we have no stable way to distinguish "stale
+			// name" from "the agent still named this". Placeholder renders
+			// as a normal agent node; the user sees the name and can fix it.
+			resolved.push({ kind: 'resolved', sessionName: legacyName });
 			continue;
 		}
-		// Neither ID nor name resolved → hard unresolved.
+		// Neither ID nor name present → hard unresolved.
 		resolved.push({
 			kind: 'unresolved',
 			unresolvedId: id,

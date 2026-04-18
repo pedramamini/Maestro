@@ -105,7 +105,13 @@ describe('yamlToPipeline — error nodes for unresolved agents', () => {
 		expect((sourceErr!.data as ErrorNodeData).unresolvedName).toBe('GhostUpstream');
 	});
 
-	it('does NOT emit an error node when the upstream is reachable via name fallback', () => {
+	it('emits an error node (no silent swap) even when the upstream name matches a DIFFERENT live session', () => {
+		// Regression guard for silent identity swap: a user deleted the
+		// original upstream (uuid "deleted-upstream-uuid") and recreated a
+		// new agent that happens to share the same visible name "Upstream"
+		// but has a different uuid. Resolving via name would silently wire
+		// the chain to the new agent, hiding the fact that the original
+		// reference is gone. The loader MUST surface this as an error node.
 		const subs: CueSubscription[] = [
 			{
 				name: 'pipe',
@@ -125,7 +131,9 @@ describe('yamlToPipeline — error nodes for unresolved agents', () => {
 				agent_id: 'sess-down',
 			},
 		];
-		// ID misses but name resolves to a live session.
+		// ID misses but name matches a live session (different uuid — a
+		// recreated agent that reused the name). We must NOT silently adopt
+		// it as the resolved source.
 		const sessions = makeSessions([
 			['sess-live-upstream', 'Upstream'],
 			['sess-up', 'Anchor'],
@@ -133,7 +141,15 @@ describe('yamlToPipeline — error nodes for unresolved agents', () => {
 		]);
 
 		const [pipeline] = subscriptionsToPipelines(subs, sessions);
-		expect(errorNodes(pipeline.nodes)).toHaveLength(0);
+		const errs = errorNodes(pipeline.nodes);
+		expect(errs.length).toBeGreaterThanOrEqual(1);
+		const sourceErr = errs.find((e) => (e.data as ErrorNodeData).reason === 'missing-source');
+		expect(sourceErr).toBeDefined();
+		expect((sourceErr!.data as ErrorNodeData).unresolvedId).toBe('deleted-upstream-uuid');
+		// Name is still carried so the user can see what the original
+		// reference was called, without implying the live agent with the
+		// same name is the correct replacement.
+		expect((sourceErr!.data as ErrorNodeData).unresolvedName).toBe('Upstream');
 	});
 
 	it('does NOT emit an error node when legacy YAML has name but no ID', () => {
@@ -210,17 +226,29 @@ describe('yamlToPipeline — error nodes for unresolved agents', () => {
 		const [p1] = subscriptionsToPipelines(subs1, sessions);
 		const [p2] = subscriptionsToPipelines(subs2, sessions);
 
-		const summarize = (nodes: PipelineNode[]) =>
-			nodes
-				.map((n) => {
-					if (n.type === 'agent') {
-						return `agent:${(n.data as { sessionName: string }).sessionName}`;
-					}
-					return n.type;
-				})
+		const labelFor = (node: PipelineNode) =>
+			node.type === 'agent'
+				? `agent:${(node.data as { sessionName: string }).sessionName}`
+				: node.type;
+		const summarize = (nodes: PipelineNode[]) => nodes.map(labelFor).sort();
+
+		// Build normalized edge topology as "sourceLabel->targetLabel" strings
+		// keyed by node id. Sorting makes the comparison order-independent,
+		// so the test asserts graph ISOMORPHISM (same nodes connected the
+		// same way), not just matching node/edge counts. This catches bugs
+		// where a different YAML write order would produce the right set of
+		// edges but wire them to the wrong agents.
+		const summarizeEdges = (nodes: PipelineNode[], edges: { source: string; target: string }[]) => {
+			const idToLabel = new Map<string, string>();
+			for (const n of nodes) idToLabel.set(n.id, labelFor(n));
+			return edges
+				.map(
+					(e) => `${idToLabel.get(e.source) ?? e.source}->${idToLabel.get(e.target) ?? e.target}`
+				)
 				.sort();
+		};
 
 		expect(summarize(p1.nodes)).toEqual(summarize(p2.nodes));
-		expect(p1.edges.length).toBe(p2.edges.length);
+		expect(summarizeEdges(p1.nodes, p1.edges)).toEqual(summarizeEdges(p2.nodes, p2.edges));
 	});
 });

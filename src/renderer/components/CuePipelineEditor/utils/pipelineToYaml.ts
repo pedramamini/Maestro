@@ -216,13 +216,27 @@ export function pipelineToYamlSubscriptions(pipeline: CuePipeline): CueSubscript
 				// array which bloated the YAML and read asymmetrically.
 				sub.prompt = perAgentPrompts[0]; // engine fallback if files go missing
 				sub.fan_out_prompts = perAgentPrompts; // carries content to assembly
-				sub.fan_out_prompt_files = agentTargets.map((agent) => {
+				// Path is keyed by (agentName, pipelineName). When two fan-out
+				// targets share the same sessionName (pathological but possible
+				// — e.g. a user dragged the same agent into fan-out twice) the
+				// base path would collide and the SECOND write would silently
+				// overwrite the FIRST, merging two distinct prompts onto disk
+				// as one file. We detect collisions up-front and suffix the
+				// duplicates with their positional index in the fan-out so each
+				// agent gets its own file. Non-colliding fan-outs (the 99% case)
+				// keep the original unsuffixed filename, so this is backward
+				// compatible for the normal path.
+				const baseNameCounts = new Map<string, number>();
+				for (const agent of agentTargets) {
+					const name = (agent.data as AgentNodeData).sessionName;
+					baseNameCounts.set(name, (baseNameCounts.get(name) ?? 0) + 1);
+				}
+				sub.fan_out_prompt_files = agentTargets.map((agent, idx) => {
 					const agentName = (agent.data as AgentNodeData).sessionName;
-					// Suffix uniquely per-agent so two agents with the same
-					// pipeline+event don't collide on disk. Agent names can
-					// duplicate in pathological cases; `fan_out` preserves
-					// positional order so files are still addressable by index.
-					return cuePromptFilePath(agentName, pipeline.name);
+					const collides = (baseNameCounts.get(agentName) ?? 0) > 1;
+					return collides
+						? cuePromptFilePath(agentName, pipeline.name, `${idx}`)
+						: cuePromptFilePath(agentName, pipeline.name);
 				});
 			}
 			subscriptions.push(sub);

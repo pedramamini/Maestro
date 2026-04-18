@@ -130,7 +130,13 @@ describe('chain source resolution by stable agent_id', () => {
 		expect(agentNames).toEqual(expect.arrayContaining(['Upstream', 'Downstream']));
 	});
 
-	it('falls back to legacy name when source_session_ids references a deleted session', () => {
+	it('surfaces an error node (NOT a silent name-fallback) when source_session_ids references a deleted session', () => {
+		// Regression guard for the "silent identity swap": if the user deleted an
+		// agent and recreated a DIFFERENT agent that happens to share the same
+		// visible name, resolving via the name would silently rewire the chain
+		// to the new agent — hiding the fact that the original reference is
+		// gone. Once an ID is present and fails to resolve, we stop and emit an
+		// error node. The user can then Reassign or Remove explicitly.
 		const subs: CueSubscription[] = [
 			{
 				name: 'orphan',
@@ -160,7 +166,21 @@ describe('chain source resolution by stable agent_id', () => {
 		const agentNames = pipeline.nodes
 			.filter((n) => n.type === 'agent')
 			.map((n) => (n.data as { sessionName: string }).sessionName);
-		expect(agentNames).toContain('StillPresent');
+		// The live-session agent that happens to share the legacy name must
+		// NOT be wired into this pipeline — its identity is different from the
+		// deleted reference. It may still appear as a node because it owns its
+		// own trigger sub, but it must not be the resolved source of the
+		// chain edge.
+		const errorNodes = pipeline.nodes.filter((n) => n.type === 'error');
+		expect(errorNodes.length).toBeGreaterThanOrEqual(1);
+		const sourceError = errorNodes.find(
+			(n) => (n.data as { reason: string }).reason === 'missing-source'
+		);
+		expect(sourceError).toBeDefined();
+		expect((sourceError!.data as { unresolvedId?: string }).unresolvedId).toBe('sess-deleted-uuid');
+		// Downstream agent still wired; Current still present (owns trigger sub);
+		// no silent adoption of the StillPresent agent as the chain source.
+		expect(agentNames).toContain('Downstream');
 	});
 
 	it('ID wins over name when both resolve to different sessions', () => {

@@ -39,7 +39,12 @@ export function mergePipelinesWithSavedLayout(
 		// no color at all (never happens in practice — palette fallback always
 		// yields a value — but defensive against future refactors).
 		const mergedName = savedProps?.name ?? pipeline.name;
-		const mergedColor = pipeline.color || savedProps?.color || pipeline.color;
+		// YAML is authoritative for color (round-tripped via `pipeline_color`).
+		// Layout-JSON color is only consulted when the live pipeline has none —
+		// which doesn't happen in practice because palette fallback always
+		// yields a value, but the fallback keeps the merge safe against future
+		// refactors that relax `pipeline.color`'s required-ness.
+		const mergedColor = pipeline.color || savedProps?.color || '';
 		return {
 			...pipeline,
 			name: mergedName,

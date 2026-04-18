@@ -158,47 +158,54 @@ export const TriggerNode = memo(function TriggerNode({
 				 *  subscription (sub name populated by yamlToPipeline on load).
 				 *  Falls back to pipelineName only for legacy pipelines where the
 				 *  sub name wasn't stamped on the node; for post-fix data this
-				 *  correctly targets per-trigger chain subs like "Pipeline 1-chain-2". */}
-				{data.isSaved && data.onTriggerPipeline && (data.subscriptionName || data.pipelineName) && (
-					<button
-						type="button"
-						onClick={(e) => {
-							e.stopPropagation();
-							if (!data.isRunning) {
-								const target = data.subscriptionName ?? data.pipelineName!;
-								data.onTriggerPipeline!(target);
-							}
-						}}
-						disabled={data.isRunning}
-						aria-label={
-							data.isRunning ? 'Running' : `Run ${data.subscriptionName ?? data.pipelineName}`
-						}
-						style={{
-							display: 'flex',
-							alignItems: 'center',
-							justifyContent: 'center',
-							cursor: data.isRunning ? 'default' : 'pointer',
-							color: data.isRunning
-								? (theme?.colors.success ?? '#22c55e')
-								: `${theme?.colors.success ?? '#22c55e'}90`,
-							padding: 4,
-							borderRadius: 4,
-							border: 'none',
-							backgroundColor: 'transparent',
-							transition: 'color 0.15s',
-						}}
-						onMouseEnter={(e) => {
-							if (!data.isRunning) e.currentTarget.style.color = theme?.colors.success ?? '#22c55e';
-						}}
-						onMouseLeave={(e) => {
-							if (!data.isRunning)
-								e.currentTarget.style.color = `${theme?.colors.success ?? '#22c55e'}90`;
-						}}
-						title={data.isRunning ? 'Running…' : 'Run now'}
-					>
-						{data.isRunning ? <Loader2 size={14} className="animate-spin" /> : <Play size={14} />}
-					</button>
-				)}
+				 *  correctly targets per-trigger chain subs like "Pipeline 1-chain-2".
+				 *
+				 *  The fire target is computed ONCE with truthy semantics so an
+				 *  empty-string `subscriptionName` can't render a button that
+				 *  fires the empty sub name. Rendering, click, and aria-label
+				 *  all use the same resolved target. */}
+				{(() => {
+					const fireTarget = data.subscriptionName || data.pipelineName;
+					if (!data.isSaved || !data.onTriggerPipeline || !fireTarget) return null;
+					return (
+						<button
+							type="button"
+							onClick={(e) => {
+								e.stopPropagation();
+								if (!data.isRunning) {
+									data.onTriggerPipeline!(fireTarget);
+								}
+							}}
+							disabled={data.isRunning}
+							aria-label={data.isRunning ? 'Running' : `Run ${fireTarget}`}
+							style={{
+								display: 'flex',
+								alignItems: 'center',
+								justifyContent: 'center',
+								cursor: data.isRunning ? 'default' : 'pointer',
+								color: data.isRunning
+									? (theme?.colors.success ?? '#22c55e')
+									: `${theme?.colors.success ?? '#22c55e'}90`,
+								padding: 4,
+								borderRadius: 4,
+								border: 'none',
+								backgroundColor: 'transparent',
+								transition: 'color 0.15s',
+							}}
+							onMouseEnter={(e) => {
+								if (!data.isRunning)
+									e.currentTarget.style.color = theme?.colors.success ?? '#22c55e';
+							}}
+							onMouseLeave={(e) => {
+								if (!data.isRunning)
+									e.currentTarget.style.color = `${theme?.colors.success ?? '#22c55e'}90`;
+							}}
+							title={data.isRunning ? 'Running…' : 'Run now'}
+						>
+							{data.isRunning ? <Loader2 size={14} className="animate-spin" /> : <Play size={14} />}
+						</button>
+					);
+				})()}
 
 				{/* Gear icon */}
 				<button

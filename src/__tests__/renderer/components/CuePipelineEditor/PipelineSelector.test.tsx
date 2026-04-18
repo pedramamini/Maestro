@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { PipelineSelector } from '../../../../renderer/components/CuePipelineEditor/PipelineSelector';
-import type { CuePipeline } from '../../../../shared/cue-pipeline-types';
+import { PIPELINE_COLORS, type CuePipeline } from '../../../../shared/cue-pipeline-types';
 
 const mockPipelines: CuePipeline[] = [
 	{
@@ -147,9 +147,12 @@ describe('PipelineSelector', () => {
 		const swatches = screen.getAllByTitle(/^#/);
 		expect(swatches.length).toBe(12);
 
-		// Click a swatch at index 2 in the canonical PIPELINE_COLORS palette
-		fireEvent.click(swatches[2]); // amber #f59e0b
-		expect(onChangePipelineColor).toHaveBeenCalledWith('p1', '#f59e0b');
+		// Click a swatch at index 2 in the canonical PIPELINE_COLORS palette.
+		// Referencing the shared constant (instead of the literal '#f59e0b')
+		// keeps this test in sync if the palette order ever changes — only
+		// pipelineColorPalette.test.ts owns the literal-value snapshot.
+		fireEvent.click(swatches[2]);
+		expect(onChangePipelineColor).toHaveBeenCalledWith('p1', PIPELINE_COLORS[2]);
 	});
 
 	it('should apply custom textColor and borderColor', () => {
