@@ -359,14 +359,7 @@ export const BionifyTextBlock = forwardRef<HTMLDivElement, BionifyTextBlockProps
 
 		return (
 			<div ref={ref} className={blockClassName} style={blockStyle} {...props}>
-				<BionifyText
-					enabled={normalizedConfig.enabled}
-					intensity={normalizedConfig.intensity}
-					algorithm={normalizedConfig.algorithm}
-					theme={theme}
-				>
-					{children}
-				</BionifyText>
+				{renderBionifyChildren(children, normalizedConfig)}
 			</div>
 		);
 	}
