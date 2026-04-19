@@ -121,7 +121,8 @@ You are continuing this conversation from the fork point above. Briefly acknowle
 					if (s.id !== session.id) return s;
 					const hasNewTab = s.aiTabs.some((t) => t.id === newTabId);
 					let updatedTabs = s.aiTabs;
-					let updatedOrder = s.unifiedTabOrder || [];
+					const currentOrder = s.unifiedTabOrder || [];
+					let updatedOrder = currentOrder;
 					if (!hasNewTab) {
 						const sourceIdx = s.aiTabs.findIndex((t) => t.id === sourceTabId);
 						const insertIdx = sourceIdx >= 0 ? sourceIdx + 1 : s.aiTabs.length;
@@ -132,7 +133,20 @@ You are continuing this conversation from the fork point above. Briefly acknowle
 							awaitingSessionId: true,
 						};
 						updatedTabs = [...s.aiTabs.slice(0, insertIdx), busyTab, ...s.aiTabs.slice(insertIdx)];
-						updatedOrder = [...updatedOrder, { type: 'ai' as const, id: newTabId }];
+						const newTabRef = { type: 'ai' as const, id: newTabId };
+						if (!currentOrder.some((ref) => ref.type === 'ai' && ref.id === newTabId)) {
+							const sourceOrderIdx = currentOrder.findIndex(
+								(ref) => ref.type === 'ai' && ref.id === sourceTabId
+							);
+							updatedOrder =
+								sourceOrderIdx >= 0
+									? [
+											...currentOrder.slice(0, sourceOrderIdx + 1),
+											newTabRef,
+											...currentOrder.slice(sourceOrderIdx + 1),
+										]
+									: [...currentOrder, newTabRef];
+						}
 					}
 					return {
 						...s,

@@ -4,7 +4,7 @@
  * Locks in the behavior that fork creates a NEW AI TAB within the existing
  * session — it must NOT create a new session. Also covers:
  * - Tab inserted immediately after the source tab
- * - unifiedTabOrder appended with the new tab reference
+ * - unifiedTabOrder has the new tab inserted directly after the source (not appended)
  * - Session marked busy, new tab active, source session.id preserved
  * - Agent spawn uses the existing session.id (`${session.id}-ai-${newTabId}`)
  * - Multi-chunk AI response is captured via endIndex extension
@@ -161,7 +161,8 @@ describe('useForkConversation', () => {
 
 			fork('log-s');
 
-			const aiTabs = getSessions()[0].aiTabs;
+			const after = getSessions()[0];
+			const aiTabs = after.aiTabs;
 			expect(aiTabs).toHaveLength(4);
 			expect(aiTabs[0].id).toBe(firstTab.id);
 			expect(aiTabs[1].id).toBe(sourceTab.id);
@@ -169,6 +170,13 @@ describe('useForkConversation', () => {
 			const newTab = aiTabs[2];
 			expect(newTab.id).not.toBe(sourceTab.id);
 			expect(newTab.name).toBe('Forked: Source');
+			// unifiedTabOrder must insert the fork directly after the source, not at the end
+			expect(after.unifiedTabOrder).toEqual([
+				{ type: 'ai', id: firstTab.id },
+				{ type: 'ai', id: sourceTab.id },
+				{ type: 'ai', id: newTab.id },
+				{ type: 'ai', id: tailTab.id },
+			]);
 		});
 
 		it('marks the new tab busy, makes it active, and appends to unifiedTabOrder', () => {
