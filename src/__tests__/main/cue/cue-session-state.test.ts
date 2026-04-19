@@ -274,7 +274,7 @@ describe('computeOwnershipWarning', () => {
 			configFromAncestor: false,
 		});
 		expect(firstResult).toContain('is ambiguous');
-		expect(firstResult).toContain('matches 2 agents');
+		expect(firstResult).toContain('matches 2 agents in this projectRoot by display name');
 		expect(firstResult).toContain('session-1');
 		expect(firstResult).toContain('session-2');
 
@@ -298,5 +298,29 @@ describe('computeOwnershipWarning', () => {
 			configFromAncestor: false,
 		});
 		expect(result).toBeUndefined();
+	});
+
+	it('owner_agent_id is resolved by id even when another session has that string as its display name', () => {
+		// A is the intended owner by id. B happens to have a display name
+		// equal to A's id (a pathological but possible configuration). Only
+		// A should be treated as owner — B must not silently claim it.
+		const a = makeCandidate({ id: 'uuid-alpha', name: 'Alpha' });
+		const b = makeCandidate({ id: 'session-b', name: 'uuid-alpha' });
+
+		const fromA = computeOwnershipWarning({
+			session: a,
+			candidates: [a, b],
+			config: makeConfig({ owner_agent_id: 'uuid-alpha' }),
+			configFromAncestor: false,
+		});
+		expect(fromA).toBeUndefined();
+
+		const fromB = computeOwnershipWarning({
+			session: b,
+			candidates: [a, b],
+			config: makeConfig({ owner_agent_id: 'uuid-alpha' }),
+			configFromAncestor: false,
+		});
+		expect(fromB).toContain('targets "uuid-alpha"');
 	});
 });

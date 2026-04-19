@@ -189,13 +189,15 @@ export function createCueSessionRuntimeService(
 		// of truth: this session is NOT the config owner and the dashboard
 		// will surface the string as a red-triangle tooltip. Subscriptions
 		// with an explicit `agent_id` continue to fan out regardless.
-		// Filter to sessions that would actually load a cue.yaml at their
-		// projectRoot — otherwise a config-less agent could win the implicit
-		// first-in-list race, become the "owner", and silently disable
-		// automation for the whole projectRoot.
+		// Filter candidates to sessions that could actually own a Cue config —
+		// a cue.yaml at their projectRoot AND a tool type that participates
+		// in Cue. A terminal (or any non-AI-agent) session could otherwise
+		// win the implicit first-in-list race at a shared projectRoot,
+		// become the "owner", have nothing to dispatch, and silently suppress
+		// automation on the real Cue-configured agent.
 		const candidates = deps
 			.getSessions()
-			.filter((s) => resolveCueConfigPath(s.projectRoot) !== null);
+			.filter((s) => s.toolType !== 'terminal' && resolveCueConfigPath(s.projectRoot) !== null);
 		const ownershipWarning = computeOwnershipWarning({
 			session,
 			candidates,

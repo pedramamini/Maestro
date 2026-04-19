@@ -76,9 +76,10 @@ export function SessionsTable({
 									{s.ownershipWarning && (
 										<span
 											role="img"
+											tabIndex={0}
 											title={s.ownershipWarning}
-											aria-label={`Cue ownership conflict: ${s.ownershipWarning}`}
-											className="inline-flex"
+											aria-label={s.ownershipWarning}
+											className="inline-flex focus:outline-none focus-visible:ring-1 focus-visible:ring-current rounded"
 										>
 											<AlertTriangle
 												className="w-3.5 h-3.5 flex-shrink-0"

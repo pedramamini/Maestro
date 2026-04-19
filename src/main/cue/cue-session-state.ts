@@ -137,15 +137,29 @@ export function computeOwnershipWarning(params: {
 	const sameRoot = candidates.filter((s) => s.projectRoot === session.projectRoot);
 
 	if (explicitOwner) {
-		const matches = sameRoot.filter((s) => s.id === explicitOwner || s.name === explicitOwner);
-		if (matches.length === 0) {
+		// Prefer id match (ids are globally unique). Only consult name match
+		// when no candidate matches by id, so a session that happens to have
+		// a display name equal to some other agent's id string cannot
+		// accidentally claim ownership. Name matches can themselves be
+		// ambiguous (two agents sharing a display name); that's reported as
+		// unresolved rather than silently picking one.
+		let owner: OwnershipCandidate | undefined;
+		const byId = sameRoot.filter((s) => s.id === explicitOwner);
+		if (byId.length === 1) {
+			owner = byId[0];
+		} else if (byId.length === 0) {
+			const byName = sameRoot.filter((s) => s.name === explicitOwner);
+			if (byName.length === 1) {
+				owner = byName[0];
+			} else if (byName.length > 1) {
+				const matchingIds = byName.map((s) => s.id).join(', ');
+				return `settings.owner_agent_id "${explicitOwner}" is ambiguous — matches ${byName.length} agents in this projectRoot by display name (ids: ${matchingIds}). Unowned subscriptions are disabled until this is fixed; use a full agent id to disambiguate.`;
+			}
+		}
+
+		if (!owner) {
 			return `settings.owner_agent_id "${explicitOwner}" does not match any agent in this projectRoot — unowned subscriptions are disabled until this is fixed.`;
 		}
-		if (matches.length > 1) {
-			const matchingIds = matches.map((s) => s.id).join(', ');
-			return `settings.owner_agent_id "${explicitOwner}" is ambiguous — matches ${matches.length} agents in this projectRoot (ids: ${matchingIds}). Unowned subscriptions are disabled until this is fixed; use a full agent id to disambiguate.`;
-		}
-		const owner = matches[0];
 		if (owner.id === session.id) return undefined;
 		return `settings.owner_agent_id targets "${explicitOwner}" — unowned subscriptions run on that agent instead.`;
 	}
