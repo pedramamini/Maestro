@@ -140,6 +140,20 @@ describe('cue-cli-executor', () => {
 		expect(result.status).toBe('completed');
 	});
 
+	it('spawns with ELECTRON_RUN_AS_NODE=1 so packaged Electron runs Node, not the app', async () => {
+		// In packaged Electron, `process.execPath` is the app binary. Without
+		// this env flag the spawn would relaunch the app instead of running
+		// maestro-cli.js, silently breaking Cue output delivery in production.
+		const config = createConfig();
+		const promise = executeCueCli(config as any);
+		await Promise.resolve();
+		mockChild.emit('close', 0);
+		await promise;
+
+		const spawnOptions = mockSpawn.mock.calls[0][2] as { env?: Record<string, string> };
+		expect(spawnOptions.env?.ELECTRON_RUN_AS_NODE).toBe('1');
+	});
+
 	it('uses an explicit message override when provided', async () => {
 		const config = createConfig({
 			cli: {

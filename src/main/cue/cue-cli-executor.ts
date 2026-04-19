@@ -144,6 +144,14 @@ export async function runMaestroCliSend(
 		try {
 			child = spawn(process.execPath, [cliScriptPath, 'send', target, truncated, '--live'], {
 				stdio: ['ignore', 'pipe', 'pipe'],
+				// In packaged Electron, `process.execPath` is the app binary, not
+				// Node — without this flag the spawn would launch the app instead
+				// of running maestro-cli.js. Mirrors the shims emitted by
+				// maestro-cli-manager.ts for user-facing invocations.
+				env: {
+					...process.env,
+					ELECTRON_RUN_AS_NODE: '1',
+				},
 			});
 		} catch (err) {
 			resolve({
