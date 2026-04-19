@@ -1097,13 +1097,8 @@ function MaestroConsoleInner() {
 		setActiveSessionId,
 	});
 
-	// Fork conversation hook - creates a new session from a point in conversation history
-	const handleForkConversation = useForkConversation(
-		sessions,
-		setSessions,
-		activeSessionId,
-		setActiveSessionId
-	);
+	// Fork conversation hook - creates a new tab in the current session from a point in conversation history
+	const handleForkConversation = useForkConversation(sessions, setSessions, activeSessionId);
 
 	// Summarize & Continue hook for context compaction (non-blocking, per-tab)
 	const {
