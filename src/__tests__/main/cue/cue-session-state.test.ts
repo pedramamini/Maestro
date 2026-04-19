@@ -1,9 +1,11 @@
 import { describe, it, expect } from 'vitest';
 import {
+	computeOwnershipWarning,
 	countActiveSubscriptions,
 	isSubscriptionParticipant,
+	type OwnershipCandidate,
 } from '../../../main/cue/cue-session-state';
-import type { CueSubscription } from '../../../shared/cue/contracts';
+import type { CueConfig, CueSubscription } from '../../../shared/cue/contracts';
 
 /** Helper so individual tests read as the sub's shape only, not boilerplate. */
 function makeSub(overrides: Partial<CueSubscription> = {}): CueSubscription {
@@ -85,5 +87,164 @@ describe('countActiveSubscriptions with fan-out', () => {
 			makeSub({ agent_id: 'session-A', fan_out: ['Agent A', 'Agent B'] }),
 		];
 		expect(countActiveSubscriptions(subs, 'session-X', 'Agent X')).toBe(0);
+	});
+});
+
+describe('computeOwnershipWarning', () => {
+	function makeCandidate(overrides: Partial<OwnershipCandidate> = {}): OwnershipCandidate {
+		return {
+			id: 'session-1',
+			name: 'Agent A',
+			projectRoot: '/projects/vault',
+			...overrides,
+		};
+	}
+
+	function makeConfig(overrides: Partial<CueConfig['settings']> = {}): CueConfig {
+		return {
+			subscriptions: [],
+			settings: {
+				timeout_minutes: 30,
+				timeout_on_fail: 'break',
+				max_concurrent: 1,
+				queue_size: 10,
+				...overrides,
+			},
+		};
+	}
+
+	it('returns undefined when the session is the only agent in the projectRoot', () => {
+		const session = makeCandidate();
+		const result = computeOwnershipWarning({
+			session,
+			allSessions: [session],
+			config: makeConfig(),
+			configFromAncestor: false,
+		});
+		expect(result).toBeUndefined();
+	});
+
+	it('returns undefined for the first session when >1 agent shares the root (implicit winner)', () => {
+		const session1 = makeCandidate({ id: 'session-1', name: 'Opus' });
+		const session2 = makeCandidate({ id: 'session-2', name: 'Sonnet' });
+		const result = computeOwnershipWarning({
+			session: session1,
+			allSessions: [session1, session2],
+			config: makeConfig(),
+			configFromAncestor: false,
+		});
+		expect(result).toBeUndefined();
+	});
+
+	it('returns a tooltip naming the winner for the second session in shared-root, no owner set', () => {
+		const session1 = makeCandidate({ id: 'session-1', name: 'Opus' });
+		const session2 = makeCandidate({ id: 'session-2', name: 'Sonnet' });
+		const result = computeOwnershipWarning({
+			session: session2,
+			allSessions: [session1, session2],
+			config: makeConfig(),
+			configFromAncestor: false,
+		});
+		expect(result).toContain('"Opus" was selected as the owner');
+		expect(result).toContain('owner_agent_id');
+	});
+
+	it('returns undefined when owner_agent_id matches the session id', () => {
+		const session1 = makeCandidate({ id: 'session-1', name: 'Opus' });
+		const session2 = makeCandidate({ id: 'session-2', name: 'Sonnet' });
+		const result = computeOwnershipWarning({
+			session: session1,
+			allSessions: [session1, session2],
+			config: makeConfig({ owner_agent_id: 'session-1' }),
+			configFromAncestor: false,
+		});
+		expect(result).toBeUndefined();
+	});
+
+	it('returns undefined when owner_agent_id matches the session name', () => {
+		const session1 = makeCandidate({ id: 'session-1', name: 'Opus' });
+		const session2 = makeCandidate({ id: 'session-2', name: 'Sonnet' });
+		const result = computeOwnershipWarning({
+			session: session1,
+			allSessions: [session1, session2],
+			config: makeConfig({ owner_agent_id: 'Opus' }),
+			configFromAncestor: false,
+		});
+		expect(result).toBeUndefined();
+	});
+
+	it('returns a tooltip pointing to the owner for non-matching siblings', () => {
+		const session1 = makeCandidate({ id: 'session-1', name: 'Opus' });
+		const session2 = makeCandidate({ id: 'session-2', name: 'Sonnet' });
+		const result = computeOwnershipWarning({
+			session: session2,
+			allSessions: [session1, session2],
+			config: makeConfig({ owner_agent_id: 'Opus' }),
+			configFromAncestor: false,
+		});
+		expect(result).toContain('owner_agent_id targets "Opus"');
+	});
+
+	it('flags every session in the root when owner_agent_id matches nobody', () => {
+		const session1 = makeCandidate({ id: 'session-1', name: 'Opus' });
+		const session2 = makeCandidate({ id: 'session-2', name: 'Sonnet' });
+		const config = makeConfig({ owner_agent_id: 'NonExistentAgent' });
+
+		const result1 = computeOwnershipWarning({
+			session: session1,
+			allSessions: [session1, session2],
+			config,
+			configFromAncestor: false,
+		});
+		const result2 = computeOwnershipWarning({
+			session: session2,
+			allSessions: [session1, session2],
+			config,
+			configFromAncestor: false,
+		});
+		expect(result1).toContain('"NonExistentAgent" does not match any agent');
+		expect(result2).toContain('"NonExistentAgent" does not match any agent');
+	});
+
+	it('ignores candidates with a different projectRoot when checking explicit owner existence', () => {
+		// An agent named "Opus" exists but lives in a different projectRoot —
+		// owner_agent_id should still resolve as unmatched for this root.
+		const session = makeCandidate({ id: 'session-1', name: 'Sonnet' });
+		const outsider = makeCandidate({
+			id: 'session-99',
+			name: 'Opus',
+			projectRoot: '/projects/other',
+		});
+		const result = computeOwnershipWarning({
+			session,
+			allSessions: [session, outsider],
+			config: makeConfig({ owner_agent_id: 'Opus' }),
+			configFromAncestor: false,
+		});
+		expect(result).toContain('"Opus" does not match any agent');
+	});
+
+	it('returns undefined for ancestor-loaded configs regardless of siblings', () => {
+		const session1 = makeCandidate({ id: 'session-1', name: 'Opus' });
+		const session2 = makeCandidate({ id: 'session-2', name: 'Sonnet' });
+		const result = computeOwnershipWarning({
+			session: session2,
+			allSessions: [session1, session2],
+			config: makeConfig({ owner_agent_id: 'NonExistentAgent' }),
+			configFromAncestor: true,
+		});
+		expect(result).toBeUndefined();
+	});
+
+	it('treats whitespace-only owner_agent_id as unset (falls back to first-wins)', () => {
+		const session1 = makeCandidate({ id: 'session-1', name: 'Opus' });
+		const session2 = makeCandidate({ id: 'session-2', name: 'Sonnet' });
+		const result = computeOwnershipWarning({
+			session: session2,
+			allSessions: [session1, session2],
+			config: makeConfig({ owner_agent_id: '   ' }),
+			configFromAncestor: false,
+		});
+		expect(result).toContain('"Opus" was selected as the owner');
 	});
 });

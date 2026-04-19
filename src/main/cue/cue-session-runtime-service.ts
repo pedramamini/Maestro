@@ -4,6 +4,7 @@ import { findAncestorCueConfigRoot, loadCueConfigDetailed, watchCueYaml } from '
 import { createCueEvent, type CueEvent, type CueSubscription } from './cue-types';
 import { clearGitHubSeenForSubscription } from './cue-db';
 import {
+	computeOwnershipWarning,
 	countActiveSubscriptions,
 	hasTimeBasedSubscriptions,
 	isSubscriptionParticipant,
@@ -180,12 +181,34 @@ export function createCueSessionRuntimeService(
 			deps.onLog('warn', `[CUE] ${warning}`);
 		}
 
+		// Ownership gate for UNOWNED subscriptions (no agent_id). When multiple
+		// agents share a projectRoot, each would otherwise fire every unowned
+		// subscription once. See {@link computeOwnershipWarning} for the full
+		// resolution matrix. A non-empty warning string is the single source
+		// of truth: this session is NOT the config owner and the dashboard
+		// will surface the string as a red-triangle tooltip. Subscriptions
+		// with an explicit `agent_id` continue to fan out regardless.
+		const ownershipWarning = computeOwnershipWarning({
+			session,
+			allSessions: deps.getSessions(),
+			config,
+			configFromAncestor: Boolean(ancestorRoot),
+		});
+		const isConfigOwner = !ownershipWarning;
+		if (ownershipWarning && config.subscriptions.some((s) => !s.agent_id)) {
+			deps.onLog(
+				'cue',
+				`[CUE] "${session.name}" will not fire unowned subscriptions from cue.yaml at "${session.projectRoot}" — ${ownershipWarning}`
+			);
+		}
+
 		const state: SessionState = {
 			config,
 			configRoot: ancestorRoot,
 			triggerSources: [],
 			yamlWatcher: null,
 			sleepPrevented: false,
+			ownershipWarning,
 		};
 
 		// Watch the cue.yaml at the config's actual location (ancestor or own root).
@@ -206,6 +229,7 @@ export function createCueSessionRuntimeService(
 		for (const sub of config.subscriptions) {
 			if (sub.enabled === false) continue;
 			if (sub.agent_id && sub.agent_id !== session.id) continue;
+			if (!isConfigOwner && !sub.agent_id) continue;
 
 			const source: CueTriggerSource | null = createTriggerSource(sub.event, {
 				session,
@@ -232,6 +256,7 @@ export function createCueSessionRuntimeService(
 			for (const sub of config.subscriptions) {
 				if (sub.enabled === false) continue;
 				if (sub.agent_id && sub.agent_id !== session.id) continue;
+				if (!isConfigOwner && !sub.agent_id) continue;
 				if (sub.event !== 'app.startup') continue;
 
 				if (!registry.markStartupFired(session.id, sub.name)) continue;

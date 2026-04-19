@@ -19,6 +19,10 @@ export interface SessionState {
 	yamlWatcher: (() => void) | null;
 	sleepPrevented: boolean;
 	lastTriggered?: string;
+	/** Non-empty when this session's unowned subscriptions are suppressed because
+	 *  ownership of the cue.yaml is contested or unresolvable. Used by the Cue
+	 *  dashboard to surface a red indicator with the reason. */
+	ownershipWarning?: string;
 }
 
 /**
@@ -82,6 +86,70 @@ export function hasTimeBasedSubscriptions(config: CueConfig, sessionId: string):
 	);
 }
 
+/**
+ * Minimal shape needed by {@link computeOwnershipWarning}. Kept intentionally
+ * narrow so tests don't need to construct full `SessionInfo` objects.
+ */
+export interface OwnershipCandidate {
+	id: string;
+	name: string;
+	projectRoot: string;
+}
+
+/**
+ * Compute the ownership warning for a session that just loaded `config`.
+ *
+ * Returns `undefined` when the session is the effective owner (no warning is
+ * needed). Returns a human-readable string otherwise — that string is the
+ * single source of truth: presence means the Cue dashboard shows a red `!`
+ * and uses the string as the tooltip; absence means no indicator.
+ *
+ * Ownership resolution:
+ *   • `configFromAncestor` true → always `undefined`. Ancestor configs already
+ *     filter to subscriptions explicitly targeting this session, so the gate
+ *     doesn't apply.
+ *   • `owner_agent_id` set and matches some candidate (by id or name) sharing
+ *     the session's `projectRoot` → that candidate owns; other candidates in
+ *     the same root get a tooltip pointing to the owner.
+ *   • `owner_agent_id` set but matches nobody in the session's `projectRoot`
+ *     → every candidate in that root gets a tooltip about the bad value.
+ *   • `owner_agent_id` unset and >1 candidate shares the root → first in the
+ *     list wins; non-winners get a tooltip naming the winner.
+ */
+export function computeOwnershipWarning(params: {
+	session: OwnershipCandidate;
+	allSessions: OwnershipCandidate[];
+	config: CueConfig;
+	configFromAncestor: boolean;
+}): string | undefined {
+	if (params.configFromAncestor) return undefined;
+
+	const { session, allSessions, config } = params;
+	const explicitOwner = config.settings.owner_agent_id?.trim();
+
+	if (explicitOwner) {
+		const ownerExists = allSessions.some(
+			(s) =>
+				s.projectRoot === session.projectRoot &&
+				(s.id === explicitOwner || s.name === explicitOwner)
+		);
+		if (!ownerExists) {
+			return `settings.owner_agent_id "${explicitOwner}" does not match any agent in this projectRoot — unowned subscriptions are disabled until this is fixed.`;
+		}
+		const isOwner = explicitOwner === session.id || explicitOwner === session.name;
+		if (!isOwner) {
+			return `settings.owner_agent_id targets "${explicitOwner}" — unowned subscriptions run on that agent instead.`;
+		}
+		return undefined;
+	}
+
+	const firstForRoot = allSessions.find((s) => s.projectRoot === session.projectRoot);
+	if (firstForRoot && firstForRoot.id !== session.id) {
+		return `"${firstForRoot.name}" was selected as the owner of this projectRoot (no settings.owner_agent_id set — first agent wins). Set settings.owner_agent_id in cue.yaml to choose a different owner.`;
+	}
+	return undefined;
+}
+
 export function toSessionStatus(params: {
 	sessionId: string;
 	sessionName: string;
@@ -102,5 +170,6 @@ export function toSessionStatus(params: {
 		activeRuns: params.activeRuns,
 		lastTriggered: params.state?.lastTriggered,
 		nextTrigger: params.state ? getEarliestNextTriggerIso(params.state) : undefined,
+		ownershipWarning: params.state?.ownershipWarning,
 	};
 }

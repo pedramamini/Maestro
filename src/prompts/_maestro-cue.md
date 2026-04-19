@@ -74,6 +74,17 @@ When a user asks you to add, modify, or debug a Cue subscription:
 3. For full schema, field reference, and worked examples, fetch the official Cue docs: https://docs.runmaestro.ai/maestro-cue-configuration, https://docs.runmaestro.ai/maestro-cue-events, https://docs.runmaestro.ai/maestro-cue-advanced, https://docs.runmaestro.ai/maestro-cue-examples. Don't guess field names.
 4. After writing, validate with `{{MAESTRO_CLI_PATH}} cue list` — the engine reloads automatically when the file changes.
 
+### Shared Workspaces: `settings.owner_agent_id`
+
+When two or more agents are registered against the same project root (for example, an Opus and a Sonnet agent both pointing at the same Obsidian vault), _unowned_ subscriptions (no explicit `agent_id`) would otherwise fire once per agent. To prevent this:
+
+- Set `settings.owner_agent_id` to the agent's internal id (UUID) **or** its display name (e.g. `Obsidian`). Only that agent will fire unowned subscriptions.
+- If unset and multiple agents share the project root, Maestro picks the first agent in the session list as the implicit owner; non-winner agents are flagged with a red warning in the Cue dashboard naming who won and pointing to `owner_agent_id` as the override.
+- If `owner_agent_id` is set but no agent in the project root matches it, every agent there is flagged with a red warning and unowned subscriptions stop firing — fix the value to recover.
+- Subscriptions that already carry an explicit `agent_id` continue to fan out independently of ownership.
+
+When writing a `cue.yaml` that might live in a shared workspace, add `owner_agent_id` proactively (use `{{MAESTRO_CLI_PATH}} list agents` to discover ids and names) unless the user explicitly wants every agent to run the unowned subs.
+
 ### Natural-Language → YAML Recipes
 
 Translate the user's phrasing into one of these starter templates, then adapt names/prompts/agent ids. Always set `agent_id` to the target agent (use `{{MAESTRO_CLI_PATH}} list agents` to find ids).
