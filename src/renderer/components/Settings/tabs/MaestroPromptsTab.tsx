@@ -23,6 +23,7 @@ import { useActiveSession } from '../../../hooks/session/useActiveSession';
 import { useSettingsStore } from '../../../stores/settingsStore';
 import { gitService } from '../../../services/git';
 import { DualPaneFileEditor, type DualPaneFileEditorItem } from '../../shared/DualPaneFileEditor';
+import { PROMPT_IDS } from '../../../../shared/promptDefinitions';
 import './MaestroPromptsTab.css';
 
 interface CorePrompt {
@@ -275,6 +276,14 @@ export function MaestroPromptsTab({
 	const textareaRef = useRef<HTMLTextAreaElement>(null);
 	const activeSession = useActiveSession();
 	const conductorProfile = useSettingsStore((s) => s.conductorProfile);
+	const lastSelectedPromptId = useSettingsStore((s) => s.lastSelectedPromptId);
+	const setLastSelectedPromptId = useSettingsStore((s) => s.setLastSelectedPromptId);
+	// Snapshot the recalled prompt ID once so we don't re-select across rerenders after the
+	// user picks something else in this session.
+	const initialRecalledPromptIdRef = useRef<string | null | undefined>(undefined);
+	if (initialRecalledPromptIdRef.current === undefined) {
+		initialRecalledPromptIdRef.current = lastSelectedPromptId ?? null;
+	}
 
 	const autocomplete = useTemplateAutocomplete({
 		textareaRef: textareaRef as React.RefObject<HTMLTextAreaElement>,
@@ -386,10 +395,13 @@ export function MaestroPromptsTab({
 				}
 				if (result.success && result.prompts) {
 					setPrompts(result.prompts);
-					const initial = initialSelectedPromptId
-						? result.prompts.find((p) => p.id === initialSelectedPromptId)
-						: undefined;
-					const target = initial || result.prompts[0];
+					const findById = (id: string | null | undefined) =>
+						id ? result.prompts!.find((p) => p.id === id) : undefined;
+					const target =
+						findById(initialSelectedPromptId) ||
+						findById(initialRecalledPromptIdRef.current) ||
+						findById(PROMPT_IDS.MAESTRO_SYSTEM_PROMPT) ||
+						result.prompts[0];
 					if (target) {
 						setSelectedPrompt(target);
 						setEditedContent(target.content);
@@ -435,8 +447,9 @@ export function MaestroPromptsTab({
 			setEditedContent(prompt.content);
 			setHasUnsavedChanges(false);
 			setSuccessMessage(null);
+			setLastSelectedPromptId(id);
 		},
-		[prompts, hasUnsavedChanges]
+		[prompts, hasUnsavedChanges, setLastSelectedPromptId]
 	);
 
 	const toggleCategory = useCallback((category: string) => {

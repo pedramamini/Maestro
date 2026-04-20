@@ -15,7 +15,7 @@
  * this component owns the chrome and common styling.
  */
 
-import React, { useCallback } from 'react';
+import React, { useCallback, useEffect, useRef } from 'react';
 import { ExternalLink, ChevronDown, ChevronRight } from 'lucide-react';
 import type { Theme } from '../../constants/themes';
 import { getOpenInLabel } from '../../utils/platformUtils';
@@ -140,6 +140,27 @@ export function DualPaneFileEditor({
 }: DualPaneFileEditorProps): JSX.Element {
 	const selectedItem = items.find((i) => i.id === selectedId) ?? null;
 
+	// Scroll the selected item into view on first reveal (initial mount or
+	// when the list re-appears after being hidden by isExpanded/showHelp).
+	// We only auto-scroll once per reveal — user-driven selections already
+	// scroll via click focus, and we don't want to yank the list on every
+	// render.
+	const listRef = useRef<HTMLDivElement | null>(null);
+	const lastScrolledIdRef = useRef<string | null>(null);
+	const listHiddenRef = useRef<boolean>(true);
+	useEffect(() => {
+		const listVisible = !isExpanded && !showHelp;
+		const justRevealed = listHiddenRef.current && listVisible;
+		listHiddenRef.current = !listVisible;
+		if (!listVisible || !selectedId) return;
+		if (!justRevealed && lastScrolledIdRef.current === selectedId) return;
+		const node = listRef.current?.querySelector<HTMLElement>(
+			`[data-item-id="${CSS.escape(selectedId)}"]`
+		);
+		node?.scrollIntoView({ block: 'nearest' });
+		lastScrolledIdRef.current = selectedId;
+	}, [selectedId, isExpanded, showHelp, items]);
+
 	const groupedItems = React.useMemo(() => {
 		if (!categories) {
 			return null;
@@ -197,7 +218,11 @@ export function DualPaneFileEditor({
 			<div className="dual-pane-split-view" style={{ borderColor: theme.colors.border }}>
 				{/* Left: list */}
 				{!isExpanded && !showHelp && (
-					<div className="dual-pane-list" style={{ borderColor: theme.colors.border }}>
+					<div
+						ref={listRef}
+						className="dual-pane-list"
+						style={{ borderColor: theme.colors.border }}
+					>
 						{onCreateNewItem && (
 							<button
 								className="dual-pane-create-button"
@@ -336,6 +361,7 @@ export function DualPaneFileEditor({
 		return (
 			<button
 				key={item.id}
+				data-item-id={item.id}
 				className={`dual-pane-list-item ${isSelected ? 'selected' : ''}`}
 				onClick={() => onSelect(item.id)}
 				title={item.description}

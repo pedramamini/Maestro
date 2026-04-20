@@ -643,6 +643,13 @@ export const SETTINGS_METADATA: Record<string, SettingMetadata> = {
 		default: false,
 		category: 'internal',
 	},
+	lastSelectedPromptId: {
+		description:
+			'ID of the prompt most recently edited in Settings → Maestro Prompts. Restored on reopen.',
+		type: 'string',
+		default: null,
+		category: 'internal',
+	},
 };
 
 // ============================================================================

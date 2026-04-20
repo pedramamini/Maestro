@@ -324,6 +324,7 @@ export interface SettingsStoreState {
 	autoHideMenuBar: boolean;
 	moderatorStandingInstructions: string;
 	autoRunDisabled: boolean;
+	lastSelectedPromptId: string | null;
 }
 
 export interface SettingsStoreActions {
@@ -406,6 +407,7 @@ export interface SettingsStoreActions {
 	setAutoHideMenuBar: (value: boolean) => void;
 	setModeratorStandingInstructions: (value: string) => void;
 	setAutoRunDisabled: (value: boolean) => void;
+	setLastSelectedPromptId: (value: string | null) => void;
 
 	// Async setters
 	setLogLevel: (value: string) => Promise<void>;
@@ -568,6 +570,7 @@ export const useSettingsStore = create<SettingsStore>()((set, get) => {
 		autoHideMenuBar: false,
 		moderatorStandingInstructions: '',
 		autoRunDisabled: false,
+		lastSelectedPromptId: null,
 
 		// ============================================================================
 		// Simple Setters
@@ -1037,6 +1040,11 @@ export const useSettingsStore = create<SettingsStore>()((set, get) => {
 		setAutoRunDisabled: (value) => {
 			set({ autoRunDisabled: value });
 			window.maestro.settings.set('autoRunDisabled', value);
+		},
+
+		setLastSelectedPromptId: (value) => {
+			set({ lastSelectedPromptId: value });
+			window.maestro.settings.set('lastSelectedPromptId', value);
 		},
 
 		// ============================================================================
@@ -2021,6 +2029,9 @@ export async function loadAllSettings(): Promise<void> {
 
 		if (allSettings['autoRunDisabled'] !== undefined)
 			patch.autoRunDisabled = allSettings['autoRunDisabled'] as boolean;
+
+		if (allSettings['lastSelectedPromptId'] !== undefined)
+			patch.lastSelectedPromptId = allSettings['lastSelectedPromptId'] as string | null;
 
 		// Apply the entire patch in one setState call
 		patch.settingsLoaded = true;
