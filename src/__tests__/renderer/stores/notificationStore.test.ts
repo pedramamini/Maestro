@@ -10,7 +10,6 @@
  */
 
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
-import { useNotificationStore, notifyToast } from '../../../renderer/stores/notificationStore';
 import { logger } from '../../../renderer/utils/logger';
 import {
 	useNotificationStore,

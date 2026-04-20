@@ -272,6 +272,9 @@ function MaestroConsoleInner() {
 		setAgentSessionsOpen,
 		activeAgentSessionId,
 		setActiveAgentSessionId,
+		// Memory Viewer (Claude Code per-project memory)
+		memoryViewerOpen,
+		setMemoryViewerOpen,
 		// Batch Runner Modal
 		setBatchRunnerModalOpen,
 		// Auto Run Setup Modal
@@ -2054,6 +2057,7 @@ function MaestroConsoleInner() {
 		setGitLogOpen,
 		setActiveAgentSessionId,
 		setAgentSessionsOpen,
+		setMemoryViewerOpen,
 		setLogViewerOpen,
 		setProcessMonitorOpen,
 		setUsageDashboardOpen,
@@ -2212,6 +2216,7 @@ function MaestroConsoleInner() {
 		// Core state
 		logViewerOpen,
 		agentSessionsOpen,
+		memoryViewerOpen,
 		activeAgentSessionId,
 		activeSession,
 		thinkingItems,
@@ -2280,6 +2285,7 @@ function MaestroConsoleInner() {
 		setGitDiffPreview,
 		setLogViewerOpen,
 		setAgentSessionsOpen,
+		setMemoryViewerOpen,
 		setActiveAgentSessionId,
 		setInputValue,
 		setStagedImages,
@@ -2747,6 +2753,7 @@ function MaestroConsoleInner() {
 					setUsageDashboardOpen={encoreFeatures.usageStats ? setUsageDashboardOpen : undefined}
 					setActiveRightTab={setActiveRightTab}
 					setAgentSessionsOpen={setAgentSessionsOpen}
+					setMemoryViewerOpen={setMemoryViewerOpen}
 					setActiveAgentSessionId={setActiveAgentSessionId}
 					setGitDiffPreview={setGitDiffPreview}
 					setGitLogOpen={setGitLogOpen}

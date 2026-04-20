@@ -43,6 +43,7 @@ export interface UseMainPanelPropsDeps {
 	// Core state (primitives for memoization)
 	logViewerOpen: boolean;
 	agentSessionsOpen: boolean;
+	memoryViewerOpen: boolean;
 	activeAgentSessionId: string | null;
 	activeSession: Session | null;
 	thinkingItems: ThinkingItem[];
@@ -118,6 +119,7 @@ export interface UseMainPanelPropsDeps {
 	setGitDiffPreview: (preview: string | null) => void;
 	setLogViewerOpen: (open: boolean) => void;
 	setAgentSessionsOpen: (open: boolean) => void;
+	setMemoryViewerOpen: (open: boolean) => void;
 	setActiveAgentSessionId: (id: string | null) => void;
 	setInputValue: (value: string) => void;
 	setStagedImages: React.Dispatch<React.SetStateAction<string[]>>;
@@ -315,6 +317,7 @@ export function useMainPanelProps(deps: UseMainPanelPropsDeps) {
 			// State props
 			logViewerOpen: deps.logViewerOpen,
 			agentSessionsOpen: deps.agentSessionsOpen,
+			memoryViewerOpen: deps.memoryViewerOpen,
 			activeAgentSessionId: deps.activeAgentSessionId,
 			activeSession: deps.activeSession,
 			thinkingItems: deps.thinkingItems,
@@ -332,6 +335,7 @@ export function useMainPanelProps(deps: UseMainPanelPropsDeps) {
 			setGitDiffPreview: deps.setGitDiffPreview,
 			setLogViewerOpen: deps.setLogViewerOpen,
 			setAgentSessionsOpen: deps.setAgentSessionsOpen,
+			setMemoryViewerOpen: deps.setMemoryViewerOpen,
 			setActiveAgentSessionId: deps.setActiveAgentSessionId,
 			onResumeAgentSession: deps.handleResumeSession,
 			onNewAgentSession: deps.handleNewAgentSession,
@@ -521,6 +525,7 @@ export function useMainPanelProps(deps: UseMainPanelPropsDeps) {
 			// Primitive dependencies for minimal re-computation
 			deps.logViewerOpen,
 			deps.agentSessionsOpen,
+			deps.memoryViewerOpen,
 			deps.activeAgentSessionId,
 			deps.activeSession?.id, // Use ID instead of full object
 			deps.activeSession?.activeTabId,
@@ -572,6 +577,7 @@ export function useMainPanelProps(deps: UseMainPanelPropsDeps) {
 			deps.setGitDiffPreview,
 			deps.setLogViewerOpen,
 			deps.setAgentSessionsOpen,
+			deps.setMemoryViewerOpen,
 			deps.setActiveAgentSessionId,
 			deps.handleResumeSession,
 			deps.handleNewAgentSession,

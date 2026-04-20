@@ -63,6 +63,7 @@ interface QuickActionsModalProps {
 	setProcessMonitorOpen: (open: boolean) => void;
 	setUsageDashboardOpen?: (open: boolean) => void;
 	setAgentSessionsOpen: (open: boolean) => void;
+	setMemoryViewerOpen?: (open: boolean) => void;
 	setActiveAgentSessionId: (id: string | null) => void;
 	setGitDiffPreview: (diff: string | null) => void;
 	setGitLogOpen: (open: boolean) => void;
@@ -93,7 +94,11 @@ interface QuickActionsModalProps {
 	onDeleteGroupChat?: (id: string) => void;
 	activeGroupChatId?: string | null;
 	hasActiveSessionCapability?: (
-		capability: 'supportsSessionStorage' | 'supportsSlashCommands' | 'supportsContextMerge'
+		capability:
+			| 'supportsSessionStorage'
+			| 'supportsSlashCommands'
+			| 'supportsContextMerge'
+			| 'supportsProjectMemory'
 	) => boolean;
 	// Merge session
 	onOpenMergeSession?: () => void;
@@ -177,6 +182,7 @@ export const QuickActionsModal = memo(function QuickActionsModal(props: QuickAct
 		setProcessMonitorOpen,
 		setUsageDashboardOpen,
 		setAgentSessionsOpen,
+		setMemoryViewerOpen,
 		setActiveAgentSessionId,
 		setGitDiffPreview,
 		setGitLogOpen,
@@ -1024,6 +1030,21 @@ export const QuickActionsModal = memo(function QuickActionsModal(props: QuickAct
 						action: () => {
 							setActiveAgentSessionId(null);
 							setAgentSessionsOpen(true);
+							setQuickActionOpen(false);
+						},
+					},
+				]
+			: []),
+		...(activeSession &&
+		setMemoryViewerOpen &&
+		hasActiveSessionCapability?.('supportsProjectMemory')
+			? [
+					{
+						id: 'openMemoryViewer',
+						label: `View Agent Memories for ${activeSession.name}`,
+						shortcut: shortcuts.openMemoryViewer,
+						action: () => {
+							setMemoryViewerOpen(true);
 							setQuickActionOpen(false);
 						},
 					},

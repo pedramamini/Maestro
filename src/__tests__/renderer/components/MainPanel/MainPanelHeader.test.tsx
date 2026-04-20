@@ -110,6 +110,7 @@ const defaultProps = {
 	getContextColor: vi.fn(() => '#3b82f6'),
 	setGitLogOpen: vi.fn(),
 	setAgentSessionsOpen: vi.fn(),
+	setMemoryViewerOpen: vi.fn(),
 	setActiveAgentSessionId: vi.fn(),
 	onStopBatchRun: vi.fn(),
 	onOpenWorktreeConfig: vi.fn(),

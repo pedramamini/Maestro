@@ -904,6 +904,15 @@ const LogItemComponent = memo(
 									<Trash2 className="w-3.5 h-3.5" />
 								</button>
 							))}
+						{/* Read-only mode indicator for messages sent in read-only/plan mode */}
+						{isUserMessage && isAIMode && log.readOnly && (
+							<span title="Sent in read-only mode" className="flex items-center">
+								<Eye
+									className="w-3.5 h-3.5"
+									style={{ color: theme.colors.warning, opacity: 0.7 }}
+								/>
+							</span>
+						)}
 						{/* Force parallel indicator for messages sent via Cmd+Shift+Enter */}
 						{isUserMessage && isAIMode && log.forceParallel && (
 							<span
@@ -1808,7 +1817,7 @@ export const TerminalOutput = memo(
 						<div className="flex items-center gap-2">
 							<button
 								onClick={() => setOutputSearchRegex(!outputSearchRegex)}
-								className="flex items-center gap-1 px-2 rounded border text-xs font-medium whitespace-nowrap transition-colors self-stretch"
+								className="flex items-center gap-1.5 pl-1 pr-2 rounded border text-xs font-medium whitespace-nowrap transition-colors self-stretch"
 								style={{
 									borderColor: outputSearchRegex
 										? theme.colors.accent
@@ -1822,7 +1831,18 @@ export const TerminalOutput = memo(
 								}}
 								title={outputSearchRegex ? 'Switch to plain-text search' : 'Switch to regex search'}
 							>
-								<span>.*</span>
+								{/* Pill marker: bg/fg inverted vs. the surrounding button */}
+								<span
+									className="px-1.5 py-0.5 rounded font-mono leading-none"
+									style={{
+										backgroundColor: outputSearchRegex ? theme.colors.accent : theme.colors.textDim,
+										color: outputSearchRegex
+											? theme.colors.accentForeground
+											: theme.colors.bgSidebar,
+									}}
+								>
+									{outputSearchRegex ? '.*' : 'Aa'}
+								</span>
 								<span>{outputSearchRegex ? 'Regex' : 'Plain Text'}</span>
 							</button>
 							<input

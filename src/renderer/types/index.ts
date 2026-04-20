@@ -1,7 +1,5 @@
 // Type definitions for Maestro renderer
 
-import type { AgentCapabilities } from '../../shared/types';
-
 // Re-export context merge types
 export * from './contextMerge';
 
