@@ -2018,7 +2018,11 @@ export function useBatchProcessor({
 							completedTasks
 						);
 					} catch (statsError) {
-						logger.warn('[BatchProcessor:killBatchRun] Failed to end stats tracking:', undefined, statsError);
+						logger.warn(
+							'[BatchProcessor:killBatchRun] Failed to end stats tracking:',
+							undefined,
+							statsError
+						);
 					}
 				}
 				try {
@@ -2039,7 +2043,11 @@ export function useBatchProcessor({
 						elapsedTimeMs: elapsedMs,
 					});
 				} catch (historyError) {
-					logger.warn('[BatchProcessor:killBatchRun] Failed to add history entry:', undefined, historyError);
+					logger.warn(
+						'[BatchProcessor:killBatchRun] Failed to add history entry:',
+						undefined,
+						historyError
+					);
 				}
 			}
 
