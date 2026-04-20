@@ -240,6 +240,36 @@ describe('TerminalOutput', () => {
 			expect(screen.getByTitle('Message delivered')).toBeInTheDocument();
 		});
 
+		it('shows read-only eye indicator for messages sent in read-only mode', () => {
+			const logs: LogEntry[] = [
+				createLogEntry({ text: 'Read-only message', source: 'user', readOnly: true }),
+			];
+
+			const session = createDefaultSession({
+				tabs: [{ id: 'tab-1', agentSessionId: 'claude-123', logs, isUnread: false }],
+				activeTabId: 'tab-1',
+			});
+
+			const props = createDefaultProps({ session });
+			render(<TerminalOutput {...props} />);
+
+			expect(screen.getByTitle('Sent in read-only mode')).toBeInTheDocument();
+		});
+
+		it('does not show read-only indicator for messages sent without read-only flag', () => {
+			const logs: LogEntry[] = [createLogEntry({ text: 'Regular message', source: 'user' })];
+
+			const session = createDefaultSession({
+				tabs: [{ id: 'tab-1', agentSessionId: 'claude-123', logs, isUnread: false }],
+				activeTabId: 'tab-1',
+			});
+
+			const props = createDefaultProps({ session });
+			render(<TerminalOutput {...props} />);
+
+			expect(screen.queryByTitle('Sent in read-only mode')).not.toBeInTheDocument();
+		});
+
 		it('collapses consecutive AI responses in AI mode', () => {
 			const logs: LogEntry[] = [
 				createLogEntry({ id: 'user-1', text: 'Question', source: 'user' }),

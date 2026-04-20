@@ -279,6 +279,23 @@ export function useBatchProcessor({
 	// Error resolution promises to pause batch processing until user action (per session)
 	const errorResolutionRefs = useRef<Record<string, ErrorResolutionEntry>>({});
 
+	// Per-session state for emergency stats/history flush on force-kill.
+	// Whoever deletes the entry first (the loop's normal cleanup, or killBatchRun) is
+	// responsible for writing the final history + endAutoRun. This guards against the
+	// case where killBatchRun calls timeTracking.stopTracking (which zeros the tracker)
+	// before the loop's cleanup reads it, resulting in a 0ms duration being recorded.
+	const autoRunFlushStateRefs = useRef<
+		Record<
+			string,
+			{
+				statsAutoRunId: string | null;
+				sessionName: string;
+				projectPath: string;
+				getCompletedTasks: () => number;
+			}
+		>
+	>({});
+
 	// Track whether the component is still mounted to prevent state updates after unmount
 	const isMountedRef = useRef(false);
 
@@ -301,6 +318,9 @@ export function useBatchProcessor({
 
 			// Clear stop requested refs (though they should already be cleaned up per-session)
 			stopRequestedRefs.current = {};
+
+			// Drop any outstanding Auto Run flush state — nothing to flush against after unmount.
+			autoRunFlushStateRefs.current = {};
 		};
 	}, []);
 
@@ -889,6 +909,16 @@ export function useBatchProcessor({
 			const agentSessionIds: string[] = [];
 			let totalCompletedTasks = 0;
 			let loopIteration = 0;
+
+			// Register this Auto Run for emergency stats/history flush on force-kill.
+			// Populated even if startAutoRun failed (statsAutoRunId null) so killBatchRun can
+			// still write a history entry with the elapsed time the user actually spent.
+			autoRunFlushStateRefs.current[sessionId] = {
+				statsAutoRunId,
+				sessionName: session.name || session.cwd.split('/').pop() || 'Unknown',
+				projectPath: session.cwd,
+				getCompletedTasks: () => totalCompletedTasks,
+			};
 
 			// Per-loop tracking for loop summary
 			let loopStartTime = Date.now();
@@ -1802,44 +1832,51 @@ export function useBatchProcessor({
 			// Success is true if not stopped and at least some documents completed without stalling
 			const isSuccess = !wasStopped && !allDocsStalled;
 
-			try {
-				await onAddHistoryEntry({
-					type: 'AUTO',
-					timestamp: Date.now(),
-					summary: finalSummary,
-					fullResponse: finalDetails,
-					projectPath: session.cwd,
-					sessionId, // Include sessionId so the summary appears in session's history
-					success: isSuccess,
-					elapsedTimeMs: totalElapsedMs,
-					usageStats:
-						totalInputTokens > 0 || totalOutputTokens > 0
-							? {
-									inputTokens: totalInputTokens,
-									outputTokens: totalOutputTokens,
-									cacheReadInputTokens: 0,
-									cacheCreationInputTokens: 0,
-									totalCostUsd: totalCost,
-									contextWindow: 0,
-								}
-							: undefined,
-					achievementAction: 'openAbout', // Enable clickable link to achievements panel
-				});
-			} catch {
-				// Ignore history errors
-			}
+			// Claim the flush state: if killBatchRun already flushed, skip the history + stats
+			// writes here to avoid clobbering recorded duration with a stale/zero value.
+			const alreadyFlushed = !autoRunFlushStateRefs.current[sessionId];
+			delete autoRunFlushStateRefs.current[sessionId];
 
-			// End stats tracking for this Auto Run session
-			if (statsAutoRunId) {
+			if (!alreadyFlushed) {
 				try {
-					await window.maestro.stats.endAutoRun(
-						statsAutoRunId,
-						totalElapsedMs,
-						totalCompletedTasks
-					);
-				} catch (statsError) {
-					// Don't fail cleanup if stats tracking fails
-					console.warn('[BatchProcessor] Failed to end stats tracking:', statsError);
+					await onAddHistoryEntry({
+						type: 'AUTO',
+						timestamp: Date.now(),
+						summary: finalSummary,
+						fullResponse: finalDetails,
+						projectPath: session.cwd,
+						sessionId, // Include sessionId so the summary appears in session's history
+						success: isSuccess,
+						elapsedTimeMs: totalElapsedMs,
+						usageStats:
+							totalInputTokens > 0 || totalOutputTokens > 0
+								? {
+										inputTokens: totalInputTokens,
+										outputTokens: totalOutputTokens,
+										cacheReadInputTokens: 0,
+										cacheCreationInputTokens: 0,
+										totalCostUsd: totalCost,
+										contextWindow: 0,
+									}
+								: undefined,
+						achievementAction: 'openAbout', // Enable clickable link to achievements panel
+					});
+				} catch {
+					// Ignore history errors
+				}
+
+				// End stats tracking for this Auto Run session
+				if (statsAutoRunId) {
+					try {
+						await window.maestro.stats.endAutoRun(
+							statsAutoRunId,
+							totalElapsedMs,
+							totalCompletedTasks
+						);
+					} catch (statsError) {
+						// Don't fail cleanup if stats tracking fails
+						console.warn('[BatchProcessor] Failed to end stats tracking:', statsError);
+					}
 				}
 			}
 
@@ -1947,6 +1984,47 @@ export function useBatchProcessor({
 		async (sessionId: string) => {
 			console.log('[BatchProcessor:killBatchRun] Force killing session:', sessionId);
 
+			// 0. Flush Auto Run stats + history BEFORE we tear down timeTracking below.
+			//    stopTracking() deletes the tracker, so elapsed time must be captured now.
+			//    Atomically claiming the ref ensures the loop's normal cleanup won't double-write.
+			const flushState = autoRunFlushStateRefs.current[sessionId];
+			delete autoRunFlushStateRefs.current[sessionId];
+			if (flushState) {
+				const elapsedMs = timeTracking.getElapsedTime(sessionId);
+				const completedTasks = flushState.getCompletedTasks();
+				if (flushState.statsAutoRunId) {
+					try {
+						await window.maestro.stats.endAutoRun(
+							flushState.statsAutoRunId,
+							elapsedMs,
+							completedTasks
+						);
+					} catch (statsError) {
+						console.warn('[BatchProcessor:killBatchRun] Failed to end stats tracking:', statsError);
+					}
+				}
+				try {
+					await onAddHistoryEntry({
+						type: 'AUTO',
+						timestamp: Date.now(),
+						summary: `Auto Run killed: ${completedTasks} task${completedTasks !== 1 ? 's' : ''} in ${formatElapsedTime(elapsedMs)}`,
+						fullResponse: [
+							'**Auto Run Summary**',
+							'',
+							'- **Status:** Killed by user',
+							`- **Tasks Completed:** ${completedTasks}`,
+							`- **Total Duration:** ${formatElapsedTime(elapsedMs)}`,
+						].join('\n'),
+						projectPath: flushState.projectPath,
+						sessionId,
+						success: false,
+						elapsedTimeMs: elapsedMs,
+					});
+				} catch (historyError) {
+					console.warn('[BatchProcessor:killBatchRun] Failed to add history entry:', historyError);
+				}
+			}
+
 			// 1. Kill the agent process and wait for termination before cleaning up state
 			try {
 				await window.maestro.process.kill(sessionId);
@@ -1984,7 +2062,7 @@ export function useBatchProcessor({
 			// 8. Allow system to sleep
 			window.maestro.power.removeReason(`autorun:${sessionId}`);
 		},
-		[broadcastAutoRunState, flushDebouncedUpdate, timeTracking]
+		[broadcastAutoRunState, flushDebouncedUpdate, timeTracking, onAddHistoryEntry]
 	);
 
 	/**
