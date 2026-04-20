@@ -40,6 +40,7 @@ export interface MainPanelProps {
 	// State
 	logViewerOpen: boolean;
 	agentSessionsOpen: boolean;
+	memoryViewerOpen: boolean;
 	activeAgentSessionId: string | null;
 	activeSession: Session | null;
 	// PERF: Receive pre-filtered thinkingItems instead of full sessions array.
@@ -77,6 +78,7 @@ export interface MainPanelProps {
 	setGitDiffPreview: (preview: string | null) => void;
 	setLogViewerOpen: (open: boolean) => void;
 	setAgentSessionsOpen: (open: boolean) => void;
+	setMemoryViewerOpen: (open: boolean) => void;
 	setActiveAgentSessionId: (id: string | null) => void;
 	onResumeAgentSession: (
 		agentSessionId: string,

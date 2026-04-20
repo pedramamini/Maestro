@@ -200,6 +200,7 @@ export type ModalId =
 	| 'sendToAgent'
 	| 'agentSessions'
 	// Batch & Auto Run
+	| 'memoryViewer'
 	| 'queueBrowser'
 	| 'batchRunner'
 	| 'autoRunSetup'
@@ -695,6 +696,10 @@ export function getModalActions() {
 		setActiveAgentSessionId: (activeAgentSessionId: string | null) =>
 			updateModalData('agentSessions', { activeAgentSessionId }),
 
+		// Memory Viewer (Claude Code per-project memory)
+		setMemoryViewerOpen: (open: boolean) =>
+			open ? openModal('memoryViewer') : closeModal('memoryViewer'),
+
 		// Execution Queue Browser Modal
 		setQueueBrowserOpen: (open: boolean) =>
 			open ? openModal('queueBrowser') : closeModal('queueBrowser'),
@@ -865,6 +870,7 @@ export function useModalActions() {
 	const renameGroupData = useModalStore(selectModalData('renameGroup'));
 	const agentSessionsOpen = useModalStore(selectModalOpen('agentSessions'));
 	const agentSessionsData = useModalStore(selectModalData('agentSessions'));
+	const memoryViewerOpen = useModalStore(selectModalOpen('memoryViewer'));
 	const queueBrowserOpen = useModalStore(selectModalOpen('queueBrowser'));
 	const batchRunnerModalOpen = useModalStore(selectModalOpen('batchRunner'));
 	const autoRunSetupModalOpen = useModalStore(selectModalOpen('autoRunSetup'));
@@ -1000,6 +1006,9 @@ export function useModalActions() {
 		// Agent Sessions Browser
 		agentSessionsOpen,
 		activeAgentSessionId: agentSessionsData?.activeAgentSessionId ?? null,
+
+		// Memory Viewer (Claude Code per-project memory)
+		memoryViewerOpen,
 
 		// Execution Queue Browser Modal
 		queueBrowserOpen,

@@ -59,6 +59,7 @@ import { registerWakatimeHandlers } from './wakatime';
 import { registerFeedbackHandlers } from './feedback';
 import { registerMaestroCliHandlers } from './maestro-cli';
 import { registerPromptsHandlers } from './prompts';
+import { registerMemoryHandlers } from './memory';
 import { AgentDetector } from '../../agents';
 import { ProcessManager } from '../../process-manager';
 import { WebServer } from '../../web-server';
@@ -112,6 +113,7 @@ export { registerWakatimeHandlers };
 export { registerFeedbackHandlers };
 export { registerMaestroCliHandlers };
 export { registerPromptsHandlers };
+export { registerMemoryHandlers };
 export type { AgentsHandlerDependencies };
 export type { ProcessHandlerDependencies };
 export type { PersistenceHandlerDependencies };
@@ -299,6 +301,8 @@ export function registerAllHandlers(deps: HandlerDependencies): void {
 	});
 	// Register Core Prompts handlers (no dependencies needed)
 	registerPromptsHandlers();
+	// Register project Memory handlers (Claude Code per-project memory viewer)
+	registerMemoryHandlers();
 	// Setup logger event forwarding to renderer
 	setupLoggerEventForwarding(deps.getMainWindow);
 }

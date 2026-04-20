@@ -12,6 +12,7 @@ import { LogViewer } from '../LogViewer';
 import { FilePreviewHandle } from '../FilePreview';
 import { ErrorBoundary } from '../ErrorBoundary';
 import { AgentSessionsBrowser } from '../AgentSessionsBrowser';
+import { MemoryViewer } from '../MemoryViewer';
 import { TabBar } from '../TabBar';
 import { gitService } from '../../services/git';
 import { useAgentCapabilities } from '../../hooks';
@@ -38,6 +39,7 @@ export const MainPanel = React.memo(
 		const {
 			logViewerOpen,
 			agentSessionsOpen,
+			memoryViewerOpen,
 			activeAgentSessionId,
 			activeSession,
 			thinkingItems,
@@ -70,6 +72,7 @@ export const MainPanel = React.memo(
 			setGitDiffPreview,
 			setLogViewerOpen,
 			setAgentSessionsOpen,
+			setMemoryViewerOpen,
 			setActiveAgentSessionId,
 			onResumeAgentSession,
 			onNewAgentSession,
@@ -538,6 +541,22 @@ export const MainPanel = React.memo(
 			);
 		}
 
+		// Show memory viewer (only if agent supports per-project memory)
+		if (memoryViewerOpen && hasCapability('supportsProjectMemory')) {
+			return (
+				<div
+					className="flex-1 flex flex-col min-w-0 relative"
+					style={{ backgroundColor: theme.colors.bgMain }}
+				>
+					<MemoryViewer
+						theme={theme}
+						activeSession={activeSession || undefined}
+						onClose={() => setMemoryViewerOpen(false)}
+					/>
+				</div>
+			);
+		}
+
 		// Show empty state when no active session
 		if (!activeSession) {
 			return (
@@ -589,6 +608,7 @@ export const MainPanel = React.memo(
 								getContextColor={getContextColor}
 								setGitLogOpen={setGitLogOpen}
 								setAgentSessionsOpen={setAgentSessionsOpen}
+								setMemoryViewerOpen={setMemoryViewerOpen}
 								setActiveAgentSessionId={setActiveAgentSessionId}
 								onStopBatchRun={onStopBatchRun}
 								onOpenWorktreeConfig={onOpenWorktreeConfig}

@@ -100,6 +100,12 @@ export interface AgentCapabilities {
 	supportsAppendSystemPrompt: boolean;
 
 	/**
+	 * Agent maintains a per-project persistent memory store on disk that Maestro
+	 * can browse and edit. Claude Code does this at ~/.claude/projects/<path>/memory/.
+	 */
+	supportsProjectMemory: boolean;
+
+	/**
 	 * How images should be handled on resume when -i flag is not available.
 	 * 'prompt-embed': Save images to temp files and embed file paths in the prompt text.
 	 * undefined: Use default image handling (or no special resume handling needed).
@@ -136,6 +142,7 @@ export const DEFAULT_CAPABILITIES: AgentCapabilities = {
 	usesJsonLineOutput: false,
 	usesCombinedContextWindow: false,
 	supportsAppendSystemPrompt: false,
+	supportsProjectMemory: false,
 };
 
 // Session group
@@ -318,6 +325,11 @@ export interface AgentCapabilities {
 	usesCombinedContextWindow: boolean;
 	/** Agent supports --append-system-prompt for separate system prompt delivery */
 	supportsAppendSystemPrompt: boolean;
+	/**
+	 * Agent maintains a per-project persistent memory store on disk that Maestro
+	 * can browse and edit. Claude Code does this at ~/.claude/projects/<path>/memory/.
+	 */
+	supportsProjectMemory: boolean;
 	/** How images should be handled on resume when -i flag is not available. */
 	imageResumeMode?: 'prompt-embed';
 }

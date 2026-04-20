@@ -566,6 +566,12 @@ export function useMainKeyboardHandler(): UseMainKeyboardHandlerReturn {
 					ctx.setAgentSessionsOpen(true);
 					trackShortcut('agentSessions');
 				}
+			} else if (ctx.isShortcut(e, 'openMemoryViewer')) {
+				e.preventDefault();
+				if (ctx.hasActiveSessionCapability('supportsProjectMemory')) {
+					ctx.setMemoryViewerOpen(true);
+					trackShortcut('openMemoryViewer');
+				}
 			} else if (ctx.isShortcut(e, 'systemLogs')) {
 				e.preventDefault();
 				ctx.setLogViewerOpen(true);
