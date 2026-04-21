@@ -70,6 +70,7 @@ import type {
 	RefreshFileTreeCallback,
 	OpenBrowserTabCallback,
 	OpenTerminalTabCallback,
+	NewAITabWithPromptCallback,
 	RefreshAutoRunDocsCallback,
 	ConfigureAutoRunCallback,
 	GetThemeCallback,
@@ -435,6 +436,10 @@ export class WebServer {
 		this.callbackRegistry.setOpenTerminalTabCallback(callback);
 	}
 
+	setNewAITabWithPromptCallback(callback: NewAITabWithPromptCallback): void {
+		this.callbackRegistry.setNewAITabWithPromptCallback(callback);
+	}
+
 	setRefreshAutoRunDocsCallback(callback: RefreshAutoRunDocsCallback): void {
 		this.callbackRegistry.setRefreshAutoRunDocsCallback(callback);
 	}
@@ -742,6 +747,8 @@ export class WebServer {
 				sessionId: string,
 				config: { cwd?: string; shell?: string; name?: string | null }
 			) => this.callbackRegistry.openTerminalTab(sessionId, config),
+			newAITabWithPrompt: async (sessionId: string, prompt: string) =>
+				this.callbackRegistry.newAITabWithPrompt(sessionId, prompt),
 			refreshAutoRunDocs: async (sessionId: string) =>
 				this.callbackRegistry.refreshAutoRunDocs(sessionId),
 			configureAutoRun: async (

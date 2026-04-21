@@ -127,6 +127,7 @@ export interface MessageHandlerCallbacks {
 		sessionId: string,
 		config: { cwd?: string; shell?: string; name?: string | null }
 	) => Promise<boolean>;
+	newAITabWithPrompt: (sessionId: string, prompt: string) => Promise<boolean>;
 	refreshAutoRunDocs: (sessionId: string) => Promise<boolean>;
 	configureAutoRun: (
 		sessionId: string,
@@ -316,6 +317,10 @@ export class WebSocketMessageHandler {
 
 			case 'open_terminal_tab':
 				this.handleOpenTerminalTab(client, message);
+				break;
+
+			case 'new_ai_tab_with_prompt':
+				this.handleNewAITabWithPrompt(client, message);
 				break;
 
 			case 'refresh_file_tree':
@@ -1546,6 +1551,57 @@ export class WebSocketMessageHandler {
 			})
 			.catch((error) => {
 				sendErrorResult(`Failed to open terminal tab: ${error.message}`);
+			});
+	}
+
+	/**
+	 * Handle new_ai_tab_with_prompt message - atomically create a new AI tab
+	 * and dispatch an initial prompt into it. Used by `send --live --new-tab`
+	 * to guarantee a fresh conversation rather than writing into whichever tab
+	 * happens to be active.
+	 */
+	private handleNewAITabWithPrompt(client: WebClient, message: WebClientMessage): void {
+		const sessionId = message.sessionId as string;
+		const prompt = message.prompt as string;
+		logger.info(
+			`[Web] Received new_ai_tab_with_prompt message: session=${sessionId}, prompt=${
+				prompt?.substring(0, 50) ?? ''
+			}`,
+			LOG_CONTEXT
+		);
+
+		const sendErrorResult = (error: string) => {
+			this.send(client, {
+				type: 'new_ai_tab_with_prompt_result',
+				success: false,
+				error,
+				sessionId,
+				requestId: message.requestId,
+			});
+		};
+
+		if (!sessionId || !prompt) {
+			sendErrorResult('Missing sessionId or prompt');
+			return;
+		}
+
+		if (!this.callbacks.newAITabWithPrompt) {
+			sendErrorResult('New AI tab with prompt not configured');
+			return;
+		}
+
+		this.callbacks
+			.newAITabWithPrompt(sessionId, prompt)
+			.then((success) => {
+				this.send(client, {
+					type: 'new_ai_tab_with_prompt_result',
+					success,
+					sessionId,
+					requestId: message.requestId,
+				});
+			})
+			.catch((error) => {
+				sendErrorResult(`Failed to create AI tab with prompt: ${error.message}`);
 			});
 	}
 

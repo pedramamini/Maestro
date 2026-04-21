@@ -666,6 +666,21 @@ export function createWebServerFactory(deps: WebServerFactoryDependencies) {
 			}
 		);
 
+		server.setNewAITabWithPromptCallback(async (sessionId: string, prompt: string) => {
+			const mainWindow = getMainWindow();
+			if (!mainWindow) {
+				logger.warn('mainWindow is null for newAITabWithPrompt', 'WebServer');
+				return false;
+			}
+
+			if (!isWebContentsAvailable(mainWindow)) {
+				logger.warn('webContents is not available for newAITabWithPrompt', 'WebServer');
+				return false;
+			}
+			mainWindow.webContents.send('remote:newAITabWithPrompt', sessionId, prompt);
+			return true;
+		});
+
 		server.setRefreshAutoRunDocsCallback(async (sessionId: string) => {
 			const mainWindow = getMainWindow();
 			if (!mainWindow) {

@@ -303,6 +303,9 @@ interface MaestroAPI {
 				config: { cwd?: string; shell?: string; name?: string | null }
 			) => void
 		) => () => void;
+		onRemoteNewAITabWithPrompt: (
+			callback: (sessionId: string, prompt: string) => void
+		) => () => void;
 		onRemoteRefreshAutoRunDocs: (callback: (sessionId: string) => void) => () => void;
 		onRemoteConfigureAutoRun: (
 			callback: (

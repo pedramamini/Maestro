@@ -13,6 +13,7 @@ interface SendOptions {
 	readOnly?: boolean;
 	tab?: boolean;
 	live?: boolean;
+	newTab?: boolean;
 }
 
 interface SendResponse {
@@ -76,6 +77,12 @@ export async function send(
 	message: string,
 	options: SendOptions
 ): Promise<void> {
+	// --new-tab requires --live (both are "route through desktop" modes)
+	if (options.newTab && !options.live) {
+		emitErrorJson('--new-tab requires --live', 'INVALID_OPTIONS');
+		process.exit(1);
+	}
+
 	// --live mode: route message through Maestro desktop tab
 	if (options.live) {
 		if (options.session || options.readOnly) {
@@ -84,10 +91,19 @@ export async function send(
 		}
 		try {
 			await withMaestroClient(async (client) => {
-				await client.sendCommand(
-					{ type: 'send_command', sessionId: agentIdArg, command: message, inputMode: 'ai' },
-					'command_result'
-				);
+				if (options.newTab) {
+					// Atomic: create a new AI tab, focus it, and dispatch the prompt
+					await client.sendCommand(
+						{ type: 'new_ai_tab_with_prompt', sessionId: agentIdArg, prompt: message },
+						'new_ai_tab_with_prompt_result'
+					);
+				} else {
+					// Write into the agent's currently-active AI tab
+					await client.sendCommand(
+						{ type: 'send_command', sessionId: agentIdArg, command: message, inputMode: 'ai' },
+						'command_result'
+					);
+				}
 			});
 			const response: SendResponse = {
 				agentId: agentIdArg,

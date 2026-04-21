@@ -77,6 +77,7 @@ function createMockCallbacks(): MessageHandlerCallbacks {
 		refreshFileTree: vi.fn().mockResolvedValue(true),
 		openBrowserTab: vi.fn().mockResolvedValue(true),
 		openTerminalTab: vi.fn().mockResolvedValue(true),
+		newAITabWithPrompt: vi.fn().mockResolvedValue(true),
 		refreshAutoRunDocs: vi.fn().mockResolvedValue(true),
 		configureAutoRun: vi.fn().mockResolvedValue({ success: true }),
 		getSessions: vi.fn().mockReturnValue([
@@ -799,6 +800,65 @@ describe('WebSocketMessageHandler', () => {
 			expect(response.success).toBe(false);
 			expect(response.error).toContain('Missing sessionId');
 			expect(callbacks.openTerminalTab).not.toHaveBeenCalled();
+		});
+	});
+
+	describe('New AI Tab With Prompt (Web → Desktop)', () => {
+		it('should forward sessionId and prompt to callback', async () => {
+			handler.handleMessage(client, {
+				type: 'new_ai_tab_with_prompt',
+				sessionId: 'session-1',
+				prompt: 'Summarize the repo',
+			});
+
+			await vi.waitFor(() => {
+				expect(callbacks.newAITabWithPrompt).toHaveBeenCalledWith(
+					'session-1',
+					'Summarize the repo'
+				);
+			});
+
+			const response = JSON.parse((client.socket.send as any).mock.calls[0][0]);
+			expect(response.type).toBe('new_ai_tab_with_prompt_result');
+			expect(response.success).toBe(true);
+			expect(response.sessionId).toBe('session-1');
+		});
+
+		it('should reject missing sessionId', () => {
+			handler.handleMessage(client, { type: 'new_ai_tab_with_prompt', prompt: 'hello' });
+
+			const response = JSON.parse((client.socket.send as any).mock.calls[0][0]);
+			expect(response.type).toBe('new_ai_tab_with_prompt_result');
+			expect(response.success).toBe(false);
+			expect(response.error).toContain('Missing sessionId or prompt');
+			expect(callbacks.newAITabWithPrompt).not.toHaveBeenCalled();
+		});
+
+		it('should reject missing prompt', () => {
+			handler.handleMessage(client, { type: 'new_ai_tab_with_prompt', sessionId: 'session-1' });
+
+			const response = JSON.parse((client.socket.send as any).mock.calls[0][0]);
+			expect(response.type).toBe('new_ai_tab_with_prompt_result');
+			expect(response.success).toBe(false);
+			expect(response.error).toContain('Missing sessionId or prompt');
+			expect(callbacks.newAITabWithPrompt).not.toHaveBeenCalled();
+		});
+
+		it('should handle callback failure', async () => {
+			(callbacks.newAITabWithPrompt as any).mockRejectedValue(new Error('boom'));
+			handler.handleMessage(client, {
+				type: 'new_ai_tab_with_prompt',
+				sessionId: 'session-1',
+				prompt: 'hello',
+			});
+
+			await vi.waitFor(() => {
+				const calls = (client.socket.send as any).mock.calls;
+				const lastResponse = JSON.parse(calls[calls.length - 1][0]);
+				expect(lastResponse.type).toBe('new_ai_tab_with_prompt_result');
+				expect(lastResponse.success).toBe(false);
+				expect(lastResponse.error).toContain('boom');
+			});
 		});
 	});
 

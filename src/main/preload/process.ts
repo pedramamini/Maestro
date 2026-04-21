@@ -496,6 +496,18 @@ export function createProcessApi() {
 		},
 
 		/**
+		 * Subscribe to remote "new AI tab with prompt" from CLI/web interface
+		 */
+		onRemoteNewAITabWithPrompt: (
+			callback: (sessionId: string, prompt: string) => void
+		): (() => void) => {
+			const handler = (_: unknown, sessionId: string, prompt: string) =>
+				callback(sessionId, prompt);
+			ipcRenderer.on('remote:newAITabWithPrompt', handler);
+			return () => ipcRenderer.removeListener('remote:newAITabWithPrompt', handler);
+		},
+
+		/**
 		 * Subscribe to remote refresh auto-run docs from web interface
 		 */
 		onRemoteRefreshAutoRunDocs: (callback: (sessionId: string) => void): (() => void) => {

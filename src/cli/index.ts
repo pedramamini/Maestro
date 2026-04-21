@@ -143,6 +143,7 @@ program
 	.option('-r, --read-only', 'Run in read-only/plan mode (agent cannot modify files)')
 	.option('-t, --tab', 'Open/focus the session tab in Maestro desktop')
 	.option('-l, --live', 'Send message through Maestro desktop (appears in tab)')
+	.option('--new-tab', 'Create a new AI tab instead of writing to the active one (requires --live)')
 	.action(send);
 
 // Open file command - open a file in the Maestro desktop app

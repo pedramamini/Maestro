@@ -294,6 +294,7 @@ export type ReorderTabCallback = (
 export type ToggleBookmarkCallback = (sessionId: string) => Promise<boolean>;
 export type OpenFileTabCallback = (sessionId: string, filePath: string) => Promise<boolean>;
 export type RefreshFileTreeCallback = (sessionId: string) => Promise<boolean>;
+export type NewAITabWithPromptCallback = (sessionId: string, prompt: string) => Promise<boolean>;
 export type OpenBrowserTabCallback = (sessionId: string, url: string) => Promise<boolean>;
 export interface OpenTerminalTabConfig {
 	cwd?: string;

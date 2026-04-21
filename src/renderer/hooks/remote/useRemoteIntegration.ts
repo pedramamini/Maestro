@@ -329,6 +329,31 @@ export function useRemoteIntegration(deps: UseRemoteIntegrationDeps): UseRemoteI
 			}
 		);
 
+		// Handle remote "new AI tab with prompt" from CLI (send --live --new-tab).
+		// Atomically creates a fresh AI tab, makes it active, and dispatches the
+		// prompt through the same maestro:remoteCommand event path that --live
+		// uses — so downstream spawn/history/state flows are identical.
+		const unsubscribeNewTabWithPrompt = window.maestro.process.onRemoteNewAITabWithPrompt(
+			(sessionId: string, prompt: string) => {
+				setSessions((prev) =>
+					prev.map((s) => {
+						if (s.id !== sessionId) return s;
+						const result = createTab(s, {
+							saveToHistory: defaultSaveToHistory,
+							showThinking: defaultShowThinking,
+						});
+						return result?.session ?? s;
+					})
+				);
+				setActiveSessionId(sessionId);
+				window.dispatchEvent(
+					new CustomEvent('maestro:remoteCommand', {
+						detail: { sessionId, command: prompt, inputMode: 'ai' },
+					})
+				);
+			}
+		);
+
 		// Handle remote close tab from web interface
 		const unsubscribeCloseTab = window.maestro.process.onRemoteCloseTab(
 			(sessionId: string, tabId: string) => {
@@ -449,13 +474,21 @@ export function useRemoteIntegration(deps: UseRemoteIntegrationDeps): UseRemoteI
 			unsubscribeSelectSession();
 			unsubscribeSelectTab();
 			unsubscribeNewTab();
+			unsubscribeNewTabWithPrompt();
 			unsubscribeCloseTab();
 			unsubscribeRenameTab();
 			unsubscribeStarTab();
 			unsubscribeReorderTab();
 			unsubscribeToggleBookmark();
 		};
-	}, [sessionsRef, activeSessionIdRef, setSessions, setActiveSessionId, defaultSaveToHistory]);
+	}, [
+		sessionsRef,
+		activeSessionIdRef,
+		setSessions,
+		setActiveSessionId,
+		defaultSaveToHistory,
+		defaultShowThinking,
+	]);
 
 	// Handle remote open file tab from web/CLI interface
 	// Dispatches a CustomEvent for App.tsx to handle (avoids hook ordering issues)

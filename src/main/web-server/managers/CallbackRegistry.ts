@@ -26,6 +26,7 @@ import type {
 	OpenBrowserTabCallback,
 	OpenTerminalTabCallback,
 	OpenTerminalTabConfig,
+	NewAITabWithPromptCallback,
 	RefreshAutoRunDocsCallback,
 	ConfigureAutoRunCallback,
 	GetThemeCallback,
@@ -102,6 +103,7 @@ export interface WebServerCallbacks {
 	refreshFileTree: RefreshFileTreeCallback | null;
 	openBrowserTab: OpenBrowserTabCallback | null;
 	openTerminalTab: OpenTerminalTabCallback | null;
+	newAITabWithPrompt: NewAITabWithPromptCallback | null;
 	refreshAutoRunDocs: RefreshAutoRunDocsCallback | null;
 	configureAutoRun: ConfigureAutoRunCallback | null;
 	getHistory: GetHistoryCallback | null;
@@ -160,6 +162,7 @@ export class CallbackRegistry {
 		refreshFileTree: null,
 		openBrowserTab: null,
 		openTerminalTab: null,
+		newAITabWithPrompt: null,
 		refreshAutoRunDocs: null,
 		configureAutoRun: null,
 		getHistory: null,
@@ -294,6 +297,11 @@ export class CallbackRegistry {
 	async openTerminalTab(sessionId: string, config: OpenTerminalTabConfig): Promise<boolean> {
 		if (!this.callbacks.openTerminalTab) return false;
 		return this.callbacks.openTerminalTab(sessionId, config);
+	}
+
+	async newAITabWithPrompt(sessionId: string, prompt: string): Promise<boolean> {
+		if (!this.callbacks.newAITabWithPrompt) return false;
+		return this.callbacks.newAITabWithPrompt(sessionId, prompt);
 	}
 
 	async refreshAutoRunDocs(sessionId: string): Promise<boolean> {
@@ -608,6 +616,10 @@ export class CallbackRegistry {
 
 	setOpenTerminalTabCallback(callback: OpenTerminalTabCallback): void {
 		this.callbacks.openTerminalTab = callback;
+	}
+
+	setNewAITabWithPromptCallback(callback: NewAITabWithPromptCallback): void {
+		this.callbacks.newAITabWithPrompt = callback;
 	}
 
 	setRefreshAutoRunDocsCallback(callback: RefreshAutoRunDocsCallback): void {
