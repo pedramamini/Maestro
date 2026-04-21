@@ -303,11 +303,9 @@ export const useAgentStore = create<AgentStore>()((set, get) => ({
 				// Process a message - spawn agent with the message text
 				const effectivePrompt = isImageOnlyMessage ? DEFAULT_IMAGE_ONLY_PROMPT : item.text!;
 
-				// For NEW sessions (no agentSessionId), prepare Maestro system prompt separately
 				const appendSystemPrompt = await prepareMaestroSystemPrompt({
 					session,
 					activeTabId: targetTab.id,
-					agentSessionId: tabAgentSessionId,
 				});
 
 				const { sendPromptViaStdin, sendPromptViaStdinRaw } = getStdinFlags({
@@ -392,11 +390,9 @@ export const useAgentStore = create<AgentStore>()((set, get) => ({
 						conductorProfile: deps.conductorProfile,
 					});
 
-					// For NEW sessions, prepare Maestro system prompt separately
 					const appendSystemPromptForCommand = await prepareMaestroSystemPrompt({
 						session,
 						activeTabId: targetTab.id,
-						agentSessionId: tabAgentSessionId,
 					});
 
 					// Add user log showing the command with its interpolated prompt

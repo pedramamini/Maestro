@@ -72,6 +72,8 @@ export function GeneralTab({ theme, isOpen }: GeneralTabProps) {
 		// Input settings
 		enterToSendAI,
 		setEnterToSendAI,
+		enterToSendAIExpanded,
+		setEnterToSendAIExpanded,
 		defaultSaveToHistory,
 		setDefaultSaveToHistory,
 		defaultShowThinking,
@@ -715,6 +717,34 @@ export function GeneralTab({ theme, isOpen }: GeneralTabProps) {
 						{enterToSendAI
 							? 'Press Enter to send. Use Shift+Enter for new line.'
 							: `Press ${formatMetaKey()}+Enter to send. Enter creates new line.`}
+					</p>
+				</div>
+
+				{/* Expanded AI Mode Setting (Prompt Composer) */}
+				<div
+					className="mb-4 p-3 rounded border"
+					style={{ borderColor: theme.colors.border, backgroundColor: theme.colors.bgMain }}
+				>
+					<div className="flex items-center justify-between mb-2">
+						<div className="text-sm font-medium">Expanded AI Interaction Mode</div>
+						<button
+							onClick={() => setEnterToSendAIExpanded(!enterToSendAIExpanded)}
+							className="px-3 py-1.5 rounded text-xs font-mono transition-all"
+							style={{
+								backgroundColor: enterToSendAIExpanded
+									? theme.colors.accentDim
+									: theme.colors.bgActivity,
+								color: theme.colors.textMain,
+								border: `1px solid ${theme.colors.border}`,
+							}}
+						>
+							{formatEnterToSend(enterToSendAIExpanded)}
+						</button>
+					</div>
+					<p className="text-xs opacity-50">
+						{enterToSendAIExpanded
+							? 'In the expanded Prompt Composer, press Enter to send. Use Shift+Enter for new line.'
+							: `In the expanded Prompt Composer, press ${formatMetaKey()}+Enter to send. Enter creates new line.`}
 					</p>
 				</div>
 

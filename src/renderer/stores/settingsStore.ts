@@ -252,6 +252,7 @@ export interface SettingsStoreState {
 	customThemeColors: ThemeColors;
 	customThemeBaseId: ThemeId;
 	enterToSendAI: boolean;
+	enterToSendAIExpanded: boolean;
 	forcedParallelExecution: boolean;
 	forcedParallelAcknowledged: boolean;
 	defaultSaveToHistory: boolean;
@@ -344,6 +345,7 @@ export interface SettingsStoreActions {
 	setCustomThemeColors: (value: ThemeColors) => void;
 	setCustomThemeBaseId: (value: ThemeId) => void;
 	setEnterToSendAI: (value: boolean) => void;
+	setEnterToSendAIExpanded: (value: boolean) => void;
 	setForcedParallelExecution: (value: boolean) => void;
 	setForcedParallelAcknowledged: (value: boolean) => void;
 	setDefaultSaveToHistory: (value: boolean) => void;
@@ -497,7 +499,8 @@ export const useSettingsStore = create<SettingsStore>()((set, get) => {
 		activeThemeId: 'dracula',
 		customThemeColors: DEFAULT_CUSTOM_THEME_COLORS,
 		customThemeBaseId: 'dracula',
-		enterToSendAI: false,
+		enterToSendAI: true,
+		enterToSendAIExpanded: false,
 		forcedParallelExecution: false,
 		forcedParallelAcknowledged: false,
 		defaultSaveToHistory: true,
@@ -650,6 +653,11 @@ export const useSettingsStore = create<SettingsStore>()((set, get) => {
 		setEnterToSendAI: (value) => {
 			set({ enterToSendAI: value });
 			window.maestro.settings.set('enterToSendAI', value);
+		},
+
+		setEnterToSendAIExpanded: (value) => {
+			set({ enterToSendAIExpanded: value });
+			window.maestro.settings.set('enterToSendAIExpanded', value);
 		},
 
 		setForcedParallelExecution: (value) => {
@@ -1533,12 +1541,21 @@ function keysEqual(a: string[], b: string[]): boolean {
 /**
  * Migrate shortcuts: fix macOS Alt+key special characters, apply one-time
  * default remaps, and merge with current defaults. Returns the merged shortcuts
- * and whether a migration write is needed.
+ * (for store state), the raw migrated map (for persistence write-back), and
+ * whether a migration write is needed.
+ *
+ * `migratedRaw` applies BOTH migrations so writing it back makes `needsMigration`
+ * false on the next load. Writing only a partially-migrated map caused an
+ * infinite re-persist loop via the settings file watcher.
  */
 function migrateShortcuts(
 	saved: Record<string, Shortcut>,
 	defaults: Record<string, Shortcut>
-): { shortcuts: Record<string, Shortcut>; needsMigration: boolean } {
+): {
+	shortcuts: Record<string, Shortcut>;
+	migratedRaw: Record<string, Shortcut>;
+	needsMigration: boolean;
+} {
 	const migrated: Record<string, Shortcut> = {};
 	let needsMigration = false;
 
@@ -1573,7 +1590,7 @@ function migrateShortcuts(
 		};
 	}
 
-	return { shortcuts: merged, needsMigration };
+	return { shortcuts: merged, migratedRaw: migrated, needsMigration };
 }
 
 /**
@@ -1635,6 +1652,9 @@ export async function loadAllSettings(): Promise<void> {
 
 		if (allSettings['enterToSendAI'] !== undefined)
 			patch.enterToSendAI = allSettings['enterToSendAI'] as boolean;
+
+		if (allSettings['enterToSendAIExpanded'] !== undefined)
+			patch.enterToSendAIExpanded = allSettings['enterToSendAIExpanded'] as boolean;
 
 		if (allSettings['forcedParallelExecution'] !== undefined)
 			patch.forcedParallelExecution = allSettings['forcedParallelExecution'] as boolean;
@@ -1730,17 +1750,7 @@ export async function loadAllSettings(): Promise<void> {
 			);
 			patch.shortcuts = result.shortcuts;
 			if (result.needsMigration) {
-				// Persist the migrated (but not yet merged) shortcuts so raw saved data is corrected
-				const migratedRaw: Record<string, Shortcut> = {};
-				for (const [id, shortcut] of Object.entries(
-					allSettings['shortcuts'] as Record<string, Shortcut>
-				)) {
-					migratedRaw[id] = {
-						...shortcut,
-						keys: shortcut.keys.map((key) => MAC_ALT_CHAR_MAP[key] || key),
-					};
-				}
-				window.maestro.settings.set('shortcuts', migratedRaw);
+				window.maestro.settings.set('shortcuts', result.migratedRaw);
 			}
 		}
 
@@ -1751,16 +1761,7 @@ export async function loadAllSettings(): Promise<void> {
 			);
 			patch.tabShortcuts = result.shortcuts;
 			if (result.needsMigration) {
-				const migratedRaw: Record<string, Shortcut> = {};
-				for (const [id, shortcut] of Object.entries(
-					allSettings['tabShortcuts'] as Record<string, Shortcut>
-				)) {
-					migratedRaw[id] = {
-						...shortcut,
-						keys: shortcut.keys.map((key) => MAC_ALT_CHAR_MAP[key] || key),
-					};
-				}
-				window.maestro.settings.set('tabShortcuts', migratedRaw);
+				window.maestro.settings.set('tabShortcuts', result.migratedRaw);
 			}
 		}
 

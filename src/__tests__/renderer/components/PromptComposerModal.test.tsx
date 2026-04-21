@@ -739,6 +739,53 @@ describe('PromptComposerModal', () => {
 
 			expect(onSend).not.toHaveBeenCalled();
 		});
+
+		// When enterToSend=true (Expanded AI Interaction Mode "Enter sends"): plain Enter
+		// sends, Shift+Enter inserts a newline, Cmd/Ctrl+Enter falls through (no-op).
+		describe('when enterToSend is true', () => {
+			it('sends on plain Enter', () => {
+				renderWithProvider(
+					<PromptComposerModal
+						isOpen={true}
+						onClose={onClose}
+						theme={mockTheme}
+						initialValue="Test message"
+						onSubmit={onSubmit}
+						onSend={onSend}
+						enterToSend={true}
+					/>
+				);
+
+				const textarea = screen.getByPlaceholderText(
+					'Write your prompt here... (@ to reference files)'
+				);
+				fireEvent.keyDown(textarea, { key: 'Enter' });
+
+				expect(onSend).toHaveBeenCalledWith('Test message');
+				expect(onClose).toHaveBeenCalled();
+			});
+
+			it('does not send on Shift + Enter (allows newline)', () => {
+				renderWithProvider(
+					<PromptComposerModal
+						isOpen={true}
+						onClose={onClose}
+						theme={mockTheme}
+						initialValue="Test message"
+						onSubmit={onSubmit}
+						onSend={onSend}
+						enterToSend={true}
+					/>
+				);
+
+				const textarea = screen.getByPlaceholderText(
+					'Write your prompt here... (@ to reference files)'
+				);
+				fireEvent.keyDown(textarea, { key: 'Enter', shiftKey: true });
+
+				expect(onSend).not.toHaveBeenCalled();
+			});
+		});
 	});
 
 	describe('Close button', () => {

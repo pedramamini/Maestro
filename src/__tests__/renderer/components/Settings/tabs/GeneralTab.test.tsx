@@ -44,6 +44,7 @@ const mockSetShellEnvVars = vi.fn();
 const mockSetGhPath = vi.fn();
 const mockSetLogLevel = vi.fn();
 const mockSetEnterToSendAI = vi.fn();
+const mockSetEnterToSendAIExpanded = vi.fn();
 const mockSetDefaultSaveToHistory = vi.fn();
 const mockSetDefaultShowThinking = vi.fn();
 const mockSetAutomaticTabNamingEnabled = vi.fn();
@@ -78,6 +79,8 @@ vi.mock('../../../../../renderer/hooks/settings/useSettings', () => ({
 		// Input settings
 		enterToSendAI: true,
 		setEnterToSendAI: mockSetEnterToSendAI,
+		enterToSendAIExpanded: false,
+		setEnterToSendAIExpanded: mockSetEnterToSendAIExpanded,
 		defaultSaveToHistory: true,
 		setDefaultSaveToHistory: mockSetDefaultSaveToHistory,
 		defaultShowThinking: 'off',

@@ -528,14 +528,16 @@ export function useInputProcessing(deps: UseInputProcessingDeps): UseInputProces
 				}
 			}
 
-			// Check if we're in read-only mode for the log entry (tab setting OR Auto Run without worktree)
+			// Check if we're in read-only mode for the log entry (tab setting OR Auto Run without worktree).
+			// Force Send (Cmd+Shift+Enter / the Force Send button on a queued item) is an explicit user
+			// override — skip the Auto Run gate, but still honor the tab's own readOnlyMode setting.
 			const activeTabForEntry = currentMode === 'ai' ? getActiveTab(activeSession) : null;
 			const currentBatchState = getBatchState(activeSession.id);
-			const isAutoRunReadOnly = currentBatchState.isRunning && !currentBatchState.worktreeActive;
-			const isReadOnlyEntry = activeTabForEntry?.readOnlyMode === true || isAutoRunReadOnly;
-
 			const isForceParallelEntry =
 				options?.forceParallel === true && useSettingsStore.getState().forcedParallelExecution;
+			const isAutoRunReadOnly =
+				currentBatchState.isRunning && !currentBatchState.worktreeActive && !isForceParallelEntry;
+			const isReadOnlyEntry = activeTabForEntry?.readOnlyMode === true || isAutoRunReadOnly;
 
 			const newEntry: LogEntry = {
 				id: generateId(),
@@ -961,10 +963,15 @@ export function useInputProcessing(deps: UseInputProcessingDeps): UseInputProces
 						// Use the ACTIVE TAB's agentSessionId (not the deprecated session-level one)
 						const freshActiveTab = getActiveTab(freshSession);
 						const tabAgentSessionId = freshActiveTab?.agentSessionId;
-						// Check CURRENT session's Auto Run state (not any session's) and respect worktree bypass
+						// Check CURRENT session's Auto Run state (not any session's) and respect worktree bypass.
+						// Force Send (Cmd+Shift+Enter / the Force Send button on a queued item) is an
+						// explicit override — skip the Auto Run gate, but still honor the tab's own
+						// readOnlyMode setting.
 						const currentSessionBatchState = getBatchState(activeSessionId);
 						const isAutoRunReadOnly =
-							currentSessionBatchState.isRunning && !currentSessionBatchState.worktreeActive;
+							currentSessionBatchState.isRunning &&
+							!currentSessionBatchState.worktreeActive &&
+							!isForceParallel;
 						const isReadOnly = isAutoRunReadOnly || freshActiveTab?.readOnlyMode;
 
 						// For read-only mode, filter out any YOLO/skip-permissions flags from base args
@@ -1024,12 +1031,12 @@ export function useInputProcessing(deps: UseInputProcessingDeps): UseInputProces
 							});
 						}
 
-						// For NEW sessions (no agentSessionId), prepare Maestro system prompt separately
-						// This introduces Maestro and sets directory restrictions for the agent
+						// Prepare Maestro system prompt (re-injected on every spawn, incl. resume —
+						// Claude Code's --append-system-prompt is per-invocation and NOT persisted
+						// into the session transcript, so skipping on resume drops it from turn 2+)
 						const appendSystemPrompt = await prepareMaestroSystemPrompt({
 							session: freshSession,
 							activeTabId: freshSession.activeTabId,
-							agentSessionId: tabAgentSessionId,
 						});
 
 						const { sendPromptViaStdin, sendPromptViaStdinRaw } = getStdinFlags({

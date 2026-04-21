@@ -80,6 +80,12 @@ describe('generateProseStyles', () => {
 			expect(css).toContain('.prose td');
 		});
 
+		it('should allow inline code to wrap when it cannot break cleanly', () => {
+			const css = generateProseStyles({ theme: mockTheme });
+			const codeRule = css.match(/\.prose code \{[^}]*\}/)?.[0] ?? '';
+			expect(codeRule).toContain('overflow-wrap: anywhere');
+		});
+
 		it('should include blockquote, link, and hr rules', () => {
 			const css = generateProseStyles({ theme: mockTheme });
 			expect(css).toContain('.prose blockquote');

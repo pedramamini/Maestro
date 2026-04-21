@@ -349,11 +349,9 @@ export function useRemoteHandlers(deps: UseRemoteHandlersDeps): UseRemoteHandler
 				const targetSessionId = `${sessionId}-ai-${activeTab?.id || 'default'}`;
 				const commandToUse = agent.path ?? agent.command ?? '';
 
-				// For NEW sessions, prepare Maestro system prompt
 				const appendSystemPrompt = await prepareMaestroSystemPrompt({
 					session,
 					activeTabId: activeTab?.id,
-					agentSessionId: tabAgentSessionId,
 				});
 
 				// Determine whether to send the prompt via stdin on Windows to avoid

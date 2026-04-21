@@ -887,7 +887,9 @@ describe('SettingsModal', () => {
 				await vi.advanceTimersByTimeAsync(100);
 			});
 
-			expect(screen.getByText(formatEnterToSend(false))).toBeInTheDocument();
+			// Both the AI Interaction Mode and Expanded AI Interaction Mode buttons can render
+			// this label depending on their respective settings; assert that at least one is shown.
+			expect(screen.getAllByText(formatEnterToSend(false)).length).toBeGreaterThan(0);
 		});
 	});
 

@@ -1305,7 +1305,7 @@ describe('agentStore', () => {
 			expect(spawnCall.prompt).not.toContain('# User Request');
 		});
 
-		it('does NOT prepend system prompt for existing sessions', async () => {
+		it('still passes system prompt for existing sessions (Claude Code does not persist --append-system-prompt across resume)', async () => {
 			const session = createMockSession({
 				id: 'session-1',
 				toolType: 'claude-code',
@@ -1332,7 +1332,7 @@ describe('agentStore', () => {
 
 			const spawnCall = mockSpawn.mock.calls[0][0];
 			expect(spawnCall.prompt).toBe('Follow up question');
-			expect(spawnCall.appendSystemPrompt).toBeUndefined();
+			expect(spawnCall.appendSystemPrompt).toContain('Mock system prompt');
 		});
 
 		it('filters YOLO flags when read-only mode is active', async () => {

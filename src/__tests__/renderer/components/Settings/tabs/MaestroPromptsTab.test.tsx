@@ -11,7 +11,7 @@
  * the shared list renders each item with a data-item-id for scroll-into-view.
  */
 
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import type { Theme } from '../../../../../renderer/types';
 
@@ -143,10 +143,6 @@ describe('MaestroPromptsTab selection precedence', () => {
 		mockSetLastSelectedPromptId.mockReset();
 		mockLastSelectedPromptId = null;
 		setupWindowMaestro();
-	});
-
-	afterEach(() => {
-		delete (window as any).maestro;
 	});
 
 	it('defaults to maestro-system-prompt when nothing else is specified', async () => {

@@ -157,6 +157,13 @@ export const SETTINGS_METADATA: Record<string, SettingMetadata> = {
 		description:
 			'When true, pressing Enter sends messages in AI mode. When false, Ctrl+Enter sends.',
 		type: 'boolean',
+		default: true,
+		category: 'editor',
+	},
+	enterToSendAIExpanded: {
+		description:
+			'When true, pressing Enter sends messages in the expanded Prompt Composer. When false, Ctrl+Enter sends.',
+		type: 'boolean',
 		default: false,
 		category: 'editor',
 	},

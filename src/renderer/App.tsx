@@ -380,6 +380,7 @@ function MaestroConsoleInner() {
 		customThemeColors,
 		enterToSendAI,
 		setEnterToSendAI,
+		enterToSendAIExpanded,
 		defaultSaveToHistory,
 		defaultShowThinking,
 		rightPanelWidth,
@@ -2889,7 +2890,7 @@ function MaestroConsoleInner() {
 					promptSupportsThinking={
 						!activeGroupChatId && hasActiveSessionCapability('supportsThinkingDisplay')
 					}
-					promptEnterToSend={enterToSendAI}
+					promptEnterToSend={enterToSendAIExpanded}
 					onPromptToggleEnterToSend={handlePromptToggleEnterToSend}
 					onCloseQueueBrowser={handleCloseQueueBrowser}
 					onRemoveQueueItem={handleRemoveQueueItem}
