@@ -614,10 +614,18 @@ export function createCueRunManager(deps: CueRunManagerDeps): CueRunManager {
 		},
 
 		stopAll(): void {
+			// Clear the queue FIRST, then stop active runs. stopRun calls
+			// drainQueue internally when it releases a concurrency slot; if
+			// the queue still has entries at that point, the drain dispatches
+			// a fresh run that escapes this stopAll invocation. Clearing the
+			// queue up-front makes every nested drain a no-op, so after this
+			// function returns there are zero active runs AND zero queued
+			// events — the contract callers (engine shutdown / Cue toggle
+			// off) actually need.
+			eventQueue.clear();
 			for (const runId of [...activeRuns.keys()]) {
 				this.stopRun(runId);
 			}
-			eventQueue.clear();
 		},
 
 		getActiveRuns(): CueRunResult[] {
