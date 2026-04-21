@@ -40,6 +40,14 @@ export async function openBrowser(url: string, options: OpenBrowserOptions): Pro
 		process.exit(1);
 	}
 
+	// A scheme-less input that parses with userinfo (e.g. `foo:bar@baz`) is
+	// almost certainly malformed — reject rather than silently prepending
+	// `https://` and producing `https://foo:bar@baz/`.
+	if (!hasExplicitScheme && (parsed.username || parsed.password)) {
+		console.error(`Error: Invalid URL: ${url}`);
+		process.exit(1);
+	}
+
 	if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
 		console.error(`Error: Only http(s) URLs are supported (got ${parsed.protocol})`);
 		process.exit(1);

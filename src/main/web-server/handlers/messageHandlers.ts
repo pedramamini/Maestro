@@ -1429,8 +1429,9 @@ export class WebSocketMessageHandler {
 	private handleOpenBrowserTab(client: WebClient, message: WebClientMessage): void {
 		const sessionId = typeof message.sessionId === 'string' ? message.sessionId : '';
 		const url = typeof message.url === 'string' ? message.url : '';
+		// URLs can embed bearer tokens or session IDs — log length only.
 		logger.info(
-			`[Web] Received open_browser_tab message: session=${sessionId}, url=${url}`,
+			`[Web] Received open_browser_tab message: session=${sessionId}, urlLength=${url.length}`,
 			LOG_CONTEXT
 		);
 
@@ -1504,15 +1505,19 @@ export class WebSocketMessageHandler {
 	/**
 	 * Handle open_terminal_tab message - open a new terminal tab
 	 */
-	private handleOpenTerminalTab(client: WebClient, message: WebClientMessage): void {
+	private async handleOpenTerminalTab(client: WebClient, message: WebClientMessage): Promise<void> {
 		const sessionId = typeof message.sessionId === 'string' ? message.sessionId : '';
 		const rawCwd = message.cwd;
 		const rawShell = message.shell;
 		const rawName = message.name;
+		// cwd/shell/name can leak local usernames or project names — log
+		// presence flags only.
 		logger.info(
-			`[Web] Received open_terminal_tab message: session=${sessionId}, cwd=${
-				typeof rawCwd === 'string' ? rawCwd : ''
-			}, shell=${typeof rawShell === 'string' ? rawShell : ''}`,
+			`[Web] Received open_terminal_tab message: session=${sessionId}, cwdProvided=${
+				typeof rawCwd === 'string' && rawCwd.length > 0
+			}, shellProvided=${
+				typeof rawShell === 'string' && rawShell.length > 0
+			}, nameProvided=${rawName !== undefined}`,
 			LOG_CONTEXT
 		);
 
@@ -1557,14 +1562,23 @@ export class WebSocketMessageHandler {
 
 		// If a cwd is provided, confine it to the agent working directory
 		// (same rule as open_file_tab — prevents spawning a shell outside scope).
+		// Resolve symlinks via fs.realpath so a `link-to-outside` inside the
+		// session root can't slip past the lexical prefix check.
 		let resolvedCwd: string | undefined;
 		if (cwd) {
 			if (!session.cwd) {
 				sendErrorResult('Session has no working directory');
 				return;
 			}
-			const sessionRoot = path.resolve(session.cwd);
-			const resolved = path.resolve(sessionRoot, cwd);
+			let sessionRoot: string;
+			let resolved: string;
+			try {
+				sessionRoot = await fs.realpath(path.resolve(session.cwd));
+				resolved = await fs.realpath(path.resolve(sessionRoot, cwd));
+			} catch {
+				sendErrorResult('Invalid cwd');
+				return;
+			}
 			if (!resolved.startsWith(sessionRoot + path.sep) && resolved !== sessionRoot) {
 				sendErrorResult('Invalid cwd: path is outside the agent working directory');
 				return;
@@ -1601,11 +1615,10 @@ export class WebSocketMessageHandler {
 	private handleNewAITabWithPrompt(client: WebClient, message: WebClientMessage): void {
 		const sessionId = typeof message.sessionId === 'string' ? message.sessionId : '';
 		const prompt = typeof message.prompt === 'string' ? message.prompt : '';
+		// Prompts can contain user-authored content with secrets or PII —
+		// log length only rather than a raw preview.
 		logger.info(
-			`[Web] Received new_ai_tab_with_prompt message: session=${sessionId}, prompt=${prompt.substring(
-				0,
-				50
-			)}`,
+			`[Web] Received new_ai_tab_with_prompt message: session=${sessionId}, promptLength=${prompt.length}`,
 			LOG_CONTEXT
 		);
 
