@@ -27,7 +27,10 @@ export async function openBrowser(url: string, options: OpenBrowserOptions): Pro
 	}
 
 	// Prepend https:// for scheme-less URLs so the user doesn't need to type it.
-	const normalized = /^[a-zA-Z][a-zA-Z\d+.-]*:/.test(trimmed) ? trimmed : `https://${trimmed}`;
+	// Require `://` so inputs like `localhost:3000` or `example.com:8080` are
+	// treated as scheme-less host:port rather than an unknown protocol.
+	const hasExplicitScheme = /^[a-zA-Z][a-zA-Z\d+.-]*:\/\//.test(trimmed);
+	const normalized = hasExplicitScheme ? trimmed : `https://${trimmed}`;
 
 	let parsed: URL;
 	try {

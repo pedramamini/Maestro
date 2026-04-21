@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react';
+import { flushSync } from 'react-dom';
 import type { Session, SessionState, ThinkingMode } from '../../types';
 import { cueService } from '../../services/cue';
 import { captureException } from '../../utils/sentry';
@@ -333,19 +334,35 @@ export function useRemoteIntegration(deps: UseRemoteIntegrationDeps): UseRemoteI
 		// Atomically creates a fresh AI tab, makes it active, and dispatches the
 		// prompt through the same maestro:remoteCommand event path that --live
 		// uses — so downstream spawn/history/state flows are identical.
+		// flushSync forces React to commit the new tab as active before we fire
+		// the event; without it the downstream handler reads stale activeTabId
+		// and writes the prompt into the previously-active tab.
 		const unsubscribeNewTabWithPrompt = window.maestro.process.onRemoteNewAITabWithPrompt(
 			(sessionId: string, prompt: string) => {
-				setSessions((prev) =>
-					prev.map((s) => {
-						if (s.id !== sessionId) return s;
-						const result = createTab(s, {
-							saveToHistory: defaultSaveToHistory,
-							showThinking: defaultShowThinking,
-						});
-						return result?.session ?? s;
-					})
-				);
-				setActiveSessionId(sessionId);
+				let tabCreated = false;
+				flushSync(() => {
+					setSessions((prev) =>
+						prev.map((s) => {
+							if (s.id !== sessionId) return s;
+							const result = createTab(s, {
+								saveToHistory: defaultSaveToHistory,
+								showThinking: defaultShowThinking,
+							});
+							if (!result) return s;
+							tabCreated = true;
+							return result.session;
+						})
+					);
+					if (tabCreated) {
+						setActiveSessionId(sessionId);
+					}
+				});
+				if (!tabCreated) {
+					logger.warn(
+						'[useRemoteIntegration] onRemoteNewAITabWithPrompt: createTab failed, dropping prompt'
+					);
+					return;
+				}
 				window.dispatchEvent(
 					new CustomEvent('maestro:remoteCommand', {
 						detail: { sessionId, command: prompt, inputMode: 'ai' },
