@@ -1471,6 +1471,7 @@ export function AgentSessionsBrowser({
 										renamingSessionId={renamingSessionId}
 										renameValue={renameValue}
 										searchMode={searchMode}
+										searchQuery={search}
 										searchResultInfo={getSearchResultInfo(session.sessionId)}
 										theme={theme}
 										selectedItemRef={selectedItemRef}
