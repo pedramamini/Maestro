@@ -24,10 +24,21 @@ vi.mock('chokidar', () => ({
 // Mock fs
 const mockExistsSync = vi.fn();
 const mockReadFileSync = vi.fn();
-vi.mock('fs', () => ({
-	existsSync: (...args: unknown[]) => mockExistsSync(...args),
-	readFileSync: (...args: unknown[]) => mockReadFileSync(...args),
-}));
+// readPromptFile in cue-config-normalizer uses fs.realpathSync.native to harden
+// its containment check. These tests use fake paths (`/projects/test/...`) that
+// don't exist on disk, so we stub realpath as an identity function — the
+// mocked paths have no symlinks, making this the correct canonical path.
+const mockRealpathSyncNative = vi.fn((p: string) => p);
+vi.mock('fs', () => {
+	const realpathSync = (p: string) => mockRealpathSyncNative(p);
+	(realpathSync as unknown as { native: (p: string) => string }).native = (p: string) =>
+		mockRealpathSyncNative(p);
+	return {
+		existsSync: (...args: unknown[]) => mockExistsSync(...args),
+		readFileSync: (...args: unknown[]) => mockReadFileSync(...args),
+		realpathSync,
+	};
+});
 
 // Must import after mocks
 import {
