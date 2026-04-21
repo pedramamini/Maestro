@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react';
+import { flushSync } from 'react-dom';
 import type { Session, SessionState, ThinkingMode } from '../../types';
 import { cueService } from '../../services/cue';
 import { captureException } from '../../utils/sentry';
@@ -329,6 +330,69 @@ export function useRemoteIntegration(deps: UseRemoteIntegrationDeps): UseRemoteI
 			}
 		);
 
+		// Handle remote "new AI tab with prompt" from CLI (send --live --new-tab).
+		// Atomically creates a fresh AI tab, makes it active, and dispatches the
+		// prompt through the same maestro:remoteCommand event path that --live
+		// uses — so downstream spawn/history/state flows are identical.
+		// flushSync forces React to commit the new tab as active before we fire
+		// the event; without it the downstream handler reads stale activeTabId
+		// and writes the prompt into the previously-active tab.
+		// Ack the renderer result on responseChannel so the CLI only reports
+		// success when a tab was actually created.
+		const unsubscribeNewTabWithPrompt = window.maestro.process.onRemoteNewAITabWithPrompt(
+			(sessionId: string, prompt: string, responseChannel: string) => {
+				// Guard: the downstream maestro:remoteCommand handler drops commands
+				// for missing or busy sessions. Check here so we don't create an
+				// orphan tab and falsely ack success.
+				const targetSession = sessionsRef.current.find((s) => s.id === sessionId);
+				if (!targetSession) {
+					logger.warn(
+						'[useRemoteIntegration] onRemoteNewAITabWithPrompt: session not found, dropping prompt'
+					);
+					window.maestro.process.sendRemoteNewAITabWithPromptResponse(responseChannel, false);
+					return;
+				}
+				if (targetSession.state === 'busy') {
+					logger.warn(
+						'[useRemoteIntegration] onRemoteNewAITabWithPrompt: session is busy, dropping prompt'
+					);
+					window.maestro.process.sendRemoteNewAITabWithPromptResponse(responseChannel, false);
+					return;
+				}
+				let tabCreated = false;
+				flushSync(() => {
+					setSessions((prev) =>
+						prev.map((s) => {
+							if (s.id !== sessionId) return s;
+							const result = createTab(s, {
+								saveToHistory: defaultSaveToHistory,
+								showThinking: defaultShowThinking,
+							});
+							if (!result) return s;
+							tabCreated = true;
+							return result.session;
+						})
+					);
+					if (tabCreated) {
+						setActiveSessionId(sessionId);
+					}
+				});
+				if (!tabCreated) {
+					logger.warn(
+						'[useRemoteIntegration] onRemoteNewAITabWithPrompt: createTab failed, dropping prompt'
+					);
+					window.maestro.process.sendRemoteNewAITabWithPromptResponse(responseChannel, false);
+					return;
+				}
+				window.dispatchEvent(
+					new CustomEvent('maestro:remoteCommand', {
+						detail: { sessionId, command: prompt, inputMode: 'ai' },
+					})
+				);
+				window.maestro.process.sendRemoteNewAITabWithPromptResponse(responseChannel, true);
+			}
+		);
+
 		// Handle remote close tab from web interface
 		const unsubscribeCloseTab = window.maestro.process.onRemoteCloseTab(
 			(sessionId: string, tabId: string) => {
@@ -449,13 +513,21 @@ export function useRemoteIntegration(deps: UseRemoteIntegrationDeps): UseRemoteI
 			unsubscribeSelectSession();
 			unsubscribeSelectTab();
 			unsubscribeNewTab();
+			unsubscribeNewTabWithPrompt();
 			unsubscribeCloseTab();
 			unsubscribeRenameTab();
 			unsubscribeStarTab();
 			unsubscribeReorderTab();
 			unsubscribeToggleBookmark();
 		};
-	}, [sessionsRef, activeSessionIdRef, setSessions, setActiveSessionId, defaultSaveToHistory]);
+	}, [
+		sessionsRef,
+		activeSessionIdRef,
+		setSessions,
+		setActiveSessionId,
+		defaultSaveToHistory,
+		defaultShowThinking,
+	]);
 
 	// Handle remote open file tab from web/CLI interface
 	// Dispatches a CustomEvent for App.tsx to handle (avoids hook ordering issues)
@@ -483,6 +555,46 @@ export function useRemoteIntegration(deps: UseRemoteIntegrationDeps): UseRemoteI
 				})
 			);
 		});
+		return () => {
+			unsubscribe();
+		};
+	}, []);
+
+	// Handle remote open browser tab from CLI/web interface.
+	// responseChannel is forwarded so the App-level listener can ack the
+	// CLI once the browser tab actually exists.
+	useEffect(() => {
+		const unsubscribe = window.maestro.process.onRemoteOpenBrowserTab(
+			(sessionId: string, url: string, responseChannel: string) => {
+				window.dispatchEvent(
+					new CustomEvent('maestro:openBrowserTab', {
+						detail: { sessionId, url, responseChannel },
+					})
+				);
+			}
+		);
+		return () => {
+			unsubscribe();
+		};
+	}, []);
+
+	// Handle remote open terminal tab from CLI/web interface.
+	// responseChannel is forwarded so the App-level listener can ack the
+	// CLI once the terminal tab actually exists.
+	useEffect(() => {
+		const unsubscribe = window.maestro.process.onRemoteOpenTerminalTab(
+			(
+				sessionId: string,
+				config: { cwd?: string; shell?: string; name?: string | null },
+				responseChannel: string
+			) => {
+				window.dispatchEvent(
+					new CustomEvent('maestro:openTerminalTab', {
+						detail: { sessionId, config, responseChannel },
+					})
+				);
+			}
+		);
 		return () => {
 			unsubscribe();
 		};

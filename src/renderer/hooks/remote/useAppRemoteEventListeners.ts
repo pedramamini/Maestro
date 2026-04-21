@@ -13,7 +13,13 @@ import { generateId } from '../../utils/ids';
 import { useSessionStore } from '../../stores/sessionStore';
 import { useSettingsStore } from '../../stores/settingsStore';
 import { PLAYBOOKS_DIR } from '../../../shared/maestro-paths';
-import type { Session, AITab, ToolType, Group, BatchRunConfig } from '../../types';
+import { getBrowserTabPartition } from '../../utils/browserTabPersistence';
+import { ensureInUnifiedTabOrder } from '../../utils/tabHelpers';
+import {
+	createTerminalTab as createTerminalTabHelper,
+	addTerminalTab as addTerminalTabHelper,
+} from '../../utils/terminalTabHelpers';
+import type { Session, AITab, ToolType, Group, BatchRunConfig, BrowserTab } from '../../types';
 import { logger } from '../../utils/logger';
 
 // ============================================================================
@@ -109,6 +115,95 @@ export function useAppRemoteEventListeners(deps: UseAppRemoteEventListenersDeps)
 	useEventListener('maestro:refreshFileTree', (e: Event) => {
 		const { sessionId } = (e as CustomEvent).detail;
 		refreshFileTree(sessionId);
+	});
+
+	// Handle remote open browser tab events from CLI/web interface.
+	// Acks success to responseChannel so the CLI only reports success after
+	// the tab is actually created.
+	useEventListener('maestro:openBrowserTab', (e: Event) => {
+		const { sessionId, url, responseChannel } = (e as CustomEvent).detail as {
+			sessionId: string;
+			url: string;
+			responseChannel?: string;
+		};
+		const ack = (success: boolean) => {
+			if (responseChannel) {
+				window.maestro.process.sendRemoteOpenBrowserTabResponse(responseChannel, success);
+			}
+		};
+		const session = sessionsRef.current.find((s) => s.id === sessionId);
+		if (!session) {
+			logger.error('[Remote] Session not found for openBrowserTab:', undefined, sessionId);
+			ack(false);
+			return;
+		}
+		setActiveSessionId(sessionId);
+		const newBrowserTab: BrowserTab = {
+			id: generateId(),
+			url,
+			title: url,
+			createdAt: Date.now(),
+			partition: getBrowserTabPartition(sessionId),
+			canGoBack: false,
+			canGoForward: false,
+			isLoading: true,
+			favicon: null,
+		};
+		setSessions((prev) =>
+			prev.map((s) => {
+				if (s.id !== sessionId) return s;
+				return {
+					...s,
+					browserTabs: [...(s.browserTabs || []), newBrowserTab],
+					activeFileTabId: null,
+					activeBrowserTabId: newBrowserTab.id,
+					activeTerminalTabId: null,
+					inputMode: 'ai' as const,
+					unifiedTabOrder: ensureInUnifiedTabOrder(
+						s.unifiedTabOrder || [],
+						'browser',
+						newBrowserTab.id
+					),
+				};
+			})
+		);
+		ack(true);
+	});
+
+	// Handle remote open terminal tab events from CLI/web interface.
+	// Acks success to responseChannel so the CLI only reports success after
+	// the tab is actually created.
+	useEventListener('maestro:openTerminalTab', (e: Event) => {
+		const { sessionId, config, responseChannel } = (e as CustomEvent).detail as {
+			sessionId: string;
+			config: { cwd?: string; shell?: string; name?: string | null };
+			responseChannel?: string;
+		};
+		const ack = (success: boolean) => {
+			if (responseChannel) {
+				window.maestro.process.sendRemoteOpenTerminalTabResponse(responseChannel, success);
+			}
+		};
+		const session = sessionsRef.current.find((s) => s.id === sessionId);
+		if (!session) {
+			logger.error('[Remote] Session not found for openTerminalTab:', undefined, sessionId);
+			ack(false);
+			return;
+		}
+		setActiveSessionId(sessionId);
+		const tab = createTerminalTabHelper(
+			config?.shell,
+			config?.cwd ?? session.cwd,
+			config?.name ?? null
+		);
+		setSessions((prev) =>
+			prev.map((s) => {
+				if (s.id !== sessionId) return s;
+				const updated = addTerminalTabHelper(s, tab);
+				return { ...updated, inputMode: 'terminal' as const };
+			})
+		);
+		ack(true);
 	});
 
 	// --- Auto Run Operations ---

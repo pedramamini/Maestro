@@ -296,6 +296,22 @@ interface MaestroAPI {
 		onRemoteToggleBookmark: (callback: (sessionId: string) => void) => () => void;
 		onRemoteOpenFileTab: (callback: (sessionId: string, filePath: string) => void) => () => void;
 		onRemoteRefreshFileTree: (callback: (sessionId: string) => void) => () => void;
+		onRemoteOpenBrowserTab: (
+			callback: (sessionId: string, url: string, responseChannel: string) => void
+		) => () => void;
+		sendRemoteOpenBrowserTabResponse: (responseChannel: string, success: boolean) => void;
+		onRemoteOpenTerminalTab: (
+			callback: (
+				sessionId: string,
+				config: { cwd?: string; shell?: string; name?: string | null },
+				responseChannel: string
+			) => void
+		) => () => void;
+		sendRemoteOpenTerminalTabResponse: (responseChannel: string, success: boolean) => void;
+		onRemoteNewAITabWithPrompt: (
+			callback: (sessionId: string, prompt: string, responseChannel: string) => void
+		) => () => void;
+		sendRemoteNewAITabWithPromptResponse: (responseChannel: string, success: boolean) => void;
 		onRemoteRefreshAutoRunDocs: (callback: (sessionId: string) => void) => () => void;
 		onRemoteConfigureAutoRun: (
 			callback: (
