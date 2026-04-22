@@ -253,6 +253,8 @@ export const QuickActionsModal = memo(function QuickActionsModal(props: QuickAct
 	const setAudioFeedbackEnabled = useSettingsStore((s) => s.setAudioFeedbackEnabled);
 	const idleNotificationEnabled = useSettingsStore((s) => s.idleNotificationEnabled);
 	const setIdleNotificationEnabled = useSettingsStore((s) => s.setIdleNotificationEnabled);
+	const bionifyReadingMode = useSettingsStore((s) => s.bionifyReadingMode);
+	const setBionifyReadingMode = useSettingsStore((s) => s.setBionifyReadingMode);
 	const storeSetHistorySearchFilterOpen = useUIStore((s) => s.setHistorySearchFilterOpen);
 	const setSuccessFlashNotification = useUIStore((s) => s.setSuccessFlashNotification);
 
@@ -617,6 +619,18 @@ export const QuickActionsModal = memo(function QuickActionsModal(props: QuickAct
 					},
 				]
 			: []),
+		{
+			id: 'toggleBionifyReadingMode',
+			label: bionifyReadingMode ? 'Turn Off Bionify Emphasis' : 'Turn On Bionify Emphasis',
+			subtext: `Bionify emphasis: ${bionifyReadingMode ? 'enabled' : 'disabled'}`,
+			action: () => {
+				const newState = !bionifyReadingMode;
+				setBionifyReadingMode(newState);
+				setSuccessFlashNotification(newState ? 'Bionify: ON' : 'Bionify: OFF');
+				setTimeout(() => setSuccessFlashNotification(null), 2000);
+				setQuickActionOpen(false);
+			},
+		},
 		{
 			id: 'toggleCustomNotification',
 			label: audioFeedbackEnabled
@@ -1726,14 +1740,18 @@ export const QuickActionsModal = memo(function QuickActionsModal(props: QuickAct
 	];
 
 	const groupActions: QuickAction[] = [
-		{
-			id: 'back',
-			label: '← Back to main menu',
-			action: () => {
-				setMode('main');
-				setSelectedIndex(0);
-			},
-		},
+		...(initialMode === 'main'
+			? [
+					{
+						id: 'back',
+						label: '← Back to main menu',
+						action: () => {
+							setMode('main');
+							setSelectedIndex(0);
+						},
+					},
+				]
+			: []),
 		{ id: 'no-group', label: '📁 No Group (Root)', action: () => handleMoveToGroup('') },
 		...groups.map((g) => ({
 			id: `group-${g.id}`,

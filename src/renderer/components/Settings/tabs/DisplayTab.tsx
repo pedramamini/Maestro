@@ -7,12 +7,25 @@
  */
 
 import { useState } from 'react';
-import { Sparkles, AlertTriangle, AppWindow, HelpCircle, ListFilter } from 'lucide-react';
+import {
+	ALargeSmall,
+	AlignHorizontalJustifyCenter,
+	AlertTriangle,
+	AppWindow,
+	BookOpen,
+	Database,
+	HelpCircle,
+	WrapText,
+	ListFilter,
+	Palette,
+	Sparkles,
+} from 'lucide-react';
 import { useSettings } from '../../../hooks';
 import type { Theme } from '../../../types';
 import { ToggleButtonGroup } from '../../ToggleButtonGroup';
 import { FontConfigurationPanel } from '../../FontConfigurationPanel';
 import { IgnorePatternsSection } from '../IgnorePatternsSection';
+import { SettingsSectionHeading } from '../SettingsSectionHeading';
 import { DEFAULT_LOCAL_IGNORE_PATTERNS } from '../../../stores/settingsStore';
 import { logger } from '../../../utils/logger';
 import { Modal } from '../../ui/Modal';
@@ -147,7 +160,7 @@ export function DisplayTab({ theme }: DisplayTabProps) {
 
 			{/* Font Size */}
 			<div data-setting-id="display-font-size">
-				<div className="block text-xs font-bold opacity-70 uppercase mb-2">Font Size</div>
+				<SettingsSectionHeading icon={ALargeSmall}>Font Size</SettingsSectionHeading>
 				<ToggleButtonGroup
 					options={[
 						{ value: 12, label: 'Small' },
@@ -163,7 +176,7 @@ export function DisplayTab({ theme }: DisplayTabProps) {
 
 			{/* Max Log Buffer */}
 			<div data-setting-id="display-max-log-buffer">
-				<div className="block text-xs font-bold opacity-70 uppercase mb-2">Maximum Log Buffer</div>
+				<SettingsSectionHeading icon={Database}>Maximum Log Buffer</SettingsSectionHeading>
 				<ToggleButtonGroup
 					options={[1000, 5000, 10000, 25000]}
 					value={maxLogBuffer}
@@ -178,9 +191,9 @@ export function DisplayTab({ theme }: DisplayTabProps) {
 
 			{/* Max Output Lines */}
 			<div data-setting-id="display-max-output-lines">
-				<div className="block text-xs font-bold opacity-70 uppercase mb-2">
+				<SettingsSectionHeading icon={WrapText}>
 					Max Output Lines per Response
-				</div>
+				</SettingsSectionHeading>
 				<ToggleButtonGroup
 					options={[
 						{ value: 15 },
@@ -201,9 +214,9 @@ export function DisplayTab({ theme }: DisplayTabProps) {
 
 			{/* Message Alignment */}
 			<div data-setting-id="display-message-alignment">
-				<div className="block text-xs font-bold opacity-70 uppercase mb-2">
+				<SettingsSectionHeading icon={AlignHorizontalJustifyCenter}>
 					User Message Alignment
-				</div>
+				</SettingsSectionHeading>
 				<ToggleButtonGroup
 					options={[
 						{ value: 'left', label: 'Left' },
@@ -220,7 +233,11 @@ export function DisplayTab({ theme }: DisplayTabProps) {
 			</div>
 
 			<div data-setting-id="display-bionify-reading-mode">
-				<div className="block text-xs font-bold opacity-70 uppercase mb-2">Reading Mode</div>
+				<SettingsSectionHeading icon={BookOpen}>Reading Mode</SettingsSectionHeading>
+				<p className="text-xs opacity-50 mb-2">
+					Applies Bionify-style emphasis only to opted-in long-form readers like File Preview and
+					Auto Run. Terminals, logs, and chat input stay unchanged.
+				</p>
 				<div
 					className="p-3 rounded border space-y-3"
 					style={{ borderColor: theme.colors.border, backgroundColor: theme.colors.bgMain }}
@@ -256,10 +273,6 @@ export function DisplayTab({ theme }: DisplayTabProps) {
 								>
 									<HelpCircle className="w-3.5 h-3.5" />
 								</button>
-							</div>
-							<div className="text-xs opacity-50 mt-0.5" style={{ color: theme.colors.textDim }}>
-								Applies Bionify-style emphasis only to opted-in long-form readers like File Preview
-								and Auto Run. Terminals, logs, and chat input stay unchanged.
 							</div>
 						</div>
 						<button
@@ -357,9 +370,7 @@ export function DisplayTab({ theme }: DisplayTabProps) {
 			</div>
 
 			<div data-setting-id="display-icon-theme">
-				<div className="block text-xs font-bold opacity-70 uppercase mb-2">
-					Files Pane Icon Theme
-				</div>
+				<SettingsSectionHeading icon={Palette}>Files Pane Icon Theme</SettingsSectionHeading>
 				<ToggleButtonGroup
 					options={[
 						{ value: 'default', label: 'Default' },
@@ -377,13 +388,7 @@ export function DisplayTab({ theme }: DisplayTabProps) {
 
 			{/* Window Chrome Settings */}
 			<div data-setting-id="display-window-chrome">
-				<label
-					className="block text-xs font-bold opacity-70 uppercase mb-2 flex items-center gap-2"
-					style={{ color: theme.colors.textDim }}
-				>
-					<AppWindow className="w-3 h-3" />
-					Window Chrome
-				</label>
+				<SettingsSectionHeading icon={AppWindow}>Window Chrome</SettingsSectionHeading>
 				<div
 					className="p-3 rounded border space-y-3"
 					style={{
@@ -456,13 +461,7 @@ export function DisplayTab({ theme }: DisplayTabProps) {
 
 			{/* Starred Tabs in Unread Filter */}
 			<div data-setting-id="display-tab-filtering">
-				<label
-					className="block text-xs font-bold opacity-70 uppercase mb-2 flex items-center gap-2"
-					style={{ color: theme.colors.textDim }}
-				>
-					<ListFilter className="w-3 h-3" />
-					Tab Filtering
-				</label>
+				<SettingsSectionHeading icon={ListFilter}>Tab Filtering</SettingsSectionHeading>
 				<div
 					className="p-3 rounded border space-y-3"
 					style={{
@@ -538,10 +537,7 @@ export function DisplayTab({ theme }: DisplayTabProps) {
 
 			{/* Document Graph Settings */}
 			<div data-setting-id="display-document-graph">
-				<div className="block text-xs font-bold opacity-70 uppercase mb-2 flex items-center gap-2">
-					<Sparkles className="w-3 h-3" />
-					Document Graph
-				</div>
+				<SettingsSectionHeading icon={Sparkles}>Document Graph</SettingsSectionHeading>
 				<div
 					className="p-3 rounded border space-y-3"
 					style={{ borderColor: theme.colors.border, backgroundColor: theme.colors.bgMain }}
@@ -608,10 +604,9 @@ export function DisplayTab({ theme }: DisplayTabProps) {
 
 			{/* Context Window Warnings */}
 			<div data-setting-id="display-context-warnings">
-				<div className="block text-xs font-bold opacity-70 uppercase mb-2 flex items-center gap-2">
-					<AlertTriangle className="w-3 h-3" />
+				<SettingsSectionHeading icon={AlertTriangle}>
 					Context Window Warnings
-				</div>
+				</SettingsSectionHeading>
 				<div
 					className="p-3 rounded border space-y-3"
 					style={{ borderColor: theme.colors.border, backgroundColor: theme.colors.bgMain }}

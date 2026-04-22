@@ -126,24 +126,15 @@ describe('AutoRunDocumentSelector', () => {
 			expect(changeFolderButton).toBeInTheDocument();
 		});
 
-		it('renders a Bionify toggle with the same toolbar geometry as adjacent action buttons', () => {
-			render(
-				<AutoRunDocumentSelector
-					{...defaultProps}
-					selectedDocument="doc1"
-					bionifyEnabled={false}
-					onToggleBionify={vi.fn()}
-				/>
-			);
+		it('does not render a Bionify toggle (toggled globally via Cmd+K)', () => {
+			render(<AutoRunDocumentSelector {...defaultProps} selectedDocument="doc1" />);
 
-			const bionifyButton = screen.getByTitle('Enable Bionify for this document preview');
-			const createButton = screen.getByTitle('Create new document');
-
-			expect(bionifyButton.className).toContain('inline-flex');
-			expect(bionifyButton.className).toContain('justify-center');
-			expect(bionifyButton.className).toContain('min-w-10');
-			expect(bionifyButton.className).toContain('h-10');
-			expect(bionifyButton.className).toBe(createButton.className);
+			expect(
+				screen.queryByTitle('Enable Bionify for this document preview')
+			).not.toBeInTheDocument();
+			expect(
+				screen.queryByTitle('Disable Bionify for this document preview')
+			).not.toBeInTheDocument();
 		});
 
 		it('applies theme colors to dropdown button', () => {

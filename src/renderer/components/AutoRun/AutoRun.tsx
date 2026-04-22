@@ -157,16 +157,10 @@ const AutoRunInner = forwardRef<AutoRunHandle, AutoRunProps>(function AutoRunInn
 	const textareaRef = useRef<HTMLTextAreaElement>(null);
 	const previewRef = useRef<HTMLDivElement>(null);
 
-	// Bionify reading mode (opt-in per preview surface; disabled while search highlights are active)
+	// Bionify reading mode (global setting; disabled while search highlights are active)
 	const bionifyReadingMode = useSettingsStore((s) => s.bionifyReadingMode);
 	const bionifyIntensity = useSettingsStore((s) => s.bionifyIntensity);
 	const bionifyAlgorithm = useSettingsStore((s) => s.bionifyAlgorithm);
-	const [previewBionifyOverride, setPreviewBionifyOverride] = useState<boolean | null>(null);
-	const previewBionifyReadingMode = previewBionifyOverride ?? bionifyReadingMode;
-	// Reset override when the selected document changes
-	useEffect(() => {
-		setPreviewBionifyOverride(null);
-	}, [selectedFile]);
 
 	// Search state and effects
 	const {
@@ -472,7 +466,7 @@ const AutoRunInner = forwardRef<AutoRunHandle, AutoRunProps>(function AutoRunInn
 
 	// Disable Bionify while search is active so search highlights remain visible
 	const hasActivePreviewSearch = searchOpen && searchQuery.trim().length > 0;
-	const effectivePreviewBionifyReadingMode = previewBionifyReadingMode && !hasActivePreviewSearch;
+	const effectivePreviewBionifyReadingMode = bionifyReadingMode && !hasActivePreviewSearch;
 
 	// Markdown rendering: prose styles, task counts, token count, remark plugins, components
 	const { proseStyles, taskCounts, tokenCount, remarkPlugins, markdownComponents } =
@@ -559,10 +553,6 @@ const AutoRunInner = forwardRef<AutoRunHandle, AutoRunProps>(function AutoRunInn
 						onCreateDocument={onCreateDocument}
 						isLoading={isLoadingDocuments}
 						documentTaskCounts={documentTaskCounts}
-						bionifyEnabled={previewBionifyReadingMode}
-						onToggleBionify={() =>
-							setPreviewBionifyOverride((current) => !(current ?? bionifyReadingMode))
-						}
 					/>
 				</div>
 			)}

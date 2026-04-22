@@ -104,15 +104,11 @@ vi.mock('../../../renderer/components/MermaidRenderer', () => ({
 
 vi.mock('../../../renderer/components/AutoRun/AutoRunDocumentSelector', () => ({
 	AutoRunDocumentSelector: ({
-		theme,
 		documents,
 		selectedDocument,
 		onSelectDocument,
 		onRefresh,
 		onChangeFolder,
-		onCreateDocument,
-		bionifyEnabled,
-		onToggleBionify,
 		isLoading,
 	}: any) => (
 		<div data-testid="document-selector">
@@ -132,9 +128,6 @@ vi.mock('../../../renderer/components/AutoRun/AutoRunDocumentSelector', () => ({
 			</button>
 			<button data-testid="change-folder-btn" onClick={onChangeFolder}>
 				Change
-			</button>
-			<button data-testid="toggle-bionify-btn" onClick={onToggleBionify}>
-				{bionifyEnabled ? 'Bionify On' : 'Bionify Off'}
 			</button>
 			{isLoading && <span data-testid="loading-indicator">Loading...</span>}
 		</div>
@@ -290,15 +283,14 @@ describe('AutoRun', () => {
 			expect(screen.getByTestId('react-markdown')).toBeInTheDocument();
 		});
 
-		it('allows Bionify to be toggled from the document selector area', () => {
-			const props = createDefaultProps({ mode: 'preview' });
+		it('reflects global bionifyReadingMode in preview markdown components', () => {
+			useSettingsStore.setState({ bionifyReadingMode: true });
+			const props = createDefaultProps({ mode: 'preview', content: 'hello world' });
 			renderWithProvider(<AutoRun {...props} />);
 
-			expect(screen.getByTestId('toggle-bionify-btn')).toHaveTextContent('Bionify Off');
-
-			fireEvent.click(screen.getByTestId('toggle-bionify-btn'));
-
-			expect(screen.getByTestId('toggle-bionify-btn')).toHaveTextContent('Bionify On');
+			expect(
+				createMarkdownComponentsCalls.some((call) => call.enableBionifyReadingMode === true)
+			).toBe(true);
 		});
 
 		it('shows "Select Auto Run Folder" button when no folder is configured', () => {
@@ -2302,11 +2294,9 @@ describe('Preview Mode with Search', () => {
 	});
 
 	it('passes bionify=false to preview markdown components while search is active', async () => {
+		useSettingsStore.setState({ bionifyReadingMode: true });
 		const props = createDefaultProps({ mode: 'preview', content: 'information information' });
 		renderWithProvider(<AutoRun {...props} />);
-
-		fireEvent.click(screen.getByTestId('toggle-bionify-btn'));
-		expect(screen.getByTestId('toggle-bionify-btn')).toHaveTextContent('Bionify On');
 
 		const preview = screen.getByTestId('react-markdown').parentElement!;
 		fireEvent.keyDown(preview, { key: 'f', metaKey: true });

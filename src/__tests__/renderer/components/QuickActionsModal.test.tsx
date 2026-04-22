@@ -389,6 +389,20 @@ describe('QuickActionsModal', () => {
 
 			expect(props.toggleInputMode).toHaveBeenCalled();
 		});
+
+		it('toggles Bionify Emphasis globally', async () => {
+			const { useSettingsStore } = await import('../../../renderer/stores/settingsStore');
+			useSettingsStore.setState({ bionifyReadingMode: false });
+			const props = createDefaultProps();
+			render(<QuickActionsModal {...props} />);
+
+			fireEvent.click(screen.getByText('Turn On Bionify Emphasis'));
+
+			expect(useSettingsStore.getState().bionifyReadingMode).toBe(true);
+			expect(props.setQuickActionOpen).toHaveBeenCalledWith(false);
+
+			useSettingsStore.setState({ bionifyReadingMode: false });
+		});
 	});
 
 	describe('Settings and help actions', () => {
