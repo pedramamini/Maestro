@@ -110,6 +110,29 @@ interface GroupedResult {
 }
 
 /**
+ * Session is "unread" if any AI tab has unread, or the session is busy.
+ */
+function sessionHasUnreadActivity(session: Session): boolean {
+	return (session.aiTabs?.some((tab) => tab.hasUnread) ?? false) || session.state === 'busy';
+}
+
+/**
+ * Mirrors the desktop `useSortedSessions.passesUnreadFilter` so the web bell
+ * keeps the same set of sessions visible as the desktop Left Bar filter.
+ */
+function passesUnreadFilter(
+	session: Session,
+	activeSessionId: string | null,
+	worktreeChildrenMap: Map<string, Session[]>
+): boolean {
+	if (session.id === activeSessionId) return true;
+	const children = worktreeChildrenMap.get(session.id);
+	if (children?.some((child) => child.id === activeSessionId)) return true;
+	if (sessionHasUnreadActivity(session)) return true;
+	return children?.some(sessionHasUnreadActivity) ?? false;
+}
+
+/**
  * Group sessions by their groupName (or "Ungrouped"),
  * filtering out worktree children from the top-level list.
  */
@@ -640,9 +663,35 @@ export function LeftPanel({
 		[setCollapsedGroups]
 	);
 
+	// Bell filter — when enabled, show only sessions that are active, busy,
+	// have unread tabs, or have a worktree child that is busy/unread.
+	const [showUnreadOnly, setShowUnreadOnly] = useState(false);
+
+	const worktreeChildrenByParent = useMemo(() => buildWorktreeChildrenMap(sessions), [sessions]);
+
+	const hasUnreadAgents = useMemo(() => sessions.some(sessionHasUnreadActivity), [sessions]);
+
+	// If the filter turns off because there's nothing to show, auto-disable so
+	// the user isn't left with a blank list after sessions settle.
+	useEffect(() => {
+		if (showUnreadOnly && !hasUnreadAgents) {
+			setShowUnreadOnly(false);
+		}
+	}, [showUnreadOnly, hasUnreadAgents]);
+
+	const visibleSessions = useMemo(() => {
+		if (!showUnreadOnly) return sessions;
+		// Only filter top-level sessions; keep all worktree children so parents
+		// that pass the filter can still render their full child list.
+		return sessions.filter((s) => {
+			if (s.parentSessionId) return true;
+			return passesUnreadFilter(s, activeSessionId, worktreeChildrenByParent);
+		});
+	}, [sessions, showUnreadOnly, activeSessionId, worktreeChildrenByParent]);
+
 	const { groups: grouped, worktreeChildrenMap } = useMemo(
-		() => groupSessions(sessions),
-		[sessions]
+		() => groupSessions(visibleSessions),
+		[visibleSessions]
 	);
 
 	const [expandedWorktrees, setExpandedWorktrees] = useState<Set<string>>(
@@ -806,6 +855,56 @@ export function LeftPanel({
 						Agents
 					</span>
 					<div style={{ display: 'flex', gap: '4px' }}>
+						<button
+							onClick={() => {
+								triggerHaptic(HAPTIC_PATTERNS.tap);
+								setShowUnreadOnly((prev) => !prev);
+							}}
+							style={{
+								position: 'relative',
+								width: '24px',
+								height: '24px',
+								display: 'flex',
+								alignItems: 'center',
+								justifyContent: 'center',
+								border: `1px solid ${showUnreadOnly ? colors.accent : colors.border}`,
+								borderRadius: '4px',
+								backgroundColor: showUnreadOnly ? colors.accent : 'transparent',
+								color: showUnreadOnly ? colors.accentForeground : colors.textDim,
+								cursor: 'pointer',
+								padding: 0,
+							}}
+							aria-pressed={showUnreadOnly}
+							aria-label={showUnreadOnly ? 'Showing unread agents only' : 'Filter unread agents'}
+							title={showUnreadOnly ? 'Showing unread agents only' : 'Filter unread agents'}
+						>
+							<svg
+								width="12"
+								height="12"
+								viewBox="0 0 24 24"
+								fill="none"
+								stroke="currentColor"
+								strokeWidth="2"
+								strokeLinecap="round"
+								strokeLinejoin="round"
+							>
+								<path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
+								<path d="M13.73 21a2 2 0 0 1-3.46 0" />
+							</svg>
+							{hasUnreadAgents && !showUnreadOnly && (
+								<span
+									style={{
+										position: 'absolute',
+										top: '-2px',
+										right: '-2px',
+										width: '6px',
+										height: '6px',
+										borderRadius: '50%',
+										backgroundColor: colors.accent,
+									}}
+								/>
+							)}
+						</button>
 						{onCreateGroup && (
 							<button
 								onClick={() => {
@@ -935,6 +1034,19 @@ export function LeftPanel({
 							}}
 						>
 							No agents yet
+						</div>
+					)}
+
+					{sessions.length > 0 && showUnreadOnly && grouped.length === 0 && (
+						<div
+							style={{
+								padding: '24px 12px',
+								textAlign: 'center',
+								color: colors.textDim,
+								fontSize: '13px',
+							}}
+						>
+							No active or unread agents
 						</div>
 					)}
 
