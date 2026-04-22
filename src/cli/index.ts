@@ -408,4 +408,9 @@ prompts
 	.option('--json', 'Output as JSON object with metadata + content')
 	.action(promptsGet);
 
-program.parse();
+// Commander auto-switches to from: 'electron' when process.versions.electron is
+// set, which is still true under ELECTRON_RUN_AS_NODE=1. In that mode Commander
+// only strips argv[0] and treats the script path as the first user command.
+// Force node-style argv parsing so the shim that spawns us via Electron-as-Node
+// (see MaestroCliManager.writeUnixShim / writeWindowsShim) works correctly.
+program.parse(process.argv, { from: 'node' });
