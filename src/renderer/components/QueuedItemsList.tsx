@@ -244,31 +244,15 @@ export const QueuedItemsList = memo(
 								</div>
 							)}
 
-							{/* Top-right action cluster: Force Send + Remove */}
-							<div className="absolute top-2 right-2 flex items-center gap-1">
-								{showForceSendButton && (
-									<button
-										onClick={() => setForceSendConfirmId(item.id)}
-										className="flex items-center gap-1 px-2 py-1 rounded text-xs font-medium hover:opacity-80 transition-opacity"
-										style={{
-											backgroundColor: theme.colors.warning + '33',
-											color: theme.colors.warning,
-										}}
-										title="Force send this message now (skips cross-tab wait)"
-									>
-										<Hammer className="w-3.5 h-3.5" />
-										Force Send
-									</button>
-								)}
-								<button
-									onClick={() => setQueueRemoveConfirmId(item.id)}
-									className="p-1 rounded hover:bg-black/20 transition-colors"
-									style={{ color: theme.colors.textDim }}
-									title="Remove from queue"
-								>
-									<X className="w-4 h-4" />
-								</button>
-							</div>
+							{/* Top-right: Remove button */}
+							<button
+								onClick={() => setQueueRemoveConfirmId(item.id)}
+								className="absolute top-2 right-2 p-1 rounded hover:bg-black/20 transition-colors"
+								style={{ color: theme.colors.textDim }}
+								title="Remove from queue"
+							>
+								<X className="w-4 h-4" />
+							</button>
 
 							{/* Item content */}
 							<div
@@ -314,6 +298,24 @@ export const QueuedItemsList = memo(
 							{item.images && item.images.length > 0 && (
 								<div className="mt-1 text-xs" style={{ color: theme.colors.textDim }}>
 									{item.images.length} image{item.images.length > 1 ? 's' : ''} attached
+								</div>
+							)}
+
+							{/* Bottom-right: Force Send button */}
+							{showForceSendButton && (
+								<div className="mt-2 flex justify-end">
+									<button
+										onClick={() => setForceSendConfirmId(item.id)}
+										className="flex items-center gap-1 px-2 py-1 rounded text-xs font-medium hover:opacity-80 transition-opacity"
+										style={{
+											backgroundColor: theme.colors.warning + '33',
+											color: theme.colors.warning,
+										}}
+										title="Force send this message now (skips cross-tab wait)"
+									>
+										<Hammer className="w-3.5 h-3.5" />
+										Force Send
+									</button>
 								</div>
 							)}
 						</div>
