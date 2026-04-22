@@ -64,9 +64,16 @@ export interface UseMobileKeyboardHandlerDeps {
  * but inlined here to avoid importing a React hook from a renderer path. Kept in
  * sync manually — update both if matching rules change.
  */
+const MODIFIER_KEYS = new Set(['meta', 'ctrl', 'command', 'shift', 'alt']);
+
 function matchesShortcut(e: KeyboardEvent, sc: Shortcut | undefined): boolean {
 	if (!sc) return false;
 	const keys = sc.keys.map((k) => k.toLowerCase());
+	if (keys.length === 0) return false;
+
+	const mainKey = keys[keys.length - 1];
+	// Skip cleared / modifier-only shortcut definitions to avoid matching ordinary typing.
+	if (!mainKey || MODIFIER_KEYS.has(mainKey)) return false;
 
 	const metaPressed = e.metaKey || e.ctrlKey;
 	const shiftPressed = e.shiftKey;
@@ -80,8 +87,6 @@ function matchesShortcut(e: KeyboardEvent, sc: Shortcut | undefined): boolean {
 	if (metaPressed !== configMeta) return false;
 	if (shiftPressed !== configShift) return false;
 	if (altPressed !== configAlt) return false;
-
-	const mainKey = keys[keys.length - 1];
 
 	if (mainKey === '/' && key === '/') return true;
 	if (mainKey === 'arrowleft' && key === 'arrowleft') return true;
@@ -160,6 +165,23 @@ export function useMobileKeyboardHandler(deps: UseMobileKeyboardHandlerDeps): vo
 			if (e.key === 'Escape' && isCommandPaletteOpen && onCloseCommandPalette) {
 				e.preventDefault();
 				onCloseCommandPalette();
+				return;
+			}
+
+			// Don't fire shortcuts on plain typing inside editable fields. Modifier-key
+			// shortcuts (Cmd/Ctrl/Alt) still fire so palette / mode toggle work from the input.
+			const isEditableElement = (el: EventTarget | null) =>
+				el instanceof HTMLElement &&
+				(el.isContentEditable ||
+					el.tagName === 'INPUT' ||
+					el.tagName === 'TEXTAREA' ||
+					el.tagName === 'SELECT');
+			if (
+				!e.metaKey &&
+				!e.ctrlKey &&
+				!e.altKey &&
+				(isEditableElement(target) || isEditableElement(activeElement))
+			) {
 				return;
 			}
 

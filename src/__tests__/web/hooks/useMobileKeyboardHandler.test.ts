@@ -212,4 +212,83 @@ describe('useMobileKeyboardHandler', () => {
 
 		expect(quickAction).not.toHaveBeenCalled();
 	});
+
+	it('skips plain typing inside an input field', () => {
+		const newInstance = vi.fn();
+		// Simulate a user-customized shortcut bound to a single bare key.
+		const shortcuts = {
+			...WEB_DEFAULT_SHORTCUTS,
+			newInstance: { id: 'newInstance', label: 'New Agent', keys: ['n'] },
+		};
+
+		const input = document.createElement('input');
+		document.body.appendChild(input);
+		input.focus();
+
+		renderHook(() =>
+			useMobileKeyboardHandler({
+				shortcuts,
+				activeSession: null,
+				actions: { newInstance },
+			})
+		);
+
+		const event = new KeyboardEvent('keydown', { key: 'n', cancelable: true, bubbles: true });
+		act(() => {
+			input.dispatchEvent(event);
+		});
+
+		expect(newInstance).not.toHaveBeenCalled();
+		input.remove();
+	});
+
+	it('still fires modifier shortcuts while an input field is focused', () => {
+		const quickAction = vi.fn();
+
+		const input = document.createElement('input');
+		document.body.appendChild(input);
+		input.focus();
+
+		renderHook(() =>
+			useMobileKeyboardHandler({
+				shortcuts: WEB_DEFAULT_SHORTCUTS,
+				activeSession: null,
+				actions: { quickAction },
+			})
+		);
+
+		const event = new KeyboardEvent('keydown', {
+			key: 'k',
+			metaKey: true,
+			cancelable: true,
+			bubbles: true,
+		});
+		act(() => {
+			input.dispatchEvent(event);
+		});
+
+		expect(quickAction).toHaveBeenCalledTimes(1);
+		input.remove();
+	});
+
+	it('does not match an empty or modifier-only shortcut definition', () => {
+		const newInstance = vi.fn();
+		const shortcuts = {
+			newInstance: { id: 'newInstance', label: 'New Agent', keys: [] },
+		};
+
+		renderHook(() =>
+			useMobileKeyboardHandler({
+				shortcuts,
+				activeSession: null,
+				actions: { newInstance },
+			})
+		);
+
+		act(() => {
+			document.dispatchEvent(new KeyboardEvent('keydown', { key: 'n', cancelable: true }));
+		});
+
+		expect(newInstance).not.toHaveBeenCalled();
+	});
 });
