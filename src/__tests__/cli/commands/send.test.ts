@@ -454,7 +454,16 @@ describe('send command', () => {
 			vi.mocked(resolveAgentId).mockReturnValue('agent-abc-123');
 			vi.mocked(readSettingValue).mockReturnValue(false);
 
-			await send('my-agent-id', 'Hello', { live: true, force: true });
+			// Production relies on process.exit(1) halting execution after emitting
+			// FORCE_NOT_ALLOWED. The shared spy swallows exit; override it locally so
+			// the mocked exit throws and control cannot fall through to the --live branch.
+			processExitSpy.mockImplementation(() => {
+				throw new Error('PROCESS_EXIT');
+			});
+
+			await expect(send('my-agent-id', 'Hello', { live: true, force: true })).rejects.toThrow(
+				'PROCESS_EXIT'
+			);
 
 			const output = JSON.parse(consoleSpy.mock.calls[0][0]);
 			expect(output.success).toBe(false);
