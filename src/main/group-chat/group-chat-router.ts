@@ -69,6 +69,19 @@ function getGlobalShellEnvVars(): Record<string, string> {
 }
 
 /**
+ * Merge global shell env vars with per-agent custom env vars, with per-agent
+ * taking precedence. Used before calling `wrapSpawnWithSsh()` so that the
+ * global vars are embedded into the remote SSH stdin script — otherwise they
+ * would only land on the local ssh client process and never reach the remote
+ * agent. Mirrors `ipc/handlers/process.ts:437`.
+ */
+function mergeGlobalShellWithCustomEnv(
+	customEnvVars: Record<string, string> | undefined
+): Record<string, string> {
+	return { ...getGlobalShellEnvVars(), ...(customEnvVars || {}) };
+}
+
+/**
  * Session info for matching @mentions to available Maestro sessions.
  */
 export interface SessionInfo {
@@ -783,9 +796,7 @@ ${message}`;
 							args: finalArgs,
 							cwd: os.homedir(),
 							prompt: fullPrompt,
-							customEnvVars:
-								configResolution.effectiveCustomEnvVars ??
-								getCustomEnvVarsCallback?.(chat.moderatorAgentId),
+							customEnvVars: mergeGlobalShellWithCustomEnv(spawnEnvVars),
 							promptArgs: agent.promptArgs,
 							noPromptSeparator: agent.noPromptSeparator,
 							agentBinaryName: agent.binaryName,
@@ -1273,9 +1284,7 @@ export async function routeModeratorResponse(
 							args: spawnArgs,
 							cwd,
 							prompt: participantPrompt,
-							customEnvVars:
-								configResolution.effectiveCustomEnvVars ??
-								getCustomEnvVarsCallback?.(participant.agentId),
+							customEnvVars: mergeGlobalShellWithCustomEnv(finalSpawnEnvVars),
 							promptArgs: agent.promptArgs,
 							noPromptSeparator: agent.noPromptSeparator,
 							agentBinaryName: agent.binaryName,
@@ -1695,9 +1704,7 @@ Review the agent responses above. Either:
 					args: finalArgs,
 					cwd: os.homedir(),
 					prompt: synthesisPrompt,
-					customEnvVars:
-						configResolution.effectiveCustomEnvVars ??
-						getCustomEnvVarsCallback?.(chat.moderatorAgentId),
+					customEnvVars: mergeGlobalShellWithCustomEnv(spawnEnvVars),
 					promptArgs: agent.promptArgs,
 					noPromptSeparator: agent.noPromptSeparator,
 					agentBinaryName: agent.binaryName,
@@ -1897,7 +1904,7 @@ export async function respawnParticipantWithRecovery(
 				args: finalSpawnArgs,
 				cwd,
 				prompt: fullPrompt,
-				customEnvVars: finalSpawnEnvVars,
+				customEnvVars: mergeGlobalShellWithCustomEnv(finalSpawnEnvVars),
 				promptArgs: agent.promptArgs,
 				noPromptSeparator: agent.noPromptSeparator,
 				agentBinaryName: agent.binaryName,
