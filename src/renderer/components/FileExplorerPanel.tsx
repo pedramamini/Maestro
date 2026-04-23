@@ -481,7 +481,7 @@ function FileExplorerPanelInner(props: FileExplorerPanelProps) {
 
 	const shortcuts = useSettingsStore((s) => s.shortcuts);
 	const rightPanelWidth = useSettingsStore((s) => s.rightPanelWidth);
-	const compact = rightPanelWidth < 320;
+	const compact = rightPanelWidth < 340;
 
 	const { registerLayer, unregisterLayer, updateLayerHandler } = useLayerStack();
 	const layerIdRef = useRef<string>();
