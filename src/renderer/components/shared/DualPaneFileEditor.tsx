@@ -19,6 +19,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { ExternalLink, ChevronDown, ChevronRight } from 'lucide-react';
 import type { Theme } from '../../constants/themes';
 import { getOpenInLabel } from '../../utils/platformUtils';
+import { formatTokensCompact } from '../../../shared/formatters';
 import './DualPaneFileEditor.css';
 
 export interface DualPaneFileEditorItem {
@@ -27,6 +28,8 @@ export interface DualPaneFileEditorItem {
 	description?: string;
 	category?: string;
 	isModified?: boolean;
+	/** Estimated token count for the document — shown compactly on the list row. */
+	tokenCount?: number;
 }
 
 export interface DualPaneFileEditorAction {
@@ -74,6 +77,9 @@ export interface DualPaneFileEditorProps {
 
 	/** Description shown below the title (hidden when editor is expanded). */
 	editorDescription?: string;
+
+	/** Live token count for the edited document — shown next to the editor title. */
+	editorTokenCount?: number;
 
 	/** Extra buttons in the editor header row (preview, help, expand toggles). */
 	editorHeaderActions?: React.ReactNode;
@@ -144,6 +150,7 @@ export function DualPaneFileEditor({
 	renderEditorBody,
 	editorTitle,
 	editorDescription,
+	editorTokenCount,
 	editorHeaderActions,
 	showModifiedBadge,
 	primaryAction,
@@ -344,7 +351,18 @@ export function DualPaneFileEditor({
 									<div className="dual-pane-editor-header-row">
 										<div className="dual-pane-editor-header-text">
 											{editorTitle && (
-												<h3 style={{ color: theme.colors.textMain }}>{editorTitle}</h3>
+												<h3 style={{ color: theme.colors.textMain }}>
+													<span>{editorTitle}</span>
+													{typeof editorTokenCount === 'number' && (
+														<span
+															className="dual-pane-editor-token-count"
+															style={{ color: theme.colors.textDim }}
+															title={`~${editorTokenCount.toLocaleString()} tokens (estimated)`}
+														>
+															~{formatTokensCompact(editorTokenCount)} tokens
+														</span>
+													)}
+												</h3>
 											)}
 											{!isExpanded && editorDescription && (
 												<p
@@ -441,11 +459,22 @@ export function DualPaneFileEditor({
 				}}
 			>
 				<span className="dual-pane-list-item-name">{item.label}</span>
-				{item.isModified && (
-					<span className="dual-pane-modified-indicator" style={{ color: theme.colors.accent }}>
-						&bull;
-					</span>
-				)}
+				<span className="dual-pane-list-item-meta">
+					{typeof item.tokenCount === 'number' && (
+						<span
+							className="dual-pane-list-item-token-count"
+							style={{ color: theme.colors.textDim }}
+							title={`~${item.tokenCount.toLocaleString()} tokens (estimated)`}
+						>
+							~{formatTokensCompact(item.tokenCount)}
+						</span>
+					)}
+					{item.isModified && (
+						<span className="dual-pane-modified-indicator" style={{ color: theme.colors.accent }}>
+							&bull;
+						</span>
+					)}
+				</span>
 			</button>
 		);
 	}

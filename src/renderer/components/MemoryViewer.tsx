@@ -10,6 +10,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Brain, Plus, X, Database, FileText, Clock, Zap } from 'lucide-react';
 import type { Session, Theme } from '../types';
 import { formatSize, formatRelativeTime, formatNumber } from '../utils/formatters';
+import { estimateTokenCount } from '../../shared/formatters';
 import { getAgentDisplayName } from '../../shared/agentMetadata';
 import { useLayerStack } from '../contexts/LayerStackContext';
 import { MODAL_PRIORITIES } from '../constants/modalPriorities';
@@ -321,15 +322,30 @@ export function MemoryViewer({ theme, activeSession, onClose }: MemoryViewerProp
 		}
 	}, [projectPath, createName, entries, agentId, reloadList, closeCreateModal]);
 
+	// Token count is a rough size-based estimate (~4 bytes/token) for unselected rows;
+	// for the selected row while editing, use the live buffer so it tracks edits.
 	const items = useMemo<DualPaneFileEditorItem[]>(
 		() =>
-			entries.map((e) => ({
-				id: e.name,
-				label: e.name,
-				description: `${formatSize(e.size)} • modified ${formatRelativeTime(e.modifiedAt)}`,
-				isModified: e.name === selectedName && hasUnsavedChanges,
-			})),
-		[entries, selectedName, hasUnsavedChanges]
+			entries.map((e) => {
+				const isCurrent = e.name === selectedName;
+				const tokenCount =
+					isCurrent && hasUnsavedChanges
+						? estimateTokenCount(editedContent)
+						: Math.ceil(e.size / 4);
+				return {
+					id: e.name,
+					label: e.name,
+					description: `${formatSize(e.size)} • modified ${formatRelativeTime(e.modifiedAt)}`,
+					isModified: isCurrent && hasUnsavedChanges,
+					tokenCount,
+				};
+			}),
+		[entries, selectedName, hasUnsavedChanges, editedContent]
+	);
+
+	const editorTokenCount = useMemo(
+		() => (selectedName ? estimateTokenCount(editedContent) : undefined),
+		[selectedName, editedContent]
 	);
 
 	const renderEditorBody = useCallback(() => {
@@ -472,6 +488,7 @@ export function MemoryViewer({ theme, activeSession, onClose }: MemoryViewerProp
 						onSelect={handleSelect}
 						emptyStateMessage="Select a memory file to view"
 						editorTitle={selectedName ?? undefined}
+						editorTokenCount={editorTokenCount}
 						showModifiedBadge={hasUnsavedChanges}
 						renderEditorBody={renderEditorBody}
 						successMessage={successMessage}
