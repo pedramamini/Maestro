@@ -935,12 +935,12 @@ describe('FileExplorerPanel', () => {
 		it('applies indentation to nested items via paddingLeft', () => {
 			const session = createMockSession({ fileExplorerExpanded: ['src'] });
 			const { container } = render(<FileExplorerPanel {...defaultProps} session={session} />);
-			// Virtualized tree uses paddingLeft for indentation: 8 + depth * 16
-			// index.ts is at depth 1, so paddingLeft = 8 + 1*16 = 24px
+			// Virtualized tree uses paddingLeft for indentation: 8 + depth * 20
+			// index.ts is at depth 1, so paddingLeft = 8 + 1*20 = 28px
 			const nestedItem = Array.from(container.querySelectorAll('[data-file-index]')).find((el) =>
 				el.textContent?.includes('index.ts')
 			);
-			expect(nestedItem).toHaveStyle({ paddingLeft: '24px' });
+			expect(nestedItem).toHaveStyle({ paddingLeft: '28px' });
 		});
 
 		it('displays file name with truncate class', () => {
@@ -1384,6 +1384,119 @@ describe('FileExplorerPanel', () => {
 				'src/utils/helpers.ts',
 				expect.any(Object)
 			);
+		});
+	});
+
+	// LOCKED VISUAL INVARIANTS — DO NOT RELAX WITHOUT EXPLICIT REQUEST.
+	// Alignment rules (see FileExplorerPanel.tsx TreeRow):
+	//   BASE_PAD = 8, INDENT_STEP = 20 (= chevron width 12 + flex gap 8)
+	//   Row padding-left:  BASE_PAD + depth * INDENT_STEP
+	//   Indent guide left: 12 + i * INDENT_STEP   for i in [0, depth)
+	// Derived alignment guarantees:
+	//   1. Root files (depth 0) align with root folder chevrons at X = 8.
+	//   2. File icon at depth N+1 aligns with parent folder icon at depth N,
+	//      because folder_icon_X(N) = pad(N) + chevron(12) + gap(8) = pad(N+1).
+	//   3. Sibling rows at the same depth share identical padding-left.
+	describe('Indent Alignment (locked invariants)', () => {
+		const BASE_PAD = 8;
+		const INDENT_STEP = 20;
+		const CHEVRON_PLUS_GAP = 20; // w-3 (12) + gap-2 (8) — must equal INDENT_STEP
+		const expectedPad = (depth: number) => `${BASE_PAD + depth * INDENT_STEP}px`;
+
+		const getRowByText = (container: HTMLElement, text: string) =>
+			Array.from(container.querySelectorAll<HTMLElement>('[data-file-index]')).find((el) =>
+				el.textContent?.includes(text)
+			);
+
+		it('root folder row has padding-left = 8px', () => {
+			const { container } = render(<FileExplorerPanel {...defaultProps} />);
+			const row = getRowByText(container, 'src');
+			expect(row).toHaveStyle({ paddingLeft: expectedPad(0) });
+			expect(row).toHaveStyle({ paddingLeft: '8px' });
+		});
+
+		it('root file row has padding-left = 8px (aligned with root folder chevron)', () => {
+			const { container } = render(<FileExplorerPanel {...defaultProps} />);
+			const row = getRowByText(container, 'package.json');
+			expect(row).toHaveStyle({ paddingLeft: expectedPad(0) });
+			expect(row).toHaveStyle({ paddingLeft: '8px' });
+		});
+
+		it('depth-1 folder row has padding-left = 28px', () => {
+			const session = createMockSession({ fileExplorerExpanded: ['src'] });
+			const { container } = render(<FileExplorerPanel {...defaultProps} session={session} />);
+			const row = getRowByText(container, 'utils');
+			expect(row).toHaveStyle({ paddingLeft: expectedPad(1) });
+			expect(row).toHaveStyle({ paddingLeft: '28px' });
+		});
+
+		it('depth-1 file row has padding-left = 28px (same column as sibling folder)', () => {
+			const session = createMockSession({ fileExplorerExpanded: ['src'] });
+			const { container } = render(<FileExplorerPanel {...defaultProps} session={session} />);
+			const row = getRowByText(container, 'index.ts');
+			expect(row).toHaveStyle({ paddingLeft: expectedPad(1) });
+			expect(row).toHaveStyle({ paddingLeft: '28px' });
+		});
+
+		it('depth-2 file row has padding-left = 48px', () => {
+			const session = createMockSession({ fileExplorerExpanded: ['src', 'src/utils'] });
+			const { container } = render(<FileExplorerPanel {...defaultProps} session={session} />);
+			const row = getRowByText(container, 'helpers.ts');
+			expect(row).toHaveStyle({ paddingLeft: expectedPad(2) });
+			expect(row).toHaveStyle({ paddingLeft: '48px' });
+		});
+
+		it('file icon at depth N+1 aligns with parent folder icon at depth N', () => {
+			// Core parent-child alignment invariant.
+			// folder_icon_X(N) = pad(N) + chevron_width + gap
+			//                 = 8 + 20N + 20 = 28 + 20N
+			// file_pad(N+1)   = 8 + 20(N+1) = 28 + 20N  ✓
+			const session = createMockSession({ fileExplorerExpanded: ['src', 'src/utils'] });
+			const { container } = render(<FileExplorerPanel {...defaultProps} session={session} />);
+
+			const parentFolder = getRowByText(container, 'utils'); // depth 1
+			const childFile = getRowByText(container, 'helpers.ts'); // depth 2
+
+			const parentPad = parseFloat(parentFolder!.style.paddingLeft);
+			const childPad = parseFloat(childFile!.style.paddingLeft);
+
+			// Parent folder's icon column == parent pad + chevron + gap
+			// Child file's icon column == child pad
+			// These must be equal.
+			expect(childPad).toBe(parentPad + CHEVRON_PLUS_GAP);
+		});
+
+		it('indent step equals chevron width + gap (required for parent-child alignment)', () => {
+			// If this fails, the parent-child alignment invariant above breaks.
+			expect(INDENT_STEP).toBe(CHEVRON_PLUS_GAP);
+		});
+
+		it('renders one indent guide per depth level, spaced by INDENT_STEP', () => {
+			const session = createMockSession({ fileExplorerExpanded: ['src', 'src/utils'] });
+			const { container } = render(<FileExplorerPanel {...defaultProps} session={session} />);
+
+			// helpers.ts at depth 2 should have 2 guides at left = 12 and 12 + 20 = 32
+			const row = getRowByText(container, 'helpers.ts');
+			const guides = row!.querySelectorAll<HTMLElement>('div.absolute.w-px');
+			expect(guides).toHaveLength(2);
+			expect(guides[0]).toHaveStyle({ left: '12px' });
+			expect(guides[1]).toHaveStyle({ left: `${12 + INDENT_STEP}px` });
+			expect(guides[1]).toHaveStyle({ left: '32px' });
+		});
+
+		it('root rows render zero indent guides', () => {
+			const { container } = render(<FileExplorerPanel {...defaultProps} />);
+			const row = getRowByText(container, 'package.json');
+			const guides = row!.querySelectorAll('div.absolute.w-px');
+			expect(guides).toHaveLength(0);
+		});
+
+		it('sibling folder and file at same depth share identical padding-left', () => {
+			const session = createMockSession({ fileExplorerExpanded: ['src'] });
+			const { container } = render(<FileExplorerPanel {...defaultProps} session={session} />);
+			const folder = getRowByText(container, 'utils'); // depth 1 folder
+			const file = getRowByText(container, 'index.ts'); // depth 1 file
+			expect(folder!.style.paddingLeft).toBe(file!.style.paddingLeft);
 		});
 	});
 

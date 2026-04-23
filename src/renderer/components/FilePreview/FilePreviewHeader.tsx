@@ -56,12 +56,6 @@ interface FilePreviewHeaderProps {
 	copyPathToClipboard: () => void;
 	headerBtnClass: string;
 	headerIconClass: string;
-	/** Whether to show the Bionify toggle button (markdown/readable text previews only) */
-	showBionifyToggle?: boolean;
-	/** Current Bionify state for the preview surface */
-	bionifyEnabled?: boolean;
-	/** Toggle Bionify override for this preview */
-	onToggleBionify?: () => void;
 }
 
 export const FilePreviewHeader = React.memo(function FilePreviewHeader({
@@ -101,9 +95,6 @@ export const FilePreviewHeader = React.memo(function FilePreviewHeader({
 	copyPathToClipboard,
 	headerBtnClass,
 	headerIconClass,
-	showBionifyToggle = false,
-	bionifyEnabled = false,
-	onToggleBionify,
 }: FilePreviewHeaderProps) {
 	const [showBackPopup, setShowBackPopup] = useState(false);
 	const [showForwardPopup, setShowForwardPopup] = useState(false);
@@ -167,24 +158,6 @@ export const FilePreviewHeader = React.memo(function FilePreviewHeader({
 								title={showRemoteImages ? 'Hide remote images' : 'Show remote images'}
 							>
 								<Globe className={headerIconClass} />
-							</button>
-						)}
-						{/* Bionify reading mode toggle - markdown/readable text in preview mode */}
-						{showBionifyToggle && !markdownEditMode && onToggleBionify && (
-							<button
-								onClick={onToggleBionify}
-								className={headerBtnClass}
-								style={{
-									color: bionifyEnabled ? theme.colors.accent : theme.colors.textDim,
-								}}
-								title={
-									bionifyEnabled
-										? 'Disable Bionify for this preview'
-										: 'Enable Bionify for this preview'
-								}
-								aria-pressed={bionifyEnabled}
-							>
-								<span className="text-[12px] font-black leading-none">B</span>
 							</button>
 						)}
 						{/* Toggle between edit and preview/view mode - for any editable text file */}

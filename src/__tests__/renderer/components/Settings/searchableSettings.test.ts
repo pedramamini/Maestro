@@ -129,17 +129,70 @@ describe('searchableSettings', () => {
 		// labels). When you add a new setting, add the visible strings here so
 		// they remain findable — keyword drift from UI text is silent otherwise.
 		it.each([
+			// General tab
 			['Auto Run Inactivity Timeout', 'general-autorun-inactivity-timeout'],
+			['refactor', 'general-autorun-inactivity-timeout'],
+			['forced parallel execution', 'general-input-behavior'],
+			['shift+enter', 'general-input-behavior'],
+			['prompt composer', 'general-input-behavior'],
+			['ai interaction mode', 'general-input-behavior'],
+			['custom shell path', 'general-default-shell'],
+			['pwsh', 'general-default-shell'],
+			['worktree', 'general-gh-path'],
+			['cue pipeline', 'general-power'],
+			['ctrl+click', 'general-browser'],
+			['context menu', 'general-browser'],
+			['icloud drive', 'general-storage'],
+			['environment variables', 'general-storage'],
+			['migrate', 'general-storage'],
+			['final response', 'general-thinking-mode'],
+
+			// Display tab
+			['x-large', 'display-font-size'],
+			['medium', 'display-font-size'],
+			['ai response', 'display-message-alignment'],
 			['file indexing', 'display-file-indexing'],
 			['file panel', 'display-file-indexing'],
 			['File Panel Settings', 'display-file-indexing'],
 			['max recursion depth', 'display-file-indexing'],
 			['max file entries', 'display-file-indexing'],
 			['load more', 'display-file-indexing'],
-			['idle notification', 'notifications-idle'],
-			['forced parallel execution', 'general-input-behavior'],
-			['custom shell path', 'general-default-shell'],
+			['100k', 'display-file-indexing'],
 			['ignore patterns', 'display-file-indexing'],
+			['soft', 'display-bionify-reading-mode'],
+			['strong', 'display-bionify-reading-mode'],
+			['file preview', 'display-bionify-reading-mode'],
+			['speed reading', 'display-bionify-reading-mode'],
+			['alt menu bar', 'display-window-chrome'],
+			['custom title bar', 'display-window-chrome'],
+			['compaction', 'display-context-warnings'],
+			['mindmap', 'display-document-graph'],
+			['backlinks', 'display-document-graph'],
+
+			// Notifications tab
+			['idle notification', 'notifications-idle'],
+			['festival', 'notifications-custom'],
+			['voice', 'notifications-custom'],
+			['dismiss', 'notifications-toast'],
+
+			// AI Commands tab
+			['slash command', 'aicommands-custom'],
+			['built-in command', 'aicommands-custom'],
+
+			// SSH tab
+			['test connection', 'ssh-remotes'],
+
+			// Encore tab
+			['lookback', 'encore-usage-stats'],
+			['coding activity', 'encore-usage-stats'],
+			['github pr', 'encore-cue'],
+			['cron', 'encore-cue'],
+			['playbook registry', 'encore-symphony'],
+
+			// Prompts tab
+			['wizard prompt', 'prompts-editor'],
+			['group chat', 'prompts-editor'],
+			['inline wizard', 'prompts-editor'],
 		])('should find "%s" and return id %s', (query, expectedId) => {
 			const results = searchSettings(query);
 			expect(

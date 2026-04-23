@@ -1048,7 +1048,7 @@ function FileExplorerPanelInner(props: FileExplorerPanelProps) {
 						key={i}
 						className="absolute top-0 bottom-0 w-px"
 						style={{
-							left: `${12 + i * 16}px`,
+							left: `${12 + i * 20}px`,
 							backgroundColor: theme.colors.border,
 						}}
 					/>
@@ -1062,7 +1062,7 @@ function FileExplorerPanelInner(props: FileExplorerPanelProps) {
 					style={{
 						height: `${virtualRow.size}px`,
 						transform: `translateY(${virtualRow.start}px)`,
-						paddingLeft: `${8 + depth * 16}px`,
+						paddingLeft: `${8 + depth * 20}px`,
 						color: change ? theme.colors.textMain : theme.colors.textDim,
 						borderLeftColor: isKeyboardSelected ? theme.colors.accent : 'transparent',
 						backgroundColor: isKeyboardSelected

@@ -289,14 +289,12 @@ export const FilePreview = React.memo(
 			onSearchQueryChange,
 		});
 
-		// Bionify reading mode (opt-in per preview, disabled while search highlights are active)
+		// Bionify reading mode follows the global setting; disabled while search highlights are active.
 		const bionifyReadingMode = useSettingsStore((s) => s.bionifyReadingMode);
 		const bionifyIntensity = useSettingsStore((s) => s.bionifyIntensity);
 		const bionifyAlgorithm = useSettingsStore((s) => s.bionifyAlgorithm);
-		const [surfaceBionifyOverride, setSurfaceBionifyOverride] = useState<boolean | null>(null);
 		const hasActiveSearch = searchQuery.trim().length > 0;
-		const surfaceBionifyReadingMode = surfaceBionifyOverride ?? bionifyReadingMode;
-		const effectiveBionifyReadingMode = surfaceBionifyReadingMode && !hasActiveSearch;
+		const effectiveBionifyReadingMode = bionifyReadingMode && !hasActiveSearch;
 
 		// Close jq help on outside click or Escape
 		useEffect(() => {
@@ -344,11 +342,6 @@ export const FilePreview = React.memo(
 			if (!isMarkdown || !file?.content) return [];
 			return extractHeadings(file.content);
 		}, [isMarkdown, file?.content]);
-
-		// Reset per-surface Bionify override when the file changes so overrides don't leak across files
-		useEffect(() => {
-			setSurfaceBionifyOverride(null);
-		}, [file?.path]);
 
 		// Compute dynamic ToC overlay width based on longest heading text
 		const tocWidth = useMemo(() => {
@@ -1005,11 +998,6 @@ export const FilePreview = React.memo(
 					copyPathToClipboard={copyPathToClipboard}
 					headerBtnClass={headerBtnClass}
 					headerIconClass={headerIconClass}
-					showBionifyToggle={isMarkdown || isReadableText}
-					bionifyEnabled={surfaceBionifyReadingMode}
-					onToggleBionify={() =>
-						setSurfaceBionifyOverride((current) => !(current ?? bionifyReadingMode))
-					}
 				/>
 
 				{/* File changed on disk banner */}

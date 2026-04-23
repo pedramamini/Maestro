@@ -384,7 +384,7 @@ describe('FilePreview', () => {
 			expect(screen.queryByText(/Large file preview truncated/)).not.toBeInTheDocument();
 		});
 
-		it('allows Bionify to be toggled from the file preview header', () => {
+		it('does not render a per-preview Bionify toggle button (Bionify is controlled globally)', () => {
 			render(
 				<FilePreview
 					{...defaultProps}
@@ -396,34 +396,8 @@ describe('FilePreview', () => {
 				/>
 			);
 
-			expect(document.querySelector('.bionify-word')).not.toBeInTheDocument();
-
-			fireEvent.click(screen.getByTitle('Enable Bionify for this preview'));
-
-			expect(screen.getByTitle('Disable Bionify for this preview')).toBeInTheDocument();
-			expect(document.querySelectorAll('.bionify-word').length).toBeGreaterThan(0);
-		});
-
-		it('uses the same square toolbar geometry for the Bionify toggle as sibling header buttons', () => {
-			render(
-				<FilePreview
-					{...defaultProps}
-					file={{
-						name: 'notes.txt',
-						content: 'Readable text preview content',
-						path: '/test/notes.txt',
-					}}
-				/>
-			);
-
-			const bionifyButton = screen.getByTitle('Enable Bionify for this preview');
-			const clipboardButton = screen.getByTitle('Copy content to clipboard');
-
-			expect(bionifyButton.className).toContain('inline-flex');
-			expect(bionifyButton.className).toContain('justify-center');
-			expect(bionifyButton.className).toContain('min-w-9');
-			expect(bionifyButton.className).toContain('min-h-9');
-			expect(bionifyButton.className).toBe(clipboardButton.className);
+			expect(screen.queryByTitle('Enable Bionify for this preview')).not.toBeInTheDocument();
+			expect(screen.queryByTitle('Disable Bionify for this preview')).not.toBeInTheDocument();
 		});
 
 		it('routes .mdx files through markdown preview instead of readable text preview', () => {
