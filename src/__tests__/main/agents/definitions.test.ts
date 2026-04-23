@@ -25,7 +25,7 @@ describe('agent-definitions', () => {
 			expect(agentIds).toContain('opencode');
 			expect(agentIds).toContain('gemini-cli');
 			expect(agentIds).toContain('qwen3-coder');
-			expect(agentIds).toContain('aider');
+			expect(agentIds).toContain('copilot-cli');
 		});
 
 		it('should have required properties on all definitions', () => {
@@ -128,7 +128,14 @@ describe('agent-definitions', () => {
 		});
 
 		it('should return definition for all known agents', () => {
-			const knownAgents = ['terminal', 'claude-code', 'codex', 'opencode', 'gemini-cli', 'aider'];
+			const knownAgents = [
+				'terminal',
+				'claude-code',
+				'codex',
+				'opencode',
+				'gemini-cli',
+				'copilot-cli',
+			];
 			for (const agentId of knownAgents) {
 				const def = getAgentDefinition(agentId);
 				expect(def).toBeDefined();

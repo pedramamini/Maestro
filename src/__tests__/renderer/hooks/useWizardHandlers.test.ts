@@ -403,6 +403,7 @@ describe('useWizardHandlers', () => {
 			expect((window as any).maestro.agents.discoverSlashCommands).toHaveBeenCalledWith(
 				'copilot-cli',
 				'/projects/test',
+				undefined,
 				undefined
 			);
 
@@ -437,6 +438,7 @@ describe('useWizardHandlers', () => {
 			expect((window as any).maestro.agents.discoverSlashCommands).toHaveBeenCalledWith(
 				'opencode',
 				'/projects/test',
+				undefined,
 				undefined
 			);
 		});

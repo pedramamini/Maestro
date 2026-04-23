@@ -22,7 +22,6 @@ export const AGENT_DISPLAY_NAMES: Record<AgentId, string> = {
 	'qwen3-coder': 'Qwen3 Coder',
 	opencode: 'OpenCode',
 	'factory-droid': 'Factory Droid',
-	aider: 'Aider',
 	'copilot-cli': 'Copilot-CLI',
 };
 

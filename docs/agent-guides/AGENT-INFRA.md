@@ -33,7 +33,6 @@ export const AGENT_IDS = [
 	'qwen3-coder',
 	'opencode',
 	'factory-droid',
-	'aider',
 	'copilot-cli',
 ] as const;
 

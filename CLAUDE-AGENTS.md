@@ -4,14 +4,14 @@ Agent support documentation for the Maestro codebase. For the main guide, see [[
 
 ## Supported Agents
 
-| ID              | Name          | Status     | Notes                                                                                                                              |
-| --------------- | ------------- | ---------- | ---------------------------------------------------------------------------------------------------------------------------------- |
-| `claude-code`   | Claude Code   | **Active** | Primary agent, `--print --verbose --output-format stream-json`                                                                     |
-| `codex`         | Codex         | **Active** | Full support, `--json`, YOLO mode default                                                                                          |
-| `opencode`      | OpenCode      | **Active** | Multi-provider support (75+ LLMs), stub provider session storage                                                                   |
-| `factory-droid` | Factory Droid | **Active** | Factory's AI coding assistant, `-o stream-json`                                                                                    |
+| ID              | Name          | Status     | Notes                                                                                                                               |
+| --------------- | ------------- | ---------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| `claude-code`   | Claude Code   | **Active** | Primary agent, `--print --verbose --output-format stream-json`                                                                      |
+| `codex`         | Codex         | **Active** | Full support, `--json`, YOLO mode default                                                                                           |
+| `opencode`      | OpenCode      | **Active** | Multi-provider support (75+ LLMs), stub provider session storage                                                                    |
+| `factory-droid` | Factory Droid | **Active** | Factory's AI coding assistant, `-o stream-json`                                                                                     |
 | `copilot-cli`   | Copilot-CLI   | **Beta**   | `-p/--prompt`, `--output-format json`, `--resume`, `@image` mentions, permission filters, reasoning stream, models.dev model picker |
-| `terminal`      | Terminal      | Internal   | Hidden from UI, used for shell sessions                                                                                            |
+| `terminal`      | Terminal      | Internal   | Hidden from UI, used for shell sessions                                                                                             |
 
 ## Agent Capabilities
 

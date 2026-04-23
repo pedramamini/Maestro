@@ -30,7 +30,6 @@ describe('agentMetadata', () => {
 			expect(AGENT_DISPLAY_NAMES['factory-droid']).toBe('Factory Droid');
 			expect(AGENT_DISPLAY_NAMES['gemini-cli']).toBe('Gemini CLI');
 			expect(AGENT_DISPLAY_NAMES['qwen3-coder']).toBe('Qwen3 Coder');
-			expect(AGENT_DISPLAY_NAMES['aider']).toBe('Aider');
 			expect(AGENT_DISPLAY_NAMES['copilot-cli']).toBe('Copilot-CLI');
 			expect(AGENT_DISPLAY_NAMES['terminal']).toBe('Terminal');
 		});
@@ -53,7 +52,6 @@ describe('agentMetadata', () => {
 			expect(getAgentDisplayName('factory-droid')).toBe('Factory Droid');
 			expect(getAgentDisplayName('gemini-cli')).toBe('Gemini CLI');
 			expect(getAgentDisplayName('qwen3-coder')).toBe('Qwen3 Coder');
-			expect(getAgentDisplayName('aider')).toBe('Aider');
 			expect(getAgentDisplayName('terminal')).toBe('Terminal');
 		});
 
@@ -87,7 +85,6 @@ describe('agentMetadata', () => {
 			expect(BETA_AGENTS.has('terminal')).toBe(false);
 			expect(BETA_AGENTS.has('gemini-cli')).toBe(false);
 			expect(BETA_AGENTS.has('qwen3-coder')).toBe(false);
-			expect(BETA_AGENTS.has('aider')).toBe(false);
 		});
 
 		it('should only contain valid agent IDs', () => {
@@ -110,7 +107,6 @@ describe('agentMetadata', () => {
 			expect(isBetaAgent('terminal')).toBe(false);
 			expect(isBetaAgent('gemini-cli')).toBe(false);
 			expect(isBetaAgent('qwen3-coder')).toBe(false);
-			expect(isBetaAgent('aider')).toBe(false);
 		});
 
 		it('should return false for unknown agents', () => {

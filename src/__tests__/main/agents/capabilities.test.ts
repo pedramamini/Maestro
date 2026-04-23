@@ -165,7 +165,6 @@ describe('agent-capabilities', () => {
 				'qwen3-coder',
 				'opencode',
 				'factory-droid',
-				'aider',
 				'copilot-cli',
 			];
 

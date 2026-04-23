@@ -269,41 +269,6 @@ export const AGENT_CAPABILITIES: Record<string, AgentCapabilities> = {
 	},
 
 	/**
-	 * Aider - Open source AI pair programming tool
-	 * https://github.com/paul-gauthier/aider
-	 *
-	 * PLACEHOLDER: Most capabilities set to false until Aider integration is
-	 * implemented and tested. Update this configuration when integrating.
-	 */
-	aider: {
-		supportsResume: false,
-		supportsReadOnlyMode: false,
-		supportsJsonOutput: false,
-		supportsSessionId: false,
-		supportsImageInput: false,
-		supportsImageInputOnResume: false,
-		supportsSlashCommands: false,
-		supportsSessionStorage: false,
-		supportsCostTracking: false,
-		supportsUsageStats: false,
-		supportsBatchMode: false,
-		requiresPromptToStart: false,
-		supportsStreaming: true, // Likely streams
-		supportsResultMessages: false,
-		supportsModelSelection: false,
-		supportsStreamJsonInput: false,
-		supportsThinkingDisplay: false,
-		supportsContextMerge: false,
-		supportsContextExport: false,
-		supportsWizard: false, // PLACEHOLDER
-		supportsGroupChatModeration: false, // PLACEHOLDER
-		usesJsonLineOutput: false, // PLACEHOLDER
-		usesCombinedContextWindow: false, // PLACEHOLDER
-		supportsAppendSystemPrompt: false,
-		supportsProjectMemory: false,
-	},
-
-	/**
 	 * GitHub Copilot CLI - AI coding assistant from GitHub
 	 * https://github.com/github/copilot-cli
 	 *
