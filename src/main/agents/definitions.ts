@@ -476,7 +476,7 @@ export const AGENT_DEFINITIONS: AgentDefinition[] = [
 				type: 'text',
 				label: 'Model',
 				description:
-					'Model to use (e.g., claude-sonnet-4.6, gpt-5.3-codex). Leave empty for default.',
+					'Model to use. Pickable from models.dev catalog or type a custom model name. Leave empty for default.',
 				default: '', // Empty = use Copilot's default model
 				argBuilder: (value: string) => {
 					if (value && value.trim()) {
