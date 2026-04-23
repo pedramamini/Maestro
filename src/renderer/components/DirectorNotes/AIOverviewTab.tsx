@@ -50,7 +50,6 @@ function fireSynopsisReadyToast() {
 		type: 'success',
 		title: "Director's Notes",
 		message: 'AI Synopsis is ready. Click to view.',
-		skipCustomNotification: true,
 		onClick: () => {
 			useModalStore.getState().openModal('directorNotes', { initialTab: 'ai-overview' });
 		},

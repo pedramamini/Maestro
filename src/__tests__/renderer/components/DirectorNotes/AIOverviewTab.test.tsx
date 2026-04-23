@@ -49,6 +49,18 @@ vi.mock('../../../../renderer/utils/markdownConfig', () => ({
 	generateTerminalProseStyles: () => '.director-notes-content { color: inherit; }',
 }));
 
+// Mock notifyToast so we can assert the unmount-completion toast shape
+const mockNotifyToast = vi.fn();
+vi.mock('../../../../renderer/stores/notificationStore', () => ({
+	notifyToast: (...args: unknown[]) => mockNotifyToast(...args),
+}));
+
+// Mock modalStore so the toast onClick handler doesn't explode in tests
+const mockOpenModal = vi.fn();
+vi.mock('../../../../renderer/stores/modalStore', () => ({
+	useModalStore: { getState: () => ({ openModal: mockOpenModal }) },
+}));
+
 // Mock navigator.clipboard
 const mockWriteText = vi.fn().mockResolvedValue(undefined);
 Object.defineProperty(navigator, 'clipboard', {
@@ -314,6 +326,62 @@ describe('AIOverviewTab', () => {
 		const { hasCachedSynopsis } =
 			await import('../../../../renderer/components/DirectorNotes/AIOverviewTab');
 		expect(hasCachedSynopsis()).toBe(true);
+	});
+
+	it('fires a completion toast that opts in to the custom notification command when generation finishes after unmount', async () => {
+		let resolveGeneration!: (value: any) => void;
+		mockGenerateSynopsis.mockReturnValue(
+			new Promise((resolve) => {
+				resolveGeneration = resolve;
+			})
+		);
+
+		const { unmount } = render(<AIOverviewTab theme={mockTheme} />);
+
+		await waitFor(() => {
+			expect(mockGenerateSynopsis).toHaveBeenCalledTimes(1);
+		});
+
+		unmount();
+
+		await act(async () => {
+			resolveGeneration({
+				success: true,
+				synopsis: '# Cached Result',
+				generatedAt: 1234567890,
+			});
+		});
+
+		expect(mockNotifyToast).toHaveBeenCalledTimes(1);
+		const toastArg = mockNotifyToast.mock.calls[0][0];
+		expect(toastArg).toMatchObject({
+			type: 'success',
+			title: "Director's Notes",
+			message: expect.stringMatching(/synopsis is ready/i),
+		});
+		// Regression guard: synopsis completion must flow through the custom audio/TTS
+		// notification command when the user has one configured.
+		expect(toastArg.skipCustomNotification).toBeUndefined();
+		// Clicking the toast should open Director's Notes directly to the AI Overview tab.
+		expect(typeof toastArg.onClick).toBe('function');
+		toastArg.onClick();
+		expect(mockOpenModal).toHaveBeenCalledWith('directorNotes', { initialTab: 'ai-overview' });
+	});
+
+	it('does not fire a completion toast when generation finishes while still mounted', async () => {
+		mockGenerateSynopsis.mockResolvedValue({
+			success: true,
+			synopsis: '# Synopsis',
+			generatedAt: 1234567890,
+		});
+
+		render(<AIOverviewTab theme={mockTheme} />);
+
+		await waitFor(() => {
+			expect(screen.getByTestId('markdown-renderer')).toBeInTheDocument();
+		});
+
+		expect(mockNotifyToast).not.toHaveBeenCalled();
 	});
 
 	it('closes save modal when close button is clicked', async () => {
