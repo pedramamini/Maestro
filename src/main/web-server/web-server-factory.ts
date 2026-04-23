@@ -998,10 +998,7 @@ export function createWebServerFactory(deps: WebServerFactoryDependencies) {
 							audioFeedbackEnabled: settingsStore.get('audioFeedbackEnabled', false) as boolean,
 							colorBlindMode: settingsStore.get('colorBlindMode', 'false') as string,
 							conductorProfile: settingsStore.get('conductorProfile', '') as string,
-							shortcuts: settingsStore.get('shortcuts', {}) as Record<
-								string,
-								import('../../shared/shortcut-types').Shortcut
-							>,
+							shortcuts: settingsStore.get('shortcuts', {}) as Record<string, Shortcut>,
 						};
 						server.broadcastSettingsChanged(settings);
 					}

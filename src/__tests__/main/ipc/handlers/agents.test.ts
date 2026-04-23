@@ -333,9 +333,11 @@ describe('agents IPC handlers', () => {
 				const handler = handlers.get('agents:detect');
 				await handler!({} as any, 'remote-1');
 
-				// Every probe should invoke 'command -v <binary>', never 'which'
+				// Every probe should invoke 'command -v <binary>', never 'which'.
+				// Asserting one call per AGENT_DEFINITION catches regressions that
+				// silently skip agents instead of just dropping to zero.
 				const calls = vi.mocked(buildSshCommand).mock.calls;
-				expect(calls.length).toBeGreaterThan(0);
+				expect(calls.length).toBe(agentCapabilities.AGENT_DEFINITIONS.length);
 				for (const [, options] of calls) {
 					expect(options.command).toBe('command');
 					expect(options.args[0]).toBe('-v');

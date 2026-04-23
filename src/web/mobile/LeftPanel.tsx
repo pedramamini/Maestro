@@ -681,7 +681,7 @@ export function LeftPanel({
 		if (showUnreadOnly && !hasUnreadAgents) {
 			setShowUnreadOnly(false);
 		}
-	}, [showUnreadOnly, hasUnreadAgents]);
+	}, [showUnreadOnly, hasUnreadAgents, setShowUnreadOnly]);
 
 	const visibleSessions = useMemo(() => {
 		if (!showUnreadOnly) return sessions;
