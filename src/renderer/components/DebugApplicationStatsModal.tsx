@@ -88,6 +88,7 @@ function computeFootprint(session: Session, pidRss: Map<number, number>): Sessio
 	let processRssBytes = aiPid ? pidRss.get(aiPid) : undefined;
 	let processPid = aiPid;
 	// Aggregate terminal tab PIDs as fallback
+	const liveTerminalPid = (session.terminalTabs ?? []).some((t) => t.pid && t.pid > 0);
 	if (processRssBytes === undefined) {
 		for (const term of session.terminalTabs ?? []) {
 			if (term.pid && term.pid > 0 && pidRss.has(term.pid)) {
@@ -97,10 +98,16 @@ function computeFootprint(session: Session, pidRss: Map<number, number>): Sessio
 		}
 	}
 
+	// Load state reflects *lazy-loaded* state only. Fields like `aiTabs[].logs`,
+	// `filePreviewTabs`, and `browserTabs` are persisted to disk and rehydrated
+	// at app launch, so they can't tell us if the agent has been touched this
+	// session. `fileTree`, `aiPid`, and `terminalTabs[].pid` are all reset on
+	// restore and only populated after the user focuses / interacts with the
+	// agent, so they're the reliable signals.
 	let loadState: LoadState;
-	if (aiPid || session.state !== 'idle') {
+	if (aiPid || liveTerminalPid) {
 		loadState = 'active';
-	} else if (logCount > 0 || fileTree.length > 0 || filePreviewTabs.length > 0) {
+	} else if (fileTree.length > 0 || session.fileTreeLoading) {
 		loadState = 'warm';
 	} else {
 		loadState = 'cold';
@@ -262,8 +269,9 @@ export function DebugApplicationStatsModal({ theme, onClose }: DebugApplicationS
 			footer={
 				<div className="flex items-center justify-between w-full">
 					<p className="text-xs" style={{ color: theme.colors.textDim }}>
-						Data bytes are UTF-16 estimates of log/file-tree text — useful for relative comparison,
-						not precise heap accounting.
+						State reflects lazy-loaded runtime only — logs and file/browser tabs are restored from
+						disk at launch, so agents look "cold" until their file tree or process spawns. Data
+						bytes are rough UTF-16 estimates for relative comparison.
 					</p>
 					<button
 						type="button"
