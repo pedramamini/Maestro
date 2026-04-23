@@ -168,6 +168,23 @@ describe('remote-fs', () => {
 			// Path should be properly escaped in the command
 			expect(remoteCommand).toContain("'/path/with spaces/and'\\''quotes'");
 		});
+
+		it('uses find rather than shell globs so zsh NOMATCH cannot fail the command', async () => {
+			// Regression: an earlier implementation scanned for symlinks with
+			// `for f in <path>/* <path>/.[!.]* <path>/..?*; do ...; done`, which
+			// aborts with exit 1 under zsh (the default shell on macOS) whenever
+			// any pattern has no match — common for directories without dotfiles.
+			// Using `find -type l` avoids shell glob expansion entirely.
+			const deps = createMockDeps({ stdout: 'file.txt\n', stderr: '', exitCode: 0 });
+
+			await readDirRemote('/some/dir', baseConfig, deps);
+
+			const call = (deps.execSsh as any).mock.calls[0][1];
+			const remoteCommand = call[call.length - 1];
+			expect(remoteCommand).toMatch(/find .* -type l/);
+			expect(remoteCommand).not.toMatch(/\.\[!\.\]\*/);
+			expect(remoteCommand).not.toMatch(/\.\.\?\*/);
+		});
 	});
 
 	describe('readFileRemote', () => {

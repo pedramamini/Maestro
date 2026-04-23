@@ -222,17 +222,15 @@ export async function readDirRemote(
 	// that consumers can recurse into them.  The marker line __SYMDIR__
 	// separates the two outputs.
 	//
-	// Glob patterns used for the symlink scan:
-	//   /*          — non-dotfiles
-	//   /.[!.]*     — dotfiles (one leading dot), excluding the "." entry
-	//   /..?*       — names starting with ".." followed by more chars, excluding ".."
-	// We avoid a plain "/.*" because it matches "." and ".." on most shells.
-	// Unmatched globs are passed literally, but [ -L ] fails on them so nothing
-	// spurious is printed. Errors are redirected to /dev/null regardless.
+	// We use `find -mindepth 1 -maxdepth 1 -type l` rather than shell globs
+	// because zsh (the default shell on modern macOS) errors on unmatched
+	// globs by default (NOMATCH), which would fail the whole command for any
+	// directory missing dotfiles. `find` has no such failure mode, and
+	// -mindepth/-maxdepth are supported by both GNU and BSD find.
 	const escapedPath = shellEscape(dirPath);
 	const symlinkScan =
-		`for f in ${escapedPath}/* ${escapedPath}/.[!.]* ${escapedPath}/..?*; ` +
-		`do [ -L "$f" ] && [ -d "$f" ] && basename "$f"; done 2>/dev/null`;
+		`find ${escapedPath} -mindepth 1 -maxdepth 1 -type l 2>/dev/null | ` +
+		`while IFS= read -r f; do [ -d "$f" ] && basename "$f"; done`;
 	const remoteCommand =
 		`ls -1AF --color=never ${escapedPath} 2>/dev/null || echo "__LS_ERROR__"; ` +
 		`echo "__SYMDIR__"; ` +
