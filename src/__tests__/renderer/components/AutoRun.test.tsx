@@ -3586,3 +3586,74 @@ describe('Reset Tasks Flash Notification', () => {
 		});
 	});
 });
+
+describe('Document Selector Task Count Sync', () => {
+	beforeEach(() => {
+		setupMaestroMock();
+		useBatchStore.setState({ documentTaskCounts: new Map() });
+	});
+
+	afterEach(() => {
+		vi.clearAllMocks();
+		useBatchStore.setState({ documentTaskCounts: new Map() });
+	});
+
+	it('pushes savedContent-derived task counts into batchStore for the selected document', async () => {
+		const content = ['# Tasks', '- [x] Done one', '- [x] Done two', '- [ ] Still pending'].join(
+			'\n'
+		);
+		const props = createDefaultProps({ selectedFile: 'my-doc', content });
+		renderWithProvider(<AutoRun {...props} />);
+
+		await waitFor(() => {
+			const entry = useBatchStore.getState().documentTaskCounts.get('my-doc');
+			expect(entry).toEqual({ completed: 2, total: 3 });
+		});
+	});
+
+	it('refreshes the store entry when savedContent changes via contentVersion bump', async () => {
+		const initial = '- [ ] one\n- [ ] two';
+		const props = createDefaultProps({
+			selectedFile: 'my-doc',
+			content: initial,
+			contentVersion: 1,
+		});
+		const { rerender } = renderWithProvider(<AutoRun {...props} />);
+
+		await waitFor(() => {
+			expect(useBatchStore.getState().documentTaskCounts.get('my-doc')).toEqual({
+				completed: 0,
+				total: 2,
+			});
+		});
+
+		const updated = '- [x] one\n- [x] two';
+		rerender(
+			<AutoRun
+				{...createDefaultProps({
+					selectedFile: 'my-doc',
+					content: updated,
+					contentVersion: 2,
+				})}
+			/>
+		);
+
+		await waitFor(() => {
+			expect(useBatchStore.getState().documentTaskCounts.get('my-doc')).toEqual({
+				completed: 2,
+				total: 2,
+			});
+		});
+	});
+
+	it('does not write a stale zero entry while savedContent is empty', async () => {
+		const props = createDefaultProps({ selectedFile: 'my-doc', content: '' });
+		renderWithProvider(<AutoRun {...props} />);
+
+		await act(async () => {
+			vi.advanceTimersByTime(100);
+		});
+
+		expect(useBatchStore.getState().documentTaskCounts.has('my-doc')).toBe(false);
+	});
+});

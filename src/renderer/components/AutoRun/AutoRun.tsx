@@ -489,6 +489,14 @@ const AutoRunInner = forwardRef<AutoRunHandle, AutoRunProps>(function AutoRunInn
 			bionifyAlgorithm,
 		});
 
+	// Keep the document selector badge in sync with the bottom-panel counter.
+	// The file watcher's refresh path can be stale (debounced/missed events, SSH poll lag),
+	// but savedContent for the selected doc is always authoritative — mirror it into the store.
+	useEffect(() => {
+		if (!selectedFile || !savedContent) return;
+		useBatchStore.getState().updateTaskCount(selectedFile, taskCounts.completed, taskCounts.total);
+	}, [selectedFile, savedContent, taskCounts.completed, taskCounts.total]);
+
 	return (
 		<div
 			ref={containerRef}
