@@ -693,6 +693,7 @@ export const HistoryPanel = React.memo(
 					<HistoryDetailModal
 						theme={theme}
 						entry={detailModalEntry}
+						agentId={session.toolType}
 						onClose={closeDetailModal}
 						onJumpToAgentSession={onJumpToAgentSession}
 						onResumeSession={onResumeSession}
