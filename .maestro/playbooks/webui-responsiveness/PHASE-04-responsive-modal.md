@@ -470,7 +470,40 @@ All 8 sheets currently use `position: fixed` bottom-aligned full-viewport-width 
 	i.e., viewports narrower than 296px), so no visual change at wider
 	breakpoints. Left the rest of the header alone per the task spec.
 	Type-check (`npm run lint`), ESLint, and Prettier all clean.
-- [ ] **Task 4.13 — Update tests in scope.** Every touched sheet's tests; skip the rest.
+- [x] **Task 4.13 — Update tests in scope.** Every touched sheet's tests; skip the rest.
+
+	**Notes:** Surveyed the touched sheets and their test coverage. Dedicated
+	test files exist only for `TabSearchModal` and `QuickActionsMenu`; both were
+	already updated in their respective migration commits (see Task 4.10 / 4.11
+	notes). `ResponsiveModal` and `ResponsiveModalFooter` have dedicated tests
+	from their creation (Task 4.2 / 4.3). The remaining five migrated sheets
+	(`GroupChatListSheet`, `AutoRunSetupSheet`, `AgentCreationSheet`,
+	`NotificationSettingsSheet`, `ContextManagementSheet`, `GroupChatSetupSheet`)
+	do not have dedicated test files — they are mocked at the module boundary
+	in `src/__tests__/web/mobile/App.test.tsx` and live inline or as children
+	of `MobileApp`.
+
+	**One fix required:** `src/__tests__/web/mobile/App.test.tsx` was failing
+	all 95 tests with `No "BREAKPOINTS" export is defined on the
+	"../../../web/mobile/constants" mock`. Root cause: multiple migrated
+	sheets (and `MobileApp` itself via the notification-dropdown cap) now
+	render `<ResponsiveModal>`, which pulls in `useBreakpoint()`, which in
+	turn reads `BREAKPOINTS` from `web/mobile/constants`. The module-level
+	mock in `App.test.tsx` didn't re-export `BREAKPOINTS`, so any render
+	that touched the breakpoint hook crashed at module-evaluation time. Task
+	4.10 notes had tagged this as "pre-existing" and deferred to Task 4.13;
+	fixed here by adding `BREAKPOINTS: { phone: 0, tablet: 600, desktop:
+	960 }` to the mock object — same shape as `TabSearchModal.test.tsx` and
+	`QuickActionsMenu.test.tsx` already use.
+
+	**Verification:**
+	- `npx vitest run src/__tests__/web/mobile/App.test.tsx` — 95/95 pass
+	  (was 1/95 before the fix).
+	- `npx vitest run src/__tests__/web/mobile/TabSearchModal.test.tsx
+	  src/__tests__/web/mobile/QuickActionsMenu.test.tsx
+	  src/__tests__/web/components/ResponsiveModal.test.tsx
+	  src/__tests__/web/components/ResponsiveModalFooter.test.tsx` —
+	  153/153 pass.
 - [ ] **Task 4.14 — Manual verification.** Open each of the 8 sheets at 320px and at 1280px. Verify: phone renders bottom sheet, desktop renders centered modal, both have working Escape+backdrop close, focus trap works, first focusable element receives focus on open.
 - [ ] **Task 4.15 — Lint, commit, push.**
 

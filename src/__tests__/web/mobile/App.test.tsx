@@ -199,6 +199,11 @@ vi.mock('../../../web/mobile/constants', () => ({
 		pullToRefresh: 80,
 		longPress: 500,
 	},
+	BREAKPOINTS: {
+		phone: 0,
+		tablet: 600,
+		desktop: 960,
+	},
 }));
 
 // Mock webLogger
