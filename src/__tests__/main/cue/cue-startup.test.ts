@@ -142,15 +142,38 @@ describe('CueEngine app.startup', () => {
 		engine.stop();
 	});
 
-	it('does NOT fire on user feature toggle (isSystemBoot=false)', () => {
+	it('does NOT fire when start() is called with default user-toggle reason', () => {
 		const config = createStartupConfig();
 		mockLoadCueConfig.mockReturnValue(config);
 
 		const deps = createMockDeps();
 		const engine = new CueEngine(deps);
-		engine.start(); // No true — simulates user toggling Cue on
+		engine.start(); // no argument — defaults to 'user-toggle'; app.startup does not fire
 
 		expect(deps.onCueRun).not.toHaveBeenCalled();
+
+		engine.stop();
+	});
+
+	it('fires on IPC-driven user toggle (cue:enable calls start with system-boot)', () => {
+		// The cue:enable IPC handler calls requireEngine().start('system-boot'),
+		// so enabling Cue from the UI should fire app.startup subscriptions just
+		// like a real Electron launch.
+		const config = createStartupConfig();
+		mockLoadCueConfig.mockReturnValue(config);
+
+		const deps = createMockDeps();
+		const engine = new CueEngine(deps);
+		engine.start('system-boot'); // mirrors what cue:enable does via IPC
+
+		expect(deps.onCueRun).toHaveBeenCalledTimes(1);
+		expect(deps.onCueRun).toHaveBeenCalledWith(
+			expect.objectContaining({
+				sessionId: 'session-1',
+				subscriptionName: 'init-workspace',
+				event: expect.objectContaining({ type: 'app.startup' }),
+			})
+		);
 
 		engine.stop();
 	});
@@ -174,7 +197,11 @@ describe('CueEngine app.startup', () => {
 		engine.stop();
 	});
 
-	it('does NOT re-fire on engine stop/start toggle', async () => {
+	it('does NOT re-fire when stop/start uses default user-toggle reason', async () => {
+		// This validates direct engine.start() calls that omit the reason argument
+		// (defaulting to 'user-toggle'). Note: the cue:enable IPC handler passes
+		// 'system-boot' explicitly, so the IPC-driven path DOES re-fire — see the
+		// 'fires on IPC-driven user toggle' test above.
 		const config = createStartupConfig();
 		mockLoadCueConfig.mockReturnValue(config);
 
@@ -184,11 +211,9 @@ describe('CueEngine app.startup', () => {
 		engine.start('system-boot');
 		expect(deps.onCueRun).toHaveBeenCalledTimes(1);
 
-		// User toggles Cue off then on (feature toggle, not system boot)
 		engine.stop();
-		engine.start(); // isSystemBoot defaults to false
+		engine.start(); // no argument — 'user-toggle' reason; app.startup check is skipped
 
-		// Should NOT re-fire — startupFiredKeys persist across stop/start
 		expect(deps.onCueRun).toHaveBeenCalledTimes(1);
 
 		engine.stop();

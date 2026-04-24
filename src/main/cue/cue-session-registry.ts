@@ -10,11 +10,16 @@
  * - register / unregister / get / has / values / size — session lifecycle
  * - markScheduledFired / evictStaleScheduledKeys / clearScheduledForSession
  *   — `time.scheduled` dedup (one fire per `(session, sub, HH:MM)`)
- * - markStartupFired / clearStartupForSession — `app.startup` dedup
- *   (one fire per `(session, sub)` per process lifecycle)
- * - clear — drops all sessions and `time.scheduled` dedup state but PRESERVES
- *   `app.startup` keys, matching the old engine.stop() semantics where toggling
- *   Cue off/on must NOT re-fire startup subscriptions.
+ * - markStartupFired / clearStartupForSession / clearAllStartupKeys
+ *   — `app.startup` dedup (one fire per `(session, sub)` per engine cycle).
+ *   `markStartupFired` returns true on first fire within the current cycle,
+ *   false if already fired. `engine.stop()` calls `clearAllStartupKeys()` to
+ *   reset the dedup set so that the next `start('system-boot')` re-fires
+ *   startup subscriptions for all sessions.
+ * - clear — drops all sessions and `time.scheduled` dedup state; `app.startup`
+ *   keys are NOT cleared by `clear()` (they remain valid within the current
+ *   engine cycle). To reset startup keys, call `clearAllStartupKeys()` or
+ *   use `engine.stop()`, which does so automatically.
  */
 
 import type { SessionState } from './cue-session-state';

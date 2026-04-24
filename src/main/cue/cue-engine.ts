@@ -370,9 +370,13 @@ export class CueEngine {
 	 *
 	 * @param reason Why the engine is starting. Determines whether `app.startup`
 	 *   subscriptions fire:
-	 *   - `'system-boot'`: pass at Electron launch (index.ts). app.startup fires.
-	 *   - `'user-toggle'` (default): user flipped the Cue toggle. app.startup
-	 *     does NOT re-fire — toggling is idempotent.
+	 *   - `'system-boot'`: used at Electron launch (index.ts) AND when the user
+	 *     enables Cue via the IPC handler (`cue:enable` calls
+	 *     `requireEngine().start('system-boot')`). app.startup subscriptions fire
+	 *     and are deduped per engine cycle (keys are cleared by stop()).
+	 *   - `'user-toggle'` (default): direct engine.start() call without an explicit
+	 *     reason (e.g. in tests or internal paths). app.startup does NOT fire —
+	 *     only IPC-driven enables and Electron launch use 'system-boot'.
 	 */
 	start(reason: SessionInitReason = 'user-toggle'): void {
 		if (this.enabled) return;
