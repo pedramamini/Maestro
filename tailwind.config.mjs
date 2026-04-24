@@ -29,6 +29,11 @@ export default {
 				error: 'var(--maestro-error)',
 				// Alias so `bg-background` reads naturally for the main canvas.
 				background: 'var(--maestro-bg-main)',
+				// Non-theme color: the "connecting" badge state is an orange flag
+				// that doesn't participate in user-selectable themes. Defined as
+				// a literal hex so Tailwind's opacity modifiers (e.g.
+				// `bg-connecting/[0.125]`) work — they don't with `var(...)` tokens.
+				connecting: '#f97316',
 			},
 		},
 	},
