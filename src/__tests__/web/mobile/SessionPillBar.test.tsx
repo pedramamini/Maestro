@@ -1462,7 +1462,7 @@ describe('SessionPillBar', () => {
 			expect(container.firstChild).toHaveStyle({ marginBottom: '10px' });
 		});
 
-		it('uses theme colors for styling', () => {
+		it('uses theme tokens for the outer container', () => {
 			render(
 				<SessionPillBar
 					sessions={[createMockSession({ id: 's1' })]}
@@ -1471,10 +1471,15 @@ describe('SessionPillBar', () => {
 				/>
 			);
 
-			// Component renders with theme colors (verified by visual output)
-			expect(screen.getByRole('tablist').parentElement).toHaveStyle({
-				borderBottom: `1px solid ${mockColors.border}`,
-			});
+			// After the Task 2.6 Tailwind migration the bottom border + sidebar
+			// tint ride on class tokens resolved against `var(--maestro-*)` at
+			// runtime — asserting on classes keeps the test stable across
+			// theme swaps.
+			expect(screen.getByRole('tablist').parentElement).toHaveClass(
+				'border-b',
+				'border-border',
+				'bg-bg-sidebar'
+			);
 		});
 	});
 
@@ -1492,7 +1497,9 @@ describe('SessionPillBar', () => {
 			const nameElement = screen.getByText(
 				'This is a very long session name that should be truncated'
 			);
-			expect(nameElement).toHaveStyle({ textOverflow: 'ellipsis' });
+			// Task 2.6 migrated the truncation primitives to Tailwind; the
+			// behaviour is now expressed via `overflow-hidden text-ellipsis`.
+			expect(nameElement).toHaveClass('overflow-hidden', 'text-ellipsis');
 		});
 
 		it('handles special characters in session name', () => {
