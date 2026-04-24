@@ -15,6 +15,7 @@ import { getAgentDisplayName } from '../../shared/agentMetadata';
 import { truncatePath } from '../../shared/formatters';
 import type { Session } from '../hooks/useSessions';
 import type { GroupData } from '../hooks/useWebSocket';
+import type { PanelMode } from './panelModes';
 
 export interface LeftPanelProps {
 	sessions: Session[];
@@ -25,8 +26,12 @@ export interface LeftPanelProps {
 	panelRef?: React.RefObject<HTMLDivElement>;
 	width?: number;
 	onResizeStart?: (e: React.PointerEvent<HTMLElement>) => void;
-	/** When true, renders as a full-screen overlay (mobile) instead of an inline side panel */
-	isFullScreen?: boolean;
+	/**
+	 * Rendering mode. `'overlay'` renders as a full-screen, swipe-to-close sheet
+	 * (phone + demoted tablet/desktop cases). `'inline'` renders as a resizable
+	 * column inside the layout flex row.
+	 */
+	mode?: PanelMode;
 	/** Lifted group collapse state — persists across panel open/close */
 	collapsedGroups: Set<string>;
 	setCollapsedGroups: React.Dispatch<React.SetStateAction<Set<string>>>;
@@ -605,7 +610,7 @@ export function LeftPanel({
 	panelRef,
 	width,
 	onResizeStart,
-	isFullScreen,
+	mode = 'inline',
 	collapsedGroups,
 	setCollapsedGroups,
 	showUnreadOnly,
@@ -615,16 +620,17 @@ export function LeftPanel({
 	onMoveToGroup,
 }: LeftPanelProps) {
 	const colors = useThemeColors();
+	const isOverlay = mode === 'overlay';
 
-	// Slide-in animation state (full-screen overlay mode only)
+	// Slide-in animation state (overlay mode only)
 	const [isOpen, setIsOpen] = useState(false);
 	useEffect(() => {
-		if (isFullScreen) {
+		if (isOverlay) {
 			requestAnimationFrame(() => setIsOpen(true));
 		}
-	}, [isFullScreen]);
+	}, [isOverlay]);
 
-	// Swipe left to close (full-screen overlay mode only)
+	// Swipe left to close (overlay mode only)
 	const {
 		handlers: swipeHandlers,
 		offsetX,
@@ -635,7 +641,7 @@ export function LeftPanel({
 		maxOffset: 200,
 		threshold: 50,
 		lockDirection: true,
-		enabled: !!isFullScreen,
+		enabled: isOverlay,
 	});
 
 	const closeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -788,7 +794,7 @@ export function LeftPanel({
 	const swipeOffset = isSwiping && offsetX < 0 ? offsetX : 0;
 	const drawerTransform = isOpen ? `translateX(${swipeOffset}px)` : 'translateX(-100%)';
 
-	const panelStyle: React.CSSProperties = isFullScreen
+	const panelStyle: React.CSSProperties = isOverlay
 		? {
 				position: 'fixed',
 				top: 0,
@@ -819,7 +825,7 @@ export function LeftPanel({
 
 	return (
 		<>
-			{isFullScreen && (
+			{isOverlay && (
 				<div
 					onClick={handleClose}
 					style={{
@@ -835,7 +841,7 @@ export function LeftPanel({
 					aria-label="Close panel"
 				/>
 			)}
-			<div ref={panelRef} {...(isFullScreen ? swipeHandlers : {})} style={panelStyle}>
+			<div ref={panelRef} {...(isOverlay ? swipeHandlers : {})} style={panelStyle}>
 				{/* Header */}
 				<div
 					style={{
@@ -983,7 +989,7 @@ export function LeftPanel({
 							</button>
 						)}
 						<button
-							onClick={isFullScreen ? handleClose : onClose}
+							onClick={isOverlay ? handleClose : onClose}
 							style={{
 								width: '24px',
 								height: '24px',
@@ -1415,7 +1421,7 @@ export function LeftPanel({
 						</div>
 					))}
 				</div>
-				{!isFullScreen && onResizeStart && (
+				{!isOverlay && onResizeStart && (
 					<div
 						onPointerDown={onResizeStart}
 						style={{

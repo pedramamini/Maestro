@@ -15,6 +15,7 @@ import { triggerHaptic, HAPTIC_PATTERNS } from './constants';
 import type { AutoRunState, UseWebSocketReturn } from '../hooks/useWebSocket';
 import type { UseGitStatusReturn } from '../hooks/useGitStatus';
 import type { RightDrawerTab } from './RightDrawer';
+import type { PanelMode } from './panelModes';
 
 export interface RightPanelProps {
 	sessionId: string;
@@ -32,8 +33,12 @@ export interface RightPanelProps {
 	panelRef?: React.RefObject<HTMLDivElement>;
 	width?: number;
 	onResizeStart?: (e: React.PointerEvent<HTMLElement>) => void;
-	/** When true, renders as a full-screen overlay (mobile) instead of an inline side panel */
-	isFullScreen?: boolean;
+	/**
+	 * Rendering mode. `'overlay'` renders as a full-screen, swipe-to-close sheet
+	 * (phone + demoted tablet/desktop cases). `'inline'` renders as a resizable
+	 * column inside the layout flex row.
+	 */
+	mode?: PanelMode;
 }
 
 const TABS: { id: RightDrawerTab; label: string }[] = [
@@ -62,20 +67,21 @@ export function RightPanel({
 	panelRef,
 	width,
 	onResizeStart,
-	isFullScreen,
+	mode = 'inline',
 }: RightPanelProps) {
 	const colors = useThemeColors();
 	const [currentTab, setCurrentTab] = useState<RightDrawerTab>(activeTab);
+	const isOverlay = mode === 'overlay';
 
-	// Slide-in animation state (full-screen overlay mode only)
+	// Slide-in animation state (overlay mode only)
 	const [isOpen, setIsOpen] = useState(false);
 	useEffect(() => {
-		if (isFullScreen) {
+		if (isOverlay) {
 			requestAnimationFrame(() => setIsOpen(true));
 		}
-	}, [isFullScreen]);
+	}, [isOverlay]);
 
-	// Swipe right to close (full-screen overlay mode only)
+	// Swipe right to close (overlay mode only)
 	const {
 		handlers: swipeHandlers,
 		offsetX,
@@ -86,7 +92,7 @@ export function RightPanel({
 		maxOffset: 200,
 		threshold: 50,
 		lockDirection: true,
-		enabled: !!isFullScreen,
+		enabled: isOverlay,
 	});
 
 	const closeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -113,7 +119,7 @@ export function RightPanel({
 	const swipeOffset = isSwiping && offsetX > 0 ? offsetX : 0;
 	const drawerTransform = isOpen ? `translateX(${swipeOffset}px)` : 'translateX(100%)';
 
-	const panelStyle: React.CSSProperties = isFullScreen
+	const panelStyle: React.CSSProperties = isOverlay
 		? {
 				position: 'fixed',
 				top: 0,
@@ -142,7 +148,7 @@ export function RightPanel({
 
 	return (
 		<>
-			{isFullScreen && (
+			{isOverlay && (
 				<div
 					onClick={handleClose}
 					style={{
@@ -158,8 +164,8 @@ export function RightPanel({
 					aria-label="Close panel"
 				/>
 			)}
-			<div ref={panelRef} {...(isFullScreen ? swipeHandlers : {})} style={panelStyle}>
-				{!isFullScreen && onResizeStart && (
+			<div ref={panelRef} {...(isOverlay ? swipeHandlers : {})} style={panelStyle}>
+				{!isOverlay && onResizeStart && (
 					<div
 						onPointerDown={onResizeStart}
 						style={{

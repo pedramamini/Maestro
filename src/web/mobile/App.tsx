@@ -24,13 +24,16 @@ import { useMobileSessionManagement } from '../hooks/useMobileSessionManagement'
 import { useOfflineStatus, useDesktopTheme } from '../main';
 import { buildApiUrl } from '../utils/config';
 import { triggerHaptic, HAPTIC_PATTERNS } from './constants';
-import type { MostRecentlyOpenedPanel } from './panelModes';
+import {
+	applyMainMinWidthGuard,
+	getPanelMode,
+	type MostRecentlyOpenedPanel,
+} from './panelModes';
 import { webLogger } from '../utils/logger';
 import { AllSessionsView } from './AllSessionsView';
 import { type RightDrawerTab } from './RightDrawer';
 import { RightPanel } from './RightPanel';
 import { LeftPanel } from './LeftPanel';
-import { useIsMobile } from '../hooks/useIsMobile';
 import { useBreakpoint } from '../hooks/useBreakpoint';
 import { useGitStatus } from '../hooks/useGitStatus';
 import { useResizableWebPanel } from '../hooks/useResizableWebPanel';
@@ -1085,8 +1088,10 @@ export default function MobileApp() {
 		persistSessionSelection,
 	} = useMobileViewState();
 
-	// Responsive: detect mobile viewport for full-screen panel mode
-	const isMobile = useIsMobile();
+	// Responsive: tier + viewport drive the three-column layout decisions in
+	// `./panelModes`. `tier` picks the base overlay/inline layout and
+	// `viewportWidth` feeds the main-column min-width guard.
+	const { tier, width: viewportWidth } = useBreakpoint();
 
 	// Resizable panel hooks
 	const leftPanelResize = useResizableWebPanel({
@@ -1114,13 +1119,10 @@ export default function MobileApp() {
 	const [showRightDrawer, setShowRightDrawer] = useState(false);
 	const [rightDrawerTab, setRightDrawerTab] = useState<RightDrawerTab>('files');
 
-	// Track which panel the user most recently opened so the Phase 1 layout
-	// guard (`applyMainMinWidthGuard` in `./panelModes`) can demote the freshest
-	// panel to overlay when the desktop-tier inline layout would squeeze main
-	// below 420px. Consumed starting in Task 1.5 when the mode plumbing lands;
-	// the state lives here so the tracking effect sees the canonical panel
-	// open-state. Prefixed with `_` until wired to silence the unused-var lint.
-	const [_mostRecentlyOpened, setMostRecentlyOpened] = useState<MostRecentlyOpenedPanel>(null);
+	// Track which panel the user most recently opened so `applyMainMinWidthGuard`
+	// can demote the freshest panel to overlay when the desktop-tier inline
+	// layout would squeeze `main` below `MAIN_MIN_WIDTH`.
+	const [mostRecentlyOpened, setMostRecentlyOpened] = useState<MostRecentlyOpenedPanel>(null);
 	const prevLeftOpenRef = useRef(showLeftPanel);
 	const prevRightOpenRef = useRef(showRightDrawer);
 	useEffect(() => {
@@ -1134,6 +1136,27 @@ export default function MobileApp() {
 		prevLeftOpenRef.current = showLeftPanel;
 		prevRightOpenRef.current = showRightDrawer;
 	}, [showLeftPanel, showRightDrawer]);
+
+	// Derive each panel's rendering mode from tier + open state, then apply the
+	// min-width guard so the main column never drops below `MAIN_MIN_WIDTH`.
+	const panelModes = useMemo(
+		() =>
+			applyMainMinWidthGuard(getPanelMode(tier, showLeftPanel, showRightDrawer), {
+				viewportWidth,
+				leftInlineWidth: leftPanelResize.width,
+				rightInlineWidth: rightPanelResize.width,
+				mostRecentlyOpened,
+			}),
+		[
+			tier,
+			showLeftPanel,
+			showRightDrawer,
+			viewportWidth,
+			leftPanelResize.width,
+			rightPanelResize.width,
+			mostRecentlyOpened,
+		]
+	);
 
 	const [showTabSearch, setShowTabSearch] = useState(savedState.showTabSearch);
 	const [thinkingMode, setThinkingMode] = useState<ThinkingMode>('off');
@@ -3280,22 +3303,9 @@ export default function MobileApp() {
 				/>
 			)}
 
-			{/* Horizontal layout: main content + optional right panel */}
-			{/* SCRATCH(phase-1, remove before commit of Task 1.5):
-			     Current three-column layout:
-			       - Row container: flex:1, flexDirection:row, minHeight:0, overflow:hidden (inline styles).
-			       - LeftPanel: default 240px, min 200, max 400 (useResizableWebPanel, storageKey maestro-web-left-panel-width).
-			         When isMobile=true -> isFullScreen=true (overlay, no resize props passed).
-			         When isMobile=false -> inline column with panelRef/width/onResizeStart from leftPanelResize.
-			       - main: flex:1, flexDirection:column, minWidth:0, minHeight:0, overflow:hidden.
-			         alignItems/justifyContent/padding swap based on currentInputMode==='terminal'.
-			         No explicit min-width guard today — at ~900px viewport with both panels inline, main can squeeze below ~340px.
-			       - RightPanel: default 320px, min 260, max 500 (useResizableWebPanel, storageKey maestro-web-right-panel-width).
-			         Same isMobile -> isFullScreen=true overlay pattern.
-			       - isMobile origin: `const isMobile = useIsMobile();` (line ~1088). Threaded into both panels only via
-			         isFullScreen / panelRef / width / onResizeStart props — no tier awareness, no 'most-recently-opened' tracking.
-			     Tasks 1.2–1.5 replace isFullScreen with mode:'overlay'|'inline' derived from useBreakpoint() + a recency ref,
-			     and migrate the row container + main to Tailwind. */}
+			{/* Horizontal layout: left panel + main content + right panel. Each
+			    panel's `mode` is derived from tier + open-state + a min-width guard
+			    on `main` (see `./panelModes`). */}
 			<div className="flex flex-1 flex-row min-h-0 overflow-hidden">
 				{/* Left panel — agent list, toggleable */}
 				{showLeftPanel && (
@@ -3305,10 +3315,12 @@ export default function MobileApp() {
 						onSelectSession={handleSelectSession}
 						onClose={() => setShowLeftPanel(false)}
 						onNewAgent={handleOpenAgentCreation}
-						isFullScreen={isMobile}
-						panelRef={isMobile ? undefined : leftPanelResize.panelRef}
-						width={isMobile ? undefined : leftPanelResize.width}
-						onResizeStart={isMobile ? undefined : leftPanelResize.onResizeStart}
+						mode={panelModes.leftMode}
+						panelRef={panelModes.leftMode === 'inline' ? leftPanelResize.panelRef : undefined}
+						width={panelModes.leftMode === 'inline' ? leftPanelResize.width : undefined}
+						onResizeStart={
+							panelModes.leftMode === 'inline' ? leftPanelResize.onResizeStart : undefined
+						}
 						collapsedGroups={collapsedGroups}
 						setCollapsedGroups={setCollapsedGroups}
 						showUnreadOnly={showUnreadAgentsOnly}
@@ -3360,10 +3372,12 @@ export default function MobileApp() {
 						sendRequest={sendRequest}
 						send={send}
 						onViewDiff={handleViewGitDiff}
-						isFullScreen={isMobile}
-						panelRef={isMobile ? undefined : rightPanelResize.panelRef}
-						width={isMobile ? undefined : rightPanelResize.width}
-						onResizeStart={isMobile ? undefined : rightPanelResize.onResizeStart}
+						mode={panelModes.rightMode}
+						panelRef={panelModes.rightMode === 'inline' ? rightPanelResize.panelRef : undefined}
+						width={panelModes.rightMode === 'inline' ? rightPanelResize.width : undefined}
+						onResizeStart={
+							panelModes.rightMode === 'inline' ? rightPanelResize.onResizeStart : undefined
+						}
 					/>
 				)}
 			</div>
