@@ -380,6 +380,35 @@ describe('web handlers', () => {
 
 			expect(writeCliServerInfo).not.toHaveBeenCalled();
 		});
+
+		// A discovery-file write failure (disk full, unwritable config dir, …)
+		// must not mask a genuinely-running server — `ensureCliServer` treats
+		// the write as non-fatal and `live:startServer` should too.
+		it('should still report success when discovery write fails after a fresh start', async () => {
+			mockWebServer.isActive.mockReturnValue(false);
+			vi.mocked(writeCliServerInfo).mockImplementationOnce(() => {
+				throw new Error('disk full');
+			});
+
+			const handler = registeredHandlers.get('live:startServer');
+			const result = await handler!({});
+
+			expect(mockWebServer.start).toHaveBeenCalled();
+			expect(result).toEqual({ success: true, url: 'http://localhost:8080' });
+		});
+
+		it('should still report success when discovery write fails on an already-running server', async () => {
+			mockWebServer.isActive.mockReturnValue(true);
+			vi.mocked(writeCliServerInfo).mockImplementationOnce(() => {
+				throw new Error('permission denied');
+			});
+
+			const handler = registeredHandlers.get('live:startServer');
+			const result = await handler!({});
+
+			expect(mockWebServer.start).not.toHaveBeenCalled();
+			expect(result).toEqual({ success: true, url: 'http://localhost:8080' });
+		});
 	});
 
 	describe('live:stopServer', () => {
@@ -427,6 +456,8 @@ describe('web handlers', () => {
 			const handler = registeredHandlers.get('live:disableAll');
 			const result = await handler!({});
 
+			expect(mockWebServer.stop).toHaveBeenCalled();
+			expect(deleteCliServerInfo).toHaveBeenCalledTimes(1);
 			expect(result).toEqual({ success: true, count: 0 });
 		});
 	});

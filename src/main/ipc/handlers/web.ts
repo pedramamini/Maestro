@@ -287,12 +287,23 @@ export function registerWebHandlers(deps: WebHandlerDependencies): void {
 
 				// Refresh CLI discovery file so the CLI can reconnect after a
 				// stop/start cycle (ensureCliServer only runs once at app launch).
-				refreshCliDiscoveryFile(port, token);
+				// Non-fatal: the server is genuinely up — a failure here would only
+				// break CLI IPC, so don't let it mask the UI's success path.
+				try {
+					refreshCliDiscoveryFile(port, token);
+				} catch (err: any) {
+					logger.error(`Failed to write CLI discovery file: ${err?.message ?? err}`, 'WebServer');
+				}
 				return { success: true, url };
 			}
 
-			// Already running — refresh discovery file in case it's stale
-			refreshCliDiscoveryFile(webServer.getPort(), webServer.getSecurityToken());
+			// Already running — refresh discovery file in case it's stale.
+			// Same non-fatal treatment: server is up, CLI discovery is secondary.
+			try {
+				refreshCliDiscoveryFile(webServer.getPort(), webServer.getSecurityToken());
+			} catch (err: any) {
+				logger.error(`Failed to refresh CLI discovery file: ${err?.message ?? err}`, 'WebServer');
+			}
 			return { success: true, url: webServer.getSecureUrl() };
 		} catch (error: any) {
 			logger.error(`Failed to start web server: ${error.message}`, 'WebServer');
