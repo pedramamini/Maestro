@@ -24,6 +24,7 @@ import { useMobileSessionManagement } from '../hooks/useMobileSessionManagement'
 import { useOfflineStatus, useDesktopTheme } from '../main';
 import { buildApiUrl } from '../utils/config';
 import { triggerHaptic, HAPTIC_PATTERNS } from './constants';
+import type { MostRecentlyOpenedPanel } from './panelModes';
 import { webLogger } from '../utils/logger';
 import { AllSessionsView } from './AllSessionsView';
 import { type RightDrawerTab } from './RightDrawer';
@@ -1112,6 +1113,28 @@ export default function MobileApp() {
 	const [showUnreadAgentsOnly, setShowUnreadAgentsOnly] = useState(false);
 	const [showRightDrawer, setShowRightDrawer] = useState(false);
 	const [rightDrawerTab, setRightDrawerTab] = useState<RightDrawerTab>('files');
+
+	// Track which panel the user most recently opened so the Phase 1 layout
+	// guard (`applyMainMinWidthGuard` in `./panelModes`) can demote the freshest
+	// panel to overlay when the desktop-tier inline layout would squeeze main
+	// below 420px. Consumed starting in Task 1.5 when the mode plumbing lands;
+	// the state lives here so the tracking effect sees the canonical panel
+	// open-state. Prefixed with `_` until wired to silence the unused-var lint.
+	const [_mostRecentlyOpened, setMostRecentlyOpened] = useState<MostRecentlyOpenedPanel>(null);
+	const prevLeftOpenRef = useRef(showLeftPanel);
+	const prevRightOpenRef = useRef(showRightDrawer);
+	useEffect(() => {
+		const leftJustOpened = showLeftPanel && !prevLeftOpenRef.current;
+		const rightJustOpened = showRightDrawer && !prevRightOpenRef.current;
+		if (leftJustOpened) {
+			setMostRecentlyOpened('left');
+		} else if (rightJustOpened) {
+			setMostRecentlyOpened('right');
+		}
+		prevLeftOpenRef.current = showLeftPanel;
+		prevRightOpenRef.current = showRightDrawer;
+	}, [showLeftPanel, showRightDrawer]);
+
 	const [showTabSearch, setShowTabSearch] = useState(savedState.showTabSearch);
 	const [thinkingMode, setThinkingMode] = useState<ThinkingMode>('off');
 	const [commandDrafts, setCommandDrafts] = useState<CommandDraftStore>({});
