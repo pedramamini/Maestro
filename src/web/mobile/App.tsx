@@ -99,29 +99,27 @@ function getActiveTabFromSession(session: Session | null | undefined): AITabData
 }
 
 /**
- * Shared icon button style for the header
+ * Shared icon-button className for the header.
+ *
+ * Tailwind tokens resolve the live `--maestro-*` CSS custom properties, so the
+ * active/inactive states continue to react to theme hot-swaps. The active
+ * background uses the same `color-mix(..., 12%, transparent)` pattern as
+ * `Badge.tsx`'s subtle style to emulate the legacy `${hex}20` alpha (~12.5%)
+ * — Tailwind's opacity modifiers don't compose with `var()` tokens.
+ *
+ * The global 44px touch-target floor (see `src/web/index.css`) still applies
+ * because `<button>` matches the universal selector there; the `w-8 h-8`
+ * utilities set the 32px square icon box while min-height keeps the hit zone
+ * at 44px.
  */
-function headerIconButton(
-	colors: ReturnType<typeof useThemeColors>,
-	isActive = false
-): React.CSSProperties {
-	return {
-		width: '32px',
-		height: '32px',
-		display: 'flex',
-		alignItems: 'center',
-		justifyContent: 'center',
-		borderRadius: '6px',
-		backgroundColor: isActive ? `${colors.accent}20` : 'transparent',
-		border: isActive ? `1px solid ${colors.accent}` : `1px solid ${colors.border}`,
-		color: isActive ? colors.accent : colors.textDim,
-		cursor: 'pointer',
-		touchAction: 'manipulation',
-		WebkitTapHighlightColor: 'transparent',
-		flexShrink: 0,
-		position: 'relative' as const,
-		padding: 0,
-	};
+const HEADER_ICON_BUTTON_BASE =
+	'w-8 h-8 flex items-center justify-center rounded-md flex-shrink-0 relative p-0 cursor-pointer touch-manipulation';
+
+function headerIconButtonClasses(isActive = false): string {
+	const state = isActive
+		? 'bg-[color-mix(in_srgb,var(--maestro-accent)_12%,transparent)] border border-accent text-accent'
+		: 'bg-transparent border border-border text-text-dim';
+	return `${HEADER_ICON_BUTTON_BASE} ${state}`;
 }
 
 /**
@@ -131,42 +129,17 @@ function OverflowMenuItem({
 	icon,
 	label,
 	onClick,
-	colors,
 }: {
 	icon: React.ReactNode;
 	label: string;
 	onClick: () => void;
-	colors: ReturnType<typeof useThemeColors>;
 }) {
 	return (
 		<button
 			onClick={onClick}
-			style={{
-				display: 'flex',
-				alignItems: 'center',
-				gap: '10px',
-				width: '100%',
-				padding: '10px 14px',
-				border: 'none',
-				backgroundColor: 'transparent',
-				color: colors.textMain,
-				fontSize: '14px',
-				cursor: 'pointer',
-				touchAction: 'manipulation',
-				WebkitTapHighlightColor: 'transparent',
-				textAlign: 'left',
-				borderRadius: '6px',
-			}}
-			onMouseEnter={(e) => {
-				(e.currentTarget as HTMLElement).style.backgroundColor = `${colors.textDim}15`;
-			}}
-			onMouseLeave={(e) => {
-				(e.currentTarget as HTMLElement).style.backgroundColor = 'transparent';
-			}}
+			className="flex items-center gap-2.5 w-full px-3.5 py-2.5 border-none bg-transparent text-text-main text-sm cursor-pointer touch-manipulation text-left rounded-md hover:bg-[color-mix(in_srgb,var(--maestro-text-dim)_8%,transparent)]"
 		>
-			<span style={{ color: colors.textDim, flexShrink: 0, display: 'flex', alignItems: 'center' }}>
-				{icon}
-			</span>
+			<span className="text-text-dim flex-shrink-0 flex items-center">{icon}</span>
 			<span>{label}</span>
 		</button>
 	);
@@ -291,7 +264,6 @@ function MobileHeader({
 	onContextManagementTap,
 	onNewAgentTap,
 }: MobileHeaderProps) {
-	const colors = useThemeColors();
 	const [showOverflow, setShowOverflow] = useState(false);
 	const overflowRef = useRef<HTMLDivElement>(null);
 	const [showNotifDropdown, setShowNotifDropdown] = useState(false);
@@ -332,13 +304,14 @@ function MobileHeader({
 		return () => document.removeEventListener('mousedown', handler);
 	}, [showOverflow]);
 
-	// Get status dot color
-	const getStatusDotColor = () => {
-		if (sessionState === 'busy') return colors.warning;
-		if (sessionState === 'error') return colors.error;
-		if (sessionState === 'connecting') return colors.warning;
-		return colors.success; // idle
-	};
+	// Status dot color maps to a Tailwind bg token so theme hot-swaps pick up
+	// the new palette without re-rendering the dot element.
+	const statusDotBgClass =
+		sessionState === 'busy' || sessionState === 'connecting'
+			? 'bg-warning'
+			: sessionState === 'error'
+				? 'bg-error'
+				: 'bg-success';
 
 	const handleOverflowAction = useCallback((action: (() => void) | undefined) => {
 		setShowOverflow(false);
@@ -346,23 +319,11 @@ function MobileHeader({
 	}, []);
 
 	return (
-		<header
-			style={{
-				display: 'flex',
-				alignItems: 'center',
-				justifyContent: 'space-between',
-				padding: '6px 10px',
-				paddingTop: 'max(6px, env(safe-area-inset-top))',
-				borderBottom: `1px solid ${colors.border}`,
-				backgroundColor: colors.bgSidebar,
-				minHeight: '44px',
-				gap: '6px',
-			}}
-		>
+		<header className="flex items-center justify-between gap-1.5 px-2.5 pb-1.5 pt-[max(6px,env(safe-area-inset-top))] min-h-11 border-b border-border bg-bg-sidebar">
 			{/* Left: Agents panel toggle */}
 			<button
 				onClick={onMenuTap}
-				style={headerIconButton(colors, isLeftPanelOpen)}
+				className={headerIconButtonClasses(isLeftPanelOpen)}
 				aria-label="Agents"
 				title="Agents"
 			>
@@ -387,56 +348,32 @@ function MobileHeader({
 
 			{/* Center: Session name + status dot */}
 			{activeSession ? (
-				<div
-					style={{
-						flex: 1,
-						display: 'flex',
-						alignItems: 'center',
-						justifyContent: 'center',
-						gap: '6px',
-						minWidth: 0,
-						overflow: 'hidden',
-					}}
-				>
+				<div className="flex flex-1 items-center justify-center gap-1.5 min-w-0 overflow-hidden">
 					{/* Session status dot */}
 					<span
-						style={{
-							width: '8px',
-							height: '8px',
-							borderRadius: '50%',
-							backgroundColor: getStatusDotColor(),
-							flexShrink: 0,
-							animation: isThinking ? 'pulse 1.5s ease-in-out infinite' : 'none',
-						}}
+						className={`w-2 h-2 rounded-full flex-shrink-0 ${statusDotBgClass} ${
+							isThinking ? '[animation:pulse_1.5s_ease-in-out_infinite]' : ''
+						}`}
 						title={`Session ${sessionState}`}
 					/>
 					{/* Session name */}
-					<span
-						style={{
-							fontSize: '14px',
-							fontWeight: 600,
-							color: colors.textMain,
-							overflow: 'hidden',
-							textOverflow: 'ellipsis',
-							whiteSpace: 'nowrap',
-						}}
-					>
+					<span className="text-sm font-semibold text-text-main overflow-hidden text-ellipsis whitespace-nowrap">
 						{activeSession.name}
 					</span>
 				</div>
 			) : (
-				<div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-					<span style={{ fontSize: '14px', fontWeight: 600, color: colors.textMain }}>Maestro</span>
+				<div className="flex flex-1 items-center justify-center">
+					<span className="text-sm font-semibold text-text-main">Maestro</span>
 				</div>
 			)}
 
 			{/* Right: Priority icon buttons + overflow */}
-			<div style={{ display: 'flex', alignItems: 'center', gap: '4px', flexShrink: 0 }}>
+			<div className="flex items-center gap-1 flex-shrink-0">
 				{/* Search / Quick Actions (Cmd+K) — inline on tablet+ */}
 				{isHeaderIconInline('search', tier) && (
 					<button
 						onClick={onSearchTap}
-						style={headerIconButton(colors)}
+						className={headerIconButtonClasses()}
 						aria-label="Search"
 						title="Quick Actions (Cmd+K)"
 					>
@@ -460,7 +397,7 @@ function MobileHeader({
 				{isHeaderIconInline('rightPanel', tier) && (
 					<button
 						onClick={onRightDrawerTap}
-						style={headerIconButton(colors, isRightPanelOpen)}
+						className={headerIconButtonClasses(isRightPanelOpen)}
 						aria-label="Files & History"
 						title="Files / History / Git"
 					>
@@ -484,7 +421,7 @@ function MobileHeader({
 				{isHeaderIconInline('cue', tier) && (
 					<button
 						onClick={onCueTap}
-						style={headerIconButton(colors, hasRunningCue)}
+						className={headerIconButtonClasses(hasRunningCue)}
 						aria-label="Maestro Cue"
 						title="Maestro Cue"
 					>
@@ -501,28 +438,17 @@ function MobileHeader({
 							<polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
 						</svg>
 						{hasRunningCue && (
-							<span
-								style={{
-									position: 'absolute',
-									top: '-2px',
-									right: '-2px',
-									width: '7px',
-									height: '7px',
-									borderRadius: '50%',
-									backgroundColor: colors.success,
-									animation: 'pulse 1.5s ease-in-out infinite',
-								}}
-							/>
+							<span className="absolute -top-0.5 -right-0.5 w-[7px] h-[7px] rounded-full bg-success [animation:pulse_1.5s_ease-in-out_infinite]" />
 						)}
 					</button>
 				)}
 
 				{/* Notifications (badge with count + dropdown) — priority #2, always inline */}
 				{isHeaderIconInline('notifications', tier) && (
-					<div ref={notifDropdownRef} style={{ position: 'relative' }}>
+					<div ref={notifDropdownRef} className="relative">
 					<button
 						onClick={() => setShowNotifDropdown((prev) => !prev)}
-						style={headerIconButton(colors, showNotifDropdown)}
+						className={headerIconButtonClasses(showNotifDropdown)}
 						aria-label="Notifications"
 						title="Notifications"
 					>
@@ -540,74 +466,26 @@ function MobileHeader({
 							<path d="M13.73 21a2 2 0 0 1-3.46 0" />
 						</svg>
 						{completedAgents.length > 0 && (
-							<span
-								style={{
-									position: 'absolute',
-									top: '-4px',
-									right: '-4px',
-									fontSize: '8px',
-									fontWeight: 700,
-									color: 'white',
-									backgroundColor: colors.error,
-									borderRadius: '8px',
-									padding: '1px 3px',
-									minWidth: '14px',
-									textAlign: 'center',
-									lineHeight: '12px',
-								}}
-							>
+							<span className="absolute -top-1 -right-1 text-[8px] font-bold text-white bg-error rounded-lg min-w-[14px] text-center leading-3 px-[3px] py-px">
 								{completedAgents.length > 99 ? '99+' : completedAgents.length}
 							</span>
 						)}
 					</button>
 					{showNotifDropdown && (
-						<div
-							style={{
-								position: 'absolute',
-								top: '100%',
-								right: '0',
-								marginTop: '8px',
-								backgroundColor: colors.bgSidebar,
-								border: `1px solid ${colors.border}`,
-								borderRadius: '10px',
-								boxShadow: '0 8px 24px rgba(0,0,0,0.3)',
-								zIndex: 200,
-								width: '280px',
-								maxHeight: '360px',
-								overflow: 'hidden',
-								display: 'flex',
-								flexDirection: 'column',
-							}}
-						>
+						<div className="absolute top-full right-0 mt-2 w-[280px] max-h-[360px] bg-bg-sidebar border border-border rounded-[10px] shadow-[0_8px_24px_rgba(0,0,0,0.3)] z-[200] overflow-hidden flex flex-col">
 							{/* Header */}
-							<div
-								style={{
-									display: 'flex',
-									alignItems: 'center',
-									justifyContent: 'space-between',
-									padding: '10px 12px',
-									borderBottom: `1px solid ${colors.border}`,
-								}}
-							>
-								<span style={{ fontSize: '13px', fontWeight: 600, color: colors.textMain }}>
+							<div className="flex items-center justify-between px-3 py-2.5 border-b border-border">
+								<span className="text-[13px] font-semibold text-text-main">
 									Completed Agents
 								</span>
-								<div style={{ display: 'flex', gap: '4px' }}>
+								<div className="flex gap-1">
 									{onClearNotifications && completedAgents.length > 0 && (
 										<button
 											onClick={() => {
 												onClearNotifications();
 												setShowNotifDropdown(false);
 											}}
-											style={{
-												border: 'none',
-												backgroundColor: 'transparent',
-												color: colors.textDim,
-												fontSize: '11px',
-												cursor: 'pointer',
-												padding: '2px 6px',
-												borderRadius: '4px',
-											}}
+											className="border-none bg-transparent text-text-dim text-[11px] cursor-pointer px-1.5 py-0.5 rounded"
 										>
 											Clear
 										</button>
@@ -618,16 +496,7 @@ function MobileHeader({
 												onOpenNotificationSettings();
 												setShowNotifDropdown(false);
 											}}
-											style={{
-												border: 'none',
-												backgroundColor: 'transparent',
-												color: colors.textDim,
-												cursor: 'pointer',
-												padding: '2px 4px',
-												borderRadius: '4px',
-												display: 'flex',
-												alignItems: 'center',
-											}}
+											className="border-none bg-transparent text-text-dim cursor-pointer px-1 py-0.5 rounded flex items-center"
 											title="Notification Settings"
 										>
 											<svg
@@ -648,16 +517,9 @@ function MobileHeader({
 								</div>
 							</div>
 							{/* Agent list */}
-							<div style={{ overflowY: 'auto', flex: 1 }}>
+							<div className="overflow-y-auto flex-1">
 								{completedAgents.length === 0 ? (
-									<div
-										style={{
-											padding: '24px 12px',
-											textAlign: 'center',
-											color: colors.textDim,
-											fontSize: '13px',
-										}}
-									>
+									<div className="px-3 py-6 text-center text-text-dim text-[13px]">
 										No completed agents yet
 									</div>
 								) : (
@@ -676,42 +538,21 @@ function MobileHeader({
 													onSelectAgent?.(agent.sessionId);
 													setShowNotifDropdown(false);
 												}}
-												style={{
-													display: 'flex',
-													alignItems: 'center',
-													gap: '10px',
-													width: '100%',
-													padding: '10px 12px',
-													border: 'none',
-													borderTop: i > 0 ? `1px solid ${colors.border}20` : 'none',
-													backgroundColor: 'transparent',
-													color: colors.textMain,
-													fontSize: '13px',
-													cursor: 'pointer',
-													textAlign: 'left',
-												}}
+												className={`flex items-center gap-2.5 w-full px-3 py-2.5 border-none bg-transparent text-text-main text-[13px] cursor-pointer text-left ${
+													i > 0
+														? 'border-t border-t-[color-mix(in_srgb,var(--maestro-border)_12%,transparent)]'
+														: ''
+												}`}
 											>
 												<span
-													style={{
-														width: '8px',
-														height: '8px',
-														borderRadius: '50%',
-														backgroundColor:
-															agent.eventType === 'agent_error' ? colors.error : colors.success,
-														flexShrink: 0,
-													}}
+													className={`w-2 h-2 rounded-full flex-shrink-0 ${
+														agent.eventType === 'agent_error' ? 'bg-error' : 'bg-success'
+													}`}
 												/>
-												<span
-													style={{
-														flex: 1,
-														overflow: 'hidden',
-														textOverflow: 'ellipsis',
-														whiteSpace: 'nowrap',
-													}}
-												>
+												<span className="flex-1 overflow-hidden text-ellipsis whitespace-nowrap">
 													{agent.sessionName}
 												</span>
-												<span style={{ fontSize: '11px', color: colors.textDim, flexShrink: 0 }}>
+												<span className="text-[11px] text-text-dim flex-shrink-0">
 													{timeLabel}
 												</span>
 											</button>
@@ -728,7 +569,7 @@ function MobileHeader({
 				{isHeaderIconInline('settings', tier) && (
 					<button
 						onClick={onSettingsTap}
-						style={headerIconButton(colors)}
+						className={headerIconButtonClasses()}
 						aria-label="Settings"
 						title="Settings"
 					>
@@ -752,7 +593,7 @@ function MobileHeader({
 				{isHeaderIconInline('groupChat', tier) && (
 					<button
 						onClick={onGroupChatTap}
-						style={headerIconButton(colors, groupChatCount > 0)}
+						className={headerIconButtonClasses(groupChatCount > 0)}
 						aria-label="Group Chat"
 						title="Group Chat"
 					>
@@ -769,22 +610,7 @@ function MobileHeader({
 							<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
 						</svg>
 						{groupChatCount > 0 && (
-							<span
-								style={{
-									position: 'absolute',
-									top: '-4px',
-									right: '-4px',
-									fontSize: '8px',
-									fontWeight: 700,
-									color: 'white',
-									backgroundColor: colors.accent,
-									borderRadius: '8px',
-									padding: '1px 3px',
-									minWidth: '14px',
-									textAlign: 'center',
-									lineHeight: '12px',
-								}}
-							>
+							<span className="absolute -top-1 -right-1 text-[8px] font-bold text-white bg-accent rounded-lg min-w-[14px] text-center leading-3 px-[3px] py-px">
 								{groupChatCount}
 							</span>
 						)}
@@ -795,7 +621,7 @@ function MobileHeader({
 				{isHeaderIconInline('usageDashboard', tier) && (
 					<button
 						onClick={onUsageDashboardTap}
-						style={headerIconButton(colors)}
+						className={headerIconButtonClasses()}
 						aria-label="Usage Dashboard"
 						title="Usage Dashboard"
 					>
@@ -819,7 +645,7 @@ function MobileHeader({
 				{isHeaderIconInline('achievements', tier) && (
 					<button
 						onClick={onAchievementsTap}
-						style={headerIconButton(colors)}
+						className={headerIconButtonClasses()}
 						aria-label="Achievements"
 						title="Achievements"
 					>
@@ -843,7 +669,7 @@ function MobileHeader({
 				{isHeaderIconInline('contextManagement', tier) && activeSession && (
 					<button
 						onClick={onContextManagementTap}
-						style={headerIconButton(colors)}
+						className={headerIconButtonClasses()}
 						aria-label="Context Management"
 						title="Context Management"
 					>
@@ -868,7 +694,7 @@ function MobileHeader({
 				{isHeaderIconInline('newAgent', tier) && (
 					<button
 						onClick={onNewAgentTap}
-						style={headerIconButton(colors)}
+						className={headerIconButtonClasses()}
 						aria-label="New Agent"
 						title="New Agent"
 					>
@@ -890,14 +716,14 @@ function MobileHeader({
 
 				{/* Overflow menu (⋯) — hidden on desktop (all icons inline) */}
 				{tier !== 'desktop' && (
-				<div ref={overflowRef} style={{ position: 'relative' }}>
+				<div ref={overflowRef} className="relative">
 					<button
 						onClick={() => setShowOverflow((prev) => !prev)}
-						style={{
-							...headerIconButton(colors),
-							border: 'none',
-							backgroundColor: showOverflow ? `${colors.textDim}15` : 'transparent',
-						}}
+						className={`${HEADER_ICON_BUTTON_BASE} border-none text-text-dim ${
+							showOverflow
+								? 'bg-[color-mix(in_srgb,var(--maestro-text-dim)_8%,transparent)]'
+								: 'bg-transparent'
+						}`}
 						aria-label="More actions"
 						title="More actions"
 					>
@@ -911,22 +737,7 @@ function MobileHeader({
 
 					{/* Overflow dropdown */}
 					{showOverflow && (
-						<div
-							style={{
-								position: 'absolute',
-								top: '100%',
-								right: 0,
-								marginTop: '4px',
-								minWidth: '200px',
-								backgroundColor: colors.bgSidebar,
-								border: `1px solid ${colors.border}`,
-								borderRadius: '10px',
-								boxShadow: `0 8px 24px rgba(0,0,0,0.25)`,
-								zIndex: 300,
-								padding: '4px',
-								overflow: 'hidden',
-							}}
-						>
+						<div className="absolute top-full right-0 mt-1 min-w-[200px] bg-bg-sidebar border border-border rounded-[10px] shadow-[0_8px_24px_rgba(0,0,0,0.25)] z-[300] p-1 overflow-hidden">
 							{/* Search — overflow on phone (priority #3) */}
 							{!isHeaderIconInline('search', tier) && (
 								<OverflowMenuItem
@@ -947,7 +758,6 @@ function MobileHeader({
 									}
 									label="Quick Actions (Cmd+K)"
 									onClick={() => handleOverflowAction(onSearchTap)}
-									colors={colors}
 								/>
 							)}
 							{/* Cue — overflow on phone (priority #4) */}
@@ -969,7 +779,6 @@ function MobileHeader({
 									}
 									label={`Maestro Cue${hasRunningCue ? ' (running)' : ''}`}
 									onClick={() => handleOverflowAction(onCueTap)}
-									colors={colors}
 								/>
 							)}
 							{/* Settings — overflow on phone/tablet */}
@@ -992,7 +801,6 @@ function MobileHeader({
 									}
 									label="Settings"
 									onClick={() => handleOverflowAction(onSettingsTap)}
-									colors={colors}
 								/>
 							)}
 							{/* Group Chat — overflow on phone/tablet */}
@@ -1014,7 +822,6 @@ function MobileHeader({
 									}
 									label={`Group Chat${groupChatCount > 0 ? ` (${groupChatCount})` : ''}`}
 									onClick={() => handleOverflowAction(onGroupChatTap)}
-									colors={colors}
 								/>
 							)}
 							{/* Usage Dashboard — secondary, overflow on phone/tablet */}
@@ -1037,7 +844,6 @@ function MobileHeader({
 									}
 									label="Usage Dashboard"
 									onClick={() => handleOverflowAction(onUsageDashboardTap)}
-									colors={colors}
 								/>
 							)}
 							{/* Achievements — secondary, overflow on phone/tablet */}
@@ -1060,7 +866,6 @@ function MobileHeader({
 									}
 									label="Achievements"
 									onClick={() => handleOverflowAction(onAchievementsTap)}
-									colors={colors}
 								/>
 							)}
 							{/* Context Management — secondary, overflow on phone/tablet (requires active session) */}
@@ -1084,7 +889,6 @@ function MobileHeader({
 									}
 									label="Context Management"
 									onClick={() => handleOverflowAction(onContextManagementTap)}
-									colors={colors}
 								/>
 							)}
 							{/* New Agent — secondary, overflow on phone/tablet */}
@@ -1107,7 +911,6 @@ function MobileHeader({
 									}
 									label="New Agent"
 									onClick={() => handleOverflowAction(onNewAgentTap)}
-									colors={colors}
 								/>
 							)}
 						</div>
@@ -1115,14 +918,6 @@ function MobileHeader({
 				</div>
 				)}
 			</div>
-
-			{/* Pulse animation for thinking state */}
-			<style>{`
-        @keyframes pulse {
-          0%, 100% { opacity: 1; }
-          50% { opacity: 0.5; }
-        }
-      `}</style>
 		</header>
 	);
 }
