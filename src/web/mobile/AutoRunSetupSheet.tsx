@@ -115,9 +115,17 @@ export function AutoRunSetupSheet({
 		const currentDocs = Array.from(selectedFiles).sort();
 		if (currentDocs.length !== playbookDocs.length) return true;
 		if (currentDocs.some((f, i) => f !== playbookDocs[i])) return true;
-		if (prompt !== activePlaybook.prompt) return true;
+		// Normalize both sides to match how we save/load:
+		//   - prompt: handlePlaybookNamePromptSubmit persists `prompt.trim()`, so
+		//     trailing whitespace the user never deliberately added shouldn't count
+		//     as a modification. `activePlaybook.prompt` is `?? ''` to cover older
+		//     playbooks that stored `undefined`.
+		//   - maxLoops: handleSelectPlaybook seeds the state with `playbook.maxLoops
+		//     ?? 3`, so a playbook stored with `null`/missing maxLoops compared to
+		//     the default-3 state was flagging as modified on load.
+		if (prompt.trim() !== (activePlaybook.prompt ?? '')) return true;
 		if (loopEnabled !== activePlaybook.loopEnabled) return true;
-		if (loopEnabled && (activePlaybook.maxLoops ?? null) !== maxLoops) return true;
+		if (loopEnabled && (activePlaybook.maxLoops ?? 3) !== maxLoops) return true;
 		return false;
 	})();
 
