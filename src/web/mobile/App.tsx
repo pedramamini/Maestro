@@ -469,7 +469,7 @@ function MobileHeader({
 							)}
 						</button>
 						{showNotifDropdown && (
-							<div className="absolute top-full right-0 mt-2 w-[280px] max-h-[360px] bg-bg-sidebar border border-border rounded-[10px] shadow-[0_8px_24px_rgba(0,0,0,0.3)] z-[200] overflow-hidden flex flex-col">
+							<div className="absolute top-full right-0 mt-2 w-[280px] max-w-[calc(100vw-16px)] max-h-[360px] bg-bg-sidebar border border-border rounded-[10px] shadow-[0_8px_24px_rgba(0,0,0,0.3)] z-[200] overflow-hidden flex flex-col">
 								{/* Header */}
 								<div className="flex items-center justify-between px-3 py-2.5 border-b border-border">
 									<span className="text-[13px] font-semibold text-text-main">Completed Agents</span>
