@@ -3151,9 +3151,10 @@ export default function MobileApp() {
 				/>
 			)}
 
-			{/* Auto Run setup sheet - bottom sheet on top of panel */}
-			{activeSessionId && showAutoRunSetup && (
+			{/* Auto Run setup — centered modal on tablet+, bottom sheet on phone */}
+			{activeSessionId && (
 				<AutoRunSetupSheet
+					isOpen={showAutoRunSetup}
 					sessionId={activeSessionId}
 					documents={autoRunDocuments}
 					onLaunch={handleAutoRunLaunch}
