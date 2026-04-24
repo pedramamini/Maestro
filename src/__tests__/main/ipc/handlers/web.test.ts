@@ -28,7 +28,14 @@ vi.mock('../../../../main/web-server', () => ({
 	WebServer: vi.fn(),
 }));
 
+// Mock cli-server-discovery so handlers don't touch the real filesystem
+vi.mock('../../../../shared/cli-server-discovery', () => ({
+	writeCliServerInfo: vi.fn(),
+	deleteCliServerInfo: vi.fn(),
+}));
+
 import { registerWebHandlers } from '../../../../main/ipc/handlers/web';
+import { writeCliServerInfo, deleteCliServerInfo } from '../../../../shared/cli-server-discovery';
 
 describe('web handlers', () => {
 	let mockWebServer: any;
@@ -57,7 +64,11 @@ describe('web handlers', () => {
 			getWebClientCount: vi.fn().mockReturnValue(1),
 			getSecurityToken: vi.fn().mockReturnValue('mock-security-token'),
 			getPort: vi.fn().mockReturnValue(8080),
-			start: vi.fn().mockResolvedValue({ port: 8080, url: 'http://localhost:8080' }),
+			start: vi.fn().mockResolvedValue({
+				port: 8080,
+				token: 'mock-security-token',
+				url: 'http://localhost:8080',
+			}),
 			stop: vi.fn().mockResolvedValue(undefined),
 		};
 
@@ -310,6 +321,65 @@ describe('web handlers', () => {
 
 			expect(result).toEqual({ success: false, error: 'Port in use' });
 		});
+
+		// Regression tests for #859: CLI discovery file must be refreshed so
+		// `maestro-cli` can reconnect after a stop/start cycle.
+		it('should refresh CLI discovery file after starting a freshly-created server', async () => {
+			webServerRef.current = null;
+			mockWebServer.isActive.mockReturnValue(false);
+
+			const handler = registeredHandlers.get('live:startServer');
+			await handler!({});
+
+			expect(writeCliServerInfo).toHaveBeenCalledTimes(1);
+			expect(writeCliServerInfo).toHaveBeenCalledWith(
+				expect.objectContaining({
+					port: 8080,
+					token: 'mock-security-token',
+					pid: process.pid,
+				})
+			);
+		});
+
+		it('should refresh CLI discovery file when the existing server is restarted', async () => {
+			mockWebServer.isActive.mockReturnValue(false);
+
+			const handler = registeredHandlers.get('live:startServer');
+			await handler!({});
+
+			expect(writeCliServerInfo).toHaveBeenCalledTimes(1);
+			expect(writeCliServerInfo).toHaveBeenCalledWith(
+				expect.objectContaining({
+					port: 8080,
+					token: 'mock-security-token',
+				})
+			);
+		});
+
+		it('should refresh CLI discovery file when the server is already running', async () => {
+			mockWebServer.isActive.mockReturnValue(true);
+
+			const handler = registeredHandlers.get('live:startServer');
+			await handler!({});
+
+			expect(writeCliServerInfo).toHaveBeenCalledTimes(1);
+			expect(writeCliServerInfo).toHaveBeenCalledWith(
+				expect.objectContaining({
+					port: 8080,
+					token: 'mock-security-token',
+				})
+			);
+		});
+
+		it('should not refresh CLI discovery file when start throws', async () => {
+			mockWebServer.isActive.mockReturnValue(false);
+			mockWebServer.start.mockRejectedValue(new Error('Port in use'));
+
+			const handler = registeredHandlers.get('live:startServer');
+			await handler!({});
+
+			expect(writeCliServerInfo).not.toHaveBeenCalled();
+		});
 	});
 
 	describe('live:stopServer', () => {
@@ -319,6 +389,7 @@ describe('web handlers', () => {
 
 			expect(mockWebServer.stop).toHaveBeenCalled();
 			expect(webServerRef.current).toBeNull();
+			expect(deleteCliServerInfo).toHaveBeenCalledTimes(1);
 			expect(result).toEqual({ success: true });
 		});
 
@@ -346,6 +417,7 @@ describe('web handlers', () => {
 			expect(mockWebServer.setSessionOffline).toHaveBeenCalledWith('session-2');
 			expect(mockWebServer.stop).toHaveBeenCalled();
 			expect(webServerRef.current).toBeNull();
+			expect(deleteCliServerInfo).toHaveBeenCalledTimes(1);
 			expect(result).toEqual({ success: true, count: 2 });
 		});
 

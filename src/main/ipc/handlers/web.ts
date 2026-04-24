@@ -50,6 +50,20 @@ export interface WebHandlerDependencies {
 }
 
 /**
+ * Write the CLI discovery file for the currently-running server so the CLI
+ * can locate it. Centralized so `ensureCliServer` and `live:startServer`
+ * cannot drift on pid/startedAt semantics or future fields.
+ */
+function refreshCliDiscoveryFile(port: number, token: string): void {
+	writeCliServerInfo({
+		port,
+		token,
+		pid: process.pid,
+		startedAt: Date.now(),
+	});
+}
+
+/**
  * Ensure the CLI server is running and write the discovery file.
  *
  * Called during app initialization to make the web server always available
@@ -74,22 +88,10 @@ export async function ensureCliServer(deps: WebHandlerDependencies): Promise<voi
 			logger.info('Starting CLI server', 'CliServer');
 			const { port, token } = await webServer.start();
 			logger.info(`CLI server running on port ${port}`, 'CliServer');
-
-			// Write discovery file so CLI can find us
-			writeCliServerInfo({
-				port,
-				token,
-				pid: process.pid,
-				startedAt: Date.now(),
-			});
+			refreshCliDiscoveryFile(port, token);
 		} else {
 			// Server already running — still write discovery file in case it's stale
-			writeCliServerInfo({
-				port: webServer.getPort(),
-				token: webServer.getSecurityToken(),
-				pid: process.pid,
-				startedAt: Date.now(),
-			});
+			refreshCliDiscoveryFile(webServer.getPort(), webServer.getSecurityToken());
 		}
 	} catch (error: any) {
 		logger.error(`Failed to start CLI server: ${error.message}`, 'CliServer');
@@ -285,22 +287,12 @@ export function registerWebHandlers(deps: WebHandlerDependencies): void {
 
 				// Refresh CLI discovery file so the CLI can reconnect after a
 				// stop/start cycle (ensureCliServer only runs once at app launch).
-				writeCliServerInfo({
-					port,
-					token,
-					pid: process.pid,
-					startedAt: Date.now(),
-				});
+				refreshCliDiscoveryFile(port, token);
 				return { success: true, url };
 			}
 
 			// Already running — refresh discovery file in case it's stale
-			writeCliServerInfo({
-				port: webServer.getPort(),
-				token: webServer.getSecurityToken(),
-				pid: process.pid,
-				startedAt: Date.now(),
-			});
+			refreshCliDiscoveryFile(webServer.getPort(), webServer.getSecurityToken());
 			return { success: true, url: webServer.getSecureUrl() };
 		} catch (error: any) {
 			logger.error(`Failed to start web server: ${error.message}`, 'WebServer');
