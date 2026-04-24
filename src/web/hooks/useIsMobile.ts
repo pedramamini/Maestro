@@ -1,51 +1,29 @@
 /**
  * useIsMobile hook for Maestro web interface
  *
- * Detects whether the viewport is at or below a mobile breakpoint (768px).
- * Uses a debounced resize listener to avoid excessive re-renders during
- * window resize drags.
+ * Thin wrapper around `useBreakpoint()` retained for backward compatibility.
+ * Returns `true` when the viewport is at the phone tier (width <
+ * `BREAKPOINTS.tablet`, i.e. 600px). Tier boundaries live in
+ * `src/web/mobile/constants.ts` and are shared with `useBreakpoint()` and the
+ * `--bp-*` CSS custom properties in `src/web/index.css`.
+ *
+ * @deprecated Prefer `useBreakpoint()` for new code — it exposes the full
+ * tier (phone / tablet / desktop), viewport dimensions, and a short-viewport
+ * flag rather than collapsing everything to a single boolean.
  */
 
-import { useState, useEffect, useRef } from 'react';
-
-/** Default breakpoint in pixels — at or below this width is considered mobile */
-const MOBILE_BREAKPOINT = 768;
-
-/** Debounce delay in milliseconds for resize events */
-const DEBOUNCE_MS = 150;
+import { useBreakpoint } from './useBreakpoint';
 
 /**
- * Returns `true` when the viewport width is <= MOBILE_BREAKPOINT.
+ * Returns `true` when the viewport tier is `'phone'`.
  *
- * The value is updated on window resize with a short debounce so that
- * rapid resize events (e.g. dragging a window edge) don't cause a
- * cascade of re-renders.
+ * @param _breakpoint - Ignored. Retained so the original signature
+ *   (`useIsMobile(breakpoint?: number)`) still type-checks at every call
+ *   site. Tier boundaries are now centralized in `BREAKPOINTS`
+ *   (`src/web/mobile/constants.ts`); pass-through custom thresholds are no
+ *   longer supported.
  */
-export function useIsMobile(breakpoint: number = MOBILE_BREAKPOINT): boolean {
-	const [isMobile, setIsMobile] = useState(() => window.innerWidth <= breakpoint);
-	const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-	useEffect(() => {
-		setIsMobile(window.innerWidth <= breakpoint);
-
-		const handleResize = () => {
-			if (timerRef.current) {
-				clearTimeout(timerRef.current);
-			}
-			timerRef.current = setTimeout(() => {
-				setIsMobile(window.innerWidth <= breakpoint);
-			}, DEBOUNCE_MS);
-		};
-
-		window.addEventListener('resize', handleResize);
-
-		return () => {
-			window.removeEventListener('resize', handleResize);
-			if (timerRef.current) {
-				clearTimeout(timerRef.current);
-			}
-		};
-	}, [breakpoint]);
-
-	return isMobile;
+export function useIsMobile(_breakpoint?: number): boolean {
+	const { isPhone } = useBreakpoint();
+	return isPhone;
 }
