@@ -107,16 +107,21 @@ function getActiveTabFromSession(session: Session | null | undefined): AITabData
  * The global 44px touch-target floor (see `src/web/index.css`) still applies
  * because `<button>` matches the universal selector there; the `w-8 h-8`
  * utilities set the 32px square icon box while min-height keeps the hit zone
- * at 44px.
+ * at 44px. When `compact` is true (short viewport, Phase 5 Task 5.4), the
+ * `min-h-10` utility overrides the global 44px floor down to a 40px hit zone
+ * so the thinned header stays under 48px total — still well above the 32px
+ * icon box, so the tap target shrinks via reduced surrounding padding rather
+ * than by scaling the icon.
  */
 const HEADER_ICON_BUTTON_BASE =
 	'w-8 h-8 flex items-center justify-center rounded-md flex-shrink-0 relative p-0 cursor-pointer touch-manipulation';
 
-function headerIconButtonClasses(isActive = false): string {
+function headerIconButtonClasses(isActive = false, compact = false): string {
 	const state = isActive
 		? 'bg-[color-mix(in_srgb,var(--maestro-accent)_12%,transparent)] border border-accent text-accent'
 		: 'bg-transparent border border-border text-text-dim';
-	return `${HEADER_ICON_BUTTON_BASE} ${state}`;
+	const sizing = compact ? 'min-h-10' : '';
+	return `${HEADER_ICON_BUTTON_BASE} ${state}${sizing ? ` ${sizing}` : ''}`;
 }
 
 /**
@@ -287,7 +292,10 @@ function MobileHeader({
 
 	// Responsive: tier drives which icons render inline vs. in the overflow
 	// menu (see PRIMARY_HEADER_ICONS / PRIMARY_SLOTS_BY_TIER at top of file).
-	const { tier } = useBreakpoint();
+	// `isShortViewport` (Phase 5 Task 5.4) halves vertical padding and relaxes
+	// the per-button 44px min-height floor to 40px so the header stays ≤48px
+	// tall in landscape phone orientations.
+	const { tier, isShortViewport } = useBreakpoint();
 
 	// Close overflow menu when clicking outside
 	useEffect(() => {
@@ -315,12 +323,18 @@ function MobileHeader({
 		action?.();
 	}, []);
 
+	const headerPaddingClass = isShortViewport
+		? 'pb-0.5 pt-[max(3px,env(safe-area-inset-top))] min-h-10'
+		: 'pb-1.5 pt-[max(6px,env(safe-area-inset-top))] min-h-11';
+
 	return (
-		<header className="flex items-center justify-between gap-1.5 px-2.5 pb-1.5 pt-[max(6px,env(safe-area-inset-top))] min-h-11 border-b border-border bg-bg-sidebar">
+		<header
+			className={`flex items-center justify-between gap-1.5 px-2.5 border-b border-border bg-bg-sidebar ${headerPaddingClass}`}
+		>
 			{/* Left: Agents panel toggle */}
 			<button
 				onClick={onMenuTap}
-				className={headerIconButtonClasses(isLeftPanelOpen)}
+				className={headerIconButtonClasses(isLeftPanelOpen, isShortViewport)}
 				aria-label="Agents"
 				title="Agents"
 			>
@@ -370,7 +384,7 @@ function MobileHeader({
 				{isHeaderIconInline('search', tier) && (
 					<button
 						onClick={onSearchTap}
-						className={headerIconButtonClasses()}
+						className={headerIconButtonClasses(false, isShortViewport)}
 						aria-label="Search"
 						title="Quick Actions (Cmd+K)"
 					>
@@ -394,7 +408,7 @@ function MobileHeader({
 				{isHeaderIconInline('rightPanel', tier) && (
 					<button
 						onClick={onRightDrawerTap}
-						className={headerIconButtonClasses(isRightPanelOpen)}
+						className={headerIconButtonClasses(isRightPanelOpen, isShortViewport)}
 						aria-label="Files & History"
 						title="Files / History / Git"
 					>
@@ -418,7 +432,7 @@ function MobileHeader({
 				{isHeaderIconInline('cue', tier) && (
 					<button
 						onClick={onCueTap}
-						className={headerIconButtonClasses(hasRunningCue)}
+						className={headerIconButtonClasses(hasRunningCue, isShortViewport)}
 						aria-label="Maestro Cue"
 						title="Maestro Cue"
 					>
@@ -445,7 +459,7 @@ function MobileHeader({
 					<div ref={notifDropdownRef} className="relative">
 						<button
 							onClick={() => setShowNotifDropdown((prev) => !prev)}
-							className={headerIconButtonClasses(showNotifDropdown)}
+							className={headerIconButtonClasses(showNotifDropdown, isShortViewport)}
 							aria-label="Notifications"
 							title="Notifications"
 						>
@@ -564,7 +578,7 @@ function MobileHeader({
 				{isHeaderIconInline('settings', tier) && (
 					<button
 						onClick={onSettingsTap}
-						className={headerIconButtonClasses()}
+						className={headerIconButtonClasses(false, isShortViewport)}
 						aria-label="Settings"
 						title="Settings"
 					>
@@ -588,7 +602,7 @@ function MobileHeader({
 				{isHeaderIconInline('groupChat', tier) && (
 					<button
 						onClick={onGroupChatTap}
-						className={headerIconButtonClasses(groupChatCount > 0)}
+						className={headerIconButtonClasses(groupChatCount > 0, isShortViewport)}
 						aria-label="Group Chat"
 						title="Group Chat"
 					>
@@ -616,7 +630,7 @@ function MobileHeader({
 				{isHeaderIconInline('usageDashboard', tier) && (
 					<button
 						onClick={onUsageDashboardTap}
-						className={headerIconButtonClasses()}
+						className={headerIconButtonClasses(false, isShortViewport)}
 						aria-label="Usage Dashboard"
 						title="Usage Dashboard"
 					>
@@ -640,7 +654,7 @@ function MobileHeader({
 				{isHeaderIconInline('achievements', tier) && (
 					<button
 						onClick={onAchievementsTap}
-						className={headerIconButtonClasses()}
+						className={headerIconButtonClasses(false, isShortViewport)}
 						aria-label="Achievements"
 						title="Achievements"
 					>
@@ -664,7 +678,7 @@ function MobileHeader({
 				{isHeaderIconInline('contextManagement', tier) && activeSession && (
 					<button
 						onClick={onContextManagementTap}
-						className={headerIconButtonClasses()}
+						className={headerIconButtonClasses(false, isShortViewport)}
 						aria-label="Context Management"
 						title="Context Management"
 					>
@@ -689,7 +703,7 @@ function MobileHeader({
 				{isHeaderIconInline('newAgent', tier) && (
 					<button
 						onClick={onNewAgentTap}
-						className={headerIconButtonClasses()}
+						className={headerIconButtonClasses(false, isShortViewport)}
 						aria-label="New Agent"
 						title="New Agent"
 					>
@@ -718,7 +732,7 @@ function MobileHeader({
 								showOverflow
 									? 'bg-[color-mix(in_srgb,var(--maestro-text-dim)_8%,transparent)]'
 									: 'bg-transparent'
-							}`}
+							}${isShortViewport ? ' min-h-10' : ''}`}
 							aria-label="More actions"
 							title="More actions"
 						>
