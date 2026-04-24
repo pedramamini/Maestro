@@ -3258,6 +3258,21 @@ export default function MobileApp() {
 			)}
 
 			{/* Horizontal layout: main content + optional right panel */}
+			{/* SCRATCH(phase-1, remove before commit of Task 1.5):
+			     Current three-column layout:
+			       - Row container: flex:1, flexDirection:row, minHeight:0, overflow:hidden (inline styles).
+			       - LeftPanel: default 240px, min 200, max 400 (useResizableWebPanel, storageKey maestro-web-left-panel-width).
+			         When isMobile=true -> isFullScreen=true (overlay, no resize props passed).
+			         When isMobile=false -> inline column with panelRef/width/onResizeStart from leftPanelResize.
+			       - main: flex:1, flexDirection:column, minWidth:0, minHeight:0, overflow:hidden.
+			         alignItems/justifyContent/padding swap based on currentInputMode==='terminal'.
+			         No explicit min-width guard today — at ~900px viewport with both panels inline, main can squeeze below ~340px.
+			       - RightPanel: default 320px, min 260, max 500 (useResizableWebPanel, storageKey maestro-web-right-panel-width).
+			         Same isMobile -> isFullScreen=true overlay pattern.
+			       - isMobile origin: `const isMobile = useIsMobile();` (line ~1088). Threaded into both panels only via
+			         isFullScreen / panelRef / width / onResizeStart props — no tier awareness, no 'most-recently-opened' tracking.
+			     Tasks 1.2–1.5 replace isFullScreen with mode:'overlay'|'inline' derived from useBreakpoint() + a recency ref,
+			     and migrate the row container + main to Tailwind. */}
 			<div
 				style={{
 					flex: 1,
