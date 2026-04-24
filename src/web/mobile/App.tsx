@@ -3227,13 +3227,12 @@ export default function MobileApp() {
 			)}
 
 			{/* Group Chat setup sheet */}
-			{showGroupChatSetup && (
-				<GroupChatSetupSheet
-					sessions={sessions}
-					onStart={handleGroupChatStart}
-					onClose={() => setShowGroupChatSetup(false)}
-				/>
-			)}
+			<GroupChatSetupSheet
+				isOpen={showGroupChatSetup}
+				sessions={sessions}
+				onStart={handleGroupChatStart}
+				onClose={() => setShowGroupChatSetup(false)}
+			/>
 
 			{/* Group Chat list — centered modal on tablet+, bottom sheet on phone */}
 			<GroupChatListSheet
