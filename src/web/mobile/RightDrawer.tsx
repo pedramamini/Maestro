@@ -358,7 +358,7 @@ function FilesTabContent({
 							onFileSelect?.(node.path);
 						}
 					}}
-					className="flex items-center gap-1 w-full py-[3px] pr-2 border-none bg-transparent text-text-main text-xs font-mono cursor-pointer text-left whitespace-nowrap overflow-hidden text-ellipsis transition-colors duration-150 ease-in-out hover:bg-[color-mix(in_srgb,var(--maestro-text-dim)_6%,transparent)]"
+					className="flex items-center gap-1 w-full py-[3px] pr-2 border-none bg-transparent text-text-main text-xs font-mono cursor-pointer text-left whitespace-nowrap overflow-hidden text-ellipsis transition-colors duration-150 ease-in-out hover:bg-[color-mix(in_srgb,var(--maestro-text-dim)_6%,transparent)] outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-inset"
 					style={{
 						paddingLeft: `${8 + depth * 16}px`,
 					}}

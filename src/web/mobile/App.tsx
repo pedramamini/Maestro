@@ -120,10 +120,10 @@ function getActiveTabFromSession(session: Session | null | undefined): AITabData
  * replacement.
  */
 const HEADER_ICON_BUTTON_BASE_SQUARE =
-	'w-8 h-8 flex items-center justify-center rounded-md flex-shrink-0 relative p-0 cursor-pointer touch-manipulation';
+	'w-8 h-8 flex items-center justify-center rounded-md flex-shrink-0 relative p-0 cursor-pointer touch-manipulation outline-none focus-visible:ring-2 focus-visible:ring-accent';
 
 const HEADER_ICON_BUTTON_BASE_LABELED =
-	'h-8 flex items-center justify-center rounded-md flex-shrink-0 relative px-2 gap-1.5 cursor-pointer touch-manipulation';
+	'h-8 flex items-center justify-center rounded-md flex-shrink-0 relative px-2 gap-1.5 cursor-pointer touch-manipulation outline-none focus-visible:ring-2 focus-visible:ring-accent';
 
 // Kept for backwards compatibility with the overflow-button inline string.
 const HEADER_ICON_BUTTON_BASE = HEADER_ICON_BUTTON_BASE_SQUARE;

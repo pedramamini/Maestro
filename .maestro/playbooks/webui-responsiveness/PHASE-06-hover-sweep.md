@@ -56,7 +56,17 @@ Expected survivors after Phases 0–5: `SlashCommandAutocomplete.tsx`, `Overflow
   - Note: `src/web/mobile/CommandInputBar.tsx:363` `handleKeyDown` currently only handles Enter/Shift+Enter — ArrowUp/Down to cycle the popup is a pre-existing gap, not Phase 6 fallout. Out of scope for this spot-check.
   - Ran `npx vitest run src/__tests__/web/mobile/SlashCommandAutocomplete.test.tsx` → 61 pass, 2 fail. Both failures are in the `Close button` describe-block ("applies/removes hover styles on mouse enter/leave") and assert inline `style.backgroundColor` — fallout from Task 6.2's CSS migration (Tailwind `hover:` pseudo-classes don't serialize to inline style in jsdom). Explicitly in scope for **Task 6.8** ("Any test that asserted on `onMouseEnter`/`onMouseLeave` handlers needs rewrites") — logging here so 6.8 has an easy target.
   - Selection-index tests (lines 228-280) all pass, confirming the surviving `onMouseEnter` and the `selectedIndex`→visual-highlight path are both intact.
-- [ ] **Task 6.6 — Add focus-visible rings where missing.** Any interactive element touched in this phase that lacks `focus-visible:` styling — add it.
+- [x] **Task 6.6 — Add focus-visible rings where missing.** Any interactive element touched in this phase that lacks `focus-visible:` styling — add it.
+  - Canonical pattern in this codebase is `outline-none focus-visible:ring-2 focus-visible:ring-accent` (grep-verified across `src/web/components/Card.tsx`, `ResponsiveModal.tsx`, `src/web/mobile/LeftPanel.tsx` × 5). Reused unchanged so theme hot-swap and RingColor consistency are preserved.
+  - Three call sites touched — the focusable buttons from Tasks 6.2 and 6.4:
+    1. `src/web/mobile/SlashCommandAutocomplete.tsx:216` — Commands-popup close button. Appended `outline-none focus-visible:ring-2 focus-visible:ring-accent` to the `className` string.
+    2. `src/web/mobile/RightDrawer.tsx:361` — file-tree row button. Same pattern + `focus-visible:ring-inset` so the ring hugs the row instead of spilling into the adjacent row (rows sit flush against each other with no gap).
+    3. `src/web/mobile/App.tsx:122,126` — added the pattern to both `HEADER_ICON_BUTTON_BASE_SQUARE` and `HEADER_ICON_BUTTON_BASE_LABELED`, which covers all 11 MobileHeader icon buttons in one shot (Agents / Search / Files / Cue / Alerts / Settings / Chat / Usage / Awards / Context / New Agent) at every tier.
+  - **Deliberately skipped (non-focusable in current markup):**
+    - `SlashCommandAutocomplete.tsx:241` command-row `<div>` — uses `onClick` on a div, not a `<button>`, so not reachable by Tab. Upgrading to a focusable element is a restructuring change (out of Phase 6 scope).
+    - `RightPanel.tsx:170` resize strip `<div>` — drag handle, no `tabIndex`, not keyboard-operable. Matches the established pattern for `useResizableWebPanel` consumers elsewhere.
+  - `OverflowMenuItem` (App.tsx:153) was not modified in Phase 6 — left alone per scope rules.
+  - `npm run lint` + `npm run lint:eslint` clean.
 - [ ] **Task 6.7 — Tailwind migration of leftover inline styles.** While you're in each file for hover cleanup, migrate nearby inline styles to Tailwind classes — but only in the same JSX subtree. Do not refactor unrelated regions.
 - [ ] **Task 6.8 — Update tests in scope.** Any test that asserted on `onMouseEnter` / `onMouseLeave` handlers needs rewrites. Prefer testing visible DOM state (e.g. close button present) over testing handler wiring.
 - [ ] **Task 6.9 — Manual pass at each tier.** Touch-emulation DevTools at 320, 600, 960. Every interactive element reachable via tap; keyboard focus navigates everything with visible focus rings; no feature requires hover.

@@ -213,7 +213,7 @@ export function SlashCommandAutocomplete({
 						e.stopPropagation();
 						onClose();
 					}}
-					className="p-1.5 rounded-md bg-transparent border-none cursor-pointer flex items-center justify-center text-text-dim transition-colors duration-150 ease-in-out hover:bg-[color-mix(in_srgb,var(--maestro-text-dim)_12%,transparent)] hover:text-text-main"
+					className="p-1.5 rounded-md bg-transparent border-none cursor-pointer flex items-center justify-center text-text-dim transition-colors duration-150 ease-in-out hover:bg-[color-mix(in_srgb,var(--maestro-text-dim)_12%,transparent)] hover:text-text-main outline-none focus-visible:ring-2 focus-visible:ring-accent"
 					aria-label="Close commands"
 				>
 					<svg
