@@ -864,6 +864,7 @@ export function LeftPanel({
 								triggerHaptic(HAPTIC_PATTERNS.tap);
 								setShowUnreadOnly((prev) => !prev);
 							}}
+							className="outline-none focus-visible:ring-2 focus-visible:ring-accent"
 							style={{
 								position: 'relative',
 								width: '24px',
@@ -915,6 +916,7 @@ export function LeftPanel({
 									triggerHaptic(HAPTIC_PATTERNS.tap);
 									setShowCreateGroup(true);
 								}}
+								className="outline-none focus-visible:ring-2 focus-visible:ring-accent"
 								style={{
 									width: '24px',
 									height: '24px',
@@ -951,6 +953,7 @@ export function LeftPanel({
 									triggerHaptic(HAPTIC_PATTERNS.tap);
 									onNewAgent();
 								}}
+								className="outline-none focus-visible:ring-2 focus-visible:ring-accent"
 								style={{
 									width: '24px',
 									height: '24px',
@@ -984,6 +987,7 @@ export function LeftPanel({
 						)}
 						<button
 							onClick={isOverlay ? handleClose : onClose}
+							className="outline-none focus-visible:ring-2 focus-visible:ring-accent"
 							style={{
 								width: '24px',
 								height: '24px',
@@ -1069,6 +1073,7 @@ export function LeftPanel({
 											toggleGroup(group.groupName);
 										}
 									}}
+									className="rounded outline-none focus-visible:ring-2 focus-visible:ring-accent"
 									style={{
 										padding: '8px 8px 4px',
 										fontSize: '10px',
@@ -1188,6 +1193,7 @@ export function LeftPanel({
 														}
 														handleSelect(session.id);
 													}}
+													className="rounded-md outline-none focus-visible:ring-2 focus-visible:ring-accent"
 													style={{
 														display: 'flex',
 														alignItems: 'center',
@@ -1279,6 +1285,7 @@ export function LeftPanel({
 													<button
 														type="button"
 														onClick={() => toggleWorktrees(session.id)}
+														className="outline-none focus-visible:ring-2 focus-visible:ring-accent"
 														style={{
 															display: 'inline-flex',
 															alignItems: 'center',
@@ -1325,7 +1332,7 @@ export function LeftPanel({
 														<button
 															key={child.id}
 															onClick={() => handleSelect(child.id)}
-															className={isChildActive ? undefined : 'hover:bg-white/[0.06]'}
+															className={`outline-none focus-visible:ring-2 focus-visible:ring-accent${isChildActive ? '' : ' hover:bg-white/[0.06]'}`}
 															style={{
 																display: 'flex',
 																alignItems: 'center',
