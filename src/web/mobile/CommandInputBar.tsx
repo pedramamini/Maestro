@@ -496,21 +496,21 @@ export function CommandInputBar({
 		<div
 			ref={containerRef}
 			{...swipeUpHandlers}
+			className={`pl-[env(safe-area-inset-left)] pr-[env(safe-area-inset-right)] ${
+				compact || onHistoryOpen ? 'pt-1' : 'pt-3'
+			} ${
+				isKeyboardVisible
+					? 'pb-0'
+					: compact
+						? 'pb-[max(4px,env(safe-area-inset-bottom))]'
+						: 'pb-[max(12px,env(safe-area-inset-bottom))]'
+			}`}
 			style={{
 				position: 'fixed',
 				left: 0,
 				right: 0,
 				bottom: keyboardOffset,
 				zIndex: 100,
-				// Safe area padding for notched devices
-				paddingBottom: isKeyboardVisible
-					? '0'
-					: compact
-						? 'max(4px, env(safe-area-inset-bottom))'
-						: 'max(12px, env(safe-area-inset-bottom))',
-				paddingLeft: 'env(safe-area-inset-left)',
-				paddingRight: 'env(safe-area-inset-right)',
-				paddingTop: compact ? '4px' : onHistoryOpen ? '4px' : '12px', // Reduced top padding when swipe handle is shown or compact
 				backgroundColor: colors.bgSidebar,
 				borderTop: `1px solid ${colors.border}`,
 				// Smooth transition when keyboard appears/disappears
@@ -527,24 +527,11 @@ export function CommandInputBar({
 			{/* Hidden in compact mode to reclaim vertical space on short viewports */}
 			{onHistoryOpen && !compact && (
 				<div
-					style={{
-						display: 'flex',
-						justifyContent: 'center',
-						paddingBottom: '8px',
-						cursor: 'pointer',
-					}}
+					className="flex justify-center pb-2 cursor-pointer"
 					onClick={onHistoryOpen}
 					aria-label="Open command history"
 				>
-					<div
-						style={{
-							width: '36px',
-							height: '4px',
-							backgroundColor: colors.border,
-							borderRadius: '2px',
-							opacity: 0.6,
-						}}
-					/>
+					<div className="w-9 h-1 bg-border rounded-sm opacity-60" />
 				</div>
 			)}
 
