@@ -267,7 +267,7 @@ describe('TabBar', () => {
 				/>
 			);
 			const activeButton = screen.getByText('Active').closest('button');
-			expect(activeButton).toHaveStyle({ fontWeight: '600' });
+			expect(activeButton).toHaveClass('font-semibold');
 		});
 
 		it('applies inactive styling to non-selected tabs', () => {
@@ -285,7 +285,7 @@ describe('TabBar', () => {
 				/>
 			);
 			const inactiveButton = screen.getByText('Inactive').closest('button');
-			expect(inactiveButton).toHaveStyle({ fontWeight: '400' });
+			expect(inactiveButton).toHaveClass('font-normal');
 		});
 
 		it('sets active tab z-index to 1', () => {
@@ -303,7 +303,9 @@ describe('TabBar', () => {
 				/>
 			);
 			const activeButton = screen.getByText('Active').closest('button');
-			expect(activeButton).toHaveStyle({ zIndex: '1' });
+			// Tailwind arbitrary value `z-[1]` preserves the exact legacy z-index
+			// while Tailwind's preset `z-0` handles the inactive case below.
+			expect(activeButton).toHaveClass('z-[1]');
 		});
 
 		it('sets inactive tab z-index to 0', () => {
@@ -321,15 +323,16 @@ describe('TabBar', () => {
 				/>
 			);
 			const inactiveButton = screen.getByText('Inactive').closest('button');
-			expect(inactiveButton).toHaveStyle({ zIndex: '0' });
+			expect(inactiveButton).toHaveClass('z-0');
 		});
 	});
 
 	describe('Hover state', () => {
-		it('marks inactive tab so CSS can apply the hover tint', () => {
+		it('applies Tailwind hover class to inactive tab for hover tint', () => {
 			// Phase 2.2 moved the inactive-tab hover tint from React state to a CSS
-			// rule keyed off `data-tab-active="false"` (see the `<style>` block in
-			// TabBar.tsx). Mouse events no longer mutate inline style.
+			// rule. Phase 2.3 migrated it further onto the Tailwind `hover:` utility
+			// so the rule sits on the element rather than in a standalone <style>
+			// block. Mouse events no longer mutate inline style in any form.
 			const tabs = [
 				createTab({ id: 'tab-1', name: 'Active' }),
 				createTab({ id: 'tab-2', name: 'Inactive' }),
@@ -345,20 +348,20 @@ describe('TabBar', () => {
 			);
 			const inactiveButton = screen.getByText('Inactive').closest('button')!;
 
-			expect(inactiveButton).toHaveAttribute('data-tab-active', 'false');
-			expect(inactiveButton).toHaveClass('tab-bar-tab-button');
-			expect(inactiveButton.style.backgroundColor).toBe('transparent');
+			expect(inactiveButton).toHaveClass('hover:bg-white/[0.08]');
+			expect(inactiveButton).toHaveClass('bg-transparent');
 
-			// Mouse events must no longer mutate inline backgroundColor — the CSS
-			// `:hover` rule handles the tint, and simulated mouseEnter in jsdom
-			// does not fire real `:hover` matches anyway.
+			// Mouse events must not mutate inline style — the Tailwind `hover:`
+			// utility handles the tint and jsdom does not fire real `:hover`
+			// matches anyway, so inline `style` should stay absent throughout.
+			const initialStyle = inactiveButton.getAttribute('style') ?? '';
 			fireEvent.mouseEnter(inactiveButton);
-			expect(inactiveButton.style.backgroundColor).toBe('transparent');
+			expect(inactiveButton.getAttribute('style') ?? '').toBe(initialStyle);
 			fireEvent.mouseLeave(inactiveButton);
-			expect(inactiveButton.style.backgroundColor).toBe('transparent');
+			expect(inactiveButton.getAttribute('style') ?? '').toBe(initialStyle);
 		});
 
-		it('keeps the active tab background untouched by mouse events', () => {
+		it('keeps the active tab background class untouched by mouse events', () => {
 			const tabs = [
 				createTab({ id: 'tab-1', name: 'Active' }),
 				createTab({ id: 'tab-2', name: 'Inactive' }),
@@ -374,11 +377,12 @@ describe('TabBar', () => {
 			);
 			const activeButton = screen.getByText('Active').closest('button')!;
 
-			expect(activeButton).toHaveAttribute('data-tab-active', 'true');
-			expect(activeButton).toHaveStyle({ backgroundColor: mockColors.bgMain });
+			expect(activeButton).toHaveClass('bg-bg-main');
+			// Active tab never applies the inactive hover tint class.
+			expect(activeButton.className).not.toMatch(/hover:bg-white/);
 
 			fireEvent.mouseEnter(activeButton);
-			expect(activeButton).toHaveStyle({ backgroundColor: mockColors.bgMain });
+			expect(activeButton).toHaveClass('bg-bg-main');
 		});
 	});
 
@@ -405,8 +409,10 @@ describe('TabBar', () => {
 
 		it('always renders close button for inactive tabs (touch reachability)', () => {
 			// Phase 2.2: the `×` must be in the DOM at every viewport tier so
-			// touch users can reach it without hovering. The desktop-only
-			// hover-reveal is handled in CSS (see `<style>` block in TabBar).
+			// touch users can reach it without hovering. Phase 2.3 keeps the
+			// desktop-only hover reveal, now expressed as Tailwind
+			// `group-hover:` / `group-focus-within:` utilities on the close
+			// button keyed off the `group` class on the row wrapper.
 			const tabs = [
 				createTab({ id: 'tab-1', name: 'Active' }),
 				createTab({ id: 'tab-2', name: 'Inactive' }),
@@ -424,9 +430,15 @@ describe('TabBar', () => {
 			const tabWrapper = inactiveButton.parentElement!;
 
 			// Close button present even before any hover event.
-			expect(within(tabWrapper).getByLabelText('Close tab')).toBeInTheDocument();
-			// And the row carries the data attribute the CSS rule targets.
-			expect(tabWrapper).toHaveAttribute('data-tab-active', 'false');
+			const closeButton = within(tabWrapper).getByLabelText('Close tab');
+			expect(closeButton).toBeInTheDocument();
+			// Row wrapper is a Tailwind `group` so the close button's
+			// `min-[960px]:group-hover:*` utilities can key off row hover.
+			expect(tabWrapper).toHaveClass('group');
+			// Close button carries the desktop-only hide + group-hover reveal
+			// utilities when sitting on an inactive tab.
+			expect(closeButton.className).toMatch(/min-\[960px\]:opacity-0/);
+			expect(closeButton.className).toMatch(/min-\[960px\]:group-hover:opacity-100/);
 
 			// Mouse events must not toggle DOM presence any more.
 			fireEvent.mouseEnter(inactiveButton);
@@ -483,6 +495,10 @@ describe('TabBar', () => {
 	});
 
 	describe('Busy indicator', () => {
+		// Phase 2.3 migrated the busy dot from inline styles to Tailwind classes,
+		// including an arbitrary `[animation:pulse_1.5s_infinite]` utility. The
+		// `.bg-warning` class sits on that same span and uniquely identifies the
+		// dot (the star icon uses `text-warning`, not `bg-warning`).
 		it('shows pulsing dot for busy tab', () => {
 			const tabs = [
 				createTab({ id: 'tab-1', name: 'Busy Tab', state: 'busy' }),
@@ -499,9 +515,10 @@ describe('TabBar', () => {
 			);
 
 			const busyButton = screen.getByText('Busy Tab').closest('button');
-			const dot = busyButton?.querySelector('span[style*="animation"]');
+			const dot = busyButton?.querySelector('.bg-warning');
 			expect(dot).toBeInTheDocument();
-			expect(dot).toHaveStyle({ animation: 'pulse 1.5s infinite' });
+			// Arbitrary Tailwind utility carries the animation declaration.
+			expect(dot?.className).toContain('[animation:pulse_1.5s_infinite]');
 		});
 
 		it('does not show pulsing dot for idle tab', () => {
@@ -520,7 +537,7 @@ describe('TabBar', () => {
 			);
 
 			const idleButton = screen.getByText('Idle Tab').closest('button');
-			const dot = idleButton?.querySelector('span[style*="animation"]');
+			const dot = idleButton?.querySelector('.bg-warning');
 			expect(dot).not.toBeInTheDocument();
 		});
 
@@ -540,7 +557,7 @@ describe('TabBar', () => {
 			);
 
 			const errorButton = screen.getByText('Error Tab').closest('button');
-			const dot = errorButton?.querySelector('span[style*="animation"]');
+			const dot = errorButton?.querySelector('.bg-warning');
 			expect(dot).not.toBeInTheDocument();
 		});
 
@@ -560,8 +577,8 @@ describe('TabBar', () => {
 			);
 
 			const busyButton = screen.getByText('Busy Tab').closest('button');
-			const dot = busyButton?.querySelector('span[style*="animation"]');
-			expect(dot).toHaveStyle({ backgroundColor: mockColors.warning });
+			const dot = busyButton?.querySelector('.bg-warning');
+			expect(dot).toHaveClass('bg-warning');
 		});
 	});
 
@@ -618,7 +635,7 @@ describe('TabBar', () => {
 			);
 
 			const star = screen.getByText('★');
-			expect(star).toHaveStyle({ color: mockColors.warning });
+			expect(star).toHaveClass('text-warning');
 		});
 
 		it('shows both star and busy indicator when both are true', () => {
@@ -638,7 +655,7 @@ describe('TabBar', () => {
 
 			expect(screen.getByText('★')).toBeInTheDocument();
 			const bothButton = screen.getByText('Both').closest('button');
-			const dot = bothButton?.querySelector('span[style*="animation"]');
+			const dot = bothButton?.querySelector('.bg-warning');
 			expect(dot).toBeInTheDocument();
 		});
 	});
@@ -860,7 +877,7 @@ describe('TabBar', () => {
 	});
 
 	describe('Container styling', () => {
-		it('applies bgSidebar background color', () => {
+		it('applies bg-bg-sidebar background class', () => {
 			const tabs = [
 				createTab({ id: 'tab-1', name: 'First' }),
 				createTab({ id: 'tab-2', name: 'Second' }),
@@ -875,10 +892,10 @@ describe('TabBar', () => {
 				/>
 			);
 
-			expect(container.firstChild).toHaveStyle({ backgroundColor: mockColors.bgSidebar });
+			expect(container.firstChild).toHaveClass('bg-bg-sidebar');
 		});
 
-		it('has border bottom', () => {
+		it('has bottom border classes', () => {
 			const tabs = [
 				createTab({ id: 'tab-1', name: 'First' }),
 				createTab({ id: 'tab-2', name: 'Second' }),
@@ -893,9 +910,7 @@ describe('TabBar', () => {
 				/>
 			);
 
-			expect(container.firstChild).toHaveStyle({
-				borderBottom: `1px solid ${mockColors.border}`,
-			});
+			expect(container.firstChild).toHaveClass('border-b', 'border-border');
 		});
 
 		it('includes hide-scrollbar class for scrollable area', () => {
@@ -973,7 +988,7 @@ describe('TabBar', () => {
 				/>
 			);
 			const longName = screen.getByText('This is a very long tab name that should be truncated');
-			expect(longName).toHaveStyle({ overflow: 'hidden', textOverflow: 'ellipsis' });
+			expect(longName).toHaveClass('overflow-hidden', 'text-ellipsis');
 		});
 
 		it('handles XSS-like characters in tab names', () => {
@@ -1073,7 +1088,7 @@ describe('TabBar', () => {
 
 			// Connecting state should not show busy dot
 			const connectingButton = screen.getByText('Connecting').closest('button');
-			const dot = connectingButton?.querySelector('span[style*="animation"]');
+			const dot = connectingButton?.querySelector('.bg-warning');
 			expect(dot).not.toBeInTheDocument();
 		});
 

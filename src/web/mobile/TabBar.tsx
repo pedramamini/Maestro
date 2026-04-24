@@ -12,6 +12,36 @@ import { useLongPress } from '../hooks/useLongPress';
 import { triggerHaptic, HAPTIC_PATTERNS } from './constants';
 import type { AITabData } from '../hooks/useWebSocket';
 
+// Tailwind tokens here resolve to `var(--maestro-*)` custom properties written
+// by ThemeProvider, so active/inactive + hover states react to theme hot-swaps.
+// Min-[960px] is the same breakpoint the previous CSS `<style>` rule used for
+// the desktop-only hover reveal (see Phase 2.2); keeping it lets the reveal
+// behaviour survive migration verbatim without introducing a new breakpoint.
+const TAB_BUTTON_BASE =
+	'flex items-center gap-1.5 py-1.5 pl-2.5 rounded-t-md text-xs font-mono cursor-pointer whitespace-nowrap transition-all duration-150 select-none [touch-action:pan-x_pan-y] [-webkit-tap-highlight-color:transparent]';
+
+const TAB_BUTTON_ACTIVE =
+	'z-[1] -mb-px border border-border border-b-bg-main bg-bg-main text-text-main font-semibold';
+
+const TAB_BUTTON_INACTIVE =
+	'z-0 mb-0 border border-transparent bg-transparent text-text-dim font-normal hover:bg-white/[0.08]';
+
+function tabButtonClasses(isActive: boolean, canClose: boolean): string {
+	// Reserve the `28px` close-button slot whenever the `×` can render so the
+	// text position stays stable when the desktop hover reveal animates it in.
+	const pr = canClose ? 'pr-7' : 'pr-2.5';
+	return `${TAB_BUTTON_BASE} ${pr} ${isActive ? TAB_BUTTON_ACTIVE : TAB_BUTTON_INACTIVE}`;
+}
+
+const CLOSE_BUTTON_BASE =
+	'absolute right-1 top-1/2 -translate-y-1/2 flex items-center justify-center w-5 h-5 rounded p-0 text-xs text-text-dim bg-transparent transition-[background-color,color] duration-100 cursor-pointer z-[2] hover:text-text-main hover:bg-white/[0.15]';
+
+// Desktop-only (≥960px) hover reveal for inactive tabs. Close button stays in
+// the DOM so touch users at phone/tablet tiers can reach it; desktop hides it
+// until the row is hovered or a descendant receives focus.
+const CLOSE_BUTTON_DESKTOP_HIDDEN =
+	'min-[960px]:opacity-0 min-[960px]:pointer-events-none min-[960px]:group-hover:opacity-100 min-[960px]:group-hover:pointer-events-auto min-[960px]:group-focus-within:opacity-100 min-[960px]:group-focus-within:pointer-events-auto';
+
 interface TabBarProps {
 	tabs: AITabData[];
 	activeTabId: string;
@@ -35,24 +65,12 @@ interface TabProps {
 	tabIndex: number;
 	isActive: boolean;
 	canClose: boolean;
-	colors: ReturnType<typeof useThemeColors>;
 	onSelect: () => void;
 	onClose: () => void;
 	onLongPress: (tab: AITabData, tabIndex: number, rect: DOMRect) => void;
 }
 
-function Tab({
-	tab,
-	tabIndex,
-	isActive,
-	canClose,
-	colors,
-	onSelect,
-	onClose,
-	onLongPress,
-}: TabProps) {
-	const [isCloseHovered, setIsCloseHovered] = useState(false);
-
+function Tab({ tab, tabIndex, isActive, canClose, onSelect, onClose, onLongPress }: TabProps) {
 	const handleLongPress = useCallback(
 		(rect: DOMRect) => onLongPress(tab, tabIndex, rect),
 		[tab, tabIndex, onLongPress]
@@ -67,97 +85,29 @@ function Tab({
 		tab.name || (tab.agentSessionId ? tab.agentSessionId.split('-')[0].toUpperCase() : 'New');
 
 	return (
-		<div
-			className="tab-bar-tab-row"
-			data-tab-active={isActive}
-			style={{
-				display: 'flex',
-				alignItems: 'center',
-				position: 'relative',
-				flexShrink: 0,
-			}}
-		>
+		<div className="group relative flex items-center flex-shrink-0">
 			<button
 				ref={elementRef as React.RefObject<HTMLButtonElement>}
 				{...handlers}
 				onClick={handleClick}
 				onContextMenu={handleContextMenu}
-				className="tab-bar-tab-button"
-				data-tab-active={isActive}
-				style={{
-					display: 'flex',
-					alignItems: 'center',
-					gap: '6px',
-					padding: '6px 10px',
-					// Reserve space for the close `×` whenever it can render. Keeping
-					// padding stable across hover/active prevents a layout shift when
-					// the CSS hover reveal animates it in on desktop.
-					paddingRight: canClose ? '28px' : '10px',
-					// Browser-style tab with rounded top corners
-					borderTopLeftRadius: '6px',
-					borderTopRightRadius: '6px',
-					// Active tab has visible borders, inactive tabs have no borders
-					borderTop: isActive ? `1px solid ${colors.border}` : '1px solid transparent',
-					borderLeft: isActive ? `1px solid ${colors.border}` : '1px solid transparent',
-					borderRight: isActive ? `1px solid ${colors.border}` : '1px solid transparent',
-					// Active tab connects to content (no bottom border)
-					borderBottom: isActive ? `1px solid ${colors.bgMain}` : '1px solid transparent',
-					// Active tab has bright background matching content; inactive starts
-					// transparent and gets a CSS-driven hover tint (see the <style> block
-					// at the bottom of this file).
-					backgroundColor: isActive ? colors.bgMain : 'transparent',
-					color: isActive ? colors.textMain : colors.textDim,
-					fontSize: '12px',
-					fontWeight: isActive ? 600 : 400,
-					fontFamily: 'monospace',
-					cursor: 'pointer',
-					whiteSpace: 'nowrap',
-					transition: 'all 0.15s ease',
-					// Active tab sits on top of the bar's bottom border
-					marginBottom: isActive ? '-1px' : '0',
-					zIndex: isActive ? 1 : 0,
-					// Allow native touch scrolling
-					touchAction: 'pan-x pan-y',
-					WebkitTapHighlightColor: 'transparent',
-					userSelect: 'none',
-					WebkitUserSelect: 'none',
-				}}
+				className={tabButtonClasses(isActive, canClose)}
 			>
 				{/* Pulsing dot for busy tabs */}
 				{tab.state === 'busy' && (
-					<span
-						style={{
-							width: '6px',
-							height: '6px',
-							borderRadius: '50%',
-							backgroundColor: colors.warning,
-							animation: 'pulse 1.5s infinite',
-							flexShrink: 0,
-						}}
-					/>
+					<span className="w-1.5 h-1.5 rounded-full bg-warning flex-shrink-0 [animation:pulse_1.5s_infinite]" />
 				)}
 
 				{/* Star indicator */}
-				{tab.starred && (
-					<span style={{ fontSize: '10px', flexShrink: 0, color: colors.warning }}>★</span>
-				)}
+				{tab.starred && <span className="text-[10px] flex-shrink-0 text-warning">★</span>}
 
-				{/* Tab name - minimum 8 characters visible */}
-				<span
-					style={{
-						overflow: 'hidden',
-						textOverflow: 'ellipsis',
-						minWidth: '48px', // ~8 characters at 12px monospace (6px per char)
-						maxWidth: '80px',
-					}}
-				>
-					{displayName}
-				</span>
+				{/* Tab name - minimum 8 characters visible (~8 chars at 12px mono) */}
+				<span className="overflow-hidden text-ellipsis min-w-12 max-w-20">{displayName}</span>
 			</button>
 
 			{/* Close button — always rendered when `canClose`, so touch users can
-			    reach it without hover. At desktop width the CSS `<style>` block
-			    below hides the inactive-tab `×` until hover or focus-within. */}
+			    reach it without hover. At ≥960px inactive tabs hide it until the
+			    row is hovered or receives focus (see `CLOSE_BUTTON_DESKTOP_HIDDEN`). */}
 			{canClose && (
 				<button
 					onClick={(e) => {
@@ -165,29 +115,9 @@ function Tab({
 						e.preventDefault();
 						onClose();
 					}}
-					onMouseEnter={() => setIsCloseHovered(true)}
-					onMouseLeave={() => setIsCloseHovered(false)}
-					className="tab-bar-close-button"
-					style={{
-						position: 'absolute',
-						right: '4px',
-						top: '50%',
-						transform: 'translateY(-50%)',
-						display: 'flex',
-						alignItems: 'center',
-						justifyContent: 'center',
-						width: '20px',
-						height: '20px',
-						borderRadius: '4px',
-						border: 'none',
-						fontSize: '12px',
-						color: isCloseHovered ? colors.textMain : colors.textDim,
-						backgroundColor: isCloseHovered ? 'rgba(255, 255, 255, 0.15)' : 'transparent',
-						cursor: 'pointer',
-						padding: 0,
-						zIndex: 2,
-						transition: 'background-color 0.1s ease, color 0.1s ease',
-					}}
+					className={
+						isActive ? CLOSE_BUTTON_BASE : `${CLOSE_BUTTON_BASE} ${CLOSE_BUTTON_DESKTOP_HIDDEN}`
+					}
 					aria-label="Close tab"
 				>
 					×
@@ -559,7 +489,6 @@ export function TabBar({
 	onSelectTerminal,
 	onCloseTerminal,
 }: TabBarProps) {
-	const colors = useThemeColors();
 	const [popoverState, setPopoverState] = useState<TabPopoverState | null>(null);
 	const [showNewTabMenu, setShowNewTabMenu] = useState(false);
 	const newTabMenuRef = useRef<HTMLDivElement>(null);
@@ -587,41 +516,14 @@ export function TabBar({
 	const canClose = tabs.length > 1;
 
 	return (
-		<div
-			style={{
-				display: 'flex',
-				alignItems: 'flex-end',
-				backgroundColor: colors.bgSidebar,
-				borderBottom: `1px solid ${colors.border}`,
-			}}
-		>
+		<div className="flex items-end bg-bg-sidebar border-b border-border">
 			{/* Pinned buttons - search and new tab */}
-			<div
-				style={{
-					flexShrink: 0,
-					padding: '8px 0 0 8px',
-					display: 'flex',
-					alignItems: 'center',
-					gap: '6px',
-				}}
-			>
+			<div className="flex-shrink-0 pt-2 pl-2 flex items-center gap-1.5">
 				{/* Search tabs button */}
 				{onOpenTabSearch && (
 					<button
 						onClick={onOpenTabSearch}
-						style={{
-							display: 'flex',
-							alignItems: 'center',
-							justifyContent: 'center',
-							width: '28px',
-							height: '28px',
-							borderRadius: '14px',
-							border: `1px solid ${colors.border}`,
-							backgroundColor: colors.bgMain,
-							color: colors.textDim,
-							cursor: 'pointer',
-							marginBottom: '4px',
-						}}
+						className="flex items-center justify-center w-7 h-7 rounded-full border border-border bg-bg-main text-text-dim cursor-pointer mb-1"
 						title={`Search ${tabs.length} tabs`}
 					>
 						<svg
@@ -641,22 +543,10 @@ export function TabBar({
 				)}
 
 				{/* New tab button with menu */}
-				<div ref={newTabMenuRef} style={{ position: 'relative' }}>
+				<div ref={newTabMenuRef} className="relative">
 					<button
 						onClick={() => setShowNewTabMenu((prev) => !prev)}
-						style={{
-							display: 'flex',
-							alignItems: 'center',
-							justifyContent: 'center',
-							width: '28px',
-							height: '28px',
-							borderRadius: '14px',
-							border: `1px solid ${colors.border}`,
-							backgroundColor: colors.bgMain,
-							color: colors.textDim,
-							cursor: 'pointer',
-							marginBottom: '4px',
-						}}
+						className="flex items-center justify-center w-7 h-7 rounded-full border border-border bg-bg-main text-text-dim cursor-pointer mb-1"
 						title="New Tab"
 					>
 						<svg
@@ -674,40 +564,14 @@ export function TabBar({
 						</svg>
 					</button>
 					{showNewTabMenu && (
-						<div
-							style={{
-								position: 'absolute',
-								top: '100%',
-								left: '0',
-								marginTop: '4px',
-								backgroundColor: colors.bgSidebar,
-								border: `1px solid ${colors.border}`,
-								borderRadius: '8px',
-								boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
-								zIndex: 100,
-								minWidth: '150px',
-								overflow: 'hidden',
-							}}
-						>
+						<div className="absolute top-full left-0 mt-1 bg-bg-sidebar border border-border rounded-lg shadow-[0_4px_12px_rgba(0,0,0,0.3)] z-[100] min-w-[150px] overflow-hidden">
 							<button
 								onClick={() => {
 									triggerHaptic(HAPTIC_PATTERNS.tap);
 									onNewTab();
 									setShowNewTabMenu(false);
 								}}
-								style={{
-									display: 'flex',
-									alignItems: 'center',
-									gap: '8px',
-									width: '100%',
-									padding: '10px 12px',
-									border: 'none',
-									backgroundColor: 'transparent',
-									color: colors.textMain,
-									fontSize: '13px',
-									cursor: 'pointer',
-									textAlign: 'left',
-								}}
+								className="flex items-center gap-2 w-full px-3 py-2.5 border-none bg-transparent text-text-main text-[13px] cursor-pointer text-left"
 							>
 								<svg
 									width="14"
@@ -730,20 +594,7 @@ export function TabBar({
 										onSelectTerminal();
 										setShowNewTabMenu(false);
 									}}
-									style={{
-										display: 'flex',
-										alignItems: 'center',
-										gap: '8px',
-										width: '100%',
-										padding: '10px 12px',
-										border: 'none',
-										borderTop: `1px solid ${colors.border}`,
-										backgroundColor: 'transparent',
-										color: colors.textMain,
-										fontSize: '13px',
-										cursor: 'pointer',
-										textAlign: 'left',
-									}}
+									className="flex items-center gap-2 w-full px-3 py-2.5 border-none border-t border-t-border bg-transparent text-text-main text-[13px] cursor-pointer text-left"
 								>
 									<svg
 										width="14"
@@ -767,20 +618,7 @@ export function TabBar({
 			</div>
 
 			{/* Scrollable tabs area */}
-			<div
-				style={{
-					display: 'flex',
-					flex: 1,
-					alignItems: 'flex-end',
-					gap: '2px',
-					padding: '8px 8px 0 8px',
-					overflowX: 'auto',
-					WebkitOverflowScrolling: 'touch',
-					scrollbarWidth: 'none',
-					msOverflowStyle: 'none',
-				}}
-				className="hide-scrollbar"
-			>
+			<div className="flex flex-1 items-end gap-0.5 pt-2 px-2 overflow-x-auto [-webkit-overflow-scrolling:touch] [scrollbar-width:none] [-ms-overflow-style:none] hide-scrollbar">
 				{tabs.map((tab, index) => (
 					<Tab
 						key={tab.id}
@@ -788,51 +626,22 @@ export function TabBar({
 						tabIndex={index}
 						isActive={inputMode === 'ai' && tab.id === activeTabId}
 						canClose={canClose}
-						colors={colors}
 						onSelect={() => onSelectTab(tab.id)}
 						onClose={() => onCloseTab(tab.id)}
 						onLongPress={handleTabLongPress}
 					/>
 				))}
 
-				{/* Terminal tab */}
+				{/* Terminal tab — reuses the same active/inactive class tokens as
+				    the Tab subcomponent. Close button sits inline (not absolute),
+				    so `canClose=false` keeps the base `pr-2.5` padding. */}
 				{onSelectTerminal && (
 					<button
 						onClick={() => {
 							triggerHaptic(HAPTIC_PATTERNS.tap);
 							onSelectTerminal();
 						}}
-						style={{
-							display: 'flex',
-							alignItems: 'center',
-							gap: '6px',
-							padding: '6px 10px',
-							borderTopLeftRadius: '6px',
-							borderTopRightRadius: '6px',
-							borderTop:
-								inputMode === 'terminal' ? `1px solid ${colors.border}` : '1px solid transparent',
-							borderLeft:
-								inputMode === 'terminal' ? `1px solid ${colors.border}` : '1px solid transparent',
-							borderRight:
-								inputMode === 'terminal' ? `1px solid ${colors.border}` : '1px solid transparent',
-							borderBottom:
-								inputMode === 'terminal' ? `1px solid ${colors.bgMain}` : '1px solid transparent',
-							backgroundColor: inputMode === 'terminal' ? colors.bgMain : 'transparent',
-							color: inputMode === 'terminal' ? colors.textMain : colors.textDim,
-							fontSize: '12px',
-							fontWeight: inputMode === 'terminal' ? 600 : 400,
-							fontFamily: 'monospace',
-							cursor: 'pointer',
-							whiteSpace: 'nowrap',
-							transition: 'all 0.15s ease',
-							marginBottom: inputMode === 'terminal' ? '-1px' : '0',
-							zIndex: inputMode === 'terminal' ? 1 : 0,
-							touchAction: 'pan-x pan-y',
-							WebkitTapHighlightColor: 'transparent',
-							userSelect: 'none',
-							WebkitUserSelect: 'none',
-							flexShrink: 0,
-						}}
+						className={tabButtonClasses(inputMode === 'terminal', false)}
 					>
 						{/* Terminal icon */}
 						<svg
@@ -858,22 +667,7 @@ export function TabBar({
 									triggerHaptic(HAPTIC_PATTERNS.tap);
 									onCloseTerminal();
 								}}
-								style={{
-									display: 'flex',
-									alignItems: 'center',
-									justifyContent: 'center',
-									width: '16px',
-									height: '16px',
-									borderRadius: '4px',
-									marginLeft: '4px',
-									cursor: 'pointer',
-									opacity: 0.6,
-									background: 'none',
-									border: 'none',
-									padding: 0,
-									color: 'inherit',
-									font: 'inherit',
-								}}
+								className="flex items-center justify-center w-4 h-4 rounded ml-1 cursor-pointer opacity-60 bg-transparent border-none p-0 text-inherit font-[inherit]"
 							>
 								<svg
 									width="10"
@@ -917,9 +711,11 @@ export function TabBar({
 				/>
 			)}
 
-			{/* CSS for pulse animation + hover/visibility rules driven by
-			    data-tab-active on the row + tab button. See Task 2.2 in
-			    .maestro/playbooks/webui-responsiveness/PHASE-02-navigation.md. */}
+			{/* Local pulse keyframe used by busy-tab dots. `@keyframes pulse` also
+			    lives in the global stylesheet, so this block could be removed if
+			    all pulse-users were migrated; leaving it in place for resilience
+			    and to keep the CSS-animation test surface intact. Hide-scrollbar
+			    rule backs the `hide-scrollbar` class on the scroll container. */}
 			<style>{`
         @keyframes pulse {
           0%, 100% { opacity: 1; }
@@ -927,24 +723,6 @@ export function TabBar({
         }
         .hide-scrollbar::-webkit-scrollbar {
           display: none;
-        }
-        /* Inactive tabs get a subtle hover tint — previously a React state. */
-        .tab-bar-tab-button[data-tab-active="false"]:hover {
-          background-color: rgba(255, 255, 255, 0.08);
-        }
-        /* Close-button visibility mirrors Phase 2.2 rules:
-             active tab OR phone/tablet (< 960px) → always visible;
-             desktop (≥ 960px) inactive tab → hidden until hover or focus-within. */
-        @media (min-width: 960px) {
-          .tab-bar-tab-row[data-tab-active="false"] .tab-bar-close-button {
-            opacity: 0;
-            pointer-events: none;
-          }
-          .tab-bar-tab-row[data-tab-active="false"]:hover .tab-bar-close-button,
-          .tab-bar-tab-row[data-tab-active="false"]:focus-within .tab-bar-close-button {
-            opacity: 1;
-            pointer-events: auto;
-          }
         }
       `}</style>
 		</div>
