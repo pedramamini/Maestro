@@ -195,6 +195,14 @@ export function CueModal({ theme, onClose, cueShortcutKeys }: CueModalProps) {
 	// Active runs section is collapsible when empty
 	const [activeRunsExpanded, setActiveRunsExpanded] = useState(true);
 
+	// Wrap tab switching so navigating away from the pipeline tab clears the
+	// pending selection token — prevents a stale nonce from re-snapping the editor
+	// to the "View in Pipeline" target on the next remount.
+	const handleSetActiveTab = useCallback((tab: CueModalTab) => {
+		if (tab !== 'pipeline') setPendingPipelineId(null);
+		setActiveTab(tab);
+	}, []);
+
 	const handleOpenHelp = useCallback(() => setShowHelp(true), []);
 	const handleCloseHelp = useCallback(() => setShowHelp(false), []);
 
@@ -233,7 +241,7 @@ export function CueModal({ theme, onClose, cueShortcutKeys }: CueModalProps) {
 						<CueModalHeader
 							theme={theme}
 							activeTab={activeTab}
-							setActiveTab={setActiveTab}
+							setActiveTab={handleSetActiveTab}
 							isEnabled={isEnabled}
 							toggling={toggling}
 							handleToggle={handleToggle}
