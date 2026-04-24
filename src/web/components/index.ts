@@ -18,3 +18,6 @@ export type { PullToRefreshIndicatorProps } from './PullToRefresh';
 
 export { ResponsiveModal } from './ResponsiveModal';
 export type { ResponsiveModalProps } from './ResponsiveModal';
+
+export { ResponsiveModalFooter } from './ResponsiveModalFooter';
+export type { ResponsiveModalFooterProps } from './ResponsiveModalFooter';
