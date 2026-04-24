@@ -24,7 +24,7 @@ export interface LeftPanelProps {
 	onNewAgent?: () => void;
 	panelRef?: React.RefObject<HTMLDivElement>;
 	width?: number;
-	onResizeStart?: (e: React.MouseEvent) => void;
+	onResizeStart?: (e: React.PointerEvent<HTMLElement>) => void;
 	/** When true, renders as a full-screen overlay (mobile) instead of an inline side panel */
 	isFullScreen?: boolean;
 	/** Lifted group collapse state — persists across panel open/close */
@@ -1417,7 +1417,7 @@ export function LeftPanel({
 				</div>
 				{!isFullScreen && onResizeStart && (
 					<div
-						onMouseDown={onResizeStart}
+						onPointerDown={onResizeStart}
 						style={{
 							position: 'absolute',
 							top: 0,
@@ -1426,6 +1426,7 @@ export function LeftPanel({
 							height: '100%',
 							cursor: 'col-resize',
 							zIndex: 10,
+							touchAction: 'none',
 						}}
 						onMouseEnter={(e) => {
 							(e.currentTarget as HTMLElement).style.backgroundColor = colors.accent;

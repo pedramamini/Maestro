@@ -31,7 +31,7 @@ export interface RightPanelProps {
 	onViewDiff?: (filePath: string) => void;
 	panelRef?: React.RefObject<HTMLDivElement>;
 	width?: number;
-	onResizeStart?: (e: React.MouseEvent) => void;
+	onResizeStart?: (e: React.PointerEvent<HTMLElement>) => void;
 	/** When true, renders as a full-screen overlay (mobile) instead of an inline side panel */
 	isFullScreen?: boolean;
 }
@@ -161,7 +161,7 @@ export function RightPanel({
 			<div ref={panelRef} {...(isFullScreen ? swipeHandlers : {})} style={panelStyle}>
 				{!isFullScreen && onResizeStart && (
 					<div
-						onMouseDown={onResizeStart}
+						onPointerDown={onResizeStart}
 						style={{
 							position: 'absolute',
 							top: 0,
@@ -170,6 +170,7 @@ export function RightPanel({
 							height: '100%',
 							cursor: 'col-resize',
 							zIndex: 10,
+							touchAction: 'none',
 						}}
 						onMouseEnter={(e) => {
 							(e.currentTarget as HTMLElement).style.backgroundColor = colors.accent;
