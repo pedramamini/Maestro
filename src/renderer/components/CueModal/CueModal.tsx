@@ -20,6 +20,7 @@ import type { CueSessionStatus } from '../../hooks/useCue';
 import { CueHelpContent } from '../CueHelpModal';
 import { CuePipelineEditor } from '../CuePipelineEditor';
 import { getPipelineColorForAgent } from '../CuePipelineEditor/pipelineColors';
+import { generateId } from '../../utils/ids';
 import { useSessionStore } from '../../stores/sessionStore';
 import { getModalActions, useModalStore, selectModalData } from '../../stores/modalStore';
 import { notifyToast } from '../../stores/notificationStore';
@@ -127,14 +128,17 @@ export function CueModal({ theme, onClose, cueShortcutKeys }: CueModalProps) {
 		getModalActions().openCueYamlEditor(session.sessionId, session.projectRoot);
 	}, []);
 
-	const [pendingPipelineId, setPendingPipelineId] = useState<string | null>(null);
+	const [pendingPipelineId, setPendingPipelineId] = useState<{
+		id: string | null;
+		nonce: string;
+	} | null>(null);
 
 	const handleViewInPipeline = useCallback(
 		(session: CueSessionStatus) => {
 			const colors = getPipelineColorForAgent(session.sessionId, dashboardPipelines);
 			const pipeline =
 				colors.length > 0 ? dashboardPipelines.find((p) => p.color === colors[0]) : undefined;
-			setPendingPipelineId(pipeline?.id ?? null);
+			setPendingPipelineId({ id: pipeline?.id ?? null, nonce: generateId() });
 			setActiveTab('pipeline');
 		},
 		[dashboardPipelines]

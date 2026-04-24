@@ -59,6 +59,7 @@ function PipelineEmptyStateInner({
 					<button
 						onClick={() => {
 							createPipeline();
+							if (drawerTimerRef.current !== null) clearTimeout(drawerTimerRef.current);
 							drawerTimerRef.current = setTimeout(() => {
 								setTriggerDrawerOpen(true);
 								setAgentDrawerOpen(true);
