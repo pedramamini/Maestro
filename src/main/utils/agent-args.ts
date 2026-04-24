@@ -120,11 +120,7 @@ export function buildAgentArgs(
 	// Interactive sessions must not receive these flags (e.g., Copilot rejects --output-format json
 	// in interactive mode). Agents that need JSON output in interactive mode should include
 	// the relevant flags in their base `args` or `batchModeArgs` instead.
-	if (
-		agent.jsonOutputArgs &&
-		inBatchMode &&
-		!hasJsonOutputFlag(finalArgs, agent.jsonOutputArgs)
-	) {
+	if (agent.jsonOutputArgs && inBatchMode && !hasJsonOutputFlag(finalArgs, agent.jsonOutputArgs)) {
 		finalArgs = [...finalArgs, ...agent.jsonOutputArgs];
 	}
 
