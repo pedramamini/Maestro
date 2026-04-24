@@ -54,7 +54,7 @@ export async function gistCreate(agentIdArg: string, options: GistCreateOptions)
 			)
 		);
 
-		if (!result.success) {
+		if (!result.success || !result.gistUrl) {
 			emitErrorJson(result.error ?? 'Failed to create gist', 'GIST_CREATE_FAILED');
 			process.exit(1);
 		}

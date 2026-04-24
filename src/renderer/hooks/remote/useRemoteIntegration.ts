@@ -1095,6 +1095,19 @@ export function useRemoteIntegration(deps: UseRemoteIntegrationDeps): UseRemoteI
 					window.maestro.process.sendRemoteCreateGistResponse(responseChannel, result);
 				} catch (error) {
 					const message = error instanceof Error ? error.message : String(error);
+					// Known recoverable modes (session missing, empty history, `gh`
+					// not installed/authenticated) already returned above as
+					// structured results. Anything that lands here is unexpected —
+					// report to Sentry without the transcript/description/filename,
+					// which can carry PII/secrets.
+					captureException(error, {
+						extra: {
+							context: 'remoteCreateGist',
+							sessionId,
+							isPublic,
+							descriptionProvided: Boolean(description),
+						},
+					});
 					window.maestro.process.sendRemoteCreateGistResponse(responseChannel, {
 						success: false,
 						error: message,

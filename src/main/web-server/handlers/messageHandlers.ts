@@ -2591,37 +2591,51 @@ export class WebSocketMessageHandler {
 	}
 
 	/**
-	 * Handle create_gist message - publish a session's transcript to a GitHub gist
+	 * Handle create_gist message - publish a session's transcript to a GitHub gist.
+	 * Always replies with `create_gist_result` (even on failure) so waiting
+	 * clients don't hang until their request timeout.
 	 */
 	private handleCreateGist(client: WebClient, message: WebClientMessage): void {
-		const sessionId = message.sessionId as string;
-		const description = (message.description as string | undefined) ?? '';
-		const isPublic = Boolean(message.isPublic);
+		const reply = (result: { success: boolean; gistUrl?: string; error?: string }) => {
+			this.send(client, {
+				type: 'create_gist_result',
+				...result,
+				requestId: message.requestId,
+			});
+		};
 
-		if (!sessionId) {
-			this.sendError(client, 'Missing sessionId');
+		const sessionId = message.sessionId;
+		if (typeof sessionId !== 'string' || !sessionId) {
+			reply({ success: false, error: 'Missing sessionId' });
 			return;
 		}
 
+		// Strict validation — avoid truthy coercion so a string like "false"
+		// cannot flip a private gist to public.
+		if (message.description !== undefined && typeof message.description !== 'string') {
+			reply({ success: false, error: 'description must be a string when provided' });
+			return;
+		}
+		if (message.isPublic !== undefined && typeof message.isPublic !== 'boolean') {
+			reply({ success: false, error: 'isPublic must be a boolean when provided' });
+			return;
+		}
+		const description = message.description ?? '';
+		const isPublic = message.isPublic ?? false;
+
 		if (!this.callbacks.createGist) {
-			this.sendError(client, 'Gist creation not configured');
+			reply({ success: false, error: 'Gist creation not configured' });
 			return;
 		}
 
 		this.callbacks
 			.createGist(sessionId, description, isPublic)
 			.then((result) => {
-				this.send(client, {
-					type: 'create_gist_result',
-					success: result.success,
-					gistUrl: result.gistUrl,
-					error: result.error,
-					requestId: message.requestId,
-					timestamp: Date.now(),
-				});
+				reply(result);
 			})
-			.catch((error) => {
-				this.sendError(client, `Failed to create gist: ${error.message}`);
+			.catch((error: unknown) => {
+				const msg = error instanceof Error ? error.message : String(error);
+				reply({ success: false, error: `Failed to create gist: ${msg}` });
 			});
 	}
 
