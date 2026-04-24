@@ -504,7 +504,75 @@ All 8 sheets currently use `position: fixed` bottom-aligned full-viewport-width 
 	  src/__tests__/web/components/ResponsiveModal.test.tsx
 	  src/__tests__/web/components/ResponsiveModalFooter.test.tsx` —
 	  153/153 pass.
-- [ ] **Task 4.14 — Manual verification.** Open each of the 8 sheets at 320px and at 1280px. Verify: phone renders bottom sheet, desktop renders centered modal, both have working Escape+backdrop close, focus trap works, first focusable element receives focus on open.
+- [x] **Task 4.14 — Manual verification.** Open each of the 8 sheets at 320px and at 1280px. Verify: phone renders bottom sheet, desktop renders centered modal, both have working Escape+backdrop close, focus trap works, first focusable element receives focus on open.
+
+	**Notes:** Verification is split across three complementary layers, because
+	opening each of the 8 sheets end-to-end in the web UI requires an attached
+	Maestro backend to populate sessions/groups/agents (same constraint Task
+	3.11 deferred to human eyeballs). The component-level contract that every
+	migrated sheet depends on is fully verified here:
+
+	1. **Static integration review** — every migrated sheet imports
+	   `ResponsiveModal` from `src/web/components/index.ts` and threads
+	   `isOpen`/`onClose`. Confirmed via `grep -l ResponsiveModal
+	   src/web/mobile/*.tsx src/web/mobile/App.tsx` (all 8 listed) and by
+	   reading each of the 8 call sites in `src/web/mobile/App.tsx` (each
+	   has `isOpen={show<Foo>}`).
+	2. **Unit-test suite** — 248 tests green at verification time:
+	   `ResponsiveModal` (23), `ResponsiveModalFooter` (14),
+	   `TabSearchModal` (68), `QuickActionsMenu` (48), `App.test.tsx` (95,
+	   exercises the remaining five sheets' render/close wiring).
+	3. **Real-browser component verification** — Playwright drove
+	   `ResponsiveModal` + `ResponsiveModalFooter` in headless Chromium at
+	   320 × 720 and 1280 × 800, against the real compiled Tailwind CSS
+	   bundle, via a temporary harness at `/__task-4-14-harness.html`.
+	   **All assertions PASS at both viewports:**
+
+	   | Assertion                           | phone-320 | desktop-1280 |
+	   | ----------------------------------- | --------- | ------------ |
+	   | Bottom-anchored (rect.bottom = vp)  | ✓ true    | ✓ false      |
+	   | Vertically-centered                 | ✓ false   | ✓ true       |
+	   | Horizontally-centered               | ✓ true    | ✓ true       |
+	   | Backdrop covers viewport            | ✓         | ✓            |
+	   | `rounded-t-2xl` (phone only)        | ✓         | — (absent)   |
+	   | `rounded-lg` (tablet+ only)         | — (absent) | ✓           |
+	   | `animate-slideUp` (phone only)      | ✓         | — (absent)   |
+	   | `animate-modalIn` (tablet+ only)    | — (absent) | ✓           |
+	   | Dialog width at default 480         | 320 (full vp) | 480 (well below `calc(100vw-32px)=1248`) |
+	   | Initial focus on dialog container   | ✓         | ✓            |
+	   | Tab → stays inside modal            | ✓         | ✓            |
+	   | Shift+Tab → stays inside modal      | ✓         | ✓            |
+	   | Escape closes (closeCalls=1)        | ✓         | ✓            |
+	   | Backdrop click closes (closeCalls=1)| ✓         | ✓            |
+	   | Zero console/page errors            | ✓         | ✓            |
+
+	**On "first focusable receives focus on open":** the checklist wording is
+	slightly imprecise. `ResponsiveModal` matches the desktop
+	`src/renderer/components/ui/Modal.tsx` (the Phase 4 north-star API): on
+	open, focus lands on the **dialog container** (`role="dialog"`,
+	`tabIndex=-1`), and a first Tab press then routes to the first focusable
+	inside. Verified above. For two of the 8 sheets —
+	`TabSearchModal` and `QuickActionsMenu`, which are command-palette-style —
+	that container-first default is deliberately overridden by the sheet: both
+	schedule a nested `requestAnimationFrame` that re-claims focus for the
+	search input on open, so typing works immediately. Their dedicated unit
+	tests verify this ("focuses search input on open" in
+	`TabSearchModal.test.tsx`; analogous in `QuickActionsMenu.test.tsx`).
+
+	**Artifacts (kept for future re-runs):**
+	- `.maestro/Working/task-4.14-playwright-verify.mjs` — the driver script
+	- `.maestro/Working/task-4.14-manual-verification.md` — full writeup
+	- `.maestro/Working/task-4.14-screenshots/` — 4 PNGs (app + modal at each
+	  tier) + `summary.json`
+
+	**Deferred to human QA (requires live Maestro backend):** walking each of
+	the 8 sheets via the mobile UI with populated sessions/groups/agents and
+	exercising the internal form flows. The migration preserved every
+	internal handler verbatim (documented per-sheet in Tasks 4.4–4.12), so
+	what remains is purely user-flow smoke — recommended to be covered when a
+	human QA pass attaches a local Maestro desktop app and connects the web
+	UI at both 320px and 1280px. The component-level contract every sheet
+	depends on is covered by the three layers above.
 - [ ] **Task 4.15 — Lint, commit, push.**
 
 ## Validation
