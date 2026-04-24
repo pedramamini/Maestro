@@ -36,7 +36,12 @@ Expected survivors after Phases 0–5: `SlashCommandAutocomplete.tsx`, `Overflow
   - `RightDrawer.tsx:379,382` file-tree button: inline style + mouse handlers → `className` with `hover:bg-[color-mix(in_srgb,var(--maestro-text-dim)_6%,transparent)]` (6% ≈ original `${colors.textDim}10`). `paddingLeft` stays inline — depends on `depth`.
   - Residue: `rg "onMouse(Enter|Leave|Down|Move|Up)" src/web/` now returns 2 hits — both category (c) keyboard-selection sync (rows 3 & 6 in inventory), scheduled for Task 6.5 spot-check.
   - `npm run lint` + `npm run lint:eslint` clean.
-- [ ] **Task 6.3 — Pointer-event parity for drag/press.** For each category-(b) hit: convert `onMouse*` to `onPointer*` with `setPointerCapture` where appropriate. `useResizableWebPanel` already done in Phase 0 — do not re-do it.
+- [x] **Task 6.3 — Pointer-event parity for drag/press.** For each category-(b) hit: convert `onMouse*` to `onPointer*` with `setPointerCapture` where appropriate. `useResizableWebPanel` already done in Phase 0 — do not re-do it.
+  - **No code changes required.** Task 6.1's inventory already classified category (b) as **0 hits**, and a fresh grep confirms it: `rg -n "onMouse(Down|Move|Up)" src/web/` → no matches.
+  - Verified the two surviving drag/press sites are already on pointer events:
+    - `src/web/hooks/useResizableWebPanel.ts` — uses `onPointerDown` with `setPointerCapture(pointerId)`, `pointerup` / `pointercancel` listeners, and routes moves via the captured pointer (Phase 0 work).
+    - Consumers `src/web/mobile/RightPanel.tsx:170` and `src/web/mobile/LeftPanel.tsx:1290` attach `onPointerDown={onResizeStart}` on handles carrying `touch-none` (CSS `touch-action: none`), giving touch/pen full parity with mouse.
+  - Remaining `onMouse*` residue (2 hits) is category (c) keyboard-selection sync only — scheduled for Task 6.5 spot-check, not Task 6.3.
 - [ ] **Task 6.4 — `title=`-only tooltips.** Find icon-only buttons whose only affordance is a `title` attribute. At `desktop` tier, render a visible label beside the icon. At `phone`/`tablet`, keep icon-only but add a hint label that appears on tap (or rely on the overflow menu copy when inside one).
 - [ ] **Task 6.5 — Spot-check `SlashCommandAutocomplete`.** The component has 3 `onMouseEnter` hits driving keyboard-selected-item syncing. Confirm the fix preserves both mouse-hover and arrow-key selection.
 - [ ] **Task 6.6 — Add focus-visible rings where missing.** Any interactive element touched in this phase that lacks `focus-visible:` styling — add it.
