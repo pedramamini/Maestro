@@ -41,6 +41,11 @@ vi.mock('../../../web/mobile/constants', () => ({
 		success: [40],
 		error: [50],
 	},
+	BREAKPOINTS: {
+		phone: 0,
+		tablet: 600,
+		desktop: 960,
+	},
 }));
 
 describe('TabSearchModal', () => {
@@ -81,6 +86,7 @@ describe('TabSearchModal', () => {
 				const tabs = [createTab({ id: 'tab-1', name: 'MyCustomTab' })];
 				render(
 					<TabSearchModal
+						isOpen={true}
 						tabs={tabs}
 						activeTabId="tab-1"
 						onSelectTab={mockOnSelectTab}
@@ -94,6 +100,7 @@ describe('TabSearchModal', () => {
 				const tabs = [createTab({ id: 'tab-1', name: '', agentSessionId: 'abc12345-6789-0def' })];
 				render(
 					<TabSearchModal
+						isOpen={true}
 						tabs={tabs}
 						activeTabId="tab-1"
 						onSelectTab={mockOnSelectTab}
@@ -107,6 +114,7 @@ describe('TabSearchModal', () => {
 				const tabs = [createTab({ id: 'tab-1', name: '', agentSessionId: '' })];
 				render(
 					<TabSearchModal
+						isOpen={true}
 						tabs={tabs}
 						activeTabId="tab-1"
 						onSelectTab={mockOnSelectTab}
@@ -120,6 +128,7 @@ describe('TabSearchModal', () => {
 				const tabs = [{ id: 'tab-1', name: '', state: 'idle' as const, starred: false }];
 				render(
 					<TabSearchModal
+						isOpen={true}
 						tabs={tabs}
 						activeTabId="tab-1"
 						onSelectTab={mockOnSelectTab}
@@ -133,6 +142,7 @@ describe('TabSearchModal', () => {
 				const tabs = [createTab({ id: 'tab-1', name: '', agentSessionId: 'simpleId' })];
 				render(
 					<TabSearchModal
+						isOpen={true}
 						tabs={tabs}
 						activeTabId="tab-1"
 						onSelectTab={mockOnSelectTab}
@@ -151,6 +161,7 @@ describe('TabSearchModal', () => {
 				const tabs = [createTab({ id: 'tab-1', name: 'Busy Tab', state: 'busy' })];
 				render(
 					<TabSearchModal
+						isOpen={true}
 						tabs={tabs}
 						activeTabId="tab-1"
 						onSelectTab={mockOnSelectTab}
@@ -173,6 +184,7 @@ describe('TabSearchModal', () => {
 				const tabs = [createTab({ id: 'tab-1', name: 'Idle Tab', state: 'idle' })];
 				render(
 					<TabSearchModal
+						isOpen={true}
 						tabs={tabs}
 						activeTabId="tab-1"
 						onSelectTab={mockOnSelectTab}
@@ -197,6 +209,7 @@ describe('TabSearchModal', () => {
 				const tabs = [createTab({ id: 'tab-1', name: 'Busy Tab', state: 'busy' })];
 				render(
 					<TabSearchModal
+						isOpen={true}
 						tabs={tabs}
 						activeTabId="tab-1"
 						onSelectTab={mockOnSelectTab}
@@ -212,6 +225,7 @@ describe('TabSearchModal', () => {
 				const tabs = [createTab({ id: 'tab-1', name: 'Idle Tab', state: 'idle' })];
 				render(
 					<TabSearchModal
+						isOpen={true}
 						tabs={tabs}
 						activeTabId="tab-1"
 						onSelectTab={mockOnSelectTab}
@@ -234,6 +248,7 @@ describe('TabSearchModal', () => {
 				const tabs = [createTab({ id: 'tab-1', name: 'Starred Tab', starred: true })];
 				render(
 					<TabSearchModal
+						isOpen={true}
 						tabs={tabs}
 						activeTabId="tab-1"
 						onSelectTab={mockOnSelectTab}
@@ -247,6 +262,7 @@ describe('TabSearchModal', () => {
 				const tabs = [createTab({ id: 'tab-1', name: 'Unstarred Tab', starred: false })];
 				render(
 					<TabSearchModal
+						isOpen={true}
 						tabs={tabs}
 						activeTabId="tab-1"
 						onSelectTab={mockOnSelectTab}
@@ -260,6 +276,7 @@ describe('TabSearchModal', () => {
 				const tabs = [createTab({ id: 'tab-1', name: 'Starred Tab', starred: true })];
 				render(
 					<TabSearchModal
+						isOpen={true}
 						tabs={tabs}
 						activeTabId="tab-1"
 						onSelectTab={mockOnSelectTab}
@@ -278,6 +295,7 @@ describe('TabSearchModal', () => {
 				];
 				render(
 					<TabSearchModal
+						isOpen={true}
 						tabs={tabs}
 						activeTabId="tab-1"
 						onSelectTab={mockOnSelectTab}
@@ -291,6 +309,7 @@ describe('TabSearchModal', () => {
 				const tabs = [createTab({ id: 'tab-1', name: 'Test', agentSessionId: '' })];
 				render(
 					<TabSearchModal
+						isOpen={true}
 						tabs={tabs}
 						activeTabId="tab-1"
 						onSelectTab={mockOnSelectTab}
@@ -306,6 +325,7 @@ describe('TabSearchModal', () => {
 				const tabs = [createTab({ id: 'tab-1', name: 'Test', agentSessionId: 'xyz-session' })];
 				render(
 					<TabSearchModal
+						isOpen={true}
 						tabs={tabs}
 						activeTabId="tab-1"
 						onSelectTab={mockOnSelectTab}
@@ -325,6 +345,7 @@ describe('TabSearchModal', () => {
 				];
 				render(
 					<TabSearchModal
+						isOpen={true}
 						tabs={tabs}
 						activeTabId="tab-1"
 						onSelectTab={mockOnSelectTab}
@@ -342,6 +363,7 @@ describe('TabSearchModal', () => {
 				];
 				render(
 					<TabSearchModal
+						isOpen={true}
 						tabs={tabs}
 						activeTabId="tab-1"
 						onSelectTab={mockOnSelectTab}
@@ -358,6 +380,7 @@ describe('TabSearchModal', () => {
 				const tabs = [createTab({ id: 'tab-1', name: 'Test' })];
 				render(
 					<TabSearchModal
+						isOpen={true}
 						tabs={tabs}
 						activeTabId="tab-1"
 						onSelectTab={mockOnSelectTab}
@@ -374,6 +397,7 @@ describe('TabSearchModal', () => {
 				];
 				render(
 					<TabSearchModal
+						isOpen={true}
 						tabs={tabs}
 						activeTabId="tab-1"
 						onSelectTab={mockOnSelectTab}
@@ -391,6 +415,7 @@ describe('TabSearchModal', () => {
 				];
 				render(
 					<TabSearchModal
+						isOpen={true}
 						tabs={tabs}
 						activeTabId="tab-1"
 						onSelectTab={mockOnSelectTab}
@@ -408,6 +433,7 @@ describe('TabSearchModal', () => {
 				];
 				render(
 					<TabSearchModal
+						isOpen={true}
 						tabs={tabs}
 						activeTabId="tab-1"
 						onSelectTab={mockOnSelectTab}
@@ -424,6 +450,7 @@ describe('TabSearchModal', () => {
 				const tabs = [createTab({ id: 'tab-1', name: 'Test' })];
 				render(
 					<TabSearchModal
+						isOpen={true}
 						tabs={tabs}
 						activeTabId="tab-1"
 						onSelectTab={mockOnSelectTab}
@@ -439,6 +466,7 @@ describe('TabSearchModal', () => {
 				const tabs = [createTab({ id: 'tab-1', name: 'Test' })];
 				render(
 					<TabSearchModal
+						isOpen={true}
 						tabs={tabs}
 						activeTabId="tab-2"
 						onSelectTab={mockOnSelectTab}
@@ -457,54 +485,68 @@ describe('TabSearchModal', () => {
 	// ============================================================
 	describe('TabSearchModal main component', () => {
 		describe('Rendering', () => {
-			it('renders fixed full-screen overlay', () => {
+			it('renders nothing when isOpen is false', () => {
 				render(
 					<TabSearchModal
+						isOpen={false}
 						tabs={defaultTabs}
 						activeTabId="tab-1"
 						onSelectTab={mockOnSelectTab}
 						onClose={mockOnClose}
 					/>
 				);
-				const modal = screen.getByText('Main').closest('div[style*="position: fixed"]');
-				expect(modal).toHaveStyle({
-					position: 'fixed',
-					top: '0',
-					left: '0',
-					right: '0',
-					bottom: '0',
-				});
+				expect(screen.queryByText('Main')).not.toBeInTheDocument();
 			});
 
-			it('has high z-index', () => {
+			it('renders as a dialog with aria-modal', () => {
 				render(
 					<TabSearchModal
+						isOpen={true}
 						tabs={defaultTabs}
 						activeTabId="tab-1"
 						onSelectTab={mockOnSelectTab}
 						onClose={mockOnClose}
 					/>
 				);
-				const modal = screen.getByText('Main').closest('div[style*="position: fixed"]');
+				const dialog = screen.getByRole('dialog');
+				expect(dialog).toHaveAttribute('aria-modal', 'true');
+				expect(dialog).toHaveAttribute('aria-label', 'Search Tabs');
+			});
+
+			it('renders fixed-position overlay', () => {
+				render(
+					<TabSearchModal
+						isOpen={true}
+						tabs={defaultTabs}
+						activeTabId="tab-1"
+						onSelectTab={mockOnSelectTab}
+						onClose={mockOnClose}
+					/>
+				);
+				// The ResponsiveModal outer div uses `.fixed` (Tailwind) plus an
+				// inline `zIndex` style — find it via the inline style attribute.
+				const modal = screen.getByText('Main').closest('div[style*="z-index"]');
+				expect(modal).toBeInTheDocument();
+			});
+
+			it('forwards zIndex prop to the overlay', () => {
+				render(
+					<TabSearchModal
+						isOpen={true}
+						tabs={defaultTabs}
+						activeTabId="tab-1"
+						onSelectTab={mockOnSelectTab}
+						onClose={mockOnClose}
+					/>
+				);
+				const modal = screen.getByText('Main').closest('div[style*="z-index"]');
 				expect(modal).toHaveStyle({ zIndex: '1000' });
-			});
-
-			it('uses bgMain background color', () => {
-				render(
-					<TabSearchModal
-						tabs={defaultTabs}
-						activeTabId="tab-1"
-						onSelectTab={mockOnSelectTab}
-						onClose={mockOnClose}
-					/>
-				);
-				const modal = screen.getByText('Main').closest('div[style*="position: fixed"]');
-				expect(modal).toHaveStyle({ backgroundColor: mockColors.bgMain });
 			});
 
 			it('renders all tabs', () => {
 				render(
 					<TabSearchModal
+						isOpen={true}
 						tabs={defaultTabs}
 						activeTabId="tab-1"
 						onSelectTab={mockOnSelectTab}
@@ -521,6 +563,7 @@ describe('TabSearchModal', () => {
 			it('focuses search input on mount', async () => {
 				render(
 					<TabSearchModal
+						isOpen={true}
 						tabs={defaultTabs}
 						activeTabId="tab-1"
 						onSelectTab={mockOnSelectTab}
@@ -538,29 +581,30 @@ describe('TabSearchModal', () => {
 			it('renders close button with X icon', () => {
 				render(
 					<TabSearchModal
+						isOpen={true}
 						tabs={defaultTabs}
 						activeTabId="tab-1"
 						onSelectTab={mockOnSelectTab}
 						onClose={mockOnClose}
 					/>
 				);
-				const closeButton = screen.getByTitle('Close');
+				const closeButton = screen.getByRole('button', { name: /close modal/i });
 				expect(closeButton).toBeInTheDocument();
 				expect(closeButton.querySelector('svg')).toBeInTheDocument();
 			});
 
-			it('triggers haptic and calls onClose when clicked', () => {
+			it('calls onClose when clicked', () => {
 				render(
 					<TabSearchModal
+						isOpen={true}
 						tabs={defaultTabs}
 						activeTabId="tab-1"
 						onSelectTab={mockOnSelectTab}
 						onClose={mockOnClose}
 					/>
 				);
-				const closeButton = screen.getByTitle('Close');
+				const closeButton = screen.getByRole('button', { name: /close modal/i });
 				fireEvent.click(closeButton);
-				expect(mockTriggerHaptic).toHaveBeenCalled();
 				expect(mockOnClose).toHaveBeenCalledTimes(1);
 			});
 		});
@@ -569,6 +613,7 @@ describe('TabSearchModal', () => {
 			it('shows tab count in placeholder', () => {
 				render(
 					<TabSearchModal
+						isOpen={true}
 						tabs={defaultTabs}
 						activeTabId="tab-1"
 						onSelectTab={mockOnSelectTab}
@@ -582,6 +627,7 @@ describe('TabSearchModal', () => {
 				const tabs = [createTab({ id: 'tab-1', name: 'Only One' })];
 				render(
 					<TabSearchModal
+						isOpen={true}
 						tabs={tabs}
 						activeTabId="tab-1"
 						onSelectTab={mockOnSelectTab}
@@ -594,6 +640,7 @@ describe('TabSearchModal', () => {
 			it('is a controlled input', () => {
 				render(
 					<TabSearchModal
+						isOpen={true}
 						tabs={defaultTabs}
 						activeTabId="tab-1"
 						onSelectTab={mockOnSelectTab}
@@ -608,15 +655,17 @@ describe('TabSearchModal', () => {
 			it('has magnifying glass icon', () => {
 				render(
 					<TabSearchModal
+						isOpen={true}
 						tabs={defaultTabs}
 						activeTabId="tab-1"
 						onSelectTab={mockOnSelectTab}
 						onClose={mockOnClose}
 					/>
 				);
-				// The search icon is in the header container
-				const header = screen.getByTitle('Close').parentElement;
-				expect(header?.querySelector('svg circle')).toBeInTheDocument();
+				// The search icon sits next to the search input inside the modal body.
+				const searchInput = screen.getByPlaceholderText(/Search.*tabs/);
+				const searchRow = searchInput.parentElement;
+				expect(searchRow?.querySelector('svg circle')).toBeInTheDocument();
 			});
 		});
 
@@ -624,6 +673,7 @@ describe('TabSearchModal', () => {
 			it('is hidden when search is empty', () => {
 				render(
 					<TabSearchModal
+						isOpen={true}
 						tabs={defaultTabs}
 						activeTabId="tab-1"
 						onSelectTab={mockOnSelectTab}
@@ -636,6 +686,7 @@ describe('TabSearchModal', () => {
 			it('is visible when search has text', () => {
 				render(
 					<TabSearchModal
+						isOpen={true}
 						tabs={defaultTabs}
 						activeTabId="tab-1"
 						onSelectTab={mockOnSelectTab}
@@ -650,6 +701,7 @@ describe('TabSearchModal', () => {
 			it('clears search when clicked', () => {
 				render(
 					<TabSearchModal
+						isOpen={true}
 						tabs={defaultTabs}
 						activeTabId="tab-1"
 						onSelectTab={mockOnSelectTab}
@@ -668,34 +720,37 @@ describe('TabSearchModal', () => {
 			it('closes modal on Escape key', () => {
 				render(
 					<TabSearchModal
+						isOpen={true}
 						tabs={defaultTabs}
 						activeTabId="tab-1"
 						onSelectTab={mockOnSelectTab}
 						onClose={mockOnClose}
 					/>
 				);
-				fireEvent.keyDown(window, { key: 'Escape' });
+				fireEvent.keyDown(document, { key: 'Escape' });
 				expect(mockOnClose).toHaveBeenCalledTimes(1);
 			});
 
 			it('does not close on other keys', () => {
 				render(
 					<TabSearchModal
+						isOpen={true}
 						tabs={defaultTabs}
 						activeTabId="tab-1"
 						onSelectTab={mockOnSelectTab}
 						onClose={mockOnClose}
 					/>
 				);
-				fireEvent.keyDown(window, { key: 'Enter' });
-				fireEvent.keyDown(window, { key: 'a' });
+				fireEvent.keyDown(document, { key: 'Enter' });
+				fireEvent.keyDown(document, { key: 'a' });
 				expect(mockOnClose).not.toHaveBeenCalled();
 			});
 
 			it('cleans up event listener on unmount', () => {
-				const removeEventListenerSpy = vi.spyOn(window, 'removeEventListener');
+				const removeEventListenerSpy = vi.spyOn(document, 'removeEventListener');
 				const { unmount } = render(
 					<TabSearchModal
+						isOpen={true}
 						tabs={defaultTabs}
 						activeTabId="tab-1"
 						onSelectTab={mockOnSelectTab}
@@ -712,6 +767,7 @@ describe('TabSearchModal', () => {
 			it('calls onSelectTab with correct tabId', () => {
 				render(
 					<TabSearchModal
+						isOpen={true}
 						tabs={defaultTabs}
 						activeTabId="tab-1"
 						onSelectTab={mockOnSelectTab}
@@ -726,6 +782,7 @@ describe('TabSearchModal', () => {
 			it('calls onClose after selecting tab', () => {
 				render(
 					<TabSearchModal
+						isOpen={true}
 						tabs={defaultTabs}
 						activeTabId="tab-1"
 						onSelectTab={mockOnSelectTab}
@@ -742,6 +799,7 @@ describe('TabSearchModal', () => {
 			it('shows all tabs when search is empty', () => {
 				render(
 					<TabSearchModal
+						isOpen={true}
 						tabs={defaultTabs}
 						activeTabId="tab-1"
 						onSelectTab={mockOnSelectTab}
@@ -756,6 +814,7 @@ describe('TabSearchModal', () => {
 			it('filters by name (case-insensitive)', () => {
 				render(
 					<TabSearchModal
+						isOpen={true}
 						tabs={defaultTabs}
 						activeTabId="tab-1"
 						onSelectTab={mockOnSelectTab}
@@ -772,6 +831,7 @@ describe('TabSearchModal', () => {
 			it('filters by agentSessionId (case-insensitive)', () => {
 				render(
 					<TabSearchModal
+						isOpen={true}
 						tabs={defaultTabs}
 						activeTabId="tab-1"
 						onSelectTab={mockOnSelectTab}
@@ -788,6 +848,7 @@ describe('TabSearchModal', () => {
 			it('shows partial matches', () => {
 				render(
 					<TabSearchModal
+						isOpen={true}
 						tabs={defaultTabs}
 						activeTabId="tab-1"
 						onSelectTab={mockOnSelectTab}
@@ -804,6 +865,7 @@ describe('TabSearchModal', () => {
 			it('treats whitespace-only search as empty', () => {
 				render(
 					<TabSearchModal
+						isOpen={true}
 						tabs={defaultTabs}
 						activeTabId="tab-1"
 						onSelectTab={mockOnSelectTab}
@@ -823,6 +885,7 @@ describe('TabSearchModal', () => {
 			it('shows "No tabs available" when tabs array is empty', () => {
 				render(
 					<TabSearchModal
+						isOpen={true}
 						tabs={[]}
 						activeTabId=""
 						onSelectTab={mockOnSelectTab}
@@ -835,6 +898,7 @@ describe('TabSearchModal', () => {
 			it('shows "No tabs match your search" when search has no results', () => {
 				render(
 					<TabSearchModal
+						isOpen={true}
 						tabs={defaultTabs}
 						activeTabId="tab-1"
 						onSelectTab={mockOnSelectTab}
@@ -846,47 +910,6 @@ describe('TabSearchModal', () => {
 				expect(screen.getByText('No tabs match your search')).toBeInTheDocument();
 			});
 		});
-
-		describe('CSS animations', () => {
-			it('includes slideUp keyframes', () => {
-				const { container } = render(
-					<TabSearchModal
-						tabs={defaultTabs}
-						activeTabId="tab-1"
-						onSelectTab={mockOnSelectTab}
-						onClose={mockOnClose}
-					/>
-				);
-				const style = container.querySelector('style');
-				expect(style?.textContent).toContain('@keyframes slideUp');
-			});
-
-			it('includes pulse keyframes', () => {
-				const { container } = render(
-					<TabSearchModal
-						tabs={defaultTabs}
-						activeTabId="tab-1"
-						onSelectTab={mockOnSelectTab}
-						onClose={mockOnClose}
-					/>
-				);
-				const style = container.querySelector('style');
-				expect(style?.textContent).toContain('@keyframes pulse');
-			});
-
-			it('modal has slideUp animation', () => {
-				render(
-					<TabSearchModal
-						tabs={defaultTabs}
-						activeTabId="tab-1"
-						onSelectTab={mockOnSelectTab}
-						onClose={mockOnClose}
-					/>
-				);
-				const modal = screen.getByText('Main').closest('div[style*="position: fixed"]');
-				expect(modal).toHaveStyle({ animation: 'slideUp 0.2s ease-out' });
-			});
-		});
 	});
 
 	// ============================================================
@@ -896,6 +919,7 @@ describe('TabSearchModal', () => {
 		it('handles empty tabs array', () => {
 			render(
 				<TabSearchModal
+					isOpen={true}
 					tabs={[]}
 					activeTabId=""
 					onSelectTab={mockOnSelectTab}
@@ -910,6 +934,7 @@ describe('TabSearchModal', () => {
 			const tabs = [createTab({ id: 'tab-1', name: 'Only One' })];
 			render(
 				<TabSearchModal
+					isOpen={true}
 					tabs={tabs}
 					activeTabId="tab-1"
 					onSelectTab={mockOnSelectTab}
@@ -926,6 +951,7 @@ describe('TabSearchModal', () => {
 			);
 			render(
 				<TabSearchModal
+					isOpen={true}
 					tabs={tabs}
 					activeTabId="tab-0"
 					onSelectTab={mockOnSelectTab}
@@ -948,6 +974,7 @@ describe('TabSearchModal', () => {
 			];
 			render(
 				<TabSearchModal
+					isOpen={true}
 					tabs={tabs}
 					activeTabId="tab-1"
 					onSelectTab={mockOnSelectTab}
@@ -964,6 +991,7 @@ describe('TabSearchModal', () => {
 			const tabs = [createTab({ id: 'tab-1', name: '<script>alert("xss")</script>' })];
 			render(
 				<TabSearchModal
+					isOpen={true}
 					tabs={tabs}
 					activeTabId="tab-1"
 					onSelectTab={mockOnSelectTab}
@@ -977,6 +1005,7 @@ describe('TabSearchModal', () => {
 			const tabs = [createTab({ id: 'tab-1', name: '🎵 Music Tab 中文 العربية 🎶' })];
 			render(
 				<TabSearchModal
+					isOpen={true}
 					tabs={tabs}
 					activeTabId="tab-1"
 					onSelectTab={mockOnSelectTab}
@@ -999,6 +1028,7 @@ describe('TabSearchModal', () => {
 			];
 			render(
 				<TabSearchModal
+					isOpen={true}
 					tabs={tabs}
 					activeTabId="tab-1"
 					onSelectTab={mockOnSelectTab}
@@ -1012,6 +1042,7 @@ describe('TabSearchModal', () => {
 		it('handles active tab not in filtered results', () => {
 			render(
 				<TabSearchModal
+					isOpen={true}
 					tabs={defaultTabs}
 					activeTabId="tab-1"
 					onSelectTab={mockOnSelectTab}
@@ -1029,6 +1060,7 @@ describe('TabSearchModal', () => {
 		it('handles rapid search input changes', () => {
 			render(
 				<TabSearchModal
+					isOpen={true}
 					tabs={defaultTabs}
 					activeTabId="tab-1"
 					onSelectTab={mockOnSelectTab}
@@ -1051,6 +1083,7 @@ describe('TabSearchModal', () => {
 		it('handles search matching partial agentSessionId', () => {
 			render(
 				<TabSearchModal
+					isOpen={true}
 					tabs={defaultTabs}
 					activeTabId="tab-1"
 					onSelectTab={mockOnSelectTab}
@@ -1067,6 +1100,7 @@ describe('TabSearchModal', () => {
 		it('handles multiple rapid select actions', () => {
 			render(
 				<TabSearchModal
+					isOpen={true}
 					tabs={defaultTabs}
 					activeTabId="tab-1"
 					onSelectTab={mockOnSelectTab}
@@ -1091,6 +1125,7 @@ describe('TabSearchModal', () => {
 			];
 			render(
 				<TabSearchModal
+					isOpen={true}
 					tabs={tabs}
 					activeTabId="tab-1"
 					onSelectTab={mockOnSelectTab}
@@ -1116,6 +1151,7 @@ describe('TabSearchModal', () => {
 		it('complete search and select flow', () => {
 			render(
 				<TabSearchModal
+					isOpen={true}
 					tabs={defaultTabs}
 					activeTabId="tab-1"
 					onSelectTab={mockOnSelectTab}
@@ -1147,6 +1183,7 @@ describe('TabSearchModal', () => {
 		it('search -> clear -> search flow', () => {
 			render(
 				<TabSearchModal
+					isOpen={true}
 					tabs={defaultTabs}
 					activeTabId="tab-1"
 					onSelectTab={mockOnSelectTab}
@@ -1177,6 +1214,7 @@ describe('TabSearchModal', () => {
 		it('escape during search clears and closes', () => {
 			render(
 				<TabSearchModal
+					isOpen={true}
 					tabs={defaultTabs}
 					activeTabId="tab-1"
 					onSelectTab={mockOnSelectTab}
@@ -1188,7 +1226,7 @@ describe('TabSearchModal', () => {
 			fireEvent.change(input, { target: { value: 'test' } });
 
 			// Press escape
-			fireEvent.keyDown(window, { key: 'Escape' });
+			fireEvent.keyDown(document, { key: 'Escape' });
 
 			expect(mockOnClose).toHaveBeenCalled();
 		});
@@ -1201,6 +1239,7 @@ describe('TabSearchModal', () => {
 			];
 			render(
 				<TabSearchModal
+					isOpen={true}
 					tabs={tabs}
 					activeTabId="tab-2"
 					onSelectTab={mockOnSelectTab}

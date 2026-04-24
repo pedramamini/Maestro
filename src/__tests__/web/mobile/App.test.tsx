@@ -508,22 +508,24 @@ vi.mock('../../../web/mobile/TabBar', () => ({
 
 vi.mock('../../../web/mobile/TabSearchModal', () => ({
 	TabSearchModal: ({
-		tabs,
-		activeTabId,
-		onSelectTab,
+		isOpen,
 		onClose,
 	}: {
+		isOpen: boolean;
 		tabs: unknown[];
 		activeTabId: string;
 		onSelectTab: (id: string) => void;
 		onClose: () => void;
-	}) => (
-		<div data-testid="tab-search-modal">
-			<button data-testid="close-tab-search" onClick={onClose}>
-				Close
-			</button>
-		</div>
-	),
+	}) => {
+		if (!isOpen) return null;
+		return (
+			<div data-testid="tab-search-modal">
+				<button data-testid="close-tab-search" onClick={onClose}>
+					Close
+				</button>
+			</div>
+		);
+	},
 }));
 
 vi.mock('../../../web/mobile/SlashCommandAutocomplete', () => ({

@@ -3112,9 +3112,10 @@ export default function MobileApp() {
 				/>
 			)}
 
-			{/* Tab search modal - full-screen modal for searching tabs */}
-			{showTabSearch && activeSession?.aiTabs && activeSession.activeTabId && (
+			{/* Tab search modal - command palette for searching tabs */}
+			{activeSession?.aiTabs && activeSession.activeTabId && (
 				<TabSearchModal
+					isOpen={showTabSearch}
 					tabs={activeSession.aiTabs}
 					activeTabId={activeSession.activeTabId}
 					onSelectTab={handleSelectTab}
