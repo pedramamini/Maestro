@@ -186,6 +186,24 @@ describe('remote-fs', () => {
 			expect(remoteCommand).not.toMatch(/\.\.\?\*/);
 		});
 
+		it('uses find -exec for the symlink scan so a pipeline does not leak [ -d ] exit status', async () => {
+			// Regression: a `find … | while read f; do [ -d "$f" ] && basename "$f"; done`
+			// pipeline exits with the status of its last body command, so any directory
+			// containing a symlink whose target was NOT a directory (common — e.g. a
+			// file-symlink in a project root) made the whole SSH command exit 1 and
+			// `readDirRemote` report failure even though `ls` succeeded. Seen in the
+			// field on a remote checkout with a single file-symlink.
+			const deps = createMockDeps({ stdout: 'file.txt\n', stderr: '', exitCode: 0 });
+
+			await readDirRemote('/some/dir', baseConfig, deps);
+
+			const call = (deps.execSsh as any).mock.calls[0][1];
+			const remoteCommand = call[call.length - 1];
+			expect(remoteCommand).toMatch(/-exec test -d \{\} \\;/);
+			expect(remoteCommand).toMatch(/-exec basename \{\} \\;/);
+			expect(remoteCommand).not.toMatch(/while IFS= read/);
+		});
+
 		it('expands remote home-relative paths before executing over SSH', async () => {
 			const deps = createMockDeps({
 				stdout: 'file.txt\n',

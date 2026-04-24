@@ -327,9 +327,25 @@ export function useFileTreeManagement(
 			} catch (error) {
 				// Refresh failed — log it but preserve the existing file tree.
 				// A transient SSH failure shouldn't wipe out a working tree.
-				logger.error('File tree refresh error', 'FileTreeManagement', {
-					error: (error as Error)?.message || 'Unknown error',
-				});
+				const errorMsg = (error as Error)?.message || 'Unknown error';
+				logger.error('File tree refresh error', 'FileTreeManagement', { error: errorMsg });
+				// Surface the current failure instead of leaving whatever stale
+				// error message was sitting in state (which may be from an
+				// outdated code path and mislead the user about the real cause).
+				const sessionNow = sessionsRef.current.find((s) => s.id === sessionId);
+				const hasUsableTree = !!sessionNow?.fileTree?.length;
+				setSessions((prev) =>
+					prev.map((s) =>
+						s.id === sessionId
+							? {
+									...s,
+									fileTreeError: hasUsableTree
+										? undefined
+										: `Cannot access directory: ${treeRoot}\n${errorMsg}`,
+								}
+							: s
+					)
+				);
 				return undefined;
 			}
 		},
@@ -488,10 +504,13 @@ export function useFileTreeManagement(
 		const session = activeSession;
 		if (!session) return;
 
-		// Only load if file tree is empty, not already loading, and hasn't been loaded yet
-		// fileTreeStats is set after successful load, so we use it to detect "loaded but empty"
-		const hasLoadedOnce =
-			session.fileTreeStats !== undefined || session.fileTreeError !== undefined;
+		// Only load if file tree is empty, not already loading, and hasn't been loaded yet.
+		// fileTreeStats is set after successful load, so we use it to detect "loaded but empty".
+		// We intentionally do NOT gate on a residual `fileTreeError` here: if an old error was
+		// restored from persistence or left over from a previous failed load, the auto-loader
+		// should get a fresh attempt so the current code path can try (and either clear or
+		// update the error). Otherwise a stale error permanently blocks the panel.
+		const hasLoadedOnce = session.fileTreeStats !== undefined;
 		if (
 			(!session.fileTree || session.fileTree.length === 0) &&
 			!session.fileTreeLoading &&

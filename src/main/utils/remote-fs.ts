@@ -242,15 +242,29 @@ export async function readDirRemote(
 	// that consumers can recurse into them.  The marker line __SYMDIR__
 	// separates the two outputs.
 	//
-	// We use `find -mindepth 1 -maxdepth 1 -type l` rather than shell globs
-	// because zsh (the default shell on modern macOS) errors on unmatched
-	// globs by default (NOMATCH), which would fail the whole command for any
-	// directory missing dotfiles. `find` has no such failure mode, and
-	// -mindepth/-maxdepth are supported by both GNU and BSD find.
+	// Implementation choices (both matter — each guards against a real failure
+	// we hit in production):
+	//
+	// 1. `find -mindepth 1 -maxdepth 1 -type l` rather than shell globs,
+	//    because zsh (default shell on modern macOS) errors on unmatched
+	//    globs (NOMATCH), which would fail the whole SSH command for any
+	//    directory missing dotfiles. `find` has no such failure mode.
+	//
+	// 2. `-exec test -d {} \; -exec basename {} \;` rather than a
+	//    `| while read` pipeline, because the while loop's exit status is
+	//    the exit status of its last body command. If `find` returns any
+	//    symlink whose target is NOT a directory (e.g. a symlink to a file),
+	//    `test -d` fails for that iteration and the pipeline leaks exit 1,
+	//    which `readDirRemote`'s caller would then report as a failure even
+	//    though `ls` succeeded. `find -exec` always reports success when
+	//    find itself completed, regardless of -exec outcomes.
+	//
+	// Both `-mindepth`/`-maxdepth` and the POSIX `-exec … {} \;` form are
+	// supported by GNU and BSD (macOS) find.
 	const escapedPath = shellEscapeRemotePath(dirPath);
 	const symlinkScan =
-		`find ${escapedPath} -mindepth 1 -maxdepth 1 -type l 2>/dev/null | ` +
-		`while IFS= read -r f; do [ -d "$f" ] && basename "$f"; done`;
+		`find ${escapedPath} -mindepth 1 -maxdepth 1 -type l ` +
+		`-exec test -d {} \\; -exec basename {} \\; 2>/dev/null`;
 	const remoteCommand =
 		`ls -1AF --color=never ${escapedPath} 2>/dev/null || echo "__LS_ERROR__"; ` +
 		`echo "__SYMDIR__"; ` +
