@@ -63,6 +63,19 @@ export function AutoRunSetupSheet({
 	const [activePlaybookId, setActivePlaybookId] = useState<string | null>(null);
 	const [isSavingPlaybook, setIsSavingPlaybook] = useState(false);
 	const [showPlaybooks, setShowPlaybooks] = useState(true);
+	// In-sheet prompt/confirm modals for playbook name entry and delete confirmation.
+	// `window.prompt` / `window.confirm` are unreliable in mobile WebViews (iOS Safari
+	// can disable dialogs after repeated use; some embedded WebViews stub them to no-ops),
+	// so we render our own inline modals instead.
+	const [playbookNamePromptState, setPlaybookNamePromptState] = useState<{
+		initialValue: string;
+		title: string;
+		submitLabel: string;
+	} | null>(null);
+	const [playbookNameDraft, setPlaybookNameDraft] = useState('');
+	const [confirmDeletePlaybookState, setConfirmDeletePlaybookState] = useState<Playbook | null>(
+		null
+	);
 
 	// Resolve the currently-loaded playbook. Used to detect modifications and
 	// to switch the "Save Playbook" button between Create / Update modes.
@@ -192,20 +205,34 @@ export function AutoRunSetupSheet({
 		[documents]
 	);
 
-	const handleSavePlaybook = useCallback(async () => {
+	// Open the playbook-name prompt overlay. The actual save fires from
+	// handlePlaybookNameSubmit once the user confirms a non-empty name.
+	const handleSavePlaybook = useCallback(() => {
 		if (selectedFiles.size === 0) return;
 		const isUpdate = activePlaybook !== null;
 		const proposedName = isUpdate ? activePlaybook!.name : '';
-		const name = window.prompt(
-			isUpdate ? 'Update this playbook? You can rename it here:' : 'Name this playbook:',
-			proposedName
-		);
-		if (!name || !name.trim()) return;
+		setPlaybookNameDraft(proposedName);
+		setPlaybookNamePromptState({
+			initialValue: proposedName,
+			title: isUpdate ? `Update "${activePlaybook!.name}"?` : 'Name this playbook',
+			submitLabel: isUpdate ? 'Update' : 'Save',
+		});
+	}, [activePlaybook, selectedFiles.size]);
+
+	const handlePlaybookNamePromptCancel = useCallback(() => {
+		setPlaybookNamePromptState(null);
+	}, []);
+
+	const handlePlaybookNamePromptSubmit = useCallback(async () => {
+		const trimmed = playbookNameDraft.trim();
+		if (!trimmed) return;
+		setPlaybookNamePromptState(null);
+		const isUpdate = activePlaybook !== null;
 		triggerHaptic(HAPTIC_PATTERNS.tap);
 		setIsSavingPlaybook(true);
 		try {
 			const draft = {
-				name: name.trim(),
+				name: trimmed,
 				documents: Array.from(selectedFiles).map((filename) => ({
 					filename,
 					resetOnCompletion: false,
@@ -234,24 +261,33 @@ export function AutoRunSetupSheet({
 		createPlaybook,
 		loopEnabled,
 		maxLoops,
+		playbookNameDraft,
 		prompt,
 		selectedFiles,
 		sessionId,
 		updatePlaybook,
 	]);
 
-	const handleDeletePlaybook = useCallback(
-		async (playbook: Playbook) => {
-			const confirmed = window.confirm(`Delete playbook "${playbook.name}"?`);
-			if (!confirmed) return;
-			triggerHaptic(HAPTIC_PATTERNS.tap);
-			const success = await deletePlaybook(sessionId, playbook.id);
-			if (success && activePlaybookId === playbook.id) {
-				setActivePlaybookId(null);
-			}
-		},
-		[activePlaybookId, deletePlaybook, sessionId]
-	);
+	// Open the delete-confirmation overlay. Firing the actual delete is deferred
+	// to handleConfirmDelete once the user taps Confirm in the in-sheet modal.
+	const handleDeletePlaybook = useCallback((playbook: Playbook) => {
+		setConfirmDeletePlaybookState(playbook);
+	}, []);
+
+	const handleConfirmDeleteCancel = useCallback(() => {
+		setConfirmDeletePlaybookState(null);
+	}, []);
+
+	const handleConfirmDeleteSubmit = useCallback(async () => {
+		const playbook = confirmDeletePlaybookState;
+		if (!playbook) return;
+		setConfirmDeletePlaybookState(null);
+		triggerHaptic(HAPTIC_PATTERNS.tap);
+		const success = await deletePlaybook(sessionId, playbook.id);
+		if (success && activePlaybookId === playbook.id) {
+			setActivePlaybookId(null);
+		}
+	}, [activePlaybookId, confirmDeletePlaybookState, deletePlaybook, sessionId]);
 
 	const allSelected = selectedFiles.size === documents.length && documents.length > 0;
 
@@ -926,6 +962,215 @@ export function AutoRunSetupSheet({
 					</button>
 				</div>
 			</div>
+
+			{/* Playbook-name prompt overlay. Rendered above the sheet so it
+			    covers the whole screen on mobile and doesn't depend on
+			    `window.prompt`, which is unreliable in mobile WebViews. */}
+			{playbookNamePromptState && (
+				<div
+					onClick={(e) => {
+						if (e.target === e.currentTarget) handlePlaybookNamePromptCancel();
+					}}
+					style={{
+						position: 'fixed',
+						top: 0,
+						left: 0,
+						right: 0,
+						bottom: 0,
+						backgroundColor: 'rgba(0, 0, 0, 0.6)',
+						zIndex: 230,
+						display: 'flex',
+						alignItems: 'center',
+						justifyContent: 'center',
+						padding: '16px',
+					}}
+					role="presentation"
+				>
+					<div
+						role="dialog"
+						aria-modal="true"
+						aria-label="Name this playbook"
+						style={{
+							width: '100%',
+							maxWidth: '400px',
+							backgroundColor: colors.bgMain,
+							borderRadius: '12px',
+							padding: '16px',
+							display: 'flex',
+							flexDirection: 'column',
+							gap: '12px',
+						}}
+					>
+						<h3
+							style={{
+								margin: 0,
+								fontSize: '16px',
+								fontWeight: 600,
+								color: colors.textMain,
+							}}
+						>
+							{playbookNamePromptState.title}
+						</h3>
+						<input
+							type="text"
+							autoFocus
+							value={playbookNameDraft}
+							onChange={(e) => setPlaybookNameDraft(e.target.value)}
+							onKeyDown={(e) => {
+								if (e.key === 'Enter') {
+									e.preventDefault();
+									void handlePlaybookNamePromptSubmit();
+								} else if (e.key === 'Escape') {
+									e.preventDefault();
+									handlePlaybookNamePromptCancel();
+								}
+							}}
+							placeholder="Playbook name"
+							style={{
+								width: '100%',
+								padding: '12px 14px',
+								borderRadius: '10px',
+								border: `1px solid ${colors.border}`,
+								backgroundColor: colors.bgSidebar,
+								color: colors.textMain,
+								fontSize: '15px',
+								outline: 'none',
+								WebkitAppearance: 'none',
+								boxSizing: 'border-box',
+							}}
+						/>
+						<div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
+							<button
+								onClick={handlePlaybookNamePromptCancel}
+								style={{
+									padding: '10px 16px',
+									borderRadius: '10px',
+									backgroundColor: 'transparent',
+									border: `1px solid ${colors.border}`,
+									color: colors.textMain,
+									fontSize: '14px',
+									fontWeight: 500,
+									cursor: 'pointer',
+									touchAction: 'manipulation',
+									WebkitTapHighlightColor: 'transparent',
+								}}
+							>
+								Cancel
+							</button>
+							<button
+								onClick={() => void handlePlaybookNamePromptSubmit()}
+								disabled={!playbookNameDraft.trim()}
+								style={{
+									padding: '10px 16px',
+									borderRadius: '10px',
+									backgroundColor: playbookNameDraft.trim() ? colors.accent : `${colors.accent}40`,
+									border: 'none',
+									color: 'white',
+									fontSize: '14px',
+									fontWeight: 600,
+									cursor: playbookNameDraft.trim() ? 'pointer' : 'not-allowed',
+									opacity: playbookNameDraft.trim() ? 1 : 0.5,
+									touchAction: 'manipulation',
+									WebkitTapHighlightColor: 'transparent',
+								}}
+							>
+								{playbookNamePromptState.submitLabel}
+							</button>
+						</div>
+					</div>
+				</div>
+			)}
+
+			{/* Delete-confirmation overlay. Same rationale as the prompt overlay —
+			    avoids `window.confirm`, which gets blocked on iOS Safari after
+			    repeated use and is stubbed to a no-op in some embedded WebViews. */}
+			{confirmDeletePlaybookState && (
+				<div
+					onClick={(e) => {
+						if (e.target === e.currentTarget) handleConfirmDeleteCancel();
+					}}
+					style={{
+						position: 'fixed',
+						top: 0,
+						left: 0,
+						right: 0,
+						bottom: 0,
+						backgroundColor: 'rgba(0, 0, 0, 0.6)',
+						zIndex: 230,
+						display: 'flex',
+						alignItems: 'center',
+						justifyContent: 'center',
+						padding: '16px',
+					}}
+					role="presentation"
+				>
+					<div
+						role="dialog"
+						aria-modal="true"
+						aria-label="Delete playbook"
+						style={{
+							width: '100%',
+							maxWidth: '400px',
+							backgroundColor: colors.bgMain,
+							borderRadius: '12px',
+							padding: '16px',
+							display: 'flex',
+							flexDirection: 'column',
+							gap: '12px',
+						}}
+					>
+						<h3
+							style={{
+								margin: 0,
+								fontSize: '16px',
+								fontWeight: 600,
+								color: colors.textMain,
+							}}
+						>
+							Delete &quot;{confirmDeletePlaybookState.name}&quot;?
+						</h3>
+						<p style={{ margin: 0, fontSize: '14px', color: colors.textDim }}>
+							This can&apos;t be undone.
+						</p>
+						<div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
+							<button
+								onClick={handleConfirmDeleteCancel}
+								style={{
+									padding: '10px 16px',
+									borderRadius: '10px',
+									backgroundColor: 'transparent',
+									border: `1px solid ${colors.border}`,
+									color: colors.textMain,
+									fontSize: '14px',
+									fontWeight: 500,
+									cursor: 'pointer',
+									touchAction: 'manipulation',
+									WebkitTapHighlightColor: 'transparent',
+								}}
+							>
+								Cancel
+							</button>
+							<button
+								onClick={() => void handleConfirmDeleteSubmit()}
+								style={{
+									padding: '10px 16px',
+									borderRadius: '10px',
+									backgroundColor: colors.error,
+									border: 'none',
+									color: 'white',
+									fontSize: '14px',
+									fontWeight: 600,
+									cursor: 'pointer',
+									touchAction: 'manipulation',
+									WebkitTapHighlightColor: 'transparent',
+								}}
+							>
+								Delete
+							</button>
+						</div>
+					</div>
+				</div>
+			)}
 		</div>
 	);
 }

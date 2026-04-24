@@ -603,8 +603,18 @@ export function useAppRemoteEventListeners(deps: UseAppRemoteEventListenersDeps)
 	useEventListener('maestro:deletePlaybook', async (e: Event) => {
 		const { sessionId, playbookId, responseChannel } = (e as CustomEvent).detail;
 		try {
-			await window.maestro.playbooks.delete(sessionId, playbookId);
-			window.maestro.process.sendRemoteDeletePlaybookResponse(responseChannel, true);
+			// `playbooks.delete` returns `{ success: boolean; error?: string }` — if the
+			// IPC reports `success: false` (e.g. playbook not found) we must surface
+			// that back to the web client instead of silently acking true, otherwise
+			// the mobile UI optimistically drops the entry and the list goes stale.
+			const result = await window.maestro.playbooks.delete(sessionId, playbookId);
+			if (!result?.success) {
+				logger.error('[Remote] Failed to delete playbook:', undefined, result?.error);
+			}
+			window.maestro.process.sendRemoteDeletePlaybookResponse(
+				responseChannel,
+				Boolean(result?.success)
+			);
 		} catch (error) {
 			logger.error('[Remote] Failed to delete playbook:', undefined, error);
 			window.maestro.process.sendRemoteDeletePlaybookResponse(responseChannel, false);
