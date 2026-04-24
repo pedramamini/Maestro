@@ -6,6 +6,30 @@ export default {
 			fontFamily: {
 				mono: ['"JetBrains Mono"', '"Fira Code"', '"Courier New"', 'monospace'],
 			},
+			// Semantic color tokens bound to runtime theme CSS custom properties.
+			// Values resolve via `--maestro-*` variables written by
+			// `src/web/utils/cssCustomProperties.ts`, so Tailwind utilities
+			// (e.g. `bg-background`, `text-text-main`) react to live theme swaps.
+			// Every entry here corresponds 1:1 to a token in
+			// `colorToCSSProperty` (cssCustomProperties.ts). When adding a new
+			// theme color there, add its Tailwind token below too.
+			colors: {
+				'bg-main': 'var(--maestro-bg-main)',
+				'bg-sidebar': 'var(--maestro-bg-sidebar)',
+				'bg-activity': 'var(--maestro-bg-activity)',
+				border: 'var(--maestro-border)',
+				'text-main': 'var(--maestro-text-main)',
+				'text-dim': 'var(--maestro-text-dim)',
+				accent: 'var(--maestro-accent)',
+				'accent-dim': 'var(--maestro-accent-dim)',
+				'accent-text': 'var(--maestro-accent-text)',
+				'accent-foreground': 'var(--maestro-accent-foreground)',
+				success: 'var(--maestro-success)',
+				warning: 'var(--maestro-warning)',
+				error: 'var(--maestro-error)',
+				// Alias so `bg-background` reads naturally for the main canvas.
+				background: 'var(--maestro-bg-main)',
+			},
 		},
 	},
 	plugins: [],
