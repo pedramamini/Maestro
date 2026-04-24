@@ -143,7 +143,7 @@ export function useCue(options?: UseCueOptions): UseCueReturn {
 				const stamp = new Date(payload.queuedAt).toLocaleTimeString();
 				notifyToast({
 					type: 'warning',
-					title: `Cue queue overflow: ${payload.sessionName} (${stamp})`,
+					title: `Cue queue overflow: ${payload.sessionName} (${stamp}) [${payload.queuedAt}]`,
 					message: `Oldest queued "${payload.subscriptionName}" event was dropped — raise queue_size or max_concurrent to avoid loss.`,
 				});
 			}
