@@ -561,6 +561,7 @@ function SessionContextMenu({
 					onMoveToGroup(session);
 					onClose();
 				}}
+				className="hover:bg-white/[0.05]"
 				style={{
 					display: 'flex',
 					alignItems: 'center',
@@ -569,18 +570,11 @@ function SessionContextMenu({
 					padding: '10px 14px',
 					fontSize: '13px',
 					color: colors.textMain,
-					backgroundColor: 'transparent',
 					border: 'none',
 					cursor: 'pointer',
 					textAlign: 'left',
 					touchAction: 'manipulation',
 					WebkitTapHighlightColor: 'transparent',
-				}}
-				onMouseEnter={(e) => {
-					(e.currentTarget as HTMLElement).style.backgroundColor = `${colors.textDim}15`;
-				}}
-				onMouseLeave={(e) => {
-					(e.currentTarget as HTMLElement).style.backgroundColor = 'transparent';
 				}}
 			>
 				<svg
@@ -1158,6 +1152,7 @@ export function LeftPanel({
 									return (
 										<div key={session.id}>
 											<div
+												className={isActive ? undefined : 'hover:bg-white/[0.06]'}
 												style={{
 													display: 'flex',
 													alignItems: 'center',
@@ -1165,21 +1160,10 @@ export function LeftPanel({
 													width: '100%',
 													padding: '8px 10px',
 													borderRadius: '6px',
-													backgroundColor: isActive ? `${colors.accent}15` : 'transparent',
+													backgroundColor: isActive ? `${colors.accent}15` : undefined,
 													color: colors.textMain,
 													marginBottom: '1px',
 													transition: 'background-color 0.1s ease',
-												}}
-												onMouseEnter={(e) => {
-													if (!isActive) {
-														(e.currentTarget as HTMLElement).style.backgroundColor =
-															`${colors.textDim}10`;
-													}
-												}}
-												onMouseLeave={(e) => {
-													(e.currentTarget as HTMLElement).style.backgroundColor = isActive
-														? `${colors.accent}15`
-														: 'transparent';
 												}}
 												onContextMenu={(e) => {
 													if (onMoveToGroup) {
@@ -1341,6 +1325,7 @@ export function LeftPanel({
 														<button
 															key={child.id}
 															onClick={() => handleSelect(child.id)}
+															className={isChildActive ? undefined : 'hover:bg-white/[0.06]'}
 															style={{
 																display: 'flex',
 																alignItems: 'center',
@@ -1351,9 +1336,7 @@ export function LeftPanel({
 																borderRadius: '0 6px 6px 0',
 																border: 'none',
 																borderLeft: `3px solid ${colors.accent}`,
-																backgroundColor: isChildActive
-																	? `${colors.accent}15`
-																	: 'transparent',
+																backgroundColor: isChildActive ? `${colors.accent}15` : undefined,
 																color: colors.textMain,
 																cursor: 'pointer',
 																textAlign: 'left',
@@ -1361,16 +1344,6 @@ export function LeftPanel({
 																WebkitTapHighlightColor: 'transparent',
 																marginBottom: '1px',
 																transition: 'background-color 0.1s ease',
-															}}
-															onMouseEnter={(e) => {
-																if (!isChildActive) {
-																	(e.currentTarget as HTMLElement).style.backgroundColor =
-																		`${colors.textDim}10`;
-																}
-															}}
-															onMouseLeave={(e) => {
-																(e.currentTarget as HTMLElement).style.backgroundColor =
-																	isChildActive ? `${colors.accent}15` : 'transparent';
 															}}
 															aria-pressed={isChildActive}
 															title={`Worktree: ${child.worktreeBranch || child.name}`}
@@ -1424,6 +1397,7 @@ export function LeftPanel({
 				{!isOverlay && onResizeStart && (
 					<div
 						onPointerDown={onResizeStart}
+						className="hover:bg-accent"
 						style={{
 							position: 'absolute',
 							top: 0,
@@ -1433,12 +1407,6 @@ export function LeftPanel({
 							cursor: 'col-resize',
 							zIndex: 10,
 							touchAction: 'none',
-						}}
-						onMouseEnter={(e) => {
-							(e.currentTarget as HTMLElement).style.backgroundColor = colors.accent;
-						}}
-						onMouseLeave={(e) => {
-							(e.currentTarget as HTMLElement).style.backgroundColor = 'transparent';
 						}}
 					/>
 				)}
