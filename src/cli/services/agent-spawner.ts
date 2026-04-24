@@ -92,11 +92,12 @@ function resolveAgentOverrides(
 }
 
 /**
- * Merge user-level env vars over an existing env record. Agent defaults are
- * preserved only when the shell didn't already set them — matches today's CLI
- * precedence so users can still shadow built-in agent defaults from the shell.
- * User-configured vars (agent-level customEnvVars + session customEnvVars)
- * unconditionally override, because the user explicitly opted into them.
+ * Merge env vars onto an existing env record in the documented precedence
+ * `defaults < batchMode < user < readOnly`. Defaults/batch-mode only fill
+ * slots the shell hasn't already set, so users can still shadow built-in
+ * agent defaults from the shell. User-configured vars (agent-level
+ * customEnvVars + session customEnvVars) unconditionally override, because
+ * the user explicitly opted into them.
  */
 function applyEnvLayers(
 	env: NodeJS.ProcessEnv,
@@ -105,13 +106,14 @@ function applyEnvLayers(
 	userEnvVars: Record<string, string> | undefined,
 	readOnlyOverrides: Record<string, string> | undefined
 ): void {
-	if (agentDefaults) {
-		for (const [k, v] of Object.entries(agentDefaults)) {
-			if (!env[k]) env[k] = v;
-		}
-	}
-	if (batchDefaults) {
-		for (const [k, v] of Object.entries(batchDefaults)) {
+	// Merge defaults first so batch-mode takes precedence over agent-wide
+	// defaults for shared keys, then fill only slots the shell hasn't already
+	// set. Iterating the two maps sequentially (each with `!env[k]`) would
+	// invert the order: the first loop would fill the shell-unset slot and
+	// the second loop's guard would then skip the batch-mode value.
+	if (agentDefaults || batchDefaults) {
+		const mergedDefaults = { ...(agentDefaults ?? {}), ...(batchDefaults ?? {}) };
+		for (const [k, v] of Object.entries(mergedDefaults)) {
 			if (!env[k]) env[k] = v;
 		}
 	}
