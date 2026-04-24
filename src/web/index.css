@@ -51,6 +51,12 @@
 	--z-modal-backdrop: 300;
 	--z-modal: 400;
 	--z-toast: 500;
+
+	/* Responsive breakpoints — mirrors BREAKPOINTS in src/web/mobile/constants.ts.
+	   phone covers [0, --bp-tablet), tablet covers [--bp-tablet, --bp-desktop),
+	   desktop covers [--bp-desktop, ∞). */
+	--bp-tablet: 600px;
+	--bp-desktop: 960px;
 }
 
 /* Base styles */
