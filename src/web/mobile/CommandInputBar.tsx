@@ -285,6 +285,10 @@ export function CommandInputBar({
 	/**
 	 * Report container height changes to parent so it can reserve matching space
 	 * in the scroll area above (keeps last chat line visible when bar expands).
+	 * Report the *border-box* height — the container's own padding (including
+	 * safe-area inset on notched devices) must be part of the reserved space,
+	 * and `contentRect` excludes it, which would cause the reserved gap to
+	 * shrink after the first observer tick.
 	 */
 	useEffect(() => {
 		const container = containerRef.current;
@@ -292,7 +296,8 @@ export function CommandInputBar({
 		const observer = new ResizeObserver((entries) => {
 			const entry = entries[0];
 			if (!entry) return;
-			onHeightChange(entry.contentRect.height);
+			const borderBoxBlockSize = entry.borderBoxSize?.[0]?.blockSize;
+			onHeightChange(borderBoxBlockSize ?? container.getBoundingClientRect().height);
 		});
 		observer.observe(container);
 		onHeightChange(container.getBoundingClientRect().height);

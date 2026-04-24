@@ -50,17 +50,33 @@ type SpawnOverrides = Pick<
 
 /**
  * Resolve agent-level + session-level overrides and produce final args plus
- * the effective customEnvVars. Mirrors what the desktop process handler does
- * in `applyAgentConfigOverrides()` so CLI-spawned agents honor the same
- * custom model / effort / args / env vars as the desktop app.
+ * the effective env vars. Mirrors what the desktop process handler does in
+ * `applyAgentConfigOverrides()` so CLI-spawned agents honor the same custom
+ * model / effort / args / env vars as the desktop app.
+ *
+ * Returns both:
+ * - `effectiveCustomEnvVars`: the fully merged env (agent defaults + user
+ *   overrides), used for the SSH path where we pass the resolved env
+ *   explicitly to the remote.
+ * - `effectiveUserEnvVars`: just the user-level overrides (session or
+ *   agent-config customEnvVars, never agent defaults). Used by the local
+ *   spawn's layered env merge so agent defaults don't get replayed as
+ *   user overrides and clobber shell-provided values.
  */
 function resolveAgentOverrides(
 	toolType: ToolType,
 	def: ReturnType<typeof getAgentDefinition>,
 	baseArgs: string[],
 	overrides: SpawnOverrides
-): { args: string[]; effectiveCustomEnvVars?: Record<string, string> } {
+): {
+	args: string[];
+	effectiveCustomEnvVars?: Record<string, string>;
+	effectiveUserEnvVars?: Record<string, string>;
+} {
 	const agentConfigValues = readAgentConfig(toolType);
+	const effectiveUserEnvVars =
+		overrides.customEnvVars ??
+		(agentConfigValues.customEnvVars as Record<string, string> | undefined);
 	const result = applyAgentConfigOverrides(def ?? null, baseArgs, {
 		agentConfigValues,
 		sessionCustomModel: overrides.customModel,
@@ -68,7 +84,11 @@ function resolveAgentOverrides(
 		sessionCustomArgs: overrides.customArgs,
 		sessionCustomEnvVars: overrides.customEnvVars,
 	});
-	return { args: result.args, effectiveCustomEnvVars: result.effectiveCustomEnvVars };
+	return {
+		args: result.args,
+		effectiveCustomEnvVars: result.effectiveCustomEnvVars,
+		effectiveUserEnvVars,
+	};
 }
 
 /**
@@ -281,20 +301,22 @@ async function spawnClaudeAgent(
 
 	// Layer agent-level + session-level overrides (model, effort, customArgs)
 	// and compute the effective user-facing env vars.
-	const { args: baseArgs, effectiveCustomEnvVars } = resolveAgentOverrides(
-		'claude-code',
-		def,
-		preOverrideArgs,
-		overrides
-	);
+	const {
+		args: baseArgs,
+		effectiveCustomEnvVars,
+		effectiveUserEnvVars,
+	} = resolveAgentOverrides('claude-code', def, preOverrideArgs, overrides);
 
 	// Build local env: defaults (shell wins) + batch-mode defaults (shell wins)
 	// + user env vars (override shell) + read-only overrides (always).
+	// Pass only the user-level env (not the merged effectiveCustomEnvVars which
+	// includes agent defaults) so shell-provided values keep precedence over
+	// agent defaults.
 	applyEnvLayers(
 		env,
 		def?.defaultEnvVars,
 		def?.batchModeEnvVars,
-		effectiveCustomEnvVars,
+		effectiveUserEnvVars,
 		readOnlyMode ? def?.readOnlyEnvOverrides : undefined
 	);
 
@@ -606,18 +628,19 @@ async function spawnJsonLineAgent(
 
 	// Layer agent-level + session-level overrides (model, effort, customArgs)
 	// and compute the effective user-facing env vars.
-	const { args: baseArgs, effectiveCustomEnvVars } = resolveAgentOverrides(
-		toolType,
-		def,
-		preOverrideArgs,
-		overrides
-	);
+	const {
+		args: baseArgs,
+		effectiveCustomEnvVars,
+		effectiveUserEnvVars,
+	} = resolveAgentOverrides(toolType, def, preOverrideArgs, overrides);
 
+	// Pass only the user-level env (not the merged effectiveCustomEnvVars) so
+	// shell-provided values keep precedence over agent defaults.
 	applyEnvLayers(
 		env,
 		def?.defaultEnvVars,
 		def?.batchModeEnvVars,
-		effectiveCustomEnvVars,
+		effectiveUserEnvVars,
 		readOnlyMode ? def?.readOnlyEnvOverrides : undefined
 	);
 

@@ -1754,16 +1754,18 @@ Some text with [x] in it that's not a checkbox
 			const prev = process.env.MAESTRO_TEST_ENV;
 			process.env.MAESTRO_TEST_ENV = 'from-shell';
 
-			const p = spawnAgent('claude-code', '/p', 'hi', undefined, {
-				customEnvVars: { MAESTRO_TEST_ENV: 'from-session' },
-			});
-			await driveSpawnToCompletion(p, 0, CLAUDE_OK());
+			try {
+				const p = spawnAgent('claude-code', '/p', 'hi', undefined, {
+					customEnvVars: { MAESTRO_TEST_ENV: 'from-session' },
+				});
+				await driveSpawnToCompletion(p, 0, CLAUDE_OK());
 
-			const { options } = spawnCall();
-			expect(options.env.MAESTRO_TEST_ENV).toBe('from-session');
-
-			if (prev === undefined) delete process.env.MAESTRO_TEST_ENV;
-			else process.env.MAESTRO_TEST_ENV = prev;
+				const { options } = spawnCall();
+				expect(options.env.MAESTRO_TEST_ENV).toBe('from-session');
+			} finally {
+				if (prev === undefined) delete process.env.MAESTRO_TEST_ENV;
+				else process.env.MAESTRO_TEST_ENV = prev;
+			}
 		});
 
 		it('session customEnvVars wins over agent-level customEnvVars', async () => {

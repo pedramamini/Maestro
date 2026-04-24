@@ -3312,10 +3312,11 @@ export default function MobileApp() {
 						alignItems: currentInputMode === 'terminal' ? 'stretch' : 'center',
 						justifyContent: 'flex-start',
 						padding: currentInputMode === 'terminal' ? '0' : '12px',
-						paddingBottom:
-							currentInputMode === 'terminal'
-								? '0'
-								: `calc(${inputBarHeight}px + env(safe-area-inset-bottom))`,
+						// CommandInputBar already includes `max(12px, env(safe-area-inset-bottom))`
+						// in its own padding and reports its border-box height, so reserve just
+						// that height — adding the inset again would leave a visible gap on
+						// notched devices.
+						paddingBottom: currentInputMode === 'terminal' ? '0' : `${inputBarHeight}px`,
 						textAlign: currentInputMode === 'terminal' ? 'left' : 'center',
 						overflow: 'hidden',
 						minHeight: 0,
