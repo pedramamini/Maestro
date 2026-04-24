@@ -188,16 +188,21 @@ function SessionPill({ session, isActive, onSelect, onLongPress }: SessionPillPr
 					onLongPress(session, rect);
 				}
 			}}
+			// Tier-aware sizing via Tailwind responsive variants (Task 2.5).
+			// phone (<600): 6×10 padding, 12px text, 20px radius — trims the pill
+			// for narrow viewports without sacrificing touch legality.
+			// tablet (≥600): 8×12 padding, 13px text, 20px radius — reference.
+			// desktop (≥960): 4×10 padding, 12px text, 14px radius — pointer-first
+			// density for wide bars. Remaining non-sizing styles stay inline until
+			// Task 2.6 migrates the layout to Tailwind.
+			className="px-[10px] py-[6px] text-[12px] rounded-[20px] min-[600px]:px-[12px] min-[600px]:py-[8px] min-[600px]:text-[13px] min-[960px]:px-[10px] min-[960px]:py-[4px] min-[960px]:text-[12px] min-[960px]:rounded-[14px]"
 			style={{
 				display: 'flex',
 				alignItems: 'center',
 				gap: '6px',
-				padding: '8px 12px',
-				borderRadius: '20px',
 				border: isActive ? `2px solid ${colors.accent}` : `1px solid ${colors.border}`,
 				backgroundColor: isActive ? `${colors.accent}15` : colors.bgSidebar,
 				color: colors.textMain,
-				fontSize: '13px',
 				fontWeight: isActive ? 600 : 400,
 				whiteSpace: 'nowrap',
 				cursor: 'pointer',
@@ -217,10 +222,11 @@ function SessionPill({ session, isActive, onSelect, onLongPress }: SessionPillPr
 			{/* Status dot */}
 			<StatusDot status={getStatus()} size="sm" />
 
-			{/* Session name */}
+			{/* Session name — max-width narrows at phone so two-pill density is
+			    reachable on 320px without scrolling. */}
 			<span
+				className="max-w-[100px] min-[600px]:max-w-[120px]"
 				style={{
-					maxWidth: '120px',
 					overflow: 'hidden',
 					textOverflow: 'ellipsis',
 				}}
@@ -692,16 +698,19 @@ function GroupHeader({
 					onToggleCollapse(groupId);
 				}
 			}}
+			// Tier-aware sizing (Task 2.5). phone/tablet keep 6×12 padding and
+			// 12px text — the header is already compact enough for narrow widths.
+			// desktop (≥960): 4×10 padding, 11px text so the group header matches
+			// the tightened pills alongside it.
+			className="px-[12px] py-[6px] text-[12px] min-[960px]:px-[10px] min-[960px]:py-[4px] min-[960px]:text-[11px]"
 			style={{
 				display: 'flex',
 				alignItems: 'center',
 				gap: '6px',
-				padding: '6px 12px',
 				backgroundColor: `${colors.accent}10`,
 				border: `1px solid ${colors.border}`,
 				borderRadius: '16px',
 				color: colors.textMain,
-				fontSize: '12px',
 				fontWeight: 600,
 				cursor: 'pointer',
 				whiteSpace: 'nowrap',
@@ -1234,16 +1243,18 @@ export function SessionPillBar({
 									triggerHaptic(HAPTIC_PATTERNS.tap);
 									onOpenCreateAgent();
 								}}
+								// Tier-aware sizing (Task 2.5). phone/tablet keep the
+								// touch-friendly 8×14/20 radius baseline. desktop
+								// (≥960): 4×10 padding, 14px text, 14px radius so the
+								// create-agent affordance matches the tightened pills.
+								className="px-[14px] py-[8px] text-[16px] rounded-[20px] min-[960px]:px-[10px] min-[960px]:py-[4px] min-[960px]:text-[14px] min-[960px]:rounded-[14px]"
 								style={{
 									display: 'flex',
 									alignItems: 'center',
 									justifyContent: 'center',
-									padding: '8px 14px',
-									borderRadius: '20px',
 									border: `1px dashed ${colors.border}`,
 									backgroundColor: 'transparent',
 									color: colors.accent,
-									fontSize: '16px',
 									fontWeight: 500,
 									whiteSpace: 'nowrap',
 									cursor: 'pointer',
