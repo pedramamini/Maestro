@@ -415,7 +415,12 @@ function validateSettings(rawSettings: unknown): string[] {
 export function validateCueConfigDocument(config: unknown): { valid: boolean; errors: string[] } {
 	const errors: string[] = [];
 
-	if (!config || typeof config !== 'object') {
+	// null/undefined = comments-only or empty file → treat as valid empty config
+	if (config === null || config === undefined) {
+		return { valid: true, errors: [] };
+	}
+
+	if (typeof config !== 'object') {
 		return { valid: false, errors: ['Config must be a non-null object'] };
 	}
 

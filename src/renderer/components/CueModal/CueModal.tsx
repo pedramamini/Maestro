@@ -19,6 +19,7 @@ import { useCue } from '../../hooks/useCue';
 import type { CueSessionStatus } from '../../hooks/useCue';
 import { CueHelpContent } from '../CueHelpModal';
 import { CuePipelineEditor } from '../CuePipelineEditor';
+import { getPipelineColorForAgent } from '../CuePipelineEditor/pipelineColors';
 import { useSessionStore } from '../../stores/sessionStore';
 import { getModalActions, useModalStore, selectModalData } from '../../stores/modalStore';
 import { notifyToast } from '../../stores/notificationStore';
@@ -126,9 +127,18 @@ export function CueModal({ theme, onClose, cueShortcutKeys }: CueModalProps) {
 		getModalActions().openCueYamlEditor(session.sessionId, session.projectRoot);
 	}, []);
 
-	const handleViewInPipeline = useCallback((_session: CueSessionStatus) => {
-		setActiveTab('pipeline');
-	}, []);
+	const [pendingPipelineId, setPendingPipelineId] = useState<string | null>(null);
+
+	const handleViewInPipeline = useCallback(
+		(session: CueSessionStatus) => {
+			const colors = getPipelineColorForAgent(session.sessionId, dashboardPipelines);
+			const pipeline =
+				colors.length > 0 ? dashboardPipelines.find((p) => p.color === colors[0]) : undefined;
+			setPendingPipelineId(pipeline?.id ?? null);
+			setActiveTab('pipeline');
+		},
+		[dashboardPipelines]
+	);
 
 	const handleRemoveCue = useCallback(
 		(session: CueSessionStatus) => {
@@ -270,6 +280,7 @@ export function CueModal({ theme, onClose, cueShortcutKeys }: CueModalProps) {
 								activeRuns={activeRuns}
 								onTriggerPipeline={triggerSubscription}
 								onSaveSuccess={refreshGraphData}
+								initialPipelineId={pendingPipelineId ?? undefined}
 							/>
 						)}
 					</div>

@@ -45,6 +45,8 @@ export interface CuePipelineEditorProps {
 	/** Callback fired after a successful save. Used by CueModal to refresh
 	 *  dashboard graph data so saved state is visible immediately (Fix #3). */
 	onSaveSuccess?: () => void;
+	/** Pre-select a specific pipeline by ID on mount (e.g. from "View in Pipeline"). */
+	initialPipelineId?: string;
 }
 
 function CuePipelineEditorInner({
@@ -56,6 +58,7 @@ function CuePipelineEditorInner({
 	activeRuns: activeRunsProp,
 	onTriggerPipeline,
 	onSaveSuccess,
+	initialPipelineId,
 }: CuePipelineEditorProps) {
 	const reactFlowInstance = useReactFlow();
 
@@ -113,6 +116,14 @@ function CuePipelineEditorInner({
 	const selectionHook = usePipelineSelection({
 		pipelineState: stateHook.pipelineState,
 	});
+
+	// When opened via "View in Pipeline", pre-select the resolved pipeline once
+	// the pipeline list has loaded.
+	useEffect(() => {
+		if (initialPipelineId && stateHook.pipelineState.pipelines.length > 0) {
+			stateHook.selectPipeline(initialPipelineId);
+		}
+	}, [initialPipelineId, stateHook.pipelineState.pipelines.length]);  
 
 	// Update ref in render body so next render (and any post-render callback
 	// invocation) reads the latest selection values.
