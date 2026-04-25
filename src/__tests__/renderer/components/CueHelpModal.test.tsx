@@ -88,15 +88,6 @@ describe('CueHelpContent', () => {
 			expect(screen.getByText('{{DATE}}')).toBeInTheDocument();
 		});
 
-		it('should render Multi-Agent Orchestration section', () => {
-			expect(screen.getByText('Multi-Agent Orchestration')).toBeInTheDocument();
-		});
-
-		it('should render fan-out and fan-in patterns', () => {
-			expect(screen.getByText(/Fan-Out:/)).toBeInTheDocument();
-			expect(screen.getByText(/Fan-In:/)).toBeInTheDocument();
-		});
-
 		it('should render Timeouts & Failure Handling section', () => {
 			expect(screen.getByText('Timeouts & Failure Handling')).toBeInTheDocument();
 			expect(screen.getByText(/Default timeout is 30 minutes/)).toBeInTheDocument();

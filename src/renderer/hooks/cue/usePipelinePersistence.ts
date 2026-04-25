@@ -357,8 +357,21 @@ export function usePipelinePersistence({
 			// effect compares against savedStateRef.current, so flipping dirty
 			// false before the ref is fresh would immediately flip it back true.
 			savedStateRef.current = JSON.stringify(validPipelines);
-			lastWrittenRootsRef.current = new Set(currentRoots);
+			// Preserve error-pipeline roots alongside current roots so the NEXT
+			// save's previousRoots still covers them. Without this, deleting an
+			// error-node pipeline after a partial save orphans its YAML: the root
+			// drops out of previousRoots and the cleanup loop never deletes it.
+			lastWrittenRootsRef.current = new Set([...currentRoots, ...errorPipelineRoots]);
 			setIsDirty(false);
+
+			// Nothing was written and nothing was cleared — happens when all
+			// pipelines have error nodes and there are no previous roots to clean
+			// up. Avoid a misleading "Saved 0 pipelines to 0 projects" toast.
+			if (totalPipelinesWritten === 0 && rootsCleared === 0) {
+				setSaveStatus('idle');
+				return;
+			}
+
 			setSaveStatus('success');
 			persistLayout();
 			// Fix #3: notify parent (CueModal) so graph data can refresh.

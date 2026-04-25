@@ -4,7 +4,7 @@
  * Configures: timeout, failure behavior, concurrency, queue size.
  */
 
-import React, { useRef, useEffect, useState } from 'react';
+import React, { useRef, useEffect, useId, useState } from 'react';
 import { HelpCircle } from 'lucide-react';
 import type { Theme } from '../../../types';
 import type { CueSettings } from '../../../../shared/cue';
@@ -19,20 +19,31 @@ interface InfoTooltipProps {
 
 function InfoTooltip({ text, theme, placement = 'above' }: InfoTooltipProps) {
 	const [visible, setVisible] = useState(false);
+	const tooltipId = useId();
 
 	const verticalStyle: React.CSSProperties =
 		placement === 'below' ? { top: 'calc(100% + 6px)' } : { bottom: 'calc(100% + 6px)' };
 
 	return (
-		<span style={{ position: 'relative', display: 'inline-flex', alignItems: 'center' }}>
+		<span
+			style={{ position: 'relative', display: 'inline-flex', alignItems: 'center' }}
+			tabIndex={0}
+			aria-describedby={visible ? tooltipId : undefined}
+			aria-label={text}
+			onMouseEnter={() => setVisible(true)}
+			onMouseLeave={() => setVisible(false)}
+			onFocus={() => setVisible(true)}
+			onBlur={() => setVisible(false)}
+		>
 			<HelpCircle
 				size={11}
 				style={{ color: theme.colors.textDim, cursor: 'default', opacity: 0.55, flexShrink: 0 }}
-				onMouseEnter={() => setVisible(true)}
-				onMouseLeave={() => setVisible(false)}
+				aria-hidden="true"
 			/>
 			{visible && (
 				<div
+					id={tooltipId}
+					role="tooltip"
 					style={{
 						position: 'absolute',
 						...verticalStyle,

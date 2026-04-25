@@ -265,12 +265,6 @@ describe('usePipelinePersistence', () => {
 			// Valid pipeline A (has proper agent) + Broken pipeline B (error node)
 			// User deletes A → A is no longer in currentPipelines
 			// Save should: skip B (error), write nothing (A deleted), and NOT block
-			const pipelineA = pipeline(
-				'p-a',
-				'Pipeline A',
-				[triggerNode('t1'), agentNode('a1', 'Alpha')],
-				[{ id: 'e1', source: 't1', target: 'a1' }]
-			);
 			const pipelineB = pipeline('p-b', 'Broken B', [triggerNode('t2'), makeErrorNode('e-b')]);
 
 			// Previous save had A at /proj-a

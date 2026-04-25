@@ -3,7 +3,6 @@ import {
 	FileText,
 	Radio,
 	Code,
-	GitBranch,
 	Clock,
 	Sparkles,
 	Layers,
@@ -630,69 +629,6 @@ export function CueHelpContent({ theme, cueShortcutKeys }: CueHelpContentProps) 
 							</code>
 							, etc.) are also available in Cue prompts.
 						</span>
-					</div>
-				</div>
-			</section>
-
-			{/* Section 5: Multi-Agent Orchestration */}
-			<section>
-				<div className="flex items-center gap-2 mb-3">
-					<GitBranch className="w-5 h-5" style={{ color: theme.colors.accent }} />
-					<h3 className="font-bold">Multi-Agent Orchestration</h3>
-				</div>
-				<div className="text-sm space-y-3 pl-7" style={{ color: theme.colors.textDim }}>
-					<div>
-						<p>
-							<strong style={{ color: theme.colors.textMain }}>Fan-Out:</strong> Trigger multiple
-							sessions from a single event. Add{' '}
-							<code
-								className="px-1 rounded text-xs"
-								style={{ backgroundColor: theme.colors.bgActivity }}
-							>
-								fan_out: ["session-1", "session-2"]
-							</code>{' '}
-							to your subscription.
-						</p>
-					</div>
-					<div>
-						<p>
-							<strong style={{ color: theme.colors.textMain }}>Fan-In:</strong> Wait for multiple
-							sessions to complete before triggering. Set{' '}
-							<code
-								className="px-1 rounded text-xs"
-								style={{ backgroundColor: theme.colors.bgActivity }}
-							>
-								source_session
-							</code>{' '}
-							to an array:{' '}
-							<code
-								className="px-1 rounded text-xs"
-								style={{ backgroundColor: theme.colors.bgActivity }}
-							>
-								["session-1", "session-2"]
-							</code>
-							.
-						</p>
-					</div>
-					<div
-						className="font-mono text-xs p-3 rounded border"
-						style={{
-							backgroundColor: theme.colors.bgActivity,
-							borderColor: theme.colors.border,
-						}}
-					>
-						{'  '}Event ──┬── Agent A (fan-out)
-						<br />
-						{'          '}├── Agent B
-						<br />
-						{'          '}└── Agent C
-						<br />
-						<br />
-						{'  '}Agent A ──┐
-						<br />
-						{'  '}Agent B ──┼── Event (fan-in)
-						<br />
-						{'  '}Agent C ──┘
 					</div>
 				</div>
 			</section>

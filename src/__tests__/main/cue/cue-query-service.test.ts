@@ -101,6 +101,34 @@ describe('getStatus', () => {
 		expect(result[0].subscriptionCount).toBe(1);
 	});
 
+	it('dormant subscriptionCount excludes disabled subscriptions', () => {
+		const session = makeSession('s1');
+		const config = makeConfig([
+			{
+				name: 'active-sub',
+				event: 'time.heartbeat',
+				enabled: true,
+				prompt: 'p',
+				interval_minutes: 30,
+			},
+			{
+				name: 'disabled-sub',
+				event: 'time.heartbeat',
+				enabled: false,
+				prompt: 'p',
+				interval_minutes: 60,
+			},
+		]);
+		const deps = makeDeps({
+			getAllSessions: () => [session],
+			getSessionStates: () => new Map(),
+			loadConfigForProjectRoot: () => config,
+		});
+		const result = createCueQueryService(deps).getStatus();
+
+		expect(result[0].subscriptionCount).toBe(1);
+	});
+
 	it('does not double-report a session that is both in registry and allSessions', () => {
 		const session = makeSession('s1');
 		const state = makeState();

@@ -175,6 +175,43 @@ describe('SessionsTable', () => {
 		expect(onTrigger).toHaveBeenCalledWith('c1');
 	});
 
+	it('Run Now fires both subs when same pipeline_name but different trigger types', () => {
+		const onTrigger = vi.fn();
+		const session = makeSession('s1');
+		// Same pipeline_name, but different events → different trigger groups → both must fire
+		const gs = makeGraphSession('s1', [
+			{
+				name: 'heartbeat-sub',
+				event: 'time.heartbeat',
+				enabled: true,
+				prompt: 'p',
+				interval_minutes: 60,
+				pipeline_name: 'Deploy',
+			},
+			{
+				name: 'file-sub',
+				event: 'file.changed',
+				enabled: true,
+				prompt: 'p',
+				watch: 'src/**',
+				pipeline_name: 'Deploy',
+			},
+		]);
+		render(
+			<SessionsTable
+				{...makeProps({
+					sessions: [session],
+					graphSessions: [gs],
+					onTriggerSubscription: onTrigger,
+				})}
+			/>
+		);
+		fireEvent.click(screen.getByText('Run Now'));
+		expect(onTrigger).toHaveBeenCalledTimes(2);
+		expect(onTrigger).toHaveBeenCalledWith('heartbeat-sub');
+		expect(onTrigger).toHaveBeenCalledWith('file-sub');
+	});
+
 	it('fan-out tooltip shows agent count when fan_out.length > 1', () => {
 		const session = makeSession('s1');
 		const sub: CueSubscription = {
