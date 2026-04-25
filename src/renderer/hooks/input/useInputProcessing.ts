@@ -310,7 +310,15 @@ export function useInputProcessing(deps: UseInputProcessingDeps): UseInputProces
 							// Check both session busy state AND AutoRun state
 							// AutoRun runs in isolation and doesn't set session to busy, so we check it explicitly
 							const isAutoRunActive = getBatchState(activeSession.id).isRunning;
-							const sessionIsIdle = activeSession.state !== 'busy' && !isAutoRunActive;
+							// Forced parallel: explicit user override (Cmd+Shift+Enter / Force Send button).
+							// Mirrors the regular message path — only THIS tab's state matters; cross-tab
+							// busyness and AutoRun are intentionally bypassed.
+							const forceParallel =
+								options?.forceParallel === true &&
+								useSettingsStore.getState().forcedParallelExecution;
+							const sessionIsIdle = forceParallel
+								? activeTab?.state !== 'busy'
+								: activeSession.state !== 'busy' && !isAutoRunActive;
 
 							const queuedItem: QueuedItem = {
 								id: generateId(),
@@ -326,6 +334,7 @@ export function useInputProcessing(deps: UseInputProcessingDeps): UseInputProces
 										? activeTab.agentSessionId.split('-')[0].toUpperCase()
 										: 'New'),
 								readOnlyMode: isReadOnlyMode,
+								...(forceParallel && { forceParallel: true }),
 							};
 
 							// If session is idle, we need to set up state and process immediately

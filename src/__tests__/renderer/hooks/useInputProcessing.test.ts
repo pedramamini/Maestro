@@ -411,6 +411,108 @@ describe('useInputProcessing', () => {
 			expect(updatedSessions[0].executionQueue[0].type).toBe('command');
 			expect(updatedSessions[0].executionQueue[0].command).toBe('/test');
 		});
+
+		describe('forced parallel for slash commands', () => {
+			afterEach(() => {
+				useSettingsStore.setState({ forcedParallelExecution: false } as any);
+			});
+
+			it('processes slash command immediately when this tab is idle but another tab is busy', async () => {
+				vi.useFakeTimers();
+				useSettingsStore.setState({ forcedParallelExecution: true } as any);
+
+				// Session busy because tab-2 is running, but the active tab-1 is idle.
+				const session = createMockSession({
+					state: 'busy',
+					aiTabs: [
+						createMockTab({ id: 'tab-1', state: 'idle' }),
+						createMockTab({ id: 'tab-2', state: 'busy' }),
+					],
+					activeTabId: 'tab-1',
+				});
+				const deps = createDeps({
+					activeSession: session,
+					sessionsRef: { current: [session] },
+					inputValue: '/test',
+					customAICommands: customCommands,
+				});
+				const { result } = renderHook(() => useInputProcessing(deps));
+
+				await act(async () => {
+					await result.current.processInput(undefined, { forceParallel: true });
+				});
+
+				await act(async () => {
+					vi.advanceTimersByTime(100);
+				});
+
+				// Should dispatch via processQueuedItem, NOT just enqueue
+				expect(mockProcessQueuedItemRef.current).toHaveBeenCalled();
+				vi.useRealTimers();
+			});
+
+			it('tags queued slash command with forceParallel when this tab is busy', async () => {
+				useSettingsStore.setState({ forcedParallelExecution: true } as any);
+
+				const busyTab = createMockTab({ state: 'busy' });
+				const session = createMockSession({
+					state: 'busy',
+					aiTabs: [busyTab],
+					activeTabId: busyTab.id,
+				});
+				const deps = createDeps({
+					activeSession: session,
+					sessionsRef: { current: [session] },
+					inputValue: '/test',
+					customAICommands: customCommands,
+				});
+				const { result } = renderHook(() => useInputProcessing(deps));
+
+				await act(async () => {
+					await result.current.processInput(undefined, { forceParallel: true });
+				});
+
+				expect(mockSetSessions).toHaveBeenCalled();
+				const setSessionsCall = mockSetSessions.mock.calls[0][0];
+				const updatedSessions = setSessionsCall([session]);
+				expect(updatedSessions[0].executionQueue.length).toBe(1);
+				expect(updatedSessions[0].executionQueue[0].command).toBe('/test');
+				expect(updatedSessions[0].executionQueue[0].forceParallel).toBe(true);
+			});
+
+			it('queues slash command normally when forcedParallelExecution setting is disabled', async () => {
+				useSettingsStore.setState({ forcedParallelExecution: false } as any);
+
+				// Session busy via another tab; active tab idle. Without the setting on,
+				// this should fall through the original sessionIsIdle check (false) and queue.
+				const session = createMockSession({
+					state: 'busy',
+					aiTabs: [
+						createMockTab({ id: 'tab-1', state: 'idle' }),
+						createMockTab({ id: 'tab-2', state: 'busy' }),
+					],
+					activeTabId: 'tab-1',
+				});
+				const deps = createDeps({
+					activeSession: session,
+					sessionsRef: { current: [session] },
+					inputValue: '/test',
+					customAICommands: customCommands,
+				});
+				const { result } = renderHook(() => useInputProcessing(deps));
+
+				await act(async () => {
+					await result.current.processInput(undefined, { forceParallel: true });
+				});
+
+				// Should enqueue, not dispatch — setting gate prevents the override.
+				expect(mockSetSessions).toHaveBeenCalled();
+				const setSessionsCall = mockSetSessions.mock.calls[0][0];
+				const updatedSessions = setSessionsCall([session]);
+				expect(updatedSessions[0].executionQueue.length).toBe(1);
+				expect(updatedSessions[0].executionQueue[0].forceParallel).toBeUndefined();
+			});
+		});
 	});
 
 	describe('speckit commands (via customAICommands)', () => {

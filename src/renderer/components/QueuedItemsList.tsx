@@ -2,6 +2,8 @@ import React, { useState, useCallback, useRef, memo } from 'react';
 import { X, ChevronDown, ChevronUp, GripVertical, Copy, Check, Hammer } from 'lucide-react';
 import type { Theme, QueuedItem } from '../types';
 import { safeClipboardWrite } from '../utils/clipboard';
+import { Modal, ModalFooter } from './ui/Modal';
+import { MODAL_PRIORITIES } from '../constants/modalPriorities';
 
 // ============================================================================
 // QueuedItemsList - Displays queued execution items with expand/collapse
@@ -70,6 +72,10 @@ export const QueuedItemsList = memo(
 		const [dropIndex, setDropIndex] = useState<number | null>(null);
 		const dragItemRef = useRef<number | null>(null);
 
+		// Refs for confirm-button focus management in confirmation modals
+		const removeConfirmButtonRef = useRef<HTMLButtonElement>(null);
+		const forceSendConfirmButtonRef = useRef<HTMLButtonElement>(null);
+
 		// Can only drag if we have reorder handler and more than 1 item
 		const canDrag = !!onReorderItems && filteredQueue.length > 1;
 
@@ -104,23 +110,6 @@ export const QueuedItemsList = memo(
 			});
 		}, []);
 
-		// Handle keyboard events on removal confirmation modal
-		const handleRemoveModalKeyDown = useCallback(
-			(e: React.KeyboardEvent) => {
-				if (e.key === 'Enter') {
-					e.preventDefault();
-					if (onRemoveQueuedItem && queueRemoveConfirmId) {
-						onRemoveQueuedItem(queueRemoveConfirmId);
-					}
-					setQueueRemoveConfirmId(null);
-				} else if (e.key === 'Escape') {
-					e.preventDefault();
-					setQueueRemoveConfirmId(null);
-				}
-			},
-			[onRemoveQueuedItem, queueRemoveConfirmId]
-		);
-
 		// Handle confirm removal
 		const handleConfirmRemove = useCallback(() => {
 			if (onRemoveQueuedItem && queueRemoveConfirmId) {
@@ -128,23 +117,6 @@ export const QueuedItemsList = memo(
 			}
 			setQueueRemoveConfirmId(null);
 		}, [onRemoveQueuedItem, queueRemoveConfirmId]);
-
-		// Handle keyboard events on Force Send confirmation modal
-		const handleForceSendModalKeyDown = useCallback(
-			(e: React.KeyboardEvent) => {
-				if (e.key === 'Enter') {
-					e.preventDefault();
-					if (onForceSendQueuedItem && forceSendConfirmId) {
-						onForceSendQueuedItem(forceSendConfirmId);
-					}
-					setForceSendConfirmId(null);
-				} else if (e.key === 'Escape') {
-					e.preventDefault();
-					setForceSendConfirmId(null);
-				}
-			},
-			[onForceSendQueuedItem, forceSendConfirmId]
-		);
 
 		const handleConfirmForceSend = useCallback(() => {
 			if (onForceSendQueuedItem && forceSendConfirmId) {
@@ -372,120 +344,80 @@ export const QueuedItemsList = memo(
 
 				{/* Queue removal confirmation modal */}
 				{queueRemoveConfirmId && (
-					<div
-						className="fixed inset-0 flex items-center justify-center z-50"
-						style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}
-						onClick={() => setQueueRemoveConfirmId(null)}
-						onKeyDown={handleRemoveModalKeyDown}
+					<Modal
+						theme={theme}
+						title="Remove Queued Message?"
+						priority={MODAL_PRIORITIES.CONFIRM}
+						onClose={() => setQueueRemoveConfirmId(null)}
+						width={448}
+						initialFocusRef={removeConfirmButtonRef}
+						footer={
+							<ModalFooter
+								theme={theme}
+								onCancel={() => setQueueRemoveConfirmId(null)}
+								onConfirm={handleConfirmRemove}
+								confirmLabel="Remove"
+								destructive
+								confirmButtonRef={removeConfirmButtonRef}
+							/>
+						}
 					>
-						<div
-							className="p-4 rounded-lg shadow-xl max-w-md mx-4"
-							style={{ backgroundColor: theme.colors.bgMain }}
-							onClick={(e) => e.stopPropagation()}
-							tabIndex={-1}
-							ref={(el) => el?.focus()}
-						>
-							<h3 className="text-lg font-semibold mb-2" style={{ color: theme.colors.textMain }}>
-								Remove Queued Message?
-							</h3>
-							<p className="text-sm mb-4" style={{ color: theme.colors.textDim }}>
-								This message will be removed from the queue and will not be sent.
-							</p>
-							<div className="flex gap-2 justify-end">
-								<button
-									onClick={() => setQueueRemoveConfirmId(null)}
-									className="px-3 py-1.5 rounded text-sm"
-									style={{ backgroundColor: theme.colors.bgActivity, color: theme.colors.textMain }}
-								>
-									Cancel
-								</button>
-								<button
-									onClick={handleConfirmRemove}
-									className="px-3 py-1.5 rounded text-sm"
-									style={{ backgroundColor: theme.colors.error, color: 'white' }}
-									autoFocus
-								>
-									Remove
-								</button>
-							</div>
-						</div>
-					</div>
+						<p className="text-sm" style={{ color: theme.colors.textDim }}>
+							This message will be removed from the queue and will not be sent.
+						</p>
+					</Modal>
 				)}
 
 				{/* Force Send confirmation modal */}
 				{forceSendConfirmId && forceSendConfirmItem && (
-					<div
-						className="fixed inset-0 flex items-center justify-center z-50"
-						style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}
-						onClick={() => setForceSendConfirmId(null)}
-						onKeyDown={handleForceSendModalKeyDown}
+					<Modal
+						theme={theme}
+						title="Force Send Message?"
+						headerIcon={<Hammer className="w-5 h-5" style={{ color: theme.colors.warning }} />}
+						priority={MODAL_PRIORITIES.CONFIRM}
+						onClose={() => setForceSendConfirmId(null)}
+						width={448}
+						initialFocusRef={forceSendConfirmButtonRef}
+						footer={
+							<ModalFooter
+								theme={theme}
+								onCancel={() => setForceSendConfirmId(null)}
+								onConfirm={handleConfirmForceSend}
+								confirmLabel="Force Send"
+								confirmButtonRef={forceSendConfirmButtonRef}
+							/>
+						}
 					>
-						<div
-							className="p-5 rounded-lg shadow-xl max-w-md mx-4 w-full"
-							style={{ backgroundColor: theme.colors.bgMain }}
-							onClick={(e) => e.stopPropagation()}
-							tabIndex={-1}
-							ref={(el) => el?.focus()}
-						>
-							<div className="flex items-center gap-2 mb-2">
-								<Hammer className="w-5 h-5" style={{ color: theme.colors.warning }} />
-								<h3 className="text-lg font-semibold" style={{ color: theme.colors.textMain }}>
-									Force Send Message?
-								</h3>
-							</div>
-							<p className="text-sm mb-3" style={{ color: theme.colors.textDim }}>
-								This will send the queued message immediately, running in parallel with the other
-								tab
-								{forceSendConfirmContext && forceSendConfirmContext.otherBusyTabs.length === 1
-									? ''
-									: 's'}{' '}
-								currently working in this agent.
-							</p>
-							{forceSendConfirmContext && forceSendConfirmContext.otherBusyTabs.length > 0 && (
+						<p className="text-sm mb-3" style={{ color: theme.colors.textDim }}>
+							This will send the queued message immediately, running in parallel with the other tab
+							{forceSendConfirmContext && forceSendConfirmContext.otherBusyTabs.length === 1
+								? ''
+								: 's'}{' '}
+							currently working in this agent.
+						</p>
+						{forceSendConfirmContext && forceSendConfirmContext.otherBusyTabs.length > 0 && (
+							<div className="p-3 rounded" style={{ backgroundColor: theme.colors.bgActivity }}>
 								<div
-									className="mb-4 p-3 rounded"
-									style={{ backgroundColor: theme.colors.bgActivity }}
+									className="text-xs font-bold tracking-wider mb-2"
+									style={{ color: theme.colors.warning }}
 								>
-									<div
-										className="text-xs font-bold tracking-wider mb-2"
-										style={{ color: theme.colors.warning }}
-									>
-										{forceSendConfirmContext.otherBusyTabs.length} OTHER TAB
-										{forceSendConfirmContext.otherBusyTabs.length === 1 ? '' : 'S'} WORKING
-									</div>
-									<ul className="text-sm space-y-1" style={{ color: theme.colors.textMain }}>
-										{forceSendConfirmContext.otherBusyTabs.map((tab) => (
-											<li key={tab.id} className="flex items-center gap-2">
-												<span
-													className="inline-block w-2 h-2 rounded-full"
-													style={{ backgroundColor: theme.colors.warning }}
-												/>
-												<span className="font-mono">{tab.displayName}</span>
-											</li>
-										))}
-									</ul>
+									{forceSendConfirmContext.otherBusyTabs.length} OTHER TAB
+									{forceSendConfirmContext.otherBusyTabs.length === 1 ? '' : 'S'} WORKING
 								</div>
-							)}
-							<div className="flex gap-2 justify-end">
-								<button
-									onClick={() => setForceSendConfirmId(null)}
-									className="px-3 py-1.5 rounded text-sm"
-									style={{ backgroundColor: theme.colors.bgActivity, color: theme.colors.textMain }}
-								>
-									Cancel
-								</button>
-								<button
-									onClick={handleConfirmForceSend}
-									className="flex items-center gap-1.5 px-3 py-1.5 rounded text-sm font-medium"
-									style={{ backgroundColor: theme.colors.warning, color: theme.colors.bgMain }}
-									autoFocus
-								>
-									<Hammer className="w-4 h-4" />
-									Force Send
-								</button>
+								<ul className="text-sm space-y-1" style={{ color: theme.colors.textMain }}>
+									{forceSendConfirmContext.otherBusyTabs.map((tab) => (
+										<li key={tab.id} className="flex items-center gap-2">
+											<span
+												className="inline-block w-2 h-2 rounded-full"
+												style={{ backgroundColor: theme.colors.warning }}
+											/>
+											<span className="font-mono">{tab.displayName}</span>
+										</li>
+									))}
+								</ul>
 							</div>
-						</div>
-					</div>
+						)}
+					</Modal>
 				)}
 			</>
 		);
