@@ -16,6 +16,10 @@ import { gitService } from '../../services/git';
 import { logger } from '../../utils/logger';
 import { useFileExplorerStore } from '../../stores/fileExplorerStore';
 import { useSessionStore } from '../../stores/sessionStore';
+import {
+	DEFAULT_SSH_REDUCE_ENTRY_CAP_FRACTION,
+	FILE_EXPLORER_MIN_ENTRIES,
+} from '../../stores/settingsStore';
 
 /**
  * Retry delay for file tree errors (20 seconds).
@@ -111,6 +115,13 @@ export interface UseFileTreeManagementDeps {
 	fileExplorerMaxDepth?: number;
 	/** Max file entries per scan before truncating (applies to local + remote) */
 	fileExplorerMaxEntries?: number;
+	/**
+	 * When true, SSH-backed sessions use a fraction of {@link fileExplorerMaxEntries}
+	 * as their cap. Disabled by default — local and remote share the same cap.
+	 */
+	sshReduceEntryCapEnabled?: boolean;
+	/** Fraction (0–1) applied to the entry cap for SSH sessions when scaling is enabled. */
+	sshReduceEntryCapFraction?: number;
 }
 
 /**
@@ -162,12 +173,29 @@ export function useFileTreeManagement(
 		localHonorGitignore,
 		fileExplorerMaxDepth,
 		fileExplorerMaxEntries,
+		sshReduceEntryCapEnabled,
+		sshReduceEntryCapFraction,
 	} = deps;
 
 	// Fall back to the canonical defaults from settingsStore when deps omit these values
 	// (e.g. in tests that don't wire the full settings state through).
 	const effectiveMaxDepth = fileExplorerMaxDepth ?? 5;
 	const effectiveMaxEntries = fileExplorerMaxEntries ?? 100_000;
+	const effectiveSshReduceEnabled = sshReduceEntryCapEnabled ?? false;
+	const effectiveSshFraction = sshReduceEntryCapFraction ?? DEFAULT_SSH_REDUCE_ENTRY_CAP_FRACTION;
+
+	/**
+	 * Resolve the entry cap for a load. SSH sessions get a smaller cap when
+	 * "Reduce entry cap on SSH remotes" is enabled — each remote dir is its own
+	 * SSH round-trip, so a tighter cap returns sooner on large remote trees.
+	 */
+	const resolveMaxEntries = useCallback(
+		(isSsh: boolean, baseCap: number): number => {
+			if (!isSsh || !effectiveSshReduceEnabled) return baseCap;
+			return Math.max(FILE_EXPLORER_MIN_ENTRIES, Math.floor(baseCap * effectiveSshFraction));
+		},
+		[effectiveSshReduceEnabled, effectiveSshFraction]
+	);
 
 	const fileTreeFilter = useFileExplorerStore((s) => s.fileTreeFilter);
 
@@ -306,7 +334,10 @@ export function useFileTreeManagement(
 			// This ensures the file tree always shows the agent's working directory, not wherever cd'd to
 			const treeRoot = session.projectRoot || session.cwd;
 
-			const maxEntriesForRefresh = options?.maxEntriesOverride ?? effectiveMaxEntries;
+			// An explicit override (e.g. "Load all") bypasses SSH scaling — the user
+			// has opted into a larger scan and we shouldn't second-guess them.
+			const maxEntriesForRefresh =
+				options?.maxEntriesOverride ?? resolveMaxEntries(!!sshContext, effectiveMaxEntries);
 
 			try {
 				// Fire stats independently — update asynchronously without blocking tree refresh.
@@ -405,6 +436,7 @@ export function useFileTreeManagement(
 			isStale,
 			effectiveMaxDepth,
 			effectiveMaxEntries,
+			resolveMaxEntries,
 		]
 	);
 
@@ -464,6 +496,8 @@ export function useFileTreeManagement(
 						);
 					});
 
+				const maxEntriesForRefresh = resolveMaxEntries(!!sshContext, effectiveMaxEntries);
+
 				// Refresh file tree and git repo status in parallel
 				const [loadResult, isGitRepo] = await Promise.all([
 					loadFileTree(
@@ -473,7 +507,7 @@ export function useFileTreeManagement(
 						sshContext,
 						undefined,
 						localOptions,
-						effectiveMaxEntries
+						maxEntriesForRefresh
 					),
 					gitService.isRepo(gitRoot, sshContext?.sshRemoteId),
 				]);
@@ -504,7 +538,7 @@ export function useFileTreeManagement(
 									fileTree: loadResult.tree,
 									fileTreeError: undefined,
 									fileTreeTruncated: loadResult.truncated,
-									fileTreeLoadedCap: effectiveMaxEntries,
+									fileTreeLoadedCap: maxEntriesForRefresh,
 									isGitRepo,
 									gitBranches,
 									gitTags,
@@ -535,6 +569,7 @@ export function useFileTreeManagement(
 			isStale,
 			effectiveMaxDepth,
 			effectiveMaxEntries,
+			resolveMaxEntries,
 		]
 	);
 
@@ -666,6 +701,8 @@ export function useFileTreeManagement(
 					});
 			}
 
+			const maxEntriesForLoad = resolveMaxEntries(!!sshContext, effectiveMaxEntries);
+
 			// Full recursive tree load (with progress callback for SSH)
 			const treePromise = sshContext
 				? loadFileTree(
@@ -675,7 +712,7 @@ export function useFileTreeManagement(
 						sshContext,
 						onProgress,
 						localOptions,
-						effectiveMaxEntries,
+						maxEntriesForLoad,
 						abortSignal
 					)
 				: loadFileTree(
@@ -685,7 +722,7 @@ export function useFileTreeManagement(
 						sshContext,
 						undefined,
 						localOptions,
-						effectiveMaxEntries,
+						maxEntriesForLoad,
 						abortSignal
 					);
 
@@ -744,7 +781,7 @@ export function useFileTreeManagement(
 										...s,
 										fileTree: loadResult.tree,
 										fileTreeTruncated: loadResult.truncated,
-										fileTreeLoadedCap: effectiveMaxEntries,
+										fileTreeLoadedCap: maxEntriesForLoad,
 										fileTreeError: undefined,
 										fileTreeRetryAt: undefined,
 										fileTreeLoading: false,
@@ -816,6 +853,7 @@ export function useFileTreeManagement(
 		isStale,
 		effectiveMaxDepth,
 		effectiveMaxEntries,
+		resolveMaxEntries,
 		signalInitialFileTreeReady,
 	]);
 
