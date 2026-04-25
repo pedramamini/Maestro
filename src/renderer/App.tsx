@@ -2566,14 +2566,14 @@ function MaestroConsoleInner() {
 				onDragOver={handleImageDragOver}
 				onDrop={handleDrop}
 			>
-				{/* Image Drop Overlay */}
+				{/* External File Drop Overlay */}
 				{isDraggingImage && (
 					<div
 						className="fixed inset-0 z-[9999] pointer-events-none flex items-center justify-center"
 						style={{ backgroundColor: `${theme.colors.accent}20` }}
 					>
 						<div
-							className="pointer-events-none rounded-xl border-2 border-dashed p-8 flex flex-col items-center gap-4"
+							className="pointer-events-none rounded-xl border-2 border-dashed p-8 flex flex-col items-center gap-3"
 							style={{
 								borderColor: theme.colors.accent,
 								backgroundColor: `${theme.colors.bgMain}ee`,
@@ -2595,6 +2595,9 @@ function MaestroConsoleInner() {
 							</svg>
 							<span className="text-lg font-medium" style={{ color: theme.colors.textMain }}>
 								Drop image to attach
+							</span>
+							<span className="text-sm" style={{ color: theme.colors.textDim }}>
+								or drop a file or folder to insert as @reference
 							</span>
 						</div>
 					</div>

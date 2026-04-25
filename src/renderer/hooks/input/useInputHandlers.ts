@@ -657,7 +657,7 @@ export function useInputHandlers(deps: UseInputHandlersDeps): UseInputHandlersRe
 					};
 					reader.readAsDataURL(file);
 				} else {
-					// Phase 2: external non-image file or folder — collect path for @-mention.
+					// External non-image file or folder — collect path for @-mention.
 					const filePath = (file as File & { path?: string }).path;
 					if (filePath) {
 						externalPaths.push(toMentionPath(filePath, projectRoot));
