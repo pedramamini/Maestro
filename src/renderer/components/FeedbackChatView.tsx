@@ -41,6 +41,7 @@ import {
 import { isBetaAgent } from '../../shared/agentMetadata';
 import { ThemedSelect } from './shared/ThemedSelect';
 import { openUrl } from '../utils/openUrl';
+import { useFeedbackDraftStore } from '../stores/feedbackDraftStore';
 
 // ============================================================================
 // Constants
@@ -220,8 +221,19 @@ export function FeedbackChatView({ theme, onCancel, onWidthChange }: FeedbackCha
 	useEffect(() => {
 		return () => {
 			managerRef.current.cleanup();
+			useFeedbackDraftStore.getState().reset();
 		};
 	}, []);
+
+	// --- Publish draft state so the sidebar Feedback button + close handler
+	//     know whether the user has unsaved work that would be lost. Once the
+	//     issue is submitted (step === 'done') there's nothing left to lose.
+	useEffect(() => {
+		const hasContent =
+			messages.length > 0 || inputValue.trim().length > 0 || attachments.length > 0;
+		const hasDraft = hasContent && step !== 'done';
+		useFeedbackDraftStore.getState().setHasDraft(hasDraft);
+	}, [messages, inputValue, attachments, step]);
 
 	// --- Background issue search — fires after every agent response ---
 	const runIssueSearch = useCallback(async (query: string) => {

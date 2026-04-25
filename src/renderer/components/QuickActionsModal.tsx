@@ -17,6 +17,7 @@ import { useListNavigation } from '../hooks';
 import { useUIStore } from '../stores/uiStore';
 import { useSettingsStore } from '../stores/settingsStore';
 import { useFileExplorerStore } from '../stores/fileExplorerStore';
+import { useFeedbackDraftStore } from '../stores/feedbackDraftStore';
 import { buildMaestroUrl } from '../utils/buildMaestroUrl';
 import { buildSessionDeepLink } from '../../shared/deep-link-urls';
 import { openUrl } from '../utils/openUrl';
@@ -1253,7 +1254,12 @@ export const QuickActionsModal = memo(function QuickActionsModal(props: QuickAct
 			label: 'Send Feedback',
 			subtext: 'Report a bug or suggest a feature via GitHub',
 			action: () => {
-				setFeedbackModalOpen(true);
+				const draft = useFeedbackDraftStore.getState();
+				if (draft.isMinimized) {
+					draft.setMinimized(false);
+				} else {
+					setFeedbackModalOpen(true);
+				}
 				setQuickActionOpen(false);
 			},
 		},
