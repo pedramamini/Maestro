@@ -957,6 +957,7 @@ describe('useInputHandlers', () => {
 			const dropEvent = {
 				preventDefault: vi.fn(),
 				dataTransfer: {
+					getData: () => '',
 					files: { length: 0 } as any,
 				},
 			} as unknown as React.DragEvent;
@@ -981,6 +982,7 @@ describe('useInputHandlers', () => {
 			const dropEvent = {
 				preventDefault: vi.fn(),
 				dataTransfer: {
+					getData: () => '',
 					files: {
 						length: 1,
 						0: { type: 'image/png' },
@@ -1013,6 +1015,7 @@ describe('useInputHandlers', () => {
 			const dropEvent = {
 				preventDefault: vi.fn(),
 				dataTransfer: {
+					getData: () => '',
 					files: {
 						length: 1,
 						0: mockFile,
@@ -1542,6 +1545,7 @@ describe('useInputHandlers', () => {
 			const dropEvent = {
 				preventDefault: vi.fn(),
 				dataTransfer: {
+					getData: () => '',
 					files: {
 						length: 2,
 						0: { type: 'application/pdf', name: 'doc.pdf' },
@@ -1587,6 +1591,7 @@ describe('useInputHandlers', () => {
 				const dropEvent = {
 					preventDefault: vi.fn(),
 					dataTransfer: {
+						getData: () => '',
 						files: {
 							length: 2,
 							0: { type: 'image/png', name: 'img1.png' },
@@ -1608,6 +1613,75 @@ describe('useInputHandlers', () => {
 			} finally {
 				global.FileReader = originalFileReader;
 			}
+		});
+
+		it('inserts @<path> into AI input when dropping an internal Files-panel drag', () => {
+			const deps = createMockDeps();
+			const { result } = renderHook(() => useInputHandlers(deps));
+
+			const dropEvent = {
+				preventDefault: vi.fn(),
+				dataTransfer: {
+					getData: (type: string) =>
+						type === 'application/x-maestro-file-path' ? 'src/main/index.ts' : '',
+					files: { length: 0 } as any,
+				},
+			} as unknown as React.DragEvent;
+
+			act(() => {
+				result.current.handleDrop(dropEvent);
+			});
+
+			expect(result.current.inputValue).toBe('@src/main/index.ts ');
+		});
+
+		it('appends @<path> with a separating space when input already has content', () => {
+			const deps = createMockDeps();
+			const { result } = renderHook(() => useInputHandlers(deps));
+
+			act(() => {
+				result.current.setInputValue('look at');
+			});
+
+			const dropEvent = {
+				preventDefault: vi.fn(),
+				dataTransfer: {
+					getData: (type: string) =>
+						type === 'application/x-maestro-file-path' ? 'README.md' : '',
+					files: { length: 0 } as any,
+				},
+			} as unknown as React.DragEvent;
+
+			act(() => {
+				result.current.handleDrop(dropEvent);
+			});
+
+			expect(result.current.inputValue).toBe('look at @README.md ');
+		});
+
+		it('ignores internal Files-panel drag when group chat is active', () => {
+			useGroupChatStore.setState({
+				activeGroupChatId: 'group-1',
+				setGroupChatStagedImages: vi.fn(),
+			} as any);
+
+			const deps = createMockDeps();
+			const { result } = renderHook(() => useInputHandlers(deps));
+
+			const dropEvent = {
+				preventDefault: vi.fn(),
+				dataTransfer: {
+					getData: (type: string) =>
+						type === 'application/x-maestro-file-path' ? 'src/main/index.ts' : '',
+					files: { length: 0 } as any,
+				},
+			} as unknown as React.DragEvent;
+
+			act(() => {
+				result.current.handleDrop(dropEvent);
+			});
+
+			expect(result.current.inputValue).toBe('');
 		});
 	});
 

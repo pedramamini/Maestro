@@ -564,6 +564,21 @@ export function useInputHandlers(deps: UseInputHandlersDeps): UseInputHandlersRe
 			const isGroupChatActive = !!activeGroupChatId;
 			const isDirectAIMode = activeSession && activeSession.inputMode === 'ai';
 
+			// Internal drag from the Files panel — insert as @<path> in the AI input.
+			// Phase 1: AI mode only; group chat is excluded.
+			const internalPath = e.dataTransfer.getData('application/x-maestro-file-path');
+			if (internalPath) {
+				if (isGroupChatActive || !isDirectAIMode) return;
+				const mention = `@${internalPath}`;
+				setInputValue((prev) => {
+					if (!prev) return mention + ' ';
+					const needsSpace = !/\s$/.test(prev);
+					return prev + (needsSpace ? ' ' : '') + mention + ' ';
+				});
+				inputRef.current?.focus();
+				return;
+			}
+
 			if (!isGroupChatActive && !isDirectAIMode) return;
 
 			const files = e.dataTransfer.files;

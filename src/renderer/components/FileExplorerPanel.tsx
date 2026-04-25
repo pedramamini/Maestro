@@ -1095,6 +1095,11 @@ function FileExplorerPanelInner(props: FileExplorerPanelProps) {
 								? 'rgba(255,255,255,0.1)'
 								: undefined,
 					}}
+					draggable
+					onDragStart={(e) => {
+						e.dataTransfer.setData('application/x-maestro-file-path', fullPath);
+						e.dataTransfer.effectAllowed = 'copy';
+					}}
 					onMouseDown={(e) => {
 						// Prevent focus from leaving the filter input when filtering
 						if (fileTreeFilter.length > 0) {
