@@ -1235,6 +1235,33 @@ describe('FileExplorerPanel', () => {
 			expect(screen.getByText('Loading files...')).toBeInTheDocument();
 		});
 
+		it('hides Stop loading when cancelFileTreeLoad is not provided', () => {
+			const session = createMockSession({ fileTree: [], fileTreeLoading: true });
+			render(<FileExplorerPanel {...defaultProps} session={session} filteredFileTree={[]} />);
+
+			expect(screen.queryByText('Stop loading')).not.toBeInTheDocument();
+		});
+
+		it('invokes cancelFileTreeLoad with session id when Stop loading clicked', () => {
+			const session = createMockSession({
+				id: 'session-xyz',
+				fileTree: [],
+				fileTreeLoading: true,
+			});
+			const cancelFileTreeLoad = vi.fn();
+			render(
+				<FileExplorerPanel
+					{...defaultProps}
+					session={session}
+					filteredFileTree={[]}
+					cancelFileTreeLoad={cancelFileTreeLoad}
+				/>
+			);
+
+			fireEvent.click(screen.getByText('Stop loading'));
+			expect(cancelFileTreeLoad).toHaveBeenCalledWith('session-xyz');
+		});
+
 		it('shows no files found when fileTree is empty and not loading', () => {
 			const session = createMockSession({ fileTree: [], fileTreeLoading: false });
 			render(<FileExplorerPanel {...defaultProps} session={session} filteredFileTree={[]} />);

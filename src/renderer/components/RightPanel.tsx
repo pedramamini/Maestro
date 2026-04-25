@@ -74,6 +74,7 @@ interface RightPanelProps {
 		setSessions: React.Dispatch<React.SetStateAction<Session[]>>
 	) => Promise<void>;
 	refreshFileTree: (sessionId: string) => Promise<FileTreeChanges | undefined>;
+	cancelFileTreeLoad: (sessionId: string) => void;
 	onAutoRefreshChange?: (interval: number) => void;
 	onShowFlash?: (message: string) => void;
 
@@ -168,6 +169,7 @@ export const RightPanel = memo(
 			collapseAllFolders,
 			updateSessionWorkingDirectory,
 			refreshFileTree,
+			cancelFileTreeLoad,
 			onAutoRefreshChange,
 			onShowFlash,
 			onAutoRunContentChange,
@@ -517,6 +519,7 @@ export const RightPanel = memo(
 							collapseAllFolders={collapseAllFolders}
 							updateSessionWorkingDirectory={updateSessionWorkingDirectory}
 							refreshFileTree={refreshFileTree}
+							cancelFileTreeLoad={cancelFileTreeLoad}
 							setSessions={setSessions}
 							onAutoRefreshChange={onAutoRefreshChange}
 							onShowFlash={onShowFlash}

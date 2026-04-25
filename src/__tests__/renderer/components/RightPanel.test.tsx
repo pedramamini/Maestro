@@ -135,6 +135,7 @@ describe('RightPanel', () => {
 		collapseAllFolders: vi.fn(),
 		updateSessionWorkingDirectory: vi.fn(),
 		refreshFileTree: vi.fn(),
+		cancelFileTreeLoad: vi.fn(),
 		onAutoRefreshChange: vi.fn(),
 		onShowFlash: vi.fn(),
 		onAutoRunContentChange: vi.fn(),

@@ -5,6 +5,7 @@ import type { FileNode } from '../../types/fileTree';
 import {
 	loadFileTree,
 	compareFileTrees,
+	FileTreeAbortError,
 	type FileTreeChanges,
 	type SshContext,
 	type FileTreeProgress,
@@ -123,6 +124,12 @@ export interface UseFileTreeManagementReturn {
 	) => Promise<FileTreeChanges | undefined>;
 	/** Refresh both file tree and git state for a session */
 	refreshGitFileState: (sessionId: string) => Promise<void>;
+	/**
+	 * Cancel the in-flight file tree load for a session. Aborts the underlying
+	 * recursion so no further readDir calls (including SSH round-trips) are
+	 * issued. Safe to call when no load is in flight.
+	 */
+	cancelFileTreeLoad: (sessionId: string) => void;
 	/** Filtered file tree based on current filter */
 	filteredFileTree: FileNode[];
 }
@@ -206,6 +213,46 @@ export function useFileTreeManagement(
 	// When a newer load starts for the same session, any in-flight load with an
 	// older sequence number will discard its result instead of calling setSessions.
 	const loadSeqMapRef = useRef<Map<string, number>>(new Map());
+
+	// Per-session AbortControllers for the active file tree load. Used by
+	// cancelFileTreeLoad to halt the recursive walk so no further readDir
+	// calls (including SSH round-trips) are issued. Replaced on each new load.
+	const loadAbortMapRef = useRef<Map<string, AbortController>>(new Map());
+
+	/**
+	 * Start a new abort-controlled load for a session. Aborts any prior
+	 * in-flight load for the same session and returns a fresh signal.
+	 */
+	const beginAbortableLoad = useCallback((sessionId: string): AbortSignal => {
+		const prior = loadAbortMapRef.current.get(sessionId);
+		if (prior) prior.abort();
+		const controller = new AbortController();
+		loadAbortMapRef.current.set(sessionId, controller);
+		return controller.signal;
+	}, []);
+
+	const cancelFileTreeLoad = useCallback(
+		(sessionId: string) => {
+			const controller = loadAbortMapRef.current.get(sessionId);
+			if (!controller) return;
+			controller.abort();
+			loadAbortMapRef.current.delete(sessionId);
+			// Clear the loading UI immediately so the user sees the cancel take effect
+			// even if the in-flight readDir hasn't resolved yet.
+			setSessions((prev) =>
+				prev.map((s) =>
+					s.id === sessionId
+						? {
+								...s,
+								fileTreeLoading: false,
+								fileTreeLoadingProgress: undefined,
+							}
+						: s
+				)
+			);
+		},
+		[setSessions]
+	);
 
 	/** Increment and return the next sequence number for a session. */
 	const nextSeq = useCallback((sessionId: string): number => {
@@ -578,6 +625,9 @@ export function useFileTreeManagement(
 			// Increment per-session load sequence so concurrent loads can detect staleness
 			const seq = nextSeq(sessionId);
 
+			// Begin a fresh abort-controlled load (cancels any prior in-flight load).
+			const abortSignal = beginAbortableLoad(sessionId);
+
 			// For SSH sessions, fire a shallow load (depth 1) first so the root-level
 			// tree renders almost instantly (single round-trip), then backfill with
 			// the full recursive walk. Local sessions skip the shallow pass since
@@ -585,7 +635,16 @@ export function useFileTreeManagement(
 			if (sshContext) {
 				// Shallow pass ignores the entry cap — the whole point is to render
 				// the top-level dir fast. The full pass below honors the cap.
-				loadFileTree(treeRoot, 1, 0, sshContext, undefined, localOptions)
+				loadFileTree(
+					treeRoot,
+					1,
+					0,
+					sshContext,
+					undefined,
+					localOptions,
+					Number.POSITIVE_INFINITY,
+					abortSignal
+				)
 					.then((shallowResult) => {
 						if (isStale(sessionId, seq)) return;
 						setSessions((prev) =>
@@ -603,7 +662,7 @@ export function useFileTreeManagement(
 						signalInitialFileTreeReady();
 					})
 					.catch(() => {
-						// Shallow load failed — full load will handle the error below
+						// Shallow load failed or was aborted — full load handles below
 					});
 			}
 
@@ -616,7 +675,8 @@ export function useFileTreeManagement(
 						sshContext,
 						onProgress,
 						localOptions,
-						effectiveMaxEntries
+						effectiveMaxEntries,
+						abortSignal
 					)
 				: loadFileTree(
 						treeRoot,
@@ -625,7 +685,8 @@ export function useFileTreeManagement(
 						sshContext,
 						undefined,
 						localOptions,
-						effectiveMaxEntries
+						effectiveMaxEntries,
+						abortSignal
 					);
 
 			// Fetch stats independently — a directorySize failure (e.g., `du` timeout
@@ -705,6 +766,21 @@ export function useFileTreeManagement(
 									: s
 							)
 						);
+						return;
+					}
+
+					// User cancelled — clear loading state but don't surface an error.
+					// cancelFileTreeLoad already cleared loading UI; this just guards against
+					// the race where the load completes before the cancel state-write lands.
+					if (error instanceof FileTreeAbortError) {
+						setSessions((prev) =>
+							prev.map((s) =>
+								s.id === sessionId
+									? { ...s, fileTreeLoading: false, fileTreeLoadingProgress: undefined }
+									: s
+							)
+						);
+						signalInitialFileTreeReady();
 						return;
 					}
 
@@ -860,6 +936,7 @@ export function useFileTreeManagement(
 	return {
 		refreshFileTree,
 		refreshGitFileState,
+		cancelFileTreeLoad,
 		filteredFileTree,
 	};
 }

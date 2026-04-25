@@ -55,6 +55,7 @@ export interface UseRightPanelPropsDeps {
 		setSessions: React.Dispatch<React.SetStateAction<Session[]>>
 	) => Promise<void>;
 	refreshFileTree: (sessionId: string) => Promise<FileTreeChanges | undefined>;
+	cancelFileTreeLoad: (sessionId: string) => void;
 	handleAutoRefreshChange: (interval: number) => void;
 	showSuccessFlash: (message: string) => void;
 
@@ -126,6 +127,7 @@ export function useRightPanelProps(deps: UseRightPanelPropsDeps) {
 			collapseAllFolders: deps.collapseAllFolders,
 			updateSessionWorkingDirectory: deps.updateSessionWorkingDirectory,
 			refreshFileTree: deps.refreshFileTree,
+			cancelFileTreeLoad: deps.cancelFileTreeLoad,
 			onAutoRefreshChange: deps.handleAutoRefreshChange,
 			onShowFlash: deps.showSuccessFlash,
 
@@ -180,6 +182,7 @@ export function useRightPanelProps(deps: UseRightPanelPropsDeps) {
 			deps.collapseAllFolders,
 			deps.updateSessionWorkingDirectory,
 			deps.refreshFileTree,
+			deps.cancelFileTreeLoad,
 			deps.handleAutoRefreshChange,
 			deps.showSuccessFlash,
 			deps.handleAutoRunContentChange,

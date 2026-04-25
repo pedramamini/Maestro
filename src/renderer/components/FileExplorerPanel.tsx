@@ -98,6 +98,7 @@ function FileTreeLoadingProgress({
 	theme,
 	progress,
 	isRemote,
+	onCancel,
 }: {
 	theme: Theme;
 	progress?: {
@@ -106,6 +107,7 @@ function FileTreeLoadingProgress({
 		currentDirectory: string;
 	};
 	isRemote: boolean;
+	onCancel?: () => void;
 }) {
 	// Extract just the folder name from the full path for display
 	const currentFolder = progress?.currentDirectory
@@ -146,6 +148,18 @@ function FileTreeLoadingProgress({
 					>
 						scanning: {currentFolder}/
 					</div>
+				)}
+
+				{/* Cancel — useful over SSH when the scan is hogging connections. */}
+				{onCancel && (
+					<button
+						type="button"
+						onClick={onCancel}
+						className="text-[11px] mt-3 underline-offset-2 hover:underline transition-opacity"
+						style={{ color: theme.colors.textDim }}
+					>
+						Stop loading
+					</button>
 				)}
 			</div>
 		</div>
@@ -439,6 +453,8 @@ interface FileExplorerPanelProps {
 		sessionId: string,
 		options?: { maxEntriesOverride?: number }
 	) => Promise<FileTreeChanges | undefined>;
+	/** Cancel the in-flight file tree load — useful when SSH scans monopolize connections. */
+	cancelFileTreeLoad?: (sessionId: string) => void;
 	setSessions: React.Dispatch<React.SetStateAction<Session[]>>;
 	onAutoRefreshChange?: (interval: number) => void;
 	onShowFlash?: (message: string) => void;
@@ -470,6 +486,7 @@ function FileExplorerPanelInner(props: FileExplorerPanelProps) {
 		collapseAllFolders,
 		updateSessionWorkingDirectory,
 		refreshFileTree,
+		cancelFileTreeLoad,
 		setSessions,
 		onAutoRefreshChange,
 		onShowFlash,
@@ -1395,6 +1412,7 @@ function FileExplorerPanelInner(props: FileExplorerPanelProps) {
 							theme={theme}
 							progress={session.fileTreeLoadingProgress}
 							isRemote={!!(session.sshRemoteId || session.sessionSshRemoteConfig?.enabled)}
+							onCancel={cancelFileTreeLoad ? () => cancelFileTreeLoad(session.id) : undefined}
 						/>
 					)}
 					{/* Truncation banner - scan hit the entry cap and stopped early. */}
