@@ -608,6 +608,14 @@ describe('useAgentListeners', () => {
 				id: 'tab-1',
 				agentSessionId: 'old-session-id',
 				awaitingSessionId: false,
+				usageStats: {
+					inputTokens: 100,
+					outputTokens: 50,
+					cacheReadInputTokens: 0,
+					cacheCreationInputTokens: 0,
+					totalCostUsd: 0.001,
+					contextWindow: 200000,
+				},
 			});
 			const session = createMockSession({
 				id: 'sess-1',
@@ -668,6 +676,11 @@ describe('useAgentListeners', () => {
 			const updated = useSessionStore.getState().sessions.find((s) => s.id === 'sess-1');
 			const updatedTab = updated?.aiTabs.find((t) => t.id === 'tab-1');
 			expect(updatedTab?.agentSessionId).toBe('same-session-id');
+			// Should NOT add a resume-failure log entry
+			const hasResumeFailureLog = !!updatedTab?.logs.some((l) =>
+				l.text.includes('Session resume failed')
+			);
+			expect(hasResumeFailureLog).toBe(false);
 		});
 
 		it('preserves context gauge when resume succeeds', () => {
