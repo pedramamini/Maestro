@@ -1087,7 +1087,7 @@ export function useWizardHandlers(deps: UseWizardHandlersDeps): UseWizardHandler
 				customArgs,
 				customEnvVars,
 				sessionSshRemoteConfig,
-				runAllDocuments,
+				autoRunMode,
 			} = wizardState;
 
 			if (!selectedAgent || !directoryPath) {
@@ -1225,7 +1225,9 @@ export function useWizardHandlers(deps: UseWizardHandlersDeps): UseWizardHandler
 
 			clearResumeState();
 			completeWizard(newId);
-			setActiveRightTab('autorun');
+			if (autoRunMode !== 'none') {
+				setActiveRightTab('autorun');
+			}
 
 			if (wantsTour) {
 				setTimeout(() => {
@@ -1238,8 +1240,8 @@ export function useWizardHandlers(deps: UseWizardHandlersDeps): UseWizardHandler
 			setTimeout(() => inputRef.current?.focus(), 100);
 
 			const docsWithTasks = generatedDocuments.filter((doc) => doc.taskCount > 0);
-			if (docsWithTasks.length > 0 && autoRunFolderPath) {
-				const docsToRun = runAllDocuments ? docsWithTasks : [docsWithTasks[0]];
+			if (autoRunMode !== 'none' && docsWithTasks.length > 0 && autoRunFolderPath) {
+				const docsToRun = autoRunMode === 'all' ? docsWithTasks : [docsWithTasks[0]];
 				const batchConfig: BatchRunConfig = {
 					documents: docsToRun.map((doc) => ({
 						id: generateId(),
