@@ -1441,6 +1441,8 @@ interface MaestroAPI {
 			projectPath?: string;
 			sessionId?: string;
 			pagination?: { limit?: number; offset?: number };
+			lookbackHours?: number | null;
+			sharedContext?: { sshRemoteId: string; remoteCwd: string };
 		}) => Promise<{
 			entries: Array<{
 				id: string;
@@ -1510,7 +1512,11 @@ interface MaestroAPI {
 			cueCount: number;
 			cached: boolean;
 		}>;
-		getOffsetForTimestamp: (sessionId: string, timestamp: number) => Promise<number>;
+		getOffsetForTimestamp: (
+			sessionId: string,
+			timestamp: number,
+			lookbackHours?: number | null
+		) => Promise<number>;
 		onExternalChange: (handler: () => void) => () => void;
 		reload: () => Promise<boolean>;
 	};

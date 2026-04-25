@@ -19,6 +19,7 @@ import {
 	PaginationOptions,
 	ORPHANED_SESSION_ID,
 	sortEntriesByTimestamp,
+	paginateEntries,
 } from '../../../shared/history';
 import { getHistoryManager } from '../../history-manager';
 import {
@@ -220,7 +221,13 @@ export function registerHistoryHandlers(deps: HistoryHandlerDependencies): void 
 		)
 	);
 
-	// Get history entries with pagination support
+	// Get history entries with pagination support.
+	//
+	// Accepts an optional `lookbackHours` to filter entries to the last N
+	// hours before pagination — keeps page boundaries meaningful when the
+	// renderer's lookback is tighter than the on-disk window. Also accepts
+	// `sharedContext` so SSH-shared history is merged in before paging,
+	// matching `history:getAll`'s behavior.
 	ipcMain.handle(
 		'history:getAllPaginated',
 		withIpcErrorLogging(
@@ -229,21 +236,71 @@ export function registerHistoryHandlers(deps: HistoryHandlerDependencies): void 
 				projectPath?: string;
 				sessionId?: string;
 				pagination?: PaginationOptions;
+				lookbackHours?: number | null;
+				sharedContext?: SharedHistoryContext;
 			}) => {
-				const { projectPath, sessionId, pagination } = options || {};
+				const { projectPath, sessionId, pagination, lookbackHours, sharedContext } = options || {};
+				const cutoffTime =
+					lookbackHours !== null && lookbackHours !== undefined && lookbackHours > 0
+						? Date.now() - lookbackHours * 60 * 60 * 1000
+						: 0;
 
+				const applyLookback = (entries: HistoryEntry[]): HistoryEntry[] =>
+					cutoffTime > 0 ? entries.filter((e) => e.timestamp >= cutoffTime) : entries;
+
+				// Single-session path: optionally merge shared (SSH or local
+				// project-mirrored) entries before applying lookback + pagination.
 				if (sessionId) {
-					// Get paginated entries for specific session
-					return historyManager.getEntriesPaginated(sessionId, pagination);
+					let local = historyManager.getEntries(sessionId);
+					local = sortEntriesByTimestamp(local);
+
+					const hasShared = Boolean(sharedContext?.sshRemoteId && sharedContext?.remoteCwd);
+					if (hasShared || projectPath) {
+						const maxEntries = deps.getMaxEntries?.();
+						let sharedEntries: HistoryEntry[] = [];
+						try {
+							if (hasShared) {
+								const sshRemote = deps.getSshRemoteById?.(sharedContext!.sshRemoteId);
+								if (sshRemote) {
+									sharedEntries = await readRemoteEntriesSsh(
+										sharedContext!.remoteCwd,
+										sshRemote,
+										maxEntries
+									);
+								}
+							} else if (projectPath) {
+								sharedEntries = readRemoteEntriesLocal(projectPath, maxEntries);
+							}
+						} catch (error) {
+							void captureException(error);
+							logger.warn(`Failed to read shared history (paginated): ${error}`, LOG_CONTEXT);
+						}
+
+						if (sharedEntries.length > 0) {
+							const seen = new Set(local.map((e) => e.id));
+							for (const e of sharedEntries) {
+								if (!seen.has(e.id)) {
+									local.push(e);
+									seen.add(e.id);
+								}
+							}
+							local = sortEntriesByTimestamp(local);
+						}
+					}
+
+					return paginateEntries(applyLookback(local), pagination);
 				}
 
 				if (projectPath) {
-					// Get paginated entries for sessions in this project
-					return historyManager.getEntriesByProjectPathPaginated(projectPath, pagination);
+					const entries = historyManager.getEntriesByProjectPathPaginated(
+						projectPath,
+						undefined
+					).entries;
+					return paginateEntries(applyLookback(entries), pagination);
 				}
 
-				// Return paginated entries (for global view)
-				return historyManager.getAllEntriesPaginated(pagination);
+				const entries = historyManager.getAllEntriesPaginated(undefined).entries;
+				return paginateEntries(applyLookback(entries), pagination);
 			}
 		)
 	);
@@ -332,14 +389,25 @@ export function registerHistoryHandlers(deps: HistoryHandlerDependencies): void 
 	);
 
 	// Find the offset of the first entry whose timestamp is <= the given
-	// timestamp, in the newest-first sorted order. Used by the activity-graph
-	// click handler to jump the paginated list to a specific bucket.
+	// timestamp, in the newest-first sorted order (with the same lookback
+	// filter the paginated list uses, so the offset lines up with the
+	// rendered indices). Used by the activity-graph click handler to jump
+	// the paginated list to a specific bucket.
 	ipcMain.handle(
 		'history:getOffsetForTimestamp',
 		withIpcErrorLogging(
 			handlerOpts('getOffsetForTimestamp'),
-			async (sessionId: string, timestamp: number): Promise<number> => {
-				const entries = historyManager.getEntries(sessionId);
+			async (
+				sessionId: string,
+				timestamp: number,
+				lookbackHours?: number | null
+			): Promise<number> => {
+				const cutoffTime =
+					lookbackHours !== null && lookbackHours !== undefined && lookbackHours > 0
+						? Date.now() - lookbackHours * 60 * 60 * 1000
+						: 0;
+				let entries = historyManager.getEntries(sessionId);
+				if (cutoffTime > 0) entries = entries.filter((e) => e.timestamp >= cutoffTime);
 				if (entries.length === 0) return 0;
 				const sorted = sortEntriesByTimestamp(entries);
 				let offset = 0;

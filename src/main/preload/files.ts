@@ -91,6 +91,8 @@ export function createHistoryApi() {
 			projectPath?: string;
 			sessionId?: string;
 			pagination?: { limit?: number; offset?: number };
+			lookbackHours?: number | null;
+			sharedContext?: { sshRemoteId: string; remoteCwd: string };
 		}) => ipcRenderer.invoke('history:getAllPaginated', options),
 
 		add: (entry: HistoryEntry, sharedContext?: { sshRemoteId: string; remoteCwd: string }) =>
@@ -129,11 +131,16 @@ export function createHistoryApi() {
 				sharedContext
 			),
 
-		// Resolve the offset (newest-first sorted) of the first entry whose
-		// timestamp is <= the given timestamp. Used to jump the paginated
-		// entry list to a specific bucket the user clicked on the graph.
-		getOffsetForTimestamp: (sessionId: string, timestamp: number): Promise<number> =>
-			ipcRenderer.invoke('history:getOffsetForTimestamp', sessionId, timestamp),
+		// Resolve the offset (newest-first sorted, with the same lookback
+		// filter applied to the paginated list) of the first entry whose
+		// timestamp is <= the given timestamp. Powers the activity-graph's
+		// click-to-jump behavior.
+		getOffsetForTimestamp: (
+			sessionId: string,
+			timestamp: number,
+			lookbackHours?: number | null
+		): Promise<number> =>
+			ipcRenderer.invoke('history:getOffsetForTimestamp', sessionId, timestamp, lookbackHours),
 
 		onExternalChange: (handler: () => void) => {
 			const wrappedHandler = () => handler();

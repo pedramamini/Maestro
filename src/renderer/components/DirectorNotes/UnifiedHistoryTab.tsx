@@ -8,7 +8,7 @@ import React, {
 	useImperativeHandle,
 } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
-import { Search, X } from 'lucide-react';
+import { Search, X, ArrowUp } from 'lucide-react';
 import { Spinner } from '../ui/Spinner';
 import type { Theme, HistoryEntry, HistoryEntryType } from '../../types';
 import type { FileNode } from '../../types/fileTree';
@@ -25,6 +25,8 @@ import type { GraphBucket } from '../History/ActivityGraph';
 import type { HistoryStats } from '../History';
 import { HistoryDetailModal } from '../HistoryDetailModal';
 import { useListNavigation, useSettings, useThrottledCallback } from '../../hooks';
+import { useHistoryPagination } from '../../hooks/history/useHistoryPagination';
+import type { PaginatedPage } from '../../hooks/history/useHistoryPagination';
 import { useSessionStore } from '../../stores/sessionStore';
 import { useSettingsStore } from '../../stores/settingsStore';
 import type { TabFocusHandle } from './OverviewTab';
@@ -45,13 +47,6 @@ function bucketCountForLookback(hours: number | null): number {
 	const config = LOOKBACK_OPTIONS.find((o) => o.hours === hours);
 	return config?.bucketCount ?? 24;
 }
-
-/**
- * Cap on the number of pages we'll fetch in one click-to-jump operation,
- * to avoid runaway IPC if the user clicks a bucket far from the loaded
- * window. Worst case = JUMP_MAX_PAGES * PAGE_SIZE entries appended.
- */
-const JUMP_MAX_PAGES = 50;
 
 interface UnifiedHistoryEntry extends HistoryEntry {
 	agentName?: string;
@@ -90,11 +85,6 @@ export const UnifiedHistoryTab = forwardRef<TabFocusHandle, UnifiedHistoryTabPro
 			? ['AUTO', 'USER', 'CUE']
 			: ['AUTO', 'USER'];
 
-		const [entries, setEntries] = useState<UnifiedHistoryEntry[]>([]);
-		const [isLoading, setIsLoading] = useState(true);
-		const [isLoadingMore, setIsLoadingMore] = useState(false);
-		const [hasMore, setHasMore] = useState(true);
-		const [totalEntries, setTotalEntries] = useState(0);
 		const [activeFilters, setActiveFilters] = useState<Set<HistoryEntryType>>(
 			() => new Set(maestroCueEnabled ? ['AUTO', 'USER', 'CUE'] : ['AUTO', 'USER'])
 		);
@@ -106,9 +96,9 @@ export const UnifiedHistoryTab = forwardRef<TabFocusHandle, UnifiedHistoryTabPro
 		const [searchExpanded, setSearchExpanded] = useState(false);
 		const [searchQuery, setSearchQuery] = useState('');
 
-		// Pre-computed graph buckets from backend (covers ALL entries across
-		// every session, not just the loaded pages). Always all-time —
-		// independent of the lookback selector that filters the entry list.
+		// Pre-computed graph buckets from backend (covers all entries in
+		// the lookback window — server-cached). Independent from the
+		// paginated entry list below.
 		const [graphBuckets, setGraphBuckets] = useState<GraphBucket[] | undefined>(undefined);
 		const [graphRange, setGraphRange] = useState<{ start: number; end: number } | undefined>(
 			undefined
@@ -117,12 +107,56 @@ export const UnifiedHistoryTab = forwardRef<TabFocusHandle, UnifiedHistoryTabPro
 		const [graphViewportRange, setGraphViewportRange] = useState<
 			{ start: number; end: number } | undefined
 		>(undefined);
-		const [isJumping, setIsJumping] = useState(false);
 		const graphRefreshScheduled = useRef(false);
 
 		const listRef = useRef<HTMLDivElement>(null);
-		const loadingMoreRef = useRef(false); // Guard against concurrent loads
 		const searchInputRef = useRef<HTMLInputElement>(null);
+
+		// Page loader for the shared pagination hook. Memoized on
+		// `lookbackHours` so changing the lookback resets the window
+		// (the hook re-runs its initial load when this identity changes).
+		// Side effect: keeps `historyStats` in sync from the same IPC
+		// response so we don't fan out to a second call.
+		const loadPage = useCallback(
+			async (offset: number, limit: number): Promise<PaginatedPage<UnifiedHistoryEntry>> => {
+				const result = await window.maestro.directorNotes.getUnifiedHistory({
+					lookbackDays: lookbackHoursToDays(lookbackHours),
+					filter: null,
+					limit,
+					offset,
+				});
+				if (result.stats) {
+					setHistoryStats(result.stats);
+				}
+				return {
+					entries: result.entries as UnifiedHistoryEntry[],
+					hasMore: result.hasMore,
+					total: result.total,
+				};
+			},
+			[lookbackHours]
+		);
+
+		const getEntryId = useCallback((entry: UnifiedHistoryEntry) => entry.id, []);
+
+		const {
+			entries,
+			startOffset,
+			totalCount: totalEntries,
+			isLoading,
+			isLoadingMore,
+			isJumping,
+			isAtTop,
+			loadMoreOlder,
+			jumpToOffset,
+			jumpToTop,
+			prependLiveEntry,
+			mutateEntries,
+		} = useHistoryPagination<UnifiedHistoryEntry>({
+			pageSize: PAGE_SIZE,
+			loadPage,
+			getEntryId,
+		});
 
 		// --- Live agent activity from Zustand (primitive selectors for efficient re-renders) ---
 		const activeAgentCount = useSessionStore(
@@ -171,23 +205,21 @@ export const UnifiedHistoryTab = forwardRef<TabFocusHandle, UnifiedHistoryTabPro
 					}
 				}
 
-				setEntries((prev) => {
-					const existingIds = new Set(prev.map((e) => e.id));
-					const newEntries = uniqueBatch.filter((e) => !existingIds.has(e.id));
-					if (newEntries.length === 0) return prev;
+				// Per-type tally of what we'll attempt to insert; needed
+				// for the stats bump regardless of whether the prepend
+				// actually lands (it only lands when the window is at top).
+				let newAuto = 0;
+				let newUser = 0;
+				let prepended = 0;
+				for (const entry of uniqueBatch) {
+					if (entry.type === 'AUTO') newAuto++;
+					else if (entry.type === 'USER') newUser++;
+					if (prependLiveEntry(entry)) prepended++;
+				}
 
-					// Update total count to match actual additions
-					setTotalEntries((t) => t + newEntries.length);
-
-					// Incrementally update stats counters from deduplicated entries
+				if (newAuto > 0 || newUser > 0) {
 					setHistoryStats((prevStats) => {
 						if (!prevStats) return prevStats;
-						let newAuto = 0;
-						let newUser = 0;
-						for (const entry of newEntries) {
-							if (entry.type === 'AUTO') newAuto++;
-							else if (entry.type === 'USER') newUser++;
-						}
 						return {
 							...prevStats,
 							autoCount: prevStats.autoCount + newAuto,
@@ -195,18 +227,14 @@ export const UnifiedHistoryTab = forwardRef<TabFocusHandle, UnifiedHistoryTabPro
 							totalCount: prevStats.totalCount + newAuto + newUser,
 						};
 					});
+				}
 
-					const merged = [...newEntries, ...prev];
-					merged.sort((a, b) => b.timestamp - a.timestamp);
-					return merged;
-				});
-
-				// Schedule a graph refetch instead of updating buckets
-				// in-place. The server cache is keyed by file mtime+size so
-				// any append invalidates it; one coalesced refresh per
-				// animation frame keeps the graph fresh without per-entry
-				// IPC churn.
-				if (!graphRefreshScheduled.current) {
+				// Schedule a graph refetch when entries actually landed in
+				// the visible window. The server cache is keyed by file
+				// mtime+size so any append invalidates it; one coalesced
+				// refresh per animation frame keeps the graph fresh
+				// without per-entry IPC churn.
+				if (prepended > 0 && !graphRefreshScheduled.current) {
 					graphRefreshScheduled.current = true;
 					requestAnimationFrame(() => {
 						graphRefreshScheduled.current = false;
@@ -245,7 +273,7 @@ export const UnifiedHistoryTab = forwardRef<TabFocusHandle, UnifiedHistoryTabPro
 				}
 				pendingEntriesRef.current = [];
 			};
-		}, [lookbackHours]);
+		}, [lookbackHours, prependLiveEntry]);
 
 		useImperativeHandle(
 			ref,
@@ -283,54 +311,6 @@ export const UnifiedHistoryTab = forwardRef<TabFocusHandle, UnifiedHistoryTabPro
 			}
 		}, [lookbackHours]);
 
-		// Load a page of unified history
-		const loadPage = useCallback(
-			async (offset: number, append: boolean, lookback: number | null) => {
-				if (append) {
-					setIsLoadingMore(true);
-				} else {
-					setIsLoading(true);
-				}
-				try {
-					const result = await window.maestro.directorNotes.getUnifiedHistory({
-						lookbackDays: lookbackHoursToDays(lookback),
-						filter: null,
-						limit: PAGE_SIZE,
-						offset,
-					});
-					const newEntries = result.entries as UnifiedHistoryEntry[];
-					if (append) {
-						setEntries((prev) => [...prev, ...newEntries]);
-					} else {
-						setEntries(newEntries);
-					}
-					setHasMore(result.hasMore);
-					setTotalEntries(result.total);
-					// Capture stats on every load (they cover the full dataset, not just the page)
-					if (result.stats) {
-						setHistoryStats(result.stats);
-					}
-				} catch (error) {
-					logger.error('Failed to load unified history:', undefined, error);
-					if (!append) {
-						setEntries([]);
-					}
-					setHasMore(false);
-				} finally {
-					setIsLoading(false);
-					setIsLoadingMore(false);
-					loadingMoreRef.current = false;
-				}
-			},
-			[]
-		);
-
-		// Initial load (and reload on lookback change). Graph data fetches
-		// once and stays valid until the cache invalidates via mtime.
-		useEffect(() => {
-			loadPage(0, false, lookbackHours);
-		}, [loadPage, lookbackHours]);
-
 		useEffect(() => {
 			refreshGraphData();
 		}, [refreshGraphData]);
@@ -342,13 +322,12 @@ export const UnifiedHistoryTab = forwardRef<TabFocusHandle, UnifiedHistoryTabPro
 			}
 		}, [isLoading]);
 
-		// Handle lookback change from graph right-click menu. Only resets
-		// the entry list — the graph stays all-time.
+		// Lookback change — the hook reloads the entry list automatically
+		// when its `loadPage` identity changes (loadPage is memoized on
+		// `lookbackHours`). We just clear stats so the bar reflects the new
+		// scope until the next response lands.
 		const handleLookbackChange = useCallback((hours: number | null) => {
 			setLookbackHours(hours);
-			setEntries([]);
-			setHasMore(true);
-			setTotalEntries(0);
 			setHistoryStats(null);
 		}, []);
 
@@ -444,12 +423,13 @@ export const UnifiedHistoryTab = forwardRef<TabFocusHandle, UnifiedHistoryTabPro
 		const handleScrollInner = useCallback(() => {
 			const el = scrollTargetRef.current || listRef.current;
 
-			// Pagination: load next page when near bottom
-			if (el && hasMore && !loadingMoreRef.current && !isLoading) {
+			// Pagination: load next older page when near bottom. The hook
+			// guards against concurrent calls and no-ops when there's
+			// nothing more to load.
+			if (el && !isLoading) {
 				const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < SCROLL_LOAD_THRESHOLD;
 				if (nearBottom) {
-					loadingMoreRef.current = true;
-					loadPage(entries.length, true, lookbackHours);
+					void loadMoreOlder();
 				}
 			}
 
@@ -478,7 +458,7 @@ export const UnifiedHistoryTab = forwardRef<TabFocusHandle, UnifiedHistoryTabPro
 					});
 				}
 			}
-		}, [hasMore, isLoading, entries.length, loadPage, lookbackHours, virtualizer, filteredEntries]);
+		}, [isLoading, loadMoreOlder, virtualizer, filteredEntries]);
 
 		// Throttle to ~240fps for smooth indicator movement
 		const throttledScrollHandler = useThrottledCallback(handleScrollInner, 4);
@@ -497,87 +477,46 @@ export const UnifiedHistoryTab = forwardRef<TabFocusHandle, UnifiedHistoryTabPro
 		}, [activeFilters, searchQuery, lookbackHours]);
 
 		/**
-		 * Click-to-jump on the activity graph. When the target bucket isn't
-		 * yet in the loaded window, fetch additional pages until either the
-		 * matching entry is loaded, `hasMore` runs out, or we hit the
-		 * `JUMP_MAX_PAGES` safety cap. Then scroll the virtualizer to the
-		 * matching entry.
+		 * Click-to-jump on the activity graph.
+		 *
+		 * Fast path: target bucket is in the currently-loaded window →
+		 * scroll to it.
+		 *
+		 * Slow path: ask the server for the offset of the first entry at
+		 * (or just before) the bucket's end, then `jumpToOffset` to load
+		 * the single page anchored at that target. Memory stays bounded:
+		 * we never fill in every page in between.
 		 */
 		const handleGraphBarClick = useCallback(
 			async (bucketStart: number, bucketEnd: number) => {
 				const findIdx = (list: UnifiedHistoryEntry[]) =>
 					list.findIndex((e) => e.timestamp >= bucketStart && e.timestamp < bucketEnd);
 
-				// Fast path: already loaded.
-				let idx = findIdx(filteredEntries);
+				const idx = findIdx(filteredEntries);
 				if (idx >= 0) {
 					setSelectedIndex(idx);
 					virtualizer.scrollToIndex(idx, { align: 'center', behavior: 'smooth' });
 					return;
 				}
 
-				// Slow path: ask the server which page contains an entry at
-				// (or just before) bucketEnd, then load pages until we reach it.
-				setIsJumping(true);
 				try {
 					const targetOffset = await window.maestro.directorNotes.getOffsetForTimestamp(
 						bucketEnd - 1,
 						{ lookbackDays: lookbackHoursToDays(lookbackHours), filter: null }
 					);
-
-					let currentEntries = entries;
-					let currentHasMore = hasMore;
-					let pagesLoaded = 0;
-					while (
-						currentHasMore &&
-						currentEntries.length <= targetOffset &&
-						pagesLoaded < JUMP_MAX_PAGES
-					) {
-						const result = await window.maestro.directorNotes.getUnifiedHistory({
-							lookbackDays: lookbackHoursToDays(lookbackHours),
-							filter: null,
-							limit: PAGE_SIZE,
-							offset: currentEntries.length,
-						});
-						const page = result.entries as UnifiedHistoryEntry[];
-						if (page.length === 0) {
-							currentHasMore = false;
-							break;
-						}
-						currentEntries = [...currentEntries, ...page];
-						currentHasMore = result.hasMore;
-						pagesLoaded++;
-					}
-
-					setEntries(currentEntries);
-					setHasMore(currentHasMore);
-
-					// Re-find against the freshly-extended list. Filtering may
-					// drop the exact target, so fall back to the closest entry.
-					const visible = currentEntries.filter((entry) => activeFilters.has(entry.type));
-					idx = findIdx(visible);
-					if (idx < 0) {
-						idx = visible.findIndex((e) => e.timestamp <= bucketEnd);
-					}
-					if (idx >= 0) {
-						setSelectedIndex(idx);
-						virtualizer.scrollToIndex(idx, { align: 'center', behavior: 'smooth' });
-					}
+					await jumpToOffset(targetOffset);
+					// After the window slides, the virtualizer's bookkeeping
+					// has new indices — let the next render flush before
+					// scrolling. Scroll-to-top is the right default; the
+					// target lives near it because we anchored the page.
+					requestAnimationFrame(() => {
+						virtualizer.scrollToIndex(0, { align: 'start', behavior: 'auto' });
+					});
 				} catch (error) {
 					logger.error('Failed to jump to graph bucket:', undefined, error);
-				} finally {
-					setIsJumping(false);
 				}
 			},
-			[
-				filteredEntries,
-				entries,
-				hasMore,
-				lookbackHours,
-				activeFilters,
-				setSelectedIndex,
-				virtualizer,
-			]
+			[filteredEntries, lookbackHours, jumpToOffset, setSelectedIndex, virtualizer]
 		);
 
 		// Search toggle
@@ -660,14 +599,14 @@ export const UnifiedHistoryTab = forwardRef<TabFocusHandle, UnifiedHistoryTabPro
 					target.sourceSessionId
 				);
 				if (success) {
-					setEntries((prev) => prev.map((e) => (e.id === entryId ? { ...e, ...updates } : e)));
+					mutateEntries((prev) => prev.map((e) => (e.id === entryId ? { ...e, ...updates } : e)));
 					setDetailModalEntry((prev) =>
 						prev && prev.id === entryId ? { ...prev, ...updates } : prev
 					);
 				}
 				return success;
 			},
-			[entries]
+			[entries, mutateEntries]
 		);
 
 		return (
@@ -737,16 +676,29 @@ export const UnifiedHistoryTab = forwardRef<TabFocusHandle, UnifiedHistoryTabPro
 						alwaysShowViewportLabel
 						onBarClick={handleGraphBarClick}
 					/>
-					{/* Entry count badge */}
+					{/* Entry count badge — shows window position when jumped, total otherwise */}
 					{!isLoading && totalEntries > 0 && (
 						<span
 							className="text-[10px] font-mono whitespace-nowrap flex-shrink-0 mt-1"
 							style={{ color: theme.colors.textDim }}
 						>
-							{entries.length < totalEntries
-								? `${entries.length}/${totalEntries}`
-								: `${totalEntries}`}
+							{!isAtTop
+								? `${startOffset + 1}–${startOffset + entries.length}/${totalEntries}`
+								: entries.length < totalEntries
+									? `${entries.length}/${totalEntries}`
+									: `${totalEntries}`}
 						</span>
+					)}
+					{/* Back-to-top affordance — only visible after a jump */}
+					{!isAtTop && !isJumping && (
+						<button
+							onClick={() => void jumpToTop()}
+							className="flex-shrink-0 p-1.5 rounded-full transition-colors hover:bg-white/10 mt-0.5"
+							title="Back to most recent"
+							style={{ color: theme.colors.accent }}
+						>
+							<ArrowUp className="w-3.5 h-3.5" />
+						</button>
 					)}
 				</div>
 
