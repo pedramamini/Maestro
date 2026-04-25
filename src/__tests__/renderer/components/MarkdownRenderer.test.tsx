@@ -3,6 +3,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { MarkdownRenderer } from '../../../renderer/components/MarkdownRenderer';
 
+import { mockTheme } from '../../helpers/mockTheme';
 // Mock react-syntax-highlighter
 vi.mock('react-syntax-highlighter', () => ({
 	Prism: ({ children, language }: { children: string; language?: string }) => (
@@ -23,6 +24,7 @@ vi.mock('lucide-react', () => ({
 	ImageOff: () => <span data-testid="image-off-icon">ImageOff</span>,
 	Copy: () => <span data-testid="copy-icon">Copy</span>,
 	ExternalLink: () => <span data-testid="external-link-icon">ExternalLink</span>,
+	Globe: () => <span data-testid="globe-icon">Globe</span>,
 	FileText: () => <span data-testid="file-text-icon">FileText</span>,
 	Target: () => <span data-testid="target-icon">Target</span>,
 }));
@@ -44,20 +46,6 @@ vi.mock('../../../renderer/stores/fileExplorerStore', () => ({
 		}),
 	},
 }));
-
-const mockTheme = {
-	id: 'test-theme',
-	mode: 'dark',
-	colors: {
-		bgMain: '#1a1a2e',
-		bgActivity: '#16213e',
-		bgSidebar: '#111',
-		textMain: '#eee',
-		textDim: '#888',
-		border: '#333',
-		accent: '#4a9eff',
-	},
-} as any;
 
 const defaultProps = {
 	content: '',
@@ -1085,7 +1073,8 @@ describe('MarkdownRenderer', () => {
 			expect(screen.getByText('Copy Path')).toBeInTheDocument();
 			expect(screen.getByText('Open in Default App')).toBeInTheDocument();
 			expect(screen.queryByText('Copy Link')).toBeNull();
-			expect(screen.queryByText('Open in Browser')).toBeNull();
+			expect(screen.queryByText('Open in Maestro Browser')).toBeNull();
+			expect(screen.queryByText('Open in System Browser')).toBeNull();
 		});
 
 		it('shows Document Graph option for markdown file references', () => {
@@ -1123,7 +1112,7 @@ describe('MarkdownRenderer', () => {
 	});
 
 	describe('link context menu', () => {
-		it('renders a context menu with Copy Link and Open in Browser on right-click', () => {
+		it('renders a context menu with Copy Link, Open in Maestro Browser, and Open in System Browser on right-click', () => {
 			const { container } = render(
 				<MarkdownRenderer
 					{...defaultProps}
@@ -1136,7 +1125,8 @@ describe('MarkdownRenderer', () => {
 			fireEvent.contextMenu(link!, { clientX: 100, clientY: 200 });
 
 			expect(screen.getByText('Copy Link')).toBeInTheDocument();
-			expect(screen.getByText('Open in Browser')).toBeInTheDocument();
+			expect(screen.getByText('Open in Maestro Browser')).toBeInTheDocument();
+			expect(screen.getByText('Open in System Browser')).toBeInTheDocument();
 		});
 
 		it('does not show context menu for links without href', () => {

@@ -394,7 +394,7 @@ export function AutoRunDocumentSelector({
 				{/* Create New Document Button */}
 				<button
 					onClick={() => setShowCreateModal(true)}
-					className="p-2 rounded transition-colors hover:bg-white/10 shrink-0"
+					className="inline-flex h-10 min-w-10 items-center justify-center p-2 rounded transition-colors hover:bg-white/10 shrink-0"
 					style={{
 						color: theme.colors.textDim,
 						border: `1px solid ${theme.colors.border}`,
@@ -408,7 +408,7 @@ export function AutoRunDocumentSelector({
 				<button
 					onClick={onRefresh}
 					disabled={isLoading}
-					className={`p-2 rounded transition-colors hover:bg-white/10 shrink-0 ${isLoading ? 'opacity-50 cursor-not-allowed' : ''}`}
+					className={`inline-flex h-10 min-w-10 items-center justify-center p-2 rounded transition-colors hover:bg-white/10 shrink-0 ${isLoading ? 'opacity-50 cursor-not-allowed' : ''}`}
 					style={{
 						color: theme.colors.textDim,
 						border: `1px solid ${theme.colors.border}`,
@@ -421,7 +421,7 @@ export function AutoRunDocumentSelector({
 				{/* Change Folder Button */}
 				<button
 					onClick={onChangeFolder}
-					className="p-2 rounded transition-colors hover:bg-white/10 shrink-0"
+					className="inline-flex h-10 min-w-10 items-center justify-center p-2 rounded transition-colors hover:bg-white/10 shrink-0"
 					style={{
 						color: theme.colors.textDim,
 						border: `1px solid ${theme.colors.border}`,

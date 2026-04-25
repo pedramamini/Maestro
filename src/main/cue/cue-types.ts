@@ -1,5 +1,9 @@
 import * as crypto from 'crypto';
 export type {
+	CueAction,
+	CueCommand,
+	CueCommandCliCall,
+	CueCommandMode,
 	CueConfig,
 	CueEvent,
 	CueEventType,
@@ -30,6 +34,9 @@ export interface AgentCompletionData {
 	triggeredBy?: string;
 	/** Tracks how many chained hops have occurred to prevent infinite loops */
 	chainDepth?: number;
+	/** Outputs from upstream agents that should be forwarded through this agent
+	 *  to downstream agents. Keyed by source session name. */
+	forwardedOutputs?: Record<string, string>;
 }
 
 /** Create a CueEvent with auto-generated id and timestamp */

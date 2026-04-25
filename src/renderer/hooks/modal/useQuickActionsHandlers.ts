@@ -28,6 +28,8 @@ import type { RightPanelHandle } from '../../components/RightPanel';
 export interface UseQuickActionsHandlersDeps {
 	/** Refresh file tree and git state for a session */
 	refreshGitFileState: (sessionId: string) => Promise<void>;
+	/** Scan worktree directories for additions and removals */
+	refreshWorktreeState: () => Promise<void>;
 	/** Ref to main panel component */
 	mainPanelRef: React.RefObject<MainPanelHandle | null>;
 	/** Ref to right panel component */
@@ -87,13 +89,16 @@ export interface UseQuickActionsHandlersReturn {
 // Hook implementation
 // ============================================================================
 
-/** Returns the UnifiedTabRef for the currently active tab (AI, file, or terminal). */
+/** Returns the UnifiedTabRef for the currently active tab (AI, file, terminal, or browser). */
 function getActiveUnifiedRef(session: Session): UnifiedTabRef | null {
 	if (session.inputMode === 'terminal' && session.activeTerminalTabId) {
 		return { type: 'terminal', id: session.activeTerminalTabId };
 	}
 	if (session.activeFileTabId) {
 		return { type: 'file', id: session.activeFileTabId };
+	}
+	if (session.activeBrowserTabId) {
+		return { type: 'browser', id: session.activeBrowserTabId };
 	}
 	if (session.activeTabId) {
 		return { type: 'ai', id: session.activeTabId };
@@ -106,6 +111,7 @@ export function useQuickActionsHandlers(
 ): UseQuickActionsHandlersReturn {
 	const {
 		refreshGitFileState,
+		refreshWorktreeState,
 		mainPanelRef,
 		rightPanelRef,
 		handleSummarizeAndContinue,
@@ -178,14 +184,12 @@ export function useQuickActionsHandlers(
 
 	const handleQuickActionsRefreshGitFileState = useCallback(async () => {
 		if (activeSessionId) {
-			// Refresh file tree, branches/tags, and history
-			await refreshGitFileState(activeSessionId);
-			// Also refresh git info in main panel header (branch, ahead/behind, uncommitted)
+			await Promise.all([refreshGitFileState(activeSessionId), refreshWorktreeState()]);
 			await mainPanelRef.current?.refreshGitInfo();
 			setSuccessFlashNotification('Files, Git, History Refreshed');
 			setTimeout(() => setSuccessFlashNotification(null), 2000);
 		}
-	}, [activeSessionId, refreshGitFileState]);
+	}, [activeSessionId, refreshGitFileState, refreshWorktreeState]);
 
 	const handleQuickActionsDebugReleaseQueuedItem = useCallback(() => {
 		if (!activeSession || activeSession.executionQueue.length === 0) return;

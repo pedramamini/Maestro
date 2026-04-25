@@ -171,6 +171,31 @@ describe('cue-session-registry', () => {
 		});
 	});
 
+	describe('clearAllStartupKeys', () => {
+		it('clears all startup fired-keys so subsequent fires are allowed', () => {
+			registry.markStartupFired('s1', 'init-a');
+			registry.markStartupFired('s1', 'init-b');
+			registry.markStartupFired('s2', 'init-a');
+
+			registry.clearAllStartupKeys();
+
+			expect(registry.markStartupFired('s1', 'init-a')).toBe(true);
+			expect(registry.markStartupFired('s1', 'init-b')).toBe(true);
+			expect(registry.markStartupFired('s2', 'init-a')).toBe(true);
+		});
+
+		it('does not affect sessions, scheduled keys, or session state', () => {
+			registry.register('s1', makeState());
+			registry.markScheduledFired('s1', 'sub-1', '09:00');
+			registry.markStartupFired('s1', 'init');
+
+			registry.clearAllStartupKeys();
+
+			expect(registry.has('s1')).toBe(true);
+			expect(registry.markScheduledFired('s1', 'sub-1', '09:00')).toBe(false); // still deduped
+		});
+	});
+
 	describe('clear', () => {
 		it('drops all sessions and time.scheduled keys but PRESERVES startup keys', () => {
 			registry.register('s1', makeState());
@@ -199,6 +224,48 @@ describe('cue-session-registry', () => {
 			registry.clear();
 			registry.clear();
 			expect(registry.size()).toBe(0);
+		});
+	});
+
+	describe('sweepStaleScheduledKeys', () => {
+		it('returns 0 and does nothing when no keys exist', () => {
+			const evicted = registry.sweepStaleScheduledKeys('09:00');
+			expect(evicted).toBe(0);
+		});
+
+		it('does not evict a key that matches the current time', () => {
+			registry.markScheduledFired('s1', 'sub-1', '09:00');
+			const evicted = registry.sweepStaleScheduledKeys('09:00');
+			expect(evicted).toBe(0);
+			// Key still in set — re-firing is still deduped
+			expect(registry.markScheduledFired('s1', 'sub-1', '09:00')).toBe(false);
+		});
+
+		it('evicts keys whose time component differs from the current time', () => {
+			registry.markScheduledFired('s1', 'sub-1', '08:59');
+			registry.markScheduledFired('s1', 'sub-1', '09:00');
+			// At 09:01 — the 08:59 key is stale, the 09:00 key is also stale
+			const evicted = registry.sweepStaleScheduledKeys('09:01');
+			expect(evicted).toBe(2);
+			// After eviction, both slots can fire again
+			expect(registry.markScheduledFired('s1', 'sub-1', '08:59')).toBe(true);
+			expect(registry.markScheduledFired('s1', 'sub-1', '09:00')).toBe(true);
+		});
+
+		it('evicts stale keys across multiple sessions and subscriptions', () => {
+			registry.markScheduledFired('s1', 'sub-a', '10:00');
+			registry.markScheduledFired('s2', 'sub-b', '10:00');
+			registry.markScheduledFired('s1', 'sub-a', '10:01');
+			const evicted = registry.sweepStaleScheduledKeys('10:01');
+			// The two 10:00 keys are stale; the 10:01 key is current
+			expect(evicted).toBe(2);
+		});
+
+		it('does not affect startup fired keys', () => {
+			registry.markStartupFired('s1', 'init');
+			registry.sweepStaleScheduledKeys('09:00');
+			// Startup key is unaffected — still deduped
+			expect(registry.markStartupFired('s1', 'init')).toBe(false);
 		});
 	});
 });

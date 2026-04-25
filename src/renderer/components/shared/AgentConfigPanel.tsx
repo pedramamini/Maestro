@@ -15,7 +15,9 @@
 
 import { useState, useRef, useMemo, useEffect } from 'react';
 import { RefreshCw, Plus, Trash2, HelpCircle, ChevronDown } from 'lucide-react';
+import { GhostIconButton } from '../ui/GhostIconButton';
 import type { Theme, AgentConfig, AgentConfigOption } from '../../types';
+import { logger } from '../../utils/logger';
 
 // Counter for generating stable IDs for env vars
 let envVarIdCounter = 0;
@@ -331,7 +333,7 @@ export function AgentConfigPanel({
 		const maybePromise = onConfigBlur(key, committedValue);
 		if (maybePromise && typeof (maybePromise as Promise<void>).catch === 'function') {
 			void (maybePromise as Promise<void>).catch((error: unknown) => {
-				console.error(`Failed to persist config field "${key}":`, error);
+				logger.error(`Failed to persist config field "${key}":`, undefined, error);
 			});
 		}
 	};
@@ -559,17 +561,17 @@ export function AgentConfigPanel({
 								className="flex-[2] p-2 rounded border bg-transparent outline-none text-xs font-mono"
 								style={{ borderColor: theme.colors.border, color: theme.colors.textMain }}
 							/>
-							<button
+							<GhostIconButton
 								onClick={(e) => {
 									e.stopPropagation();
 									onEnvVarRemove(key);
 								}}
-								className="p-2 rounded hover:bg-white/10 transition-colors"
+								padding="p-2"
 								title="Remove variable"
-								style={{ color: theme.colors.textDim }}
+								color={theme.colors.textDim}
 							>
 								<Trash2 className="w-3 h-3" />
-							</button>
+							</GhostIconButton>
 						</div>
 					))}
 					{/* Add new env var button */}

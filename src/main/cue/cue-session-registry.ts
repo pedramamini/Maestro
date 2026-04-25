@@ -10,11 +10,16 @@
  * - register / unregister / get / has / values / size — session lifecycle
  * - markScheduledFired / evictStaleScheduledKeys / clearScheduledForSession
  *   — `time.scheduled` dedup (one fire per `(session, sub, HH:MM)`)
- * - markStartupFired / clearStartupForSession — `app.startup` dedup
- *   (one fire per `(session, sub)` per process lifecycle)
- * - clear — drops all sessions and `time.scheduled` dedup state but PRESERVES
- *   `app.startup` keys, matching the old engine.stop() semantics where toggling
- *   Cue off/on must NOT re-fire startup subscriptions.
+ * - markStartupFired / clearStartupForSession / clearAllStartupKeys
+ *   — `app.startup` dedup (one fire per `(session, sub)` per engine cycle).
+ *   `markStartupFired` returns true on first fire within the current cycle,
+ *   false if already fired. `engine.stop()` calls `clearAllStartupKeys()` to
+ *   reset the dedup set so that the next `start('system-boot')` re-fires
+ *   startup subscriptions for all sessions.
+ * - clear — drops all sessions and `time.scheduled` dedup state; `app.startup`
+ *   keys are NOT cleared by `clear()` (they remain valid within the current
+ *   engine cycle). To reset startup keys, call `clearAllStartupKeys()` or
+ *   use `engine.stop()`, which does so automatically.
  */
 
 import type { SessionState } from './cue-session-state';
@@ -48,20 +53,28 @@ export interface CueSessionRegistry {
 	/**
 	 * Atomically check-and-set the fired flag for an `(session, sub)` startup tuple.
 	 * Returns `true` if this is the first time the subscription has fired this
-	 * process lifecycle, `false` if it was already fired.
+	 * engine cycle, `false` if it was already fired.
 	 */
 	markStartupFired(sessionId: string, subName: string): boolean;
 	/** Drop all `app.startup` fired-keys for a session (on `removeSession`). */
 	clearStartupForSession(sessionId: string): void;
+	/** Drop ALL `app.startup` fired-keys. Called by the engine on `stop()` so that
+	 * re-enabling Cue re-fires startup subscriptions for the new engine cycle. */
+	clearAllStartupKeys(): void;
 
 	/**
 	 * Drop all sessions and clear `time.scheduled` dedup state.
-	 * Matches the old `engine.stop()` semantics: `app.startup` keys are PRESERVED
-	 * across stop/start cycles so toggling Cue off/on does not re-fire startup
-	 * subscriptions. Startup keys only reset when the Electron process restarts
-	 * (i.e., a new registry instance).
+	 * `app.startup` keys are cleared separately via `clearAllStartupKeys()` when
+	 * the engine stops, so re-enabling always re-fires startup subscriptions.
 	 */
 	clear(): void;
+
+	/**
+	 * Sweep all `time.scheduled` fired-keys whose time component does not match
+	 * `currentTime` ("HH:MM"). Returns the number of evicted keys.
+	 * Intended for periodic cleanup to prevent unbounded growth of the dedup set.
+	 */
+	sweepStaleScheduledKeys(currentTime: string): number;
 }
 
 export function createCueSessionRegistry(): CueSessionRegistry {
@@ -144,10 +157,27 @@ export function createCueSessionRegistry(): CueSessionRegistry {
 			}
 		},
 
+		clearAllStartupKeys() {
+			startupFiredKeys.clear();
+		},
+
 		clear() {
 			sessions.clear();
 			scheduledFiredKeys.clear();
-			// startupFiredKeys deliberately preserved across stop/start.
+		},
+
+		sweepStaleScheduledKeys(currentTime: string): number {
+			// Keys have format: ${sessionId}:${subName}:HH:MM
+			// The time is always the trailing ":HH:MM" suffix (e.g. ":09:30").
+			const suffix = `:${currentTime}`;
+			let evicted = 0;
+			for (const key of scheduledFiredKeys) {
+				if (!key.endsWith(suffix)) {
+					scheduledFiredKeys.delete(key);
+					evicted++;
+				}
+			}
+			return evicted;
 		},
 	};
 }

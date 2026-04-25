@@ -77,6 +77,7 @@ export interface AppUtilityModalsProps {
 	setUsageDashboardOpen?: (open: boolean) => void;
 	setActiveRightTab: (tab: RightPanelTab) => void;
 	setAgentSessionsOpen: (open: boolean) => void;
+	setMemoryViewerOpen?: (open: boolean) => void;
 	setActiveAgentSessionId: (id: string | null) => void;
 	setGitDiffPreview: (diff: string | null) => void;
 	setGitLogOpen: (open: boolean) => void;
@@ -100,6 +101,7 @@ export interface AppUtilityModalsProps {
 	wizardGoToStep: (step: WizardStep) => void;
 	setDebugWizardModalOpen?: (open: boolean) => void;
 	setDebugPackageModalOpen?: (open: boolean) => void;
+	setDebugApplicationStatsOpen?: (open: boolean) => void;
 	startTour: () => void;
 	setFuzzyFileSearchOpen: (open: boolean) => void;
 	onEditAgent: (session: Session) => void;
@@ -115,6 +117,7 @@ export interface AppUtilityModalsProps {
 			| 'supportsSlashCommands'
 			| 'supportsContextMerge'
 			| 'supportsThinkingDisplay'
+			| 'supportsProjectMemory'
 	) => boolean;
 	onOpenMergeSession: () => void;
 	onOpenSendToAgent: () => void;
@@ -200,6 +203,7 @@ export interface AppUtilityModalsProps {
 	onTabSelect: (tabId: string) => void;
 	onFileTabSelect?: (tabId: string) => void;
 	onTerminalTabSelect?: (tabId: string) => void;
+	onBrowserTabSelect?: (tabId: string) => void;
 	onNamedSessionSelect: (
 		agentSessionId: string,
 		projectPath: string,
@@ -302,6 +306,7 @@ export const AppUtilityModals = memo(function AppUtilityModals({
 	setUsageDashboardOpen,
 	setActiveRightTab,
 	setAgentSessionsOpen,
+	setMemoryViewerOpen,
 	setActiveAgentSessionId,
 	setGitDiffPreview,
 	setGitLogOpen,
@@ -325,6 +330,7 @@ export const AppUtilityModals = memo(function AppUtilityModals({
 	wizardGoToStep,
 	setDebugWizardModalOpen,
 	setDebugPackageModalOpen,
+	setDebugApplicationStatsOpen,
 	startTour,
 	setFuzzyFileSearchOpen,
 	onEditAgent,
@@ -402,6 +408,7 @@ export const AppUtilityModals = memo(function AppUtilityModals({
 	onTabSelect,
 	onFileTabSelect,
 	onTerminalTabSelect,
+	onBrowserTabSelect,
 	onNamedSessionSelect,
 	colorBlindMode,
 	// FileSearchModal
@@ -475,6 +482,7 @@ export const AppUtilityModals = memo(function AppUtilityModals({
 					setUsageDashboardOpen={setUsageDashboardOpen}
 					setActiveRightTab={setActiveRightTab}
 					setAgentSessionsOpen={setAgentSessionsOpen}
+					setMemoryViewerOpen={setMemoryViewerOpen}
 					setActiveAgentSessionId={setActiveAgentSessionId}
 					setGitDiffPreview={setGitDiffPreview}
 					setGitLogOpen={setGitLogOpen}
@@ -498,6 +506,7 @@ export const AppUtilityModals = memo(function AppUtilityModals({
 					wizardGoToStep={wizardGoToStep}
 					setDebugWizardModalOpen={setDebugWizardModalOpen}
 					setDebugPackageModalOpen={setDebugPackageModalOpen}
+					setDebugApplicationStatsOpen={setDebugApplicationStatsOpen}
 					startTour={startTour}
 					setFuzzyFileSearchOpen={setFuzzyFileSearchOpen}
 					onEditAgent={onEditAgent}
@@ -627,15 +636,18 @@ export const AppUtilityModals = memo(function AppUtilityModals({
 					tabs={activeSession.aiTabs}
 					fileTabs={activeSession.filePreviewTabs}
 					terminalTabs={activeSession.terminalTabs}
+					browserTabs={activeSession.browserTabs}
 					activeTabId={activeSession.activeTabId}
 					activeFileTabId={activeSession.activeFileTabId}
 					activeTerminalTabId={activeSession.activeTerminalTabId}
+					activeBrowserTabId={activeSession.activeBrowserTabId}
 					projectRoot={activeSession.projectRoot}
 					agentId={activeSession.toolType}
 					shortcut={tabShortcuts.tabSwitcher}
 					onTabSelect={onTabSelect}
 					onFileTabSelect={onFileTabSelect}
 					onTerminalTabSelect={onTerminalTabSelect}
+					onBrowserTabSelect={onBrowserTabSelect}
 					onNamedSessionSelect={onNamedSessionSelect}
 					onClose={onCloseTabSwitcher}
 					colorBlindMode={colorBlindMode}
@@ -678,6 +690,9 @@ export const AppUtilityModals = memo(function AppUtilityModals({
 					supportsThinking={promptSupportsThinking}
 					enterToSend={promptEnterToSend}
 					onToggleEnterToSend={onPromptToggleEnterToSend}
+					activeSession={activeGroupChatId ? undefined : activeSession}
+					sessions={activeGroupChatId ? sessions : undefined}
+					groups={activeGroupChatId ? groups : undefined}
 				/>
 			)}
 

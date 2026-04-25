@@ -2,8 +2,10 @@ import React, { memo, useState, useEffect, useRef, useCallback } from 'react';
 import { Search } from 'lucide-react';
 import type { Session, Group, Theme, Shortcut, RightPanelTab, SettingsTab } from '../types';
 import type { GroupChat } from '../../shared/group-chat-types';
-import { useLayerStack } from '../contexts/LayerStackContext';
+import { useModalLayer } from '../hooks/ui/useModalLayer';
 import { notifyToast } from '../stores/notificationStore';
+import { useModalStore } from '../stores/modalStore';
+import { QUICK_ACTION_PROMPTS } from '../../shared/promptDefinitions';
 import { MODAL_PRIORITIES } from '../constants/modalPriorities';
 import { gitService } from '../services/git';
 import { formatShortcutKeys } from '../utils/shortcutFormatter';
@@ -17,6 +19,8 @@ import { useSettingsStore } from '../stores/settingsStore';
 import { useFileExplorerStore } from '../stores/fileExplorerStore';
 import { buildMaestroUrl } from '../utils/buildMaestroUrl';
 import { buildSessionDeepLink } from '../../shared/deep-link-urls';
+import { openUrl } from '../utils/openUrl';
+import { logger } from '../utils/logger';
 
 interface QuickAction {
 	id: string;
@@ -59,6 +63,7 @@ interface QuickActionsModalProps {
 	setProcessMonitorOpen: (open: boolean) => void;
 	setUsageDashboardOpen?: (open: boolean) => void;
 	setAgentSessionsOpen: (open: boolean) => void;
+	setMemoryViewerOpen?: (open: boolean) => void;
 	setActiveAgentSessionId: (id: string | null) => void;
 	setGitDiffPreview: (diff: string | null) => void;
 	setGitLogOpen: (open: boolean) => void;
@@ -78,6 +83,7 @@ interface QuickActionsModalProps {
 	wizardGoToStep?: (step: WizardStep) => void;
 	setDebugWizardModalOpen?: (open: boolean) => void;
 	setDebugPackageModalOpen?: (open: boolean) => void;
+	setDebugApplicationStatsOpen?: (open: boolean) => void;
 	startTour?: () => void;
 	setFuzzyFileSearchOpen?: (open: boolean) => void;
 	onEditAgent?: (session: Session) => void;
@@ -89,7 +95,11 @@ interface QuickActionsModalProps {
 	onDeleteGroupChat?: (id: string) => void;
 	activeGroupChatId?: string | null;
 	hasActiveSessionCapability?: (
-		capability: 'supportsSessionStorage' | 'supportsSlashCommands' | 'supportsContextMerge'
+		capability:
+			| 'supportsSessionStorage'
+			| 'supportsSlashCommands'
+			| 'supportsContextMerge'
+			| 'supportsProjectMemory'
 	) => boolean;
 	// Merge session
 	onOpenMergeSession?: () => void;
@@ -173,6 +183,7 @@ export const QuickActionsModal = memo(function QuickActionsModal(props: QuickAct
 		setProcessMonitorOpen,
 		setUsageDashboardOpen,
 		setAgentSessionsOpen,
+		setMemoryViewerOpen,
 		setActiveAgentSessionId,
 		setGitDiffPreview,
 		setGitLogOpen,
@@ -192,6 +203,7 @@ export const QuickActionsModal = memo(function QuickActionsModal(props: QuickAct
 		wizardGoToStep: _wizardGoToStep,
 		setDebugWizardModalOpen,
 		setDebugPackageModalOpen,
+		setDebugApplicationStatsOpen,
 		startTour,
 		setFuzzyFileSearchOpen,
 		onEditAgent,
@@ -241,6 +253,10 @@ export const QuickActionsModal = memo(function QuickActionsModal(props: QuickAct
 	const storeSetFileTreeFilterOpen = useFileExplorerStore((s) => s.setFileTreeFilterOpen);
 	const audioFeedbackEnabled = useSettingsStore((s) => s.audioFeedbackEnabled);
 	const setAudioFeedbackEnabled = useSettingsStore((s) => s.setAudioFeedbackEnabled);
+	const idleNotificationEnabled = useSettingsStore((s) => s.idleNotificationEnabled);
+	const setIdleNotificationEnabled = useSettingsStore((s) => s.setIdleNotificationEnabled);
+	const bionifyReadingMode = useSettingsStore((s) => s.bionifyReadingMode);
+	const setBionifyReadingMode = useSettingsStore((s) => s.setBionifyReadingMode);
 	const storeSetHistorySearchFilterOpen = useUIStore((s) => s.setHistorySearchFilterOpen);
 	const setSuccessFlashNotification = useUIStore((s) => s.setSuccessFlashNotification);
 
@@ -252,21 +268,26 @@ export const QuickActionsModal = memo(function QuickActionsModal(props: QuickAct
 	const inputRef = useRef<HTMLInputElement>(null);
 	const selectedItemRef = useRef<HTMLButtonElement>(null);
 	const scrollContainerRef = useRef<HTMLDivElement>(null);
-	const layerIdRef = useRef<string>();
 	const modalRef = useRef<HTMLDivElement>(null);
-
-	const { registerLayer, unregisterLayer, updateLayerHandler } = useLayerStack();
 	const activeSession = sessions.find((s) => s.id === activeSessionId);
 
 	// Compute the active tab's position in the unified tab order for command palette conditions.
-	// This works for AI, file, and terminal tabs.
+	// This works for AI, file, terminal, and browser tabs.
 	const isTerminalMode = activeSession?.inputMode === 'terminal';
-	const hasActiveTab = !!(isAiMode || isTerminalMode || activeSession?.activeFileTabId);
+	const hasActiveTab = !!(
+		isAiMode ||
+		isTerminalMode ||
+		activeSession?.activeFileTabId ||
+		activeSession?.activeBrowserTabId
+	);
 	const activeUnifiedIndex = (() => {
 		if (!activeSession) return -1;
-		let type: 'ai' | 'file' | 'terminal';
+		let type: 'ai' | 'file' | 'terminal' | 'browser';
 		let id: string | undefined;
-		if (isTerminalMode && activeSession.activeTerminalTabId) {
+		if (activeSession.activeBrowserTabId) {
+			type = 'browser';
+			id = activeSession.activeBrowserTabId;
+		} else if (isTerminalMode && activeSession.activeTerminalTabId) {
 			type = 'terminal';
 			id = activeSession.activeTerminalTabId;
 		} else if (activeSession.activeFileTabId) {
@@ -283,44 +304,15 @@ export const QuickActionsModal = memo(function QuickActionsModal(props: QuickAct
 	})();
 	const unifiedTabCount = activeSession?.unifiedTabOrder?.length ?? 0;
 
-	// Register layer on mount (handler will be updated by separate effect)
-	useEffect(() => {
-		layerIdRef.current = registerLayer({
-			type: 'modal',
-			priority: MODAL_PRIORITIES.QUICK_ACTION,
-			blocksLowerLayers: true,
-			capturesFocus: true,
-			focusTrap: 'strict',
-			ariaLabel: 'Quick Actions',
-			onEscape: () => setQuickActionOpen(false), // Initial handler, updated below
-		});
-
-		return () => {
-			if (layerIdRef.current) {
-				unregisterLayer(layerIdRef.current);
-			}
-		};
-	}, [registerLayer, unregisterLayer, setQuickActionOpen]);
-
-	// Update handler when mode changes - use a ref-based approach to avoid stale closure
-	const handleEscapeRef = useRef<() => void>(() => setQuickActionOpen(false));
-	useEffect(() => {
-		handleEscapeRef.current = () => {
-			// Handle escape based on current mode
-			if (mode === 'move-to-group') {
-				setMode('main');
-				// Note: Selection will be reset by the search/mode change useEffect
-			} else {
-				setQuickActionOpen(false);
-			}
-		};
-	}, [mode, setQuickActionOpen]);
-
-	useEffect(() => {
-		if (layerIdRef.current) {
-			updateLayerHandler(layerIdRef.current, () => handleEscapeRef.current());
+	// Register layer on mount - escape behavior depends on current mode
+	useModalLayer(MODAL_PRIORITIES.QUICK_ACTION, 'Quick Actions', () => {
+		if (mode === 'move-to-group') {
+			setMode('main');
+			// Note: Selection will be reset by the search/mode change useEffect
+		} else {
+			setQuickActionOpen(false);
 		}
-	}, [updateLayerHandler]);
+	});
 
 	// Focus input on mount
 	useEffect(() => {
@@ -518,7 +510,7 @@ export const QuickActionsModal = memo(function QuickActionsModal(props: QuickAct
 		},
 		{
 			id: 'nextUnreadTab',
-			label: 'Next Unread Tab',
+			label: 'Next Unread / Draft Tab',
 			shortcut: shortcuts.nextUnreadTab,
 			action: () => {
 				const result = findNextUnreadSession(sessions, activeSessionId);
@@ -547,7 +539,7 @@ export const QuickActionsModal = memo(function QuickActionsModal(props: QuickAct
 						);
 					}
 				} else {
-					setSuccessFlashNotification('No unread tabs');
+					setSuccessFlashNotification('No unread or draft tabs');
 					setTimeout(() => setSuccessFlashNotification(null), 2000);
 				}
 				setQuickActionOpen(false);
@@ -630,13 +622,44 @@ export const QuickActionsModal = memo(function QuickActionsModal(props: QuickAct
 				]
 			: []),
 		{
+			id: 'toggleBionifyReadingMode',
+			label: bionifyReadingMode ? 'Turn Off Bionify Emphasis' : 'Turn On Bionify Emphasis',
+			subtext: `Bionify emphasis: ${bionifyReadingMode ? 'enabled' : 'disabled'}`,
+			action: () => {
+				const newState = !bionifyReadingMode;
+				setBionifyReadingMode(newState);
+				setSuccessFlashNotification(newState ? 'Bionify: ON' : 'Bionify: OFF');
+				setTimeout(() => setSuccessFlashNotification(null), 2000);
+				setQuickActionOpen(false);
+			},
+		},
+		{
 			id: 'toggleCustomNotification',
 			label: audioFeedbackEnabled
 				? 'Turn Off Custom Notifications'
 				: 'Turn On Custom Notifications',
 			subtext: `Custom notifications: ${audioFeedbackEnabled ? 'enabled' : 'disabled'}`,
 			action: () => {
-				setAudioFeedbackEnabled(!audioFeedbackEnabled);
+				const newState = !audioFeedbackEnabled;
+				setAudioFeedbackEnabled(newState);
+				setSuccessFlashNotification(
+					newState ? 'Custom Notifications: ON' : 'Custom Notifications: OFF'
+				);
+				setTimeout(() => setSuccessFlashNotification(null), 2000);
+				setQuickActionOpen(false);
+			},
+		},
+		{
+			id: 'toggleIdleNotification',
+			label: idleNotificationEnabled ? 'Turn Off Idle Notifications' : 'Turn On Idle Notifications',
+			subtext: `Idle notifications: ${idleNotificationEnabled ? 'enabled' : 'disabled'}`,
+			action: () => {
+				const newState = !idleNotificationEnabled;
+				setIdleNotificationEnabled(newState);
+				setSuccessFlashNotification(
+					newState ? 'Idle Notifications: ON' : 'Idle Notifications: OFF'
+				);
+				setTimeout(() => setSuccessFlashNotification(null), 2000);
 				setQuickActionOpen(false);
 			},
 		},
@@ -953,6 +976,14 @@ export const QuickActionsModal = memo(function QuickActionsModal(props: QuickAct
 				setQuickActionOpen(false);
 			},
 		},
+		...QUICK_ACTION_PROMPTS.map((p) => ({
+			id: `edit-prompt-${p.id}`,
+			label: `Edit Prompt: ${p.label}`,
+			action: () => {
+				useModalStore.getState().openModal('settings', { tab: 'prompts', promptId: p.id });
+				setQuickActionOpen(false);
+			},
+		})),
 		{
 			id: 'shortcuts',
 			label: 'View Shortcuts',
@@ -1015,6 +1046,21 @@ export const QuickActionsModal = memo(function QuickActionsModal(props: QuickAct
 						action: () => {
 							setActiveAgentSessionId(null);
 							setAgentSessionsOpen(true);
+							setQuickActionOpen(false);
+						},
+					},
+				]
+			: []),
+		...(activeSession &&
+		setMemoryViewerOpen &&
+		hasActiveSessionCapability?.('supportsProjectMemory')
+			? [
+					{
+						id: 'openMemoryViewer',
+						label: `View Agent Memories for ${activeSession.name}`,
+						shortcut: shortcuts.openMemoryViewer,
+						action: () => {
+							setMemoryViewerOpen(true);
 							setQuickActionOpen(false);
 						},
 					},
@@ -1114,7 +1160,7 @@ export const QuickActionsModal = memo(function QuickActionsModal(props: QuickAct
 							try {
 								const browserUrl = await gitService.getRemoteBrowserUrl(cwd);
 								if (browserUrl) {
-									await window.maestro.shell.openExternal(browserUrl);
+									openUrl(browserUrl);
 								} else {
 									notifyToast({
 										type: 'error',
@@ -1123,7 +1169,7 @@ export const QuickActionsModal = memo(function QuickActionsModal(props: QuickAct
 									});
 								}
 							} catch (error) {
-								console.error('Failed to open repository in browser:', error);
+								logger.error('Failed to open repository in browser:', undefined, error);
 								notifyToast({
 									type: 'error',
 									title: 'Error',
@@ -1216,7 +1262,7 @@ export const QuickActionsModal = memo(function QuickActionsModal(props: QuickAct
 			label: 'Maestro Website',
 			subtext: 'Open the Maestro website',
 			action: () => {
-				window.maestro.shell.openExternal(buildMaestroUrl('https://runmaestro.ai/'));
+				openUrl(buildMaestroUrl('https://runmaestro.ai/'));
 				setQuickActionOpen(false);
 			},
 		},
@@ -1225,7 +1271,7 @@ export const QuickActionsModal = memo(function QuickActionsModal(props: QuickAct
 			label: 'Documentation and User Guide',
 			subtext: 'Open the Maestro documentation',
 			action: () => {
-				window.maestro.shell.openExternal(buildMaestroUrl('https://docs.runmaestro.ai/'));
+				openUrl(buildMaestroUrl('https://docs.runmaestro.ai/'));
 				setQuickActionOpen(false);
 			},
 		},
@@ -1234,7 +1280,7 @@ export const QuickActionsModal = memo(function QuickActionsModal(props: QuickAct
 			label: 'Join Discord',
 			subtext: 'Join the Maestro community',
 			action: () => {
-				window.maestro.shell.openExternal(buildMaestroUrl('https://runmaestro.ai/discord'));
+				openUrl(buildMaestroUrl('https://runmaestro.ai/discord'));
 				setQuickActionOpen(false);
 			},
 		},
@@ -1312,16 +1358,20 @@ export const QuickActionsModal = memo(function QuickActionsModal(props: QuickAct
 				setQuickActionOpen(false);
 			},
 		},
-		{
-			id: 'goToAutoRun',
-			label: 'Go to Auto Run Tab',
-			shortcut: shortcuts.goToAutoRun,
-			action: () => {
-				setRightPanelOpen(true);
-				setActiveRightTab('autorun');
-				setQuickActionOpen(false);
-			},
-		},
+		...(useSettingsStore.getState().autoRunDisabled
+			? []
+			: [
+					{
+						id: 'goToAutoRun',
+						label: 'Go to Auto Run Tab',
+						shortcut: shortcuts.goToAutoRun,
+						action: () => {
+							setRightPanelOpen(true);
+							setActiveRightTab('autorun');
+							setQuickActionOpen(false);
+						},
+					},
+				]),
 		// Playbook Exchange - browse and import community playbooks
 		...(onOpenPlaybookExchange
 			? [
@@ -1410,7 +1460,8 @@ export const QuickActionsModal = memo(function QuickActionsModal(props: QuickAct
 				]
 			: []),
 		// Auto Run reset tasks - only show when there are completed tasks in the selected document
-		...(autoRunSelectedDocument &&
+		...(!useSettingsStore.getState().autoRunDisabled &&
+		autoRunSelectedDocument &&
 		autoRunCompletedTaskCount &&
 		autoRunCompletedTaskCount > 0 &&
 		onAutoRunResetTasks
@@ -1559,7 +1610,7 @@ export const QuickActionsModal = memo(function QuickActionsModal(props: QuickAct
 						})),
 					}))
 				);
-				console.log('[Debug] Reset busy state for all sessions');
+				logger.info('[Debug] Reset busy state for all sessions');
 				setQuickActionOpen(false);
 			},
 		},
@@ -1588,7 +1639,7 @@ export const QuickActionsModal = memo(function QuickActionsModal(props: QuickAct
 									};
 								})
 							);
-							console.log('[Debug] Reset busy state for session:', activeSessionId);
+							logger.info('[Debug] Reset busy state for session:', undefined, activeSessionId);
 							setQuickActionOpen(false);
 						},
 					},
@@ -1597,8 +1648,10 @@ export const QuickActionsModal = memo(function QuickActionsModal(props: QuickAct
 		{
 			id: 'debugLogSessions',
 			label: 'Debug: Log Session State',
-			subtext: 'Print session state to console',
+			subtext: 'Print session state to DevTools console',
 			action: () => {
+				// console.log (not logger.info) so output lands in the renderer DevTools
+				// console where objects are expandable, not the main process log file.
 				console.log(
 					'[Debug] All sessions:',
 					sessions.map((s) => ({
@@ -1626,6 +1679,19 @@ export const QuickActionsModal = memo(function QuickActionsModal(props: QuickAct
 						subtext: 'Open the developer playground',
 						action: () => {
 							setPlaygroundOpen(true);
+							setQuickActionOpen(false);
+						},
+					},
+				]
+			: []),
+		...(setDebugApplicationStatsOpen
+			? [
+					{
+						id: 'debugApplicationStats',
+						label: 'Debug: View Application Stats',
+						subtext: 'Memory and data footprint per loaded agent',
+						action: () => {
+							setDebugApplicationStatsOpen(true);
 							setQuickActionOpen(false);
 						},
 					},
@@ -1667,10 +1733,14 @@ export const QuickActionsModal = memo(function QuickActionsModal(props: QuickAct
 					if (installationId) {
 						await safeClipboardWrite(installationId);
 						notifyToast({ type: 'success', title: 'Install GUID Copied', message: installationId });
-						console.log('[Debug] Installation GUID copied to clipboard:', installationId);
+						logger.info(
+							'[Debug] Installation GUID copied to clipboard:',
+							undefined,
+							installationId
+						);
 					} else {
 						notifyToast({ type: 'error', title: 'Error', message: 'No installation GUID found' });
-						console.warn('[Debug] No installation GUID found');
+						logger.warn('[Debug] No installation GUID found');
 					}
 				} catch (err) {
 					notifyToast({
@@ -1678,7 +1748,7 @@ export const QuickActionsModal = memo(function QuickActionsModal(props: QuickAct
 						title: 'Error',
 						message: 'Failed to copy installation GUID',
 					});
-					console.error('[Debug] Failed to copy installation GUID:', err);
+					logger.error('[Debug] Failed to copy installation GUID:', undefined, err);
 				}
 				setQuickActionOpen(false);
 			},
@@ -1686,14 +1756,18 @@ export const QuickActionsModal = memo(function QuickActionsModal(props: QuickAct
 	];
 
 	const groupActions: QuickAction[] = [
-		{
-			id: 'back',
-			label: '← Back to main menu',
-			action: () => {
-				setMode('main');
-				setSelectedIndex(0);
-			},
-		},
+		...(initialMode === 'main'
+			? [
+					{
+						id: 'back',
+						label: '← Back to main menu',
+						action: () => {
+							setMode('main');
+							setSelectedIndex(0);
+						},
+					},
+				]
+			: []),
 		{ id: 'no-group', label: '📁 No Group (Root)', action: () => handleMoveToGroup('') },
 		...groups.map((g) => ({
 			id: `group-${g.id}`,

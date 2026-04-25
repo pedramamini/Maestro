@@ -29,6 +29,7 @@ vi.mock('../../../main/cue/cue-yaml-loader', () => ({
 	loadCueConfig: (...args: unknown[]) => mockLoadCueConfig(args[0] as string),
 	loadCueConfigDetailed: (...args: unknown[]) => mockLoadCueConfigDetailed(args[0] as string),
 	watchCueYaml: (...args: unknown[]) => mockWatchCueYaml(args[0] as string, args[1] as () => void),
+	findAncestorCueConfigRoot: () => null,
 }));
 
 // Mock the file watcher
@@ -60,6 +61,15 @@ vi.mock('../../../main/cue/cue-db', () => ({
 	isCueDbReady: () => true,
 	recordCueEvent: vi.fn(),
 	updateCueEventStatus: vi.fn(),
+	safeRecordCueEvent: vi.fn(),
+	safeUpdateCueEventStatus: vi.fn(),
+	persistQueuedEvent: vi.fn(),
+	removeQueuedEvent: vi.fn(),
+	getQueuedEvents: vi.fn(() => []),
+	clearPersistedQueue: vi.fn(),
+	safePersistQueuedEvent: vi.fn(),
+	safeRemoveQueuedEvent: vi.fn(),
+	clearGitHubSeenForSubscription: vi.fn(),
 }));
 
 // Mock crypto
@@ -137,8 +147,12 @@ describe('CueEngine', () => {
 			engine.start();
 			engine.stop();
 
-			expect(deps.onLog).toHaveBeenCalledWith('cue', expect.stringContaining('started'));
-			expect(deps.onLog).toHaveBeenCalledWith('cue', expect.stringContaining('stopped'));
+			expect(deps.onLog).toHaveBeenCalledWith('cue', expect.stringContaining('started'), {
+				type: 'engineStarted',
+			});
+			expect(deps.onLog).toHaveBeenCalledWith('cue', expect.stringContaining('stopped'), {
+				type: 'engineStopped',
+			});
 		});
 
 		it('does not enable when initCueDb throws', () => {
@@ -1618,7 +1632,10 @@ describe('CueEngine', () => {
 			expect(graph[0].sessionId).toBe('session-1');
 		});
 
-		it('includes subscriptions with agent_id targeting a different session', () => {
+		it('filters out subscriptions whose agent_id targets a different session', () => {
+			// getGraphData reports only subscriptions that belong to each session
+			// (agent_id matches, or agent_id absent) so the pipeline editor never
+			// sees a subscription under an unrelated session.
 			const config = createMockConfig({
 				subscriptions: [
 					{
@@ -1644,13 +1661,14 @@ describe('CueEngine', () => {
 
 			const graph = engine.getGraphData();
 			expect(graph).toHaveLength(1);
-			expect(graph[0].subscriptions).toHaveLength(2);
-			expect(graph[0].subscriptions.map((s) => s.name)).toEqual(['step-a', 'step-b']);
+			// Only step-a (no agent_id, so unbound) is reported — step-b targets a
+			// different session.
+			expect(graph[0].subscriptions.map((s) => s.name)).toEqual(['step-a']);
 
 			engine.stop();
 		});
 
-		it('includes subscriptions with foreign agent_id when loading from disk', () => {
+		it('filters foreign-agent_id subscriptions when loading from disk (engine disabled)', () => {
 			const config = createMockConfig({
 				subscriptions: [
 					{
@@ -1676,11 +1694,12 @@ describe('CueEngine', () => {
 
 			const graph = engine.getGraphData();
 			expect(graph).toHaveLength(1);
-			expect(graph[0].subscriptions).toHaveLength(2);
-			expect(graph[0].subscriptions.map((s) => s.name)).toEqual(['trigger', 'downstream']);
+			// Only `trigger` (unbound) is reported — `downstream` is bound to a
+			// session that doesn't exist in this view.
+			expect(graph[0].subscriptions.map((s) => s.name)).toEqual(['trigger']);
 		});
 
-		it('returns all subscriptions from multiple sessions sharing the same config', () => {
+		it('scopes subscriptions to their owning session when multiple sessions share a config', () => {
 			const config = createMockConfig({
 				subscriptions: [
 					{
@@ -1712,9 +1731,10 @@ describe('CueEngine', () => {
 
 			const graph = engine.getGraphData();
 			expect(graph).toHaveLength(2);
-			// Each session should report ALL subscriptions (not just its own)
-			expect(graph[0].subscriptions).toHaveLength(2);
-			expect(graph[1].subscriptions).toHaveLength(2);
+			// Each session reports only its own subscriptions (agent_id match).
+			const byId = new Map(graph.map((g) => [g.sessionId, g]));
+			expect(byId.get('session-1')!.subscriptions.map((s) => s.name)).toEqual(['step-a']);
+			expect(byId.get('session-2')!.subscriptions.map((s) => s.name)).toEqual(['step-b']);
 
 			engine.stop();
 		});
@@ -2974,6 +2994,386 @@ describe('CueEngine', () => {
 					call[0] === 'warn' && typeof call[1] === 'string' && call[1].includes('prompt_file')
 			);
 			expect(warnCalls).toHaveLength(0);
+
+			engine.stop();
+		});
+	});
+
+	describe('triggerSubscription with sourceAgentId', () => {
+		it('should include sourceAgentId in the event payload', () => {
+			const config = createMockConfig({
+				subscriptions: [
+					{
+						name: 'test-sub',
+						event: 'cli.trigger',
+						enabled: true,
+						prompt: 'Do the thing',
+					},
+				],
+			});
+			mockLoadCueConfig.mockReturnValue(config);
+
+			const deps = createMockDeps();
+			const engine = new CueEngine(deps);
+			engine.start();
+
+			const result = engine.triggerSubscription('test-sub', undefined, 'agent-xyz-123');
+			expect(result).toBe(true);
+
+			// Verify the event passed to onCueRun contains sourceAgentId in payload
+			expect(deps.onCueRun).toHaveBeenCalledWith(
+				expect.objectContaining({
+					event: expect.objectContaining({
+						payload: expect.objectContaining({
+							manual: true,
+							sourceAgentId: 'agent-xyz-123',
+						}),
+					}),
+				})
+			);
+
+			engine.stop();
+		});
+
+		it('should not include sourceAgentId in event payload when not provided', () => {
+			const config = createMockConfig({
+				subscriptions: [
+					{
+						name: 'test-sub',
+						event: 'cli.trigger',
+						enabled: true,
+						prompt: 'Do the thing',
+					},
+				],
+			});
+			mockLoadCueConfig.mockReturnValue(config);
+
+			const deps = createMockDeps();
+			const engine = new CueEngine(deps);
+			engine.start();
+
+			engine.triggerSubscription('test-sub');
+
+			expect(deps.onCueRun).toHaveBeenCalledWith(
+				expect.objectContaining({
+					event: expect.objectContaining({
+						payload: expect.objectContaining({
+							manual: true,
+						}),
+					}),
+				})
+			);
+			// Verify sourceAgentId is NOT in the payload
+			const callArgs = (deps.onCueRun as ReturnType<typeof vi.fn>).mock.calls[0][0];
+			expect(callArgs.event.payload).not.toHaveProperty('sourceAgentId');
+
+			engine.stop();
+		});
+
+		it('should include both sourceAgentId and cliPrompt in event payload', () => {
+			const config = createMockConfig({
+				subscriptions: [
+					{
+						name: 'test-sub',
+						event: 'cli.trigger',
+						enabled: true,
+						prompt: 'Default prompt',
+					},
+				],
+			});
+			mockLoadCueConfig.mockReturnValue(config);
+
+			const deps = createMockDeps();
+			const engine = new CueEngine(deps);
+			engine.start();
+
+			engine.triggerSubscription('test-sub', 'override prompt', 'agent-abc');
+
+			expect(deps.onCueRun).toHaveBeenCalledWith(
+				expect.objectContaining({
+					event: expect.objectContaining({
+						payload: expect.objectContaining({
+							manual: true,
+							sourceAgentId: 'agent-abc',
+							cliPrompt: 'override prompt',
+						}),
+					}),
+				})
+			);
+
+			engine.stop();
+		});
+
+		it('should return false when subscription is not found', () => {
+			const config = createMockConfig({ subscriptions: [] });
+			mockLoadCueConfig.mockReturnValue(config);
+
+			const deps = createMockDeps();
+			const engine = new CueEngine(deps);
+			engine.start();
+
+			const result = engine.triggerSubscription('nonexistent', undefined, 'agent-xyz');
+			expect(result).toBe(false);
+			expect(deps.onCueRun).not.toHaveBeenCalled();
+
+			engine.stop();
+		});
+	});
+
+	describe('triggerSubscription fires sibling branch group', () => {
+		// Regression guard for the per-branch fan-out shape (two parallel
+		// subs sharing one trigger). A natural scheduled tick fires every
+		// armed sub; manual trigger must match that so the editor Play
+		// button runs both branches in one click, not just the one whose
+		// name happens to be bound to the trigger node.
+		//
+		// Each config raises `max_concurrent` so the run manager dispatches
+		// all siblings immediately instead of queueing the tail. The queued
+		// case is still correct (queued runs execute when a slot frees) but
+		// would make the assertions flaky on call-count timing.
+		const CONCURRENT_SETTINGS = {
+			timeout_minutes: 30,
+			timeout_on_fail: 'break' as const,
+			max_concurrent: 4,
+			queue_size: 10,
+		};
+
+		it('fires every branch sub sharing pipeline_name + event config when exact name matches', () => {
+			const config = createMockConfig({
+				settings: CONCURRENT_SETTINGS,
+				subscriptions: [
+					{
+						name: 'Pipeline 1-cmd-a',
+						event: 'time.scheduled',
+						enabled: true,
+						prompt: './script1.sh',
+						action: 'command',
+						command: { mode: 'shell', shell: './script1.sh' },
+						schedule_times: ['07:00'],
+						pipeline_name: 'Pipeline 1',
+					},
+					{
+						name: 'Pipeline 1-cmd-b',
+						event: 'time.scheduled',
+						enabled: true,
+						prompt: './script2.sh',
+						action: 'command',
+						command: { mode: 'shell', shell: './script2.sh' },
+						schedule_times: ['07:00'],
+						pipeline_name: 'Pipeline 1',
+					},
+				],
+			});
+			mockLoadCueConfig.mockReturnValue(config);
+
+			const deps = createMockDeps();
+			const engine = new CueEngine(deps);
+			engine.start();
+
+			vi.clearAllMocks();
+			const result = engine.triggerSubscription('Pipeline 1-cmd-a');
+
+			expect(result).toBe(true);
+			const names = (deps.onCueRun as ReturnType<typeof vi.fn>).mock.calls
+				.map((c) => c[0].subscriptionName)
+				.sort();
+			expect(names).toEqual(['Pipeline 1-cmd-a', 'Pipeline 1-cmd-b']);
+
+			engine.stop();
+		});
+
+		it('falls back to pipeline_name when no sub has that exact name', () => {
+			// Pipeline-editor Play-button case: a freshly-rebuilt trigger node
+			// that hasn't been reloaded from YAML carries only the pipeline
+			// name. No sub is named "Pipeline 1" exactly in the per-branch
+			// emission, but the fallback resolves to the pipeline's initial-
+			// trigger subs and fires them all.
+			const config = createMockConfig({
+				settings: CONCURRENT_SETTINGS,
+				subscriptions: [
+					{
+						name: 'Pipeline 1-cmd-a',
+						event: 'time.scheduled',
+						enabled: true,
+						prompt: './a.sh',
+						action: 'command',
+						command: { mode: 'shell', shell: './a.sh' },
+						schedule_times: ['07:00'],
+						pipeline_name: 'Pipeline 1',
+					},
+					{
+						name: 'Pipeline 1-cmd-b',
+						event: 'time.scheduled',
+						enabled: true,
+						prompt: './b.sh',
+						action: 'command',
+						command: { mode: 'shell', shell: './b.sh' },
+						schedule_times: ['07:00'],
+						pipeline_name: 'Pipeline 1',
+					},
+				],
+			});
+			mockLoadCueConfig.mockReturnValue(config);
+
+			const deps = createMockDeps();
+			const engine = new CueEngine(deps);
+			engine.start();
+
+			vi.clearAllMocks();
+			const result = engine.triggerSubscription('Pipeline 1');
+
+			expect(result).toBe(true);
+			const names = (deps.onCueRun as ReturnType<typeof vi.fn>).mock.calls
+				.map((c) => c[0].subscriptionName)
+				.sort();
+			expect(names).toEqual(['Pipeline 1-cmd-a', 'Pipeline 1-cmd-b']);
+
+			engine.stop();
+		});
+
+		it('does NOT fire chain subs (agent.completed) even if they share pipeline_name', () => {
+			// Chain subs exist for every non-initial node in a pipeline.
+			// They must only fire on their upstream's completion, not on a
+			// manual pipeline trigger — otherwise a chain would dispatch
+			// with no upstream output and run its downstream agent blindly.
+			const config = createMockConfig({
+				settings: CONCURRENT_SETTINGS,
+				subscriptions: [
+					{
+						name: 'Pipeline 1-cmd-a',
+						event: 'time.scheduled',
+						enabled: true,
+						prompt: './a.sh',
+						action: 'command',
+						command: { mode: 'shell', shell: './a.sh' },
+						schedule_times: ['07:00'],
+						pipeline_name: 'Pipeline 1',
+					},
+					{
+						name: 'Pipeline 1-chain-1',
+						event: 'agent.completed',
+						enabled: true,
+						prompt: 'run agent',
+						source_session: 'agent-a',
+						pipeline_name: 'Pipeline 1',
+					},
+				],
+			});
+			mockLoadCueConfig.mockReturnValue(config);
+
+			const deps = createMockDeps();
+			const engine = new CueEngine(deps);
+			engine.start();
+
+			vi.clearAllMocks();
+			const result = engine.triggerSubscription('Pipeline 1');
+
+			expect(result).toBe(true);
+			const names = (deps.onCueRun as ReturnType<typeof vi.fn>).mock.calls.map(
+				(c) => c[0].subscriptionName
+			);
+			expect(names).toEqual(['Pipeline 1-cmd-a']);
+			expect(names).not.toContain('Pipeline 1-chain-1');
+
+			engine.stop();
+		});
+
+		it('fires only the anchor (not the group) when promptOverride is provided', () => {
+			// CLI-shaped call: `maestro cue trigger <sub> --prompt "..."` wants
+			// exactly that sub to run with the override. Applying the override
+			// to sibling branches would surprise the caller.
+			const config = createMockConfig({
+				settings: CONCURRENT_SETTINGS,
+				subscriptions: [
+					{
+						name: 'Pipeline 1-cmd-a',
+						event: 'cli.trigger',
+						enabled: true,
+						prompt: './a.sh',
+						pipeline_name: 'Pipeline 1',
+					},
+					{
+						name: 'Pipeline 1-cmd-b',
+						event: 'cli.trigger',
+						enabled: true,
+						prompt: './b.sh',
+						pipeline_name: 'Pipeline 1',
+					},
+				],
+			});
+			mockLoadCueConfig.mockReturnValue(config);
+
+			const deps = createMockDeps();
+			const engine = new CueEngine(deps);
+			engine.start();
+
+			vi.clearAllMocks();
+			const result = engine.triggerSubscription('Pipeline 1-cmd-a', 'override prompt');
+
+			expect(result).toBe(true);
+			const names = (deps.onCueRun as ReturnType<typeof vi.fn>).mock.calls.map(
+				(c) => c[0].subscriptionName
+			);
+			expect(names).toEqual(['Pipeline 1-cmd-a']);
+
+			engine.stop();
+		});
+
+		it('does NOT fire unrelated triggers that share pipeline_name but differ in event config', () => {
+			// Multi-trigger pipelines: morning schedule (07:00) and evening
+			// schedule (19:00) share pipeline_name but are intentionally
+			// independent. The group key pins on event-specific config so
+			// clicking Play on the morning trigger does NOT fire evening.
+			const config = createMockConfig({
+				settings: CONCURRENT_SETTINGS,
+				subscriptions: [
+					{
+						name: 'morning-1',
+						event: 'time.scheduled',
+						enabled: true,
+						prompt: './morning1.sh',
+						action: 'command',
+						command: { mode: 'shell', shell: './morning1.sh' },
+						schedule_times: ['07:00'],
+						pipeline_name: 'Pipeline 1',
+					},
+					{
+						name: 'morning-2',
+						event: 'time.scheduled',
+						enabled: true,
+						prompt: './morning2.sh',
+						action: 'command',
+						command: { mode: 'shell', shell: './morning2.sh' },
+						schedule_times: ['07:00'],
+						pipeline_name: 'Pipeline 1',
+					},
+					{
+						name: 'evening',
+						event: 'time.scheduled',
+						enabled: true,
+						prompt: './evening.sh',
+						action: 'command',
+						command: { mode: 'shell', shell: './evening.sh' },
+						schedule_times: ['19:00'],
+						pipeline_name: 'Pipeline 1',
+					},
+				],
+			});
+			mockLoadCueConfig.mockReturnValue(config);
+
+			const deps = createMockDeps();
+			const engine = new CueEngine(deps);
+			engine.start();
+
+			vi.clearAllMocks();
+			const result = engine.triggerSubscription('morning-1');
+
+			expect(result).toBe(true);
+			const names = (deps.onCueRun as ReturnType<typeof vi.fn>).mock.calls
+				.map((c) => c[0].subscriptionName)
+				.sort();
+			expect(names).toEqual(['morning-1', 'morning-2']);
+			expect(names).not.toContain('evening');
 
 			engine.stop();
 		});

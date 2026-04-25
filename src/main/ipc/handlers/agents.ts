@@ -2,6 +2,7 @@ import { ipcMain } from 'electron';
 import Store from 'electron-store';
 import * as fs from 'fs';
 import * as path from 'path';
+import type { AgentConfigsData } from '../../stores/types';
 import {
 	AgentDetector,
 	AGENT_DEFINITIONS,
@@ -23,6 +24,7 @@ import { buildSshCommand, RemoteCommandOptions } from '../../utils/ssh-command-b
 import { stripAnsi } from '../../utils/stripAnsi';
 import { SshRemoteConfig } from '../../../shared/types';
 import { MaestroSettings } from './persistence';
+import { captureException } from '../../utils/sentry';
 
 const LOG_CONTEXT = '[AgentDetector]';
 const CONFIG_LOG_CONTEXT = '[AgentConfig]';
@@ -35,6 +37,35 @@ const handlerOpts = (
 	context,
 	operation,
 });
+
+// Copilot CLI built-in slash commands (always available in interactive mode)
+const COPILOT_BUILTIN_COMMANDS = [
+	'help',
+	'clear',
+	'compact',
+	'context',
+	'model',
+	'usage',
+	'session',
+	'share',
+	'mcp',
+	'fleet',
+	'tasks',
+	'delegate',
+	'review',
+];
+
+/**
+ * Discover GitHub Copilot CLI slash commands.
+ *
+ * Unlike Claude Code (which emits commands via its init JSON event), Copilot
+ * commands are interactive-only and cannot be discovered by spawning the CLI
+ * in batch mode.  We return a static list of well-documented built-in commands.
+ */
+function discoverCopilotSlashCommands(): { name: string; description: string }[] {
+	logger.info(`Discovered ${COPILOT_BUILTIN_COMMANDS.length} Copilot slash commands`, LOG_CONTEXT);
+	return COPILOT_BUILTIN_COMMANDS.map((cmd) => ({ name: cmd, description: '' }));
+}
 
 /**
  * Discover OpenCode slash commands by reading from disk.
@@ -145,13 +176,6 @@ async function discoverOpenCodeSlashCommands(cwd: string): Promise<DiscoveredCom
 }
 
 /**
- * Interface for agent configuration store data
- */
-interface AgentConfigsData {
-	configs: Record<string, Record<string, any>>;
-}
-
-/**
  * Dependencies required for agents handler registration
  */
 export interface AgentsHandlerDependencies {
@@ -190,7 +214,7 @@ function getSshRemoteById(
  * Helper to strip non-serializable functions from agent configs.
  * Agent configs can have function properties that cannot be sent over IPC:
  * - argBuilder in configOptions
- * - resumeArgs, modelArgs, workingDirArgs, imageArgs, promptArgs on the agent config
+ * - resumeArgs, modelArgs, workingDirArgs, imageArgs, imagePromptBuilder, promptArgs on the agent config
  */
 function stripAgentFunctions(agent: any) {
 	if (!agent) return null;
@@ -201,6 +225,7 @@ function stripAgentFunctions(agent: any) {
 		modelArgs: _modelArgs,
 		workingDirArgs: _workingDirArgs,
 		imageArgs: _imageArgs,
+		imagePromptBuilder: _imagePromptBuilder,
 		promptArgs: _promptArgs,
 		...serializableAgent
 	} = agent;
@@ -216,7 +241,7 @@ function stripAgentFunctions(agent: any) {
 
 /**
  * Detect agents on a remote SSH host.
- * Uses 'which' command over SSH to check for agent binaries.
+ * Uses POSIX 'command -v' over SSH to check for agent binaries.
  * Includes a timeout to handle unreachable hosts gracefully.
  */
 async function detectAgentsRemote(sshRemote: SshRemoteConfig): Promise<any[]> {
@@ -228,10 +253,13 @@ async function detectAgentsRemote(sshRemote: SshRemoteConfig): Promise<any[]> {
 	let connectionError: string | undefined;
 
 	for (const agentDef of AGENT_DEFINITIONS) {
-		// Build SSH command to check for the binary using 'which'
+		// Build SSH command to check for the binary using POSIX 'command -v'.
+		// Preferred over 'which' because it's a shell builtin (no PATH lookup needed),
+		// avoids /usr/bin/which on hosts without it, and behaves consistently across
+		// bash/dash/zsh. The command runs inside /bin/bash via buildSshCommand().
 		const remoteOptions: RemoteCommandOptions = {
-			command: 'which',
-			args: [agentDef.binaryName],
+			command: 'command',
+			args: ['-v', agentDef.binaryName],
 		};
 
 		try {
@@ -797,10 +825,11 @@ export function registerAgentsHandlers(deps: AgentsHandlerDependencies): void {
 					throw new Error(`Unknown agent: ${agentId}`);
 				}
 
-				// Build SSH command to check for the binary using 'which'
+				// Build SSH command to check for the binary using POSIX 'command -v'.
+				// See detectAgentsRemote() for rationale.
 				const remoteOptions: RemoteCommandOptions = {
-					command: 'which',
-					args: [agentDef.binaryName],
+					command: 'command',
+					args: ['-v', agentDef.binaryName],
 				};
 
 				try {
@@ -1238,6 +1267,11 @@ export function registerAgentsHandlers(deps: AgentsHandlerDependencies): void {
 					return discoverOpenCodeSlashCommands(cwd);
 				}
 
+				if (agentId === 'copilot-cli') {
+					return discoverCopilotSlashCommands();
+				}
+
+				// Only Claude Code supports slash command discovery via init message
 				if (agentId !== 'claude-code') {
 					logger.debug(`Agent ${agentId} does not support slash command discovery`, LOG_CONTEXT);
 					return null;
@@ -1307,6 +1341,7 @@ export function registerAgentsHandlers(deps: AgentsHandlerDependencies): void {
 					logger.warn(`No init message found in slash command discovery output`, LOG_CONTEXT);
 					return null;
 				} catch (error) {
+					void captureException(error);
 					logger.error(`Error discovering slash commands for ${agentId}`, LOG_CONTEXT, {
 						error: String(error),
 					});

@@ -322,7 +322,7 @@ describe('agent-detector', () => {
 
 			const agents = await detector.detectAgents();
 
-			// Should have all 8 agents (terminal, claude-code, codex, gemini-cli, qwen3-coder, opencode, factory-droid, aider)
+			// Should have all 8 agents (terminal, claude-code, codex, gemini-cli, qwen3-coder, opencode, factory-droid, copilot-cli)
 			expect(agents.length).toBe(8);
 
 			const agentIds = agents.map((a) => a.id);
@@ -333,7 +333,7 @@ describe('agent-detector', () => {
 			expect(agentIds).toContain('qwen3-coder');
 			expect(agentIds).toContain('opencode');
 			expect(agentIds).toContain('factory-droid');
-			expect(agentIds).toContain('aider');
+			expect(agentIds).toContain('copilot-cli');
 		});
 
 		it('should mark agents as available when binary is found', async () => {
@@ -968,7 +968,7 @@ describe('agent-detector', () => {
 
 			const result = await detectPromise;
 			expect(result).toBeDefined();
-			// Should have all 8 agents (terminal, claude-code, codex, gemini-cli, qwen3-coder, opencode, factory-droid, aider)
+			// Should have all 8 agents (terminal, claude-code, codex, gemini-cli, qwen3-coder, opencode, factory-droid, copilot-cli)
 			expect(result.length).toBe(8);
 		});
 
@@ -1081,14 +1081,16 @@ describe('agent-detector', () => {
 			await detector.detectAgents();
 
 			const models = await detector.discoverModels('claude-code');
-			// Should include aliases + historical models
+			// Should include aliases + [1m] variants + historical models
 			expect(models).toContain('sonnet');
 			expect(models).toContain('opus');
 			expect(models).toContain('haiku');
+			expect(models).toContain('opus[1m]');
+			expect(models).toContain('sonnet[1m]');
 			expect(models).toContain('claude-opus-4-6');
 			expect(models).toContain('claude-sonnet-4-6');
 			expect(logger.info).toHaveBeenCalledWith(
-				expect.stringContaining('Discovered 5 models'),
+				expect.stringContaining('Discovered 7 models'),
 				'AgentDetector',
 				expect.any(Object)
 			);
@@ -1114,7 +1116,7 @@ describe('agent-detector', () => {
 			await detector.detectAgents();
 
 			const models = await detector.discoverModels('claude-code');
-			expect(models).toEqual(['sonnet', 'opus', 'haiku']);
+			expect(models).toEqual(['sonnet', 'opus', 'haiku', 'opus[1m]', 'sonnet[1m]']);
 		});
 
 		it('should discover models for Codex from models_cache.json', async () => {

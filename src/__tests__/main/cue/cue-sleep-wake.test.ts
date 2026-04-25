@@ -25,6 +25,16 @@ vi.mock('../../../main/cue/cue-db', () => ({
 	updateHeartbeat: () => mockUpdateHeartbeat(),
 	getLastHeartbeat: () => mockGetLastHeartbeat(),
 	pruneCueEvents: (...args: unknown[]) => mockPruneCueEvents(...args),
+	recordCueEvent: vi.fn(),
+	updateCueEventStatus: vi.fn(),
+	safeRecordCueEvent: vi.fn(),
+	safeUpdateCueEventStatus: vi.fn(),
+	persistQueuedEvent: vi.fn(),
+	removeQueuedEvent: vi.fn(),
+	getQueuedEvents: vi.fn(() => []),
+	clearPersistedQueue: vi.fn(),
+	safePersistQueuedEvent: vi.fn(),
+	safeRemoveQueuedEvent: vi.fn(),
 }));
 
 // Track reconciler calls
@@ -45,6 +55,7 @@ vi.mock('../../../main/cue/cue-yaml-loader', () => ({
 			: { ok: false as const, reason: 'missing' as const };
 	},
 	watchCueYaml: (...args: unknown[]) => mockWatchCueYaml(args[0] as string, args[1] as () => void),
+	findAncestorCueConfigRoot: () => null,
 }));
 
 // Mock the file watcher

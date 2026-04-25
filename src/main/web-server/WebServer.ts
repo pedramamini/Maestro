@@ -28,9 +28,10 @@ import fastifyStatic from '@fastify/static';
 import { FastifyInstance, FastifyRequest } from 'fastify';
 import { randomUUID } from 'crypto';
 import path from 'path';
-import { existsSync } from 'fs';
+import { existsSync, readFileSync } from 'fs';
 import { logger } from '../utils/logger';
 import { getLocalIpAddress } from '../utils/networkUtils';
+import { captureException } from '../utils/sentry';
 import { WebSocketMessageHandler } from './handlers';
 import { BroadcastService } from './services';
 import { ApiRoutes, StaticRoutes, WsRoute } from './routes';
@@ -67,9 +68,13 @@ import type {
 	ToggleBookmarkCallback,
 	OpenFileTabCallback,
 	RefreshFileTreeCallback,
+	OpenBrowserTabCallback,
+	OpenTerminalTabCallback,
+	NewAITabWithPromptCallback,
 	RefreshAutoRunDocsCallback,
 	ConfigureAutoRunCallback,
 	GetThemeCallback,
+	GetBionifyReadingModeCallback,
 	GetCustomCommandsCallback,
 	GetHistoryCallback,
 	GetAutoRunDocsCallback,
@@ -101,11 +106,13 @@ import type {
 	SummarizeContextCallback,
 	GetCueSubscriptionsCallback,
 	ToggleCueSubscriptionCallback,
+	TriggerCueSubscriptionCallback,
 	GetCueActivityCallback,
 	CueActivityEntry,
 	CueSubscriptionInfo,
 	GetUsageDashboardCallback,
 	GetAchievementsCallback,
+	GenerateDirectorNotesSynopsisCallback,
 } from './types';
 
 // Logger context for all web server logs
@@ -206,16 +213,16 @@ export class WebServer {
 	private resolveWebAssetsPath(): string | null {
 		// Try multiple locations for the web assets
 		const possiblePaths = [
-			// Production: relative to the compiled main process
-			path.join(__dirname, '..', '..', 'web'),
 			// Development: from project root
 			path.join(process.cwd(), 'dist', 'web'),
+			// Production: relative to the compiled main process
+			path.join(__dirname, '..', '..', 'web'),
 			// Alternative: relative to __dirname going up to dist
 			path.join(__dirname, '..', 'web'),
 		];
 
 		for (const p of possiblePaths) {
-			if (existsSync(path.join(p, 'index.html'))) {
+			if (this.isServableWebAssetsPath(p)) {
 				logger.debug(`Web assets found at: ${p}`, LOG_CONTEXT);
 				return p;
 			}
@@ -226,6 +233,40 @@ export class WebServer {
 			LOG_CONTEXT
 		);
 		return null;
+	}
+
+	/**
+	 * Only serve built web assets. Source `src/web/index.html` references `/main.tsx`,
+	 * which the embedded Fastify server cannot compile or serve.
+	 */
+	private isServableWebAssetsPath(candidatePath: string): boolean {
+		const indexPath = path.join(candidatePath, 'index.html');
+		if (!existsSync(indexPath)) {
+			return false;
+		}
+
+		const assetsPath = path.join(candidatePath, 'assets');
+
+		try {
+			const html = readFileSync(indexPath, 'utf-8');
+			const referencesDevEntrypoint =
+				html.includes('src="/main.tsx"') || html.includes("src='/main.tsx'");
+			return !referencesDevEntrypoint && existsSync(assetsPath);
+		} catch (error) {
+			const err = error as NodeJS.ErrnoException;
+			if (err.code === 'ENOENT') {
+				logger.warn(`Web assets disappeared while inspecting ${candidatePath}`, LOG_CONTEXT);
+				return false;
+			}
+
+			logger.error(`Failed to inspect web assets at ${candidatePath}`, LOG_CONTEXT, error);
+			captureException(error, {
+				operation: 'webServer:isServableWebAssetsPath',
+				candidatePath,
+				indexPath,
+			});
+			throw error;
+		}
 	}
 
 	// ============ Live Session Management (Delegated to LiveSessionManager) ============
@@ -291,6 +332,10 @@ export class WebServer {
 
 	setGetThemeCallback(callback: GetThemeCallback): void {
 		this.callbackRegistry.setGetThemeCallback(callback);
+	}
+
+	setGetBionifyReadingModeCallback(callback: GetBionifyReadingModeCallback): void {
+		this.callbackRegistry.setGetBionifyReadingModeCallback(callback);
 	}
 
 	setGetCustomCommandsCallback(callback: GetCustomCommandsCallback): void {
@@ -386,6 +431,18 @@ export class WebServer {
 
 	setRefreshFileTreeCallback(callback: RefreshFileTreeCallback): void {
 		this.callbackRegistry.setRefreshFileTreeCallback(callback);
+	}
+
+	setOpenBrowserTabCallback(callback: OpenBrowserTabCallback): void {
+		this.callbackRegistry.setOpenBrowserTabCallback(callback);
+	}
+
+	setOpenTerminalTabCallback(callback: OpenTerminalTabCallback): void {
+		this.callbackRegistry.setOpenTerminalTabCallback(callback);
+	}
+
+	setNewAITabWithPromptCallback(callback: NewAITabWithPromptCallback): void {
+		this.callbackRegistry.setNewAITabWithPromptCallback(callback);
 	}
 
 	setRefreshAutoRunDocsCallback(callback: RefreshAutoRunDocsCallback): void {
@@ -504,6 +561,10 @@ export class WebServer {
 		this.callbackRegistry.setToggleCueSubscriptionCallback(callback);
 	}
 
+	setTriggerCueSubscriptionCallback(callback: TriggerCueSubscriptionCallback): void {
+		this.callbackRegistry.setTriggerCueSubscriptionCallback(callback);
+	}
+
 	setGetCueActivityCallback(callback: GetCueActivityCallback): void {
 		this.callbackRegistry.setGetCueActivityCallback(callback);
 	}
@@ -514,6 +575,10 @@ export class WebServer {
 
 	setGetAchievementsCallback(callback: GetAchievementsCallback): void {
 		this.callbackRegistry.setGetAchievementsCallback(callback);
+	}
+
+	setGenerateDirectorNotesSynopsisCallback(callback: GenerateDirectorNotesSynopsisCallback): void {
+		this.callbackRegistry.setGenerateDirectorNotesSynopsisCallback(callback);
 	}
 
 	broadcastGroupsChanged(groups: GroupData[]): void {
@@ -614,6 +679,7 @@ export class WebServer {
 		this.wsRoute.setCallbacks({
 			getSessions: () => this.callbackRegistry.getSessions(),
 			getTheme: () => this.callbackRegistry.getTheme(),
+			getBionifyReadingMode: () => this.callbackRegistry.getBionifyReadingMode(),
 			getCustomCommands: () => this.callbackRegistry.getCustomCommands(),
 			getAutoRunStates: () => this.liveSessionManager.getAutoRunStates(),
 			getLiveSessionInfo: (sessionId) => this.liveSessionManager.getLiveSessionInfo(sessionId),
@@ -681,6 +747,14 @@ export class WebServer {
 				this.callbackRegistry.openFileTab(sessionId, filePath),
 			refreshFileTree: async (sessionId: string) =>
 				this.callbackRegistry.refreshFileTree(sessionId),
+			openBrowserTab: async (sessionId: string, url: string) =>
+				this.callbackRegistry.openBrowserTab(sessionId, url),
+			openTerminalTab: async (
+				sessionId: string,
+				config: { cwd?: string; shell?: string; name?: string | null }
+			) => this.callbackRegistry.openTerminalTab(sessionId, config),
+			newAITabWithPrompt: async (sessionId: string, prompt: string) =>
+				this.callbackRegistry.newAITabWithPrompt(sessionId, prompt),
 			refreshAutoRunDocs: async (sessionId: string) =>
 				this.callbackRegistry.refreshAutoRunDocs(sessionId),
 			configureAutoRun: async (
@@ -734,6 +808,11 @@ export class WebServer {
 				this.callbackRegistry.toggleCueSubscription(subscriptionId, enabled),
 			getCueActivity: async (sessionId?: string, limit?: number) =>
 				this.callbackRegistry.getCueActivity(sessionId, limit),
+			triggerCueSubscription: async (
+				subscriptionName: string,
+				prompt?: string,
+				sourceAgentId?: string
+			) => this.callbackRegistry.triggerCueSubscription(subscriptionName, prompt, sourceAgentId),
 			getUsageDashboard: async (timeRange: 'day' | 'week' | 'month' | 'all') =>
 				this.callbackRegistry.getUsageDashboard(timeRange),
 			getAchievements: async () => this.callbackRegistry.getAchievements(),
@@ -802,6 +881,10 @@ export class WebServer {
 
 	broadcastThemeChange(theme: Theme): void {
 		this.broadcastService.broadcastThemeChange(theme);
+	}
+
+	broadcastBionifyReadingModeChange(enabled: boolean): void {
+		this.broadcastService.broadcastBionifyReadingModeChange(enabled);
 	}
 
 	broadcastCustomCommands(commands: CustomAICommand[]): void {
@@ -930,6 +1013,7 @@ export class WebServer {
 			this.isRunning = false;
 			logger.info('Server stopped', LOG_CONTEXT);
 		} catch (error) {
+			void captureException(error);
 			logger.error('Failed to stop server', LOG_CONTEXT, error);
 		}
 	}

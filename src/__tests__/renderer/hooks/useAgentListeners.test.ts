@@ -18,64 +18,32 @@ import { useSessionStore } from '../../../renderer/stores/sessionStore';
 import { useModalStore } from '../../../renderer/stores/modalStore';
 import { useGroupChatStore } from '../../../renderer/stores/groupChatStore';
 import type { Session, AITab, AgentError } from '../../../renderer/types';
+import { createMockAITab } from '../../helpers/mockTab';
+import { createMockSession as baseCreateMockSession } from '../../helpers/mockSession';
 
 // ============================================================================
 // Helpers
 // ============================================================================
 
 function createMockTab(overrides: Partial<AITab> = {}): AITab {
-	return {
-		id: 'tab-1',
-		agentSessionId: null,
-		name: null,
-		starred: false,
-		logs: [],
-		inputValue: '',
-		stagedImages: [],
+	return createMockAITab({
 		createdAt: 1700000000000,
-		state: 'idle' as const,
 		saveToHistory: true,
 		...overrides,
-	};
+	});
 }
 
+// Thin wrapper: pre-populates a base AI tab so agent listeners have a
+// target tab for streaming events.
 function createMockSession(overrides: Partial<Session> = {}): Session {
 	const baseTab = createMockTab();
-	return {
-		id: 'session-1',
-		name: 'Test Session',
-		toolType: 'claude-code',
-		state: 'idle',
-		cwd: '/test/project',
-		fullPath: '/test/project',
-		projectRoot: '/test/project',
-		aiLogs: [],
-		shellLogs: [],
-		workLog: [],
-		contextUsage: 0,
-		inputMode: 'ai',
-		aiPid: 0,
-		terminalPid: 0,
-		port: 0,
-		isLive: false,
-		changedFiles: [],
+	return baseCreateMockSession({
 		isGitRepo: true,
-		fileTree: [],
-		fileExplorerExpanded: [],
-		fileExplorerScrollPos: 0,
-		aiTabs: overrides.aiTabs ?? [baseTab],
-		activeTabId: overrides.activeTabId ?? baseTab.id,
-		closedTabHistory: [],
-		executionQueue: [],
-		activeTimeMs: 0,
-		filePreviewTabs: [],
-		activeFileTabId: null,
+		aiTabs: [baseTab],
+		activeTabId: baseTab.id,
 		unifiedTabOrder: [{ type: 'ai' as const, id: baseTab.id }],
-		unifiedClosedTabHistory: [],
-		terminalTabs: [],
-		activeTerminalTabId: null,
 		...overrides,
-	} as Session;
+	});
 }
 
 // ============================================================================
@@ -245,6 +213,7 @@ beforeEach(() => {
 
 afterEach(() => {
 	vi.restoreAllMocks();
+	vi.unstubAllGlobals();
 });
 
 // ============================================================================
@@ -415,6 +384,58 @@ describe('useAgentListeners', () => {
 				'sess-1',
 				expect.any(Number)
 			);
+		});
+
+		it('removes a recovered agent error log when successful data resumes', () => {
+			const deps = createMockDeps();
+			const recoveredError: AgentError = {
+				type: 'permission_denied',
+				message: 'Permission denied. Check file and directory permissions.',
+				recoverable: false,
+				agentId: 'copilot-cli',
+				timestamp: 1700000000000,
+			};
+			const session = createMockSession({
+				id: 'sess-1',
+				state: 'error',
+				toolType: 'copilot-cli',
+				agentError: recoveredError,
+				agentErrorTabId: 'tab-1',
+				agentErrorPaused: true,
+				aiTabs: [
+					createMockTab({
+						id: 'tab-1',
+						agentError: recoveredError,
+						logs: [
+							{
+								id: 'log-error',
+								timestamp: recoveredError.timestamp,
+								source: 'error',
+								text: recoveredError.message,
+								agentError: recoveredError,
+							},
+						],
+					}),
+				],
+				activeTabId: 'tab-1',
+			});
+			useSessionStore.setState({
+				sessions: [session],
+				activeSessionId: 'sess-1',
+			});
+
+			renderHook(() => useAgentListeners(deps));
+
+			onDataHandler?.('sess-1-ai-tab-1', 'Final answer');
+
+			const updated = useSessionStore.getState().sessions.find((s) => s.id === 'sess-1');
+			expect(updated?.agentError).toBeUndefined();
+			expect(updated?.agentErrorTabId).toBeUndefined();
+			expect(updated?.agentErrorPaused).toBe(false);
+			expect(updated?.state).toBe('busy');
+			expect(updated?.aiTabs[0]?.agentError).toBeUndefined();
+			expect(updated?.aiTabs[0]?.logs).toEqual([]);
+			expect(window.maestro.agentError.clearError).toHaveBeenCalledWith('sess-1');
 		});
 	});
 
@@ -994,6 +1015,76 @@ describe('useAgentListeners', () => {
 	});
 
 	// ========================================================================
+	// onThinkingChunk handler
+	// ========================================================================
+
+	describe('onThinkingChunk', () => {
+		it('removes hidden progress once visible output arrives', () => {
+			const deps = createMockDeps();
+			const session = createMockSession({
+				id: 'sess-1',
+				state: 'busy',
+				aiTabs: [
+					createMockTab({
+						id: 'tab-1',
+						showThinking: 'off',
+						logs: [
+							{
+								id: 'hidden-progress:tab-1',
+								timestamp: 1700000000000,
+								source: 'system',
+								text: 'Thinking through the next step...',
+							},
+						],
+					}),
+				],
+				activeTabId: 'tab-1',
+			});
+			useSessionStore.setState({
+				sessions: [session],
+				activeSessionId: 'sess-1',
+			});
+
+			renderHook(() => useAgentListeners(deps));
+
+			onDataHandler?.('sess-1-ai-tab-1', 'Visible response');
+
+			const updated = useSessionStore.getState().sessions.find((s) => s.id === 'sess-1');
+			expect(updated?.aiTabs[0]?.logs).toEqual([]);
+		});
+	});
+
+	// ========================================================================
+	// onToolExecution handler
+	// ========================================================================
+
+	describe('onToolExecution', () => {
+		it('does not emit tool logs when thinking is hidden', () => {
+			const deps = createMockDeps();
+			const session = createMockSession({
+				id: 'sess-1',
+				aiTabs: [createMockTab({ id: 'tab-1', showThinking: 'off' })],
+				activeTabId: 'tab-1',
+			});
+			useSessionStore.setState({
+				sessions: [session],
+				activeSessionId: 'sess-1',
+			});
+
+			renderHook(() => useAgentListeners(deps));
+
+			onToolExecutionHandler?.('sess-1-ai-tab-1', {
+				toolName: 'view',
+				state: { status: 'running', input: { path: 'src/renderer/App.tsx' } },
+				timestamp: 1700000000000,
+			});
+
+			const updated = useSessionStore.getState().sessions.find((s) => s.id === 'sess-1');
+			expect(updated?.aiTabs[0]?.logs).toEqual([]);
+		});
+	});
+
+	// ========================================================================
 	// onSshRemote handler
 	// ========================================================================
 
@@ -1061,6 +1152,41 @@ describe('useAgentListeners', () => {
 			expect(updatedTab?.agentSessionId).toBe('old-session-id');
 		});
 
+		it('clears hidden progress logs on AI exit', async () => {
+			const deps = createMockDeps();
+			const tab = createMockTab({
+				id: 'tab-1',
+				showThinking: 'off',
+				logs: [
+					{
+						id: 'hidden-progress:tab-1',
+						timestamp: 1700000000000,
+						source: 'system',
+						text: 'Reading src/renderer/App.tsx',
+					},
+				],
+			});
+			const session = createMockSession({
+				id: 'sess-1',
+				state: 'busy',
+				busySource: 'ai',
+				aiTabs: [tab],
+				activeTabId: 'tab-1',
+			});
+			useSessionStore.setState({
+				sessions: [session],
+				activeSessionId: 'sess-1',
+			});
+
+			renderHook(() => useAgentListeners(deps));
+
+			await onExitHandler?.('sess-1-ai-tab-1');
+			await new Promise((r) => setTimeout(r, 50));
+
+			const updated = useSessionStore.getState().sessions.find((s) => s.id === 'sess-1');
+			expect(updated?.aiTabs[0]?.logs).toEqual([]);
+		});
+
 		it('processes execution queue on exit', async () => {
 			const processQueuedItem = vi.fn().mockResolvedValue(undefined);
 			const deps = createMockDeps({
@@ -1089,6 +1215,170 @@ describe('useAgentListeners', () => {
 			await onExitHandler?.('sess-1-ai-tab-1');
 
 			// Allow async operations to complete
+			await new Promise((r) => setTimeout(r, 50));
+
+			expect(processQueuedItem).toHaveBeenCalledWith('sess-1', queueItem);
+		});
+
+		it('does NOT dequeue write-mode item when another tab is still busy', async () => {
+			const processQueuedItem = vi.fn().mockResolvedValue(undefined);
+			const deps = createMockDeps({
+				processQueuedItemRef: { current: processQueuedItem },
+			});
+			const tabA = createMockTab({ id: 'tab-a', state: 'busy', agentSessionId: 'sess-a' });
+			const tabB = createMockTab({ id: 'tab-b', state: 'busy', agentSessionId: 'sess-b' });
+			const queueItem = {
+				id: 'q1',
+				tabId: 'tab-c',
+				type: 'message' as const,
+				text: 'queued write',
+				timestamp: Date.now(),
+			};
+			const session = createMockSession({
+				id: 'sess-1',
+				state: 'busy',
+				busySource: 'ai',
+				aiTabs: [tabA, tabB],
+				activeTabId: 'tab-a',
+				executionQueue: [queueItem],
+			});
+			useSessionStore.setState({
+				sessions: [session],
+				activeSessionId: 'sess-1',
+			});
+
+			renderHook(() => useAgentListeners(deps));
+
+			// Tab A exits, but Tab B is still busy — queued write must NOT run
+			await onExitHandler?.('sess-1-ai-tab-a');
+			await new Promise((r) => setTimeout(r, 50));
+
+			expect(processQueuedItem).not.toHaveBeenCalled();
+			const updated = useSessionStore.getState().sessions.find((s) => s.id === 'sess-1');
+			// Session stays busy because tab-b is still running
+			expect(updated?.state).toBe('busy');
+			// Queue is NOT drained
+			expect(updated?.executionQueue).toHaveLength(1);
+			// Tab A was marked idle
+			const updatedTabA = updated?.aiTabs.find((t) => t.id === 'tab-a');
+			expect(updatedTabA?.state).toBe('idle');
+			// Tab B still busy
+			const updatedTabB = updated?.aiTabs.find((t) => t.id === 'tab-b');
+			expect(updatedTabB?.state).toBe('busy');
+		});
+
+		it('dequeues forceParallel item even when another tab is busy', async () => {
+			const processQueuedItem = vi.fn().mockResolvedValue(undefined);
+			const deps = createMockDeps({
+				processQueuedItemRef: { current: processQueuedItem },
+			});
+			const tabA = createMockTab({ id: 'tab-a', state: 'busy', agentSessionId: 'sess-a' });
+			const tabB = createMockTab({ id: 'tab-b', state: 'busy', agentSessionId: 'sess-b' });
+			const queueItem = {
+				id: 'q1',
+				tabId: 'tab-c',
+				type: 'message' as const,
+				text: 'forced parallel',
+				timestamp: Date.now(),
+				forceParallel: true,
+			};
+			const session = createMockSession({
+				id: 'sess-1',
+				state: 'busy',
+				busySource: 'ai',
+				aiTabs: [tabA, tabB],
+				activeTabId: 'tab-a',
+				executionQueue: [queueItem],
+			});
+			useSessionStore.setState({
+				sessions: [session],
+				activeSessionId: 'sess-1',
+			});
+
+			renderHook(() => useAgentListeners(deps));
+
+			await onExitHandler?.('sess-1-ai-tab-a');
+			await new Promise((r) => setTimeout(r, 50));
+
+			expect(processQueuedItem).toHaveBeenCalledWith('sess-1', queueItem);
+		});
+
+		it('dequeues readOnly item even when another tab is busy', async () => {
+			const processQueuedItem = vi.fn().mockResolvedValue(undefined);
+			const deps = createMockDeps({
+				processQueuedItemRef: { current: processQueuedItem },
+			});
+			const tabA = createMockTab({ id: 'tab-a', state: 'busy', agentSessionId: 'sess-a' });
+			const tabB = createMockTab({ id: 'tab-b', state: 'busy', agentSessionId: 'sess-b' });
+			const queueItem = {
+				id: 'q1',
+				tabId: 'tab-c',
+				type: 'message' as const,
+				text: 'read only query',
+				timestamp: Date.now(),
+				readOnlyMode: true,
+			};
+			const session = createMockSession({
+				id: 'sess-1',
+				state: 'busy',
+				busySource: 'ai',
+				aiTabs: [tabA, tabB],
+				activeTabId: 'tab-a',
+				executionQueue: [queueItem],
+			});
+			useSessionStore.setState({
+				sessions: [session],
+				activeSessionId: 'sess-1',
+			});
+
+			renderHook(() => useAgentListeners(deps));
+
+			await onExitHandler?.('sess-1-ai-tab-a');
+			await new Promise((r) => setTimeout(r, 50));
+
+			expect(processQueuedItem).toHaveBeenCalledWith('sess-1', queueItem);
+		});
+
+		it('dequeues write-mode item once ALL other tabs finish', async () => {
+			const processQueuedItem = vi.fn().mockResolvedValue(undefined);
+			const deps = createMockDeps({
+				processQueuedItemRef: { current: processQueuedItem },
+			});
+			const tabA = createMockTab({ id: 'tab-a', state: 'busy', agentSessionId: 'sess-a' });
+			const tabB = createMockTab({ id: 'tab-b', state: 'busy', agentSessionId: 'sess-b' });
+			const queueItem = {
+				id: 'q1',
+				tabId: 'tab-c',
+				type: 'message' as const,
+				text: 'queued write',
+				timestamp: Date.now(),
+			};
+			const session = createMockSession({
+				id: 'sess-1',
+				state: 'busy',
+				busySource: 'ai',
+				aiTabs: [tabA, tabB],
+				activeTabId: 'tab-a',
+				executionQueue: [queueItem],
+			});
+			useSessionStore.setState({
+				sessions: [session],
+				activeSessionId: 'sess-1',
+			});
+
+			renderHook(() => useAgentListeners(deps));
+
+			// Tab A exits — tab B still busy, so queue stays
+			await onExitHandler?.('sess-1-ai-tab-a');
+			await new Promise((r) => setTimeout(r, 50));
+			expect(processQueuedItem).not.toHaveBeenCalled();
+
+			// Now tab B also exits — no more busy tabs, queue should drain
+			// Update store to reflect tab-a is now idle (from the first exit)
+			const midState = useSessionStore.getState().sessions.find((s) => s.id === 'sess-1');
+			expect(midState?.aiTabs.find((t) => t.id === 'tab-a')?.state).toBe('idle');
+
+			await onExitHandler?.('sess-1-ai-tab-b');
 			await new Promise((r) => setTimeout(r, 50));
 
 			expect(processQueuedItem).toHaveBeenCalledWith('sess-1', queueItem);
