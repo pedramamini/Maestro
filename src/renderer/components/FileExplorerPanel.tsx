@@ -1081,6 +1081,7 @@ function FileExplorerPanelInner(props: FileExplorerPanelProps) {
 			return (
 				<div
 					data-file-index={globalIndex}
+					title={isFolder ? 'Alt/Option+click to expand or collapse all subfolders' : undefined}
 					className={`absolute top-0 left-0 w-full flex items-center gap-2 py-1 text-xs cursor-pointer hover:bg-white/5 px-2 rounded transition-colors border-l-2 select-none min-w-0 ${isSelected ? 'bg-white/10' : ''}`}
 					style={{
 						height: `${virtualRow.size}px`,
