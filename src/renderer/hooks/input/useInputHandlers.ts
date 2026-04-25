@@ -67,7 +67,7 @@ export interface UseInputHandlersDeps {
 	/** Drag counter ref for image drop handling */
 	dragCounterRef: React.MutableRefObject<number>;
 	/** Set dragging image state */
-	setIsDraggingImage: (value: boolean) => void;
+	setIsDraggingFile: (value: boolean) => void;
 
 	// From useBatchHandlers
 	/** Get batch state for a specific session */
@@ -162,7 +162,7 @@ export function useInputHandlers(deps: UseInputHandlersDeps): UseInputHandlersRe
 		terminalOutputRef,
 		fileTreeKeyboardNavRef,
 		dragCounterRef,
-		setIsDraggingImage,
+		setIsDraggingFile,
 		getBatchState,
 		activeBatchRunState,
 		processQueuedItemRef,
@@ -611,7 +611,7 @@ export function useInputHandlers(deps: UseInputHandlersDeps): UseInputHandlersRe
 		(e: React.DragEvent) => {
 			e.preventDefault();
 			dragCounterRef.current = 0;
-			setIsDraggingImage(false);
+			setIsDraggingFile(false);
 
 			const isGroupChatActive = !!activeGroupChatId;
 			const isDirectAIMode = activeSession && activeSession.inputMode === 'ai';
@@ -624,24 +624,34 @@ export function useInputHandlers(deps: UseInputHandlersDeps): UseInputHandlersRe
 				if (isGroupChatActive || !isDirectAIMode) return;
 
 				if (isImagePath(internalPath)) {
-					const treeRoot = activeSession?.projectRoot ?? activeSession?.fullPath;
+					// `internalPath` is built by FileExplorerPanel relative to
+					// `session.fullPath` (see TreeRow's `${session.fullPath}/${fullPath}`),
+					// so resolve against fullPath first to stay consistent with the
+					// explorer's own absolute-path construction.
+					const treeRoot = activeSession?.fullPath ?? activeSession?.projectRoot;
 					if (!treeRoot) return;
 					const absolutePath = `${treeRoot}/${internalPath}`;
 					const sshRemoteId =
 						activeSession?.sshRemoteId ??
 						activeSession?.sessionSshRemoteConfig?.remoteId ??
 						undefined;
-					void window.maestro.fs.readFile(absolutePath, sshRemoteId).then((content) => {
-						if (typeof content !== 'string' || !content.startsWith('data:image/')) return;
-						setStagedImages((prev) => {
-							if (prev.includes(content)) {
-								setSuccessFlashNotification('Duplicate image ignored');
-								setTimeout(() => setSuccessFlashNotification(null), 2000);
-								return prev;
-							}
-							return [...prev, content];
+					void window.maestro.fs
+						.readFile(absolutePath, sshRemoteId)
+						.then((content) => {
+							if (typeof content !== 'string' || !content.startsWith('data:image/')) return;
+							setStagedImages((prev) => {
+								if (prev.includes(content)) {
+									setSuccessFlashNotification('Duplicate image ignored');
+									setTimeout(() => setSuccessFlashNotification(null), 2000);
+									return prev;
+								}
+								return [...prev, content];
+							});
+						})
+						.catch(() => {
+							setSuccessFlashNotification('Could not read image file');
+							setTimeout(() => setSuccessFlashNotification(null), 2000);
 						});
-					});
 					return;
 				}
 

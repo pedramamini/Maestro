@@ -180,7 +180,7 @@ function createMockDeps(overrides: Partial<UseInputHandlersDeps> = {}): UseInput
 		terminalOutputRef: { current: { focus: vi.fn() } } as any,
 		fileTreeKeyboardNavRef: { current: false },
 		dragCounterRef: { current: 0 },
-		setIsDraggingImage: vi.fn(),
+		setIsDraggingFile: vi.fn(),
 		getBatchState: vi.fn().mockReturnValue(createDefaultBatchState()),
 		activeBatchRunState: createDefaultBatchState(),
 		processQueuedItemRef: { current: null },
@@ -967,7 +967,7 @@ describe('useInputHandlers', () => {
 			});
 
 			expect(deps.dragCounterRef.current).toBe(0);
-			expect(deps.setIsDraggingImage).toHaveBeenCalledWith(false);
+			expect(deps.setIsDraggingFile).toHaveBeenCalledWith(false);
 		});
 
 		it('ignores drops in terminal mode', () => {
