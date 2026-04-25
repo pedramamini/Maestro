@@ -53,7 +53,6 @@ import { remarkFrontmatterTable } from '../utils/remarkFrontmatterTable';
 import { REMARK_GFM_PLUGINS, createMarkdownComponents } from '../utils/markdownConfig';
 import type { FileNode } from '../types/fileTree';
 import { isImageFile } from '../../shared/gitUtils';
-import { useSettingsStore } from '../stores/settingsStore';
 import { BionifyTextBlock } from '../utils/bionifyReadingMode';
 
 // Global cache for loaded images to prevent re-fetching and flickering
