@@ -1093,13 +1093,13 @@ export function GeneralTab({ theme, isOpen }: GeneralTabProps) {
 				</div>
 			</div>
 
-			{/* Check for Updates on Startup */}
+			{/* Check for Updates */}
 			<div data-setting-id="general-updates">
 				<SettingCheckbox
 					icon={Download}
 					sectionLabel="Updates"
-					title="Check for updates on startup"
-					description="Automatically check for new Maestro versions when the app starts"
+					title="Check for updates automatically"
+					description="Check for new Maestro versions on startup and once per day while the app is running"
 					checked={checkForUpdatesOnStartup}
 					onChange={setCheckForUpdatesOnStartup}
 					theme={theme}
