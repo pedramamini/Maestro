@@ -14,6 +14,7 @@ import {
 } from '../../../../../renderer/components/CuePipelineEditor/utils/pipelineRoots';
 import type {
 	AgentNodeData,
+	CommandNodeData,
 	CuePipeline,
 	CuePipelineSessionInfo as SessionInfo,
 } from '../../../../../shared/cue-pipeline-types';
@@ -31,6 +32,54 @@ function makeAgentNode(sessionId: string, sessionName: string): CuePipeline['nod
 			toolType: 'claude-code',
 			inputPrompt: '',
 		} as AgentNodeData,
+	};
+}
+
+function makeCommandNode(
+	id: string,
+	owningSessionId: string,
+	owningSessionName: string,
+	shell = 'echo hi'
+): CuePipeline['nodes'][number] {
+	return {
+		id,
+		type: 'command',
+		position: { x: 0, y: 0 },
+		data: {
+			name: id,
+			mode: 'shell',
+			shell,
+			owningSessionId,
+			owningSessionName,
+		} as CommandNodeData,
+	};
+}
+
+function makeCommandOnlyPipeline(
+	commands: Array<{
+		id: string;
+		owningSessionId: string;
+		owningSessionName: string;
+	}>
+): CuePipeline {
+	return {
+		id: 'p-cmd',
+		name: 'cmd-only',
+		color: '#06b6d4',
+		nodes: [
+			{
+				id: 'trigger-1',
+				type: 'trigger',
+				position: { x: 0, y: 0 },
+				data: {
+					eventType: 'time.scheduled',
+					label: 'Daily',
+					config: { schedule_times: ['06:00'] },
+				},
+			},
+			...commands.map((c) => makeCommandNode(c.id, c.owningSessionId, c.owningSessionName)),
+		],
+		edges: [],
 	};
 }
 
@@ -161,6 +210,102 @@ describe('resolvePipelineWriteRoot', () => {
 			const byId = mapBy<SessionRootInfo>([['', { projectRoot: '/should-not-match' }]]);
 			const byName = mapBy<SessionRootInfo>([['', { projectRoot: '/also-should-not-match' }]]);
 			expect(resolvePipelineWriteRoot(pipeline, byId, byName)).toBeNull();
+		});
+	});
+
+	describe('command-node-only pipelines (regression: command-only pipelines vanished on save)', () => {
+		// A pipeline with a trigger plus shell/CLI command nodes (no agent
+		// nodes) used to be silently dropped from handleSave because the
+		// partition step only looked at agent nodes. Commands inherit cwd +
+		// agent_id from their owning session, so they are first-class root
+		// contributors.
+		it("resolves the root from the command's owning session", () => {
+			const pipeline = makeCommandOnlyPipeline([
+				{ id: 'cmd-1', owningSessionId: 's-cyber', owningSessionName: 'Cyber Stocks' },
+			]);
+			const byId = mapBy<SessionRootInfo>([
+				['s-cyber', { projectRoot: '/Users/me/Projects/Cyber-Stocks' }],
+			]);
+			expect(resolvePipelineWriteRoot(pipeline, byId, new Map())).toBe(
+				'/Users/me/Projects/Cyber-Stocks'
+			);
+		});
+
+		it('falls back to owningSessionName when owningSessionId is missing', () => {
+			const pipeline = makeCommandOnlyPipeline([
+				{ id: 'cmd-1', owningSessionId: 'missing', owningSessionName: 'Cyber Stocks' },
+			]);
+			const byName = mapBy<SessionRootInfo>([
+				['Cyber Stocks', { projectRoot: '/Users/me/Projects/Cyber-Stocks' }],
+			]);
+			expect(resolvePipelineWriteRoot(pipeline, new Map(), byName)).toBe(
+				'/Users/me/Projects/Cyber-Stocks'
+			);
+		});
+
+		it('collapses sibling commands under a common ancestor root', () => {
+			const pipeline = makeCommandOnlyPipeline([
+				{ id: 'cmd-1', owningSessionId: 's1', owningSessionName: 'A' },
+				{ id: 'cmd-2', owningSessionId: 's2', owningSessionName: 'B' },
+			]);
+			const byId = mapBy<SessionRootInfo>([
+				['s1', { projectRoot: '/project/A' }],
+				['s2', { projectRoot: '/project/B' }],
+			]);
+			expect(resolvePipelineWriteRoot(pipeline, byId, new Map())).toBe('/project');
+		});
+
+		it('returns null when the only command has no owning-session binding (treated as unbound)', () => {
+			// An in-flight command with no owning-session set yet is unbound, not
+			// missing — leave the pipeline unresolved so it does not seed a root.
+			const pipeline = makeCommandOnlyPipeline([
+				{ id: 'cmd-1', owningSessionId: '', owningSessionName: '' },
+			]);
+			expect(resolvePipelineWriteRoot(pipeline, new Map(), new Map())).toBeNull();
+		});
+
+		it("returns null when the command's owning session has no projectRoot", () => {
+			// Binding present but unresolvable — mirror the agent-side missingRoot
+			// rule so we never seed a root the save flow would never write to.
+			const pipeline = makeCommandOnlyPipeline([
+				{ id: 'cmd-1', owningSessionId: 's-cyber', owningSessionName: 'Cyber Stocks' },
+			]);
+			const byId = mapBy<SessionRootInfo>([['s-cyber', { projectRoot: undefined }]]);
+			expect(resolvePipelineWriteRoot(pipeline, byId, new Map())).toBeNull();
+		});
+
+		it('mixes agent + command roots when both are present in the same pipeline', () => {
+			const pipeline: CuePipeline = {
+				id: 'mixed',
+				name: 'mixed',
+				color: '#06b6d4',
+				nodes: [
+					{
+						id: 'trigger-1',
+						type: 'trigger',
+						position: { x: 0, y: 0 },
+						data: { eventType: 'time.heartbeat', label: 'Timer', config: {} },
+					},
+					{
+						id: 'agent-1',
+						type: 'agent',
+						position: { x: 0, y: 0 },
+						data: {
+							sessionId: 's-agent',
+							sessionName: 'agent',
+							toolType: 'claude-code',
+							inputPrompt: '',
+						} as AgentNodeData,
+					},
+					makeCommandNode('cmd-1', 's-cmd', 'cmd-session'),
+				],
+				edges: [],
+			};
+			const byId = mapBy<SessionRootInfo>([
+				['s-agent', { projectRoot: '/project/agent' }],
+				['s-cmd', { projectRoot: '/project/cmd' }],
+			]);
+			expect(resolvePipelineWriteRoot(pipeline, byId, new Map())).toBe('/project');
 		});
 	});
 });

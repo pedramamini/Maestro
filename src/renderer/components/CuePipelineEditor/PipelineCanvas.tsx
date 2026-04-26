@@ -228,6 +228,8 @@ export const PipelineCanvas = React.memo(function PipelineCanvas({
 				onDragOver={onDragOver}
 				onDrop={onDrop}
 				connectionMode={ConnectionMode.Loose}
+				minZoom={0.1}
+				maxZoom={2}
 				// All Pipelines view is read-only. These ReactFlow props are the
 				// first line of defense — the parent also guards each callback.
 				nodesDraggable={!isReadOnly}

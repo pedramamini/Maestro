@@ -77,6 +77,21 @@ function agentNode(id: string, sessionName: string): PipelineNode {
 	};
 }
 
+function commandNode(id: string, owningSessionName: string, shell = 'echo hi'): PipelineNode {
+	return {
+		id,
+		type: 'command',
+		position: { x: 0, y: 0 },
+		data: {
+			name: id,
+			mode: 'shell',
+			shell,
+			owningSessionId: `session-${owningSessionName}`,
+			owningSessionName,
+		},
+	};
+}
+
 function pipeline(
 	id: string,
 	name: string,
@@ -504,6 +519,55 @@ describe('usePipelinePersistence', () => {
 				vi.advanceTimersByTime(2000);
 			});
 			expect(h.result.current.saveStatus).toBe('idle');
+		});
+
+		it("command-only pipeline writes YAML to the command's owning-session root (regression: #vanishing-cyber-stocks)", async () => {
+			// Pipelines with only command nodes (trigger + shell commands, no
+			// agent) used to be silently dropped from handleSave because the
+			// partition step only resolved roots from agent nodes. Each save
+			// would toast "Saved 0 pipelines" and the user's pipeline would
+			// vanish on next reload because no cue.yaml was ever written.
+			const h = setup({
+				pipelines: [
+					pipeline(
+						'p-cyber',
+						'Cyber Stocks',
+						[
+							triggerNode('t1'),
+							commandNode('cmd-1', 'Cyber Stocks', 'pnpm analyze'),
+							commandNode('cmd-2', 'Cyber Stocks', 'pnpm fundamentals'),
+						],
+						[
+							{ id: 'e1', source: 't1', target: 'cmd-1' },
+							{ id: 'e2', source: 't1', target: 'cmd-2' },
+						]
+					),
+				],
+				sessions: [
+					{
+						id: 'session-Cyber Stocks',
+						name: 'Cyber Stocks',
+						toolType: 'claude-code',
+						projectRoot: '/Users/me/Projects/Cyber-Stocks',
+					},
+				],
+			});
+			await act(async () => {
+				await h.result.current.handleSave();
+			});
+			expect(mockWriteYaml).toHaveBeenCalledWith(
+				'/Users/me/Projects/Cyber-Stocks',
+				'yaml-content',
+				{}
+			);
+			expect(h.lastWrittenRootsRef.current.has('/Users/me/Projects/Cyber-Stocks')).toBe(true);
+			expect(h.result.current.saveStatus).toBe('success');
+			expect(mockNotifyToast).toHaveBeenCalledWith(
+				expect.objectContaining({
+					type: 'success',
+					message: expect.stringMatching(/Saved 1 pipeline to 1 project/),
+				})
+			);
 		});
 
 		it('ref update ordering: savedStateRef and lastWrittenRootsRef update before setIsDirty(false)', async () => {

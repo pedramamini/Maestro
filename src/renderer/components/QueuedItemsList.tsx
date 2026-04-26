@@ -237,13 +237,13 @@ export const QueuedItemsList = memo(
 							onDragOver={(e) => handleDragOver(e, index)}
 							onDragEnd={handleDragEnd}
 							onDragLeave={handleDragLeave}
-							className="mx-6 mb-2 p-3 rounded-lg relative group transition-all"
+							className="mx-6 mb-2 p-3 rounded-lg relative group transition-all flex flex-col"
 							style={{
 								// Reserve enough vertical room for the stacked top-right
 								// Remove (X) and Copy buttons, plus the bottom-right Force
 								// Send button when shown, without overlap.
 								// X+Copy stack: 8 + 24 + 4 + 22 = 58px from top.
-								// Force Send (in flow at bottom): 8 mt + 28 button = 36px.
+								// Force Send (pushed to bottom via mt-auto): ~28px button.
 								minHeight: showForceSendButton ? '7rem' : '4.25rem',
 								backgroundColor:
 									item.type === 'command'
@@ -352,9 +352,9 @@ export const QueuedItemsList = memo(
 								</div>
 							)}
 
-							{/* Bottom-right: Force Send button */}
+							{/* Bottom-right: Force Send button (mt-auto pushes to bottom of flex column) */}
 							{showForceSendButton && (
-								<div className="mt-2 flex justify-end">
+								<div className="mt-auto pt-2 flex justify-end">
 									<button
 										onClick={() => setForceSendConfirmId(item.id)}
 										className="flex items-center gap-1 px-2 py-1 rounded text-xs font-medium hover:opacity-80 transition-opacity"

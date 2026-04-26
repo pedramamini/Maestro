@@ -14,8 +14,10 @@
 
 import type {
 	AgentNodeData,
+	CommandNodeData,
 	CuePipeline,
 	CuePipelineSessionInfo as SessionInfo,
+	PipelineNode,
 } from '../../../../shared/cue-pipeline-types';
 import { computeCommonAncestorPath, isDescendantOrEqual } from '../../../../shared/cue-path-utils';
 
@@ -23,47 +25,90 @@ import { computeCommonAncestorPath, isDescendantOrEqual } from '../../../../shar
 type SessionRootInfo = Pick<SessionInfo, 'projectRoot'>;
 
 /**
+ * Resolve a single node's project root via its bound session.
+ *
+ * - Agent nodes bind via `sessionId` / `sessionName`.
+ * - Command nodes bind via `owningSessionId` / `owningSessionName` — they
+ *   inherit cwd + agent_id from their owning session, so they are first-class
+ *   project-root contributors and must NOT be ignored when partitioning by
+ *   root. Doing so silently dropped command-only pipelines from the save.
+ *
+ * Returns `{ root, hasBinding }`:
+ *   - `hasBinding=false` → node type carries no session binding (e.g. trigger,
+ *     error, command with no owning session set). Callers should ignore it.
+ *   - `hasBinding=true, root=null` → binding present but unresolvable. Callers
+ *     should treat this as a missing root.
+ */
+export function resolveNodeWriteRoot(
+	node: PipelineNode,
+	sessionsById: ReadonlyMap<string, SessionRootInfo>,
+	sessionsByName: ReadonlyMap<string, SessionRootInfo>
+): { root: string | null; hasBinding: boolean } {
+	let id: string | undefined;
+	let name: string | undefined;
+	if (node.type === 'agent') {
+		const data = node.data as AgentNodeData;
+		id = data.sessionId;
+		name = data.sessionName;
+	} else if (node.type === 'command') {
+		const data = node.data as CommandNodeData;
+		// Validation requires owningSessionId on save, but stale / in-flight
+		// edits can briefly leave it empty — treat that as "no binding".
+		if (!data.owningSessionId && !data.owningSessionName) {
+			return { root: null, hasBinding: false };
+		}
+		id = data.owningSessionId;
+		name = data.owningSessionName;
+	} else {
+		return { root: null, hasBinding: false };
+	}
+	// Guard against empty-string sessionId / sessionName so a stray `''`
+	// key in the session maps can't accidentally resolve a node that
+	// should have been treated as missing.
+	const byId = id ? sessionsById.get(id) : undefined;
+	const byName = !byId?.projectRoot && name ? sessionsByName.get(name) : undefined;
+	const root = byId?.projectRoot ?? byName?.projectRoot ?? null;
+	return { root, hasBinding: true };
+}
+
+/**
  * Resolve the single project root that a pipeline's YAML would be written to.
  *
  * Rules — matching handleSave's happy-path partitioning:
  *
- * - All agents resolve to the same root → that root.
- * - Agents span multiple roots that share a common ancestor (every agent
- *   root is a descendant of it) → the common ancestor. Enables the
- *   cross-directory pipeline support added in PR #845.
- * - Any agent unresolvable, no agents at all, or roots spanning unrelated
- *   trees → `null`. handleSave would reject such a pipeline as a validation
- *   error, so no YAML is written for it and we must not seed a root for it.
+ * - All session-bound nodes (agents + commands) resolve to the same root →
+ *   that root.
+ * - Bound nodes span multiple roots that share a common ancestor (every
+ *   bound-node root is a descendant of it) → the common ancestor. Enables
+ *   cross-directory pipeline support.
+ * - Any bound node unresolvable, no bound nodes at all, or roots spanning
+ *   unrelated trees → `null`. handleSave would reject such a pipeline as a
+ *   validation error, so no YAML is written for it and we must not seed a
+ *   root for it.
  *
- * Agents are resolved by `sessionId` first (stable across renames), then by
- * `sessionName` as a fallback for pipelines loaded from older YAML that
- * referenced agents purely by name.
+ * Bindings are resolved by id first (stable across renames), then by name as
+ * a fallback for pipelines loaded from older YAML that referenced sessions
+ * purely by name.
  */
 export function resolvePipelineWriteRoot(
 	pipeline: Pick<CuePipeline, 'nodes'>,
 	sessionsById: ReadonlyMap<string, SessionRootInfo>,
 	sessionsByName: ReadonlyMap<string, SessionRootInfo>
 ): string | null {
-	const agents = pipeline.nodes.filter((n) => n.type === 'agent');
-	if (agents.length === 0) return null;
-
 	const roots = new Set<string>();
 	let missingRoot = false;
-	for (const agent of agents) {
-		const data = agent.data as AgentNodeData;
-		// Guard against empty-string sessionId / sessionName so a stray `''`
-		// key in the session maps can't accidentally resolve an agent that
-		// should have been treated as missing.
-		const byId = data.sessionId ? sessionsById.get(data.sessionId) : undefined;
-		const byName =
-			!byId?.projectRoot && data.sessionName ? sessionsByName.get(data.sessionName) : undefined;
-		const root = byId?.projectRoot ?? byName?.projectRoot;
+	let sawBinding = false;
+	for (const node of pipeline.nodes) {
+		const { root, hasBinding } = resolveNodeWriteRoot(node, sessionsById, sessionsByName);
+		if (!hasBinding) continue;
+		sawBinding = true;
 		if (root) {
 			roots.add(root);
 		} else {
 			missingRoot = true;
 		}
 	}
+	if (!sawBinding) return null;
 
 	if (roots.size === 0) return null;
 

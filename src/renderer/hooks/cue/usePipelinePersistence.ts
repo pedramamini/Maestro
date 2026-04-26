@@ -17,10 +17,12 @@ import type {
 	CuePipelineState,
 	CuePipeline,
 	AgentNodeData,
+	PipelineNode,
 } from '../../../shared/cue-pipeline-types';
 import { graphSessionsToPipelines } from '../../components/CuePipelineEditor/utils/yamlToPipeline';
 import { pipelinesToYaml } from '../../components/CuePipelineEditor/utils/pipelineToYaml';
 import { validatePipelines } from '../../components/CuePipelineEditor/utils/pipelineValidation';
+import { resolveNodeWriteRoot } from '../../components/CuePipelineEditor/utils/pipelineRoots';
 import type { CueSettings } from '../../../shared/cue';
 import { cueService } from '../../services/cue';
 import { captureException } from '../../utils/sentry';
@@ -205,13 +207,8 @@ export function usePipelinePersistence({
 			if (!sessionsByName.has(s.name)) sessionsByName.set(s.name, s);
 		}
 
-		const resolveRoot = (agent: AgentNodeData): string | null => {
-			const byId = sessionsById.get(agent.sessionId);
-			if (byId?.projectRoot) return byId.projectRoot;
-			const byName = sessionsByName.get(agent.sessionName);
-			if (byName?.projectRoot) return byName.projectRoot;
-			return null;
-		};
+		const resolveNodeRoot = (node: PipelineNode): { root: string | null; hasBinding: boolean } =>
+			resolveNodeWriteRoot(node, sessionsById, sessionsByName);
 
 		// Partition pipelines by project root. A pipeline must live in exactly
 		// one root — cross-root pipelines are rejected so each .maestro/cue.yaml
@@ -221,19 +218,30 @@ export function usePipelinePersistence({
 		const unresolvedPipelines: string[] = [];
 
 		for (const pipeline of validPipelines) {
-			const agents = pipeline.nodes.filter((n) => n.type === 'agent');
-			if (agents.length === 0) continue; // validatePipelines already flagged this
+			// Both agent and command nodes contribute a project root via their
+			// bound session (commands inherit cwd + agent_id from their owning
+			// session). Treat them uniformly so command-only pipelines aren't
+			// silently dropped from the save — that bug made user-created
+			// pipelines like "Cyber Stocks" (trigger + shell commands, no agent)
+			// vanish on every save.
+			const bindings = pipeline.nodes.filter((n) => n.type === 'agent' || n.type === 'command');
+			if (bindings.length === 0) continue; // validatePipelines already flagged this
 
 			const roots = new Set<string>();
 			let missingRoot = false;
-			for (const agent of agents) {
-				const root = resolveRoot(agent.data as AgentNodeData);
+			let sawBinding = false;
+			for (const node of bindings) {
+				const { root, hasBinding } = resolveNodeRoot(node);
+				if (!hasBinding) continue;
+				sawBinding = true;
 				if (!root) {
 					missingRoot = true;
 					continue;
 				}
 				roots.add(root);
 			}
+
+			if (!sawBinding) continue; // pipeline had only unbound nodes
 
 			if (roots.size === 0) {
 				unresolvedPipelines.push(pipeline.name);
@@ -249,7 +257,7 @@ export function usePipelinePersistence({
 					commonRoot !== null && [...roots].every((r) => isDescendantOrEqual(r, commonRoot));
 				if (!allDescendants) {
 					errors.push(
-						`"${pipeline.name}": agents span unrelated project roots (${[...roots].join(', ')}) — a Cue pipeline must live in a single project.`
+						`"${pipeline.name}": nodes span unrelated project roots (${[...roots].join(', ')}) — a Cue pipeline must live in a single project.`
 					);
 					continue;
 				}
@@ -259,7 +267,7 @@ export function usePipelinePersistence({
 			}
 			if (missingRoot) {
 				errors.push(
-					`"${pipeline.name}": one or more agents have no resolvable project root — assign a working directory to the agent(s).`
+					`"${pipeline.name}": one or more agents/commands have no resolvable project root — assign a working directory to the bound session(s).`
 				);
 				continue;
 			}
@@ -272,7 +280,7 @@ export function usePipelinePersistence({
 
 		if (unresolvedPipelines.length > 0) {
 			errors.push(
-				`No project root found for pipeline(s): ${unresolvedPipelines.join(', ')} — agents need a working directory.`
+				`No project root found for pipeline(s): ${unresolvedPipelines.join(', ')} — agents/commands need a working directory.`
 			);
 		}
 
@@ -283,10 +291,8 @@ export function usePipelinePersistence({
 		const errorPipelineRoots = new Set<string>();
 		for (const p of pipelinesWithErrors) {
 			for (const node of p.nodes) {
-				if (node.type === 'agent') {
-					const root = resolveRoot(node.data as AgentNodeData);
-					if (root) errorPipelineRoots.add(root);
-				}
+				const { root, hasBinding } = resolveNodeRoot(node);
+				if (hasBinding && root) errorPipelineRoots.add(root);
 			}
 		}
 
@@ -495,17 +501,15 @@ export function usePipelinePersistence({
 			}
 			// Re-derive the written-roots set from what was just loaded so the
 			// next save knows which roots to clear if pipelines disappear again.
+			// Both agent and command nodes contribute roots — see handleSave's
+			// partitioning loop for the full rationale.
 			const sessionsById = new Map(sessions.map((s) => [s.id, s]));
 			const sessionsByName = new Map(sessions.map((s) => [s.name, s]));
 			const restoredRoots = new Set<string>();
 			for (const pipeline of restoredPipelines) {
 				for (const node of pipeline.nodes) {
-					if (node.type !== 'agent') continue;
-					const agentData = node.data as AgentNodeData;
-					const root =
-						sessionsById.get(agentData.sessionId)?.projectRoot ??
-						sessionsByName.get(agentData.sessionName)?.projectRoot;
-					if (root) restoredRoots.add(root);
+					const { root, hasBinding } = resolveNodeWriteRoot(node, sessionsById, sessionsByName);
+					if (hasBinding && root) restoredRoots.add(root);
 				}
 			}
 			lastWrittenRootsRef.current = restoredRoots;
