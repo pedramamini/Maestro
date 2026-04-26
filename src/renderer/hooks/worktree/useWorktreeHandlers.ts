@@ -324,12 +324,41 @@ export function useWorktreeHandlers(): WorktreeHandlersReturn {
 					throw new Error(result.error || 'Failed to create worktree');
 				}
 
+				// If the branch was already attached to another worktree on disk,
+				// open that existing path instead of failing the user's flow.
+				const actualPath = result.existingPath || worktreePath;
+				const reusedExisting = !!result.alreadyExisted && !!result.existingPath;
+
+				// If we ended up using a different path, drop the original mark and
+				// avoid re-marking — there was nothing newly created on disk to race with.
+				if (reusedExisting) {
+					recentlyCreatedWorktreePathsRef.current.delete(normalizedCreatedPath);
+				}
+
 				// Fetch git info for the worktree (pass SSH remote ID for remote sessions)
-				const gitInfo = await fetchGitInfo(worktreePath, sshRemoteId);
+				const gitInfo = await fetchGitInfo(actualPath, sshRemoteId);
+
+				// If a session for the existing worktree path already exists, focus it
+				// and skip the duplicate creation.
+				if (reusedExisting) {
+					const normalizedActual = normalizePath(actualPath);
+					const existingSession = useSessionStore
+						.getState()
+						.sessions.find((s) => normalizePath(s.cwd) === normalizedActual);
+					if (existingSession) {
+						useSessionStore.getState().setActiveSessionId(existingSession.id);
+						notifyToast({
+							type: 'info',
+							title: 'Worktree Already Open',
+							message: branchName,
+						});
+						return;
+					}
+				}
 
 				const worktreeSession = buildWorktreeSession({
 					parentSession: activeSession,
-					path: worktreePath,
+					path: actualPath,
 					branch: branchName,
 					name: branchName,
 					defaultSaveToHistory: savToHist,
@@ -349,9 +378,9 @@ export function useWorktreeHandlers(): WorktreeHandlersReturn {
 				useSessionStore.getState().setActiveSessionId(worktreeSession.id);
 
 				notifyToast({
-					type: 'success',
-					title: 'Worktree Created',
-					message: branchName,
+					type: reusedExisting ? 'info' : 'success',
+					title: reusedExisting ? 'Worktree Already Existed' : 'Worktree Created',
+					message: reusedExisting ? `Opened existing worktree at ${actualPath}` : branchName,
 				});
 			} catch (err) {
 				recentlyCreatedWorktreePathsRef.current.delete(normalizedCreatedPath);
@@ -410,12 +439,39 @@ export function useWorktreeHandlers(): WorktreeHandlersReturn {
 				throw new Error(result.error || 'Failed to create worktree');
 			}
 
+			// If the branch was already attached to another worktree on disk,
+			// open that existing path instead of failing the user's flow.
+			const actualPath = result.existingPath || worktreePath;
+			const reusedExisting = !!result.alreadyExisted && !!result.existingPath;
+
+			if (reusedExisting) {
+				recentlyCreatedWorktreePathsRef.current.delete(normalizedCreatedPath);
+			}
+
+			// If a session for the existing worktree path already exists, focus it
+			// and skip the duplicate creation.
+			if (reusedExisting) {
+				const normalizedActual = normalizePath(actualPath);
+				const existingSession = useSessionStore
+					.getState()
+					.sessions.find((s) => normalizePath(s.cwd) === normalizedActual);
+				if (existingSession) {
+					useSessionStore.getState().setActiveSessionId(existingSession.id);
+					notifyToast({
+						type: 'info',
+						title: 'Worktree Already Open',
+						message: branchName,
+					});
+					return;
+				}
+			}
+
 			// Fetch git info for the worktree (pass SSH remote ID for remote sessions)
-			const gitInfo = await fetchGitInfo(worktreePath, sshRemoteId);
+			const gitInfo = await fetchGitInfo(actualPath, sshRemoteId);
 
 			const worktreeSession = buildWorktreeSession({
 				parentSession: createWtSession,
-				path: worktreePath,
+				path: actualPath,
 				branch: branchName,
 				name: branchName,
 				defaultSaveToHistory: savToHist,
@@ -441,9 +497,9 @@ export function useWorktreeHandlers(): WorktreeHandlersReturn {
 			useSessionStore.getState().setActiveSessionId(worktreeSession.id);
 
 			notifyToast({
-				type: 'success',
-				title: 'Worktree Created',
-				message: branchName,
+				type: reusedExisting ? 'info' : 'success',
+				title: reusedExisting ? 'Worktree Already Existed' : 'Worktree Created',
+				message: reusedExisting ? `Opened existing worktree at ${actualPath}` : branchName,
 			});
 		} catch (err) {
 			recentlyCreatedWorktreePathsRef.current.delete(normalizedCreatedPath);

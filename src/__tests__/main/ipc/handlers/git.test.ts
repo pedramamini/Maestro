@@ -2359,8 +2359,103 @@ export function Component() {
 			});
 		});
 
-		it('should handle git worktree creation failure', async () => {
+		it('should recover when branch is already checked out at another worktree', async () => {
 			// Mock fs.access to throw (path doesn't exist)
+			const fsPromises = await import('fs/promises');
+			vi.mocked(fsPromises.default.access).mockRejectedValue(new Error('ENOENT'));
+
+			vi.mocked(execFile.execFileNoThrow)
+				.mockResolvedValueOnce({
+					// git rev-parse --verify branchName (branch exists)
+					stdout: 'abc123456789',
+					stderr: '',
+					exitCode: 0,
+				})
+				.mockResolvedValueOnce({
+					// git worktree add fails because branch already attached elsewhere
+					stdout: '',
+					stderr: "fatal: 'feature-branch' is already checked out at '/existing/wt/feature-branch'",
+					exitCode: 128,
+				})
+				.mockResolvedValueOnce({
+					// findLocalWorktreeForBranch → git worktree list --porcelain
+					stdout: [
+						'worktree /main/repo',
+						'HEAD aaa',
+						'branch refs/heads/main',
+						'',
+						'worktree /existing/wt/feature-branch',
+						'HEAD bbb',
+						'branch refs/heads/feature-branch',
+						'',
+					].join('\n'),
+					stderr: '',
+					exitCode: 0,
+				});
+
+			const handler = handlers.get('git:worktreeSetup');
+			const result = await handler!(
+				{} as any,
+				'/main/repo',
+				'/worktrees/feature',
+				'feature-branch'
+			);
+
+			expect(result).toEqual({
+				success: true,
+				created: false,
+				alreadyExisted: true,
+				existingPath: '/existing/wt/feature-branch',
+				currentBranch: 'feature-branch',
+				requestedBranch: 'feature-branch',
+				branchMismatch: false,
+			});
+			expect(execFile.execFileNoThrow).toHaveBeenCalledWith(
+				'git',
+				['worktree', 'list', '--porcelain'],
+				'/main/repo'
+			);
+		});
+
+		it('should still surface error when branch is "already used" but porcelain lookup yields no match', async () => {
+			const fsPromises = await import('fs/promises');
+			vi.mocked(fsPromises.default.access).mockRejectedValue(new Error('ENOENT'));
+
+			vi.mocked(execFile.execFileNoThrow)
+				.mockResolvedValueOnce({
+					// git rev-parse --verify branchName (branch exists)
+					stdout: 'abc123',
+					stderr: '',
+					exitCode: 0,
+				})
+				.mockResolvedValueOnce({
+					// git worktree add fails
+					stdout: '',
+					stderr: "fatal: 'feature-branch' is already used by worktree at '/gone'",
+					exitCode: 128,
+				})
+				.mockResolvedValueOnce({
+					// porcelain returns nothing matching
+					stdout: 'worktree /main/repo\nHEAD aaa\nbranch refs/heads/main\n',
+					stderr: '',
+					exitCode: 0,
+				});
+
+			const handler = handlers.get('git:worktreeSetup');
+			const result = await handler!(
+				{} as any,
+				'/main/repo',
+				'/worktrees/feature',
+				'feature-branch'
+			);
+
+			expect(result).toEqual({
+				success: false,
+				error: "fatal: 'feature-branch' is already used by worktree at '/gone'",
+			});
+		});
+
+		it('should surface unrelated git worktree creation failures unchanged', async () => {
 			const fsPromises = await import('fs/promises');
 			vi.mocked(fsPromises.default.access).mockRejectedValue(new Error('ENOENT'));
 
@@ -2372,9 +2467,9 @@ export function Component() {
 					exitCode: 128,
 				})
 				.mockResolvedValueOnce({
-					// git worktree add -b fails
+					// git worktree add -b fails for an unrelated reason
 					stdout: '',
-					stderr: "fatal: 'feature-branch' is already checked out at '/other/path'",
+					stderr: 'fatal: permission denied',
 					exitCode: 128,
 				});
 
@@ -2388,8 +2483,14 @@ export function Component() {
 
 			expect(result).toEqual({
 				success: false,
-				error: "fatal: 'feature-branch' is already checked out at '/other/path'",
+				error: 'fatal: permission denied',
 			});
+			// porcelain lookup must NOT run for non-"already used" errors
+			expect(execFile.execFileNoThrow).not.toHaveBeenCalledWith(
+				'git',
+				['worktree', 'list', '--porcelain'],
+				'/main/repo'
+			);
 		});
 	});
 

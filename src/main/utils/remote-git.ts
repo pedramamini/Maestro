@@ -12,6 +12,7 @@ import { SshRemoteConfig } from '../../shared/types';
 import { execFileNoThrow, ExecResult } from './execFile';
 import { buildSshCommand, RemoteCommandOptions } from './ssh-command-builder';
 import { logger } from './logger';
+import { isWorktreeAlreadyUsedError, parseWorktreePathForBranch } from '../../shared/gitUtils';
 
 const LOG_CONTEXT = '[RemoteGit]';
 
@@ -268,6 +269,29 @@ export interface RemoteWorktreeSetupResult extends Record<string, unknown> {
 	currentBranch?: string;
 	requestedBranch?: string;
 	branchMismatch?: boolean;
+	/** True when the branch was already attached to a worktree on disk. */
+	alreadyExisted?: boolean;
+	/** Path of the existing worktree when alreadyExisted is true. */
+	existingPath?: string;
+}
+
+/**
+ * Look up the worktree path currently checked out on the given branch by
+ * running `git worktree list --porcelain` against the remote main repo.
+ *
+ * @returns Absolute worktree path on the remote, or null if not found
+ */
+async function findRemoteWorktreeForBranch(
+	mainRepoCwd: string,
+	branchName: string,
+	sshRemote: SshRemoteConfig
+): Promise<string | null> {
+	const result = await execGitRemote(['worktree', 'list', '--porcelain'], {
+		sshRemote,
+		remoteCwd: mainRepoCwd,
+	});
+	if (result.exitCode !== 0) return null;
+	return parseWorktreePathForBranch(result.stdout, branchName);
 }
 
 /**
@@ -428,6 +452,27 @@ export async function worktreeSetupRemote(
 	}
 
 	if (createResult.exitCode !== 0) {
+		// Recover from "already used / already checked out" — the branch is
+		// attached to another worktree on the remote. Resolve that path so
+		// callers can open it instead of surfacing an opaque error.
+		const errMsg = createResult.stderr || '';
+		if (isWorktreeAlreadyUsedError(errMsg)) {
+			const existingPath = await findRemoteWorktreeForBranch(mainRepoCwd, branchName, sshRemote);
+			if (existingPath) {
+				return {
+					success: true,
+					data: {
+						success: true,
+						created: false,
+						alreadyExisted: true,
+						existingPath,
+						currentBranch: branchName,
+						requestedBranch: branchName,
+						branchMismatch: false,
+					},
+				};
+			}
+		}
 		return {
 			success: true,
 			data: {

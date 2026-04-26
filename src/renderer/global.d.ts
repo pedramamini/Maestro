@@ -666,6 +666,10 @@ interface MaestroAPI {
 			currentBranch?: string;
 			requestedBranch?: string;
 			branchMismatch?: boolean;
+			/** True when the branch was already attached to a worktree on disk. */
+			alreadyExisted?: boolean;
+			/** Path of the existing worktree when alreadyExisted is true. */
+			existingPath?: string;
 			error?: string;
 		}>;
 		worktreeCheckout: (
