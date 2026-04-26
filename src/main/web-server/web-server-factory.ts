@@ -15,6 +15,7 @@ import type { StoredSession, SettingsStoreInterface as SettingsStore } from '../
 import type { Group } from '../../shared/types';
 import type { Shortcut } from '../../shared/shortcut-types';
 import { getDefaultShell } from '../stores/defaults';
+import { buildWebSettingsSnapshot } from './web-settings-snapshot';
 
 /** UUID v4 format regex for validating stored security tokens.
  *  Enforces version nibble (4) and variant bits ([89ab]). */
@@ -989,21 +990,7 @@ export function createWebServerFactory(deps: WebServerFactoryDependencies) {
 
 					// After successful setting change, broadcast updated settings to all web clients
 					if (success) {
-						const settings = {
-							theme: settingsStore.get('activeThemeId', 'dracula') as string,
-							fontSize: settingsStore.get('fontSize', 14) as number,
-							enterToSendAI: settingsStore.get('enterToSendAI', false) as boolean,
-							defaultSaveToHistory: settingsStore.get('defaultSaveToHistory', true) as boolean,
-							defaultShowThinking: settingsStore.get('defaultShowThinking', 'off') as string,
-							autoScroll: true,
-							notificationsEnabled: settingsStore.get('osNotificationsEnabled', true) as boolean,
-							audioFeedbackEnabled: settingsStore.get('audioFeedbackEnabled', false) as boolean,
-							colorBlindMode: settingsStore.get('colorBlindMode', 'false') as string,
-							conductorProfile: settingsStore.get('conductorProfile', '') as string,
-							maxOutputLines: settingsStore.get('maxOutputLines', null) as number | null,
-							shortcuts: settingsStore.get('shortcuts', {}) as Record<string, Shortcut>,
-						};
-						server.broadcastSettingsChanged(settings);
+						server.broadcastSettingsChanged(buildWebSettingsSnapshot(settingsStore));
 					}
 
 					resolve(success);
