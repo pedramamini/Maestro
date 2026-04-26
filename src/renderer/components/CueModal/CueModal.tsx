@@ -253,7 +253,10 @@ export function CueModal({ theme, onClose, cueShortcutKeys }: CueModalProps) {
 
 						{/* Body */}
 						{showHelp ? (
-							<div className="flex-1 overflow-y-auto px-5 py-4">
+							<div
+								className="flex-1 overflow-y-auto py-4"
+								style={{ paddingLeft: 100, paddingRight: 100 }}
+							>
 								<CueHelpContent theme={theme} cueShortcutKeys={cueShortcutKeys} />
 							</div>
 						) : activeTab === 'dashboard' ? (

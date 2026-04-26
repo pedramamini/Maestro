@@ -314,6 +314,56 @@ export function CueHelpContent({ theme, cueShortcutKeys }: CueHelpContentProps) 
 							(default 1). Fires per file when content changes and pending tasks exist.
 						</p>
 					</div>
+					<div>
+						<p>
+							<strong style={{ color: theme.colors.textMain }}>CLI Trigger</strong>{' '}
+							<code
+								className="px-1 rounded text-xs"
+								style={{ backgroundColor: theme.colors.bgActivity }}
+							>
+								cli.trigger
+							</code>
+						</p>
+						<p className="mt-1">
+							Fires when invoked externally via{' '}
+							<code
+								className="px-1 rounded text-xs"
+								style={{ backgroundColor: theme.colors.bgActivity }}
+							>
+								maestro-cli cue trigger &lt;name&gt;
+							</code>
+							. Useful for hooking Cue into shell scripts, Git hooks, or other automation. The
+							optional{' '}
+							<code
+								className="px-1 rounded text-xs"
+								style={{ backgroundColor: theme.colors.bgActivity }}
+							>
+								--prompt
+							</code>{' '}
+							and{' '}
+							<code
+								className="px-1 rounded text-xs"
+								style={{ backgroundColor: theme.colors.bgActivity }}
+							>
+								--source-agent-id
+							</code>{' '}
+							flags are exposed as{' '}
+							<code
+								className="px-1 rounded text-xs"
+								style={{ backgroundColor: theme.colors.bgActivity }}
+							>
+								{'{{CUE_CLI_PROMPT}}'}
+							</code>{' '}
+							and{' '}
+							<code
+								className="px-1 rounded text-xs"
+								style={{ backgroundColor: theme.colors.bgActivity }}
+							>
+								{'{{CUE_SOURCE_AGENT_ID}}'}
+							</code>
+							.
+						</p>
+					</div>
 					<div
 						className="font-mono text-xs p-3 rounded border space-y-3"
 						style={{
@@ -385,6 +435,15 @@ export function CueHelpContent({ theme, cueShortcutKeys }: CueHelpContentProps) 
 							{'  '}watch: "tasks/**/*.md"
 							<br />
 							{'  '}poll_minutes: 1
+						</div>
+						<div>
+							# CLI Trigger
+							<br />
+							- name: "Manual Run"
+							<br />
+							{'  '}event: cli.trigger
+							<br />
+							{'  '}prompt: prompts/manual.md
 						</div>
 					</div>
 				</div>
@@ -505,7 +564,7 @@ export function CueHelpContent({ theme, cueShortcutKeys }: CueHelpContentProps) 
 						<div>
 							<code style={{ color: theme.colors.accent }}>{'{{CUE_EVENT_TYPE}}'}</code> — Event
 							type (app.startup, time.heartbeat, time.scheduled, file.changed, agent.completed,
-							github.pull_request, github.issue, task.pending)
+							github.pull_request, github.issue, task.pending, cli.trigger)
 						</div>
 						<div>
 							<code style={{ color: theme.colors.accent }}>{'{{CUE_EVENT_TIMESTAMP}}'}</code> —
@@ -563,8 +622,21 @@ export function CueHelpContent({ theme, cueShortcutKeys }: CueHelpContentProps) 
 							Subscription that triggered the source (agent.completed)
 						</div>
 						<div>
+							<code style={{ color: theme.colors.accent }}>{'{{CUE_FROM_AGENT}}'}</code> —
+							Triggering upstream agent ID — sourceSessionId (agent.completed) or sourceAgentId
+							(cli.trigger)
+						</div>
+						<div>
 							<code style={{ color: theme.colors.accent }}>{'{{CUE_TASK_FILE}}'}</code> — File path
 							with pending tasks (task.pending)
+						</div>
+						<div>
+							<code style={{ color: theme.colors.accent }}>{'{{CUE_TASK_FILE_NAME}}'}</code> — File
+							name with pending tasks (task.pending)
+						</div>
+						<div>
+							<code style={{ color: theme.colors.accent }}>{'{{CUE_TASK_FILE_DIR}}'}</code> —
+							Directory of file with pending tasks (task.pending)
 						</div>
 						<div>
 							<code style={{ color: theme.colors.accent }}>{'{{CUE_TASK_COUNT}}'}</code> — Number of
@@ -577,6 +649,10 @@ export function CueHelpContent({ theme, cueShortcutKeys }: CueHelpContentProps) 
 						<div>
 							<code style={{ color: theme.colors.accent }}>{'{{CUE_TASK_CONTENT}}'}</code> — Full
 							file content, truncated (task.pending)
+						</div>
+						<div>
+							<code style={{ color: theme.colors.accent }}>{'{{CUE_GH_TYPE}}'}</code> — GitHub item
+							type: "pull_request" or "issue" (github.*)
 						</div>
 						<div>
 							<code style={{ color: theme.colors.accent }}>{'{{CUE_GH_NUMBER}}'}</code> — PR/issue
@@ -595,8 +671,16 @@ export function CueHelpContent({ theme, cueShortcutKeys }: CueHelpContentProps) 
 							(github.*)
 						</div>
 						<div>
+							<code style={{ color: theme.colors.accent }}>{'{{CUE_GH_BODY}}'}</code> — PR/issue
+							body, truncated (github.*)
+						</div>
+						<div>
 							<code style={{ color: theme.colors.accent }}>{'{{CUE_GH_LABELS}}'}</code> — Labels,
 							comma-separated (github.*)
+						</div>
+						<div>
+							<code style={{ color: theme.colors.accent }}>{'{{CUE_GH_STATE}}'}</code> — State:
+							"open" or "closed" (github.*)
 						</div>
 						<div>
 							<code style={{ color: theme.colors.accent }}>{'{{CUE_GH_REPO}}'}</code> — Repo
@@ -605,6 +689,36 @@ export function CueHelpContent({ theme, cueShortcutKeys }: CueHelpContentProps) 
 						<div>
 							<code style={{ color: theme.colors.accent }}>{'{{CUE_GH_BRANCH}}'}</code> — Head
 							branch (github.pull_request)
+						</div>
+						<div>
+							<code style={{ color: theme.colors.accent }}>{'{{CUE_GH_BASE_BRANCH}}'}</code> — Base
+							branch (github.pull_request)
+						</div>
+						<div>
+							<code style={{ color: theme.colors.accent }}>{'{{CUE_GH_ASSIGNEES}}'}</code> —
+							Comma-separated assignees (github.issue)
+						</div>
+						<div>
+							<code style={{ color: theme.colors.accent }}>{'{{CUE_CLI_PROMPT}}'}</code> — Prompt
+							text passed via{' '}
+							<code
+								className="px-1 rounded text-xs"
+								style={{ backgroundColor: theme.colors.bgActivity }}
+							>
+								--prompt
+							</code>{' '}
+							flag (cli.trigger)
+						</div>
+						<div>
+							<code style={{ color: theme.colors.accent }}>{'{{CUE_SOURCE_AGENT_ID}}'}</code> —
+							Source agent ID passed via{' '}
+							<code
+								className="px-1 rounded text-xs"
+								style={{ backgroundColor: theme.colors.bgActivity }}
+							>
+								--source-agent-id
+							</code>{' '}
+							(cli.trigger)
 						</div>
 					</div>
 					<div
