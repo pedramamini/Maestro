@@ -58,6 +58,7 @@ import { createCueCleanupService, type CueCleanupService } from './cue-cleanup-s
 import { createCueMetrics, type CueMetrics, type CueMetricsCollector } from './cue-metrics';
 import { createCueQueuePersistence, type CueQueuePersistence } from './cue-queue-persistence';
 import { loadCueConfig } from './cue-yaml-loader';
+import { cueDebugLog } from '../../shared/cueDebug';
 
 const MAX_CHAIN_DEPTH = 10;
 
@@ -477,7 +478,17 @@ export class CueEngine {
 		// refreshSession (the typical path at boot, since getSessions() is empty
 		// when start() fires) should still get their app.startup triggers.
 		const reason = this.startReason ?? 'refresh';
+		cueDebugLog('engine:refreshSession:start', { sessionId, projectRoot, reason });
 		const result = this.sessionRuntimeService.refreshSession(sessionId, projectRoot, reason);
+		cueDebugLog('engine:refreshSession:result', {
+			sessionId,
+			projectRoot,
+			sessionName: result.sessionName,
+			reloaded: result.reloaded,
+			configRemoved: result.configRemoved,
+			activeCount: result.activeCount,
+			kind: 'kind' in result ? (result as { kind?: string }).kind : undefined,
+		});
 		if (result.reloaded && result.sessionName) {
 			this.meteredOnLog(
 				'cue',

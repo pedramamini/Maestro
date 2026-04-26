@@ -28,6 +28,7 @@ import { notifyToast } from '../../stores/notificationStore';
 import type { CuePipelineSessionInfo as SessionInfo } from '../../../shared/cue-pipeline-types';
 import { computeCommonAncestorPath, isDescendantOrEqual } from '../../../shared/cue-path-utils';
 import { flushAllPendingEdits } from './pendingEditsRegistry';
+import { cueDebugLog } from '../../../shared/cueDebug';
 
 const SAVE_SUCCESS_IDLE_DELAY_MS = 2000;
 const SAVE_ERROR_IDLE_DELAY_MS = 3000;
@@ -135,6 +136,30 @@ export function usePipelinePersistence({
 			flushAllPendingEdits();
 		});
 		const currentPipelines = pipelinesRef.current;
+
+		cueDebugLog('save:intent', {
+			pipelineCount: currentPipelines.length,
+			pipelines: currentPipelines.map((p) => ({
+				name: p.name,
+				nodes: p.nodes.map((n) => {
+					if (n.type === 'agent') {
+						const a = n.data as AgentNodeData;
+						return {
+							type: 'agent',
+							sessionId: a.sessionId,
+							sessionName: a.sessionName,
+						};
+					}
+					return { type: n.type, id: n.id };
+				}),
+				edges: p.edges.map((e) => ({ from: e.source, to: e.target })),
+			})),
+			sessionsAvailable: sessions.map((s) => ({
+				id: s.id,
+				name: s.name,
+				projectRoot: s.projectRoot,
+			})),
+		});
 
 		// Filter out pipelines with unresolved-agent error nodes rather than
 		// aborting the entire save. Error nodes are emitted by yamlToPipeline when
@@ -274,6 +299,15 @@ export function usePipelinePersistence({
 			);
 		}
 
+		cueDebugLog('save:partition', {
+			byRoot: Object.fromEntries(
+				[...pipelinesByRoot.entries()].map(([root, pipes]) => [root, pipes.map((p) => p.name)])
+			),
+			unresolvedPipelines,
+			errorPipelines: pipelinesWithErrors.map((p) => p.name),
+			validationErrors: errors,
+		});
+
 		setValidationErrors(errors);
 		if (errors.length > 0) return;
 
@@ -304,6 +338,13 @@ export function usePipelinePersistence({
 				for (const [filePath, content] of promptFiles) {
 					promptFilesObj[filePath] = content;
 				}
+				cueDebugLog('save:writeYaml:request', {
+					root,
+					yamlBytes: yamlContent.length,
+					promptFileCount: Object.keys(promptFilesObj).length,
+					promptFileKeys: Object.keys(promptFilesObj),
+					yaml: yamlContent,
+				});
 				await cueService.writeYaml(root, yamlContent, promptFilesObj);
 
 				// Write-back verification: read the YAML we just wrote and
@@ -311,6 +352,12 @@ export function usePipelinePersistence({
 				// IPC failure path — if disk doesn't match memory, we throw
 				// so the user sees an error instead of a fake "Saved".
 				const onDisk = await cueService.readYaml(root);
+				cueDebugLog('save:writeYaml:verify', {
+					root,
+					match: onDisk === yamlContent,
+					diskBytes: onDisk?.length ?? null,
+					expectedBytes: yamlContent.length,
+				});
 				if (onDisk === null) {
 					throw new Error(`writeYaml to "${root}" did not persist: no file on disk`);
 				}
@@ -354,6 +401,11 @@ export function usePipelinePersistence({
 					touchedRoots.has(session.projectRoot) ||
 					[...touchedRoots].some((root) => isDescendantOrEqual(session.projectRoot!, root));
 				if (needsRefresh) {
+					cueDebugLog('save:refreshSession', {
+						sessionId: session.id,
+						sessionName: session.name,
+						projectRoot: session.projectRoot,
+					});
 					await cueService.refreshSession(session.id, session.projectRoot);
 				}
 			}
@@ -398,6 +450,9 @@ export function usePipelinePersistence({
 				message: `Saved ${totalPipelinesWritten} ${pipelineLabel} to ${currentRoots.size} ${rootLabel}${clearedSuffix}.`,
 			});
 		} catch (err: unknown) {
+			cueDebugLog('save:error', {
+				message: err instanceof Error ? err.message : String(err),
+			});
 			captureException(err, { extra: { operation: 'cue.pipelineSave' } });
 			setSaveStatus('error');
 			scheduleIdle(SAVE_ERROR_IDLE_DELAY_MS);

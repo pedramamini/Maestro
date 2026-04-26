@@ -399,14 +399,18 @@ describe('StdoutHandler', () => {
 			expect(proc.jsonBuffer).toBe('');
 		});
 
-		it('should defer Copilot subagent narration and flush the final answer at turn_end', () => {
-			// Regression: when Copilot CLI delegates to a subagent, it emits an
-			// `assistant.message` with narration content (e.g. "Delegating...") and
-			// no explicit phase. The structural final-answer heuristic in the parser
-			// flags it as a result, but emitting it immediately closes the turn
-			// before the subagent's real final answer arrives. StdoutHandler must
-			// capture the latest content-bearing no-phase message as streamedText
-			// and only flush on `assistant.turn_end`.
+		it('should defer Copilot subagent narration across turns and flush the final answer at session.shutdown', () => {
+			// Regression: when Copilot CLI delegates to a subagent or runs an
+			// agentic loop, it emits an `assistant.message` with narration content
+			// (e.g. "I'll run this end-to-end...") and no explicit phase, then
+			// emits `assistant.turn_end`, then keeps working across additional
+			// turns. The structural final-answer heuristic in the parser flags
+			// the narration as a result; flushing on `assistant.turn_end` would
+			// emit the narration as the final answer and lock out the real one.
+			// StdoutHandler must capture the latest content-bearing no-phase
+			// message as streamedText across multiple turns and only flush on
+			// `session.shutdown` — the one signal that fires exactly once per
+			// batch run.
 			const parser = new CopilotOutputParser();
 			const { handler, bufferManager, sessionId, proc } = createTestContext({
 				isStreamJsonMode: true,
@@ -433,7 +437,13 @@ describe('StdoutHandler', () => {
 			expect(proc.streamedText).toBe("I'll delegate this to the coding agent.");
 			expect(proc.resultEmitted).toBe(false);
 
-			// Subagent does its work — second assistant.message with the real answer.
+			// Turn ends after narration. This must NOT flush — more turns follow.
+			handler.handleData(sessionId, JSON.stringify({ type: 'assistant.turn_end' }));
+			expect(bufferManager.emitDataBuffered).not.toHaveBeenCalled();
+			expect(proc.resultEmitted).toBe(false);
+
+			// Subagent does its work in a subsequent turn — emits the real answer.
+			handler.handleData(sessionId, JSON.stringify({ type: 'assistant.turn_start' }));
 			handler.handleData(
 				sessionId,
 				JSON.stringify({
@@ -444,13 +454,14 @@ describe('StdoutHandler', () => {
 					},
 				})
 			);
+			handler.handleData(sessionId, JSON.stringify({ type: 'assistant.turn_end' }));
 
 			// Still deferred — latest content-bearing message wins.
 			expect(bufferManager.emitDataBuffered).not.toHaveBeenCalled();
 			expect(proc.streamedText).toBe('Subagent finished. Here is the final answer.');
 
-			// Turn end — flush the captured final answer.
-			handler.handleData(sessionId, JSON.stringify({ type: 'assistant.turn_end' }));
+			// session.shutdown — flush the captured final answer.
+			handler.handleData(sessionId, JSON.stringify({ type: 'session.shutdown' }));
 
 			expect(bufferManager.emitDataBuffered).toHaveBeenCalledWith(
 				sessionId,

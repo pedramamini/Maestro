@@ -607,11 +607,15 @@ export class StdoutHandler {
 		// no explicit phase is structurally identified as a final answer by the
 		// parser, but in practice it may be an intermediate narration emitted
 		// before the agent delegates to a subagent (e.g. "I'll delegate this to
-		// the coding agent..."). Treating that as the turn's result prematurely
-		// flushes and suppresses the real final answer that follows. Mirror the
-		// Codex pattern: capture the latest such message as streamedText and
-		// flush on `assistant.turn_end`. Legacy `phase: 'final_answer'` messages
-		// are an explicit signal and still flush immediately via the path below.
+		// the coding agent...") or before another agentic loop. Treating that as
+		// the turn's result prematurely flushes and suppresses the real final
+		// answer that follows. Capture the latest content-bearing no-phase
+		// message as streamedText and defer flushing to session.shutdown — the
+		// only signal that fires exactly once per batch run. assistant.turn_end
+		// fires after every LLM turn (including narration turns), so it can't
+		// be trusted as a session-end marker. Legacy `phase: 'final_answer'`
+		// messages are an explicit signal and still flush immediately via the
+		// path below.
 		if (
 			managedProcess.toolType === 'copilot-cli' &&
 			outputParser.isResultMessage(event) &&
@@ -623,18 +627,17 @@ export class StdoutHandler {
 			}
 		}
 
-		// Flush captured Copilot result on assistant.turn_end. The parser surfaces
-		// this as a `system` event whose raw payload identifies the turn boundary.
-		if (
-			managedProcess.toolType === 'copilot-cli' &&
-			event.type === 'system' &&
-			!managedProcess.resultEmitted
-		) {
+		// Flush captured Copilot result on session.shutdown. This is the only
+		// event that fires exactly once per batch run, so it's the trustworthy
+		// session-end marker. The parser maps session.shutdown to either a
+		// `usage` event (when modelMetrics are present) or a `system` event;
+		// match by raw.type to cover both cases.
+		if (managedProcess.toolType === 'copilot-cli' && !managedProcess.resultEmitted) {
 			const raw = event.raw as { type?: string } | undefined;
-			if (raw?.type === 'assistant.turn_end' && managedProcess.streamedText) {
+			if (raw?.type === 'session.shutdown' && managedProcess.streamedText) {
 				managedProcess.resultEmitted = true;
 				logger.debug(
-					'[ProcessManager] Emitting final Copilot result at turn end',
+					'[ProcessManager] Emitting final Copilot result at session.shutdown',
 					'ProcessManager',
 					{
 						sessionId,
