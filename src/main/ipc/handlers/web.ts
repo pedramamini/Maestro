@@ -272,6 +272,25 @@ export function registerWebHandlers(deps: WebHandlerDependencies): void {
 		try {
 			let webServer = getWebServer();
 
+			// Rotate the security token on every Live toggle unless the user
+			// opted into Persistent Web Link. After live:stopServer the CLI-only
+			// server (spun up by ensureCliServer) keeps the previous token —
+			// reusing it on the next Live ON would silently leak the prior URL.
+			// Tear it down so createWebServer() mints a fresh ephemeral token.
+			const persistentWebLink = settingsStore.get<boolean>('persistentWebLink', false);
+			if (webServer && !persistentWebLink) {
+				try {
+					await webServer.stop();
+				} catch (err: any) {
+					logger.error(
+						`Failed to stop existing server before token rotation: ${err?.message ?? err}`,
+						'WebServer'
+					);
+				}
+				setWebServer(null);
+				webServer = null;
+			}
+
 			// Create web server if it doesn't exist
 			if (!webServer) {
 				logger.info('Creating web server', 'WebServer');

@@ -291,7 +291,10 @@ describe('web handlers', () => {
 			expect(result).toEqual({ success: true, url: 'http://localhost:8080' });
 		});
 
-		it('should just start existing server if not active', async () => {
+		it('should just start existing server if not active and persistentWebLink is on', async () => {
+			mockSettingsStore.get.mockImplementation((key: string, def: unknown) =>
+				key === 'persistentWebLink' ? true : def
+			);
 			mockWebServer.isActive.mockReturnValue(false);
 
 			const handler = registeredHandlers.get('live:startServer');
@@ -302,7 +305,10 @@ describe('web handlers', () => {
 			expect(result).toEqual({ success: true, url: 'http://localhost:8080' });
 		});
 
-		it('should return url for already running server', async () => {
+		it('should return url for already running server when persistentWebLink is on', async () => {
+			mockSettingsStore.get.mockImplementation((key: string, def: unknown) =>
+				key === 'persistentWebLink' ? true : def
+			);
 			mockWebServer.isActive.mockReturnValue(true);
 
 			const handler = registeredHandlers.get('live:startServer');
@@ -310,6 +316,56 @@ describe('web handlers', () => {
 
 			expect(mockWebServer.start).not.toHaveBeenCalled();
 			expect(result).toEqual({ success: true, url: 'http://localhost:8080' });
+		});
+
+		it('should rotate the server (tear down + recreate) on Live ON when persistentWebLink is off', async () => {
+			// Existing CLI-only server (e.g. spun up by ensureCliServer after a
+			// previous live:stopServer). The next Live ON must mint a fresh
+			// security token instead of reusing the prior one.
+			mockSettingsStore.get.mockImplementation((key: string, def: unknown) =>
+				key === 'persistentWebLink' ? false : def
+			);
+			const freshServer = {
+				...mockWebServer,
+				isActive: vi.fn().mockReturnValue(false),
+				stop: vi.fn().mockResolvedValue(undefined),
+				start: vi.fn().mockResolvedValue({
+					port: 8080,
+					token: 'fresh-token',
+					url: 'http://localhost:8080',
+				}),
+				getSecurityToken: vi.fn().mockReturnValue('fresh-token'),
+				getPort: vi.fn().mockReturnValue(8080),
+				getSecureUrl: vi.fn().mockReturnValue('http://localhost:8080'),
+			};
+			mockCreateWebServer.mockReturnValueOnce(freshServer);
+
+			const handler = registeredHandlers.get('live:startServer');
+			const result = await handler!({});
+
+			expect(mockWebServer.stop).toHaveBeenCalled();
+			expect(mockCreateWebServer).toHaveBeenCalled();
+			expect(freshServer.start).toHaveBeenCalled();
+			expect(writeCliServerInfo).toHaveBeenCalledWith(
+				expect.objectContaining({ token: 'fresh-token' })
+			);
+			expect(result).toEqual({ success: true, url: 'http://localhost:8080' });
+		});
+
+		it('should reuse the server (no rotation) on Live ON when persistentWebLink is on', async () => {
+			mockSettingsStore.get.mockImplementation((key: string, def: unknown) =>
+				key === 'persistentWebLink' ? true : def
+			);
+			mockWebServer.isActive.mockReturnValue(true);
+
+			const handler = registeredHandlers.get('live:startServer');
+			await handler!({});
+
+			expect(mockWebServer.stop).not.toHaveBeenCalled();
+			expect(mockCreateWebServer).not.toHaveBeenCalled();
+			expect(writeCliServerInfo).toHaveBeenCalledWith(
+				expect.objectContaining({ token: 'mock-security-token' })
+			);
 		});
 
 		it('should publish CLI discovery file after starting', async () => {
@@ -328,7 +384,10 @@ describe('web handlers', () => {
 			);
 		});
 
-		it('should publish CLI discovery file even when server already running', async () => {
+		it('should publish CLI discovery file even when server already running (persistent)', async () => {
+			mockSettingsStore.get.mockImplementation((key: string, def: unknown) =>
+				key === 'persistentWebLink' ? true : def
+			);
 			mockWebServer.isActive.mockReturnValue(true);
 
 			const handler = registeredHandlers.get('live:startServer');
@@ -369,7 +428,10 @@ describe('web handlers', () => {
 			);
 		});
 
-		it('should refresh CLI discovery file when the existing server is restarted', async () => {
+		it('should refresh CLI discovery file when the existing server is restarted (persistent)', async () => {
+			mockSettingsStore.get.mockImplementation((key: string, def: unknown) =>
+				key === 'persistentWebLink' ? true : def
+			);
 			mockWebServer.isActive.mockReturnValue(false);
 
 			const handler = registeredHandlers.get('live:startServer');
@@ -384,7 +446,10 @@ describe('web handlers', () => {
 			);
 		});
 
-		it('should refresh CLI discovery file when the server is already running', async () => {
+		it('should refresh CLI discovery file when the server is already running (persistent)', async () => {
+			mockSettingsStore.get.mockImplementation((key: string, def: unknown) =>
+				key === 'persistentWebLink' ? true : def
+			);
 			mockWebServer.isActive.mockReturnValue(true);
 
 			const handler = registeredHandlers.get('live:startServer');
@@ -425,7 +490,10 @@ describe('web handlers', () => {
 			expect(result).toEqual({ success: true, url: 'http://localhost:8080' });
 		});
 
-		it('should still report success when discovery write fails on an already-running server', async () => {
+		it('should still report success when discovery write fails on an already-running server (persistent)', async () => {
+			mockSettingsStore.get.mockImplementation((key: string, def: unknown) =>
+				key === 'persistentWebLink' ? true : def
+			);
 			mockWebServer.isActive.mockReturnValue(true);
 			vi.mocked(writeCliServerInfo).mockImplementationOnce(() => {
 				throw new Error('permission denied');
