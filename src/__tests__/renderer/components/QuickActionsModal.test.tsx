@@ -1819,7 +1819,7 @@ describe('QuickActionsModal', () => {
 			expect(props.setQuickActionOpen).toHaveBeenCalledWith(false);
 		});
 
-		it('sorts agents alphabetically with group chats at the bottom', () => {
+		it('sorts agents alphabetically and excludes group chats', () => {
 			const props = createDefaultProps({
 				initialMode: 'agents',
 				sessions: [
@@ -1835,15 +1835,53 @@ describe('QuickActionsModal', () => {
 			const buttons = screen.getAllByRole('button');
 			const labels = buttons.map((b) => b.textContent?.replace(/\d/, '').trim() ?? '');
 
-			// Agents alphabetically first, then group chats
 			const alphaIdx = labels.findIndex((l) => l.startsWith('Alpha'));
 			const mikeIdx = labels.findIndex((l) => l.startsWith('Mike'));
 			const zuluIdx = labels.findIndex((l) => l.startsWith('Zulu'));
-			const gcIdx = labels.findIndex((l) => l.startsWith('Design Review'));
 
 			expect(alphaIdx).toBeLessThan(mikeIdx);
 			expect(mikeIdx).toBeLessThan(zuluIdx);
-			expect(zuluIdx).toBeLessThan(gcIdx);
+
+			// Group chats are intentionally excluded from the agent jumper.
+			expect(screen.queryByText('Design Review')).not.toBeInTheDocument();
+		});
+
+		it('buckets running agents above idle ones, alphabetical within each bucket', () => {
+			const props = createDefaultProps({
+				initialMode: 'agents',
+				sessions: [
+					createMockSession({ id: 'session-1', name: 'Zulu', state: 'idle' }),
+					createMockSession({ id: 'session-2', name: 'Alpha', state: 'idle' }),
+					createMockSession({ id: 'session-3', name: 'Mike', state: 'busy' }),
+					createMockSession({ id: 'session-4', name: 'Bravo', state: 'busy' }),
+				],
+			});
+			render(<QuickActionsModal {...props} />);
+
+			const buttons = screen.getAllByRole('button');
+			const labels = buttons.map((b) => b.textContent?.replace(/\d/, '').trim() ?? '');
+
+			const bravoIdx = labels.findIndex((l) => l.startsWith('Bravo'));
+			const mikeIdx = labels.findIndex((l) => l.startsWith('Mike'));
+			const alphaIdx = labels.findIndex((l) => l.startsWith('Alpha'));
+			const zuluIdx = labels.findIndex((l) => l.startsWith('Zulu'));
+
+			// Running bucket first (Bravo, Mike), then idle bucket (Alpha, Zulu).
+			expect(bravoIdx).toBeLessThan(mikeIdx);
+			expect(mikeIdx).toBeLessThan(alphaIdx);
+			expect(alphaIdx).toBeLessThan(zuluIdx);
+		});
+
+		it('dismisses modal when clicking the backdrop', () => {
+			const props = createDefaultProps({ initialMode: 'agents' });
+			render(<QuickActionsModal {...props} />);
+
+			const dialog = screen.getByRole('dialog');
+			const backdrop = dialog.parentElement;
+			expect(backdrop).not.toBeNull();
+			fireEvent.mouseDown(backdrop!);
+
+			expect(props.setQuickActionOpen).toHaveBeenCalledWith(false);
 		});
 	});
 

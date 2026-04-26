@@ -30,6 +30,9 @@ interface QuickAction {
 	action: () => void;
 	subtext?: string;
 	shortcut?: Shortcut;
+	// Agents-mode only: marks an agent whose state is not 'idle' so we can
+	// bucket "active" agents at the top with a divider beneath them.
+	isRunningAgent?: boolean;
 }
 
 interface QuickActionsModalProps {
@@ -1784,33 +1787,22 @@ export const QuickActionsModal = memo(function QuickActionsModal(props: QuickAct
 		{ id: 'create-new', label: '+ Create New Group', action: handleCreateGroup },
 	];
 
-	// Agent switcher mode: clean names only, no "Jump to:" prefix
-	const agentActions: QuickAction[] = [
-		...sessions.map((s) => ({
-			id: `jump-${s.id}`,
-			label: s.name,
-			action: () => {
-				setActiveSessionId(s.id);
-				if (s.groupId) {
-					setGroups((prev) =>
-						prev.map((g) => (g.id === s.groupId && g.collapsed ? { ...g, collapsed: false } : g))
-					);
-				}
-			},
-			subtext: s.state.toUpperCase(),
-		})),
-		...(groupChats && onOpenGroupChat
-			? groupChats.map((gc) => ({
-					id: `groupchat-${gc.id}`,
-					label: gc.name,
-					action: () => {
-						onOpenGroupChat(gc.id);
-						setQuickActionOpen(false);
-					},
-					subtext: `GROUP CHAT · ${gc.participants.length} participant${gc.participants.length !== 1 ? 's' : ''}`,
-				}))
-			: []),
-	];
+	// Agent switcher mode: clean names only, no "Jump to:" prefix.
+	// Group chats are intentionally excluded — this modal is the agent jumper.
+	const agentActions: QuickAction[] = sessions.map((s) => ({
+		id: `jump-${s.id}`,
+		label: s.name,
+		action: () => {
+			setActiveSessionId(s.id);
+			if (s.groupId) {
+				setGroups((prev) =>
+					prev.map((g) => (g.id === s.groupId && g.collapsed ? { ...g, collapsed: false } : g))
+				);
+			}
+		},
+		subtext: s.state.toUpperCase(),
+		isRunningAgent: s.state !== 'idle',
+	}));
 
 	const actions = mode === 'agents' ? agentActions : mode === 'main' ? mainActions : groupActions;
 
@@ -1828,11 +1820,11 @@ export const QuickActionsModal = memo(function QuickActionsModal(props: QuickAct
 			return a.label.toLowerCase().includes(searchLower);
 		})
 		.sort((a, b) => {
-			// In agents mode, sort agents first (alphabetically), then group chats at the bottom
+			// In agents mode, bucket running agents above idle ones; alphabetical within each bucket.
 			if (mode === 'agents') {
-				const aIsGroup = a.id.startsWith('groupchat-');
-				const bIsGroup = b.id.startsWith('groupchat-');
-				if (aIsGroup !== bIsGroup) return aIsGroup ? 1 : -1;
+				const aRunning = a.isRunningAgent ? 1 : 0;
+				const bRunning = b.isRunningAgent ? 1 : 0;
+				if (aRunning !== bRunning) return bRunning - aRunning;
 			}
 			return a.label.localeCompare(b.label);
 		});
@@ -1915,7 +1907,15 @@ export const QuickActionsModal = memo(function QuickActionsModal(props: QuickAct
 	};
 
 	return (
-		<div className="fixed inset-0 modal-overlay flex items-start justify-center pt-32 z-[9999] animate-in fade-in duration-100">
+		<div
+			className="fixed inset-0 modal-overlay flex items-start justify-center pt-32 z-[9999] animate-in fade-in duration-100"
+			onMouseDown={(e) => {
+				// Dismiss when clicking outside the modal content (backdrop only).
+				if (e.target === e.currentTarget && !renamingSession) {
+					setQuickActionOpen(false);
+				}
+			}}
+		>
 			<div
 				ref={modalRef}
 				role="dialog"
@@ -1981,43 +1981,59 @@ export const QuickActionsModal = memo(function QuickActionsModal(props: QuickAct
 							// 1-9 for positions 1-9, 0 for position 10
 							const numberBadge = distanceFromFirstVisible === 9 ? 0 : distanceFromFirstVisible + 1;
 
+							// In agents mode, show a divider on the first idle agent that follows a running one.
+							const prev = i > 0 ? filtered[i - 1] : null;
+							const showRunningIdleDivider =
+								mode === 'agents' && prev?.isRunningAgent === true && a.isRunningAgent === false;
+
 							return (
-								<button
-									key={a.id}
-									ref={i === selectedIndex ? selectedItemRef : null}
-									onClick={() => {
-										const switchesModes = a.id === 'moveToGroup' || a.id === 'back';
-										a.action();
-										if ((mode === 'main' || mode === 'agents') && !switchesModes)
-											setQuickActionOpen(false);
-									}}
-									className={`w-full text-left px-4 py-3 flex items-center gap-3 hover:bg-opacity-10 ${i === selectedIndex ? 'bg-opacity-10' : ''}`}
-									style={{
-										backgroundColor: i === selectedIndex ? theme.colors.accent : 'transparent',
-										color:
-											i === selectedIndex ? theme.colors.accentForeground : theme.colors.textMain,
-									}}
-								>
-									{showNumber ? (
+								<React.Fragment key={a.id}>
+									{showRunningIdleDivider && (
 										<div
-											className="flex-shrink-0 w-5 h-5 rounded flex items-center justify-center text-xs font-bold"
-											style={{ backgroundColor: theme.colors.bgMain, color: theme.colors.textDim }}
-										>
-											{numberBadge}
+											className="my-1 mx-4 border-t"
+											style={{ borderColor: theme.colors.border }}
+											aria-hidden="true"
+										/>
+									)}
+									<button
+										ref={i === selectedIndex ? selectedItemRef : null}
+										onClick={() => {
+											const switchesModes = a.id === 'moveToGroup' || a.id === 'back';
+											a.action();
+											if ((mode === 'main' || mode === 'agents') && !switchesModes)
+												setQuickActionOpen(false);
+										}}
+										className={`w-full text-left px-4 py-3 flex items-center gap-3 hover:bg-opacity-10 ${i === selectedIndex ? 'bg-opacity-10' : ''}`}
+										style={{
+											backgroundColor: i === selectedIndex ? theme.colors.accent : 'transparent',
+											color:
+												i === selectedIndex ? theme.colors.accentForeground : theme.colors.textMain,
+										}}
+									>
+										{showNumber ? (
+											<div
+												className="flex-shrink-0 w-5 h-5 rounded flex items-center justify-center text-xs font-bold"
+												style={{
+													backgroundColor: theme.colors.bgMain,
+													color: theme.colors.textDim,
+												}}
+											>
+												{numberBadge}
+											</div>
+										) : (
+											<div className="flex-shrink-0 w-5 h-5" />
+										)}
+										<div className="flex flex-col flex-1">
+											<span className="font-medium">{a.label}</span>
+											{a.subtext && <span className="text-[10px] opacity-50">{a.subtext}</span>}
 										</div>
-									) : (
-										<div className="flex-shrink-0 w-5 h-5" />
-									)}
-									<div className="flex flex-col flex-1">
-										<span className="font-medium">{a.label}</span>
-										{a.subtext && <span className="text-[10px] opacity-50">{a.subtext}</span>}
-									</div>
-									{a.shortcut && (
-										<span className="text-xs font-mono opacity-60">
-											{formatShortcutKeys(a.shortcut.keys)}
-										</span>
-									)}
-								</button>
+										{a.shortcut && (
+											<span className="text-xs font-mono opacity-60">
+												{formatShortcutKeys(a.shortcut.keys)}
+											</span>
+										)}
+									</button>
+								</React.Fragment>
 							);
 						})}
 						{filtered.length === 0 && (
