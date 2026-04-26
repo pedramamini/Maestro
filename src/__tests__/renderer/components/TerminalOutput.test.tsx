@@ -15,6 +15,7 @@ import { render, screen, fireEvent, waitFor, act } from '@testing-library/react'
 import userEvent from '@testing-library/user-event';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { TerminalOutput } from '../../../renderer/components/TerminalOutput';
+import { useCenterFlashStore } from '../../../renderer/stores/centerFlashStore';
 import type { Session, Theme, LogEntry } from '../../../renderer/types';
 
 // Mock dependencies
@@ -557,7 +558,9 @@ describe('TerminalOutput', () => {
 	});
 
 	describe('copy to clipboard', () => {
-		it('shows copied notification when copy succeeds', async () => {
+		it('fires the Copied to Clipboard center flash when copy succeeds', async () => {
+			useCenterFlashStore.getState().setActive(null);
+
 			const logs: LogEntry[] = [createLogEntry({ text: 'Copy this text', source: 'stdout' })];
 
 			const session = createDefaultSession({
@@ -568,10 +571,8 @@ describe('TerminalOutput', () => {
 			const props = createDefaultProps({ session });
 			render(<TerminalOutput {...props} />);
 
-			// Find and click the copy button
 			const copyButton = screen.getByTitle('Copy to clipboard');
 
-			// Mock clipboard
 			const writeTextMock = vi.fn().mockResolvedValue(undefined);
 			Object.assign(navigator, {
 				clipboard: { writeText: writeTextMock },
@@ -584,7 +585,10 @@ describe('TerminalOutput', () => {
 			expect(writeTextMock).toHaveBeenCalledWith('Copy this text');
 
 			await waitFor(() => {
-				expect(screen.getByText('Copied to Clipboard')).toBeInTheDocument();
+				const active = useCenterFlashStore.getState().active;
+				expect(active?.message).toBe('Copied to Clipboard');
+				expect(active?.detail).toBe('Copy this text');
+				expect(active?.variant).toBe('success');
 			});
 		});
 	});

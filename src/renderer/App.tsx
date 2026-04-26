@@ -146,6 +146,7 @@ import { useActiveSession } from './hooks/session/useActiveSession';
 // useAgentStore moved to useQueueProcessing hook
 import { InlineWizardProvider, useInlineWizardContext } from './contexts/InlineWizardContext';
 import { ToastContainer } from './components/Toast';
+import { CenterFlash } from './components/CenterFlash';
 
 // Import services
 // gitService — now used in useModalHandlers (Tier 3C)
@@ -3199,6 +3200,9 @@ function MaestroConsoleInner() {
 
 				{/* --- TOAST NOTIFICATIONS --- */}
 				<ToastContainer theme={theme} onSessionClick={handleToastSessionClick} />
+
+				{/* --- CENTER FLASH (single, app-wide; mounted via portal) --- */}
+				<CenterFlash theme={theme} />
 			</div>
 		</GitStatusProvider>
 	);

@@ -53,7 +53,7 @@ settings:
   timeout_minutes: number # Default: 30. Max run duration before timeout
   timeout_on_fail: string # Default: 'break'. What to do on timeout: 'break' or 'continue'
   max_concurrent: number # Default: 1. Simultaneous runs (1-10)
-  queue_size: number # Default: 10. Max queued events (0-50)
+  queue_size: number # Default: 0 (no buffering). Max queued events (0-50)
   owner_agent_id: string # Optional. Pin this cue.yaml to a single agent (id or name). See "Sharing a workspace".
 ```
 
@@ -265,11 +265,11 @@ settings:
 
 ### queue_size
 
-**Default:** `10` | **Type:** integer, 0–50
+**Default:** `0` (no buffering) | **Type:** integer, 0–50
 
 Maximum number of events that can be queued when all concurrent slots are occupied. Events beyond this limit are dropped.
 
-Set to `0` to disable queueing — events that can't run immediately are discarded.
+Default is `0` — events that can't run immediately are discarded. Raise this if you'd rather buffer bursty events than drop them.
 
 ```yaml
 settings:

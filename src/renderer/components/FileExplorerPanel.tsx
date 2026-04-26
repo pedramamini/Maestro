@@ -40,6 +40,7 @@ import { useClickOutside } from '../hooks/ui/useClickOutside';
 import { useContextMenuPosition } from '../hooks/ui/useContextMenuPosition';
 import { getRevealLabel, getOpenInLabel } from '../utils/platformUtils';
 import { safeClipboardWrite } from '../utils/clipboard';
+import { flashCopiedToClipboard } from '../utils/flashCopiedToClipboard';
 import { formatShortcutKeys } from '../utils/shortcutFormatter';
 import { useSettingsStore } from '../stores/settingsStore';
 import type { FileExplorerIconTheme } from '../utils/fileExplorerIcons/shared';
@@ -1340,9 +1341,10 @@ function FileExplorerPanelInner(props: FileExplorerPanelProps) {
 					<span
 						className="flex-shrink-0 cursor-pointer opacity-30 hover:opacity-70 transition-opacity"
 						style={{ color: theme.colors.accent }}
-						onClick={() => {
-							safeClipboardWrite(session.projectRoot);
-							onShowFlash?.('Path copied to clipboard');
+						onClick={async () => {
+							if (await safeClipboardWrite(session.projectRoot)) {
+								flashCopiedToClipboard(session.projectRoot, 'Path Copied');
+							}
 						}}
 						title="Copy path to clipboard"
 					>
@@ -1360,9 +1362,10 @@ function FileExplorerPanelInner(props: FileExplorerPanelProps) {
 								? `${session.sshRemote.host}:${session.projectRoot}`
 								: session.projectRoot
 						}
-						onDoubleClick={() => {
-							safeClipboardWrite(session.projectRoot);
-							onShowFlash?.('Path copied to clipboard');
+						onDoubleClick={async () => {
+							if (await safeClipboardWrite(session.projectRoot)) {
+								flashCopiedToClipboard(session.projectRoot, 'Path Copied');
+							}
 						}}
 					>
 						<bdi>{session.projectRoot}</bdi>

@@ -1,6 +1,6 @@
 import type { MainLogLevel } from '../../shared/logger-types';
 import type { SessionInfo } from '../../shared/types';
-import { findAncestorCueConfigRoot, loadCueConfigDetailed, watchCueYaml } from './cue-yaml-loader';
+import { findAncestorCueConfigRoots, loadCueConfigDetailed, watchCueYaml } from './cue-yaml-loader';
 import { resolveCueConfigPath } from './config/cue-config-repository';
 import { createCueEvent, type CueEvent, type CueSubscription } from './cue-types';
 import { clearGitHubSeenForSubscription } from './cue-db';
@@ -147,34 +147,43 @@ export function createCueSessionRuntimeService(
 			((!loadResult.ok && loadResult.reason === 'missing') || localFileExistsButEmpty) &&
 			!localOptsOutOfAncestor;
 		if (localHasNoPipelines) {
-			const ancestor = findAncestorCueConfigRoot(session.projectRoot);
-			if (ancestor) {
+			// Walk every ancestor that has a cue.yaml in closest-first order, not
+			// just the closest one. A session can legitimately have a closer
+			// ancestor that hosts an UNRELATED pipeline (e.g. /Users/pedram/Projects
+			// owns a Maestro pipeline) while its own subs live at a HIGHER
+			// ancestor (/Users/pedram owns the cross-root pipeline). Stopping at
+			// the first cue.yaml — even when it has zero subs targeting this
+			// session — strands those higher-ancestor subs and the trigger
+			// silently disappears from the editor on reload because getGraphData
+			// has no session reporting it.
+			const ancestors = findAncestorCueConfigRoots(session.projectRoot);
+			for (const ancestor of ancestors) {
 				const ancestorResult = loadCueConfigDetailed(ancestor);
-				if (ancestorResult.ok) {
-					// Only include subscriptions that explicitly target this
-					// session (via agent_id or fan_out). Unowned (shared)
-					// subscriptions belong to the ancestor's own session —
-					// including them here would duplicate trigger sources.
-					const targeted = ancestorResult.config.subscriptions.filter(
-						(sub) =>
-							sub.agent_id !== undefined && isSubscriptionParticipant(sub, session.id, session.name)
-					);
+				if (!ancestorResult.ok) continue;
+				// Only include subscriptions that explicitly target this
+				// session (via agent_id or fan_out). Unowned (shared)
+				// subscriptions belong to the ancestor's own session —
+				// including them here would duplicate trigger sources.
+				const targeted = ancestorResult.config.subscriptions.filter(
+					(sub) =>
+						sub.agent_id !== undefined && isSubscriptionParticipant(sub, session.id, session.name)
+				);
 
-					if (targeted.length > 0) {
-						loadResult = {
-							ok: true,
-							config: { ...ancestorResult.config, subscriptions: targeted },
-							warnings: ancestorResult.warnings,
-						};
-						ancestorRoot = ancestor;
-						deps.onLog(
-							'cue',
-							localFileExistsButEmpty
-								? `[CUE] "${session.name}" local cue.yaml is empty — overriding with ancestor "${ancestor}" (${targeted.length} targeted subscription(s)). Set no_ancestor_fallback: true on the local file to opt out.`
-								: `[CUE] "${session.name}" using ancestor config from "${ancestor}" (${targeted.length} targeted subscription(s))`
-						);
-					}
-				}
+				if (targeted.length === 0) continue;
+
+				loadResult = {
+					ok: true,
+					config: { ...ancestorResult.config, subscriptions: targeted },
+					warnings: ancestorResult.warnings,
+				};
+				ancestorRoot = ancestor;
+				deps.onLog(
+					'cue',
+					localFileExistsButEmpty
+						? `[CUE] "${session.name}" local cue.yaml is empty — overriding with ancestor "${ancestor}" (${targeted.length} targeted subscription(s)). Set no_ancestor_fallback: true on the local file to opt out.`
+						: `[CUE] "${session.name}" using ancestor config from "${ancestor}" (${targeted.length} targeted subscription(s))`
+				);
+				break;
 			}
 		}
 

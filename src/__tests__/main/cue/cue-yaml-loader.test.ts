@@ -200,7 +200,7 @@ subscriptions:
 			expect(result!.settings.timeout_minutes).toBe(30);
 			expect(result!.settings.timeout_on_fail).toBe('break');
 			expect(result!.settings.max_concurrent).toBe(1);
-			expect(result!.settings.queue_size).toBe(10);
+			expect(result!.settings.queue_size).toBe(0);
 		});
 
 		it('defaults enabled to true when not specified', () => {
@@ -2294,6 +2294,33 @@ subscriptions:
 			});
 			const result = findAncestorCueConfigRoot('/projects/parent/child');
 			expect(result).toBe('/projects/parent');
+		});
+	});
+
+	describe('findAncestorCueConfigRoots', () => {
+		it('returns every ancestor with a cue.yaml in closest-first order', async () => {
+			mockExistsSync.mockImplementation((p: string) => {
+				const s = String(p);
+				return (
+					s === '/users/alice/projects/.maestro/cue.yaml' || s === '/users/alice/.maestro/cue.yaml'
+				);
+			});
+			const { findAncestorCueConfigRoots } = await import('../../../main/cue/cue-yaml-loader');
+			const result = findAncestorCueConfigRoots('/users/alice/projects/sub-agent');
+			expect(result).toEqual(['/users/alice/projects', '/users/alice']);
+		});
+
+		it('returns empty array when no ancestor has a cue config', async () => {
+			mockExistsSync.mockReturnValue(false);
+			const { findAncestorCueConfigRoots } = await import('../../../main/cue/cue-yaml-loader');
+			expect(findAncestorCueConfigRoots('/users/alice/projects/sub')).toEqual([]);
+		});
+
+		it('respects the depth limit', async () => {
+			mockExistsSync.mockImplementation((p: string) => String(p) === '/a/.maestro/cue.yaml');
+			const { findAncestorCueConfigRoots } = await import('../../../main/cue/cue-yaml-loader');
+			// /a is 6 levels up — outside the 5-level search depth
+			expect(findAncestorCueConfigRoots('/a/b/c/d/e/f/g')).toEqual([]);
 		});
 	});
 });

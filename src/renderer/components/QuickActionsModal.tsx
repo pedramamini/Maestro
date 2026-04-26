@@ -4,6 +4,7 @@ import type { Session, Group, Theme, Shortcut, RightPanelTab, SettingsTab } from
 import type { GroupChat } from '../../shared/group-chat-types';
 import { useModalLayer } from '../hooks/ui/useModalLayer';
 import { notifyToast } from '../stores/notificationStore';
+import { flashCopiedToClipboard } from '../utils/flashCopiedToClipboard';
 import { useModalStore } from '../stores/modalStore';
 import { QUICK_ACTION_PROMPTS } from '../../shared/promptDefinitions';
 import { MODAL_PRIORITIES } from '../constants/modalPriorities';
@@ -776,13 +777,10 @@ export const QuickActionsModal = memo(function QuickActionsModal(props: QuickAct
 							id: 'copySessionId',
 							label: 'Copy Session ID',
 							subtext: activeTab.agentSessionId,
-							action: () => {
-								safeClipboardWrite(activeTab.agentSessionId!);
-								notifyToast({
-									type: 'success',
-									title: 'Copied',
-									message: 'Session ID copied to clipboard.',
-								});
+							action: async () => {
+								if (await safeClipboardWrite(activeTab.agentSessionId!)) {
+									flashCopiedToClipboard(activeTab.agentSessionId!, 'Session ID Copied');
+								}
 								setQuickActionOpen(false);
 							},
 						},
@@ -798,13 +796,11 @@ export const QuickActionsModal = memo(function QuickActionsModal(props: QuickAct
 						{
 							id: 'copyDeepLink',
 							label: 'Copy Deep Link',
-							action: () => {
-								safeClipboardWrite(buildSessionDeepLink(activeSession.id, activeTab.id));
-								notifyToast({
-									type: 'success',
-									title: 'Copied',
-									message: 'Deep link copied to clipboard.',
-								});
+							action: async () => {
+								const deepLink = buildSessionDeepLink(activeSession.id, activeTab.id);
+								if (await safeClipboardWrite(deepLink)) {
+									flashCopiedToClipboard(deepLink, 'Deep Link Copied');
+								}
 								setQuickActionOpen(false);
 							},
 						},
@@ -1743,7 +1739,7 @@ export const QuickActionsModal = memo(function QuickActionsModal(props: QuickAct
 					const installationId = await window.maestro.leaderboard.getInstallationId();
 					if (installationId) {
 						await safeClipboardWrite(installationId);
-						notifyToast({ type: 'success', title: 'Install GUID Copied', message: installationId });
+						flashCopiedToClipboard(installationId, 'Install GUID Copied');
 						logger.info(
 							'[Debug] Installation GUID copied to clipboard:',
 							undefined,

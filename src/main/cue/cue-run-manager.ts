@@ -559,7 +559,7 @@ export function createCueRunManager(deps: CueRunManagerDeps): CueRunManager {
 		): void {
 			const settings = deps.getSessionSettings(sessionId);
 			const maxConcurrent = settings?.max_concurrent ?? 1;
-			const queueSize = settings?.queue_size ?? 10;
+			const queueSize = settings?.queue_size ?? 0;
 			const currentCount = activeRunCount.get(sessionId) ?? 0;
 
 			if (currentCount >= maxConcurrent) {

@@ -3,12 +3,12 @@
  *
  * Used across every markdown renderer (MarkdownRenderer, AutoRun, wizard
  * bubbles, release notes, etc.) so a single click on `code` content copies
- * its text and shows the standard "Copied to Clipboard" toast.
+ * its text and shows the standard "Copied to Clipboard" center flash.
  */
 
 import React from 'react';
 import { safeClipboardWrite } from './clipboard';
-import { notifyToast } from '../stores/notificationStore';
+import { flashCopiedToClipboard } from './flashCopiedToClipboard';
 
 /** Recursively extract the plain text from arbitrary React children. */
 export function extractInlineCodeText(children: React.ReactNode): string {
@@ -21,13 +21,13 @@ export function extractInlineCodeText(children: React.ReactNode): string {
 	return '';
 }
 
-/** Copy inline code text and surface the standard toast. */
+/** Copy inline code text and surface the standard center flash. */
 export async function copyInlineCode(children: React.ReactNode): Promise<void> {
 	const text = extractInlineCodeText(children).trim();
 	if (!text) return;
 	const ok = await safeClipboardWrite(text);
 	if (ok) {
-		notifyToast({ type: 'success', title: 'Copied to Clipboard', message: text, duration: 2000 });
+		flashCopiedToClipboard(text);
 	}
 }
 
