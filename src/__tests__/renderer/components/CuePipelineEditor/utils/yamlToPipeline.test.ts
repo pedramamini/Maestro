@@ -773,6 +773,103 @@ describe('subscriptionsToPipelines — target_node_key dedup', () => {
 		// distinct from the first.
 		expect(agents).toHaveLength(3);
 	});
+
+	it('handles mixed keyed/unkeyed YAML: keyed subs use key path, unkeyed subs use legacy sessionName dedup', () => {
+		// Realistic mid-migration shape: one sub from before the fix (no
+		// key) and three from after (with keys). The unkeyed sub creates
+		// a node via the legacy path; the keyed subs each create their
+		// own node, untouched by the legacy sessionName loop.
+		const subs: CueSubscription[] = [
+			{
+				name: 'mixed',
+				event: 'time.scheduled',
+				enabled: true,
+				prompt: 'Legacy run',
+				schedule_times: ['06:00'],
+				agent_id: 'session-0',
+				pipeline_name: 'mixed',
+			},
+			{
+				name: 'mixed-chain-1',
+				event: 'time.scheduled',
+				enabled: true,
+				prompt: 'Keyed run A',
+				schedule_times: ['07:00'],
+				agent_id: 'session-0',
+				target_node_key: 'k-A',
+				pipeline_name: 'mixed',
+			},
+			{
+				name: 'mixed-chain-2',
+				event: 'time.scheduled',
+				enabled: true,
+				prompt: 'Keyed run B',
+				schedule_times: ['08:00'],
+				agent_id: 'session-0',
+				target_node_key: 'k-B',
+				pipeline_name: 'mixed',
+			},
+		];
+		const sessions = makeSessions('Worker');
+
+		const pipelines = subscriptionsToPipelines(subs, sessions);
+		const agents = pipelines[0].nodes.filter((n) => n.type === 'agent');
+		// 3 distinct nodes: legacy unkeyed + 2 keyed. The keyed subs do
+		// not collapse into the legacy node despite sharing sessionName,
+		// because the legacy dedup loop is skipped when a key is present.
+		expect(agents).toHaveLength(3);
+		const keys = agents
+			.map((a) => (a.data as AgentNodeData).nodeKey)
+			.filter(Boolean)
+			.sort();
+		expect(keys).toEqual(['k-A', 'k-B']);
+	});
+
+	it('merges two trigger subs targeting one command node via shared target_node_key', () => {
+		// Explicit fan-in onto a command node — same shape as agent
+		// fan-in but for a `action: command` target. Both trigger subs
+		// reference the same `target_node_key`, so the loader returns
+		// the same command node for both, producing one node with two
+		// incoming trigger edges.
+		const subs: CueSubscription[] = [
+			{
+				name: 'cmd-fanin',
+				event: 'time.scheduled',
+				enabled: true,
+				prompt: 'noop',
+				schedule_times: ['07:00'],
+				agent_id: 'session-0',
+				action: 'command',
+				command: { mode: 'shell', shell: 'echo morning' },
+				target_node_key: 'cmd-key',
+				pipeline_name: 'cmd-fanin',
+			},
+			{
+				name: 'cmd-fanin-chain-1',
+				event: 'time.scheduled',
+				enabled: true,
+				prompt: 'noop',
+				schedule_times: ['18:00'],
+				agent_id: 'session-0',
+				action: 'command',
+				command: { mode: 'shell', shell: 'echo morning' },
+				target_node_key: 'cmd-key',
+				pipeline_name: 'cmd-fanin',
+			},
+		];
+		const sessions = makeSessions('Owner');
+
+		const pipelines = subscriptionsToPipelines(subs, sessions);
+		const commands = pipelines[0].nodes.filter((n) => n.type === 'command');
+		const triggers = pipelines[0].nodes.filter((n) => n.type === 'trigger');
+		expect(commands).toHaveLength(1);
+		expect(triggers).toHaveLength(2);
+		// Both trigger edges land on the single command node.
+		const targets = pipelines[0].edges.map((e) => e.target);
+		expect(new Set(targets).size).toBe(1);
+		expect(targets[0]).toBe(commands[0].id);
+		expect((commands[0].data as CommandNodeData).nodeKey).toBe('cmd-key');
+	});
 });
 
 describe('subscriptionsToPipelines — full round-trip via pipelineToYamlSubscriptions', () => {

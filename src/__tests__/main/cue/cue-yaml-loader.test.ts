@@ -362,6 +362,48 @@ subscriptions:
 			expect(result!.subscriptions[0].source_session).toEqual(['agent-1', 'agent-2']);
 		});
 
+		it('drops malformed target_node_key / fan_out_node_keys instead of leaking bad types', () => {
+			// Defense-in-depth: hand-edited YAML or a future serializer
+			// bug could produce non-string values. The normalizer's type
+			// guards must reject them so the renderer never sees a
+			// non-string node key (which would fail strict-equality
+			// dedup checks downstream).
+			mockExistsSync.mockReturnValue(true);
+			mockReadFileSync.mockReturnValue(`
+subscriptions:
+  - name: bad-key
+    event: time.scheduled
+    prompt: Run
+    schedule_times:
+      - '07:00'
+    target_node_key: 123
+  - name: bad-fanout-keys
+    event: time.heartbeat
+    interval_minutes: 10
+    prompt: Go
+    fan_out:
+      - worker-a
+      - worker-b
+    fan_out_node_keys:
+      - key-a
+      - 42
+  - name: empty-key
+    event: time.scheduled
+    prompt: Run
+    schedule_times:
+      - '08:00'
+    target_node_key: ''
+`);
+
+			const result = loadCueConfig('/projects/test');
+			// Numeric value rejected
+			expect(result!.subscriptions[0].target_node_key).toBeUndefined();
+			// Mixed string/non-string array rejected entirely
+			expect(result!.subscriptions[1].fan_out_node_keys).toBeUndefined();
+			// Empty string rejected so the loader's "key absent" branch fires
+			expect(result!.subscriptions[2].target_node_key).toBeUndefined();
+		});
+
 		it('preserves target_node_key on subscriptions through normalization', () => {
 			// Regression: the normalizer's allowlist used to drop these
 			// renderer-only fields, which silently re-merged distinct visual

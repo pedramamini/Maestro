@@ -196,6 +196,8 @@ subscriptions:
 - Use the `label` field to give each line a descriptive name (e.g., "Daily Analysis", "Weekly Review")
 - The Pipeline Editor creates this structure automatically when you use the visual editor
 
+**Visual-node identity (`target_node_key`, `fan_out_node_keys`):** When you save from the Pipeline Editor, you may see UUID-valued `target_node_key` / `fan_out_node_keys` fields on subscriptions. These are renderer-only — the Cue engine ignores them. They let the editor distinguish "two visual nodes that happen to point at the same agent" (different keys → two nodes on the canvas) from "one shared node with multiple inputs" (same key → explicit fan-in onto a single node). If you hand-edit YAML and want two separate visual instances of the same agent for the same trigger, give each sub a different `target_node_key`; if you want them to merge into one fan-in target, give them the same key. Leave the keys alone when round-tripping through the editor — clearing them silently re-merges your visual nodes by `agent_id` on the next reload.
+
 ### Labels
 
 The `label` field provides a human-readable name displayed in the Cue dashboard and pipeline editor. When subscriptions are grouped into a pipeline, the label distinguishes each line within the pipeline.
