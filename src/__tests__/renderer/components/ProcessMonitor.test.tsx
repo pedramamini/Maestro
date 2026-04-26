@@ -208,6 +208,11 @@ describe('ProcessMonitor', () => {
 		mockRegisterLayer.mockClear();
 		mockUnregisterLayer.mockClear();
 		mockUpdateLayerHandler.mockClear();
+
+		// Clear any persisted expand/collapse level from prior tests
+		if (typeof window !== 'undefined') {
+			window.localStorage.removeItem('maestro.processMonitor.expandedLevel');
+		}
 	});
 
 	afterEach(() => {
@@ -1019,6 +1024,50 @@ describe('ProcessMonitor', () => {
 					screen.getByText('Test Session - AI Agent (claude-code) - Tab 1')
 				).toBeInTheDocument();
 			});
+		});
+
+		it('should persist the last expand/collapse level across renders', async () => {
+			const process = createActiveProcess();
+			getActiveProcessesMock().mockResolvedValue([process]);
+
+			const session = createSession({ groupId: 'group-1' });
+			const group = createGroup();
+
+			const { unmount } = render(
+				<ProcessMonitor theme={theme} sessions={[session]} groups={[group]} onClose={onClose} />
+			);
+
+			// Initial render: fully expanded.
+			await waitFor(() => {
+				expect(
+					screen.getByText('Test Session - AI Agent (claude-code) - Tab 1')
+				).toBeInTheDocument();
+			});
+
+			// Step down once — sessions visible, process hidden.
+			fireEvent.click(screen.getByTitle('Collapse one level'));
+			await waitFor(() => {
+				expect(
+					screen.queryByText('Test Session - AI Agent (claude-code) - Tab 1')
+				).not.toBeInTheDocument();
+			});
+			expect(screen.getByText('Test Session')).toBeInTheDocument();
+
+			// Persisted level should be 1 (depth-0 group expanded only).
+			expect(window.localStorage.getItem('maestro.processMonitor.expandedLevel')).toBe('1');
+
+			// Tear down and re-render — should restore to the same level.
+			unmount();
+			render(
+				<ProcessMonitor theme={theme} sessions={[session]} groups={[group]} onClose={onClose} />
+			);
+
+			await waitFor(() => {
+				expect(screen.getByText('Test Session')).toBeInTheDocument();
+			});
+			expect(
+				screen.queryByText('Test Session - AI Agent (claude-code) - Tab 1')
+			).not.toBeInTheDocument();
 		});
 	});
 
