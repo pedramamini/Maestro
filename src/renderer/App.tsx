@@ -1472,16 +1472,16 @@ function MaestroConsoleInner() {
 				executionQueue: s.executionQueue.filter((i) => i.id !== itemId),
 			}));
 
-			// Preserve the item's attached images through the send path.
-			// stagedImages lives on the active tab; processInput reads it below.
-			if (item.images && item.images.length > 0) {
-				setStagedImages(item.images);
-			}
+			// Pass the queued item's images directly through processInput options.
+			// Routing them via setStagedImages would race with processInput's stale
+			// closure of stagedImages (deps include it), causing images to drop on the
+			// floor in both the chat log entry and the agent spawn payload.
+			const images = item.images && item.images.length > 0 ? item.images : undefined;
 
 			// Dispatch with forceParallel — same code path as Cmd+Shift+Enter.
-			processInput(text, { forceParallel: true });
+			processInput(text, { forceParallel: true, images });
 		},
-		[processInput, setStagedImages]
+		[processInput]
 	);
 
 	// Build (tab→busy summary) lookup used by the Force Send button to decide

@@ -186,22 +186,26 @@ export function getRepairedUnifiedTabOrder(session: Session): UnifiedTabRef[] {
  */
 /**
  * Get the display name for a tab.
- * Priority: name > agent session ID marker > "New Session"
+ * Priority: name > tab agent session ID > session-level agent session ID > "New Session"
  *
  * Handles different agent session ID formats:
  * - Claude UUID: "abc123-def456-ghi789" → "ABC123" (first octet)
  * - OpenCode: "SES_4BCDFE8C5FFE4KC1UV9NSMYEDB" → "SES_4BCD" (prefix + 4 chars)
  * - Codex: "thread_abc123..." → "THR_ABC1" (prefix + 4 chars)
  *
- * Shows "New Session" until the agent session is established and an
- * agentSessionId is assigned, at which point the formatted ID is shown.
+ * The optional `sessionAgentSessionId` fallback mirrors ThinkingStatusPill,
+ * which uses `tab?.agentSessionId || session.agentSessionId`. Some agents
+ * (notably Copilot-CLI) populate the session-level ID before the tab-level
+ * one is wired up, so without this fallback the pill shows the session-ID
+ * octet while the tab title still reads "New Session".
  */
-export function getTabDisplayName(tab: AITab): string {
+export function getTabDisplayName(tab: AITab, sessionAgentSessionId?: string | null): string {
 	if (tab.name) {
 		return tab.name;
 	}
-	if (tab.agentSessionId) {
-		return formatSessionId(tab.agentSessionId);
+	const fallbackId = tab.agentSessionId || sessionAgentSessionId;
+	if (fallbackId) {
+		return formatSessionId(fallbackId);
 	}
 	return 'New Session';
 }

@@ -7,7 +7,7 @@ import React, {
 	forwardRef,
 	useMemo,
 } from 'react';
-import { HelpCircle, Search, ArrowUp } from 'lucide-react';
+import { HelpCircle, Search } from 'lucide-react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import type { Session, Theme, HistoryEntry, HistoryEntryType } from '../types';
 import type { FileNode } from '../types/fileTree';
@@ -161,7 +161,6 @@ export const HistoryPanel = React.memo(
 			isLoading,
 			isLoadingMore,
 			isJumping,
-			isAtTop,
 			loadMoreOlder,
 			jumpToOffset,
 			jumpToTop,
@@ -656,21 +655,6 @@ export const HistoryPanel = React.memo(
 								lookbackHours={graphLookbackHours}
 								onLookbackChange={handleLookbackChange}
 							/>
-						)}
-
-						{/* Back-to-top — only after a jump */}
-						{!isAtTop && !isJumping && (
-							<button
-								onClick={() => void jumpToTop()}
-								className="flex-shrink-0 flex items-center justify-center w-8 h-8 rounded transition-colors hover:bg-white/10"
-								style={{
-									color: theme.colors.accent,
-									border: `1px solid ${theme.colors.border}`,
-								}}
-								title="Back to most recent"
-							>
-								<ArrowUp className="w-3.5 h-3.5" />
-							</button>
 						)}
 
 						{/* Help button — right of filter pills */}

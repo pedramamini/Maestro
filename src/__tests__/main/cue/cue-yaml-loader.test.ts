@@ -1716,6 +1716,43 @@ subscriptions:
 			const timeErrors = result.errors.filter((e: string) => e.includes('invalid hour'));
 			expect(timeErrors).toHaveLength(0);
 		});
+
+		// The trigger config UI lets users type either `6:30` or `06:30`. Save
+		// emits canonical HH:MM, but legacy YAML and hand-edits may carry the
+		// short form — accept it at validation time and let the normalizer
+		// pad to two digits so the trigger source's includes-check still matches
+		// the wall clock.
+		it('accepts schedule_times with single-digit hour (6:30)', () => {
+			const result = validateCueConfig({
+				subscriptions: [
+					{
+						name: 'test',
+						event: 'time.scheduled',
+						prompt: 'Do it',
+						schedule_times: ['6:30'],
+					},
+				],
+			});
+			expect(result.valid).toBe(true);
+		});
+
+		it('normalizes single-digit hours to HH:MM when loading the config', () => {
+			mockExistsSync.mockReturnValue(true);
+			mockReadFileSync.mockReturnValue(`
+subscriptions:
+  - name: morning
+    event: time.scheduled
+    prompt: Do it
+    schedule_times:
+      - '6:30'
+      - '17:00'
+`);
+			const result = loadCueConfigDetailed('/projects/test');
+			expect(result.ok).toBe(true);
+			if (result.ok) {
+				expect(result.config.subscriptions[0].schedule_times).toEqual(['06:30', '17:00']);
+			}
+		});
 	});
 
 	describe('validateCueConfig — interval_minutes upper bound', () => {

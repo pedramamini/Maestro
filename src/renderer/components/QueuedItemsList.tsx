@@ -214,10 +214,12 @@ export const QueuedItemsList = memo(
 							onDragLeave={handleDragLeave}
 							className="mx-6 mb-2 p-3 rounded-lg relative group transition-all"
 							style={{
-								// Reserve enough vertical room for the top-right Remove (X) and
-								// bottom-right Copy buttons to coexist on single-line items
-								// without overlapping. 8px (top) + 24px (X) + 4px gap + 22px (Copy) + 8px (bottom).
-								minHeight: '4.25rem',
+								// Reserve enough vertical room for the stacked top-right
+								// Remove (X) and Copy buttons, plus the bottom-right Force
+								// Send button when shown, without overlap.
+								// X+Copy stack: 8 + 24 + 4 + 22 = 58px from top.
+								// Force Send (in flow at bottom): 8 mt + 28 button = 36px.
+								minHeight: showForceSendButton ? '7rem' : '4.25rem',
 								backgroundColor:
 									item.type === 'command'
 										? theme.colors.success + '20'
@@ -249,10 +251,10 @@ export const QueuedItemsList = memo(
 								<X className="w-4 h-4" />
 							</button>
 
-							{/* Copy button - bottom right */}
+							{/* Copy button - directly under the Remove (X) button */}
 							<button
 								onClick={() => handleCopy(item)}
-								className="absolute bottom-2 right-2 p-1 rounded hover:bg-black/20 transition-colors opacity-0 group-hover:opacity-100 group-focus-within:opacity-100"
+								className="absolute top-9 right-2 p-1 rounded hover:bg-black/20 transition-colors opacity-0 group-hover:opacity-100 group-focus-within:opacity-100"
 								style={{
 									color: copiedItemId === item.id ? theme.colors.success : theme.colors.textDim,
 								}}

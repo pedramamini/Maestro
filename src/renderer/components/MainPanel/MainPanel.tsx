@@ -718,6 +718,7 @@ export const MainPanel = React.memo(
 									activeTabId={activeSession.activeTabId}
 									theme={theme}
 									sessionId={activeSession.id}
+									sessionAgentSessionId={activeSession.agentSessionId}
 									onTabSelect={onTabSelect}
 									onTabClose={onTabClose}
 									onNewTab={onNewTab}

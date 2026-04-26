@@ -231,7 +231,11 @@ function validateEventSpecificFields(
 				`${prefix}: "schedule_times" is required and must be a non-empty array of time strings (e.g. ["09:00", "17:00"]) for time.scheduled events`
 			);
 		} else {
-			const timeRegex = /^\d{2}:\d{2}$/;
+			// Accept both `H:MM` and `HH:MM`. The normalizer pads to two-digit
+			// hours so downstream string comparisons (e.g. the scheduled trigger
+			// source's `times.includes(currentTime)` check) match regardless of
+			// what the user typed in the UI.
+			const timeRegex = /^\d{1,2}:\d{2}$/;
 			for (const time of sub.schedule_times as string[]) {
 				if (typeof time !== 'string' || !timeRegex.test(time)) {
 					errors.push(`${prefix}: schedule_times value "${time}" must be in HH:MM format`);

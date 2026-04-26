@@ -455,6 +455,7 @@ export const QuickActionsModal = memo(function QuickActionsModal(props: QuickAct
 						label: activeSession.bookmarked
 							? `Unbookmark: ${activeSession.name}`
 							: `Bookmark: ${activeSession.name}`,
+						shortcut: shortcuts.toggleBookmark,
 						action: () => {
 							setSessions((prev) =>
 								prev.map((s) =>
@@ -489,6 +490,7 @@ export const QuickActionsModal = memo(function QuickActionsModal(props: QuickAct
 					{
 						id: 'moveToGroup',
 						label: 'Move to Group...',
+						shortcut: shortcuts.moveToGroup,
 						action: () => {
 							setMode('move-to-group');
 							setSelectedIndex(0);
@@ -818,6 +820,7 @@ export const QuickActionsModal = memo(function QuickActionsModal(props: QuickAct
 						{
 							id: 'toggleStarTab',
 							label: activeTab.starred ? 'Unstar Session' : 'Star Session',
+							shortcut: shortcuts.toggleTabStar,
 							action: () => {
 								setSessions((prev) =>
 									prev.map((s) => {
@@ -845,6 +848,7 @@ export const QuickActionsModal = memo(function QuickActionsModal(props: QuickAct
 						{
 							id: 'markTabUnread',
 							label: 'Mark as Unread',
+							shortcut: tabShortcuts?.toggleTabUnread,
 							action: () => {
 								setSessions((prev) =>
 									prev.map((s) => {
@@ -1562,6 +1566,7 @@ export const QuickActionsModal = memo(function QuickActionsModal(props: QuickAct
 					{
 						id: 'newGroupChat',
 						label: 'New Group Chat',
+						shortcut: shortcuts.newGroupChat,
 						action: () => {
 							onNewGroupChat();
 							setQuickActionOpen(false);

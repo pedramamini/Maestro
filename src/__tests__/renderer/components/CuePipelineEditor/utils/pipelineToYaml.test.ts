@@ -715,6 +715,43 @@ describe('pipelinesToYaml', () => {
 		expect(subs[0].label).toBe('Morning Check');
 	});
 
+	// Asymmetric save/load was the "vanishing pipeline" failure mode: the UI
+	// accepts `6:30`, the YAML loader's validator rejects it as
+	// non-`HH:MM`, every subscription drops, and the pipeline editor reopens
+	// empty. Pad on the way out so the on-disk shape always matches the
+	// canonical format the loader and trigger source expect.
+	it('pads single-digit schedule_times hours to HH:MM on save', () => {
+		const pipeline = makePipeline({
+			nodes: [
+				{
+					id: 't1',
+					type: 'trigger',
+					position: { x: 0, y: 0 },
+					data: {
+						eventType: 'time.scheduled',
+						label: 'Scheduled',
+						config: { schedule_times: ['6:30', '17:5'] },
+					},
+				},
+				{
+					id: 'a1',
+					type: 'agent',
+					position: { x: 300, y: 0 },
+					data: {
+						sessionId: 's1',
+						sessionName: 'worker',
+						toolType: 'claude-code',
+						inputPrompt: 'Run',
+					},
+				},
+			],
+			edges: [{ id: 'e1', source: 't1', target: 'a1', mode: 'pass' as const }],
+		});
+
+		const subs = pipelineToYamlSubscriptions(pipeline);
+		expect(subs[0].schedule_times).toEqual(['06:30', '17:05']);
+	});
+
 	it('creates separate subscriptions for multiple triggers targeting same agent with edge prompts', () => {
 		const pipeline = makePipeline({
 			nodes: [

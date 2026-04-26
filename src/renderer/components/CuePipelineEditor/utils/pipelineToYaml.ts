@@ -21,6 +21,17 @@ import type { CueSubscription, CueSettings } from '../../../../shared/cue';
 import { cuePromptFilePath } from '../../../../shared/maestro-paths';
 
 /**
+ * Pad single-digit hours to `HH:MM` so the on-disk YAML is canonical. The
+ * scheduled trigger source compares times as zero-padded strings against the
+ * wall clock; an unpadded `6:30` would silently never fire.
+ */
+function padScheduleTime(time: string): string {
+	const match = time.match(/^(\d{1,2}):(\d{2})$/);
+	if (!match) return time;
+	return `${match[1].padStart(2, '0')}:${match[2]}`;
+}
+
+/**
  * Returns the chain identity for a node — the value downstream subscriptions
  * will use as `source_session`. For agents that's the agent's session name; for
  * command nodes we use the owning session's name (the engine emits
@@ -118,7 +129,7 @@ function applyTriggerEventConfig(sub: CueSubscription, triggerData: TriggerNodeD
 			break;
 		case 'time.scheduled':
 			if (triggerData.config.schedule_times?.length) {
-				sub.schedule_times = triggerData.config.schedule_times;
+				sub.schedule_times = triggerData.config.schedule_times.map(padScheduleTime);
 			}
 			if (triggerData.config.schedule_days?.length) {
 				sub.schedule_days = triggerData.config.schedule_days as CueSubscription['schedule_days'];

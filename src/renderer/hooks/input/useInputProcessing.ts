@@ -114,11 +114,15 @@ export interface UseInputProcessingReturn {
 	/** Process the current input (send message or execute command) */
 	processInput: (
 		overrideInputValue?: string,
-		options?: { forceParallel?: boolean }
+		options?: { forceParallel?: boolean; images?: string[] }
 	) => Promise<void>;
 	/** Ref to processInput for use in callbacks that need latest version */
 	processInputRef: React.MutableRefObject<
-		((overrideInputValue?: string, options?: { forceParallel?: boolean }) => Promise<void>) | null
+		| ((
+				overrideInputValue?: string,
+				options?: { forceParallel?: boolean; images?: string[] }
+		  ) => Promise<void>)
+		| null
 	>;
 }
 
@@ -166,19 +170,32 @@ export function useInputProcessing(deps: UseInputProcessingDeps): UseInputProces
 
 	// Ref for the processInput function so external code can access the latest version
 	const processInputRef = useRef<
-		((overrideInputValue?: string, options?: { forceParallel?: boolean }) => Promise<void>) | null
+		| ((
+				overrideInputValue?: string,
+				options?: { forceParallel?: boolean; images?: string[] }
+		  ) => Promise<void>)
+		| null
 	>(null);
 
 	/**
 	 * Process user input - handles slash commands, queuing, and message sending.
 	 */
 	const processInput = useCallback(
-		async (overrideInputValue?: string, options?: { forceParallel?: boolean }) => {
+		async (
+			overrideInputValue?: string,
+			options?: { forceParallel?: boolean; images?: string[] }
+		) => {
 			// Flush any pending batched updates before processing user input
 			// This ensures AI output appears before the user's new message
 			flushBatchedUpdates?.();
 
 			const effectiveInputValue = overrideInputValue ?? inputValue;
+			// When the caller passes explicit images (e.g. Force Send button replaying a
+			// queued item), use those instead of the active tab's stagedImages. This avoids
+			// the stale-closure race when the caller does setStagedImages() right before
+			// invoking processInput(), and prevents wiping the user's in-progress draft.
+			const effectiveImages = options?.images ?? stagedImages;
+			const usingOverrideImages = options?.images !== undefined;
 			if (options?.forceParallel) {
 				logger.info('[ForcedParallel] processInput called:', undefined, {
 					hasActiveSession: !!activeSession,
@@ -187,7 +204,7 @@ export function useInputProcessing(deps: UseInputProcessingDeps): UseInputProces
 					sessionState: activeSession?.state,
 				});
 			}
-			if (!activeSession || (!effectiveInputValue.trim() && stagedImages.length === 0)) {
+			if (!activeSession || (!effectiveInputValue.trim() && effectiveImages.length === 0)) {
 				if (options?.forceParallel) {
 					logger.info('[ForcedParallel] Early return: no session or empty input');
 				}
@@ -418,11 +435,11 @@ export function useInputProcessing(deps: UseInputProcessingDeps): UseInputProces
 				}
 
 				// Capture staged images before clearing
-				const imagesToSend = stagedImages.length > 0 ? [...stagedImages] : undefined;
+				const imagesToSend = effectiveImages.length > 0 ? [...effectiveImages] : undefined;
 
 				// Clear input
 				setInputValue('');
-				setStagedImages([]);
+				if (!usingOverrideImages) setStagedImages([]);
 				syncAiInputToSession('');
 				if (inputRef.current) inputRef.current.style.height = 'auto';
 
@@ -502,7 +519,7 @@ export function useInputProcessing(deps: UseInputProcessingDeps): UseInputProces
 						tabId: activeTab?.id || activeSession.activeTabId,
 						type: 'message',
 						text: effectiveInputValue,
-						images: [...stagedImages],
+						images: [...effectiveImages],
 						tabName:
 							activeTab?.name ||
 							(activeTab?.agentSessionId
@@ -530,7 +547,7 @@ export function useInputProcessing(deps: UseInputProcessingDeps): UseInputProces
 
 					// Clear input
 					setInputValue('');
-					setStagedImages([]);
+					if (!usingOverrideImages) setStagedImages([]);
 					syncAiInputToSession(''); // Sync empty value to session state
 					if (inputRef.current) inputRef.current.style.height = 'auto';
 					return;
@@ -553,7 +570,7 @@ export function useInputProcessing(deps: UseInputProcessingDeps): UseInputProces
 				timestamp: Date.now(),
 				source: 'user',
 				text: effectiveInputValue,
-				images: [...stagedImages],
+				images: [...effectiveImages],
 				...(isReadOnlyEntry && { readOnly: true }),
 				...(isForceParallelEntry && { forceParallel: true }),
 			};
@@ -946,14 +963,14 @@ export function useInputProcessing(deps: UseInputProcessingDeps): UseInputProces
 				nudgeMessage && currentMode === 'ai'
 					? `${effectiveInputValue}\n\n---\n\n${nudgeMessage}`
 					: effectiveInputValue;
-			const capturedImages = [...stagedImages];
+			const capturedImages = [...effectiveImages];
 
 			// Broadcast user input to web clients so they stay in sync
 			// Use effectiveInputValue (without nudge) since nudge should be hidden from UI
 			window.maestro.web.broadcastUserInput(activeSession.id, effectiveInputValue, currentMode);
 
 			setInputValue('');
-			setStagedImages([]);
+			if (!usingOverrideImages) setStagedImages([]);
 
 			// Sync empty value to session state (prevents stale input restoration on blur)
 			if (isAiMode) {

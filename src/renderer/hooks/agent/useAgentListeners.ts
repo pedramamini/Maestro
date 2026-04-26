@@ -1690,6 +1690,7 @@ export function useAgentListeners(deps: UseAgentListenersDeps): void {
 					toolName: string;
 					state?: unknown;
 					timestamp: number;
+					toolCallId?: string;
 				}
 			) => {
 				const aiTabMatch = sessionId.match(REGEX_AI_TAB);
@@ -1697,6 +1698,14 @@ export function useAgentListeners(deps: UseAgentListenersDeps): void {
 
 				const actualSessionId = aiTabMatch[1];
 				const tabId = aiTabMatch[2];
+
+				// When toolCallId is present, use a deterministic log id so the
+				// `running` and `completed`/`failed` events from the same tool
+				// call collapse into one bubble. Without an id (legacy/agents
+				// that don't emit one) fall back to a per-event timestamp id.
+				const logId = toolEvent.toolCallId
+					? `tool-${toolEvent.toolCallId}`
+					: `tool-${Date.now()}-${toolEvent.toolName}`;
 
 				setSessions((prev) =>
 					prev.map((s) => {
@@ -1707,25 +1716,74 @@ export function useAgentListeners(deps: UseAgentListenersDeps): void {
 
 						if (!targetTab.showThinking || targetTab.showThinking === 'off') return s;
 
-						const toolLog: LogEntry = {
-							id: `tool-${Date.now()}-${toolEvent.toolName}`,
-							timestamp: toolEvent.timestamp,
-							source: 'tool',
-							text: toolEvent.toolName,
-							metadata: {
-								toolState: toolEvent.state as NonNullable<LogEntry['metadata']>['toolState'],
-							},
-						};
+						const newState = toolEvent.state as
+							| NonNullable<LogEntry['metadata']>['toolState']
+							| undefined;
+
+						// Locate an existing log entry to merge this event into:
+						// 1) If we have a toolCallId, match by deterministic log id.
+						// 2) Otherwise (Codex and other agents that don't emit a
+						//    call id), if this event finalizes a tool call, attribute
+						//    it to the most recent still-`running` entry with the
+						//    same toolName. This collapses the otherwise-empty
+						//    completion bubble onto the one that was showing the
+						//    spinner. Common case is sequential tool use — parallel
+						//    same-tool calls are rare and would still produce a
+						//    correct-looking, just-slightly-mis-paired result.
+						const isFinalizing =
+							newState?.status === 'completed' ||
+							newState?.status === 'failed' ||
+							newState?.status === 'error';
+						let existingIdx = -1;
+						if (toolEvent.toolCallId) {
+							existingIdx = targetTab.logs.findIndex((l) => l.id === logId);
+						} else if (isFinalizing) {
+							for (let i = targetTab.logs.length - 1; i >= 0; i--) {
+								const log = targetTab.logs[i];
+								if (
+									log.source === 'tool' &&
+									log.text === toolEvent.toolName &&
+									log.metadata?.toolState?.status === 'running'
+								) {
+									existingIdx = i;
+									break;
+								}
+							}
+						}
+
+						let updatedLogs: LogEntry[];
+						if (existingIdx >= 0) {
+							const existing = targetTab.logs[existingIdx];
+							const existingState = existing.metadata?.toolState;
+							const mergedState: NonNullable<LogEntry['metadata']>['toolState'] = {
+								...existingState,
+								...newState,
+								input: newState?.input ?? existingState?.input,
+							};
+							const mergedLog: LogEntry = {
+								...existing,
+								metadata: { ...existing.metadata, toolState: mergedState },
+							};
+							updatedLogs = [
+								...targetTab.logs.slice(0, existingIdx),
+								mergedLog,
+								...targetTab.logs.slice(existingIdx + 1),
+							];
+						} else {
+							const toolLog: LogEntry = {
+								id: logId,
+								timestamp: toolEvent.timestamp,
+								source: 'tool',
+								text: toolEvent.toolName,
+								metadata: { toolState: newState },
+							};
+							updatedLogs = [...targetTab.logs, toolLog];
+						}
 
 						return {
 							...s,
 							aiTabs: s.aiTabs.map((tab) =>
-								tab.id === tabId
-									? {
-											...tab,
-											logs: [...tab.logs, toolLog],
-										}
-									: tab
+								tab.id === tabId ? { ...tab, logs: updatedLogs } : tab
 							),
 						};
 					})
