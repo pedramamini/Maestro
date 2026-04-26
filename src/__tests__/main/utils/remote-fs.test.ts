@@ -8,6 +8,7 @@ import {
 	existsRemote,
 	mkdirRemote,
 	listDirWithStatsRemote,
+	listTreeRemote,
 	__resetHostLimitersForTest,
 	type RemoteFsDeps,
 } from '../../../main/utils/remote-fs';
@@ -217,6 +218,111 @@ describe('remote-fs', () => {
 			const call = (deps.execSsh as any).mock.calls[0][1];
 			const remoteCommand = call[call.length - 1];
 			expect(remoteCommand).toContain('"$HOME/.copilot/session-state"');
+		});
+	});
+
+	describe('listTreeRemote', () => {
+		// Two find invocations are bundled into one SSH command; output is
+		// `dirs\n__MAESTRO_FIND_SEP__\nfiles`.
+		const SEP = '__MAESTRO_FIND_SEP__';
+
+		it('parses combined dir/file find output and strips ./ prefixes', async () => {
+			const stdout = `./src\n./src/components\n./docs\n${SEP}\n./README.md\n./src/index.ts\n./src/components/Button.tsx\n`;
+			const deps = createMockDeps({ stdout, stderr: '', exitCode: 0 });
+
+			const result = await listTreeRemote('/project', { maxDepth: 5 }, baseConfig, deps);
+
+			expect(result.success).toBe(true);
+			expect(result.data?.directories).toEqual(['src', 'src/components', 'docs']);
+			expect(result.data?.files).toEqual([
+				'README.md',
+				'src/index.ts',
+				'src/components/Button.tsx',
+			]);
+			expect(result.data?.truncated).toBe(false);
+		});
+
+		it('detects truncation when file count exceeds maxFiles', async () => {
+			// head returned cap+1 entries — the helper should slice off the marker
+			// entry and flag truncated=true.
+			const files = ['a', 'b', 'c', 'd'].map((n) => `./${n}.txt`).join('\n');
+			const stdout = `./src\n${SEP}\n${files}\n`;
+			const deps = createMockDeps({ stdout, stderr: '', exitCode: 0 });
+
+			const result = await listTreeRemote(
+				'/project',
+				{ maxDepth: 5, maxFiles: 3 },
+				baseConfig,
+				deps
+			);
+
+			expect(result.success).toBe(true);
+			expect(result.data?.truncated).toBe(true);
+			expect(result.data?.files).toEqual(['a.txt', 'b.txt', 'c.txt']);
+		});
+
+		it('reports CD failure as a missing directory error', async () => {
+			const deps = createMockDeps({ stdout: '__CD_ERROR__\n', stderr: '', exitCode: 0 });
+
+			const result = await listTreeRemote('/missing', { maxDepth: 5 }, baseConfig, deps);
+
+			expect(result.success).toBe(false);
+			expect(result.error).toContain('not found or not accessible');
+		});
+
+		it('builds a single SSH command containing both find invocations and a head cap', async () => {
+			const deps = createMockDeps({ stdout: `${SEP}\n`, stderr: '', exitCode: 0 });
+
+			await listTreeRemote(
+				'/project',
+				{
+					maxDepth: 4,
+					ignorePatterns: ['node_modules', '.git'],
+					excludePaths: ['.maestro'],
+					maxFiles: 1000,
+				},
+				baseConfig,
+				deps
+			);
+
+			const call = (deps.execSsh as any).mock.calls[0][1];
+			const remoteCommand = call[call.length - 1] as string;
+			// Two find calls split by the marker echo.
+			expect(remoteCommand).toContain('-type d -print');
+			expect(remoteCommand).toContain('-type f -print');
+			expect(remoteCommand).toContain(`echo "${SEP}"`);
+			// Depth is plumbed through.
+			expect(remoteCommand).toMatch(/-maxdepth 4/);
+			// Ignore patterns turn into -name prunes.
+			expect(remoteCommand).toContain("-name 'node_modules'");
+			expect(remoteCommand).toContain("-name '.git'");
+			// excludePaths turn into -path prunes (relative to the cd'd root).
+			expect(remoteCommand).toContain("-path './.maestro'");
+			// File cap goes to head with cap+1 to detect overflow.
+			expect(remoteCommand).toContain('| head -n 1001');
+			// Symlinks followed so symlinks-to-dirs appear as their target.
+			expect(remoteCommand).toContain('find -L');
+		});
+
+		it('skips ignore patterns containing slashes (find -name matches base names only)', async () => {
+			const deps = createMockDeps({ stdout: `${SEP}\n`, stderr: '', exitCode: 0 });
+
+			await listTreeRemote(
+				'/project',
+				{
+					maxDepth: 5,
+					ignorePatterns: ['node_modules', 'dist/cache', 'build/**'],
+				},
+				baseConfig,
+				deps
+			);
+
+			const call = (deps.execSsh as any).mock.calls[0][1];
+			const remoteCommand = call[call.length - 1] as string;
+			expect(remoteCommand).toContain("-name 'node_modules'");
+			// Path-bearing patterns are dropped — they cannot work with -name.
+			expect(remoteCommand).not.toContain('dist/cache');
+			expect(remoteCommand).not.toContain('build/**');
 		});
 	});
 

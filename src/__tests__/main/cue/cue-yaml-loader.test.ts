@@ -859,6 +859,128 @@ subscriptions:
 			expect(result.valid).toBe(true);
 		});
 
+		// `timeout_minutes: 0` reaches `cue-run-manager` as a `0 ms` timeout
+		// and aborts every dispatched run on arrival — pipeline appears to do
+		// nothing with no obvious error. Validate it the same way as the other
+		// settings fields.
+		it('rejects timeout_minutes of 0', () => {
+			const result = validateCueConfig({
+				subscriptions: [],
+				settings: { timeout_minutes: 0 },
+			});
+			expect(result.valid).toBe(false);
+			expect(result.errors).toEqual(
+				expect.arrayContaining([expect.stringContaining('timeout_minutes')])
+			);
+		});
+
+		it('rejects negative timeout_minutes', () => {
+			const result = validateCueConfig({
+				subscriptions: [],
+				settings: { timeout_minutes: -5 },
+			});
+			expect(result.valid).toBe(false);
+		});
+
+		it('rejects non-integer timeout_minutes', () => {
+			const result = validateCueConfig({
+				subscriptions: [],
+				settings: { timeout_minutes: 1.5 },
+			});
+			expect(result.valid).toBe(false);
+		});
+
+		it('rejects timeout_minutes above 1440 (24 hours)', () => {
+			const result = validateCueConfig({
+				subscriptions: [],
+				settings: { timeout_minutes: 1441 },
+			});
+			expect(result.valid).toBe(false);
+		});
+
+		it('accepts valid timeout_minutes values', () => {
+			const result = validateCueConfig({
+				subscriptions: [],
+				settings: { timeout_minutes: 30 },
+			});
+			expect(result.valid).toBe(true);
+		});
+
+		// Same failure mode as timeout_minutes but per-subscription —
+		// `fan_in_timeout_minutes: 0` makes the fan-in tracker expire every
+		// fan-in immediately on the first source's arrival, so the converging
+		// agent never fires.
+		it('rejects fan_in_timeout_minutes of 0 on a subscription', () => {
+			const result = validateCueConfig({
+				subscriptions: [
+					{
+						name: 'fanin',
+						event: 'agent.completed',
+						prompt: 'Do it',
+						source_session: ['a', 'b'],
+						fan_in_timeout_minutes: 0,
+					},
+				],
+			});
+			expect(result.valid).toBe(false);
+			expect(result.errors).toEqual(
+				expect.arrayContaining([expect.stringContaining('fan_in_timeout_minutes')])
+			);
+		});
+
+		it('accepts valid fan_in_timeout_minutes values', () => {
+			const result = validateCueConfig({
+				subscriptions: [
+					{
+						name: 'fanin',
+						event: 'agent.completed',
+						prompt: 'Do it',
+						source_session: ['a', 'b'],
+						fan_in_timeout_minutes: 60,
+					},
+				],
+			});
+			expect(result.valid).toBe(true);
+		});
+
+		// `fan_out_ids` is the rename-stable mirror of `fan_out`. Mismatched
+		// length means the dispatcher would index out of bounds; an array
+		// containing non-strings would crash the id lookup.
+		it('rejects fan_out_ids whose length differs from fan_out', () => {
+			const result = validateCueConfig({
+				subscriptions: [
+					{
+						name: 'fanout',
+						event: 'time.heartbeat',
+						interval_minutes: 5,
+						prompt: 'Do it',
+						fan_out: ['a', 'b'],
+						fan_out_ids: ['id-a'],
+					},
+				],
+			});
+			expect(result.valid).toBe(false);
+			expect(result.errors).toEqual(
+				expect.arrayContaining([expect.stringContaining('fan_out_ids')])
+			);
+		});
+
+		it('accepts fan_out_ids when length matches fan_out', () => {
+			const result = validateCueConfig({
+				subscriptions: [
+					{
+						name: 'fanout',
+						event: 'time.heartbeat',
+						interval_minutes: 5,
+						prompt: 'Do it',
+						fan_out: ['a', 'b'],
+						fan_out_ids: ['id-a', 'id-b'],
+					},
+				],
+			});
+			expect(result.valid).toBe(true);
+		});
+
 		it('requires prompt to be a non-empty string', () => {
 			const result = validateCueConfig({
 				subscriptions: [{ name: 'test', event: 'time.heartbeat', interval_minutes: 5 }],

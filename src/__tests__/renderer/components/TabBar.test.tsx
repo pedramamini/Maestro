@@ -485,15 +485,17 @@ describe('TabBar', () => {
 			expect(screen.getByText('New Session')).toBeInTheDocument();
 		});
 
-		it('falls back to sessionAgentSessionId when tab.agentSessionId is unset', () => {
-			// Mirrors ThinkingStatusPill behavior: when the session-level agentSessionId
-			// is populated before the tab-level one (Copilot-CLI race), the tab title
-			// should still reflect the known session ID rather than "New Session".
+		it('shows "New Session" until the tab has its own agentSessionId, even when sessionAgentSessionId is set', () => {
+			// Regression: previously every freshly-created OpenCode tab inherited the
+			// most recent sibling tab's session id (all tabs displayed "SES_2387").
+			// A tab without its own agentSessionId must show "New Session" regardless
+			// of session-level state or awaiting flags — the title is strictly per-tab.
 			const tabs = [
 				createTab({
 					id: 'tab-1',
 					name: '',
 					agentSessionId: undefined,
+					awaitingSessionId: true,
 				}),
 			];
 
@@ -502,14 +504,14 @@ describe('TabBar', () => {
 					tabs={tabs}
 					activeTabId="tab-1"
 					theme={mockTheme}
-					sessionAgentSessionId="050bb5f5-aaaa-bbbb-cccc-dddddddddddd"
+					sessionAgentSessionId="ses_4d585107dffeO9bO3HvMdvLYyC"
 					onTabSelect={mockOnTabSelect}
 					onTabClose={mockOnTabClose}
 					onNewTab={mockOnNewTab}
 				/>
 			);
 
-			expect(screen.getByText('050BB5F5')).toBeInTheDocument();
+			expect(screen.getByText('New Session')).toBeInTheDocument();
 		});
 
 		it('prefers tab.agentSessionId over sessionAgentSessionId when both are set', () => {

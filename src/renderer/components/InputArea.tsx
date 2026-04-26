@@ -375,6 +375,16 @@ export const InputArea = React.memo(function InputArea(props: InputAreaProps) {
 		return filterSlashCommands(slashCommands, query, isTerminalMode);
 	}, [slashCommands, isTerminalMode, inputValueLower]);
 
+	// Reset the highlighted item to the top whenever the query changes or the
+	// menu opens. Without this, the index lingers from prior arrow navigation
+	// and gets clamped to the (often shorter) filtered list, leaving a non-top
+	// item highlighted by default.
+	useEffect(() => {
+		if (slashCommandOpen) {
+			setSelectedSlashCommandIndex(0);
+		}
+	}, [inputValueLower, slashCommandOpen, setSelectedSlashCommandIndex]);
+
 	// Ensure selectedSlashCommandIndex is valid for the filtered list
 	const safeSelectedIndex = Math.min(
 		Math.max(0, selectedSlashCommandIndex),

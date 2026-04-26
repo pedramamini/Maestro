@@ -454,6 +454,261 @@ export function getAllFolderPaths(nodes: FileTreeNode[], currentPath = ''): stri
 	return getAllFolderPathsShared(nodes, currentPath);
 }
 
+/**
+ * Build a hierarchical {@link FileTreeNode} array from flat lists of directory
+ * and file paths. Paths must be relative (no leading `/` or `./`) and use `/`
+ * as separator. Used by the SSH batched-find loader to assemble the tree from
+ * the flat output of `find`.
+ *
+ * Folders without an explicit parent in the directory list are attached to the
+ * root — this can happen when `excludePaths` prunes a parent or when the entry
+ * cap drops mid-tree files whose ancestor dirs are still listed.
+ */
+export function buildTreeFromPaths(directories: string[], files: string[]): FileTreeNode[] {
+	const folderMap = new Map<string, FileTreeNode>();
+	const root: FileTreeNode[] = [];
+
+	const basenameOf = (p: string): string => {
+		const i = p.lastIndexOf('/');
+		return i >= 0 ? p.slice(i + 1) : p;
+	};
+	const parentOf = (p: string): string => {
+		const i = p.lastIndexOf('/');
+		return i >= 0 ? p.slice(0, i) : '';
+	};
+
+	// Sort dirs by depth (path with fewer slashes first) so parents exist before
+	// children try to attach.
+	const sortedDirs = [...directories].sort((a, b) => {
+		const da = a.split('/').length;
+		const db = b.split('/').length;
+		if (da !== db) return da - db;
+		return a.localeCompare(b);
+	});
+
+	for (const dirPath of sortedDirs) {
+		if (!dirPath) continue;
+		if (folderMap.has(dirPath)) continue;
+		const node: FileTreeNode = {
+			name: basenameOf(dirPath).normalize('NFC'),
+			type: 'folder',
+			children: [],
+		};
+		folderMap.set(dirPath, node);
+
+		const parent = parentOf(dirPath);
+		if (parent === '') {
+			root.push(node);
+		} else {
+			const parentNode = folderMap.get(parent);
+			if (parentNode && parentNode.children) {
+				parentNode.children.push(node);
+			} else {
+				root.push(node);
+			}
+		}
+	}
+
+	for (const filePath of files) {
+		if (!filePath) continue;
+		const fileNode: FileTreeNode = {
+			name: basenameOf(filePath).normalize('NFC'),
+			type: 'file',
+		};
+		const parent = parentOf(filePath);
+		if (parent === '') {
+			root.push(fileNode);
+		} else {
+			const parentNode = folderMap.get(parent);
+			if (parentNode && parentNode.children) {
+				parentNode.children.push(fileNode);
+			} else {
+				root.push(fileNode);
+			}
+		}
+	}
+
+	const sortNodes = (nodes: FileTreeNode[]): FileTreeNode[] => {
+		nodes.sort((a, b) => {
+			if (a.type === 'folder' && b.type !== 'folder') return -1;
+			if (a.type !== 'folder' && b.type === 'folder') return 1;
+			return a.name.localeCompare(b.name);
+		});
+		for (const n of nodes) if (n.children) sortNodes(n.children);
+		return nodes;
+	};
+	return sortNodes(root);
+}
+
+/**
+ * Splice a `.maestro` subtree (loaded in its own phase) into the rest-of-tree
+ * result. The rest tree should have been loaded with `excludePaths: ['.maestro']`
+ * so it doesn't already contain `.maestro` — this helper guards against that
+ * anyway by filtering it out.
+ */
+export function spliceMaestroIntoTree(
+	restTree: FileTreeNode[],
+	maestroChildren: FileTreeNode[] | undefined
+): FileTreeNode[] {
+	const filtered = restTree.filter((n) => n.name !== '.maestro');
+	if (maestroChildren && maestroChildren.length > 0) {
+		filtered.push({
+			name: '.maestro',
+			type: 'folder',
+			children: maestroChildren,
+		});
+	}
+	return filtered.sort((a, b) => {
+		if (a.type === 'folder' && b.type !== 'folder') return -1;
+		if (a.type !== 'folder' && b.type === 'folder') return 1;
+		return a.name.localeCompare(b.name);
+	});
+}
+
+/** Options for {@link loadFileTreeRemoteBatched}. */
+export interface RemoteBatchedLoadOptions {
+	/** Hard depth cap (passed to `find -maxdepth`). */
+	maxDepth: number;
+	/** Soft cap on file entries (folders are always complete to maxDepth). */
+	maxEntries: number;
+	/** Glob name patterns to prune server-side via `find -name`. */
+	ignorePatterns: string[];
+	/** Whether to fetch and merge the remote root `.gitignore`. */
+	honorGitignore: boolean;
+	/** Required SSH remote ID. */
+	sshRemoteId: string;
+	/** Aborts pending phases when fired. */
+	signal?: AbortSignal;
+	/** Progress callback — fired at phase boundaries. */
+	onProgress?: FileTreeProgressCallback;
+	/**
+	 * Optional callback fired when an intermediate phase completes, so the
+	 * renderer can paint partial results before the final phase resolves.
+	 * Called with: ('maestro', maestroSubtree) and ('rest', restTree).
+	 */
+	onPhase?: (
+		phase: 'maestro' | 'rest',
+		partial: { maestro?: FileTreeNode[]; rest?: FileTreeNode[] }
+	) => void;
+}
+
+/**
+ * Load a remote file tree using batched `find` calls.
+ *
+ * Issues two SSH round-trips total:
+ *  1. **Maestro phase** — enumerate `<root>/.maestro` (unlimited budget). Loads
+ *     first because `.maestro` drives Cue, playbooks, and other features that
+ *     should be available as soon as possible.
+ *  2. **Rest phase** — enumerate the rest of the tree with the file cap and
+ *     `.maestro` pruned out (we already have it).
+ *
+ * Replaces the per-directory recursive `readDir` walk that issued one SSH call
+ * per remote directory (hundreds of calls on a moderately-sized project).
+ *
+ * The shallow top-level paint is **not** handled here — the caller fires that
+ * separately for instant first paint, then awaits this for the full result.
+ */
+export async function loadFileTreeRemoteBatched(
+	rootPath: string,
+	options: RemoteBatchedLoadOptions
+): Promise<FileTreeLoadResult> {
+	const {
+		maxDepth,
+		maxEntries,
+		ignorePatterns,
+		honorGitignore,
+		sshRemoteId,
+		signal,
+		onProgress,
+		onPhase,
+	} = options;
+
+	if (signal?.aborted) throw new FileTreeAbortError();
+
+	let effectiveIgnorePatterns = ignorePatterns;
+	if (honorGitignore) {
+		try {
+			const gitignorePatterns = await fetchRemoteGitignorePatterns(rootPath, sshRemoteId);
+			effectiveIgnorePatterns = [...effectiveIgnorePatterns, ...gitignorePatterns];
+		} catch {
+			// .gitignore may not exist or be readable — not an error
+		}
+	}
+
+	if (signal?.aborted) throw new FileTreeAbortError();
+
+	const partial: { maestro?: FileTreeNode[]; rest?: FileTreeNode[] } = {};
+
+	// Phase 1: .maestro subtree (unlimited budget). May fail benignly if the
+	// directory doesn't exist (most projects without Maestro state). The whole
+	// phase is best-effort: a missing or unreadable `.maestro` should not block
+	// the rest of the tree from loading.
+	if (onProgress) {
+		onProgress({
+			directoriesScanned: 0,
+			filesFound: 0,
+			currentDirectory: `${rootPath}/.maestro`,
+		});
+	}
+	let maestroChildren: FileTreeNode[] = [];
+	let maestroDirsScanned = 0;
+	let maestroFilesFound = 0;
+	try {
+		const maestroResult = await window.maestro.fs.listTreeRemote(
+			`${rootPath}/.maestro`,
+			sshRemoteId,
+			{
+				maxDepth,
+				ignorePatterns: [],
+				maxFiles: undefined,
+			}
+		);
+		if (signal?.aborted) throw new FileTreeAbortError();
+		maestroChildren = buildTreeFromPaths(maestroResult.directories, maestroResult.files);
+		maestroDirsScanned = maestroResult.directories.length;
+		maestroFilesFound = maestroResult.files.length;
+		partial.maestro = maestroChildren;
+		onPhase?.('maestro', partial);
+	} catch (err) {
+		if (err instanceof FileTreeAbortError) throw err;
+		// .maestro missing/unreadable — log and continue with empty subtree
+		logger.debug('[loadFileTreeRemoteBatched] .maestro phase failed:', undefined, err);
+	}
+
+	// Phase 2: rest of tree with .maestro pruned and file cap applied.
+	if (onProgress) {
+		onProgress({
+			directoriesScanned: maestroDirsScanned,
+			filesFound: maestroFilesFound,
+			currentDirectory: rootPath,
+		});
+	}
+	const restResult = await window.maestro.fs.listTreeRemote(rootPath, sshRemoteId, {
+		maxDepth,
+		ignorePatterns: effectiveIgnorePatterns,
+		excludePaths: ['.maestro'],
+		maxFiles: maxEntries > 0 && Number.isFinite(maxEntries) ? maxEntries : undefined,
+	});
+	if (signal?.aborted) throw new FileTreeAbortError();
+
+	const restTree = buildTreeFromPaths(restResult.directories, restResult.files);
+	partial.rest = restTree;
+	onPhase?.('rest', partial);
+
+	const finalTree = spliceMaestroIntoTree(restTree, maestroChildren);
+	const totalFiles = maestroFilesFound + restResult.files.length;
+
+	if (onProgress) {
+		onProgress({
+			directoriesScanned: maestroDirsScanned + restResult.directories.length,
+			filesFound: totalFiles,
+			currentDirectory: rootPath,
+		});
+	}
+
+	return { tree: finalTree, truncated: restResult.truncated, filesFound: totalFiles };
+}
+
 export interface FlatTreeNode extends FileTreeNode {
 	fullPath: string;
 	isFolder: boolean;

@@ -721,6 +721,7 @@ interface MaestroAPI {
 				branch: string | null;
 				repoRoot: string | null;
 			}>;
+			scanFailed?: boolean;
 		}>;
 		// File watching is not available for SSH remote sessions.
 		// For remote sessions, returns isRemote: true indicating polling should be used instead.
@@ -758,6 +759,16 @@ interface MaestroAPI {
 	fs: {
 		homeDir: () => Promise<string>;
 		readDir: (dirPath: string, sshRemoteId?: string) => Promise<DirectoryEntry[]>;
+		listTreeRemote: (
+			rootPath: string,
+			sshRemoteId: string,
+			options: {
+				maxDepth?: number;
+				ignorePatterns?: string[];
+				excludePaths?: string[];
+				maxFiles?: number;
+			}
+		) => Promise<{ directories: string[]; files: string[]; truncated: boolean }>;
 		readFile: (
 			filePath: string,
 			sshRemoteId?: string,

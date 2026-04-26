@@ -4,6 +4,7 @@ import type { Theme, QueuedItem } from '../types';
 import { safeClipboardWrite } from '../utils/clipboard';
 import { Modal, ModalFooter } from './ui/Modal';
 import { MODAL_PRIORITIES } from '../constants/modalPriorities';
+import { useEventListener } from '../hooks/utils/useEventListener';
 
 // ============================================================================
 // QueuedItemsList - Displays queued execution items with expand/collapse
@@ -150,6 +151,30 @@ export const QueuedItemsList = memo(
 		const handleDragLeave = useCallback(() => {
 			setDropIndex(null);
 		}, []);
+
+		// Keyboard shortcut bridge: when the user hits the Forced Parallel shortcut
+		// with an empty input, useInputKeyDown dispatches this event. We find the
+		// most recent eligible queued item (matching the same visibility rules as
+		// the per-item Force Send button) and open the confirmation modal — the
+		// keyboard equivalent of clicking the button.
+		useEventListener('maestro:triggerForceSendQueued', () => {
+			if (
+				!forcedParallelEnabled ||
+				!onForceSendQueuedItem ||
+				!getForceSendContext ||
+				filteredQueue.length === 0
+			) {
+				return;
+			}
+			for (let i = filteredQueue.length - 1; i >= 0; i--) {
+				const item = filteredQueue[i];
+				if (item.forceParallel) continue;
+				const ctx = getForceSendContext(item);
+				if (!ctx || ctx.targetTabBusy || ctx.otherBusyTabs.length === 0) continue;
+				setForceSendConfirmId(item.id);
+				return;
+			}
+		});
 
 		if (!filteredQueue || filteredQueue.length === 0) {
 			return null;

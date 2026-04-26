@@ -1080,6 +1080,148 @@ describe('useInputProcessing', () => {
 			expect(updatedSessions[0].executionQueue.length).toBe(1);
 		});
 
+		// Force Send replays a queued item by passing its images via options.images
+		// (avoids a stale-closure race with stagedImages). These tests pin that
+		// contract so the spawn payload actually carries the images.
+		describe('options.images override (Force Send path)', () => {
+			it('spawn payload includes images from options when text + image', async () => {
+				useSettingsStore.setState({ forcedParallelExecution: true } as any);
+
+				// Active tab idle, another tab busy — Force Send dispatches now.
+				const session = createMockSession({
+					state: 'busy',
+					aiTabs: [
+						createMockTab({ id: 'tab-1', state: 'idle' }),
+						createMockTab({ id: 'tab-2', state: 'busy' }),
+					],
+					activeTabId: 'tab-1',
+				});
+				const deps = createDeps({
+					activeSession: session,
+					sessionsRef: { current: [session] },
+					inputValue: '', // input is empty — staged images must come from options
+					stagedImages: [], // active tab has no staged images at click time
+				});
+				const { result } = renderHook(() => useInputProcessing(deps));
+
+				const queuedImage = 'data:image/png;base64,AAAA';
+
+				await act(async () => {
+					await result.current.processInput('look at this', {
+						forceParallel: true,
+						images: [queuedImage],
+					});
+				});
+
+				expect(window.maestro.process.spawn).toHaveBeenCalled();
+				const spawnArg = (window.maestro.process.spawn as ReturnType<typeof vi.fn>).mock
+					.calls[0][0];
+				expect(spawnArg.images).toEqual([queuedImage]);
+				expect(spawnArg.prompt).toBe('look at this');
+			});
+
+			it('spawn payload includes images for image-only message (empty text)', async () => {
+				useSettingsStore.setState({ forcedParallelExecution: true } as any);
+
+				const session = createMockSession({
+					state: 'busy',
+					aiTabs: [
+						createMockTab({ id: 'tab-1', state: 'idle' }),
+						createMockTab({ id: 'tab-2', state: 'busy' }),
+					],
+					activeTabId: 'tab-1',
+				});
+				const deps = createDeps({
+					activeSession: session,
+					sessionsRef: { current: [session] },
+					inputValue: '',
+					stagedImages: [],
+				});
+				const { result } = renderHook(() => useInputProcessing(deps));
+
+				const queuedImage = 'data:image/png;base64,BBBB';
+
+				// Empty text + image-only — must not bail, must still spawn with images.
+				await act(async () => {
+					await result.current.processInput('', {
+						forceParallel: true,
+						images: [queuedImage],
+					});
+				});
+
+				expect(window.maestro.process.spawn).toHaveBeenCalled();
+				const spawnArg = (window.maestro.process.spawn as ReturnType<typeof vi.fn>).mock
+					.calls[0][0];
+				expect(spawnArg.images).toEqual([queuedImage]);
+			});
+
+			it('options.images takes precedence over stagedImages', async () => {
+				useSettingsStore.setState({ forcedParallelExecution: true } as any);
+
+				const session = createMockSession({
+					state: 'busy',
+					aiTabs: [
+						createMockTab({ id: 'tab-1', state: 'idle' }),
+						createMockTab({ id: 'tab-2', state: 'busy' }),
+					],
+					activeTabId: 'tab-1',
+				});
+				const deps = createDeps({
+					activeSession: session,
+					sessionsRef: { current: [session] },
+					inputValue: 'hello',
+					// Tab has a different staged image — Force Send should use the
+					// queued item's images, not whatever's currently staged on the tab.
+					stagedImages: ['data:image/png;base64,STAGED'],
+				});
+				const { result } = renderHook(() => useInputProcessing(deps));
+
+				const queuedImage = 'data:image/png;base64,QUEUED';
+
+				await act(async () => {
+					await result.current.processInput('hello', {
+						forceParallel: true,
+						images: [queuedImage],
+					});
+				});
+
+				const spawnArg = (window.maestro.process.spawn as ReturnType<typeof vi.fn>).mock
+					.calls[0][0];
+				expect(spawnArg.images).toEqual([queuedImage]);
+				expect(spawnArg.images).not.toContain('data:image/png;base64,STAGED');
+			});
+
+			it('does not clear stagedImages when caller passes options.images', async () => {
+				useSettingsStore.setState({ forcedParallelExecution: true } as any);
+
+				const session = createMockSession({
+					state: 'busy',
+					aiTabs: [
+						createMockTab({ id: 'tab-1', state: 'idle' }),
+						createMockTab({ id: 'tab-2', state: 'busy' }),
+					],
+					activeTabId: 'tab-1',
+				});
+				const deps = createDeps({
+					activeSession: session,
+					sessionsRef: { current: [session] },
+					inputValue: 'hi',
+					stagedImages: ['data:image/png;base64,DRAFT'],
+				});
+				const { result } = renderHook(() => useInputProcessing(deps));
+
+				await act(async () => {
+					await result.current.processInput('hi', {
+						forceParallel: true,
+						images: ['data:image/png;base64,QUEUED'],
+					});
+				});
+
+				// User's draft staged image must NOT be cleared by Force Send.
+				expect(mockSetStagedImages).not.toHaveBeenCalledWith([]);
+			});
+		});
+
 		afterEach(() => {
 			useSettingsStore.setState({ forcedParallelExecution: false } as any);
 		});

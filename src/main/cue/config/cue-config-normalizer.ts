@@ -248,6 +248,11 @@ function normalizeSubscription(
 			Array.isArray(sub.fan_out) && sub.fan_out.every((value: unknown) => typeof value === 'string')
 				? (sub.fan_out as string[])
 				: undefined,
+		fan_out_ids:
+			Array.isArray(sub.fan_out_ids) &&
+			sub.fan_out_ids.every((value: unknown) => typeof value === 'string')
+				? (sub.fan_out_ids as string[])
+				: undefined,
 		fan_out_prompts: resolvedFanOutPrompts,
 		fan_out_prompt_files: fanOutPromptFiles,
 		filter: normalizeFilter(sub.filter),
@@ -259,8 +264,16 @@ function normalizeSubscription(
 				: undefined,
 		agent_id: typeof sub.agent_id === 'string' ? sub.agent_id : undefined,
 		label: typeof sub.label === 'string' ? sub.label : undefined,
+		// Defensive bounds: `loadCueConfig` skips validation, and a `0` here
+		// expires every fan-in instantly. Non-positive / non-integer values
+		// fall back to undefined → tracker uses settings.timeout_minutes default.
 		fan_in_timeout_minutes:
-			typeof sub.fan_in_timeout_minutes === 'number' ? sub.fan_in_timeout_minutes : undefined,
+			typeof sub.fan_in_timeout_minutes === 'number' &&
+			Number.isFinite(sub.fan_in_timeout_minutes) &&
+			Number.isInteger(sub.fan_in_timeout_minutes) &&
+			sub.fan_in_timeout_minutes >= 1
+				? sub.fan_in_timeout_minutes
+				: undefined,
 		fan_in_timeout_on_fail:
 			sub.fan_in_timeout_on_fail === 'break' || sub.fan_in_timeout_on_fail === 'continue'
 				? sub.fan_in_timeout_on_fail
@@ -302,8 +315,15 @@ function normalizeSubscription(
 
 function normalizeSettings(rawSettings: Record<string, unknown> | undefined): CueSettings {
 	return {
+		// Reject non-positive / non-finite / non-integer values defensively. The
+		// validator rejects them too, but `loadCueConfig` (the legacy entry point)
+		// skips validation, and a `0` here cascades into a `0 ms` run timeout
+		// that aborts every dispatch immediately.
 		timeout_minutes:
-			typeof rawSettings?.timeout_minutes === 'number'
+			typeof rawSettings?.timeout_minutes === 'number' &&
+			Number.isFinite(rawSettings.timeout_minutes) &&
+			Number.isInteger(rawSettings.timeout_minutes) &&
+			rawSettings.timeout_minutes >= 1
 				? rawSettings.timeout_minutes
 				: DEFAULT_CUE_SETTINGS.timeout_minutes,
 		timeout_on_fail:

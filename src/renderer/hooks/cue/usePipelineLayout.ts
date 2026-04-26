@@ -139,73 +139,92 @@ export function usePipelineLayout({
 	const sessionsRef = useRef(sessions);
 	sessionsRef.current = sessions;
 
+	// Synchronously assemble + write the current layout state. Shared by the
+	// debounced `persistLayout` and the unmount-flush below so closing the
+	// modal during the 500 ms debounce window doesn't lose updates to
+	// `writtenRoots` from the most recent save (otherwise the next mount
+	// reseeds from a stale on-disk layout and a subsequent "delete all +
+	// save" cycle can't clear the YAML at the now-orphaned root).
+	const writeLayoutNow = useCallback(() => {
+		const viewport = reactFlowInstance.getViewport();
+		const state = pipelineStateRef.current;
+		// Normalize the selection BEFORE computing the project key or
+		// writing. A `selectedPipelineId` that doesn't point at any live
+		// pipeline must never be persisted — on next load it would bypass
+		// the merge fallback via `pickProjectViewState` and blank the
+		// canvas (`convertToReactFlowNodes` filters out every pipeline
+		// whose id doesn't match the selection). This can happen when
+		// ids regenerate on save-reload and a stale perProject entry
+		// from a prior id scheme lingers, or when the safety-net reset
+		// races against a debounced persist. Treat any unresolvable
+		// selection as "All Pipelines" (null).
+		const selectionIsValid =
+			state.selectedPipelineId === null ||
+			state.pipelines.some((p) => p.id === state.selectedPipelineId);
+		const safeSelectedId = selectionIsValid ? state.selectedPipelineId : null;
+
+		// Scope this viewport/selection under the current project (derived
+		// from the selected pipeline's owning agent session). Other
+		// projects' entries are preserved verbatim so switching back to
+		// them later still restores their remembered view.
+		const projectKey = resolvePipelineProjectKey(
+			safeSelectedId,
+			state.pipelines,
+			sessionsRef.current
+		);
+		const nextPerProject: Record<string, PipelineProjectViewState> = {
+			...perProjectRef.current,
+			[projectKey]: {
+				selectedPipelineId: safeSelectedId,
+				viewport,
+			},
+		};
+		perProjectRef.current = nextPerProject;
+
+		const layout: PipelineLayoutState = {
+			version: 2,
+			pipelines: state.pipelines,
+			// Keep top-level fields pointing at the current project so an
+			// older build reading the file still resolves sensible state.
+			selectedPipelineId: safeSelectedId,
+			viewport,
+			perProject: nextPerProject,
+			// Persist the written-roots snapshot so the next mount can
+			// reseed lastWrittenRootsRef even if the originating agent has
+			// been renamed/removed (sessionId/Name lookup would miss the
+			// root in that case, leaving stale YAML uncleared).
+			writtenRoots: [...lastWrittenRootsRef.current],
+		};
+		cueService
+			.savePipelineLayout(layout as unknown as Record<string, unknown>)
+			.catch((err: unknown) => {
+				captureException(err, { extra: { operation: 'savePipelineLayout' } });
+			});
+	}, [reactFlowInstance, lastWrittenRootsRef]);
+
 	// Debounced layout persistence (positions + viewport + written roots)
 	const persistLayout = useCallback(() => {
 		if (layoutSaveTimerRef.current) clearTimeout(layoutSaveTimerRef.current);
 		layoutSaveTimerRef.current = setTimeout(() => {
-			const viewport = reactFlowInstance.getViewport();
-			const state = pipelineStateRef.current;
-			// Normalize the selection BEFORE computing the project key or
-			// writing. A `selectedPipelineId` that doesn't point at any live
-			// pipeline must never be persisted — on next load it would bypass
-			// the merge fallback via `pickProjectViewState` and blank the
-			// canvas (`convertToReactFlowNodes` filters out every pipeline
-			// whose id doesn't match the selection). This can happen when
-			// ids regenerate on save-reload and a stale perProject entry
-			// from a prior id scheme lingers, or when the safety-net reset
-			// races against a debounced persist. Treat any unresolvable
-			// selection as "All Pipelines" (null).
-			const selectionIsValid =
-				state.selectedPipelineId === null ||
-				state.pipelines.some((p) => p.id === state.selectedPipelineId);
-			const safeSelectedId = selectionIsValid ? state.selectedPipelineId : null;
-
-			// Scope this viewport/selection under the current project (derived
-			// from the selected pipeline's owning agent session). Other
-			// projects' entries are preserved verbatim so switching back to
-			// them later still restores their remembered view.
-			const projectKey = resolvePipelineProjectKey(
-				safeSelectedId,
-				state.pipelines,
-				sessionsRef.current
-			);
-			const nextPerProject: Record<string, PipelineProjectViewState> = {
-				...perProjectRef.current,
-				[projectKey]: {
-					selectedPipelineId: safeSelectedId,
-					viewport,
-				},
-			};
-			perProjectRef.current = nextPerProject;
-
-			const layout: PipelineLayoutState = {
-				version: 2,
-				pipelines: state.pipelines,
-				// Keep top-level fields pointing at the current project so an
-				// older build reading the file still resolves sensible state.
-				selectedPipelineId: safeSelectedId,
-				viewport,
-				perProject: nextPerProject,
-				// Persist the written-roots snapshot so the next mount can
-				// reseed lastWrittenRootsRef even if the originating agent has
-				// been renamed/removed (sessionId/Name lookup would miss the
-				// root in that case, leaving stale YAML uncleared).
-				writtenRoots: [...lastWrittenRootsRef.current],
-			};
-			cueService
-				.savePipelineLayout(layout as unknown as Record<string, unknown>)
-				.catch((err: unknown) => {
-					captureException(err, { extra: { operation: 'savePipelineLayout' } });
-				});
+			layoutSaveTimerRef.current = null;
+			writeLayoutNow();
 		}, 500);
-	}, [reactFlowInstance, lastWrittenRootsRef]);
+	}, [writeLayoutNow]);
 
-	// Clean up debounce timer on unmount
+	// On unmount: if a debounced write is still pending, flush it before
+	// tearing down. Cancelling the timer outright (the previous behavior)
+	// dropped writes that landed during the modal-close window — most
+	// painfully the post-save `writtenRoots` update, which left the next
+	// mount unable to clear orphaned cue.yaml files.
 	useEffect(() => {
 		return () => {
-			if (layoutSaveTimerRef.current) clearTimeout(layoutSaveTimerRef.current);
+			if (layoutSaveTimerRef.current) {
+				clearTimeout(layoutSaveTimerRef.current);
+				layoutSaveTimerRef.current = null;
+				writeLayoutNow();
+			}
 		};
-	}, []);
+	}, [writeLayoutNow]);
 
 	// Reseed lastWrittenRootsRef from the persisted writtenRoots set as early
 	// as possible — independent of graphSessions / livePipelines availability.

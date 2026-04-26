@@ -880,7 +880,8 @@ describe('Forced parallel send shortcut', () => {
 				},
 			},
 		} as any);
-		const deps = createMockDeps();
+		// Non-empty input — empty input takes the `triggerForceSendQueued` event branch instead.
+		const deps = createMockDeps({ inputValue: 'hello' });
 		const { result } = renderHook(() => useInputKeyDown(deps));
 		const e = createKeyEvent('Enter', { metaKey: true, shiftKey: true });
 
@@ -905,7 +906,8 @@ describe('Forced parallel send shortcut', () => {
 				},
 			},
 		} as any);
-		const deps = createMockDeps();
+		// Non-empty input — empty input takes the `triggerForceSendQueued` event branch instead.
+		const deps = createMockDeps({ inputValue: 'hello' });
 		const { result } = renderHook(() => useInputKeyDown(deps));
 		const e = createKeyEvent('Enter', { ctrlKey: true, shiftKey: true });
 
@@ -980,7 +982,8 @@ describe('Forced parallel send shortcut', () => {
 				},
 			},
 		} as any);
-		const deps = createMockDeps();
+		// Non-empty input — empty input takes the `triggerForceSendQueued` event branch instead.
+		const deps = createMockDeps({ inputValue: 'hello' });
 		const { result } = renderHook(() => useInputKeyDown(deps));
 
 		// Default shortcut (Meta+Shift+Enter) should NOT trigger

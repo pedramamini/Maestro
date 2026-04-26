@@ -82,6 +82,13 @@ export interface AgentNodeData {
 	fanInTimeoutMinutes?: number;
 	/** Per-node fan-in timeout-on-fail override. 'break' waits for all, 'continue' fires with partial data. */
 	fanInTimeoutOnFail?: 'break' | 'continue';
+	/** Stable per-instance identifier (UUID), generated when the node is
+	 *  created in the editor. Persisted in YAML via `target_node_key` /
+	 *  `fan_out_node_keys` on the owning subscription so two visual nodes
+	 *  pointing at the same agent session round-trip as separate nodes
+	 *  instead of being merged by sessionName. Same key across multiple
+	 *  incoming edges = explicit fan-in (single visual node, multi-input). */
+	nodeKey?: string;
 }
 
 /**
@@ -106,6 +113,10 @@ export interface CommandNodeData {
 	owningSessionId: string;
 	/** Cached owning session name for display. */
 	owningSessionName: string;
+	/** Stable per-instance identifier (UUID). See `AgentNodeData.nodeKey`
+	 *  for the round-trip semantics — the same `target_node_key` field on
+	 *  the subscription carries this value to/from YAML. */
+	nodeKey?: string;
 }
 
 /**

@@ -1089,6 +1089,145 @@ export async function countItemsRemote(
 }
 
 /**
+ * Options for {@link listTreeRemote}.
+ */
+export interface ListTreeOptions {
+	/** Maximum depth to recurse into (find -maxdepth). Default 5. */
+	maxDepth?: number;
+	/**
+	 * Glob patterns whose names should be pruned (no recursion). Patterns containing
+	 * a `/` are skipped (find -name matches base names only). Patterns are passed
+	 * verbatim to `find -name`, which interprets `*`, `?`, and `[…]` as globs.
+	 */
+	ignorePatterns?: string[];
+	/**
+	 * Relative paths (from `rootPath`) to exclude entirely via `find -path`. Used by
+	 * the renderer to skip `.maestro` in the "rest of tree" phase since `.maestro`
+	 * is enumerated in its own phase with no entry cap.
+	 */
+	excludePaths?: string[];
+	/**
+	 * Soft cap on file entries. Files beyond the cap are dropped server-side via
+	 * `head -n`. Directories are never capped — the structure is always complete
+	 * to `maxDepth`. Omit for unlimited.
+	 */
+	maxFiles?: number;
+}
+
+/**
+ * Result of {@link listTreeRemote}. Paths are relative to the root passed to
+ * the function, with no leading `./` or `/`.
+ */
+export interface ListTreeResult {
+	/** Relative directory paths (e.g. `src`, `src/components`). */
+	directories: string[];
+	/** Relative file paths (e.g. `package.json`, `src/index.ts`). */
+	files: string[];
+	/** True iff the file list was truncated by the `maxFiles` cap. */
+	truncated: boolean;
+}
+
+/**
+ * Enumerate a remote directory tree in a single SSH round-trip.
+ *
+ * Replaces N per-directory `ls` calls with two `find` invocations bundled into
+ * one SSH command (one for directories, one for files). Used by the file
+ * explorer to load remote trees in 1–2 round-trips total instead of one per
+ * directory.
+ *
+ * Implementation notes:
+ * - `find -L` follows symlinks, so symlinks-to-directories appear as their
+ *   target directories (matching the prior `readDir + per-symlink test -d`
+ *   resolution behavior). Loop detection in find prevents infinite recursion.
+ * - `find . -mindepth 1 …` is run with `cd` into the root so output paths come
+ *   back relative (`./foo/bar`), avoiding ambiguity when `rootPath` contains
+ *   spaces or `~`.
+ * - Two find calls (rather than one with `-printf '%y\t%p\n'`) keeps us
+ *   portable: `-printf` is GNU-only.
+ * - The file list is piped through `head -n maxFiles+1` server-side so we
+ *   never transfer more than the cap allows. The `+1` lets us detect overflow.
+ */
+export async function listTreeRemote(
+	rootPath: string,
+	options: ListTreeOptions,
+	sshRemote: SshRemoteConfig,
+	deps: RemoteFsDeps = defaultDeps
+): Promise<RemoteFsResult<ListTreeResult>> {
+	const maxDepth = options.maxDepth ?? 5;
+	const rawIgnore = options.ignorePatterns ?? [];
+	const rawExclude = options.excludePaths ?? [];
+	const maxFiles = options.maxFiles;
+
+	const escapedRoot = shellEscapeRemotePath(rootPath);
+
+	// Single-quote each pattern for safe interpolation into the find command.
+	// Inside single quotes, the shell does not expand anything; embedded quotes
+	// are escaped with the standard '"'"' idiom.
+	const sqQuote = (s: string): string => `'${s.replace(/'/g, "'\\''")}'`;
+
+	const pruneTerms: string[] = [];
+	for (const pattern of rawIgnore) {
+		// `find -name` matches base names only; skip path-bearing patterns.
+		if (!pattern || pattern.includes('/')) continue;
+		pruneTerms.push(`-name ${sqQuote(pattern)}`);
+	}
+	for (const excludePath of rawExclude) {
+		// Normalize to a leading `./` so it matches the relative paths produced
+		// by `find . -mindepth 1`.
+		const cleaned = excludePath.replace(/^\.?\/+/, '');
+		if (!cleaned) continue;
+		pruneTerms.push(`-path ${sqQuote(`./${cleaned}`)}`);
+	}
+
+	const pruneClause = pruneTerms.length > 0 ? `\\( ${pruneTerms.join(' -o ')} \\) -prune -o` : '';
+
+	const dirFind = `find -L . -mindepth 1 -maxdepth ${maxDepth} ${pruneClause} -type d -print 2>/dev/null`;
+
+	const headTail = maxFiles !== undefined ? ` | head -n ${maxFiles + 1}` : '';
+	const fileFind = `find -L . -mindepth 1 -maxdepth ${maxDepth} ${pruneClause} -type f -print 2>/dev/null${headTail}`;
+
+	const SEP = '__MAESTRO_FIND_SEP__';
+	const remoteCommand =
+		`cd ${escapedRoot} 2>/dev/null || { echo "__CD_ERROR__"; exit 0; }; ` +
+		`${dirFind}; ` +
+		`echo "${SEP}"; ` +
+		`${fileFind}`;
+
+	const result = await execRemoteCommand(sshRemote, remoteCommand, deps);
+
+	if (result.exitCode !== 0 && !result.stdout.includes('__CD_ERROR__')) {
+		return {
+			success: false,
+			error: result.stderr || `find failed with exit code ${result.exitCode}`,
+		};
+	}
+
+	if (result.stdout.startsWith('__CD_ERROR__')) {
+		return { success: false, error: `Directory not found or not accessible: ${rootPath}` };
+	}
+
+	const sepLine = `\n${SEP}\n`;
+	const sepIdx = result.stdout.indexOf(sepLine);
+	const dirSection = sepIdx >= 0 ? result.stdout.slice(0, sepIdx) : result.stdout;
+	const fileSection = sepIdx >= 0 ? result.stdout.slice(sepIdx + sepLine.length) : '';
+
+	const stripPrefix = (line: string): string => (line.startsWith('./') ? line.slice(2) : line);
+
+	const directories = dirSection.split('\n').filter(Boolean).map(stripPrefix).filter(Boolean);
+
+	const fileLinesRaw = fileSection.split('\n').filter(Boolean);
+	let truncated = false;
+	let fileLines = fileLinesRaw;
+	if (maxFiles !== undefined && fileLinesRaw.length > maxFiles) {
+		truncated = true;
+		fileLines = fileLinesRaw.slice(0, maxFiles);
+	}
+	const files = fileLines.map(stripPrefix).filter(Boolean);
+
+	return { success: true, data: { directories, files, truncated } };
+}
+
+/**
  * Result of an incremental file scan showing changes since last check.
  */
 export interface IncrementalScanResult {

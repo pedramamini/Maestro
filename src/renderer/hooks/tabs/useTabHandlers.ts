@@ -1552,6 +1552,10 @@ export function useTabHandlers(): TabHandlersReturn {
 		updateAiTab(session.id, currentActiveTab.id, (tab) => {
 			const newMode = cycleThinkingMode(tab.showThinking);
 			if (newMode === 'off') {
+				// ThinkingMode contract — manual toggle to 'off' wipes any
+				// transient thinking/tool entries currently visible. The
+				// inline ('on') and exit-time clear points live in
+				// useBatchedSessionUpdates and useAgentListeners respectively.
 				return {
 					...tab,
 					showThinking: 'off',

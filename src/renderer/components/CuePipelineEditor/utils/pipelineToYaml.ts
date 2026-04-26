@@ -52,6 +52,22 @@ function getOwningSessionId(node: PipelineNode): string {
 	return (node.data as AgentNodeData).sessionId;
 }
 
+/**
+ * Returns the stable visual-node identifier for a node, or undefined when the
+ * node predates the `nodeKey` field (legacy in-memory state). Empty strings
+ * are normalized to undefined so the loader's "absent → fall back to legacy
+ * dedup-by-sessionName" branch fires consistently.
+ */
+function getNodeKey(node: PipelineNode): string | undefined {
+	const key =
+		node.type === 'command'
+			? (node.data as CommandNodeData).nodeKey
+			: node.type === 'agent'
+				? (node.data as AgentNodeData).nodeKey
+				: undefined;
+	return key && key.length > 0 ? key : undefined;
+}
+
 const SOURCE_OUTPUT_VAR = '{{CUE_SOURCE_OUTPUT}}';
 
 /**
@@ -183,6 +199,8 @@ function populateTargetWork(
 		sub.prompt = triggerEdge?.prompt ?? agentData.inputPrompt ?? '';
 		if (agentData.outputPrompt) sub.output_prompt = agentData.outputPrompt;
 	}
+	const targetKey = getNodeKey(target);
+	if (targetKey) sub.target_node_key = targetKey;
 }
 
 /**
@@ -294,6 +312,24 @@ export function pipelineToYamlSubscriptions(pipeline: CuePipeline): CueSubscript
 
 			const fanOutAgents = workTargets;
 			sub.fan_out = fanOutAgents.map((a) => (a.data as AgentNodeData).sessionName);
+			// Stable-id mirror so the dispatcher can resolve a target after
+			// it's been renamed. The dispatcher prefers `fan_out_ids[i]` over
+			// `fan_out[i]`; without this, a rename silently drops the target.
+			const fanOutIds = fanOutAgents.map((a) => (a.data as AgentNodeData).sessionId);
+			if (fanOutIds.every(Boolean) && fanOutIds.length === fanOutAgents.length) {
+				sub.fan_out_ids = fanOutIds;
+			}
+			// Per-position visual-node identifiers. Required so the loader can
+			// distinguish "two distinct visual nodes happen to point at the
+			// same agent_id" (different keys → separate nodes) from "explicit
+			// fan-in onto one shared node" (same key → merged node). Emit only
+			// when every position carries a key — partial population is
+			// ambiguous and we'd rather fall back to the legacy
+			// dedup-by-sessionName behavior than guess.
+			const fanOutKeys = fanOutAgents.map((a) => getNodeKey(a));
+			if (fanOutKeys.every((k): k is string => !!k) && fanOutKeys.length === fanOutAgents.length) {
+				sub.fan_out_node_keys = fanOutKeys;
+			}
 			// Resolve per-agent prompts from edge prompt → agent inputPrompt fallback.
 			const perAgentPrompts = fanOutAgents.map((agent) => {
 				const edge = triggerOutgoing.find((e) => e.target === agent.id);
@@ -602,8 +638,22 @@ function buildChain(
 		// guarantees all upstream names are known before we resolve
 		// `source_sub` list membership.
 
+		const targetKey = getNodeKey(target);
+		if (targetKey) sub.target_node_key = targetKey;
+
 		subscriptions.push(sub);
-		subNamesForNode.set(target.id, new Set([sub.name]));
+		// Merge instead of overwrite — a chain agent can be reached from
+		// multiple upstream paths (e.g. TriggerA → Agent1 and TriggerB →
+		// Agent1 → Agent2). If we replace the set, the post-pass that fills
+		// `source_sub` for downstream chain subs loses the earlier-recorded
+		// names and the chain silently stalls on completions from those
+		// missing upstreams.
+		const existingNames = subNamesForNode.get(target.id);
+		if (existingNames) {
+			existingNames.add(sub.name);
+		} else {
+			subNamesForNode.set(target.id, new Set([sub.name]));
+		}
 
 		// Continue the chain
 		buildChain(
@@ -666,6 +716,7 @@ export function pipelinesToYaml(
 			if (sub.source_session_ids != null) record.source_session_ids = sub.source_session_ids;
 			if (sub.source_sub != null) record.source_sub = sub.source_sub;
 			if (sub.fan_out != null) record.fan_out = sub.fan_out;
+			if (sub.fan_out_ids != null) record.fan_out_ids = sub.fan_out_ids;
 			// Per-agent fan-out prompts: prefer externalized files over the
 			// legacy inline array. Emitting both would be redundant — the
 			// normalizer resolves files into the same runtime slots as
@@ -682,6 +733,8 @@ export function pipelinesToYaml(
 				record.fan_in_timeout_on_fail = sub.fan_in_timeout_on_fail;
 			if (sub.include_output_from != null) record.include_output_from = sub.include_output_from;
 			if (sub.forward_output_from != null) record.forward_output_from = sub.forward_output_from;
+			if (sub.target_node_key != null) record.target_node_key = sub.target_node_key;
+			if (sub.fan_out_node_keys != null) record.fan_out_node_keys = sub.fan_out_node_keys;
 
 			// Command action: emit `action: command` + the structured `command`
 			// object inline. Skip prompt_file emission — the dispatcher uses

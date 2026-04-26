@@ -37,6 +37,8 @@ import {
 	renameRemote,
 	deleteRemote,
 	countItemsRemote,
+	listTreeRemote,
+	type ListTreeOptions,
 } from '../../utils/remote-fs';
 import { resolveDirentType } from '../../utils/dirent-utils';
 import { getSshRemoteById } from '../../stores';
@@ -241,6 +243,32 @@ export function registerFilesystemHandlers(): void {
 				}
 				throw new Error(`Failed to read file: ${error}`);
 			}
+		}
+	);
+
+	// Enumerate a remote directory tree in a single SSH round-trip.
+	// Replaces N-per-directory `ls` recursion with two batched `find` calls
+	// bundled into one SSH command. Used by the file explorer to load remote
+	// trees in 1–2 round-trips total instead of one per directory.
+	// SSH-only: local trees use direct fs recursion in the renderer.
+	ipcMain.handle(
+		'fs:listTreeRemote',
+		async (_, rootPath: string, sshRemoteId: string, options: ListTreeOptions) => {
+			const sshConfig = getSshRemoteById(sshRemoteId);
+			if (!sshConfig) {
+				throw new Error(`SSH remote not found: ${sshRemoteId}`);
+			}
+			const result = await listTreeRemote(rootPath, options, sshConfig);
+			if (!result.success) {
+				throw new Error(result.error || 'Failed to list remote tree');
+			}
+			// Normalize names to NFC to match the readDir handler's behavior
+			// (paths may contain composed/decomposed unicode on macOS remotes).
+			return {
+				directories: result.data!.directories.map((p) => p.normalize('NFC')),
+				files: result.data!.files.map((p) => p.normalize('NFC')),
+				truncated: result.data!.truncated,
+			};
 		}
 	);
 

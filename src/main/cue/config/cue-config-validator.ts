@@ -139,6 +139,24 @@ export function validateSubscription(sub: unknown, prefix: string): string[] {
 			errors.push(`${prefix}: "fan_out" is not supported when action is "command"`);
 		}
 	} else {
+		// `fan_out_ids` is the rename-stable id mirror of `fan_out`. When
+		// present it must be a string array of the same length so the
+		// dispatcher can look up `fan_out_ids[i]` for each `fan_out[i]`.
+		if (subRecord.fan_out_ids !== undefined) {
+			if (
+				!Array.isArray(subRecord.fan_out_ids) ||
+				!subRecord.fan_out_ids.every((v: unknown) => typeof v === 'string')
+			) {
+				errors.push(`${prefix}: "fan_out_ids" must be an array of strings when provided`);
+			} else if (
+				Array.isArray(subRecord.fan_out) &&
+				subRecord.fan_out_ids.length !== subRecord.fan_out.length
+			) {
+				errors.push(
+					`${prefix}: "fan_out_ids" length (${subRecord.fan_out_ids.length}) must match "fan_out" length (${subRecord.fan_out.length})`
+				);
+			}
+		}
 		const hasPrompt = typeof subRecord.prompt === 'string';
 		const hasPromptFile = typeof subRecord.prompt_file === 'string';
 		// A fan-out subscription can carry its prompts per-target via
@@ -180,6 +198,23 @@ export function validateSubscription(sub: unknown, prefix: string): string[] {
 	}
 
 	validateEventSpecificFields(subRecord, prefix, errors);
+
+	if (subRecord.fan_in_timeout_minutes !== undefined) {
+		// Same bounds as `settings.timeout_minutes`. A value of `0` makes
+		// `cue-fan-in-tracker` expire every fan-in immediately on arrival of
+		// the first source, so the pipeline appears to do nothing.
+		if (
+			typeof subRecord.fan_in_timeout_minutes !== 'number' ||
+			!Number.isFinite(subRecord.fan_in_timeout_minutes) ||
+			!Number.isInteger(subRecord.fan_in_timeout_minutes) ||
+			subRecord.fan_in_timeout_minutes < 1 ||
+			subRecord.fan_in_timeout_minutes > 1440
+		) {
+			errors.push(
+				`${prefix}: "fan_in_timeout_minutes" must be a positive integer between 1 and 1440`
+			);
+		}
+	}
 
 	if (subRecord.filter !== undefined) {
 		if (
@@ -388,6 +423,21 @@ function validateSettings(rawSettings: unknown): string[] {
 		return errors;
 	}
 	const settings = rawSettings as Record<string, unknown>;
+	if (settings.timeout_minutes !== undefined) {
+		// `0`, negative, NaN, or Infinity all reach `cue-run-manager` as a ms
+		// timeout — `0` aborts every run on dispatch, `Infinity` hangs forever.
+		// 1440 (24 h) is a generous upper bound; anything higher is almost
+		// certainly a typo.
+		if (
+			typeof settings.timeout_minutes !== 'number' ||
+			!Number.isFinite(settings.timeout_minutes) ||
+			!Number.isInteger(settings.timeout_minutes) ||
+			settings.timeout_minutes < 1 ||
+			settings.timeout_minutes > 1440
+		) {
+			errors.push('"settings.timeout_minutes" must be a positive integer between 1 and 1440');
+		}
+	}
 	if (settings.timeout_on_fail !== undefined) {
 		if (settings.timeout_on_fail !== 'break' && settings.timeout_on_fail !== 'continue') {
 			errors.push('"settings.timeout_on_fail" must be "break" or "continue"');

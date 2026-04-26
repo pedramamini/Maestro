@@ -57,7 +57,7 @@ import { createCueRecoveryService, type CueRecoveryService } from './cue-recover
 import { createCueCleanupService, type CueCleanupService } from './cue-cleanup-service';
 import { createCueMetrics, type CueMetrics, type CueMetricsCollector } from './cue-metrics';
 import { createCueQueuePersistence, type CueQueuePersistence } from './cue-queue-persistence';
-import { loadCueConfig } from './cue-yaml-loader';
+import { loadCueConfigDetailed } from './cue-yaml-loader';
 import { cueDebugLog } from '../../shared/cueDebug';
 
 const MAX_CHAIN_DEPTH = 10;
@@ -323,7 +323,17 @@ export class CueEngine {
 				})),
 			getSessionStates: () => this.registry.snapshot(),
 			getActiveRunCount: (sessionId) => this.runManager.getActiveRunCount(sessionId),
-			loadConfigForProjectRoot: loadCueConfig,
+			// Use the partitioned/detailed loader so an inactive session's
+			// dashboard view matches what the runtime will see when the engine
+			// initializes that session. The legacy `loadCueConfig` skips
+			// validation entirely, so the editor would render subscriptions
+			// that the runtime later silently drops via `loadCueConfigDetailed`
+			// — the user sees the sub in the editor, then activates Cue, and
+			// it vanishes. Same loader on both paths keeps the views in sync.
+			loadConfigForProjectRoot: (projectRoot) => {
+				const result = loadCueConfigDetailed(projectRoot);
+				return result.ok ? result.config : null;
+			},
 		});
 		this.cleanupService = createCueCleanupService({
 			fanInTracker: this.fanInTracker,

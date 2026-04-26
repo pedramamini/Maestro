@@ -25,6 +25,7 @@ import type {
 	AgentError,
 	GroupChatMessage,
 	UsageStats,
+	ThinkingMode,
 } from '../../types';
 import { notifyToast } from '../../stores/notificationStore';
 import type { HistoryEntryInput } from './useAgentSessionManagement';
@@ -84,6 +85,43 @@ function removeHiddenProgressLog(logs: LogEntry[], tabId: string): LogEntry[] {
 	const hiddenLogId = buildHiddenProgressLogId(tabId);
 	const updatedLogs = logs.filter((log) => log.id !== hiddenLogId);
 	return updatedLogs.length === logs.length ? logs : updatedLogs;
+}
+
+/**
+ * Apply the showThinking exit contract to a tab's logs.
+ *
+ * Contract (kept in sync with `ThinkingMode` in `src/shared/types.ts` and the
+ * inline-clearing filter in `useBatchedSessionUpdates.ts`):
+ * - 'off': thinking/tool logs were never appended, nothing to do.
+ * - 'on' (temporary): thinking/tool logs are scratch state for the active turn
+ *   and MUST be dropped when the agent process exits.
+ * - 'sticky' (pinned): thinking/tool logs persist across exits.
+ *
+ * Provider parsers that surface reasoning or tool-execution events MUST tag
+ * their renderer logs with `source: 'thinking'` or `source: 'tool'` so this
+ * filter applies uniformly. New agent integrations inherit the behavior for
+ * free as long as they follow that tagging convention.
+ */
+function applyExitThinkingPolicy(
+	logs: LogEntry[],
+	tab: { showThinking?: ThinkingMode }
+): LogEntry[] {
+	if (tab.showThinking === 'sticky') return logs;
+	const filtered = logs.filter((l) => l.source !== 'thinking' && l.source !== 'tool');
+	return filtered.length === logs.length ? logs : filtered;
+}
+
+/**
+ * Standard cleanup applied to a just-exited AI tab's logs:
+ * removes the hidden-progress placeholder AND drops transient
+ * thinking/tool entries unless the tab is in sticky mode.
+ */
+function cleanupExitedTabLogs(
+	logs: LogEntry[],
+	tabId: string,
+	tab: { showThinking?: ThinkingMode }
+): LogEntry[] {
+	return applyExitThinkingPolicy(removeHiddenProgressLog(logs, tabId), tab);
 }
 
 /** Batched updater interface (subset used by IPC listeners) */
@@ -627,7 +665,7 @@ export function useAgentListeners(deps: UseAgentListenersDeps): void {
 													return tab.id === tabIdFromSession
 														? {
 																...tab,
-																logs: removeHiddenProgressLog(tab.logs, tab.id),
+																logs: cleanupExitedTabLogs(tab.logs, tab.id, tab),
 																state: 'idle' as const,
 																thinkingStartTime: undefined,
 																// Preserve agentSessionId — stale IDs are cleared
@@ -640,7 +678,7 @@ export function useAgentListeners(deps: UseAgentListenersDeps): void {
 													return tab.state === 'busy'
 														? {
 																...tab,
-																logs: removeHiddenProgressLog(tab.logs, tab.id),
+																logs: cleanupExitedTabLogs(tab.logs, tab.id, tab),
 																state: 'idle' as const,
 																thinkingStartTime: undefined,
 															}
@@ -670,7 +708,12 @@ export function useAgentListeners(deps: UseAgentListenersDeps): void {
 									// Don't dequeue — mark the exiting tab idle and keep session busy
 									const updatedAiTabs = s.aiTabs.map((tab) =>
 										tabIdFromSession && tab.id === tabIdFromSession
-											? { ...tab, state: 'idle' as const, thinkingStartTime: undefined }
+											? {
+													...tab,
+													logs: cleanupExitedTabLogs(tab.logs, tab.id, tab),
+													state: 'idle' as const,
+													thinkingStartTime: undefined,
+												}
 											: tab
 									);
 									const anyTabStillBusy = updatedAiTabs.some((tab) => tab.state === 'busy');
@@ -711,7 +754,7 @@ export function useAgentListeners(deps: UseAgentListenersDeps): void {
 									if (tabIdFromSession && tab.id === tabIdFromSession) {
 										return {
 											...tab,
-											logs: removeHiddenProgressLog(tab.logs, tab.id),
+											logs: cleanupExitedTabLogs(tab.logs, tab.id, tab),
 											state: 'idle' as const,
 										};
 									}
@@ -756,7 +799,7 @@ export function useAgentListeners(deps: UseAgentListenersDeps): void {
 												return tab.id === tabIdFromSession
 													? {
 															...tab,
-															logs: removeHiddenProgressLog(tab.logs, tab.id),
+															logs: cleanupExitedTabLogs(tab.logs, tab.id, tab),
 															state: 'idle' as const,
 															thinkingStartTime: undefined,
 															// Preserve agentSessionId for session resume —
@@ -768,7 +811,7 @@ export function useAgentListeners(deps: UseAgentListenersDeps): void {
 												return tab.state === 'busy'
 													? {
 															...tab,
-															logs: removeHiddenProgressLog(tab.logs, tab.id),
+															logs: cleanupExitedTabLogs(tab.logs, tab.id, tab),
 															state: 'idle' as const,
 															thinkingStartTime: undefined,
 														}

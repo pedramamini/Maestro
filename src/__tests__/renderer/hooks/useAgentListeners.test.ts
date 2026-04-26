@@ -1348,6 +1348,220 @@ describe('useAgentListeners', () => {
 			expect(updated?.aiTabs[0]?.logs).toEqual([]);
 		});
 
+		// ThinkingMode contract — exit-time clearing.
+		// `'on'` is temporary: thinking/tool entries are scratch state for the
+		// active turn and must disappear when the agent process exits.
+		// `'sticky'` is pinned and opts out so users can review reasoning.
+		// See `ThinkingMode` in src/shared/types.ts and the matching inline
+		// clearing point in src/renderer/hooks/session/useBatchedSessionUpdates.ts.
+		it("clears thinking and tool logs on AI exit when showThinking is 'on'", async () => {
+			const deps = createMockDeps();
+			const tab = createMockTab({
+				id: 'tab-1',
+				showThinking: 'on',
+				logs: [
+					{
+						id: 'log-thinking-1',
+						timestamp: 1700000000001,
+						source: 'thinking',
+						text: 'reasoning about the request...',
+					},
+					{
+						id: 'log-tool-1',
+						timestamp: 1700000000002,
+						source: 'tool',
+						text: 'bash: ls -la',
+					},
+					{
+						id: 'log-stdout-1',
+						timestamp: 1700000000003,
+						source: 'stdout',
+						text: 'final answer',
+					},
+				],
+			});
+			const session = createMockSession({
+				id: 'sess-1',
+				state: 'busy',
+				busySource: 'ai',
+				aiTabs: [tab],
+				activeTabId: 'tab-1',
+			});
+			useSessionStore.setState({
+				sessions: [session],
+				activeSessionId: 'sess-1',
+			});
+
+			renderHook(() => useAgentListeners(deps));
+
+			await onExitHandler?.('sess-1-ai-tab-1');
+			await new Promise((r) => setTimeout(r, 50));
+
+			const updated = useSessionStore.getState().sessions.find((s) => s.id === 'sess-1');
+			const remaining = updated?.aiTabs[0]?.logs ?? [];
+			expect(remaining.map((l) => l.source)).toEqual(['stdout']);
+			expect(updated?.aiTabs[0]?.state).toBe('idle');
+			expect(updated?.aiTabs[0]?.thinkingStartTime).toBeUndefined();
+		});
+
+		it("preserves thinking and tool logs on AI exit when showThinking is 'sticky'", async () => {
+			const deps = createMockDeps();
+			const tab = createMockTab({
+				id: 'tab-1',
+				showThinking: 'sticky',
+				logs: [
+					{
+						id: 'log-thinking-1',
+						timestamp: 1700000000001,
+						source: 'thinking',
+						text: 'reasoning about the request...',
+					},
+					{
+						id: 'log-tool-1',
+						timestamp: 1700000000002,
+						source: 'tool',
+						text: 'bash: ls -la',
+					},
+					{
+						id: 'log-stdout-1',
+						timestamp: 1700000000003,
+						source: 'stdout',
+						text: 'final answer',
+					},
+				],
+			});
+			const session = createMockSession({
+				id: 'sess-1',
+				state: 'busy',
+				busySource: 'ai',
+				aiTabs: [tab],
+				activeTabId: 'tab-1',
+			});
+			useSessionStore.setState({
+				sessions: [session],
+				activeSessionId: 'sess-1',
+			});
+
+			renderHook(() => useAgentListeners(deps));
+
+			await onExitHandler?.('sess-1-ai-tab-1');
+			await new Promise((r) => setTimeout(r, 50));
+
+			const updated = useSessionStore.getState().sessions.find((s) => s.id === 'sess-1');
+			const remaining = updated?.aiTabs[0]?.logs ?? [];
+			expect(remaining.map((l) => l.source)).toEqual(['thinking', 'tool', 'stdout']);
+			expect(updated?.aiTabs[0]?.state).toBe('idle');
+		});
+
+		it("clears thinking/tool logs on AI exit in error path when showThinking is 'on'", async () => {
+			const deps = createMockDeps();
+			const tab = createMockTab({
+				id: 'tab-1',
+				showThinking: 'on',
+				logs: [
+					{
+						id: 'log-thinking-1',
+						timestamp: 1700000000001,
+						source: 'thinking',
+						text: 'reasoning...',
+					},
+					{
+						id: 'log-tool-1',
+						timestamp: 1700000000002,
+						source: 'tool',
+						text: 'tool call',
+					},
+				],
+			});
+			const agentError: AgentError = {
+				type: 'rate_limited',
+				message: 'rate limited',
+				timestamp: 1700000000004,
+				recoverable: true,
+				agentId: 'claude-code',
+			};
+			const session = createMockSession({
+				id: 'sess-1',
+				state: 'error',
+				agentError,
+				busySource: 'ai',
+				aiTabs: [tab],
+				activeTabId: 'tab-1',
+			});
+			useSessionStore.setState({
+				sessions: [session],
+				activeSessionId: 'sess-1',
+			});
+
+			renderHook(() => useAgentListeners(deps));
+
+			await onExitHandler?.('sess-1-ai-tab-1');
+			await new Promise((r) => setTimeout(r, 50));
+
+			const updated = useSessionStore.getState().sessions.find((s) => s.id === 'sess-1');
+			expect(updated?.aiTabs[0]?.logs ?? []).toEqual([]);
+		});
+
+		it("clears thinking/tool logs on the just-exited tab in queue-waiting branch when showThinking is 'on'", async () => {
+			const processQueuedItem = vi.fn().mockResolvedValue(undefined);
+			const deps = createMockDeps({
+				processQueuedItemRef: { current: processQueuedItem },
+			});
+			const tabA = createMockTab({
+				id: 'tab-a',
+				state: 'busy',
+				agentSessionId: 'sess-a',
+				showThinking: 'on',
+				logs: [
+					{
+						id: 'log-thinking-a',
+						timestamp: 1700000000001,
+						source: 'thinking',
+						text: 'reasoning A',
+					},
+					{
+						id: 'log-tool-a',
+						timestamp: 1700000000002,
+						source: 'tool',
+						text: 'tool A',
+					},
+				],
+			});
+			const tabB = createMockTab({ id: 'tab-b', state: 'busy', agentSessionId: 'sess-b' });
+			const queueItem = {
+				id: 'q1',
+				tabId: 'tab-c',
+				type: 'message' as const,
+				text: 'queued write',
+				timestamp: Date.now(),
+			};
+			const session = createMockSession({
+				id: 'sess-1',
+				state: 'busy',
+				busySource: 'ai',
+				aiTabs: [tabA, tabB],
+				activeTabId: 'tab-a',
+				executionQueue: [queueItem],
+			});
+			useSessionStore.setState({
+				sessions: [session],
+				activeSessionId: 'sess-1',
+			});
+
+			renderHook(() => useAgentListeners(deps));
+
+			await onExitHandler?.('sess-1-ai-tab-a');
+			await new Promise((r) => setTimeout(r, 50));
+
+			const updated = useSessionStore.getState().sessions.find((s) => s.id === 'sess-1');
+			const updatedTabA = updated?.aiTabs.find((t) => t.id === 'tab-a');
+			// Tab A exited and was marked idle; thinking/tool logs are gone.
+			expect(updatedTabA?.state).toBe('idle');
+			expect(updatedTabA?.logs ?? []).toEqual([]);
+			// Queue is NOT drained because tab-b is still busy.
+			expect(processQueuedItem).not.toHaveBeenCalled();
+		});
+
 		it('processes execution queue on exit', async () => {
 			const processQueuedItem = vi.fn().mockResolvedValue(undefined);
 			const deps = createMockDeps({

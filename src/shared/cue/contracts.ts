@@ -123,6 +123,14 @@ export interface CueSubscription {
 	 *  "something else in the same session completed." */
 	source_sub?: string | string[];
 	fan_out?: string[];
+	/** Stable session-id parallel to `fan_out`, one entry per fan-out target.
+	 *  Mirrors the `source_session` / `source_session_ids` pair: ids survive
+	 *  display-name renames, so the dispatcher prefers `fan_out_ids[i]` over
+	 *  `fan_out[i]` when resolving a target. Without this, renaming a fan-out
+	 *  target silently drops it from dispatch (the name in YAML no longer
+	 *  matches any live session). Optional for backward compat with legacy
+	 *  YAML; new writes always emit it alongside `fan_out`. */
+	fan_out_ids?: string[];
 	/** Per-target prompts for a fan-out subscription, one string per entry in
 	 *  `fan_out`. Legacy inline shape — kept for round-tripping YAML written
 	 *  by older versions or edited by hand. New writes prefer
@@ -181,6 +189,20 @@ export interface CueSubscription {
 	 *  absent on load (legacy YAML), the loader falls back to parsing the
 	 *  `-chain-N` suffix off subscription names. */
 	pipeline_name?: string;
+	/** Stable visual-node identifier for the subscription's target node
+	 *  (single-target subs only — fan-out uses `fan_out_node_keys`).
+	 *  Lets the loader distinguish "two separate visual nodes pointing at
+	 *  the same agent_id" from "one shared node with multiple inputs":
+	 *  subs sharing an `agent_id` but different `target_node_key` values
+	 *  emit separate visual nodes; sharing the same key collapses to one
+	 *  node (explicit user-drawn fan-in). Absent on legacy YAML — the
+	 *  loader falls back to dedup-by-sessionName behavior so legacy
+	 *  pipelines keep loading. */
+	target_node_key?: string;
+	/** Stable visual-node identifiers parallel to `fan_out`, one per
+	 *  position. Same dedup semantics as `target_node_key`: positions
+	 *  carrying distinct keys render as separate visual nodes. */
+	fan_out_node_keys?: string[];
 }
 
 /** Global Cue settings */

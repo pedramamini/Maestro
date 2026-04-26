@@ -17,15 +17,24 @@ import { createMockSession } from '../../helpers/mockSession';
 import type { FileNode } from '../../../renderer/types/fileTree';
 import type { RightPanelHandle } from '../../../renderer/components/RightPanel';
 import type { RefObject, SetStateAction } from 'react';
-import { loadFileTree, compareFileTrees } from '../../../renderer/utils/fileExplorer';
+import {
+	loadFileTree,
+	loadFileTreeRemoteBatched,
+	compareFileTrees,
+} from '../../../renderer/utils/fileExplorer';
 import { gitService } from '../../../renderer/services/git';
 import { useFileExplorerStore } from '../../../renderer/stores/fileExplorerStore';
 import { useSessionStore } from '../../../renderer/stores/sessionStore';
 
-vi.mock('../../../renderer/utils/fileExplorer', () => ({
-	loadFileTree: vi.fn(),
-	compareFileTrees: vi.fn(),
-}));
+vi.mock('../../../renderer/utils/fileExplorer', async (importOriginal) => {
+	const actual = await importOriginal<typeof import('../../../renderer/utils/fileExplorer')>();
+	return {
+		...actual,
+		loadFileTree: vi.fn(),
+		loadFileTreeRemoteBatched: vi.fn(),
+		compareFileTrees: vi.fn(),
+	};
+});
 
 /** Wrap a tree array into the shape loadFileTree now returns. */
 const asResult = (tree: FileNode[], truncated = false) => ({
@@ -129,7 +138,8 @@ describe('useFileTreeManagement', () => {
 			returnedChanges = await result.current.refreshFileTree(state.getSessions()[0].id);
 		});
 
-		// For local sessions (no sshRemoteId), sshContext and localOptions are undefined
+		// For local sessions (no sshRemoteId), sshContext and localOptions are undefined.
+		// loadFullTree always forwards an 8th `signal` arg (undefined when caller omits extras).
 		expect(loadFileTree).toHaveBeenCalledWith(
 			'/test/project',
 			5,
@@ -137,7 +147,8 @@ describe('useFileTreeManagement', () => {
 			undefined,
 			undefined,
 			undefined,
-			100_000
+			100_000,
+			undefined
 		);
 		expect(compareFileTrees).toHaveBeenCalledWith(initialTree, nextTree);
 		expect(returnedChanges).toEqual(changes);
@@ -188,8 +199,9 @@ describe('useFileTreeManagement', () => {
 			await result.current.refreshGitFileState(session.id);
 		});
 
-		// loadFileTree always uses projectRoot (treeRoot), not shellCwd
-		// Git operations use shellCwd when inputMode is 'terminal'
+		// loadFileTree always uses projectRoot (treeRoot), not shellCwd.
+		// Git operations use shellCwd when inputMode is 'terminal'.
+		// loadFullTree always forwards an 8th `signal` arg (undefined when caller omits extras).
 		expect(loadFileTree).toHaveBeenCalledWith(
 			'/test/project',
 			5,
@@ -197,7 +209,8 @@ describe('useFileTreeManagement', () => {
 			undefined,
 			undefined,
 			undefined,
-			100_000
+			100_000,
+			undefined
 		);
 		expect(gitService.isRepo).toHaveBeenCalledWith('/test/shell', undefined);
 		expect(gitService.getBranches).toHaveBeenCalledWith('/test/shell', undefined);
@@ -270,7 +283,7 @@ describe('useFileTreeManagement', () => {
 		});
 	});
 
-	it('passes SSH context when session has sshRemoteId', async () => {
+	it('routes SSH refresh through the batched find loader', async () => {
 		const nextTree: FileNode[] = [{ name: 'remote-file.txt', type: 'file' }];
 		const changes = {
 			totalChanges: 0,
@@ -281,6 +294,7 @@ describe('useFileTreeManagement', () => {
 		};
 
 		vi.mocked(loadFileTree).mockResolvedValue(asResult(nextTree));
+		vi.mocked(loadFileTreeRemoteBatched).mockResolvedValue(asResult(nextTree));
 		vi.mocked(compareFileTrees).mockReturnValue(changes);
 
 		// Create session with SSH context
@@ -293,28 +307,31 @@ describe('useFileTreeManagement', () => {
 		const deps = createDeps(state);
 		const { result } = renderHook(() => useFileTreeManagement(deps));
 
+		// The initial-load effect fires a shallow loadFileTree pass for SSH on mount.
+		// That's tested separately ("fires shallow load before batched full load …");
+		// here we only care about what the *refresh* path dispatches.
+		vi.mocked(loadFileTree).mockClear();
+		vi.mocked(loadFileTreeRemoteBatched).mockClear();
+
 		await act(async () => {
 			await result.current.refreshFileTree(sshSession.id);
 		});
 
-		// Verify SSH context is passed to loadFileTree
-		expect(loadFileTree).toHaveBeenCalledWith(
+		// Verify SSH refresh dispatches to the batched loader (not recursive readDir)
+		expect(loadFileTreeRemoteBatched).toHaveBeenCalledWith(
 			'/test/project',
-			5,
-			0,
-			{
+			expect.objectContaining({
+				maxDepth: 5,
+				maxEntries: 100_000,
 				sshRemoteId: 'my-ssh-remote',
-				remoteCwd: '/remote/project',
-				honorGitignore: undefined,
-				ignorePatterns: undefined,
-			},
-			undefined,
-			undefined,
-			100_000
+			})
 		);
+		// Recursive loadFileTree must NOT be called for SSH refreshes — the whole
+		// point of the batched loader is to skip the per-directory round-trips.
+		expect(loadFileTree).not.toHaveBeenCalled();
 	});
 
-	it('fires shallow load before full load for SSH sessions on initial mount', async () => {
+	it('fires shallow load before batched full load for SSH sessions on initial mount', async () => {
 		const shallowTree: FileNode[] = [
 			{ name: 'src', type: 'folder', children: [] },
 			{ name: 'README.md', type: 'file' },
@@ -328,10 +345,10 @@ describe('useFileTreeManagement', () => {
 			{ name: 'README.md', type: 'file' },
 		];
 
-		// First call (shallow, depth=1) returns quickly, second call (full, depth=10) returns later
-		vi.mocked(loadFileTree)
-			.mockResolvedValueOnce(asResult(shallowTree))
-			.mockResolvedValueOnce(asResult(fullTree));
+		// Shallow pass goes through loadFileTree (depth=1, single readDir round-trip).
+		vi.mocked(loadFileTree).mockResolvedValueOnce(asResult(shallowTree));
+		// Full pass goes through the batched find-based loader.
+		vi.mocked(loadFileTreeRemoteBatched).mockResolvedValueOnce(asResult(fullTree));
 
 		const mockDirectorySize = vi.fn().mockResolvedValue({
 			fileCount: 2,
@@ -359,7 +376,7 @@ describe('useFileTreeManagement', () => {
 		renderHook(() => useFileTreeManagement(deps));
 
 		await waitFor(() => {
-			// Shallow load should be called with depth=1 (no entry cap on the shallow pass)
+			// Shallow load: depth=1, no entry cap, recursive readDir path.
 			expect(loadFileTree).toHaveBeenCalledWith(
 				'/test/project',
 				1,
@@ -370,16 +387,15 @@ describe('useFileTreeManagement', () => {
 				Number.POSITIVE_INFINITY,
 				expect.any(AbortSignal)
 			);
-			// Full load should be called with the configured maxDepth (default 5) + entry cap
-			expect(loadFileTree).toHaveBeenCalledWith(
+			// Full load: dispatched to batched find-based loader.
+			expect(loadFileTreeRemoteBatched).toHaveBeenCalledWith(
 				'/test/project',
-				5,
-				0,
-				expect.objectContaining({ sshRemoteId: 'my-ssh-remote' }),
-				expect.any(Function),
-				undefined,
-				100_000,
-				expect.any(AbortSignal)
+				expect.objectContaining({
+					maxDepth: 5,
+					maxEntries: 100_000,
+					sshRemoteId: 'my-ssh-remote',
+					signal: expect.any(AbortSignal),
+				})
 			);
 		});
 

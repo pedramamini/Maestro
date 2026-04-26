@@ -4,12 +4,15 @@ import type { Session } from '../../types';
 import type { FileNode } from '../../types/fileTree';
 import {
 	loadFileTree,
+	loadFileTreeRemoteBatched,
+	spliceMaestroIntoTree,
 	compareFileTrees,
 	FileTreeAbortError,
 	type FileTreeChanges,
 	type SshContext,
 	type FileTreeProgress,
 	type LocalFileTreeOptions,
+	type FileTreeNode,
 } from '../../utils/fileExplorer';
 import { fuzzyMatch } from '../../utils/search';
 import { gitService } from '../../services/git';
@@ -313,6 +316,55 @@ export function useFileTreeManagement(
 	);
 
 	/**
+	 * Load the full file tree for a session, dispatching to the batched
+	 * SSH loader when an SSH context is present and the recursive readdir
+	 * walk otherwise. Centralizes the choice so initial-load, refresh, and
+	 * git-state-refresh all stay in sync.
+	 *
+	 * SSH callers may pass `onProgress` and `onPhase` for progressive UI
+	 * updates between the `.maestro` and rest-of-tree phases.
+	 */
+	const loadFullTree = useCallback(
+		(
+			treeRoot: string,
+			sshContext: SshContext | undefined,
+			maxEntries: number,
+			extras?: {
+				signal?: AbortSignal;
+				onProgress?: (p: FileTreeProgress) => void;
+				onPhase?: (
+					phase: 'maestro' | 'rest',
+					partial: { maestro?: FileTreeNode[]; rest?: FileTreeNode[] }
+				) => void;
+			}
+		) => {
+			if (sshContext) {
+				return loadFileTreeRemoteBatched(treeRoot, {
+					maxDepth: effectiveMaxDepth,
+					maxEntries,
+					ignorePatterns: sshContext.ignorePatterns ?? [],
+					honorGitignore: sshContext.honorGitignore ?? false,
+					sshRemoteId: sshContext.sshRemoteId!,
+					signal: extras?.signal,
+					onProgress: extras?.onProgress,
+					onPhase: extras?.onPhase,
+				});
+			}
+			return loadFileTree(
+				treeRoot,
+				effectiveMaxDepth,
+				0,
+				sshContext,
+				undefined,
+				localOptions,
+				maxEntries,
+				extras?.signal
+			);
+		},
+		[effectiveMaxDepth, localOptions]
+	);
+
+	/**
 	 * Refresh file tree for a session and return the changes detected.
 	 * Uses sessionsRef to avoid dependency on sessions state (prevents timer reset on every session change).
 	 * Passes SSH context for remote sessions to enable remote file operations (Phase 2+).
@@ -371,15 +423,7 @@ export function useFileTreeManagement(
 						});
 					});
 
-				const loadResult = await loadFileTree(
-					treeRoot,
-					effectiveMaxDepth,
-					0,
-					sshContext,
-					undefined,
-					localOptions,
-					maxEntriesForRefresh
-				);
+				const loadResult = await loadFullTree(treeRoot, sshContext, maxEntriesForRefresh);
 
 				// Discard if a newer load started for this session while we were awaiting
 				if (isStale(sessionId, seq)) return undefined;
@@ -434,9 +478,9 @@ export function useFileTreeManagement(
 			localOptions,
 			nextSeq,
 			isStale,
-			effectiveMaxDepth,
 			effectiveMaxEntries,
 			resolveMaxEntries,
+			loadFullTree,
 		]
 	);
 
@@ -500,15 +544,7 @@ export function useFileTreeManagement(
 
 				// Refresh file tree and git repo status in parallel
 				const [loadResult, isGitRepo] = await Promise.all([
-					loadFileTree(
-						treeRoot,
-						effectiveMaxDepth,
-						0,
-						sshContext,
-						undefined,
-						localOptions,
-						maxEntriesForRefresh
-					),
+					loadFullTree(treeRoot, sshContext, maxEntriesForRefresh),
 					gitService.isRepo(gitRoot, sshContext?.sshRemoteId),
 				]);
 
@@ -567,9 +603,9 @@ export function useFileTreeManagement(
 			localOptions,
 			nextSeq,
 			isStale,
-			effectiveMaxDepth,
 			effectiveMaxEntries,
 			resolveMaxEntries,
+			loadFullTree,
 		]
 	);
 
@@ -664,9 +700,12 @@ export function useFileTreeManagement(
 			const abortSignal = beginAbortableLoad(sessionId);
 
 			// For SSH sessions, fire a shallow load (depth 1) first so the root-level
-			// tree renders almost instantly (single round-trip), then backfill with
-			// the full recursive walk. Local sessions skip the shallow pass since
-			// local readdir is fast enough that the overhead isn't worth it.
+			// tree renders almost instantly (single round-trip). The phased batched
+			// loader below then loads `.maestro` deeply (drives Cue, playbooks),
+			// then the rest of the tree — each phase repaints as it completes.
+			// Local sessions skip the shallow pass since local readdir is fast
+			// enough that the overhead isn't worth it.
+			let shallowTree: FileTreeNode[] | undefined;
 			if (sshContext) {
 				// Shallow pass ignores the entry cap — the whole point is to render
 				// the top-level dir fast. The full pass below honors the cap.
@@ -682,6 +721,7 @@ export function useFileTreeManagement(
 				)
 					.then((shallowResult) => {
 						if (isStale(sessionId, seq)) return;
+						shallowTree = shallowResult.tree;
 						setSessions((prev) =>
 							prev.map((s) =>
 								s.id === sessionId && s.fileTreeLoading
@@ -703,28 +743,34 @@ export function useFileTreeManagement(
 
 			const maxEntriesForLoad = resolveMaxEntries(!!sshContext, effectiveMaxEntries);
 
-			// Full recursive tree load (with progress callback for SSH)
-			const treePromise = sshContext
-				? loadFileTree(
-						treeRoot,
-						effectiveMaxDepth,
-						0,
-						sshContext,
-						onProgress,
-						localOptions,
-						maxEntriesForLoad,
-						abortSignal
-					)
-				: loadFileTree(
-						treeRoot,
-						effectiveMaxDepth,
-						0,
-						sshContext,
-						undefined,
-						localOptions,
-						maxEntriesForLoad,
-						abortSignal
+			// Full tree load. SSH uses the batched `find`-based loader (1–2 SSH
+			// round-trips total instead of N-per-directory). Local uses the
+			// recursive readdir walk — fast enough on a local filesystem that
+			// we don't need the spawn overhead of `find`.
+			const treePromise = loadFullTree(treeRoot, sshContext, maxEntriesForLoad, {
+				signal: abortSignal,
+				onProgress,
+				onPhase: (phase, partial) => {
+					// Repaint progressively as phases complete so the user sees
+					// `.maestro` content show up before the rest of the tree.
+					if (isStale(sessionId, seq)) return;
+					const merged = spliceMaestroIntoTree(partial.rest ?? shallowTree ?? [], partial.maestro);
+					setSessions((prev) =>
+						prev.map((s) =>
+							s.id === sessionId && s.fileTreeLoading
+								? {
+										...s,
+										fileTree: merged,
+										fileTreeError: undefined,
+										fileTreeRetryAt: undefined,
+									}
+								: s
+						)
 					);
+					// Once .maestro has landed, we can safely signal initial ready.
+					if (phase === 'maestro') signalInitialFileTreeReady();
+				},
+			});
 
 			// Fetch stats independently — a directorySize failure (e.g., `du` timeout
 			// on large repos over SSH) should not prevent the file tree from loading.
@@ -851,10 +897,10 @@ export function useFileTreeManagement(
 		localOptions,
 		nextSeq,
 		isStale,
-		effectiveMaxDepth,
 		effectiveMaxEntries,
 		resolveMaxEntries,
 		signalInitialFileTreeReady,
+		loadFullTree,
 	]);
 
 	// Cleanup retry timers on unmount

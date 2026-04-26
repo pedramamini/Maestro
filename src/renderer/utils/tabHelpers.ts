@@ -185,27 +185,25 @@ export function getRepairedUnifiedTabOrder(session: Session): UnifiedTabRef[] {
  * @returns The name to pre-fill in the rename input (empty for auto-generated names)
  */
 /**
- * Get the display name for a tab.
- * Priority: name > tab agent session ID > session-level agent session ID > "New Session"
+ * Get the display name for a tab. Strictly per-tab — the title only reflects
+ * THIS tab's own state, never another tab's id from the session level.
  *
- * Handles different agent session ID formats:
- * - Claude UUID: "abc123-def456-ghi789" → "ABC123" (first octet)
- * - OpenCode: "SES_4BCDFE8C5FFE4KC1UV9NSMYEDB" → "SES_4BCD" (prefix + 4 chars)
- * - Codex: "thread_abc123..." → "THR_ABC1" (prefix + 4 chars)
+ * Resolution order:
+ *   1. `tab.name` if set (auto-rename or manual rename)
+ *   2. `tab.agentSessionId` formatted (e.g. `SES_4BCD`, `THR_ABC1`, first UUID octet)
+ *   3. "New Session"
  *
- * The optional `sessionAgentSessionId` fallback mirrors ThinkingStatusPill,
- * which uses `tab?.agentSessionId || session.agentSessionId`. Some agents
- * (notably Copilot-CLI) populate the session-level ID before the tab-level
- * one is wired up, so without this fallback the pill shows the session-ID
- * octet while the tab title still reads "New Session".
+ * The `sessionAgentSessionId` parameter is accepted for signature compatibility
+ * but intentionally ignored: borrowing it caused freshly-created sibling tabs
+ * to inherit the previously-active tab's id (e.g. multiple OpenCode tabs all
+ * displaying the same `SES_XXXX`).
  */
-export function getTabDisplayName(tab: AITab, sessionAgentSessionId?: string | null): string {
+export function getTabDisplayName(tab: AITab, _sessionAgentSessionId?: string | null): string {
 	if (tab.name) {
 		return tab.name;
 	}
-	const fallbackId = tab.agentSessionId || sessionAgentSessionId;
-	if (fallbackId) {
-		return formatSessionId(fallbackId);
+	if (tab.agentSessionId) {
+		return formatSessionId(tab.agentSessionId);
 	}
 	return 'New Session';
 }

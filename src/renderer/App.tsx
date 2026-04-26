@@ -890,6 +890,7 @@ function MaestroConsoleInner() {
 		errorSession,
 		effectiveAgentError,
 		recoveryActions,
+		handleJumpToFailingAgent,
 		handleCloseGitDiff,
 		handleCloseGitLog,
 		handleCloseSettings,
@@ -1464,7 +1465,10 @@ function MaestroConsoleInner() {
 			const item = session.executionQueue.find((i) => i.id === itemId);
 			if (!item) return;
 			const text = item.type === 'command' ? (item.command ?? '') : (item.text ?? '');
-			if (!text) return;
+			const images = item.images && item.images.length > 0 ? item.images : undefined;
+			// Image-only messages have empty text but should still dispatch.
+			// processInput's own emptiness check (line ~207) requires text OR images.
+			if (!text && !images) return;
 
 			// Remove the item from the queue first so processInput doesn't see a duplicate.
 			updateSessionWith(sessionId, (s) => ({
@@ -1476,9 +1480,6 @@ function MaestroConsoleInner() {
 			// Routing them via setStagedImages would race with processInput's stale
 			// closure of stagedImages (deps include it), causing images to drop on the
 			// floor in both the chat log entry and the agent spawn payload.
-			const images = item.images && item.images.length > 0 ? item.images : undefined;
-
-			// Dispatch with forceParallel — same code path as Cmd+Shift+Enter.
 			processInput(text, { forceParallel: true, images });
 		},
 		[processInput]
@@ -2925,6 +2926,7 @@ function MaestroConsoleInner() {
 					effectiveAgentError={effectiveAgentError}
 					recoveryActions={recoveryActions}
 					onDismissAgentError={handleCloseAgentErrorModal}
+					onJumpToAgent={handleJumpToFailingAgent}
 					groupChatError={groupChatError}
 					groupChatRecoveryActions={groupChatRecoveryActions}
 					onClearGroupChatError={handleClearGroupChatError}
