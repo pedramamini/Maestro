@@ -965,7 +965,7 @@ function FileExplorerPanelInner(props: FileExplorerPanelProps) {
 			if (!nodes) return [];
 			if (showHiddenFiles) return nodes;
 			return nodes
-				.filter((node) => !node.name.startsWith('.') || node.name === '.maestro')
+				.filter((node) => !node.name.startsWith('.'))
 				.map((node) => ({
 					...node,
 					children: node.children ? filterHiddenFiles(node.children) : undefined,
@@ -1102,17 +1102,16 @@ function FileExplorerPanelInner(props: FileExplorerPanelProps) {
 						}
 					}}
 					onClick={(e) => {
+						setSelectedFileIndex(globalIndex);
+						// Only change focus if not filtering
+						if (fileTreeFilter.length === 0) {
+							setActiveFocus('right');
+						}
 						if (isFolder) {
 							if (e.altKey) {
 								toggleFolderRecursive(fullPath, session.id, setSessions);
 							} else {
 								toggleFolder(fullPath, session.id, setSessions);
-							}
-						} else {
-							setSelectedFileIndex(globalIndex);
-							// Only change focus if not filtering
-							if (fileTreeFilter.length === 0) {
-								setActiveFocus('right');
 							}
 						}
 					}}
@@ -1217,7 +1216,11 @@ function FileExplorerPanelInner(props: FileExplorerPanelProps) {
 					<button
 						onClick={() => {
 							if (fileTreeFilterOpen) {
-								fileTreeFilterInputRef?.current?.focus();
+								if (fileTreeFilter.length === 0) {
+									setFileTreeFilterOpen(false);
+								} else {
+									fileTreeFilterInputRef?.current?.focus();
+								}
 							} else {
 								setFileTreeFilterOpen(true);
 								setTimeout(() => fileTreeFilterInputRef?.current?.focus(), 0);
@@ -1269,7 +1272,7 @@ function FileExplorerPanelInner(props: FileExplorerPanelProps) {
 					>
 						{!compact &&
 							(showHiddenFiles ? <Eye className="w-3 h-3" /> : <EyeOff className="w-3 h-3" />)}
-						{showHiddenFiles ? 'Hide' : 'Show'}
+						Dotfiles
 					</button>
 					{/* Refresh */}
 					<button
