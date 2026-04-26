@@ -383,7 +383,7 @@ export function usePipelineCanvasCallbacks({
 					const suffix = Date.now().toString(36).slice(-5);
 					const ownerId = dropData.owningSessionId ?? '';
 					const commandData: CommandNodeData = {
-						name: `${targetPipeline.name}-cmd-${suffix}`,
+						name: `cmd-${suffix}`,
 						mode: 'shell',
 						shell: '',
 						owningSessionId: ownerId,

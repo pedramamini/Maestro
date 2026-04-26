@@ -329,32 +329,21 @@ export function CommandConfigPanel({
 						flexDirection: 'column',
 					}}
 				>
-					<label
+					<label style={themedLabelStyle}>Shell command</label>
+					<textarea
+						value={localShell}
+						onChange={handleShellChange}
+						placeholder="e.g. npm run lint -- {{CUE_FILE_PATH}}"
+						spellCheck={false}
 						style={{
-							...themedLabelStyle,
+							...themedInputStyle,
+							resize: 'vertical',
+							fontFamily: 'monospace',
+							lineHeight: 1.4,
 							flex: 1,
-							display: 'flex',
-							flexDirection: 'column',
-							minHeight: 0,
-							marginBottom: 0,
+							minHeight: 96,
 						}}
-					>
-						<span style={{ marginBottom: 4 }}>Shell command</span>
-						<textarea
-							value={localShell}
-							onChange={handleShellChange}
-							placeholder="e.g. npm run lint -- {{CUE_FILE_PATH}}"
-							spellCheck={false}
-							style={{
-								...themedInputStyle,
-								resize: 'vertical',
-								fontFamily: 'monospace',
-								lineHeight: 1.4,
-								flex: 1,
-								minHeight: 96,
-							}}
-						/>
-					</label>
+					/>
 					<div
 						style={{
 							color: theme.colors.textDim,

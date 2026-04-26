@@ -17,6 +17,13 @@ export type { CueCommand, CueCommandMode, CueEventType } from './cue';
 /** Cue brand color — single source of truth for all Cue UI */
 export const CUE_COLOR = '#06b6d4';
 
+/**
+ * Accent color used for command nodes in the pipeline canvas. Distinct from
+ * the per-pipeline palette so commands read as "infrastructure" alongside
+ * agents, which carry their pipeline color.
+ */
+export const COMMAND_NODE_COLOR = '#64748b';
+
 /** 12 visually distinct colors suitable for dark backgrounds */
 export const PIPELINE_COLORS: string[] = [
 	'#06b6d4', // cyan
