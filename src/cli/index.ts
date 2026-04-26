@@ -3,8 +3,6 @@
 // Command-line interface for Maestro
 
 import { Command } from 'commander';
-import * as fs from 'fs';
-import * as path from 'path';
 import { listGroups } from './commands/list-groups';
 import { listAgents } from './commands/list-agents';
 import { listPlaybooks } from './commands/list-playbooks';
@@ -41,21 +39,15 @@ import {
 } from './commands/settings-agent';
 import { promptsGet, promptsList } from './commands/prompts-get';
 
-// Read version from package.json at runtime
-function getVersion(): string {
-	try {
-		// When bundled, __dirname points to dist/cli, so go up to project root
-		const packagePath = path.resolve(__dirname, '../../package.json');
-		const packageJson = JSON.parse(fs.readFileSync(packagePath, 'utf-8'));
-		return packageJson.version;
-	} catch {
-		return '0.0.0';
-	}
-}
+// Injected at build time by scripts/build-cli.mjs via esbuild `define`
+declare const __MAESTRO_CLI_VERSION__: string;
 
 const program = new Command();
 
-program.name('maestro-cli').description('Command-line interface for Maestro').version(getVersion());
+program
+	.name('maestro-cli')
+	.description('Command-line interface for Maestro')
+	.version(__MAESTRO_CLI_VERSION__);
 
 // List commands
 const list = program.command('list').description('List resources');
