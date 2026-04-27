@@ -775,6 +775,66 @@ describe('handleStartBatchRun — worktree dispatch integration', () => {
 			expect(deps.startBatchRun.mock.calls[0][0]).toBe('wt-existing');
 		});
 
+		it('aborts dispatch when reused session is busy or connecting', async () => {
+			const session = createMockSession();
+			const deps = createMockDeps();
+
+			// Existing worktree session is mid-run (state === 'busy').
+			const busyChild = {
+				...session,
+				id: 'wt-busy',
+				cwd: '/projects/other/feat',
+				projectRoot: '/projects/other/feat',
+				worktreeBranch: 'feat',
+				parentSessionId: session.id,
+				state: 'busy',
+			};
+			useSessionStore.setState({
+				sessions: [session, busyChild as any],
+				activeSessionId: session.id,
+			} as any);
+
+			vi.mocked(window.maestro.git.worktreeSetup).mockResolvedValue({
+				success: true,
+				created: false,
+				alreadyExisted: true,
+				existingPath: '/projects/other/feat',
+				currentBranch: 'feat',
+				requestedBranch: 'feat',
+				branchMismatch: false,
+			});
+			vi.mocked(gitService.getBranches).mockResolvedValue(['main']);
+
+			const config: BatchRunConfig = {
+				documents: baseDocuments,
+				prompt: 'Go',
+				loopEnabled: false,
+				worktreeTarget: {
+					mode: 'create-new',
+					newBranchName: 'feat',
+					baseBranch: 'main',
+					createPROnCompletion: false,
+				},
+			};
+
+			const { result } = renderHook(() => useAutoRunHandlers(session, deps));
+
+			await act(async () => {
+				await result.current.handleStartBatchRun(config);
+			});
+
+			// No dispatch — busy guard fired.
+			expect(deps.startBatchRun).not.toHaveBeenCalled();
+			expect(notifyToast).toHaveBeenCalledWith(
+				expect.objectContaining({
+					type: 'warning',
+					title: 'Target Agent Busy',
+				})
+			);
+			// No new session built either.
+			expect(useSessionStore.getState().sessions.length).toBe(2);
+		});
+
 		it('reuses existing session via projectRoot match even when child cwd has drifted into a subdir', async () => {
 			const session = createMockSession();
 			const deps = createMockDeps();

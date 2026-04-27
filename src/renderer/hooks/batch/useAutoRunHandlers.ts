@@ -201,6 +201,18 @@ async function spawnWorktreeAgentAndDispatch(
 
 	let dispatchSessionId: string;
 	if (existingSession) {
+		// Mirror the existing-open guard (handleStartBatchRun line ~392): refuse
+		// to dispatch onto an in-flight agent. Without this, a recovery into a
+		// busy worktree session silently queues the batch on top of an active
+		// run.
+		if (existingSession.state === 'busy' || existingSession.state === 'connecting') {
+			notifyToast({
+				type: 'warning',
+				title: 'Target Agent Busy',
+				message: 'Existing worktree agent is busy. Please try again.',
+			});
+			return null;
+		}
 		dispatchSessionId = existingSession.id;
 	} else {
 		// Step 4: Build the session
