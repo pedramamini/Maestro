@@ -379,7 +379,7 @@ describe('TabBar', () => {
 
 			expect(activeButton).toHaveClass('bg-bg-main');
 			// Active tab never applies the inactive hover tint class.
-			expect(activeButton.className).not.toMatch(/hover:bg-white/);
+			expect(activeButton).not.toHaveClass('hover:bg-text-main/[0.08]');
 
 			fireEvent.mouseEnter(activeButton);
 			expect(activeButton).toHaveClass('bg-bg-main');
