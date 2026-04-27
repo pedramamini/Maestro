@@ -422,6 +422,7 @@ describe('persistence IPC handlers', () => {
 				groupEmoji: null,
 				parentSessionId: null,
 				worktreeBranch: null,
+				autoRunFolderPath: null,
 			});
 		});
 

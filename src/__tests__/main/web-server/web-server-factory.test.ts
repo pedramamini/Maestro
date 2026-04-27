@@ -45,6 +45,7 @@ vi.mock('../../../main/web-server/WebServer', () => {
 			setRefreshFileTreeCallback = vi.fn();
 			setRefreshAutoRunDocsCallback = vi.fn();
 			setConfigureAutoRunCallback = vi.fn();
+			setSessionAutoRunFolderCallback = vi.fn();
 			setGetAutoRunDocsCallback = vi.fn();
 			setGetAutoRunDocContentCallback = vi.fn();
 			setSaveAutoRunDocCallback = vi.fn();
