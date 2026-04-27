@@ -568,7 +568,7 @@ export function useRemoteIntegration(deps: UseRemoteIntegrationDeps): UseRemoteI
 	// enabling click-to-jump behavior.
 	useEffect(() => {
 		const unsubscribe = window.maestro.process.onRemoteNotifyToast((params) => {
-			const { title, message, toastType, duration, sessionId } = params;
+			const { title, message, color, duration, dismissible, sessionId } = params;
 			let project: string | undefined;
 			let tabId: string | undefined;
 			let tabName: string | undefined;
@@ -580,10 +580,11 @@ export function useRemoteIntegration(deps: UseRemoteIntegrationDeps): UseRemoteI
 				tabName = activeTab?.name ?? undefined;
 			}
 			notifyToast({
-				type: toastType,
+				color,
 				title,
 				message,
 				duration: duration !== undefined ? duration * 1000 : undefined,
+				dismissible,
 				sessionId,
 				tabId,
 				tabName,
@@ -601,7 +602,7 @@ export function useRemoteIntegration(deps: UseRemoteIntegrationDeps): UseRemoteI
 			notifyCenterFlash({
 				message: params.message,
 				detail: params.detail,
-				variant: params.variant,
+				color: params.color,
 				duration: params.duration,
 			});
 		});

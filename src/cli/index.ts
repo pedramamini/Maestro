@@ -426,11 +426,20 @@ const notify = program
 
 notify
 	.command('toast <title> <message>')
-	.description('Show a toast notification (queued, persistent until dismissed)')
-	.option('-t, --type <type>', 'success | info | warning | error (default: info)')
+	.description('Show a toast notification (queued, click X or icon to dismiss)')
+	.option('-c, --color <color>', 'green | yellow | orange | red | theme (default: theme)')
+	.option('-t, --type <type>', '[deprecated] success | info | warning | error — prefer --color')
+	.option(
+		'--timeout <seconds>',
+		'Auto-dismiss after N seconds (range: (0, 60]; wins over --duration)'
+	)
 	.option(
 		'-d, --duration <seconds>',
-		'Auto-dismiss after N seconds (0 = never dismiss; omitted = use app default)'
+		'Auto-dismiss after N seconds (range: (0, 60]; omitted = app default)'
+	)
+	.option(
+		'--dismissible',
+		'Sticky toast — no auto-dismiss; user must click to close. Cannot combine with --timeout/--duration'
 	)
 	.option('-a, --agent <id>', 'Associate with an agent so clicking jumps to it')
 	.option('--json', 'Output as JSON (for scripting)')
@@ -439,9 +448,17 @@ notify
 notify
 	.command('flash <message>')
 	.description('Show a center-screen flash (momentary, exclusive — replaces any active flash)')
-	.option('-v, --variant <variant>', 'success | info | warning | error (default: success)')
+	.option('-c, --color <color>', 'green | yellow | orange | red | theme (default: theme)')
+	.option(
+		'-v, --variant <variant>',
+		'[deprecated] success | info | warning | error — prefer --color'
+	)
 	.option('-D, --detail <text>', 'Optional second line shown beneath the message')
-	.option('-d, --duration <ms>', 'Auto-dismiss after N ms (default: 1500; 0 = never)')
+	.option(
+		'-t, --timeout <seconds>',
+		'Auto-dismiss after N seconds (range: (0, 5]; default 1.5; wins over --duration)'
+	)
+	.option('-d, --duration <ms>', 'Auto-dismiss after N ms (range: (0, 5000]; default 1500)')
 	.option('--json', 'Output as JSON (for scripting)')
 	.action(notifyFlash);
 

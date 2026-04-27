@@ -313,15 +313,44 @@ export type RefreshAutoRunDocsCallback = (sessionId: string) => Promise<boolean>
  * Toast = persistent dismissable notification (queued).
  * CenterFlash = momentary single-slot center-screen confirmation.
  */
+
+/**
+ * Five canonical colors shared by Toast and Center Flash (one design language).
+ * `theme` adapts to the active theme.
+ *
+ *   green  - succeeded
+ *   yellow - heads-up / soft warning
+ *   orange - more emphatic warning
+ *   red    - failed / blocked
+ *   theme  - default; matches the active theme's accent color (no semantic)
+ */
+export type NotifyCenterFlashColor = 'green' | 'yellow' | 'orange' | 'red' | 'theme';
+export type NotifyToastColor = NotifyCenterFlashColor;
+
+/**
+ * @deprecated Legacy semantic alias. Prefer `NotifyToastColor`.
+ *   success → green, info → theme, warning → yellow, error → red
+ */
 export type NotifyToastKind = 'success' | 'info' | 'warning' | 'error';
+
+/**
+ * @deprecated Legacy semantic alias. Prefer `NotifyCenterFlashColor`.
+ *   success → green, info → theme, warning → yellow, error → red
+ */
 export type NotifyCenterFlashVariant = 'success' | 'info' | 'warning' | 'error';
 
 export interface NotifyToastParams {
 	title: string;
 	message: string;
-	toastType: NotifyToastKind;
-	/** Auto-dismiss seconds; 0 = never. Omitted = use app default. */
+	/** One of the 5 canonical colors. Default: `'theme'`. */
+	color: NotifyToastColor;
+	/** Auto-dismiss seconds; ignored when `dismissible: true`. */
 	duration?: number;
+	/**
+	 * Sticky toast — no auto-dismiss, requires the user to click the close
+	 * button to dismiss. Use for critical messages the user must acknowledge.
+	 */
+	dismissible?: boolean;
 	/** Optional agent/session ID — clicking the toast jumps to it. */
 	sessionId?: string;
 }
@@ -329,7 +358,8 @@ export interface NotifyToastParams {
 export interface NotifyCenterFlashParams {
 	message: string;
 	detail?: string;
-	variant: NotifyCenterFlashVariant;
+	/** One of the 5 canonical colors. Default: `'theme'`. */
+	color: NotifyCenterFlashColor;
 	/** Auto-dismiss ms; 0 = never. Omitted = renderer default (1500ms). */
 	duration?: number;
 }

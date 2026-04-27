@@ -301,8 +301,9 @@ interface MaestroAPI {
 			callback: (params: {
 				title: string;
 				message: string;
-				toastType: 'success' | 'info' | 'warning' | 'error';
+				color: 'green' | 'yellow' | 'orange' | 'red' | 'theme';
 				duration?: number;
+				dismissible?: boolean;
 				sessionId?: string;
 			}) => void
 		) => () => void;
@@ -310,7 +311,7 @@ interface MaestroAPI {
 			callback: (params: {
 				message: string;
 				detail?: string;
-				variant: 'success' | 'info' | 'warning' | 'error';
+				color: 'green' | 'yellow' | 'orange' | 'red' | 'theme';
 				duration?: number;
 			}) => void
 		) => () => void;

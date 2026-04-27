@@ -473,14 +473,17 @@ export function createProcessApi() {
 		},
 
 		/**
-		 * Subscribe to remote toast notifications from CLI/web interface
+		 * Subscribe to remote toast notifications from CLI/web interface.
+		 * Color is one of the 5 canonical Toast/Center Flash colors.
+		 * `dismissible: true` makes the toast sticky (no auto-dismiss, click-to-close).
 		 */
 		onRemoteNotifyToast: (
 			callback: (params: {
 				title: string;
 				message: string;
-				toastType: 'success' | 'info' | 'warning' | 'error';
+				color: 'green' | 'yellow' | 'orange' | 'red' | 'theme';
 				duration?: number;
+				dismissible?: boolean;
 				sessionId?: string;
 			}) => void
 		): (() => void) => {
@@ -490,13 +493,14 @@ export function createProcessApi() {
 		},
 
 		/**
-		 * Subscribe to remote center-flash notifications from CLI/web interface
+		 * Subscribe to remote center-flash notifications from CLI/web interface.
+		 * Color is one of the 5 canonical Center Flash colors.
 		 */
 		onRemoteNotifyCenterFlash: (
 			callback: (params: {
 				message: string;
 				detail?: string;
-				variant: 'success' | 'info' | 'warning' | 'error';
+				color: 'green' | 'yellow' | 'orange' | 'red' | 'theme';
 				duration?: number;
 			}) => void
 		): (() => void) => {
