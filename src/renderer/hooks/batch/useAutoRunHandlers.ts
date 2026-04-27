@@ -19,6 +19,20 @@ function normalizePath(p: string): string {
 }
 
 /**
+ * Match a session against a worktree root path. We check both `projectRoot`
+ * (the stable worktree root captured at session creation) and `cwd` (which
+ * may drift if the user `cd`s into a subdirectory of the worktree). Without
+ * the projectRoot fallback, a child session that has navigated into a subdir
+ * is missed and the recovery flow builds a duplicate session for the same
+ * worktree.
+ */
+function sessionMatchesWorktreeRoot(session: Session, normalizedRoot: string): boolean {
+	if (session.projectRoot && normalizePath(session.projectRoot) === normalizedRoot) return true;
+	if (session.cwd && normalizePath(session.cwd) === normalizedRoot) return true;
+	return false;
+}
+
+/**
  * Tree node structure for Auto Run document tree
  */
 export interface AutoRunTreeNode {
@@ -169,7 +183,7 @@ async function spawnWorktreeAgentAndDispatch(
 	const normalizedWorktreePath = normalizePath(worktreePath);
 	const existingSession = useSessionStore
 		.getState()
-		.sessions.find((s) => normalizePath(s.cwd) === normalizedWorktreePath);
+		.sessions.find((s) => sessionMatchesWorktreeRoot(s, normalizedWorktreePath));
 
 	// Step 3: Fetch git info for the worktree
 	let gitBranches: string[] | undefined;

@@ -91,8 +91,6 @@ async function findLocalWorktreeForBranch(
 	}
 }
 
-const isAlreadyUsedError = isWorktreeAlreadyUsedError;
-
 /**
  * Register all Git-related IPC handlers.
  *
@@ -718,7 +716,7 @@ export function registerGitHandlers(_deps: GitHandlerDependencies): void {
 					// already registered with another worktree on disk. Resolve that path
 					// from `git worktree list --porcelain` so the caller can open it.
 					const errMsg = createResult.stderr || '';
-					if (isAlreadyUsedError(errMsg)) {
+					if (isWorktreeAlreadyUsedError(errMsg)) {
 						const existingPath = await findLocalWorktreeForBranch(mainRepoCwd, branchName);
 						if (existingPath) {
 							return {

@@ -88,6 +88,20 @@ function normalizePath(p: string): string {
 	return p.replace(/\\/g, '/').replace(/\/+/g, '/').replace(/\/$/, '');
 }
 
+/**
+ * Match a session against a worktree root path. We check both `projectRoot`
+ * (the stable worktree root captured at session creation) and `cwd` (which
+ * may drift if the user `cd`s into a subdirectory of the worktree). Without
+ * the projectRoot fallback, a child session that has navigated into a subdir
+ * is missed and the recovery flow builds a duplicate session for the same
+ * worktree.
+ */
+function sessionMatchesWorktreeRoot(session: Session, normalizedRoot: string): boolean {
+	if (session.projectRoot && normalizePath(session.projectRoot) === normalizedRoot) return true;
+	if (session.cwd && normalizePath(session.cwd) === normalizedRoot) return true;
+	return false;
+}
+
 // buildWorktreeSession and BuildWorktreeSessionParams are imported from ../../utils/worktreeSession
 
 // ============================================================================
@@ -342,7 +356,7 @@ export function useWorktreeHandlers(): WorktreeHandlersReturn {
 					const normalizedActual = normalizePath(actualPath);
 					const existingSession = useSessionStore
 						.getState()
-						.sessions.find((s) => normalizePath(s.cwd) === normalizedActual);
+						.sessions.find((s) => sessionMatchesWorktreeRoot(s, normalizedActual));
 					if (existingSession) {
 						useSessionStore.getState().setActiveSessionId(existingSession.id);
 						notifyToast({
@@ -455,7 +469,7 @@ export function useWorktreeHandlers(): WorktreeHandlersReturn {
 				const normalizedActual = normalizePath(actualPath);
 				const existingSession = useSessionStore
 					.getState()
-					.sessions.find((s) => normalizePath(s.cwd) === normalizedActual);
+					.sessions.find((s) => sessionMatchesWorktreeRoot(s, normalizedActual));
 				if (existingSession) {
 					useSessionStore.getState().setActiveSessionId(existingSession.id);
 					notifyToast({
