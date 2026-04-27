@@ -477,4 +477,56 @@ describe('ResponsiveModal', () => {
 			expect(backdrop.style.zIndex).toBe('9000');
 		});
 	});
+
+	// Greptile P1: the desktop renderer's `LayerStack` provides scroll-lock
+	// for free; the web variant has to do it locally. Without this lock, the
+	// page underneath the modal scrolls behind the dim backdrop.
+	describe('body scroll lock', () => {
+		it('locks document.body overflow while open', () => {
+			document.body.style.overflow = '';
+			const { rerender } = render(
+				<ResponsiveModal isOpen={false} onClose={vi.fn()} title="Locked">
+					Body
+				</ResponsiveModal>
+			);
+			expect(document.body.style.overflow).toBe('');
+
+			rerender(
+				<ResponsiveModal isOpen onClose={vi.fn()} title="Locked">
+					Body
+				</ResponsiveModal>
+			);
+			expect(document.body.style.overflow).toBe('hidden');
+		});
+
+		it('restores the previous overflow value on close', () => {
+			document.body.style.overflow = 'auto';
+			const { rerender } = render(
+				<ResponsiveModal isOpen onClose={vi.fn()} title="Restore">
+					Body
+				</ResponsiveModal>
+			);
+			expect(document.body.style.overflow).toBe('hidden');
+
+			rerender(
+				<ResponsiveModal isOpen={false} onClose={vi.fn()} title="Restore">
+					Body
+				</ResponsiveModal>
+			);
+			expect(document.body.style.overflow).toBe('auto');
+		});
+
+		it('restores the previous overflow value on unmount', () => {
+			document.body.style.overflow = 'scroll';
+			const { unmount } = render(
+				<ResponsiveModal isOpen onClose={vi.fn()} title="Unmount">
+					Body
+				</ResponsiveModal>
+			);
+			expect(document.body.style.overflow).toBe('hidden');
+
+			unmount();
+			expect(document.body.style.overflow).toBe('scroll');
+		});
+	});
 });

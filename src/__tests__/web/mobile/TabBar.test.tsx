@@ -348,7 +348,7 @@ describe('TabBar', () => {
 			);
 			const inactiveButton = screen.getByText('Inactive').closest('button')!;
 
-			expect(inactiveButton).toHaveClass('hover:bg-white/[0.08]');
+			expect(inactiveButton).toHaveClass('hover:bg-text-main/[0.08]');
 			expect(inactiveButton).toHaveClass('bg-transparent');
 
 			// Mouse events must not mutate inline style — the Tailwind `hover:`

@@ -150,15 +150,20 @@ textarea::placeholder {
 }
 
 /* Larger tap targets for accessibility (44px minimum per Apple HIG).
-   Applied at all viewport widths so pointer, touch, and stylus input all
-   clear the same target-size floor. Phone-only rules (text-size-adjust,
-   overscroll, iOS 16px zoom-prevention) remain gated below. */
-button,
-a,
-input,
-select,
-textarea {
-	min-height: 44px;
+   The HIG figure applies to TOUCH targets, not pointer targets — applying
+   it universally on desktop forces every form control to 44px and overrides
+   intentionally compact variants (Input `sm` size, header `compact` mode,
+   etc.). Scope to coarse-pointer devices and narrow viewports so phones,
+   tablets, and stylus/touch laptops still clear the floor while desktop
+   pointers keep their compact spacing. */
+@media (pointer: coarse), (max-width: 599px) {
+	button,
+	a,
+	input,
+	select,
+	textarea {
+		min-height: 44px;
+	}
 }
 
 /* Mobile-specific styles */

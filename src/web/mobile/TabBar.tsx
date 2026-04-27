@@ -23,8 +23,13 @@ const TAB_BUTTON_BASE =
 const TAB_BUTTON_ACTIVE =
 	'z-[1] -mb-px border border-border border-b-bg-main bg-bg-main text-text-main font-semibold';
 
+// Hover uses `text-main` (theme-aware foreground) at low alpha rather than
+// hardcoded `white/*`, so the overlay actually reads on light themes
+// (white-over-white was near-invisible on `#ffffff`/`#f6f8fa`). On dark
+// themes `text-main` resolves to a near-white token so the visual is
+// equivalent to the previous behavior there.
 const TAB_BUTTON_INACTIVE =
-	'z-0 mb-0 border border-transparent bg-transparent text-text-dim font-normal hover:bg-white/[0.08]';
+	'z-0 mb-0 border border-transparent bg-transparent text-text-dim font-normal hover:bg-text-main/[0.08]';
 
 function tabButtonClasses(isActive: boolean, canClose: boolean): string {
 	// Reserve the `28px` close-button slot whenever the `×` can render so the
@@ -33,8 +38,11 @@ function tabButtonClasses(isActive: boolean, canClose: boolean): string {
 	return `${TAB_BUTTON_BASE} ${pr} ${isActive ? TAB_BUTTON_ACTIVE : TAB_BUTTON_INACTIVE}`;
 }
 
+// Same theme-aware reasoning as `TAB_BUTTON_INACTIVE` above — the previous
+// `bg-white/[0.15]` overlay was nearly imperceptible on light theme
+// backgrounds.
 const CLOSE_BUTTON_BASE =
-	'absolute right-1 top-1/2 -translate-y-1/2 flex items-center justify-center w-5 h-5 rounded p-0 text-xs text-text-dim bg-transparent transition-[background-color,color] duration-100 cursor-pointer z-[2] hover:text-text-main hover:bg-white/[0.15]';
+	'absolute right-1 top-1/2 -translate-y-1/2 flex items-center justify-center w-5 h-5 rounded p-0 text-xs text-text-dim bg-transparent transition-[background-color,color] duration-100 cursor-pointer z-[2] hover:text-text-main hover:bg-text-main/[0.15]';
 
 // Desktop-only (≥960px) hover reveal for inactive tabs. Close button stays in
 // the DOM so touch users at phone/tablet tiers can reach it; desktop hides it

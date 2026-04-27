@@ -41,7 +41,12 @@ export interface ResponsiveModalFooterProps {
 	confirmLabel?: string;
 	/** When true, confirm renders with the `danger` variant (error red). */
 	destructive?: boolean;
-	/** Ref attached to the confirm button — useful as the modal's initial focus target. */
+	/**
+	 * Ref attached to the confirm button — useful as the modal's initial
+	 * focus target. Matches Button's `forwardRef<HTMLButtonElement>` slot
+	 * (`@types/react` v18, where `useRef<HTMLButtonElement>(null)` returns
+	 * `RefObject<HTMLButtonElement>`).
+	 */
 	confirmButtonRef?: React.RefObject<HTMLButtonElement>;
 }
 

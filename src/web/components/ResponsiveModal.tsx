@@ -101,6 +101,21 @@ export function ResponsiveModal({
 		return () => cancelAnimationFrame(frame);
 	}, [isOpen]);
 
+	// Lock background scroll while the modal is visible. The desktop
+	// `Modal.tsx` gets this for free via the renderer's `LayerStack`; the
+	// web variant uses local Escape/focus handling, so we manage
+	// `document.body.style.overflow` ourselves. Restore the previous value
+	// on close so we play nicely with stacked modals.
+	useEffect(() => {
+		if (!isOpen) return;
+		if (typeof document === 'undefined') return;
+		const previous = document.body.style.overflow;
+		document.body.style.overflow = 'hidden';
+		return () => {
+			document.body.style.overflow = previous;
+		};
+	}, [isOpen]);
+
 	// Escape-to-close, attached globally while open so it works regardless of focus location.
 	useEffect(() => {
 		if (!isOpen) return;

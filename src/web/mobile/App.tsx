@@ -1448,8 +1448,13 @@ export default function MobileApp() {
 					message: event.message,
 					severity: event.severity,
 				});
-				setNotificationCount((prev) => prev + 1);
+				// Both the badge and the dropdown are keyed off `completedAgents`,
+				// so only count events that actually land somewhere in the UI.
+				// Counting non-completion events here used to make the badge
+				// number drift from the dropdown contents (warning/info events
+				// would silently inflate the count).
 				if (event.eventType === 'agent_complete' || event.eventType === 'agent_error') {
+					setNotificationCount((prev) => prev + 1);
 					setCompletedAgents((prev) =>
 						[
 							{
