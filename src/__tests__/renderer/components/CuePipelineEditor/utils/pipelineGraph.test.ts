@@ -508,7 +508,8 @@ describe('convertToReactFlowNodes', () => {
 			nodes: [makeTrigger('t1', 'time.heartbeat', {}, { x: 10, y: 30 })],
 		});
 		const nodes = convertToReactFlowNodes([pipeline], null);
-		expect(nodes[0].position).toEqual({ x: 10, y: 30 });
+		const t1 = nodes.find((n) => n.id === 'p1:t1')!;
+		expect(t1.position).toEqual({ x: 10, y: 30 });
 	});
 
 	it('does NOT apply y-offsets in selected pipeline view', () => {
@@ -532,8 +533,70 @@ describe('convertToReactFlowNodes', () => {
 		});
 		const nodes = convertToReactFlowNodes([pipeline], 'p1');
 		for (const node of nodes) {
+			// Pipeline-group backgrounds are not rendered in single-pipeline view,
+			// so every remaining node still expects the drag-handle class.
 			expect(node.dragHandle).toBe('.drag-handle');
 		}
+	});
+
+	// ── Pipeline-group background nodes (All Pipelines view) ────────────────
+
+	it('emits a pipeline-group background node per non-empty pipeline in All Pipelines view', () => {
+		const p1 = makePipeline('p1', {
+			color: '#aabbcc',
+			nodes: [makeTrigger('t1', 'time.heartbeat', {}, { x: 0, y: 0 })],
+		});
+		const p2 = makePipeline('p2', {
+			color: '#ddeeff',
+			nodes: [makeTrigger('t2', 'file.changed', {}, { x: 0, y: 0 })],
+		});
+		const nodes = convertToReactFlowNodes([p1, p2], null);
+		const groups = nodes.filter((n) => n.type === 'pipeline-group');
+		expect(groups).toHaveLength(2);
+		expect(groups.find((g) => g.id === 'pipeline-group:p1')).toBeDefined();
+		expect(groups.find((g) => g.id === 'pipeline-group:p2')).toBeDefined();
+		// Group nodes are non-interactive and behind the rest.
+		for (const g of groups) {
+			expect(g.selectable).toBe(false);
+			expect(g.draggable).toBe(false);
+			expect(g.zIndex).toBe(-1);
+		}
+	});
+
+	it('skips pipeline-group nodes for empty pipelines', () => {
+		const p1 = makePipeline('p1', {
+			nodes: [makeTrigger('t1', 'time.heartbeat')],
+		});
+		const p2 = makePipeline('p2', { nodes: [] });
+		const nodes = convertToReactFlowNodes([p1, p2], null);
+		const groups = nodes.filter((n) => n.type === 'pipeline-group');
+		expect(groups).toHaveLength(1);
+		expect(groups[0].id).toBe('pipeline-group:p1');
+	});
+
+	it('does NOT emit pipeline-group nodes in single-pipeline view', () => {
+		const p1 = makePipeline('p1', {
+			nodes: [makeTrigger('t1', 'time.heartbeat')],
+		});
+		const p2 = makePipeline('p2', {
+			nodes: [makeTrigger('t2', 'file.changed')],
+		});
+		const nodes = convertToReactFlowNodes([p1, p2], 'p1');
+		expect(nodes.some((n) => n.type === 'pipeline-group')).toBe(false);
+	});
+
+	it('pipeline-group node carries the pipeline color and name', () => {
+		const p1 = makePipeline('p1', {
+			color: '#ef4444',
+			nodes: [makeTrigger('t1', 'time.heartbeat', {}, { x: 100, y: 50 })],
+		});
+		const nodes = convertToReactFlowNodes([p1], null);
+		const group = nodes.find((n) => n.id === 'pipeline-group:p1')!;
+		expect(group).toBeDefined();
+		expect((group.data as { color: string }).color).toBe('#ef4444');
+		expect((group.data as { pipelineName: string }).pipelineName).toBe('Pipeline p1');
+		expect((group.data as { width: number }).width).toBeGreaterThan(0);
+		expect((group.data as { height: number }).height).toBeGreaterThan(0);
 	});
 });
 

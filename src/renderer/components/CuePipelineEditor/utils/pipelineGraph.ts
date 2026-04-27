@@ -18,6 +18,7 @@ import type { TriggerNodeDataProps } from '../nodes/TriggerNode';
 import type { AgentNodeDataProps } from '../nodes/AgentNode';
 import type { CommandNodeDataProps } from '../nodes/CommandNode';
 import type { ErrorNodeDataProps } from '../nodes/ErrorNode';
+import type { PipelineGroupNodeDataProps } from '../nodes/PipelineGroupNode';
 import type { PipelineEdgeData } from '../edges/PipelineEdge';
 
 /** Build the one-line summary shown under the command node's name. */
@@ -68,6 +69,13 @@ export function getTriggerConfigSummary(data: TriggerNodeData): string {
 
 const PIPELINE_GAP = 100; // px between pipeline groups
 const NODE_HEIGHT = 100; // approximate node height
+
+// Approximate node footprint used to compute the bounding box of the per-pipeline
+// translucent background card in All Pipelines view. Real nodes are a touch
+// narrower/shorter, so the box always fully encloses them.
+const NODE_BG_WIDTH = 320;
+const NODE_BG_HEIGHT = 100;
+const PIPELINE_GROUP_PADDING = 28;
 
 /**
  * Computes vertical offsets so pipeline groups don't overlap in the
@@ -145,6 +153,49 @@ export function convertToReactFlowNodes(
 	// During drag, use frozen offsets so the display stays consistent with the
 	// offsets subtracted in onNodesChange (prevents visual jump on drag end).
 	const pipelineYOffsets = frozenYOffsets ?? computePipelineYOffsets(pipelines, selectedPipelineId);
+
+	// In All Pipelines view, render a translucent color-matched background
+	// card behind each pipeline so the visual grouping is obvious. Pushed
+	// FIRST so they render under content nodes; zIndex -1 belt-and-braces
+	// in case ReactFlow decides to bump a selected node's stacking order.
+	if (selectedPipelineId === null) {
+		for (const pipeline of pipelines) {
+			if (pipeline.nodes.length === 0) continue;
+			const yOffset = pipelineYOffsets.get(pipeline.id) ?? 0;
+			let minX = Infinity;
+			let minY = Infinity;
+			let maxX = -Infinity;
+			let maxY = -Infinity;
+			for (const pNode of pipeline.nodes) {
+				const x = pNode.position.x;
+				const y = pNode.position.y + yOffset;
+				minX = Math.min(minX, x);
+				minY = Math.min(minY, y);
+				maxX = Math.max(maxX, x + NODE_BG_WIDTH);
+				maxY = Math.max(maxY, y + NODE_BG_HEIGHT);
+			}
+			const groupData: PipelineGroupNodeDataProps = {
+				pipelineName: pipeline.name,
+				color: pipeline.color,
+				width: maxX - minX + 2 * PIPELINE_GROUP_PADDING,
+				height: maxY - minY + 2 * PIPELINE_GROUP_PADDING,
+				theme,
+			};
+			nodes.push({
+				id: `pipeline-group:${pipeline.id}`,
+				type: 'pipeline-group',
+				position: {
+					x: minX - PIPELINE_GROUP_PADDING,
+					y: minY - PIPELINE_GROUP_PADDING,
+				},
+				data: groupData,
+				selectable: false,
+				draggable: false,
+				focusable: false,
+				zIndex: -1,
+			});
+		}
+	}
 
 	// First pass: compute all pipeline colors per agent session (for multi-color indicator)
 	const agentPipelineMap = new Map<string, string[]>();

@@ -26,7 +26,7 @@ import { usePipelineCanvasCallbacks } from '../../hooks/cue/usePipelineCanvasCal
 import { usePipelineKeyboard } from '../../hooks/cue/usePipelineKeyboard';
 import { usePipelineContextMenu } from '../../hooks/cue/usePipelineContextMenu';
 import { PipelineToolbar } from './PipelineToolbar';
-import { PipelineCanvas } from './PipelineCanvas';
+import { PipelineCanvas, type CanvasInteractionMode } from './PipelineCanvas';
 import { PipelineContextMenu } from './PipelineContextMenu';
 
 export { validatePipelines, DEFAULT_TRIGGER_LABELS } from '../../hooks/cue/usePipelineState';
@@ -71,6 +71,9 @@ function CuePipelineEditorInner({
 	// Local drawer state — consumed by multiple hooks and children
 	const [triggerDrawerOpen, setTriggerDrawerOpen] = useState(false);
 	const [agentDrawerOpen, setAgentDrawerOpen] = useState(false);
+
+	// Canvas interaction mode: hand (pan on drag) vs pointer (box-select on drag).
+	const [interactionMode, setInteractionMode] = useState<CanvasInteractionMode>('hand');
 
 	// Selection bridge: usePipelineState needs selection IDs for its mutation
 	// callbacks, but usePipelineSelection needs pipelineState. We resolve the
@@ -439,6 +442,8 @@ function CuePipelineEditorInner({
 				isDirty={isDirty}
 				runningPipelineIds={runningPipelineIds}
 				isLoading={graphLoading || !pipelinesLoaded}
+				interactionMode={interactionMode}
+				setInteractionMode={setInteractionMode}
 			/>
 
 			{contextMenu && (

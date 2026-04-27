@@ -30,10 +30,12 @@ import type {
 	IncomingAgentEdgeInfo,
 } from '../../../shared/cue-pipeline-types';
 import type { CueSettings } from '../../../shared/cue';
+import { Hand, MousePointer2 } from 'lucide-react';
 import { TriggerNode, type TriggerNodeDataProps } from './nodes/TriggerNode';
 import { AgentNode, type AgentNodeDataProps } from './nodes/AgentNode';
 import { CommandNode, type CommandNodeDataProps } from './nodes/CommandNode';
 import { ErrorNode } from './nodes/ErrorNode';
+import { PipelineGroupNode } from './nodes/PipelineGroupNode';
 import { edgeTypes } from './edges/PipelineEdge';
 import { TriggerDrawer } from './drawers/TriggerDrawer';
 import { AgentDrawer } from './drawers/AgentDrawer';
@@ -49,7 +51,10 @@ const nodeTypes = {
 	agent: AgentNode,
 	command: CommandNode,
 	error: ErrorNode,
+	'pipeline-group': PipelineGroupNode,
 };
+
+export type CanvasInteractionMode = 'hand' | 'pointer';
 
 export interface PipelineCanvasProps {
 	theme: Theme;
@@ -130,6 +135,9 @@ export interface PipelineCanvasProps {
 	 * "Create your first pipeline" message doesn't flash before pipelines arrive.
 	 */
 	isLoading?: boolean;
+	/** Canvas interaction mode: hand pans on left-drag, pointer box-selects. */
+	interactionMode: CanvasInteractionMode;
+	setInteractionMode: React.Dispatch<React.SetStateAction<CanvasInteractionMode>>;
 }
 
 export const PipelineCanvas = React.memo(function PipelineCanvas({
@@ -187,6 +195,8 @@ export const PipelineCanvas = React.memo(function PipelineCanvas({
 	isDirty,
 	runningPipelineIds,
 	isLoading = false,
+	interactionMode,
+	setInteractionMode,
 }: PipelineCanvasProps) {
 	const handleCueSettingsChange = React.useCallback(
 		(s: CueSettings) => {
@@ -243,6 +253,11 @@ export const PipelineCanvas = React.memo(function PipelineCanvas({
 				nodesDraggable={!isReadOnly}
 				nodesConnectable={!isReadOnly}
 				elementsSelectable={!isReadOnly}
+				// Hand mode: left-drag pans (ReactFlow default). Pointer mode:
+				// left-drag box-selects, middle/right-drag still pans as an
+				// escape hatch.
+				panOnDrag={interactionMode === 'hand' ? true : [1, 2]}
+				selectionOnDrag={interactionMode === 'pointer' && !isReadOnly}
 				style={{
 					backgroundColor: theme.colors.bgMain,
 				}}
@@ -302,6 +317,61 @@ export const PipelineCanvas = React.memo(function PipelineCanvas({
 				selectPipeline={selectPipeline}
 				theme={theme}
 			/>
+
+			{/* Canvas interaction-mode toggle (hand pans, pointer box-selects). */}
+			<div
+				style={{
+					position: 'absolute',
+					top: 8,
+					left: 8,
+					zIndex: 10,
+					display: 'flex',
+					gap: 2,
+					padding: 2,
+					backgroundColor: `${theme.colors.bgActivity}f5`,
+					border: `1px solid ${theme.colors.border}`,
+					borderRadius: 6,
+				}}
+			>
+				{(
+					[
+						{ mode: 'hand' as const, Icon: Hand, title: 'Pan (left-drag to move canvas)' },
+						{
+							mode: 'pointer' as const,
+							Icon: MousePointer2,
+							title: 'Select (left-drag for bounding box)',
+						},
+					] satisfies {
+						mode: CanvasInteractionMode;
+						Icon: typeof Hand;
+						title: string;
+					}[]
+				).map(({ mode, Icon, title }) => {
+					const active = interactionMode === mode;
+					return (
+						<button
+							key={mode}
+							onClick={() => setInteractionMode(mode)}
+							title={title}
+							style={{
+								display: 'flex',
+								alignItems: 'center',
+								justifyContent: 'center',
+								width: 24,
+								height: 24,
+								backgroundColor: active ? `${theme.colors.accent}25` : 'transparent',
+								color: active ? theme.colors.accent : theme.colors.textDim,
+								border: 'none',
+								borderRadius: 4,
+								cursor: 'pointer',
+								transition: 'background-color 0.15s, color 0.15s',
+							}}
+						>
+							<Icon size={14} />
+						</button>
+					);
+				})}
+			</div>
 
 			{/* Cue settings panel */}
 			{showSettings && (
