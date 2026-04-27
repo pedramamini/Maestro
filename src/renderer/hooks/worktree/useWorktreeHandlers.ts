@@ -24,7 +24,11 @@ import { useSettingsStore } from '../../stores/settingsStore';
 import { gitService } from '../../services/git';
 import { notifyToast } from '../../stores/notificationStore';
 import { buildWorktreeSession } from '../../utils/worktreeSession';
-import { isRecentlyCreatedWorktreePath } from '../../utils/worktreeDedup';
+import {
+	isRecentlyCreatedWorktreePath,
+	normalizePath,
+	sessionMatchesWorktreeRoot,
+} from '../../utils/worktreeDedup';
 import { logger } from '../../utils/logger';
 
 // ============================================================================
@@ -83,26 +87,8 @@ function isSkippableBranch(branch: string | null | undefined): boolean {
 	return branch === 'main' || branch === 'master' || branch === 'HEAD';
 }
 
-/** Normalize file path for comparison: convert backslashes to forward slashes, collapse duplicate slashes, and remove trailing slash. */
-function normalizePath(p: string): string {
-	return p.replace(/\\/g, '/').replace(/\/+/g, '/').replace(/\/$/, '');
-}
-
-/**
- * Match a session against a worktree root path. We check both `projectRoot`
- * (the stable worktree root captured at session creation) and `cwd` (which
- * may drift if the user `cd`s into a subdirectory of the worktree). Without
- * the projectRoot fallback, a child session that has navigated into a subdir
- * is missed and the recovery flow builds a duplicate session for the same
- * worktree.
- */
-function sessionMatchesWorktreeRoot(session: Session, normalizedRoot: string): boolean {
-	if (session.projectRoot && normalizePath(session.projectRoot) === normalizedRoot) return true;
-	if (session.cwd && normalizePath(session.cwd) === normalizedRoot) return true;
-	return false;
-}
-
 // buildWorktreeSession and BuildWorktreeSessionParams are imported from ../../utils/worktreeSession
+// normalizePath and sessionMatchesWorktreeRoot are imported from ../../utils/worktreeDedup
 
 // ============================================================================
 // Hook
