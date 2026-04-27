@@ -459,6 +459,82 @@ describe('FileExplorerPanel', () => {
 		});
 	});
 
+	describe('Find Button (#759)', () => {
+		it('opens the filter input when clicked while closed', () => {
+			render(<FileExplorerPanel {...defaultProps} fileTreeFilterOpen={false} />);
+			fireEvent.click(screen.getByText('Find'));
+			expect(defaultProps.setFileTreeFilterOpen).toHaveBeenCalledWith(true);
+		});
+
+		it('closes the filter input when clicked while open and empty', () => {
+			render(<FileExplorerPanel {...defaultProps} fileTreeFilterOpen={true} fileTreeFilter="" />);
+			fireEvent.click(screen.getByText('Find'));
+			expect(defaultProps.setFileTreeFilterOpen).toHaveBeenCalledWith(false);
+		});
+
+		it('does not close the filter input when it has a query', () => {
+			render(
+				<FileExplorerPanel {...defaultProps} fileTreeFilterOpen={true} fileTreeFilter="src" />
+			);
+			fireEvent.click(screen.getByText('Find'));
+			expect(defaultProps.setFileTreeFilterOpen).not.toHaveBeenCalledWith(false);
+		});
+	});
+
+	describe('Dotfiles Toggle (#757)', () => {
+		it('hides .maestro when showHiddenFiles is false', () => {
+			const treeWithMaestro = [
+				{ name: '.maestro', type: 'folder' as const, children: [] },
+				{ name: '.git', type: 'folder' as const, children: [] },
+				{ name: 'src', type: 'folder' as const, children: [] },
+			];
+			render(
+				<FileExplorerPanel
+					{...defaultProps}
+					showHiddenFiles={false}
+					filteredFileTree={treeWithMaestro}
+				/>
+			);
+			expect(screen.queryByText('.maestro')).not.toBeInTheDocument();
+			expect(screen.queryByText('.git')).not.toBeInTheDocument();
+			expect(screen.getByText('src')).toBeInTheDocument();
+		});
+
+		it('shows .maestro when showHiddenFiles is true', () => {
+			const treeWithMaestro = [
+				{ name: '.maestro', type: 'folder' as const, children: [] },
+				{ name: 'src', type: 'folder' as const, children: [] },
+			];
+			render(
+				<FileExplorerPanel
+					{...defaultProps}
+					showHiddenFiles={true}
+					filteredFileTree={treeWithMaestro}
+				/>
+			);
+			expect(screen.getByText('.maestro')).toBeInTheDocument();
+			expect(screen.getByText('src')).toBeInTheDocument();
+		});
+
+		it('renders the toggle button labeled "Dotfiles"', () => {
+			render(<FileExplorerPanel {...defaultProps} showHiddenFiles={false} />);
+			expect(screen.getByText('Dotfiles')).toBeInTheDocument();
+			expect(screen.getByTitle('Show dotfiles')).toBeInTheDocument();
+		});
+
+		it('exposes a "Hide dotfiles" tooltip while dotfiles are shown', () => {
+			render(<FileExplorerPanel {...defaultProps} showHiddenFiles={true} />);
+			expect(screen.getByText('Dotfiles')).toBeInTheDocument();
+			expect(screen.getByTitle('Hide dotfiles')).toBeInTheDocument();
+		});
+
+		it('toggles showHiddenFiles when clicked', () => {
+			render(<FileExplorerPanel {...defaultProps} showHiddenFiles={false} />);
+			fireEvent.click(screen.getByText('Dotfiles'));
+			expect(defaultProps.setShowHiddenFiles).toHaveBeenCalledWith(true);
+		});
+	});
+
 	describe('Refresh Button', () => {
 		it('shows default title when no auto-refresh', () => {
 			render(<FileExplorerPanel {...defaultProps} />);
@@ -1012,6 +1088,25 @@ describe('FileExplorerPanel', () => {
 
 			expect(defaultProps.setSelectedFileIndex).toHaveBeenCalled();
 			expect(defaultProps.setActiveFocus).toHaveBeenCalledWith('right');
+		});
+
+		it('sets selectedFileIndex and activeFocus when clicking a folder (#768)', () => {
+			render(<FileExplorerPanel {...defaultProps} />);
+			const folder = screen.getByText('src');
+			fireEvent.click(folder);
+
+			expect(defaultProps.setSelectedFileIndex).toHaveBeenCalled();
+			expect(defaultProps.setActiveFocus).toHaveBeenCalledWith('right');
+			expect(defaultProps.toggleFolder).toHaveBeenCalled();
+		});
+
+		it('does not change focus when clicking a folder while filtering', () => {
+			render(<FileExplorerPanel {...defaultProps} fileTreeFilter="src" />);
+			const folder = screen.getByText('src');
+			fireEvent.click(folder);
+
+			expect(defaultProps.setSelectedFileIndex).toHaveBeenCalled();
+			expect(defaultProps.setActiveFocus).not.toHaveBeenCalled();
 		});
 
 		it('calls handleFileClick on double-click of file', async () => {
