@@ -3170,6 +3170,9 @@ export default function MobileApp() {
 					onOpenSetup={handleAutoRunOpenSetup}
 					sendRequest={sendRequest}
 					send={send}
+					onResumeAfterError={handleAutoRunResume}
+					onSkipAfterError={handleAutoRunSkipDocument}
+					onAbortAfterError={handleAutoRunAbort}
 				/>
 			)}
 
