@@ -1889,7 +1889,7 @@ describe('QuickActionsModal', () => {
 			expect(idleIdx).toBeGreaterThan(liveIdx);
 		});
 
-		it('renders only IDLE header when no agents are running', () => {
+		it('suppresses both headers when all agents are idle (single bucket)', () => {
 			const props = createDefaultProps({
 				initialMode: 'agents',
 				sessions: [
@@ -1900,11 +1900,13 @@ describe('QuickActionsModal', () => {
 			render(<QuickActionsModal {...props} />);
 
 			const dialog = screen.getByRole('dialog');
-			expect(dialog.textContent).toContain('IDLE');
-			expect(dialog.textContent).not.toContain('LIVE');
+			const headers = dialog.querySelectorAll('div[aria-hidden="true"]');
+			const headerTexts = Array.from(headers).map((h) => h.textContent?.trim() ?? '');
+			expect(headerTexts).not.toContain('LIVE');
+			expect(headerTexts).not.toContain('IDLE');
 		});
 
-		it('renders only LIVE header when all agents are running', () => {
+		it('suppresses both headers when all agents are running (single bucket)', () => {
 			const props = createDefaultProps({
 				initialMode: 'agents',
 				sessions: [
@@ -1915,8 +1917,10 @@ describe('QuickActionsModal', () => {
 			render(<QuickActionsModal {...props} />);
 
 			const dialog = screen.getByRole('dialog');
-			expect(dialog.textContent).toContain('LIVE');
-			expect(dialog.textContent).not.toContain('IDLE');
+			const headers = dialog.querySelectorAll('div[aria-hidden="true"]');
+			const headerTexts = Array.from(headers).map((h) => h.textContent?.trim() ?? '');
+			expect(headerTexts).not.toContain('LIVE');
+			expect(headerTexts).not.toContain('IDLE');
 		});
 
 		it('does not render LIVE/IDLE headers in main mode', () => {

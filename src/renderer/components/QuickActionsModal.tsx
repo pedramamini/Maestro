@@ -1948,6 +1948,13 @@ export const QuickActionsModal = memo(function QuickActionsModal(props: QuickAct
 	const filteredRef = useRef(filtered);
 	filteredRef.current = filtered;
 
+	// LIVE/IDLE bucket headers only earn their pixels in agents mode when both
+	// buckets are present — a single-bucket list doesn't need a label above it.
+	const showBucketHeaders =
+		mode === 'agents' &&
+		filtered.some((a) => a.isRunningAgent === true) &&
+		filtered.some((a) => a.isRunningAgent === false);
+
 	// Callback for when an item is selected (by Enter key or number hotkey)
 	const handleSelectByIndex = useCallback(
 		(index: number) => {
@@ -2098,11 +2105,12 @@ export const QuickActionsModal = memo(function QuickActionsModal(props: QuickAct
 
 							// In agents mode, show LIVE / IDLE section headers above the first running
 							// and first idle rows so the two buckets are easy to tell apart at a glance.
+							// Only render when both buckets exist (see `showBucketHeaders` above).
 							const prev = i > 0 ? filtered[i - 1] : null;
 							const isFirstRunning =
-								mode === 'agents' && a.isRunningAgent === true && prev?.isRunningAgent !== true;
+								showBucketHeaders && a.isRunningAgent === true && prev?.isRunningAgent !== true;
 							const isFirstIdle =
-								mode === 'agents' && a.isRunningAgent === false && prev?.isRunningAgent !== false;
+								showBucketHeaders && a.isRunningAgent === false && prev?.isRunningAgent !== false;
 
 							return (
 								<React.Fragment key={a.id}>
