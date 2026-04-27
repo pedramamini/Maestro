@@ -91,6 +91,18 @@ Error codes: `AGENT_NOT_FOUND`, `AGENT_UNSUPPORTED`, `CLAUDE_NOT_FOUND`, `CODEX_
 
 Supported agent types: `claude-code`, `codex`.
 
+#### Messages that start with a dash
+
+Messages whose first character is a dash (em-dash `—`, en-dash `–`, double-dash `--`, minus `-`) collide with option parsing and will be rejected as unknown flags. Use the standard `--` end-of-options separator so the message is passed verbatim:
+
+```bash
+maestro-cli send <agent-id> -- "———revise the spec"
+maestro-cli send <agent-id> -s <session-id> -- "--re-run"
+maestro-cli dispatch <agent-id> -- "--force the rewrite"
+```
+
+Everything after `--` is treated as positional, so any flags you need (`-s`, `-r`, `-t`, `--new-tab`, `-f`) must come before the separator.
+
 ### Dispatching to a Desktop Tab
 
 `dispatch` hands a prompt to an agent in the running Maestro desktop app and returns the tab/session id, so callers can address the same tab on follow-up calls without holding a persistent channel. It replaces `send --live` for orchestration use cases (Cue pipelines, external bots, multi-step automations).

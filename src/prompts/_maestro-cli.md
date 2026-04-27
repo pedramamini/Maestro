@@ -129,6 +129,18 @@ Output (always JSON; `sessionId` and `tabId` are duplicates of the same value, k
 
 Error codes: `INVALID_OPTIONS`, `AGENT_NOT_FOUND`, `FORCE_NOT_ALLOWED`, `MAESTRO_NOT_RUNNING`, `SESSION_NOT_FOUND`, `NEW_TAB_NO_ID`, `COMMAND_FAILED`. `NEW_TAB_NO_ID` fires when the desktop acks `--new-tab` without returning a tab id, leaving nothing to chain follow-up dispatches against. Requires the desktop app to be running.
 
+#### Messages that start with a dash
+
+Messages whose first character is a dash (em-dash `—`, en-dash `–`, double-dash `--`, minus `-`) collide with option parsing and will be rejected as unknown flags. Use the standard `--` end-of-options separator so the message is passed verbatim:
+
+```bash
+{{MAESTRO_CLI_PATH}} send <agent-id> -- "———revise the spec"
+{{MAESTRO_CLI_PATH}} send <agent-id> -s <session-id> -- "--re-run"
+{{MAESTRO_CLI_PATH}} dispatch <agent-id> -- "--force the rewrite"
+```
+
+Everything after `--` is treated as positional, so any flags (`-s`, `-r`, `-t`, `--new-tab`, `-f`) must come before the separator.
+
 ### Resource Listing and Inspection
 
 ```bash
