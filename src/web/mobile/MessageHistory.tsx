@@ -57,19 +57,29 @@ const formatTime = (timestamp: number) => formatTimestamp(timestamp, 'smart');
 /**
  * Summarize tool input for display (simplified from desktop TerminalOutput)
  */
-function summarizeToolInput(input: Record<string, unknown>): string {
+function summarizeToolInput(input: unknown): string {
+	// Some agents (notably Copilot/Codex apply_patch) deliver the argument as a
+	// raw string instead of an object \u2014 surface it as-is rather than walking it
+	// with Object.keys (which would expose character indices).
+	if (typeof input === 'string') {
+		return input.length > 80 ? input.substring(0, 80) + '\u2026' : input;
+	}
+	if (!input || typeof input !== 'object' || Array.isArray(input)) {
+		return '';
+	}
+	const inputRecord = input as Record<string, unknown>;
 	// File operations
-	if (typeof input.file_path === 'string') return input.file_path;
-	if (typeof input.path === 'string') return input.path;
+	if (typeof inputRecord.file_path === 'string') return inputRecord.file_path;
+	if (typeof inputRecord.path === 'string') return inputRecord.path;
 	// Bash commands
-	if (typeof input.command === 'string') {
-		const cmd = input.command as string;
+	if (typeof inputRecord.command === 'string') {
+		const cmd = inputRecord.command;
 		return cmd.length > 80 ? cmd.substring(0, 80) + '\u2026' : cmd;
 	}
 	// Search operations
-	if (typeof input.pattern === 'string') return `/${input.pattern}/`;
+	if (typeof inputRecord.pattern === 'string') return `/${inputRecord.pattern}/`;
 	// Fallback
-	const keys = Object.keys(input);
+	const keys = Object.keys(inputRecord);
 	if (keys.length === 0) return '';
 	return keys.slice(0, 2).join(', ');
 }
@@ -279,10 +289,9 @@ export function MessageHistory({
 
 					// Tool entries render as compact inline cards
 					if (source === 'tool') {
-						const toolInput = entry.metadata?.toolState?.input as
-							| Record<string, unknown>
-							| undefined;
-						const toolDetail = toolInput ? summarizeToolInput(toolInput) : null;
+						const toolInput = entry.metadata?.toolState?.input;
+						const toolDetail =
+							toolInput !== undefined && toolInput !== null ? summarizeToolInput(toolInput) : null;
 
 						return (
 							<div

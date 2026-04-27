@@ -124,6 +124,12 @@ export interface PipelineCanvasProps {
 	isDirty?: boolean;
 	/** Set of pipeline IDs that are currently running */
 	runningPipelineIds?: Set<string>;
+	/**
+	 * True while pipelines are still loading (initial graph fetch in flight or
+	 * layout restore not yet complete). Suppresses the empty-state CTA so the
+	 * "Create your first pipeline" message doesn't flash before pipelines arrive.
+	 */
+	isLoading?: boolean;
 }
 
 export const PipelineCanvas = React.memo(function PipelineCanvas({
@@ -180,6 +186,7 @@ export const PipelineCanvas = React.memo(function PipelineCanvas({
 	onTriggerPipeline,
 	isDirty,
 	runningPipelineIds,
+	isLoading = false,
 }: PipelineCanvasProps) {
 	const handleCueSettingsChange = React.useCallback(
 		(s: CueSettings) => {
@@ -208,6 +215,7 @@ export const PipelineCanvas = React.memo(function PipelineCanvas({
 				createPipeline={createPipeline}
 				setTriggerDrawerOpen={setTriggerDrawerOpen}
 				setAgentDrawerOpen={setAgentDrawerOpen}
+				isLoading={isLoading}
 			/>
 
 			{/* React Flow Canvas */}

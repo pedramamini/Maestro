@@ -48,6 +48,10 @@ export interface CuePipelineEditorProps {
 	/** Pre-select a specific pipeline when navigating from "View in Pipeline".
 	 *  Nonce ensures repeated clicks on the same pipeline re-trigger selection. */
 	initialPipelineId?: { id: string | null; nonce: string };
+	/** True while the initial graph-data fetch is in flight. Combined with the
+	 *  hook's own pipeline-restore state to render a loading spinner instead of
+	 *  flashing the "Create your first pipeline" CTA before pipelines arrive. */
+	graphLoading?: boolean;
 }
 
 function CuePipelineEditorInner({
@@ -60,6 +64,7 @@ function CuePipelineEditorInner({
 	onTriggerPipeline,
 	onSaveSuccess,
 	initialPipelineId,
+	graphLoading = false,
 }: CuePipelineEditorProps) {
 	const reactFlowInstance = useReactFlow();
 
@@ -156,6 +161,7 @@ function CuePipelineEditorInner({
 		runningSubscriptionsByPipeline,
 		persistLayout,
 		pendingSavedViewportRef,
+		pipelinesLoaded,
 		handleSave,
 		handleDiscard,
 		createPipeline,
@@ -432,6 +438,7 @@ function CuePipelineEditorInner({
 				onTriggerPipeline={onTriggerPipeline}
 				isDirty={isDirty}
 				runningPipelineIds={runningPipelineIds}
+				isLoading={graphLoading || !pipelinesLoaded}
 			/>
 
 			{contextMenu && (
