@@ -1945,6 +1945,7 @@ export class WebSocketMessageHandler {
 		'audioFeedbackEnabled',
 		'colorBlindMode',
 		'conductorProfile',
+		'maxOutputLines',
 	]);
 
 	/**

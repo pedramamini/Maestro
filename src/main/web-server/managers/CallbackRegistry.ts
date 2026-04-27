@@ -385,6 +385,7 @@ export class CallbackRegistry {
 			audioFeedbackEnabled: false,
 			colorBlindMode: 'false',
 			conductorProfile: '',
+			maxOutputLines: null,
 			shortcuts: {},
 		};
 	}
