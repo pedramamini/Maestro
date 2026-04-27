@@ -4,10 +4,7 @@
 import { spawn, SpawnOptions, ChildProcess } from 'child_process';
 import * as fs from 'fs';
 import type { AgentSshRemoteConfig, ToolType, UsageStats } from '../../shared/types';
-import type { AgentOutputParser } from '../../main/parsers/agent-output-parser';
-import { CodexOutputParser } from '../../main/parsers/codex-output-parser';
-import { OpenCodeOutputParser } from '../../main/parsers/opencode-output-parser';
-import { FactoryDroidOutputParser } from '../../main/parsers/factory-droid-output-parser';
+import { createOutputParser } from '../../main/parsers/parser-factory';
 import { aggregateModelUsage } from '../../main/parsers/usage-aggregator';
 import { getAgentDefinition } from '../../main/agents/definitions';
 import { hasCapability } from '../../main/agents/capabilities';
@@ -549,20 +546,6 @@ function mergeUsageStats(
 	return merged;
 }
 
-/** Create the appropriate output parser for a given agent type */
-function createParser(toolType: ToolType): AgentOutputParser {
-	switch (toolType) {
-		case 'codex':
-			return new CodexOutputParser();
-		case 'opencode':
-			return new OpenCodeOutputParser();
-		case 'factory-droid':
-			return new FactoryDroidOutputParser();
-		default:
-			throw new Error(`No parser available for agent type: ${toolType}`);
-	}
-}
-
 /**
  * Generic spawner for agents that use JSON line output parsed via AgentOutputParser.
  * Handles Codex, OpenCode, Factory Droid, and any future agents with the same pattern.
@@ -632,8 +615,16 @@ async function spawnJsonLineAgent(
 
 	const noPromptSeparator = !!def?.noPromptSeparator;
 
-	// Local prompt embedding mirrors wrapSpawnWithSsh's default behavior
-	const localArgs = noPromptSeparator ? [...baseArgs, prompt] : [...baseArgs, '--', prompt];
+	// Local prompt embedding mirrors wrapSpawnWithSsh's default behavior.
+	// Mirror ChildProcessSpawner's precedence so agents like Copilot/Gemini
+	// that ship a `promptArgs` builder (e.g. ['-p', prompt]) get the prompt
+	// via their flag instead of the bare '--' separator (which Copilot CLI
+	// doesn't accept as a positional prompt).
+	const localArgs = def?.promptArgs
+		? [...baseArgs, ...def.promptArgs(prompt)]
+		: noPromptSeparator
+			? [...baseArgs, prompt]
+			: [...baseArgs, '--', prompt];
 
 	const agentCommand = getAgentCommand(toolType);
 
@@ -653,6 +644,7 @@ async function spawnJsonLineAgent(
 				customEnvVars: buildSshEnvForRemote(def, readOnlyMode, userCustomEnvVars),
 				agentBinaryName: def?.binaryName,
 				noPromptSeparator,
+				promptArgs: def?.promptArgs,
 			},
 			sshRemoteConfig
 		);
@@ -660,6 +652,14 @@ async function spawnJsonLineAgent(
 			return sshUnresolvedFailure(sshRemoteConfig);
 		}
 		({ spawnCommand, spawnArgs, spawnCwd, spawnEnv, sshStdinScript } = applySshWrapResult(wrapped));
+	}
+
+	// Resolve the output parser before spawning so a misconfigured agent type
+	// fails fast instead of leaving an orphaned child process. Reviewer flagged
+	// the previous post-spawn null-check as a process leak (greptile P1).
+	const parser = createOutputParser(toolType);
+	if (!parser) {
+		return { success: false, error: `No parser available for agent type: ${toolType}` };
 	}
 
 	return new Promise((resolve) => {
@@ -671,7 +671,6 @@ async function spawnJsonLineAgent(
 
 		const child = spawn(spawnCommand, spawnArgs, options);
 
-		const parser = createParser(toolType);
 		let jsonBuffer = '';
 		let result: string | undefined;
 		let sessionId: string | undefined;
