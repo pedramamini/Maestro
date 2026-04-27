@@ -34,12 +34,20 @@ vi.mock('../../../../renderer/stores/notificationStore', async () => {
 	return { ...actual, notifyToast: vi.fn() };
 });
 
-// Mock worktreeDedup
-vi.mock('../../../../renderer/utils/worktreeDedup', () => ({
-	markWorktreePathAsRecentlyCreated: vi.fn(),
-	clearRecentlyCreatedWorktreePath: vi.fn(),
-	isRecentlyCreatedWorktreePath: vi.fn().mockReturnValue(false),
-}));
+// Mock worktreeDedup — stub the side-effecting Set helpers, but keep the
+// pure path-matching helpers (normalizePath, sessionMatchesWorktreeRoot) real
+// so the hook's lookup logic actually runs against the test fixtures.
+vi.mock('../../../../renderer/utils/worktreeDedup', async () => {
+	const actual = await vi.importActual<typeof import('../../../../renderer/utils/worktreeDedup')>(
+		'../../../../renderer/utils/worktreeDedup'
+	);
+	return {
+		...actual,
+		markWorktreePathAsRecentlyCreated: vi.fn(),
+		clearRecentlyCreatedWorktreePath: vi.fn(),
+		isRecentlyCreatedWorktreePath: vi.fn().mockReturnValue(false),
+	};
+});
 
 import { gitService } from '../../../../renderer/services/git';
 import { notifyToast } from '../../../../renderer/stores/notificationStore';
