@@ -85,12 +85,20 @@ export function useRemoteIntegration(deps: UseRemoteIntegrationDeps): UseRemoteI
 				tabId?: string,
 				force?: boolean
 			) => {
+				// Log metadata only at info level — remote commands can carry
+				// secrets, proprietary code, or PII. Mirror the redaction the
+				// main process applies in web-server-factory; the truncated
+				// preview moves to debug, which only opted-in users enable.
 				logger.info('[useRemoteIntegration] onRemoteCommand callback invoked:', undefined, {
 					sessionId,
-					command: command?.substring(0, 50),
+					commandLength: command?.length ?? 0,
 					inputMode,
 					tabId,
 					force,
+				});
+				logger.debug('[useRemoteIntegration] onRemoteCommand preview:', undefined, {
+					sessionId,
+					commandPreview: command?.substring(0, 50),
 				});
 
 				// Verify the session exists
@@ -148,11 +156,16 @@ export function useRemoteIntegration(deps: UseRemoteIntegrationDeps): UseRemoteI
 				// Pass the inputMode from web so handleRemoteCommand uses it
 				logger.info('[useRemoteIntegration] Dispatching maestro:remoteCommand event:', undefined, {
 					sessionId,
-					command: command?.substring(0, 50),
+					commandLength: command?.length ?? 0,
 					inputMode,
 					tabId,
 					force,
 				});
+				logger.debug(
+					'[useRemoteIntegration] Dispatching maestro:remoteCommand preview:',
+					undefined,
+					{ sessionId, commandPreview: command?.substring(0, 50) }
+				);
 				window.dispatchEvent(
 					new CustomEvent('maestro:remoteCommand', {
 						detail: { sessionId, command, inputMode, tabId, force },

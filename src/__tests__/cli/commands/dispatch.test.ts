@@ -117,6 +117,41 @@ describe('dispatch command', () => {
 			expect(output.tabId).toBe('tab-fresh-42');
 			expect(output.sessionId).toBe('tab-fresh-42');
 		});
+
+		it('emits NEW_TAB_NO_ID when the desktop acks --new-tab without a tabId', async () => {
+			// --new-tab's contract is to surface a fresh tab id for chaining.
+			// If the desktop omits it (older build / race), we must fail loudly
+			// with a dedicated code rather than returning `tabId: null` from a
+			// "successful" response — downstream consumers (Maestro-Discord,
+			// Cue) need to distinguish this from a generic command failure.
+			vi.mocked(resolveAgentId).mockReturnValue('agent-abc-123');
+			const mockSendCommand = vi.fn().mockResolvedValue({
+				type: 'new_ai_tab_with_prompt_result',
+				success: true,
+			});
+			vi.mocked(withMaestroClient).mockImplementation(async (action) => {
+				const mockClient = { sendCommand: mockSendCommand };
+				return action(mockClient as never);
+			});
+
+			await dispatch('agent-abc', 'Open a new conversation', { newTab: true });
+
+			const output = JSON.parse(consoleSpy.mock.calls[0][0]);
+			expect(output.success).toBe(false);
+			expect(output.code).toBe('NEW_TAB_NO_ID');
+			expect(processExitSpy).toHaveBeenCalledWith(1);
+		});
+
+		it('rejects --new-tab combined with --force as INVALID_OPTIONS (a new tab is never busy)', async () => {
+			await dispatch('agent-abc', 'Hello', { newTab: true, force: true });
+
+			const output = JSON.parse(consoleSpy.mock.calls[0][0]);
+			expect(output.success).toBe(false);
+			expect(output.code).toBe('INVALID_OPTIONS');
+			expect(output.error).toContain('--new-tab cannot be combined with --force');
+			expect(processExitSpy).toHaveBeenCalledWith(1);
+			expect(withMaestroClient).not.toHaveBeenCalled();
+		});
 	});
 
 	describe('--session <tabId> flow', () => {

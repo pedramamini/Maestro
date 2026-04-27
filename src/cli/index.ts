@@ -183,7 +183,7 @@ program
 	)
 	.option(
 		'-f, --force',
-		'Bypass the busy-state guard when writing to a busy tab; requires allowConcurrentSend'
+		'Bypass the busy-state guard when writing to a busy tab; requires allowConcurrentSend (cannot be combined with --new-tab — a fresh tab is never busy)'
 	)
 	.action(dispatch);
 

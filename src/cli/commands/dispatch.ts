@@ -47,6 +47,18 @@ export async function runDispatch(
 		};
 	}
 
+	// `--new-tab --force` is meaningless — a freshly created tab can never be
+	// busy, so the bypass-busy semantics of --force don't apply. Reject the
+	// combo rather than silently ignoring --force, which would mismatch the
+	// help text and confuse callers debugging why nothing is being bypassed.
+	if (options.newTab && options.force) {
+		return {
+			success: false,
+			error: '--new-tab cannot be combined with --force (a new tab is never busy)',
+			code: 'INVALID_OPTIONS',
+		};
+	}
+
 	// --force is gated by the `allowConcurrentSend` setting. It's off by default
 	// because concurrent writes can interleave responses in the target tab.
 	if (options.force) {
@@ -78,6 +90,15 @@ export async function runDispatch(
 					{ type: 'new_ai_tab_with_prompt', sessionId: agentId, prompt: message },
 					'new_ai_tab_with_prompt_result'
 				);
+				// `--new-tab`'s sole purpose is to surface a fresh tab id for
+				// chaining (`dispatch --session <tabId>`). If the desktop acked
+				// without one (older build / race), fail loudly with a dedicated
+				// code so consumers (Maestro-Discord, Cue) can distinguish this
+				// from a generic command failure instead of silently returning
+				// `tabId: null` from a "successful" response.
+				if (!result.tabId) {
+					throw new Error('NEW_TAB_NO_ID: new_ai_tab_with_prompt acknowledged without a tabId');
+				}
 				return result.tabId;
 			}
 			const result = await client.sendCommand<{ tabId?: string }>(
@@ -139,6 +160,14 @@ export async function runDispatch(
 				success: false,
 				error: `Session not found: ${agentId}`,
 				code: 'SESSION_NOT_FOUND',
+			};
+		}
+		if (msg.startsWith('NEW_TAB_NO_ID:')) {
+			return {
+				success: false,
+				error:
+					'Maestro desktop acknowledged --new-tab without returning a tab id (cannot chain dispatch)',
+				code: 'NEW_TAB_NO_ID',
 			};
 		}
 		return {
