@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { Minimize2, X } from 'lucide-react';
+import { Maximize2, X } from 'lucide-react';
 import type { Session, Theme } from '../types';
 import { MODAL_PRIORITIES } from '../constants/modalPriorities';
 import { Modal } from './ui/Modal';
@@ -188,7 +188,7 @@ export function FeedbackModal({ theme, sessions, onClose, onSwitchToSession }: F
 									color={theme.colors.textDim}
 									title="Minimize (keeps your draft)"
 								>
-									<Minimize2 className="w-4 h-4" />
+									<Maximize2 className="w-4 h-4" />
 								</GhostIconButton>
 								<GhostIconButton
 									onClick={handleCloseRequest}
