@@ -60,6 +60,9 @@ export function createCueApi() {
 		getActivityLog: (limit?: number): Promise<CueRunResult[]> =>
 			ipcRenderer.invoke('cue:getActivityLog', { limit }),
 
+		// Lifetime count of Cue events (dashboard stats)
+		getEventCount: (): Promise<number> => ipcRenderer.invoke('cue:getEventCount'),
+
 		// Enable the Cue engine (runtime control)
 		enable: (): Promise<void> => ipcRenderer.invoke('cue:enable'),
 

@@ -107,6 +107,14 @@ export function registerCueHandlers(deps: CueHandlerDependencies): void {
 		)
 	);
 
+	// Get lifetime count of Cue events (dashboard stats card)
+	ipcMain.handle(
+		'cue:getEventCount',
+		withIpcErrorLogging(handlerOpts('getEventCount'), async (): Promise<number> => {
+			return requireEngine().getEventCount();
+		})
+	);
+
 	// Enable the Cue engine (runtime control)
 	ipcMain.handle(
 		'cue:enable',

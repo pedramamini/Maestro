@@ -15,6 +15,7 @@ const mockGetStatus = vi.fn();
 const mockGetActiveRuns = vi.fn();
 const mockGetActivityLog = vi.fn();
 const mockGetQueueStatus = vi.fn();
+const mockGetEventCount = vi.fn();
 const mockEnable = vi.fn();
 const mockDisable = vi.fn();
 const mockStopRun = vi.fn();
@@ -39,6 +40,7 @@ beforeEach(() => {
 	mockGetActiveRuns.mockResolvedValue([]);
 	mockGetActivityLog.mockResolvedValue([]);
 	mockGetQueueStatus.mockResolvedValue({});
+	mockGetEventCount.mockResolvedValue(0);
 	mockEnable.mockResolvedValue(undefined);
 	mockDisable.mockResolvedValue(undefined);
 	mockStopRun.mockResolvedValue(true);
@@ -52,6 +54,7 @@ beforeEach(() => {
 			getActiveRuns: mockGetActiveRuns,
 			getActivityLog: mockGetActivityLog,
 			getQueueStatus: mockGetQueueStatus,
+			getEventCount: mockGetEventCount,
 			enable: mockEnable,
 			disable: mockDisable,
 			stopRun: mockStopRun,

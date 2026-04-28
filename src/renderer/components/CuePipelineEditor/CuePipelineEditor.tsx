@@ -443,6 +443,7 @@ function CuePipelineEditorInner({
 				onUpdateNode={onUpdateNode}
 				onUpdateEdgePrompt={onUpdateEdgePrompt}
 				onDeleteNode={onDeleteNode}
+				onCloseNodeConfig={() => setSelectedNodeId(null)}
 				onSwitchToSession={onSwitchToSession}
 				triggerDrawerOpenForConfig={triggerDrawerOpen}
 				agentDrawerOpenForConfig={agentDrawerOpen}

@@ -31,6 +31,7 @@ import { useCueGraphData } from '../../hooks/cue/useCueGraphData';
 import { useCueToggle } from '../../hooks/cue/useCueToggle';
 import { CueModalHeader, type CueModalTab } from './CueModalHeader';
 import { CueDashboard } from './CueDashboard';
+import { ActivityLog } from './ActivityLog';
 
 export interface CueModalProps {
 	theme: Theme;
@@ -47,6 +48,7 @@ export function CueModal({ theme, onClose, cueShortcutKeys }: CueModalProps) {
 		activeRuns,
 		activityLog,
 		queueStatus,
+		eventCount,
 		loading,
 		error,
 		enable,
@@ -106,7 +108,7 @@ export function CueModal({ theme, onClose, cueShortcutKeys }: CueModalProps) {
 
 	// Read initial tab from modal data (e.g., when navigating from YAML editor)
 	const cueModalData = useModalStore(selectModalData('cueModal'));
-	const [activeTab, setActiveTab] = useState<CueModalTab>(cueModalData?.initialTab ?? 'pipeline');
+	const [activeTab, setActiveTab] = useState<CueModalTab>(cueModalData?.initialTab ?? 'dashboard');
 
 	// Graph data (owned by hook: fetch on mount + tab change, cancellation race guard, refreshGraphData)
 	const {
@@ -270,11 +272,11 @@ export function CueModal({ theme, onClose, cueShortcutKeys }: CueModalProps) {
 									onRetry={handleRetry}
 									sessions={sessions}
 									activeRuns={activeRuns}
-									activityLog={activityLog}
 									queueStatus={queueStatus}
 									graphSessions={graphSessions}
 									dashboardPipelines={dashboardPipelines}
 									subscriptionPipelineMap={subscriptionPipelineMap}
+									executionCount={eventCount}
 									activeRunsExpanded={activeRunsExpanded}
 									setActiveRunsExpanded={setActiveRunsExpanded}
 									onViewInPipeline={handleViewInPipeline}
@@ -283,6 +285,14 @@ export function CueModal({ theme, onClose, cueShortcutKeys }: CueModalProps) {
 									onTriggerSubscription={triggerSubscription}
 									onStopRun={stopRun}
 									onStopAll={stopAll}
+								/>
+							</div>
+						) : activeTab === 'activity' ? (
+							<div className="flex-1 min-h-0 px-5 py-4">
+								<ActivityLog
+									log={activityLog}
+									theme={theme}
+									subscriptionPipelineMap={subscriptionPipelineMap}
 								/>
 							</div>
 						) : (

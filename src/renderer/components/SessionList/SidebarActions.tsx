@@ -1,5 +1,5 @@
 import { memo } from 'react';
-import { PanelLeftClose, PanelLeftOpen, Bell, Bot, MessageSquarePlus, Pencil } from 'lucide-react';
+import { PanelLeftClose, PanelLeftOpen, Bell, Bot, MessageSquarePlus } from 'lucide-react';
 import type { Theme, Shortcut } from '../../types';
 import { formatShortcutKeys } from '../../utils/shortcutFormatter';
 import { useFeedbackDraftStore } from '../../stores/feedbackDraftStore';
@@ -94,16 +94,13 @@ export const SidebarActions = memo(function SidebarActions({
 						</button>
 						{feedbackMinimized && (
 							<span
-								className="pointer-events-none absolute -top-1.5 -right-1.5 flex items-center justify-center w-5 h-5 rounded-full"
+								className="pointer-events-none absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full"
 								style={{
-									backgroundColor: theme.colors.textMain,
-									color: theme.colors.accent,
-									boxShadow: `0 0 0 2px ${theme.colors.bgSidebar}`,
+									backgroundColor: '#ef4444',
+									boxShadow: `0 0 0 1.5px ${theme.colors.bgSidebar}`,
 								}}
 								aria-label="Feedback draft in progress"
-							>
-								<Pencil className="w-3 h-3" strokeWidth={2.5} />
-							</span>
+							/>
 						)}
 					</div>
 				</div>

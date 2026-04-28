@@ -3111,6 +3111,7 @@ interface MaestroAPI {
 		getGraphData: () => Promise<CueGraphSession[]>;
 		getActiveRuns: () => Promise<CueRunResult[]>;
 		getActivityLog: (limit?: number) => Promise<CueRunResult[]>;
+		getEventCount: () => Promise<number>;
 		enable: () => Promise<void>;
 		disable: () => Promise<void>;
 		stopRun: (runId: string) => Promise<boolean>;

@@ -101,6 +101,7 @@ const defaultUseCueReturn = {
 	activeRuns: [],
 	activityLog: [],
 	queueStatus: {} as Record<string, number>,
+	eventCount: 0,
 	loading: false,
 	enable: mockEnable,
 	disable: mockDisable,
@@ -309,7 +310,7 @@ describe('CueModal', () => {
 	describe('activity log', () => {
 		it('should show "No activity yet" when empty', () => {
 			render(<CueModal theme={mockTheme} onClose={mockOnClose} />);
-			fireEvent.click(screen.getByText('Dashboard'));
+			fireEvent.click(screen.getByText('Activity Log'));
 
 			expect(screen.getByText('No activity yet')).toBeInTheDocument();
 		});
@@ -321,7 +322,7 @@ describe('CueModal', () => {
 			};
 
 			render(<CueModal theme={mockTheme} onClose={mockOnClose} />);
-			fireEvent.click(screen.getByText('Dashboard'));
+			fireEvent.click(screen.getByText('Activity Log'));
 
 			expect(screen.getByText(/completed in 5s/)).toBeInTheDocument();
 		});
@@ -333,7 +334,7 @@ describe('CueModal', () => {
 			};
 
 			render(<CueModal theme={mockTheme} onClose={mockOnClose} />);
-			fireEvent.click(screen.getByText('Dashboard'));
+			fireEvent.click(screen.getByText('Activity Log'));
 
 			expect(screen.getByText(/failed/)).toBeInTheDocument();
 		});
@@ -385,12 +386,12 @@ describe('CueModal', () => {
 			expect(screen.getByText('Pipeline Editor')).toBeInTheDocument();
 		});
 
-		it('should show Pipeline Editor content by default', () => {
+		it('should show Dashboard content by default', () => {
 			render(<CueModal theme={mockTheme} onClose={mockOnClose} />);
 
-			expect(screen.getByTestId('cue-pipeline-editor')).toBeInTheDocument();
-			// Dashboard content should not be visible by default
-			expect(screen.queryByText('Sessions with Cue')).not.toBeInTheDocument();
+			expect(screen.getByText('Sessions with Cue')).toBeInTheDocument();
+			// Pipeline Editor content should not be visible by default
+			expect(screen.queryByTestId('cue-pipeline-editor')).not.toBeInTheDocument();
 		});
 
 		it('should switch to dashboard when Dashboard tab is clicked', () => {
@@ -590,7 +591,7 @@ describe('CueModal', () => {
 			};
 
 			render(<CueModal theme={mockTheme} onClose={mockOnClose} />);
-			fireEvent.click(screen.getByText('Dashboard'));
+			fireEvent.click(screen.getByText('Activity Log'));
 
 			expect(screen.getByText(/completed in 5s/)).toBeInTheDocument();
 		});

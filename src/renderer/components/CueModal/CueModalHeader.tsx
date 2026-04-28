@@ -7,11 +7,11 @@
  */
 
 import { memo } from 'react';
-import { X, Zap, HelpCircle, LayoutDashboard, GitFork, ArrowLeft } from 'lucide-react';
+import { X, Zap, HelpCircle, LayoutDashboard, GitFork, ArrowLeft, Activity } from 'lucide-react';
 import type { Theme } from '../../types';
 import { CUE_COLOR } from '../../../shared/cue-pipeline-types';
 
-export type CueModalTab = 'dashboard' | 'pipeline';
+export type CueModalTab = 'dashboard' | 'pipeline' | 'activity';
 
 export interface CueModalHeaderProps {
 	theme: Theme;
@@ -93,6 +93,17 @@ function CueModalHeaderInner({
 							>
 								<GitFork className="w-3.5 h-3.5" />
 								Pipeline Editor
+							</button>
+							<button
+								onClick={() => setActiveTab('activity')}
+								className="flex items-center gap-1.5 px-3 py-1 rounded text-xs font-medium transition-colors"
+								style={{
+									backgroundColor: activeTab === 'activity' ? theme.colors.bgMain : 'transparent',
+									color: activeTab === 'activity' ? theme.colors.textMain : theme.colors.textDim,
+								}}
+							>
+								<Activity className="w-3.5 h-3.5" />
+								Activity Log
 							</button>
 						</div>
 					</>

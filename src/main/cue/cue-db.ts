@@ -296,6 +296,17 @@ export function safeUpdateCueEventStatus(id: string, status: string): void {
 }
 
 /**
+ * Count all Cue events in the journal — lifetime total used by the dashboard.
+ * Returns 0 if the database isn't initialized yet so the UI can render the
+ * stats row before the engine boots, instead of throwing.
+ */
+export function countCueEvents(): number {
+	if (!db) return 0;
+	const row = db.prepare(`SELECT COUNT(*) AS c FROM cue_events`).get() as { c: number } | undefined;
+	return row?.c ?? 0;
+}
+
+/**
  * Retrieve recent Cue events created after a given timestamp.
  */
 export function getRecentCueEvents(since: number, limit?: number): CueEventRecord[] {

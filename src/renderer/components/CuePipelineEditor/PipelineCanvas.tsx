@@ -117,6 +117,8 @@ export interface PipelineCanvasProps {
 	) => void;
 	onUpdateEdgePrompt: (edgeId: string, prompt: string) => void;
 	onDeleteNode: (nodeId: string) => void;
+	/** Dismiss the node config panel by clearing the selection. */
+	onCloseNodeConfig?: () => void;
 	onSwitchToSession: (id: string) => void;
 	triggerDrawerOpenForConfig: boolean;
 	agentDrawerOpenForConfig: boolean;
@@ -187,6 +189,7 @@ export const PipelineCanvas = React.memo(function PipelineCanvas({
 	onUpdateNode,
 	onUpdateEdgePrompt,
 	onDeleteNode,
+	onCloseNodeConfig,
 	onSwitchToSession,
 	triggerDrawerOpenForConfig,
 	agentDrawerOpenForConfig,
@@ -211,6 +214,50 @@ export const PipelineCanvas = React.memo(function PipelineCanvas({
 	);
 
 	const handleCloseCueSettings = React.useCallback(() => setShowSettings(false), [setShowSettings]);
+
+	// Stabilize ReactFlow child props on `theme`. PipelineCanvas re-renders on
+	// every node drag / pan / zoom (it owns `nodes` and `edges`), so inline
+	// objects/functions here would bust the memoization on MiniMap, Controls,
+	// and Background — producing both wasted renders and a flood of WDYR logs.
+	const reactFlowStyle = React.useMemo(
+		() => ({ backgroundColor: theme.colors.bgMain }),
+		[theme.colors.bgMain]
+	);
+	const controlsStyle = React.useMemo(
+		() => ({ backgroundColor: theme.colors.bgActivity, borderColor: theme.colors.border }),
+		[theme.colors.bgActivity, theme.colors.border]
+	);
+	const miniMapStyle = React.useMemo(
+		() => ({
+			backgroundColor: theme.colors.bgActivity,
+			border: `1px solid ${theme.colors.border}`,
+		}),
+		[theme.colors.bgActivity, theme.colors.border]
+	);
+	const miniMapMaskColor = React.useMemo(() => `${theme.colors.bgMain}cc`, [theme.colors.bgMain]);
+	const miniMapNodeColor = React.useCallback(
+		(node: Node) => {
+			if (node.type === 'trigger') {
+				const data = node.data as TriggerNodeDataProps;
+				return EVENT_COLORS[data.eventType] ?? theme.colors.accent;
+			}
+			if (node.type === 'agent') {
+				const data = node.data as AgentNodeDataProps;
+				return data.pipelineColor ?? theme.colors.accent;
+			}
+			if (node.type === 'command') {
+				const data = node.data as CommandNodeDataProps;
+				return data.pipelineColor ?? theme.colors.accent;
+			}
+			// Error nodes (unresolved agent/source) stand out in the
+			// minimap so the user spots them when zoomed out.
+			if (node.type === 'error') {
+				return theme.colors.error ?? '#ef4444';
+			}
+			return theme.colors.accent;
+		},
+		[theme.colors.accent, theme.colors.error]
+	);
 
 	return (
 		<div className="flex-1 relative overflow-hidden">
@@ -266,45 +313,16 @@ export const PipelineCanvas = React.memo(function PipelineCanvas({
 				// escape hatch.
 				panOnDrag={interactionMode === 'hand' ? true : [1, 2]}
 				selectionOnDrag={interactionMode === 'pointer' && !isReadOnly}
-				style={{
-					backgroundColor: theme.colors.bgMain,
-				}}
+				style={reactFlowStyle}
 			>
 				<Background color={theme.colors.border} gap={20} />
-				<Controls
-					style={{
-						backgroundColor: theme.colors.bgActivity,
-						borderColor: theme.colors.border,
-					}}
-				/>
+				<Controls style={controlsStyle} />
 				<MiniMap
 					pannable
 					zoomable
-					style={{
-						backgroundColor: theme.colors.bgActivity,
-						border: `1px solid ${theme.colors.border}`,
-					}}
-					maskColor={`${theme.colors.bgMain}cc`}
-					nodeColor={(node) => {
-						if (node.type === 'trigger') {
-							const data = node.data as TriggerNodeDataProps;
-							return EVENT_COLORS[data.eventType] ?? theme.colors.accent;
-						}
-						if (node.type === 'agent') {
-							const data = node.data as AgentNodeDataProps;
-							return data.pipelineColor ?? theme.colors.accent;
-						}
-						if (node.type === 'command') {
-							const data = node.data as CommandNodeDataProps;
-							return data.pipelineColor ?? theme.colors.accent;
-						}
-						// Error nodes (unresolved agent/source) stand out in the
-						// minimap so the user spots them when zoomed out.
-						if (node.type === 'error') {
-							return theme.colors.error ?? '#ef4444';
-						}
-						return theme.colors.accent;
-					}}
+					style={miniMapStyle}
+					maskColor={miniMapMaskColor}
+					nodeColor={miniMapNodeColor}
 				/>
 			</ReactFlow>
 
@@ -420,6 +438,7 @@ export const PipelineCanvas = React.memo(function PipelineCanvas({
 							onUpdateEdge={onUpdateEdge}
 							onUpdateEdgePrompt={onUpdateEdgePrompt}
 							onDeleteNode={onDeleteNode}
+							onClose={onCloseNodeConfig}
 							onSwitchToAgent={onSwitchToSession}
 							triggerDrawerOpen={triggerDrawerOpenForConfig}
 							agentDrawerOpen={agentDrawerOpenForConfig}

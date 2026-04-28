@@ -289,7 +289,7 @@ describe('TemplateAutocompleteDropdown', () => {
 			);
 
 			const dropdown = container.firstChild as HTMLElement;
-			expect(dropdown).toHaveStyle({ minWidth: '280px', maxWidth: '380px' });
+			expect(dropdown).toHaveStyle({ minWidth: '17.5rem', maxWidth: '23.75rem' });
 		});
 
 		it('has scrollable content area', () => {

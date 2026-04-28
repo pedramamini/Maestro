@@ -59,7 +59,7 @@ import { createCueRecoveryService, type CueRecoveryService } from './cue-recover
 import { createCueCleanupService, type CueCleanupService } from './cue-cleanup-service';
 import { createCueMetrics, type CueMetrics, type CueMetricsCollector } from './cue-metrics';
 import { createCueQueuePersistence, type CueQueuePersistence } from './cue-queue-persistence';
-import { getRecentCueEvents, type CueEventRecord } from './cue-db';
+import { countCueEvents, getRecentCueEvents, type CueEventRecord } from './cue-db';
 import { loadCueConfigDetailed } from './cue-yaml-loader';
 import { cueDebugLog } from '../../shared/cueDebug';
 import { captureException } from '../utils/sentry';
@@ -549,6 +549,11 @@ export class CueEngine {
 	/** Returns recent completed/failed runs */
 	getActivityLog(limit?: number): CueRunResult[] {
 		return this.activityLog.getAll(limit);
+	}
+
+	/** Returns the lifetime count of Cue events recorded in the journal. */
+	getEventCount(): number {
+		return countCueEvents();
 	}
 
 	/** Stops a specific running execution */
