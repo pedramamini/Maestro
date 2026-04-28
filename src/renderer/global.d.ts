@@ -38,6 +38,7 @@ import type {
 	WorkItemSearchFilters,
 	WorkItemUpdateInput,
 } from '../shared/work-graph-types';
+import type { GitStatusData, QueuedItemData, ToolExecutionData } from '../main/web-server/types';
 
 // Vite raw imports for .md files
 declare module '*.md?raw' {
@@ -642,27 +643,15 @@ interface MaestroAPI {
 			}>,
 			activeTabId: string
 		) => Promise<void>;
-		broadcastGitStatus: (sessionId: string, gitStatus: unknown | null) => Promise<boolean>;
+		broadcastGitStatus: (sessionId: string, gitStatus: GitStatusData | null) => Promise<boolean>;
 		broadcastExecutionQueue: (
 			sessionId: string,
-			executionQueue: Array<{
-				id: string;
-				timestamp: number;
-				tabId: string;
-				type: 'message' | 'command';
-				text?: string;
-				images?: string[];
-				command?: string;
-				commandArgs?: string;
-				commandDescription?: string;
-				tabName?: string;
-				readOnlyMode?: boolean;
-			}>
+			executionQueue: QueuedItemData[]
 		) => Promise<boolean>;
 		broadcastToolExecution: (
 			sessionId: string,
 			tabId: string | undefined,
-			tool: unknown
+			tool: ToolExecutionData
 		) => Promise<boolean>;
 		broadcastSessionState: (
 			sessionId: string,
