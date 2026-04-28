@@ -87,6 +87,15 @@ function resolve<T>(valOrFn: T | ((prev: T) => T), prev: T): T {
 	return typeof valOrFn === 'function' ? (valOrFn as (prev: T) => T)(prev) : valOrFn;
 }
 
+function shallowArrayEqual<T>(a: readonly T[], b: readonly T[]): boolean {
+	if (a === b) return true;
+	if (a.length !== b.length) return false;
+	for (let i = 0; i < a.length; i++) {
+		if (a[i] !== b[i]) return false;
+	}
+	return true;
+}
+
 // ============================================================================
 // Selectors
 // ============================================================================
@@ -117,7 +126,16 @@ export const useBatchStore = create<BatchStore>()((set) => ({
 	customPrompts: {},
 
 	// --- AutoRun document actions ---
-	setDocumentList: (v) => set((s) => ({ documentList: resolve(v, s.documentList) })),
+	setDocumentList: (v) =>
+		set((s) => {
+			const next = resolve(v, s.documentList);
+			// Skip update when content is unchanged — prevents reference churn from
+			// SSH polling (every 3s the loader replaces the array with a fresh
+			// reference, retriggering downstream effects like BatchRunnerModal's
+			// task-count loader). See useAutoRunDocumentLoader runRemotePoll.
+			if (shallowArrayEqual(next, s.documentList)) return {};
+			return { documentList: next };
+		}),
 	setDocumentTree: (v) => set((s) => ({ documentTree: resolve(v, s.documentTree) })),
 	setIsLoadingDocuments: (v) =>
 		set((s) => ({ isLoadingDocuments: resolve(v, s.isLoadingDocuments) })),

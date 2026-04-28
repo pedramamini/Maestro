@@ -18,16 +18,16 @@ Maestro is an Electron desktop application for managing multiple AI coding assis
 
 The reference material is split into focused, on-demand includes. Each `Path` below is the absolute path of a bundled `.md` — read it with your file tools when the topic is relevant. To honor user customizations from Settings → Maestro Prompts, fetch via `maestro-cli prompts get <name>` instead.
 
-| Include                 | Covers                                                                                             | Pull when...                                                               | Path                          |
-| ----------------------- | -------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------- | ----------------------------- |
-| `_interface-primitives` | Read / Write / Peek / Poke access model + intent → action routing table                            | mapping a natural-language intent to a CLI/filesystem action               | {{REF:_interface-primitives}} |
-| `_documentation-index`  | Curated table of external Maestro documentation URLs                                               | the agent needs authoritative external reference material                  | {{REF:_documentation-index}}  |
-| `_history-format`       | JSON schema of session history entries at `{{AGENT_HISTORY_PATH}}`                                 | recalling prior work for self or peers                                     | {{REF:_history-format}}       |
-| `_autorun-playbooks`    | Auto Run docs (a.k.a. playbooks): file naming, mandatory `- [ ]` task format, examples             | authoring or modifying Auto Run / playbook documents                       | {{REF:_autorun-playbooks}}    |
-| `_maestro-cli`          | Full `maestro-cli` reference: settings, send, list/show, agents, ssh-remotes, cue, playbooks, more | manipulating Maestro state, coordinating agents, or inspecting the fleet   | {{REF:_maestro-cli}}          |
-| `_maestro-cue`          | Maestro Cue automation: event types, `maestro-cue.yaml` schema, pipeline topologies, template vars | building or debugging a Cue pipeline                                       | {{REF:_maestro-cue}}          |
-| `_file-access-rules`    | Full agent write restrictions, Auto Run carve-out, allowed / prohibited operations                 | the user pushes on a write boundary or asks to write outside the workspace | {{REF:_file-access-rules}}    |
-| `_file-access-wizard`   | Wizard-only write restrictions (writes limited to the Auto Run folder)                             | running as a planning / wizard agent                                       | {{REF:_file-access-wizard}}   |
+| Include                 | Covers                                                                                              | Pull when...                                                               | Path                          |
+| ----------------------- | --------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------- | ----------------------------- |
+| `_interface-primitives` | Read / Write / Peek / Poke access model + intent → action routing table                             | mapping a natural-language intent to a CLI/filesystem action               | {{REF:_interface-primitives}} |
+| `_documentation-index`  | Curated table of external Maestro documentation URLs                                                | the agent needs authoritative external reference material                  | {{REF:_documentation-index}}  |
+| `_history-format`       | JSON schema of session history entries at `{{AGENT_HISTORY_PATH}}`                                  | recalling prior work for self or peers                                     | {{REF:_history-format}}       |
+| `_autorun-playbooks`    | Auto Run docs (a.k.a. playbooks): file naming, mandatory `- [ ]` task format, examples              | authoring or modifying Auto Run / playbook documents                       | {{REF:_autorun-playbooks}}    |
+| `_maestro-cli`          | Full `maestro-cli` reference: settings, send, list/show, agents, ssh-remotes, cue, playbooks, more  | manipulating Maestro state, coordinating agents, or inspecting the fleet   | {{REF:_maestro-cli}}          |
+| `_maestro-cue`          | Maestro Cue automation: event types, `.maestro/cue.yaml` schema, pipeline topologies, template vars | building or debugging a Cue pipeline                                       | {{REF:_maestro-cue}}          |
+| `_file-access-rules`    | Full agent write restrictions, Auto Run carve-out, allowed / prohibited operations                  | the user pushes on a write boundary or asks to write outside the workspace | {{REF:_file-access-rules}}    |
+| `_file-access-wizard`   | Wizard-only write restrictions (writes limited to the Auto Run folder)                              | running as a planning / wizard agent                                       | {{REF:_file-access-wizard}}   |
 
 **Discovery via CLI:** `maestro-cli prompts list` enumerates everything; `maestro-cli prompts get <name>` returns the customization-aware contents.
 
