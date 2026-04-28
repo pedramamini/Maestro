@@ -239,6 +239,11 @@ export function updateCueEventStatus(id: string, status: string): void {
  * Non-fatal — callers must not rely on successful persistence.
  */
 export function safeRecordCueEvent(event: Parameters<typeof recordCueEvent>[0]): void {
+	if (!db) {
+		// Expected during shutdown or before init completes — log and skip Sentry.
+		log('warn', `Dropping safeRecordCueEvent (id=${event.id}): Cue DB not initialized`);
+		return;
+	}
 	try {
 		recordCueEvent(event);
 	} catch (err) {
@@ -271,6 +276,14 @@ export function safeRecordCueEvent(event: Parameters<typeof recordCueEvent>[0]):
  * Non-fatal — callers must not rely on successful persistence.
  */
 export function safeUpdateCueEventStatus(id: string, status: string): void {
+	if (!db) {
+		// Expected during shutdown or before init completes — log and skip Sentry.
+		log(
+			'warn',
+			`Dropping safeUpdateCueEventStatus (id=${id}, status=${status}): Cue DB not initialized`
+		);
+		return;
+	}
 	try {
 		updateCueEventStatus(id, status);
 	} catch (err) {
