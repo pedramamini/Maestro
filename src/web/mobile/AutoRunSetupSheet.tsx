@@ -187,9 +187,12 @@ export function AutoRunSetupSheet({
 	}, [sessionId]);
 
 	// Handle documents list changes within a session.
-	//   - First non-empty docs arrival for this session: auto-select all docs
-	//     (the canonical "launch the whole playbook" default). This covers the
-	//     async-load case where the parent initially renders with empty docs.
+	//   - First non-empty docs arrival for this session: seed `selectedFiles`
+	//     with `currentDocument` (or the first doc as fallback) — matches
+	//     desktop `BatchRunnerModal`'s `currentDocument` semantics. Covers the
+	//     async-load case where the parent initially renders with empty docs;
+	//     without this, the useState initializer above runs against an empty
+	//     `documents` array and the user opens the sheet with nothing selected.
 	//   - Subsequent changes (rename, delete, refresh): intersect current
 	//     selections with what still exists. Leave prompt / loop / playbook id
 	//     untouched — a new `documents` reference must not wipe a loaded draft.
@@ -197,7 +200,13 @@ export function AutoRunSetupSheet({
 		const available = new Set(documents.map((d) => d.path || d.filename));
 		if (initializedForSessionRef.current !== sessionId && available.size > 0) {
 			initializedForSessionRef.current = sessionId;
-			setSelectedFiles(available);
+			const seed: string[] = [];
+			if (currentDocument && available.has(currentDocument)) {
+				seed.push(currentDocument);
+			} else if (documents.length > 0) {
+				seed.push(documents[0].path || documents[0].filename);
+			}
+			setSelectedFiles(new Set(seed));
 			return;
 		}
 		setSelectedFiles((prev) => {
@@ -212,7 +221,7 @@ export function AutoRunSetupSheet({
 			}
 			return changed ? next : prev;
 		});
-	}, [documents, sessionId]);
+	}, [documents, sessionId, currentDocument]);
 
 	// Load saved playbooks once when the sheet opens for this session.
 	useEffect(() => {

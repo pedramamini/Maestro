@@ -679,18 +679,23 @@ export function createProcessApi() {
 				folderPath: string,
 				responseChannel: string
 			) => {
+				// Ack the response with a fallback so the web client doesn't hang on
+				// a regression, then rethrow so Sentry actually sees the bug instead
+				// of silently degrading. Mirrors `onRemoteOpenBrowserTab`'s pattern.
 				try {
 					Promise.resolve(callback(sessionId, folderPath, responseChannel)).catch((error) => {
 						ipcRenderer.send(responseChannel, {
 							success: false,
 							error: error instanceof Error ? error.message : String(error),
 						});
+						throw error;
 					});
 				} catch (error) {
 					ipcRenderer.send(responseChannel, {
 						success: false,
 						error: error instanceof Error ? error.message : String(error),
 					});
+					throw error;
 				}
 			};
 			ipcRenderer.on('remote:setAutoRunFolder', handler);

@@ -273,7 +273,18 @@ export function useAppRemoteEventListeners(deps: UseAppRemoteEventListenersDeps)
 				};
 			}
 
-			const firstFile = listResult?.success ? listResult.files?.[0] : undefined;
+			// Treat a structured failure the same as a thrown one — otherwise we
+			// silently repoint the session at an unreadable folder and the caller
+			// gets a false-positive `{ success: true }`.
+			if (!listResult?.success) {
+				window.maestro.process.sendRemoteSetAutoRunFolderResponse(responseChannel, {
+					success: false,
+					error: listResult?.error || `Could not read folder ${folderPath}`,
+				});
+				return;
+			}
+
+			const firstFile = listResult.files?.[0];
 			let firstFileContent = '';
 			if (firstFile) {
 				try {

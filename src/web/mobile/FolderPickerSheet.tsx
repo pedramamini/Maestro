@@ -86,14 +86,46 @@ export function FolderPickerSheet({
 	}, [sendRequest, startPath, sessionId]);
 
 	// Auto-expand ancestors of the initially-selected folder so the user can see
-	// where they came from when they reopen the picker after a change.
+	// where they came from when they reopen the picker after a change. Splits on
+	// both `/` and `\` (Windows) and preserves any absolute-path prefix
+	// (POSIX leading slash, Windows drive letter, or UNC `\\host`) so the
+	// reconstructed ancestor strings match the `node.path` values the server
+	// returns from `get_file_tree` instead of being decapitated to bare names.
 	useEffect(() => {
 		if (!initialPath) return;
-		const parts = initialPath.split('/');
+		// Preserve a POSIX root marker so re-joining yields `/repo/docs` instead
+		// of `repo/docs`, which would never match a server-side `node.path`.
+		const posixAbsolute = initialPath.startsWith('/');
+		// UNC prefix (`\\host\share`) and Windows drive (`C:\`) — keep both as
+		// the first ancestor so children resolve under them.
+		const uncMatch = /^\\\\[^\\]+\\[^\\]+/.exec(initialPath);
+		const driveMatch = /^[a-zA-Z]:[\\/]?/.exec(initialPath);
+		const parts = initialPath.split(/[\\/]/).filter((p) => p.length > 0);
 		const ancestors = new Set<string>();
 		let acc = '';
+		if (uncMatch) {
+			acc = uncMatch[0];
+			ancestors.add(acc);
+			// Drop the host/share segments we already absorbed into `acc`.
+			parts.splice(0, 2);
+		} else if (driveMatch) {
+			acc =
+				driveMatch[0].endsWith('\\') || driveMatch[0].endsWith('/')
+					? driveMatch[0]
+					: driveMatch[0] + '/';
+			ancestors.add(acc.replace(/[\\/]$/, ''));
+			parts.shift();
+		} else if (posixAbsolute) {
+			acc = '/';
+		}
 		for (const part of parts) {
-			acc = acc ? `${acc}/${part}` : part;
+			if (acc === '' || acc === '/') {
+				acc = `${acc}${part}`;
+			} else if (acc.endsWith('/') || acc.endsWith('\\')) {
+				acc = `${acc}${part}`;
+			} else {
+				acc = `${acc}/${part}`;
+			}
 			ancestors.add(acc);
 		}
 		setExpanded((prev) => new Set([...prev, ...ancestors]));
