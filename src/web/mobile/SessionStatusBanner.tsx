@@ -318,7 +318,7 @@ function TokenCount({ usageStats }: { usageStats?: UsageStats | null }) {
 		tooltipParts.push(`Cache create: ${cacheCreationTokens.toLocaleString('en-US')}`);
 	}
 	if (reasoningTokens > 0) {
-		tooltipParts.push(`Reasoning: ${reasoningTokens.toLocaleString('en-US')}`);
+		tooltipParts.push(`Reasoning (in output): ${reasoningTokens.toLocaleString('en-US')}`);
 	}
 	tooltipParts.push(`Total: ${totalTokens.toLocaleString('en-US')} tokens`);
 
