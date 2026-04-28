@@ -373,6 +373,12 @@ export function NewInstanceModal({
 		// Get contextWindow and providerPath from agent config
 		const agentCustomContextWindow = agentConfigs[selectedAgent]?.contextWindow || undefined;
 		const agentCustomProviderPath = agentConfigs[selectedAgent]?.providerPath?.trim() || undefined;
+		// Effort/reasoningEffort: agents use one or the other key (e.g. Codex stores
+		// it under `reasoningEffort`, Claude Code uses `effort`).
+		const agentCustomEffort =
+			agentConfigs[selectedAgent]?.reasoningEffort?.trim() ||
+			agentConfigs[selectedAgent]?.effort?.trim() ||
+			undefined;
 
 		// Get SSH remote configuration for this session (stored per-session, not per-agent)
 		const sshRemoteConfig = agentSshRemoteConfigs[selectedAgent];
@@ -410,7 +416,8 @@ export function NewInstanceModal({
 			agentCustomModel,
 			agentCustomContextWindow,
 			agentCustomProviderPath,
-			sessionSshRemoteConfig
+			sessionSshRemoteConfig,
+			agentCustomEffort
 		);
 		onClose();
 

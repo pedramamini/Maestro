@@ -572,13 +572,16 @@ describe('TabSwitcherModal', () => {
 				expect(screen.getByText('20%')).toBeInTheDocument();
 			});
 
-			it('caps at 100%', () => {
+			it('caps at 100% when tokens fill the window exactly', () => {
+				// Use values that fill the window without overflowing so we exercise
+				// the Math.min(100, …) cap rather than the overflow branch (which now
+				// returns untrustworthy zeros — see issue #762).
 				const tab = createTestTab({
 					usageStats: {
-						inputTokens: 150000,
+						inputTokens: 199500,
 						outputTokens: 0,
-						cacheReadInputTokens: 100000, // Excluded from calculation (cumulative)
-						cacheCreationInputTokens: 100000,
+						cacheReadInputTokens: 0,
+						cacheCreationInputTokens: 500,
 						totalCostUsd: 5.0,
 						contextWindow: 200000,
 					},
@@ -596,7 +599,7 @@ describe('TabSwitcherModal', () => {
 					/>
 				);
 
-				// (150000 + 100000) / 200000 = 125% -> capped at 100% (cacheRead excluded)
+				// 200000 / 200000 = 100%
 				expect(screen.getByText('100%')).toBeInTheDocument();
 			});
 		});

@@ -730,7 +730,8 @@ describe('NewInstanceModal', () => {
 				undefined,
 				undefined,
 				undefined,
-				{ enabled: false, remoteId: null }
+				{ enabled: false, remoteId: null },
+				undefined
 			);
 		});
 
@@ -777,7 +778,8 @@ describe('NewInstanceModal', () => {
 				undefined,
 				undefined,
 				undefined,
-				{ enabled: false, remoteId: null }
+				{ enabled: false, remoteId: null },
+				undefined
 			);
 		});
 
@@ -824,7 +826,8 @@ describe('NewInstanceModal', () => {
 				undefined,
 				undefined,
 				undefined,
-				{ enabled: false, remoteId: null }
+				{ enabled: false, remoteId: null },
+				undefined
 			);
 		});
 	});
@@ -872,7 +875,8 @@ describe('NewInstanceModal', () => {
 				undefined,
 				undefined,
 				undefined,
-				{ enabled: false, remoteId: null }
+				{ enabled: false, remoteId: null },
+				undefined
 			);
 			expect(onClose).toHaveBeenCalled();
 		});
@@ -1383,7 +1387,8 @@ describe('NewInstanceModal', () => {
 				undefined,
 				undefined,
 				undefined,
-				{ enabled: false, remoteId: null }
+				{ enabled: false, remoteId: null },
+				undefined
 			);
 		});
 
@@ -1530,7 +1535,8 @@ describe('NewInstanceModal', () => {
 				undefined,
 				undefined,
 				undefined,
-				{ enabled: false, remoteId: null }
+				{ enabled: false, remoteId: null },
+				undefined
 			);
 		});
 	});
@@ -2470,7 +2476,8 @@ describe('NewInstanceModal', () => {
 					remoteId: 'remote-1',
 					syncHistory: false,
 					workingDirOverride: '/test/path',
-				}
+				},
+				undefined
 			);
 		});
 
@@ -2694,7 +2701,8 @@ describe('NewInstanceModal', () => {
 					enabled: true,
 					remoteId: 'remote-1',
 					workingDirOverride: '/home/devuser/my-project',
-				})
+				}),
+				undefined
 			);
 		});
 
@@ -2804,7 +2812,8 @@ describe('NewInstanceModal', () => {
 					enabled: true,
 					remoteId: 'remote-1',
 					workingDirOverride: '/explicit/override/path',
-				})
+				}),
+				undefined
 			);
 		});
 
