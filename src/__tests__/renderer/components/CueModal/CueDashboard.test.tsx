@@ -63,9 +63,9 @@ describe('CueDashboard', () => {
 
 	it('renders all three sections when loaded', () => {
 		render(<CueDashboard {...makeProps()} />);
+		expect(screen.getByTestId('cue-dashboard-stats')).toBeInTheDocument();
 		expect(screen.getByTestId('sessions-table')).toBeInTheDocument();
 		expect(screen.getByTestId('active-runs')).toBeInTheDocument();
-		expect(screen.getByTestId('activity-log')).toBeInTheDocument();
 	});
 
 	it('error prop → error banner rendered with message', () => {
