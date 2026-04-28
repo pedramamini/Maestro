@@ -15,6 +15,13 @@ import { buildWebSocketUrl as buildWsUrl, getCurrentSessionId } from '../utils/c
 import { webLogger } from '../utils/logger';
 
 /**
+ * Cap on the dedup cache for session_output messages. The previous
+ * implementation grew to 1000 entries then rebuilt a smaller Set; switching
+ * to a bounded LRU keeps memory flat and eviction O(1).
+ */
+const MAX_SEEN_MSG_IDS = 500;
+
+/**
  * WebSocket connection states
  */
 export type WebSocketState =
@@ -692,8 +699,10 @@ export function useWebSocket(options: UseWebSocketOptions = {}): UseWebSocketRet
 	// Connection ID to handle StrictMode double-mounting - each mount gets unique ID
 	const connectionIdRef = useRef<number>(0);
 	const mountIdRef = useRef<number>(0);
-	// Track seen message IDs to dedupe duplicate broadcasts
-	const seenMsgIdsRef = useRef<Set<string>>(new Set());
+	// Track seen message IDs to dedupe duplicate broadcasts.
+	// A Map gives us insertion-ordered iteration, so capping the size and
+	// dropping the oldest entry is O(1) — no Set rebuilds on every batch.
+	const seenMsgIdsRef = useRef<Map<string, true>>(new Map());
 	// Ref for handleMessage to avoid stale closure issues
 	const handleMessageRef = useRef<((event: MessageEvent) => void) | null>(null);
 	// Pending request-response map for sendRequest correlation
@@ -858,11 +867,14 @@ export function useWebSocket(options: UseWebSocketOptions = {}): UseWebSocketRet
 								);
 								break;
 							}
-							seenMsgIdsRef.current.add(outputMsg.msgId);
-							// Limit set size to prevent memory leaks (keep last 1000 IDs)
-							if (seenMsgIdsRef.current.size > 1000) {
-								const idsArray = Array.from(seenMsgIdsRef.current);
-								seenMsgIdsRef.current = new Set(idsArray.slice(-500));
+							seenMsgIdsRef.current.set(outputMsg.msgId, true);
+							// Bounded LRU: if we hit the cap, drop the oldest insertion.
+							// Map iteration is insertion-order so .keys().next() is the oldest.
+							if (seenMsgIdsRef.current.size > MAX_SEEN_MSG_IDS) {
+								const oldest = seenMsgIdsRef.current.keys().next().value;
+								if (oldest !== undefined) {
+									seenMsgIdsRef.current.delete(oldest);
+								}
 							}
 						}
 						webLogger.debug(
