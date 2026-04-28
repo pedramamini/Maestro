@@ -1,4 +1,12 @@
-import React, { useState, useEffect, useRef, useMemo, memo, useCallback } from 'react';
+import React, {
+	useState,
+	useEffect,
+	useRef,
+	useMemo,
+	memo,
+	useCallback,
+	useDeferredValue,
+} from 'react';
 import {
 	Wand2,
 	Plus,
@@ -273,6 +281,10 @@ function SessionListInner(props: SessionListProps) {
 	);
 
 	const { sessionFilter, setSessionFilter } = useSessionFilterMode();
+	// Deferred copy used for the heavy categorize/sort pass below. The input value
+	// itself stays bound to `sessionFilter` so typing remains instant; React just
+	// allows the filtered-list recompute to deprioritize under input pressure.
+	const deferredSessionFilter = useDeferredValue(sessionFilter);
 	const { onResizeStart: onSidebarResizeStart, transitionClass: sidebarTransitionClass } =
 		useResizablePanel({
 			width: leftSidebarWidthState,
@@ -447,7 +459,12 @@ function SessionListInner(props: SessionListProps) {
 		sortedUngroupedParentSessions,
 		sortedFilteredSessions,
 		sortedGroups,
-	} = useSessionCategories(sessionFilter, sortedSessions, showUnreadAgentsOnly, activeSessionId);
+	} = useSessionCategories(
+		deferredSessionFilter,
+		sortedSessions,
+		showUnreadAgentsOnly,
+		activeSessionId
+	);
 
 	// PERF: Cached callback maps to prevent SessionItem re-renders
 	// These Maps store stable function references keyed by session/editing ID
