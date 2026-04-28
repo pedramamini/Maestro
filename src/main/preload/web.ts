@@ -39,6 +39,20 @@ export interface AiTabState {
 	thinkingStartTime?: number | null;
 }
 
+export interface QueuedItemState {
+	id: string;
+	timestamp: number;
+	tabId: string;
+	type: 'message' | 'command';
+	text?: string;
+	images?: string[];
+	command?: string;
+	commandArgs?: string;
+	commandDescription?: string;
+	tabName?: string;
+	readOnlyMode?: boolean;
+}
+
 /**
  * Creates the web interface API object for preload exposure
  */
@@ -56,6 +70,15 @@ export function createWebApi() {
 		broadcastTabsChange: (sessionId: string, aiTabs: AiTabState[], activeTabId: string) =>
 			ipcRenderer.invoke('web:broadcastTabsChange', sessionId, aiTabs, activeTabId),
 
+		broadcastGitStatus: (sessionId: string, gitStatus: unknown | null) =>
+			ipcRenderer.invoke('web:broadcastGitStatus', sessionId, gitStatus),
+
+		broadcastExecutionQueue: (sessionId: string, executionQueue: QueuedItemState[]) =>
+			ipcRenderer.invoke('web:broadcastExecutionQueue', sessionId, executionQueue),
+
+		broadcastToolExecution: (sessionId: string, tabId: string | undefined, tool: unknown) =>
+			ipcRenderer.invoke('web:broadcastToolExecution', sessionId, tabId, tool),
+
 		// Broadcast session state change to web clients (for real-time busy/idle updates)
 		broadcastSessionState: (
 			sessionId: string,
@@ -65,6 +88,8 @@ export function createWebApi() {
 				toolType?: string;
 				inputMode?: string;
 				cwd?: string;
+				currentCycleTokens?: number;
+				thinkingStartTime?: number;
 			}
 		) => ipcRenderer.invoke('web:broadcastSessionState', sessionId, state, additionalData),
 	};

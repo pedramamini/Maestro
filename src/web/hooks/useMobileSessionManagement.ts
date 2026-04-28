@@ -35,7 +35,15 @@
 
 import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import type { Session } from './useSessions';
-import type { WebSocketState, AITabData, AutoRunState, CustomCommand } from './useWebSocket';
+import type {
+	WebSocketState,
+	AITabData,
+	AutoRunState,
+	CustomCommand,
+	GitStatusData,
+	QueuedItemData,
+	ToolExecutionData,
+} from './useWebSocket';
 import { buildApiUrl, getMaestroConfig, updateUrlForSessionTab } from '../utils/config';
 import { webLogger } from '../utils/logger';
 import type { Theme } from '../../shared/theme-types';
@@ -49,11 +57,7 @@ export interface LogEntry {
 	text: string;
 	source: 'user' | 'stdout' | 'stderr' | 'thinking' | 'tool';
 	metadata?: {
-		toolState?: {
-			name?: string;
-			status?: 'running' | 'completed' | 'error';
-			input?: Record<string, unknown>;
-		};
+		toolState?: ToolExecutionData['state'];
 	};
 }
 
@@ -144,6 +148,9 @@ export interface MobileSessionHandlers {
 	onCustomCommands: (commands: CustomCommand[]) => void;
 	onAutoRunStateChange: (sessionId: string, state: AutoRunState | null) => void;
 	onTabsChanged: (sessionId: string, aiTabs: AITabData[], newActiveTabId: string) => void;
+	onGitStatusChanged: (sessionId: string, gitStatus: GitStatusData | null) => void;
+	onExecutionQueueChanged: (sessionId: string, executionQueue: QueuedItemData[]) => void;
+	onToolExecution: (sessionId: string, tabId: string | undefined, tool: ToolExecutionData) => void;
 }
 
 /**
@@ -788,6 +795,30 @@ export function useMobileSessionManagement(
 					activeTabIdRef.current = newActiveTabId;
 					setActiveTabId(newActiveTabId);
 				}
+			},
+			onGitStatusChanged: (sessionId: string, gitStatus: GitStatusData | null) => {
+				setSessions((prev) => prev.map((s) => (s.id === sessionId ? { ...s, gitStatus } : s)));
+			},
+			onExecutionQueueChanged: (sessionId: string, executionQueue: QueuedItemData[]) => {
+				setSessions((prev) => prev.map((s) => (s.id === sessionId ? { ...s, executionQueue } : s)));
+			},
+			onToolExecution: (sessionId: string, tabId: string | undefined, tool: ToolExecutionData) => {
+				if (activeSessionIdRef.current !== sessionId) return;
+				if (tabId && activeTabIdRef.current && tabId !== activeTabIdRef.current) return;
+
+				const toolLogEntry: LogEntry = {
+					id: `tool-${Date.now()}-${tool.toolName}`,
+					timestamp: tool.timestamp || Date.now(),
+					text: tool.toolName,
+					source: 'tool',
+					metadata: {
+						toolState: tool.state,
+					},
+				};
+				setSessionLogs((prev) => ({
+					...prev,
+					aiLogs: [...prev.aiLogs, toolLogEntry],
+				}));
 			},
 		}),
 		[

@@ -28,7 +28,8 @@ export interface LogEntry {
 		toolState?: {
 			name?: string;
 			status?: 'running' | 'completed' | 'error';
-			input?: Record<string, unknown>;
+			input?: unknown;
+			output?: unknown;
 		};
 	};
 }
@@ -364,6 +365,8 @@ export function MessageHistory({
 					const isError = source === 'stderr';
 					const isSystem = source === 'system';
 					const isThinking = source === 'thinking';
+					const isTool = source === 'tool';
+					const messageKey = entry.id || `${entry.timestamp}-${index}`;
 					const isExpanded = expandedMessages.has(messageKey);
 					const isTruncatable = shouldTruncate(text);
 					const displayText = isExpanded || !isTruncatable ? text : getTruncatedText(text);
@@ -388,7 +391,7 @@ export function MessageHistory({
 									? `${colors.accent}15`
 									: isError
 										? `${colors.error}10`
-										: isSystem
+										: isSystem || isTool
 											? `${colors.textDim}10`
 											: isThinking
 												? `${colors.accent}08`
@@ -397,7 +400,13 @@ export function MessageHistory({
 								border: isThinking
 									? undefined
 									: `1px solid ${
-											isUser ? `${colors.accent}30` : isError ? `${colors.error}30` : colors.border
+											isUser
+												? `${colors.accent}30`
+												: isError
+													? `${colors.error}30`
+													: isTool
+														? `${colors.accent}30`
+														: colors.border
 										}`,
 								cursor: isTruncatable ? 'pointer' : 'default',
 								// Align user messages to the right
@@ -437,6 +446,8 @@ export function MessageHistory({
 												? 'Thinking'
 												: isSystem
 													? 'System'
+													: isTool
+														? 'Tool'
 													: inputMode === 'ai'
 														? 'AI'
 														: 'Output'}
@@ -463,7 +474,9 @@ export function MessageHistory({
 									textAlign: 'left',
 								}}
 							>
-								{inputMode === 'terminal' || isUser ? (
+								{isTool ? (
+									<ToolCard entry={entry} />
+								) : inputMode === 'terminal' || isUser ? (
 									// Terminal output and user input: render as plain monospace text
 									<div
 										style={{
@@ -532,6 +545,79 @@ export function MessageHistory({
 						</span>
 					)}
 				</button>
+			)}
+		</div>
+	);
+}
+
+function getToolDetail(input: unknown): string | null {
+	if (!input || typeof input !== 'object') return null;
+	const value = input as Record<string, unknown>;
+	const candidates = [
+		value.command,
+		value.pattern,
+		value.file_path,
+		value.filePath,
+		value.query,
+		value.description,
+		value.prompt,
+		value.task_id,
+		value.path,
+		value.cmd,
+		value.code,
+	];
+	for (const candidate of candidates) {
+		if (typeof candidate === 'string' && candidate.trim()) {
+			return candidate.length > 160 ? `${candidate.slice(0, 157)}...` : candidate;
+		}
+	}
+	return null;
+}
+
+function ToolCard({ entry }: { entry: LogEntry }) {
+	const colors = useThemeColors();
+	const state = entry.metadata?.toolState;
+	const detail = getToolDetail(state?.input);
+	const status = state?.status;
+	const statusColor =
+		status === 'completed' ? colors.success : status === 'error' ? colors.error : colors.warning;
+
+	return (
+		<div
+			style={{
+				display: 'flex',
+				flexDirection: 'column',
+				gap: '6px',
+				fontFamily: 'ui-monospace, monospace',
+				fontSize: '12px',
+				lineHeight: 1.4,
+			}}
+		>
+			<div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0 }}>
+				<span style={{ color: statusColor, flexShrink: 0 }}>
+					{status === 'completed' ? '✓' : status === 'error' ? '!' : '●'}
+				</span>
+				<span
+					style={{
+						color: colors.textMain,
+						overflow: 'hidden',
+						textOverflow: 'ellipsis',
+						whiteSpace: 'nowrap',
+					}}
+				>
+					{entry.text || entry.content || 'Tool'}
+				</span>
+			</div>
+			{detail && (
+				<div
+					style={{
+						color: colors.textDim,
+						whiteSpace: 'pre-wrap',
+						wordBreak: 'break-word',
+					}}
+				>
+					{detail}
+				</div>
 			)}
 		</div>
 	);
