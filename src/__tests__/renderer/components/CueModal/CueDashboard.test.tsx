@@ -10,8 +10,8 @@ vi.mock('../../../../renderer/components/CueModal/SessionsTable', () => ({
 vi.mock('../../../../renderer/components/CueModal/ActiveRunsList', () => ({
 	ActiveRunsList: () => <div data-testid="active-runs" />,
 }));
-vi.mock('../../../../renderer/components/CueModal/ActivityLog', () => ({
-	ActivityLog: () => <div data-testid="activity-log" />,
+vi.mock('../../../../renderer/components/CueModal/CueDashboardStats', () => ({
+	CueDashboardStats: () => <div data-testid="cue-dashboard-stats" />,
 }));
 
 const theme = {
@@ -37,11 +37,11 @@ function makeProps(
 		onRetry: vi.fn(),
 		sessions: [],
 		activeRuns: [],
-		activityLog: [],
 		queueStatus: {},
 		graphSessions: [],
 		dashboardPipelines: [],
 		subscriptionPipelineMap: new Map(),
+		executionCount: 0,
 		activeRunsExpanded: true,
 		setActiveRunsExpanded: vi.fn(),
 		onViewInPipeline: vi.fn(),

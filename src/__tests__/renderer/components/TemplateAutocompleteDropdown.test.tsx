@@ -300,7 +300,7 @@ describe('TemplateAutocompleteDropdown', () => {
 
 			const scrollContainer = container.querySelector('.overflow-y-auto');
 			expect(scrollContainer).toBeInTheDocument();
-			expect(scrollContainer).toHaveStyle({ maxHeight: '240px' });
+			expect(scrollContainer).toHaveStyle({ maxHeight: '15rem' });
 		});
 	});
 

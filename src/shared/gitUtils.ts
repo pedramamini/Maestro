@@ -372,7 +372,7 @@ export function sanitizeGitBranchName(input: string): string {
 	s = s.replace(/^[-/.]+/, '');
 	// Refs cannot end with `/`, `.`, or `.lock`
 	s = s.replace(/\.lock$/i, '');
-	s = s.replace(/[/.]+$/, '');
+	s = s.replace(/[-/.]+$/, '');
 	return s;
 }
 
