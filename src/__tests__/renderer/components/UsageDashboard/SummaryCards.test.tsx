@@ -16,7 +16,10 @@ import React from 'react';
 import {
 	AnimatedNumber,
 	BouncingDots,
+	ContextUsageBar,
+	RealtimeMetricsCard,
 	SummaryCards,
+	TokenCostBadge,
 } from '../../../../renderer/components/UsageDashboard/SummaryCards';
 import type { StatsAggregation } from '../../../../renderer/hooks/stats/useStats';
 import type { Session } from '../../../../renderer/types';
@@ -380,12 +383,11 @@ describe('SummaryCards', () => {
 
 	describe('Icons', () => {
 		it('renders SVG icons for each metric', () => {
-			const { container } = render(
-				<SummaryCards data={mockData} theme={theme} sessions={mockSessions} />
-			);
+			render(<SummaryCards data={mockData} theme={theme} sessions={mockSessions} />);
 
-			// Each card should have an SVG icon (10 cards = 10 icons)
-			const svgElements = container.querySelectorAll('svg');
+			// Scope to the metrics grid so the realtime card's icons don't inflate the count
+			const grid = screen.getByTestId('summary-cards');
+			const svgElements = grid.querySelectorAll('svg');
 			expect(svgElements.length).toBe(10);
 		});
 	});
@@ -564,5 +566,158 @@ describe('BouncingDots', () => {
 		const root = screen.getByTestId('bouncing-dots');
 		// Without a color prop, the element falls through to currentColor from CSS.
 		expect(root.getAttribute('style')).toBeFalsy();
+	});
+});
+
+// JSDOM normalises CSS hex colors into `rgb(...)` form when they round-trip
+// through inline `style`, so we compare the normalised form for theme colors.
+function hexToRgb(hex: string): string {
+	const value = hex.replace('#', '');
+	const r = parseInt(value.slice(0, 2), 16);
+	const g = parseInt(value.slice(2, 4), 16);
+	const b = parseInt(value.slice(4, 6), 16);
+	return `rgb(${r}, ${g}, ${b})`;
+}
+
+describe('ContextUsageBar', () => {
+	it('renders the percentage rounded to a whole number', () => {
+		render(<ContextUsageBar percentage={42.7} theme={theme} />);
+
+		expect(screen.getByText('43%')).toBeInTheDocument();
+	});
+
+	it('caps values above 100 at 100% so the bar never overflows', () => {
+		render(<ContextUsageBar percentage={150} theme={theme} />);
+
+		expect(screen.getByText('100%')).toBeInTheDocument();
+		const bar = screen.getByRole('progressbar');
+		expect(bar.getAttribute('aria-valuenow')).toBe('100');
+	});
+
+	it('uses the success color for usage below the warning threshold', () => {
+		render(<ContextUsageBar percentage={40} theme={theme} />);
+
+		const bar = screen.getByRole('progressbar');
+		const fill = bar.firstElementChild as HTMLElement;
+		expect(fill.style.backgroundColor).toBe(hexToRgb(theme.colors.success));
+		// No critical glow under the warning threshold.
+		expect(fill.style.boxShadow).toBe('');
+	});
+
+	it('uses the warning color in the 70-89% band', () => {
+		render(<ContextUsageBar percentage={75} theme={theme} />);
+
+		const bar = screen.getByRole('progressbar');
+		const fill = bar.firstElementChild as HTMLElement;
+		expect(fill.style.backgroundColor).toBe(hexToRgb(theme.colors.warning));
+	});
+
+	it('uses the error color and adds a glow at or above 90%', () => {
+		render(<ContextUsageBar percentage={92} theme={theme} />);
+
+		const bar = screen.getByRole('progressbar');
+		const fill = bar.firstElementChild as HTMLElement;
+		expect(fill.style.backgroundColor).toBe(hexToRgb(theme.colors.error));
+		expect(fill.style.boxShadow).not.toBe('');
+	});
+});
+
+const buildSession = (overrides: Partial<Session>): Session =>
+	({
+		id: 'sess-1',
+		name: 'Agent One',
+		toolType: 'claude-code',
+		state: 'idle',
+		contextUsage: 0,
+		...overrides,
+	}) as Session;
+
+describe('TokenCostBadge', () => {
+	it('aggregates currentCycleTokens across busy sessions only', () => {
+		const sessions = [
+			buildSession({ id: 'a', state: 'busy', currentCycleTokens: 1500, name: 'Alpha' }),
+			buildSession({ id: 'b', state: 'busy', currentCycleTokens: 2500, name: 'Beta' }),
+			// Idle session is ignored even if it reports a token count.
+			buildSession({ id: 'c', state: 'idle', currentCycleTokens: 9999, name: 'Gamma' }),
+		];
+
+		render(<TokenCostBadge sessions={sessions} theme={theme} />);
+
+		// 4000 total → "4.0K"
+		expect(screen.getByText('4.0K')).toBeInTheDocument();
+		expect(screen.getByText(/Alpha/)).toBeInTheDocument();
+		expect(screen.getByText(/Beta/)).toBeInTheDocument();
+		expect(screen.queryByText(/Gamma/)).not.toBeInTheDocument();
+	});
+
+	it('shows $0.00 when there are no busy sessions', () => {
+		render(<TokenCostBadge sessions={[]} theme={theme} />);
+
+		expect(screen.getByTestId('token-cost-estimate').textContent).toBe('$0.00');
+	});
+
+	it('omits the breakdown when no busy session reports tokens', () => {
+		const sessions = [buildSession({ state: 'busy', currentCycleTokens: 0 })];
+		render(<TokenCostBadge sessions={sessions} theme={theme} />);
+
+		expect(screen.queryByTestId('token-cost-breakdown')).not.toBeInTheDocument();
+	});
+});
+
+describe('RealtimeMetricsCard', () => {
+	it('uses the highest contextUsage across active sessions for the bar', () => {
+		const sessions = [
+			buildSession({ id: '1', state: 'idle', contextUsage: 45 }),
+			buildSession({ id: '2', state: 'busy', contextUsage: 88 }),
+			// Error sessions are excluded from "active" so this 99 must NOT win.
+			buildSession({ id: '3', state: 'error', contextUsage: 99 }),
+		];
+
+		render(<RealtimeMetricsCard sessions={sessions} theme={theme} />);
+
+		expect(screen.getByText('88%')).toBeInTheDocument();
+	});
+
+	it('shows the active agent count with correct singular/plural label', () => {
+		const single = [buildSession({ state: 'idle', contextUsage: 10 })];
+		const { unmount } = render(<RealtimeMetricsCard sessions={single} theme={theme} />);
+		expect(screen.getByText('1 active agent')).toBeInTheDocument();
+		unmount();
+
+		const many = [
+			buildSession({ id: 'a', state: 'idle' }),
+			buildSession({ id: 'b', state: 'busy' }),
+		];
+		render(<RealtimeMetricsCard sessions={many} theme={theme} />);
+		expect(screen.getByText('2 active agents')).toBeInTheDocument();
+	});
+
+	it('renders the thinking indicator only when a busy session has thinkingStartTime', () => {
+		const now = Date.now();
+		const sessions = [
+			buildSession({ state: 'busy', thinkingStartTime: now - 5500, contextUsage: 30 }),
+		];
+
+		render(<RealtimeMetricsCard sessions={sessions} theme={theme} />);
+
+		const indicator = screen.getByTestId('realtime-thinking-elapsed');
+		// 5500ms → 5s elapsed
+		expect(indicator.textContent).toContain('5s');
+	});
+
+	it('hides the thinking indicator when no session is actively thinking', () => {
+		const sessions = [buildSession({ state: 'idle', contextUsage: 20 })];
+
+		render(<RealtimeMetricsCard sessions={sessions} theme={theme} />);
+
+		expect(screen.queryByTestId('realtime-thinking-elapsed')).not.toBeInTheDocument();
+	});
+
+	it('applies the animation delay as inline style for staggered entrance', () => {
+		render(<RealtimeMetricsCard sessions={[]} theme={theme} animationDelay={320} />);
+
+		const card = screen.getByTestId('realtime-metrics-card');
+		expect(card.style.animationDelay).toBe('320ms');
+		expect(card.className).toContain('card-enter');
 	});
 });

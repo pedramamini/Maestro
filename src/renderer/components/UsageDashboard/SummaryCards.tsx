@@ -29,9 +29,13 @@ import {
 	Globe,
 	Zap,
 	PanelTop,
+	Cpu,
+	DollarSign,
+	Activity,
 } from 'lucide-react';
 import type { Theme, Session } from '../../types';
 import type { StatsAggregation } from '../../hooks/stats/useStats';
+import { formatCost } from '../../../shared/formatters';
 
 interface SummaryCardsProps {
 	/** Aggregated stats data from the API */
@@ -337,6 +341,283 @@ function formatHour(hour: number): string {
 	return `${displayHour} ${suffix}`;
 }
 
+interface ContextUsageBarProps {
+	/** Context usage as a percentage (0-100). Values above 100 are capped. */
+	percentage: number;
+	theme: Theme;
+}
+
+/**
+ * Threshold-colored progress bar for an agent's context window usage.
+ * Green <70%, yellow 70-89%, red ≥90% (with a subtle red glow).
+ */
+export const ContextUsageBar = memo(function ContextUsageBar({
+	percentage,
+	theme,
+}: ContextUsageBarProps) {
+	const capped = Math.max(0, Math.min(100, percentage));
+	const isCritical = capped >= 90;
+	const fillColor = isCritical
+		? theme.colors.error
+		: capped >= 70
+			? theme.colors.warning
+			: theme.colors.success;
+
+	return (
+		<div className="w-full" data-testid="context-usage-bar">
+			<div
+				className="flex items-center justify-between text-[10px] mb-1"
+				style={{ color: theme.colors.textDim }}
+			>
+				<span className="uppercase tracking-wide">Context</span>
+				<span style={{ color: fillColor, fontWeight: 600 }}>{Math.round(capped)}%</span>
+			</div>
+			<div
+				className="w-full h-1.5 rounded-full overflow-hidden"
+				style={{ backgroundColor: theme.colors.bgMain }}
+				role="progressbar"
+				aria-valuenow={Math.round(capped)}
+				aria-valuemin={0}
+				aria-valuemax={100}
+				aria-label="Context window usage"
+			>
+				<div
+					className="h-full rounded-full transition-all duration-500 ease-out"
+					style={{
+						width: `${capped}%`,
+						backgroundColor: fillColor,
+						boxShadow: isCritical ? `0 0 6px ${theme.colors.error}60` : undefined,
+					}}
+				/>
+			</div>
+		</div>
+	);
+});
+
+// Placeholder per-1K-token rates for current-cycle cost estimation.
+// `currentCycleTokens` does not split input vs output, so we apply a blended
+// rate that approximates Claude pricing ($3/M input, $15/M output).
+// TODO: replace with provider-specific rates and split when the parser exposes
+// input/output token counts for the in-flight cycle.
+const CURRENT_CYCLE_INPUT_RATE_PER_1K = 0.003;
+const CURRENT_CYCLE_OUTPUT_RATE_PER_1K = 0.015;
+const CURRENT_CYCLE_BLENDED_RATE_PER_1K =
+	(CURRENT_CYCLE_INPUT_RATE_PER_1K + CURRENT_CYCLE_OUTPUT_RATE_PER_1K) / 2;
+
+interface TokenCostBadgeProps {
+	sessions: Session[];
+	theme: Theme;
+}
+
+/**
+ * Aggregates `currentCycleTokens` across busy sessions and renders the total
+ * with a blended-rate cost estimate plus a per-session breakdown.
+ */
+export const TokenCostBadge = memo(function TokenCostBadge({
+	sessions,
+	theme,
+}: TokenCostBadgeProps) {
+	const { totalTokens, estimatedCost, breakdown } = useMemo(() => {
+		const busy = sessions.filter((s) => s.state === 'busy');
+		let total = 0;
+		const items: Array<{ id: string; name: string; tokens: number }> = [];
+		for (const s of busy) {
+			const tokens = s.currentCycleTokens ?? 0;
+			if (tokens > 0) {
+				total += tokens;
+				items.push({ id: s.id, name: s.name, tokens });
+			}
+		}
+		items.sort((a, b) => b.tokens - a.tokens);
+		const cost = (total / 1000) * CURRENT_CYCLE_BLENDED_RATE_PER_1K;
+		return { totalTokens: total, estimatedCost: cost, breakdown: items };
+	}, [sessions]);
+
+	return (
+		<div className="flex flex-col" data-testid="token-cost-badge">
+			<div className="text-[10px] uppercase tracking-wide" style={{ color: theme.colors.textDim }}>
+				Cycle Tokens
+			</div>
+			<div className="flex items-baseline gap-2 mt-0.5">
+				<span
+					className="font-bold"
+					style={{ color: theme.colors.textMain, fontSize: '20px' }}
+					title={`${totalTokens.toLocaleString()} tokens`}
+				>
+					{formatNumber(totalTokens)}
+				</span>
+				<span
+					className="text-xs font-medium"
+					style={{ color: theme.colors.warning }}
+					title="Estimated cost for the current thinking cycle"
+					data-testid="token-cost-estimate"
+				>
+					{formatCost(estimatedCost)}
+				</span>
+			</div>
+			{breakdown.length > 0 && (
+				<div
+					className="mt-1 flex flex-wrap gap-x-2 gap-y-0.5 text-[9px]"
+					style={{ color: theme.colors.textDim }}
+					data-testid="token-cost-breakdown"
+				>
+					{breakdown.slice(0, 4).map((item) => (
+						<span key={item.id} title={`${item.tokens.toLocaleString()} tokens`}>
+							{item.name}: {formatNumber(item.tokens)}
+						</span>
+					))}
+					{breakdown.length > 4 && <span>+{breakdown.length - 4} more</span>}
+				</div>
+			)}
+		</div>
+	);
+});
+
+interface RealtimeMetricsCardProps {
+	sessions: Session[];
+	theme: Theme;
+	/** Stagger delay (in ms) for the card-enter animation */
+	animationDelay?: number;
+}
+
+/**
+ * Compact, information-dense card combining live context-usage,
+ * current-cycle token/cost, and elapsed thinking time across active agents.
+ */
+export const RealtimeMetricsCard = memo(function RealtimeMetricsCard({
+	sessions,
+	theme,
+	animationDelay = 0,
+}: RealtimeMetricsCardProps) {
+	const activeSessions = useMemo(
+		() => sessions.filter((s) => s.state === 'busy' || s.state === 'idle'),
+		[sessions]
+	);
+
+	const peakContextUsage = useMemo(() => {
+		let peak = 0;
+		for (const s of activeSessions) {
+			if (typeof s.contextUsage === 'number' && s.contextUsage > peak) {
+				peak = s.contextUsage;
+			}
+		}
+		return peak;
+	}, [activeSessions]);
+
+	const earliestThinkingStart = useMemo(() => {
+		let earliest: number | null = null;
+		for (const s of sessions) {
+			if (s.state === 'busy' && typeof s.thinkingStartTime === 'number') {
+				if (earliest === null || s.thinkingStartTime < earliest) {
+					earliest = s.thinkingStartTime;
+				}
+			}
+		}
+		return earliest;
+	}, [sessions]);
+
+	// Tick once a second while any session is thinking so elapsed time updates
+	// smoothly; the dashboard's stats subscription is too coarse for this.
+	const [elapsedMs, setElapsedMs] = useState(() =>
+		earliestThinkingStart !== null ? Date.now() - earliestThinkingStart : 0
+	);
+	useEffect(() => {
+		if (earliestThinkingStart === null) {
+			setElapsedMs(0);
+			return;
+		}
+		setElapsedMs(Date.now() - earliestThinkingStart);
+		const interval = window.setInterval(() => {
+			setElapsedMs(Date.now() - earliestThinkingStart);
+		}, 1000);
+		return () => window.clearInterval(interval);
+	}, [earliestThinkingStart]);
+
+	const elapsedSeconds = Math.max(0, Math.floor(elapsedMs / 1000));
+	const isThinking = earliestThinkingStart !== null;
+	const activeCount = activeSessions.length;
+
+	return (
+		<div
+			className="p-4 card-enter"
+			style={{
+				...getCardStyles('elevated', theme),
+				animationDelay: `${animationDelay}ms`,
+			}}
+			data-testid="realtime-metrics-card"
+			role="group"
+			aria-label="Real-time agent metrics"
+		>
+			<div className="flex items-start gap-3">
+				<div
+					className="flex-shrink-0 p-2 rounded-md"
+					style={{
+						backgroundColor: `${theme.colors.accent}15`,
+						color: theme.colors.accent,
+					}}
+				>
+					<Activity className="w-4 h-4" />
+				</div>
+				<div className="min-w-0 flex-1">
+					<div
+						className="text-xs uppercase tracking-wide mb-2"
+						style={{ color: theme.colors.textDim }}
+					>
+						Real-time
+					</div>
+					<div className="flex items-center gap-1.5 mb-2">
+						<Cpu
+							className="w-3 h-3 flex-shrink-0"
+							style={{ color: theme.colors.textDim }}
+							aria-hidden="true"
+						/>
+						<div className="flex-1">
+							<ContextUsageBar percentage={peakContextUsage} theme={theme} />
+						</div>
+					</div>
+					<div className="flex items-center gap-1.5 mt-3">
+						<DollarSign
+							className="w-3 h-3 flex-shrink-0"
+							style={{ color: theme.colors.textDim }}
+							aria-hidden="true"
+						/>
+						<div className="flex-1">
+							<TokenCostBadge sessions={sessions} theme={theme} />
+						</div>
+					</div>
+					{isThinking && (
+						<div
+							className="mt-3 inline-flex items-center gap-1.5 text-[11px] animate-pulse"
+							style={{ color: theme.colors.warning }}
+							data-testid="realtime-thinking-elapsed"
+							aria-label={`Thinking for ${elapsedSeconds} seconds`}
+						>
+							<Clock className="w-3 h-3" aria-hidden="true" />
+							Thinking: {elapsedSeconds}s
+						</div>
+					)}
+				</div>
+			</div>
+			<div
+				className="mt-3 pt-3 border-t flex items-center gap-1.5 text-[10px]"
+				style={{ borderColor: theme.colors.border, color: theme.colors.textDim }}
+				data-testid="realtime-active-count"
+			>
+				<span
+					className="w-1.5 h-1.5 rounded-full"
+					style={{ backgroundColor: theme.colors.success }}
+					aria-hidden="true"
+				/>
+				<span>
+					{activeCount} active {activeCount === 1 ? 'agent' : 'agents'}
+				</span>
+			</div>
+		</div>
+	);
+});
+
+const EMPTY_SESSIONS: Session[] = [];
+
 export const SummaryCards = memo(function SummaryCards({
 	data,
 	theme,
@@ -510,27 +791,39 @@ export const SummaryCards = memo(function SummaryCards({
 	];
 
 	return (
-		<div
-			className="grid gap-4"
-			style={{
-				gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))`,
-			}}
-			data-testid="summary-cards"
-			role="region"
-			aria-label="Usage summary metrics"
-		>
-			{metrics.map((metric, index) => (
-				<MetricCard
-					key={metric.label}
-					icon={metric.icon}
-					label={metric.label}
-					value={metric.value}
+		<>
+			<div
+				className="grid gap-4"
+				style={{
+					gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))`,
+				}}
+				data-testid="summary-cards"
+				role="region"
+				aria-label="Usage summary metrics"
+			>
+				{metrics.map((metric, index) => (
+					<MetricCard
+						key={metric.label}
+						icon={metric.icon}
+						label={metric.label}
+						value={metric.value}
+						theme={theme}
+						animationIndex={index}
+						extra={metric.extra}
+					/>
+				))}
+			</div>
+			<div
+				className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-3"
+				data-testid="summary-realtime-row"
+			>
+				<RealtimeMetricsCard
+					sessions={sessions ?? EMPTY_SESSIONS}
 					theme={theme}
-					animationIndex={index}
-					extra={metric.extra}
+					animationDelay={320}
 				/>
-			))}
-		</div>
+			</div>
+		</>
 	);
 });
 
