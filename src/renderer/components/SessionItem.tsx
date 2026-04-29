@@ -90,7 +90,9 @@ export const SessionItem = memo(function SessionItem({
 
 	// Determine container styling based on variant
 	const getContainerClassName = () => {
-		const base = `cursor-move flex items-center justify-between group border-l-2 transition-all hover:bg-opacity-50 ${isDragging ? 'opacity-50' : ''}`;
+		// Worktree items get a dashed left border to visually distinguish from regular agents
+		const borderClass = variant === 'worktree' ? 'border-l-2 border-dashed' : 'border-l-2';
+		const base = `cursor-move flex items-center justify-between group ${borderClass} transition-all hover:bg-opacity-50 ${isDragging ? 'opacity-50' : ''}`;
 
 		if (variant === 'flat') {
 			return `mx-3 px-3 py-2 rounded mb-1 ${base}`;
@@ -115,7 +117,9 @@ export const SessionItem = memo(function SessionItem({
 			style={{
 				borderColor: isActive || isKeyboardSelected ? theme.colors.accent : 'transparent',
 				backgroundColor: isActive
-					? theme.colors.bgActivity
+					? variant === 'worktree'
+						? theme.colors.accent + '15'
+						: theme.colors.bgActivity
 					: isKeyboardSelected
 						? theme.colors.bgActivity + '40'
 						: 'transparent',
@@ -156,6 +160,30 @@ export const SessionItem = memo(function SessionItem({
 						>
 							{session.name}
 						</span>
+						{/* Worktree badge to visually mark worktree children */}
+						{variant === 'worktree' && (
+							<span
+								className="text-[9px] font-medium uppercase tracking-wider px-1 py-0.5 rounded shrink-0"
+								style={{
+									backgroundColor: theme.colors.accent + '33',
+									border: `1px solid ${theme.colors.accent}66`,
+									color: theme.colors.accent,
+								}}
+							>
+								Worktree
+							</span>
+						)}
+					</div>
+				)}
+
+				{/* Branch name for worktree children (below session name) */}
+				{variant === 'worktree' && session.worktreeBranch && !isEditing && (
+					<div
+						className="text-[10px] mt-0.5 truncate"
+						style={{ color: theme.colors.textDim }}
+						title={session.worktreeBranch}
+					>
+						{session.worktreeBranch}
 					</div>
 				)}
 
