@@ -479,6 +479,21 @@ export interface FilePreviewTab {
 }
 
 /**
+ * Terminal Tab for shell sessions in the unified tab system.
+ * Foundation interface — fields here support the terminal command persistence
+ * feature (see 2026-04-05-Terminal-Persistence playbook). Additional fields
+ * (pid, state, cwd, name, shell, etc.) will be added in subsequent tasks as
+ * the terminal tab system is built out.
+ */
+export interface TerminalTab {
+	id: string; // Unique tab ID (UUID)
+	// Shell integration / command persistence fields (Phase 3 of terminal persistence plan)
+	currentCommand?: string; // Command currently/last running in shell
+	commandRunning?: boolean; // Whether a command is actively executing
+	persistCommand?: boolean; // Flag: re-execute this command on restart
+}
+
+/**
  * Reference to any tab in the unified tab system.
  * Used for unified tab ordering across different tab types.
  */
