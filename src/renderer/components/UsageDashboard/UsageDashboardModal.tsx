@@ -16,6 +16,7 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { X, BarChart3, Calendar, Download, Database } from 'lucide-react';
 import { SummaryCards } from './SummaryCards';
+import { AgentOverviewCards } from './AgentOverviewCards';
 import { ActivityHeatmap } from './ActivityHeatmap';
 import { AgentComparisonChart } from './AgentComparisonChart';
 import { SourceDistributionChart } from './SourceDistributionChart';
@@ -728,6 +729,15 @@ export function UsageDashboardModal({
 							{/* View-specific content based on viewMode */}
 							{viewMode === 'overview' && (
 								<>
+									{/* Active Agents Overview - per-agent status, branch, sparkline.
+									    Sits above keyboard-navigable sections; AgentOverviewCards
+									    provides its own role="region" + aria-label. */}
+									{sessions.length > 0 && (
+										<ChartErrorBoundary theme={theme} chartName="Agent Overview">
+											<AgentOverviewCards sessions={sessions} data={data} theme={theme} />
+										</ChartErrorBoundary>
+									)}
+
 									{/* Summary Stats Cards - Horizontal row at top, responsive */}
 									<div
 										ref={setSectionRef('summary-cards')}
