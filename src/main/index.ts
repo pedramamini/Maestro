@@ -730,8 +730,12 @@ app.whenReady().then(async () => {
 	if (isMacOS()) {
 		const template: Electron.MenuItemConstructorOptions[] = [
 			{
-				// Explicit appMenu — omits "Quit and Keep Windows" (Opt+Cmd+Q)
-				// which otherwise immediately kills the app without cleanup.
+				// Explicit appMenu — uses a custom Quit item instead of `role: 'quit'`
+				// so we can swallow Opt+Cmd+Q. macOS auto-binds Opt+Cmd+Q to any
+				// quit role (as "Quit and Keep Windows"), and that keystroke sits
+				// one modifier away from Opt+Q (Maestro Cue), causing accidental
+				// quits. Click events from accelerators carry modifier flags, so
+				// we can detect Option held and ignore the keystroke entirely.
 				role: 'appMenu',
 				submenu: [
 					{ role: 'about' },
@@ -742,7 +746,20 @@ app.whenReady().then(async () => {
 					{ role: 'hideOthers' },
 					{ role: 'unhide' },
 					{ type: 'separator' },
-					{ role: 'quit' },
+					{
+						label: 'Quit Maestro',
+						accelerator: 'Cmd+Q',
+						click: (_item, _window, event) => {
+							if (event?.altKey) {
+								logger.info(
+									'Ignoring Opt+Cmd+Q to prevent accidental quit (too close to Opt+Q for Maestro Cue)',
+									'Menu'
+								);
+								return;
+							}
+							app.quit();
+						},
+					},
 				],
 			},
 			{ role: 'editMenu' },

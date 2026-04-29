@@ -20,6 +20,8 @@ import {
 	ActivityGraph,
 	HistoryEntryItem,
 	HistoryFilterToggle,
+	HostSourceFilter,
+	LOCAL_HOST_KEY,
 	ESTIMATED_ROW_HEIGHT,
 	ESTIMATED_ROW_HEIGHT_SIMPLE,
 	LOOKBACK_OPTIONS,
@@ -96,6 +98,9 @@ export const HistoryPanel = React.memo(
 		);
 		const [detailModalEntry, setDetailModalEntry] = useState<HistoryEntry | null>(null);
 		const [searchFilter, setSearchFilter] = useState('');
+		// Source/host filter — null means "All Sources". When set, both the
+		// entry list and the activity graph narrow to entries from that host.
+		const [selectedHost, setSelectedHost] = useState<string | null>(null);
 		const searchFilterOpen = useUIStore((s) => s.historySearchFilterOpen);
 		const setSearchFilterOpen = useUIStore((s) => s.setHistorySearchFilterOpen);
 		const [graphViewportRange, setGraphViewportRange] = useState<
@@ -276,11 +281,16 @@ export const HistoryPanel = React.memo(
 		// Client-side filters applied to the loaded window. Lookback is
 		// now server-side (part of the page loader), so it doesn't appear
 		// here — entries arriving from the IPC are already inside the
-		// window. Type + search remain client-side over loaded pages.
+		// window. Type + search + host all stay client-side over loaded pages.
 		const allFilteredEntries = useMemo(() => {
 			return historyEntries.filter((entry) => {
 				if (!entry || !entry.type) return false;
 				if (!activeFilters.has(entry.type)) return false;
+
+				if (selectedHost !== null) {
+					const entryHost = entry.hostname ?? LOCAL_HOST_KEY;
+					if (entryHost !== selectedHost) return false;
+				}
 
 				if (searchFilter) {
 					const searchLower = searchFilter.toLowerCase();
@@ -288,12 +298,45 @@ export const HistoryPanel = React.memo(
 					const responseMatch = entry.fullResponse?.toLowerCase().includes(searchLower);
 					const sessionIdMatch = entry.agentSessionId?.toLowerCase().includes(searchLower);
 					const sessionNameMatch = entry.sessionName?.toLowerCase().includes(searchLower);
-					if (!summaryMatch && !responseMatch && !sessionIdMatch && !sessionNameMatch) return false;
+					const hostnameMatch = entry.hostname?.toLowerCase().includes(searchLower);
+					if (
+						!summaryMatch &&
+						!responseMatch &&
+						!sessionIdMatch &&
+						!sessionNameMatch &&
+						!hostnameMatch
+					)
+						return false;
 				}
 
 				return true;
 			});
-		}, [historyEntries, activeFilters, searchFilter]);
+		}, [historyEntries, activeFilters, searchFilter, selectedHost]);
+
+		// Tally hosts from the loaded window. Sorted with `LOCAL_HOST_KEY`
+		// first (the user's own machine), then remote hostnames
+		// alphabetically for stable display.
+		const hostCounts = useMemo(() => {
+			const counts = new Map<string, number>();
+			for (const entry of historyEntries) {
+				const key = entry?.hostname ?? LOCAL_HOST_KEY;
+				counts.set(key, (counts.get(key) ?? 0) + 1);
+			}
+			const sorted = new Map<string, number>();
+			if (counts.has(LOCAL_HOST_KEY)) sorted.set(LOCAL_HOST_KEY, counts.get(LOCAL_HOST_KEY)!);
+			for (const key of [...counts.keys()].filter((k) => k !== LOCAL_HOST_KEY).sort()) {
+				sorted.set(key, counts.get(key)!);
+			}
+			return sorted;
+		}, [historyEntries]);
+
+		// Clear the host filter if the selected host falls out of the
+		// loaded window (e.g. session switch, lookback narrowed).
+		useEffect(() => {
+			if (selectedHost !== null && !hostCounts.has(selectedHost)) {
+				setSelectedHost(null);
+			}
+		}, [hostCounts, selectedHost]);
 
 		// Note: With virtualization, we no longer need to slice entries
 		// The virtualizer handles rendering only visible items efficiently
@@ -649,10 +692,14 @@ export const HistoryPanel = React.memo(
 							compact={compact}
 						/>
 
-						{/* Activity graph inline when only 2 types (no CUE) */}
+						{/* Activity graph inline when only 2 types (no CUE).
+						    When a host filter is active we omit the server-cached
+						    aggregate so the graph re-buckets client-side from the
+						    filtered loaded window — keeps it visually consistent
+						    with the list below. */}
 						{visibleTypes.length <= 2 && (
 							<ActivityGraph
-								entries={historyEntries}
+								entries={selectedHost ? allFilteredEntries : historyEntries}
 								theme={theme}
 								viewportRange={graphViewportRange}
 								onBarClick={handleGraphBarClickVirtualized}
@@ -675,17 +722,19 @@ export const HistoryPanel = React.memo(
 						</button>
 					</div>
 
-					{/* Activity graph on its own row when 3 types (CUE enabled) */}
+					{/* Activity graph on its own row when 3 types (CUE enabled).
+					    Same precomputed-bypass as the inline variant — host filter
+					    forces client-side bucketing from the filtered window. */}
 					{visibleTypes.length > 2 && (
 						<ActivityGraph
-							entries={historyEntries}
+							entries={selectedHost ? allFilteredEntries : historyEntries}
 							theme={theme}
 							viewportRange={graphViewportRange}
 							onBarClick={handleGraphBarClickVirtualized}
 							lookbackHours={graphLookbackHours}
 							onLookbackChange={handleLookbackChange}
-							precomputedBuckets={graphBuckets}
-							precomputedRange={graphRange}
+							precomputedBuckets={selectedHost ? undefined : graphBuckets}
+							precomputedRange={selectedHost ? undefined : graphRange}
 							alwaysShowViewportLabel
 						/>
 					)}
@@ -781,6 +830,20 @@ export const HistoryPanel = React.memo(
 						</div>
 					)}
 				</div>
+
+				{/* Source/host picker — only shown when the loaded window
+				    contains more than one host. Selecting a host narrows
+				    both the list above and the activity graph at top. */}
+				{hostCounts.size > 1 && (
+					<div className="mt-2 flex-shrink-0">
+						<HostSourceFilter
+							hostCounts={hostCounts}
+							selectedHost={selectedHost}
+							onSelect={setSelectedHost}
+							theme={theme}
+						/>
+					</div>
+				)}
 
 				{/* Detail Modal */}
 				{detailModalEntry && (

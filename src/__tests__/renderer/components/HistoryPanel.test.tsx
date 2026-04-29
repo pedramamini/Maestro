@@ -23,7 +23,6 @@ import { logger } from '../../../renderer/utils/logger';
 import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
 import { HistoryPanel, HistoryPanelHandle } from '../../../renderer/components/HistoryPanel';
 import type { Session, HistoryEntry, HistoryEntryType } from '../../../renderer/types';
-import type { Session, HistoryEntry, HistoryEntryType } from '../../../renderer/types';
 import { createMockSession as baseCreateMockSession } from '../../helpers/mockSession';
 import { useUIStore } from '../../../renderer/stores/uiStore';
 import { useSettingsStore } from '../../../renderer/stores/settingsStore';
@@ -717,6 +716,93 @@ describe('HistoryPanel', () => {
 
 			await waitFor(() => {
 				expect(screen.getByText('Session task')).toBeInTheDocument();
+			});
+		});
+
+		it('should filter by hostname', async () => {
+			const entry1 = createMockEntry({
+				id: 'e1',
+				summary: 'Local machine task',
+				hostname: 'macbook-local',
+			});
+			const entry2 = createMockEntry({
+				id: 'e2',
+				summary: 'Remote server task',
+				hostname: 'prod-server-01',
+			});
+			mockHistoryGetAll.mockResolvedValue([entry1, entry2]);
+
+			const { container } = render(
+				<HistoryPanel session={createMockSession()} theme={mockTheme} />
+			);
+
+			await waitFor(() => {
+				expect(screen.getByText('Local machine task')).toBeInTheDocument();
+				expect(screen.getByText('Remote server task')).toBeInTheDocument();
+			});
+
+			// Open search
+			const listContainer = container.querySelector('[tabIndex="0"]');
+			if (listContainer) {
+				fireEvent.keyDown(listContainer, { key: 'f', metaKey: true });
+			}
+
+			const searchInput = await screen.findByPlaceholderText('Filter history...');
+			fireEvent.change(searchInput, { target: { value: 'prod-server' } });
+
+			await waitFor(() => {
+				expect(screen.queryByText('Local machine task')).not.toBeInTheDocument();
+				expect(screen.getByText('Remote server task')).toBeInTheDocument();
+			});
+		});
+
+		it('should hide source picker when only one host is present', async () => {
+			const entry = createMockEntry({ id: 'e1', summary: 'Local only' });
+			mockHistoryGetAll.mockResolvedValue([entry]);
+
+			render(<HistoryPanel session={createMockSession()} theme={mockTheme} />);
+
+			await waitFor(() => {
+				expect(screen.getByText('Local only')).toBeInTheDocument();
+			});
+
+			expect(screen.queryByText('All Sources')).not.toBeInTheDocument();
+		});
+
+		it('should show source picker and narrow list when a host is selected', async () => {
+			const localEntry = createMockEntry({
+				id: 'e1',
+				summary: 'Local task',
+			});
+			const remoteEntry = createMockEntry({
+				id: 'e2',
+				summary: 'Remote task',
+				hostname: 'pedopswat',
+			});
+			mockHistoryGetAll.mockResolvedValue([localEntry, remoteEntry]);
+
+			render(<HistoryPanel session={createMockSession()} theme={mockTheme} />);
+
+			await waitFor(() => {
+				expect(screen.getByText('Local task')).toBeInTheDocument();
+				expect(screen.getByText('Remote task')).toBeInTheDocument();
+			});
+
+			// Default trigger label
+			const trigger = await screen.findByText('All Sources');
+			fireEvent.click(trigger);
+
+			// Popover lists hosts — select the remote one. The same host
+			// string also appears in the entry's hostname pill, so disambiguate
+			// by looking for the option in the popover's button.
+			const remoteOption = (await screen.findAllByText('pedopswat')).find((el) =>
+				el.closest('button')
+			)!;
+			fireEvent.click(remoteOption);
+
+			await waitFor(() => {
+				expect(screen.queryByText('Local task')).not.toBeInTheDocument();
+				expect(screen.getByText('Remote task')).toBeInTheDocument();
 			});
 		});
 
