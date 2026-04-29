@@ -647,6 +647,11 @@ export interface Session {
 	// Used by Cmd+Shift+T to restore any recently closed tab
 	unifiedClosedTabHistory: ClosedTabEntry[];
 
+	// Terminal tabs (foundation for terminal command persistence — see
+	// 2026-04-05-Terminal-Persistence playbook). Optional until per-tab terminal
+	// UI lands; helpers in `terminalTabHelpers.ts` no-op when absent.
+	terminalTabs?: TerminalTab[];
+
 	// Saved scroll position for terminal/shell output view
 	terminalScrollTop?: number;
 	// Draft input for terminal mode (persisted across session switches)
