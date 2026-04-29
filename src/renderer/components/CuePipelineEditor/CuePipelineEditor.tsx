@@ -455,7 +455,7 @@ function CuePipelineEditorInner({
 				onTriggerPipeline={onTriggerPipeline}
 				isDirty={isDirty}
 				runningPipelineIds={runningPipelineIds}
-				isLoading={graphLoading || !pipelinesLoaded}
+				isLoading={graphLoading || (graphSessions.length > 0 && !pipelinesLoaded)}
 				interactionMode={interactionMode}
 				setInteractionMode={setInteractionMode}
 			/>
