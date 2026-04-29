@@ -19,7 +19,7 @@ import { format, parseISO } from 'date-fns';
 import type { Theme, Session } from '../../types';
 import type { StatsTimeRange, StatsAggregation } from '../../hooks/stats/useStats';
 import { COLORBLIND_AGENT_PALETTE } from '../../constants/colorblindPalettes';
-import { findSessionByStatId, isWorktreeAgent } from './chartUtils';
+import { buildNameMap } from './chartUtils';
 
 // 10 distinct colors for agents
 const AGENT_COLORS = [
@@ -136,32 +136,6 @@ function getAgentColor(index: number, colorBlindMode: boolean): string {
 	return AGENT_COLORS[index % AGENT_COLORS.length];
 }
 
-/**
- * Extract a display name from a session ID
- * Session IDs are in format: "sessionId-ai-tabId" or similar
- * Returns the first 8 chars of the session UUID or the name if found.
- * Worktree agents are suffixed with " (WT)" so they're distinguishable in
- * legends and tooltips.
- */
-function getSessionDisplayName(sessionId: string, sessions?: Session[]): string {
-	const session = findSessionByStatId(sessionId, sessions);
-	const suffix = session && isWorktreeAgent(session) ? ' (WT)' : '';
-
-	if (session?.name) {
-		return `${session.name}${suffix}`;
-	}
-
-	// Fallback: extract the UUID part and show first 8 chars
-	// Format is typically "uuid-ai-tabId" or just "uuid"
-	const parts = sessionId.split('-');
-	if (parts.length >= 5) {
-		// UUID format: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
-		// Take first segment
-		return `${parts[0].substring(0, 8).toUpperCase()}${suffix}`;
-	}
-	return `${sessionId.substring(0, 8).toUpperCase()}${suffix}`;
-}
-
 export const AgentUsageChart = memo(function AgentUsageChart({
 	data,
 	timeRange,
@@ -196,13 +170,19 @@ export const AgentUsageChart = memo(function AgentUsageChart({
 		const topSessions = sessionTotals.slice(0, 10);
 		const agentList = topSessions.map((s) => s.sessionId);
 
-		// Build display name map and worktree flag set
+		// Resolve session IDs to user-facing display names via the shared
+		// `buildNameMap` utility — keeps name resolution consistent with the
+		// other dashboard charts. Worktree sessions still get a " (WT)" text
+		// suffix on top of the visual dashed-line indicator so they're
+		// distinguishable in tooltips where the line marker isn't visible.
+		const nameMap = buildNameMap(agentList, sessions);
 		const displayNames: Record<string, string> = {};
 		const worktreeSet = new Set<string>();
 		for (const sessionId of agentList) {
-			displayNames[sessionId] = getSessionDisplayName(sessionId, sessions);
-			const session = findSessionByStatId(sessionId, sessions);
-			if (session && isWorktreeAgent(session)) {
+			const resolved = nameMap.get(sessionId);
+			if (!resolved) continue;
+			displayNames[sessionId] = resolved.isWorktree ? `${resolved.name} (WT)` : resolved.name;
+			if (resolved.isWorktree) {
 				worktreeSet.add(sessionId);
 			}
 		}
