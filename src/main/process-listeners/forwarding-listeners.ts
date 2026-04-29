@@ -4,6 +4,7 @@
  */
 
 import type { ProcessManager } from '../process-manager';
+import type { TerminalCommandState } from '../process-manager/types';
 import type { ProcessListenerDependencies, ToolExecution } from './types';
 
 /**
@@ -41,5 +42,16 @@ export function setupForwardingListeners(
 	// Handle command exit (from runCommand - separate from PTY exit)
 	processManager.on('command-exit', (sessionId: string, code: number) => {
 		safeSend('process:command-exit', sessionId, code);
+	});
+
+	// Handle terminal shell-integration command-state snapshots
+	// Emitted by PtySpawner when OSC 133 B/D sequences fire (command start/finish)
+	processManager.on('terminal-command-state', (sessionId: string, state: TerminalCommandState) => {
+		safeSend('process:terminal-command-state', sessionId, state);
+	});
+
+	// Handle terminal CWD changes (OSC 7 from shell integration)
+	processManager.on('terminal-cwd', (sessionId: string, cwd: string) => {
+		safeSend('process:terminal-cwd', sessionId, cwd);
 	});
 }
