@@ -103,6 +103,65 @@ interface StatsAggregation {
 // View mode options for the dashboard
 type ViewMode = 'overview' | 'agents' | 'activity' | 'autorun';
 
+// Drill-down filter applied across all charts. `key` is the per-agent map key
+// used in `byAgent` / `byAgentByDay` (or session id for `bySessionByDay`).
+interface DashboardFilter {
+	type: 'agent' | 'session';
+	key: string;
+	displayName: string;
+}
+
+/**
+ * Filter a StatsAggregation down to a single agent's data.
+ *
+ * Filters the per-agent maps (`byAgent`, `byAgentByDay`, `bySessionByDay`) to
+ * include only entries for the selected key, then recalculates the totals
+ * (`totalQueries`, `totalDuration`, `avgDuration`) from what remains. Other
+ * fields (per-source, per-location, per-day, per-hour) are passed through
+ * unchanged — the per-agent data does not exist on those breakdowns, so the
+ * filtered view falls back to global numbers for charts that consume them.
+ */
+function filterStatsForAgent(stats: StatsAggregation, agentKey: string): StatsAggregation {
+	const agentEntry = stats.byAgent[agentKey];
+	const filteredByAgent: Record<string, { count: number; duration: number }> = agentEntry
+		? { [agentKey]: agentEntry }
+		: {};
+
+	const agentDayEntry = stats.byAgentByDay[agentKey];
+	const filteredByAgentByDay: Record<
+		string,
+		Array<{ date: string; count: number; duration: number }>
+	> = agentDayEntry ? { [agentKey]: agentDayEntry } : {};
+
+	// `bySessionByDay` is keyed by session id, but the drill-down filter key is
+	// an agent identifier. Match sessions whose key starts with the agent key
+	// (the agent provider is the prefix in session ids); when nothing matches,
+	// fall back to an empty map so dependent charts render zero state.
+	const filteredBySessionByDay: Record<
+		string,
+		Array<{ date: string; count: number; duration: number }>
+	> = {};
+	for (const [sessionKey, days] of Object.entries(stats.bySessionByDay)) {
+		if (sessionKey === agentKey || sessionKey.startsWith(`${agentKey}:`)) {
+			filteredBySessionByDay[sessionKey] = days;
+		}
+	}
+
+	const totalQueries = agentEntry?.count ?? 0;
+	const totalDuration = agentEntry?.duration ?? 0;
+	const avgDuration = totalQueries > 0 ? totalDuration / totalQueries : 0;
+
+	return {
+		...stats,
+		byAgent: filteredByAgent,
+		byAgentByDay: filteredByAgentByDay,
+		bySessionByDay: filteredBySessionByDay,
+		totalQueries,
+		totalDuration,
+		avgDuration,
+	};
+}
+
 interface UsageDashboardModalProps {
 	isOpen: boolean;
 	onClose: () => void;
@@ -170,6 +229,7 @@ export function UsageDashboardModal({
 	const [showNewDataIndicator, setShowNewDataIndicator] = useState(false);
 	const [databaseSize, setDatabaseSize] = useState<number | null>(null);
 	const [focusedSection, setFocusedSection] = useState<SectionId | null>(null);
+	const [filter, setFilter] = useState<DashboardFilter | null>(null);
 
 	const containerRef = useRef<HTMLDivElement>(null);
 	const contentRef = useRef<HTMLDivElement>(null);
@@ -285,6 +345,38 @@ export function UsageDashboardModal({
 		setViewMode(mode);
 		setFocusedSection(null);
 	}, []);
+
+	// Drill-down filter handlers. Clicking the same agent again clears the
+	// filter (toggle); clicking a different agent replaces it.
+	const handleFilterByAgent = useCallback((key: string, displayName: string) => {
+		setFilter((current) =>
+			current && current.type === 'agent' && current.key === key
+				? null
+				: { type: 'agent', key, displayName }
+		);
+	}, []);
+
+	const clearFilter = useCallback(() => {
+		setFilter(null);
+	}, []);
+
+	// Apply the active filter to the aggregation. When no filter is set, pass
+	// the raw stats through unchanged so referential equality is preserved
+	// (downstream charts can rely on memoization).
+	const filteredStats = useMemo(() => {
+		if (!data || !filter) return data;
+		if (filter.type === 'agent') {
+			return filterStatsForAgent(data, filter.key);
+		}
+		return data;
+	}, [data, filter]);
+
+	// These bindings are scaffolding for the drill-down UI (filter bar,
+	// per-chart click handlers) added in the follow-up task. `void` keeps
+	// TS6133 / no-unused-vars quiet without leaving the wiring half-built.
+	void handleFilterByAgent;
+	void clearFilter;
+	void filteredStats;
 
 	// Handle Cmd+Shift+[ and Cmd+Shift+] for tab navigation
 	useEffect(() => {
