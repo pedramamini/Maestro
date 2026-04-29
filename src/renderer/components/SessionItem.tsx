@@ -8,6 +8,43 @@ import { getStatusColor } from '../utils/theme';
 // ============================================================================
 
 /**
+ * Maps session state (plus batch / disconnected overrides) to a status color,
+ * an animation flag, and a human-readable label used for the status dot tooltip.
+ *
+ * Special cases:
+ * - `isInBatch`: always warning + pulse (Auto Run takes precedence over agent state)
+ * - Claude Code without an `agentSessionId`: hollow dot signal (textDim, no animation)
+ */
+export function getEnhancedStatusColor(
+	session: Session,
+	theme: Theme,
+	isInBatch: boolean
+): { color: string; animate: boolean; label: string } {
+	if (isInBatch) {
+		return { color: theme.colors.warning, animate: true, label: 'Auto Run active' };
+	}
+
+	if (session.toolType === 'claude-code' && !session.agentSessionId) {
+		return { color: theme.colors.textDim, animate: false, label: 'No active Claude session' };
+	}
+
+	switch (session.state) {
+		case 'idle':
+			return { color: theme.colors.success, animate: false, label: 'Ready' };
+		case 'busy':
+			return { color: theme.colors.warning, animate: true, label: 'Thinking' };
+		case 'error':
+			return { color: theme.colors.error, animate: false, label: 'Error' };
+		case 'connecting':
+			return { color: '#ff8800', animate: true, label: 'Connecting' };
+		case 'waiting_input':
+			return { color: theme.colors.accent, animate: true, label: 'Waiting for input' };
+		default:
+			return { color: theme.colors.textDim, animate: false, label: 'Unknown' };
+	}
+}
+
+/**
  * Variant determines the context in which the session item is rendered:
  * - 'bookmark': Session in the Bookmarks folder (shows group badge if session belongs to a group)
  * - 'group': Session inside a group folder
