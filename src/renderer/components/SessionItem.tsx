@@ -1,5 +1,14 @@
 import React, { memo } from 'react';
-import { Activity, GitBranch, Bot, Bookmark, AlertCircle, Server, FolderTree } from 'lucide-react';
+import {
+	Activity,
+	GitBranch,
+	Bot,
+	Bookmark,
+	AlertCircle,
+	Server,
+	FolderTree,
+	ChevronRight,
+} from 'lucide-react';
 import type { Session, Group, Theme } from '../types';
 
 // ============================================================================
@@ -71,6 +80,7 @@ export interface SessionItemProps {
 	gitFileCount?: number;
 	isInBatch?: boolean;
 	jumpNumber?: string | null; // Session jump shortcut number (1-9, 0)
+	worktreeChildCount?: number; // Number of worktree children (used for collapsed count badge)
 
 	// Handlers
 	onSelect: () => void;
@@ -81,6 +91,7 @@ export interface SessionItemProps {
 	onFinishRename: (newName: string) => void;
 	onStartRename: () => void;
 	onToggleBookmark: () => void;
+	onToggleWorktrees?: (sessionId: string) => void;
 }
 
 /**
@@ -111,6 +122,7 @@ export const SessionItem = memo(function SessionItem({
 	gitFileCount,
 	isInBatch = false,
 	jumpNumber,
+	worktreeChildCount,
 	onSelect,
 	onDragStart,
 	onDragOver,
@@ -119,7 +131,14 @@ export const SessionItem = memo(function SessionItem({
 	onFinishRename,
 	onStartRename,
 	onToggleBookmark,
+	onToggleWorktrees,
 }: SessionItemProps) {
+	// Parent agents (sessions with worktreeConfig) get an inline chevron toggle.
+	// Default to expanded when worktreesExpanded is undefined to match useSortedSessions.
+	const isWorktreeParent = variant !== 'worktree' && Boolean(session.worktreeConfig);
+	const worktreesExpanded = session.worktreesExpanded ?? true;
+	const showCollapsedCountBadge =
+		isWorktreeParent && !worktreesExpanded && (worktreeChildCount ?? 0) > 0;
 	// Determine if we show the GIT/LOCAL badge (not shown in bookmark variant, terminal sessions, or worktree variant)
 	const showGitLocalBadge =
 		variant !== 'bookmark' && variant !== 'worktree' && session.toolType !== 'terminal';
@@ -184,6 +203,38 @@ export const SessionItem = memo(function SessionItem({
 					/>
 				) : (
 					<div className="flex items-center gap-1.5" onDoubleClick={onStartRename}>
+						{/* Worktree expand/collapse chevron for parent agents (rotates 90deg when expanded) */}
+						{isWorktreeParent && onToggleWorktrees && (
+							<button
+								type="button"
+								onClick={(e) => {
+									e.stopPropagation();
+									onToggleWorktrees(session.id);
+								}}
+								className="w-4 h-4 rounded hover:bg-white/10 shrink-0 flex items-center justify-center transition-colors"
+								title={worktreesExpanded ? 'Collapse worktrees' : 'Expand worktrees'}
+								aria-label={worktreesExpanded ? 'Collapse worktrees' : 'Expand worktrees'}
+								aria-expanded={worktreesExpanded}
+							>
+								<ChevronRight
+									className={`w-3 h-3 transition-transform duration-200 ${worktreesExpanded ? 'rotate-90' : ''}`}
+									style={{ color: theme.colors.textDim }}
+								/>
+							</button>
+						)}
+						{/* Collapsed worktree child count badge */}
+						{showCollapsedCountBadge && (
+							<span
+								className="text-[9px] px-1.5 py-0.5 rounded-full shrink-0 font-medium"
+								style={{
+									backgroundColor: theme.colors.accent + '33',
+									color: theme.colors.accent,
+								}}
+								title={`${worktreeChildCount} hidden worktree${worktreeChildCount === 1 ? '' : 's'}`}
+							>
+								{worktreeChildCount}
+							</span>
+						)}
 						{/* Bookmark icon (only in bookmark variant, always filled) */}
 						{variant === 'bookmark' && session.bookmarked && (
 							<Bookmark
