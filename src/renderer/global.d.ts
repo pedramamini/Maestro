@@ -151,6 +151,7 @@ type GroupChatData = {
 
 import type { CueGraphSession, CueRunResult, CueSessionStatus, CueSettings } from '../shared/cue';
 import type { CueLogPayload } from '../shared/cue-log-types';
+import type { CueStatsAggregation, CueStatsTimeRange } from '../shared/cue-stats-types';
 import type { MaestroCliStatus, MaestroCliInstallResult } from '../shared/maestro-cli';
 import type { GitWorktreeSetupResult, GitWorktreeCheckoutResult } from '../main/preload/git';
 
@@ -2625,6 +2626,13 @@ interface MaestroAPI {
 		} | null>;
 		// Clear initialization result (after user has acknowledged the notification)
 		clearInitializationResult: () => Promise<boolean>;
+	};
+	// Cue Stats API (Phase 03 — Cue Dashboard aggregation query)
+	// Throws 'CueStatsDisabled' when either encoreFeatures.usageStats or
+	// encoreFeatures.maestroCue is off; consumers should catch and render
+	// the "feature off" state.
+	cueStats: {
+		getAggregation: (range: CueStatsTimeRange) => Promise<CueStatsAggregation>;
 	};
 	// Document Graph API (file watching for graph visualization)
 	documentGraph: {

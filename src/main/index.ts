@@ -55,6 +55,7 @@ import {
 	registerContextHandlers,
 	registerMarketplaceHandlers,
 	registerStatsHandlers,
+	registerCueStatsHandlers,
 	registerDocumentGraphHandlers,
 	registerSshRemoteHandlers,
 	registerFilesystemHandlers,
@@ -1043,6 +1044,11 @@ function setupIpcHandlers() {
 	// Register Stats handlers for usage tracking
 	registerStatsHandlers({
 		getMainWindow: () => mainWindow,
+		settingsStore: store,
+	});
+
+	// Register Cue Stats handlers for the Cue Dashboard aggregation query
+	registerCueStatsHandlers({
 		settingsStore: store,
 	});
 
