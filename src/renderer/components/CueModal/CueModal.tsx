@@ -272,6 +272,7 @@ export function CueModal({ theme, onClose, cueShortcutKeys }: CueModalProps) {
 									onRetry={handleRetry}
 									sessions={sessions}
 									activeRuns={activeRuns}
+									activityLog={activityLog}
 									queueStatus={queueStatus}
 									graphSessions={graphSessions}
 									dashboardPipelines={dashboardPipelines}
