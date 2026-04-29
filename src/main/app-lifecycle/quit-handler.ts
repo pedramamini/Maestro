@@ -236,9 +236,15 @@ export function createQuitHandler(deps: QuitHandlerDependencies): QuitHandler {
 		stopAllCueShellRuns();
 		stopAllCueCliRuns();
 
-		// Clean up all running processes
+		// Clean up all running processes. shutdown:true makes PTYs SIGKILL
+		// immediately (no SIGTERM grace, no escalation timer, no onExit
+		// listener) so node-pty's worker threads exit and release their
+		// N-API ThreadSafeFunctions before Electron tears down the Node
+		// environment. Otherwise CleanupHandles can finalize a TSFN whose
+		// underlying mutex is already gone, aborting the main process
+		// (Sentry MAESTRO-3B).
 		logger.info('Killing all running processes', 'Shutdown');
-		processManager?.killAll();
+		processManager?.killAll({ shutdown: true });
 
 		// Clear power save blocker AFTER killAll() to prevent late process output
 		// from re-arming the blocker via addBlockReason()
