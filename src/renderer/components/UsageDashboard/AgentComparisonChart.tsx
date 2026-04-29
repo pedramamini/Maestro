@@ -41,9 +41,13 @@ interface AgentComparisonChartProps {
 	colorBlindMode?: boolean;
 	/** Current sessions list — when provided, worktree agents are split into separate bars. */
 	sessions?: Session[];
-	/** Drill-down click handler — wired by the dashboard, consumed in a follow-up task. */
+	/** Drill-down click handler — fires with the bar's `key`/`label` on click. */
 	onAgentClick?: (key: string, displayName: string) => void;
-	/** Active drill-down filter key — consumed in a follow-up task to dim non-selected bars. */
+	/**
+	 * Active drill-down filter key. When set, the matching bar gets an accent
+	 * outline; non-matching bars dim to 30% opacity. `null` (or undefined) means
+	 * no filter is active and bars render normally.
+	 */
 	activeFilterKey?: string | null;
 }
 
@@ -118,6 +122,8 @@ export const AgentComparisonChart = memo(function AgentComparisonChart({
 	theme,
 	colorBlindMode = false,
 	sessions,
+	onAgentClick,
+	activeFilterKey = null,
 }: AgentComparisonChartProps) {
 	const [hoveredAgent, setHoveredAgent] = useState<string | null>(null);
 	const [tooltipPos, setTooltipPos] = useState<{ x: number; y: number } | null>(null);
@@ -277,6 +283,17 @@ export const AgentComparisonChart = memo(function AgentComparisonChart({
 		setTooltipPos(null);
 	}, []);
 
+	// Forward bar clicks to the dashboard's drill-down handler. The dashboard
+	// owns toggle behavior (clicking the active bar clears the filter); this
+	// component just reports which row was clicked.
+	const handleAgentClick = useCallback(
+		(key: string, label: string) => {
+			if (!onAgentClick) return;
+			onAgentClick(key, label);
+		},
+		[onAgentClick]
+	);
+
 	// Get hovered agent data for tooltip (matched by row key, since the same
 	// provider can appear twice — once as regular and once as worktree).
 	const hoveredAgentData = useMemo(() => {
@@ -296,7 +313,10 @@ export const AgentComparisonChart = memo(function AgentComparisonChart({
 		>
 			{/* Header */}
 			<div className="flex items-center justify-between mb-4">
-				<h3 className="text-sm font-medium" style={{ color: theme.colors.textMain }}>
+				<h3
+					className="text-sm font-medium"
+					style={{ color: theme.colors.textMain, animation: 'card-enter 0.4s ease both' }}
+				>
 					Provider Comparison
 				</h3>
 			</div>
@@ -315,16 +335,38 @@ export const AgentComparisonChart = memo(function AgentComparisonChart({
 						{agentData.map((agent) => {
 							const barWidth = maxDuration > 0 ? (agent.duration / maxDuration) * 100 : 0;
 							const isHovered = hoveredAgent === agent.key;
+							const isClickable = !!onAgentClick;
+							const isFiltered = activeFilterKey != null;
+							const isSelected = isFiltered && activeFilterKey === agent.key;
+							const isDimmed = isFiltered && !isSelected;
 
 							return (
 								<div
 									key={agent.key}
 									className="flex items-center gap-3"
-									style={{ height: barHeight }}
+									style={{
+										height: barHeight,
+										cursor: isClickable ? 'pointer' : undefined,
+										opacity: isDimmed ? 0.3 : 1,
+										transition: 'opacity 0.2s ease',
+									}}
 									onMouseEnter={(e) => handleMouseEnter(agent.key, e)}
 									onMouseLeave={handleMouseLeave}
+									onClick={isClickable ? () => handleAgentClick(agent.key, agent.label) : undefined}
+									onKeyDown={
+										isClickable
+											? (e) => {
+													if (e.key === 'Enter' || e.key === ' ') {
+														e.preventDefault();
+														handleAgentClick(agent.key, agent.label);
+													}
+												}
+											: undefined
+									}
 									role="listitem"
-									aria-label={`${agent.label}: ${agent.count} queries, ${formatDuration(agent.duration)}`}
+									tabIndex={isClickable ? 0 : undefined}
+									aria-pressed={isClickable ? isSelected : undefined}
+									aria-label={`${agent.label}: ${agent.count} queries, ${formatDuration(agent.duration)}${isClickable ? '. Click to filter dashboard.' : ''}`}
 								>
 									{/* Agent name label */}
 									<div
@@ -342,6 +384,11 @@ export const AgentComparisonChart = memo(function AgentComparisonChart({
 										className="flex-1 h-full rounded overflow-hidden relative"
 										style={{
 											backgroundColor: `${theme.colors.border}30`,
+											// Selected bar gets an accent outline (analogue of recharts
+											// `<Cell>` stroke + strokeWidth). `boxShadow` is used over
+											// `border` so the bar geometry doesn't shift on selection.
+											boxShadow: isSelected ? `inset 0 0 0 2px ${theme.colors.accent}` : undefined,
+											transition: 'box-shadow 0.2s ease',
 										}}
 										role="meter"
 										aria-valuenow={agent.durationPercentage}

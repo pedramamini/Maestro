@@ -13,7 +13,7 @@
  * - Applies theme colors correctly
  */
 
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import React from 'react';
 import { AgentComparisonChart } from '../../../../renderer/components/UsageDashboard/AgentComparisonChart';
@@ -532,6 +532,171 @@ describe('AgentComparisonChart', () => {
 			render(<AgentComparisonChart data={mockData} theme={theme} />);
 
 			expect(screen.queryByText(/\(Worktree\)/)).not.toBeInTheDocument();
+		});
+	});
+
+	describe('Drill-Down Filtering', () => {
+		// `[role="listitem"]` targets the outer bar row only — the inner count/
+		// duration labels share `.flex.items-center.gap-3` but have no role.
+		const BAR_ROW_SELECTOR = '[role="listitem"][aria-label]';
+
+		it('does not set cursor pointer or tabIndex when onAgentClick is not provided', () => {
+			const { container } = render(<AgentComparisonChart data={mockData} theme={theme} />);
+
+			const barRows = container.querySelectorAll(BAR_ROW_SELECTOR);
+			expect(barRows.length).toBeGreaterThan(0);
+			const firstRow = barRows[0] as HTMLElement;
+			expect(firstRow.style.cursor).toBe('');
+			expect(firstRow.getAttribute('tabIndex')).toBeNull();
+		});
+
+		it('sets cursor pointer and tabIndex when onAgentClick is provided', () => {
+			const onAgentClick = vi.fn();
+			const { container } = render(
+				<AgentComparisonChart data={mockData} theme={theme} onAgentClick={onAgentClick} />
+			);
+
+			const barRows = container.querySelectorAll(BAR_ROW_SELECTOR);
+			const firstRow = barRows[0] as HTMLElement;
+			expect(firstRow.style.cursor).toBe('pointer');
+			expect(firstRow.getAttribute('tabIndex')).toBe('0');
+		});
+
+		it('fires onAgentClick with the bar key and resolved label on click', () => {
+			const onAgentClick = vi.fn();
+			const { container } = render(
+				<AgentComparisonChart data={mockData} theme={theme} onAgentClick={onAgentClick} />
+			);
+
+			// Bars are sorted by duration desc → claude-code is first.
+			const barRows = container.querySelectorAll(BAR_ROW_SELECTOR);
+			fireEvent.click(barRows[0]);
+
+			expect(onAgentClick).toHaveBeenCalledTimes(1);
+			expect(onAgentClick).toHaveBeenCalledWith('claude-code', 'Claude Code');
+		});
+
+		it('fires onAgentClick on Enter and Space key activation', () => {
+			const onAgentClick = vi.fn();
+			const { container } = render(
+				<AgentComparisonChart data={mockData} theme={theme} onAgentClick={onAgentClick} />
+			);
+
+			const barRows = container.querySelectorAll(BAR_ROW_SELECTOR);
+			fireEvent.keyDown(barRows[0], { key: 'Enter' });
+			fireEvent.keyDown(barRows[0], { key: ' ' });
+
+			expect(onAgentClick).toHaveBeenCalledTimes(2);
+		});
+
+		it('dims non-matching bars to 30% opacity when activeFilterKey is set', () => {
+			const { container } = render(
+				<AgentComparisonChart
+					data={mockData}
+					theme={theme}
+					onAgentClick={vi.fn()}
+					activeFilterKey="claude-code"
+				/>
+			);
+
+			const barRows = container.querySelectorAll(BAR_ROW_SELECTOR);
+			// Sorted: claude-code (selected, opacity 1), factory-droid + terminal (dimmed)
+			expect((barRows[0] as HTMLElement).style.opacity).toBe('1');
+			expect((barRows[1] as HTMLElement).style.opacity).toBe('0.3');
+			expect((barRows[2] as HTMLElement).style.opacity).toBe('0.3');
+		});
+
+		it('renders bars at full opacity when no filter is active', () => {
+			const { container } = render(
+				<AgentComparisonChart
+					data={mockData}
+					theme={theme}
+					onAgentClick={vi.fn()}
+					activeFilterKey={null}
+				/>
+			);
+
+			const barRows = container.querySelectorAll(BAR_ROW_SELECTOR);
+			barRows.forEach((row) => {
+				expect((row as HTMLElement).style.opacity).toBe('1');
+			});
+		});
+
+		it('applies an accent-colored outline to the selected bar container', () => {
+			const { container } = render(
+				<AgentComparisonChart
+					data={mockData}
+					theme={theme}
+					onAgentClick={vi.fn()}
+					activeFilterKey="claude-code"
+				/>
+			);
+
+			const barContainers = container.querySelectorAll(
+				'.flex-1.h-full.rounded.overflow-hidden.relative'
+			);
+			expect(barContainers.length).toBe(3);
+			// Selected bar (claude-code, sorted first) gets an inset accent outline.
+			const selected = barContainers[0] as HTMLElement;
+			expect(selected.style.boxShadow).toContain('inset');
+			expect(selected.style.boxShadow).toContain('2px');
+			// Non-selected bars do not have the outline.
+			expect((barContainers[1] as HTMLElement).style.boxShadow).toBe('');
+		});
+
+		it('reflects selection state via aria-pressed', () => {
+			const { container } = render(
+				<AgentComparisonChart
+					data={mockData}
+					theme={theme}
+					onAgentClick={vi.fn()}
+					activeFilterKey="factory-droid"
+				/>
+			);
+
+			const barRows = container.querySelectorAll(BAR_ROW_SELECTOR);
+			// Sorted by duration: claude-code (false), factory-droid (true), terminal (false).
+			expect(barRows[0].getAttribute('aria-pressed')).toBe('false');
+			expect(barRows[1].getAttribute('aria-pressed')).toBe('true');
+			expect(barRows[2].getAttribute('aria-pressed')).toBe('false');
+		});
+
+		it('passes the worktree key suffix when a worktree bar is clicked', () => {
+			const parent = makeSession({ id: 'parent', toolType: 'claude-code' });
+			const worktree = makeSession({
+				id: 'wt-1',
+				toolType: 'claude-code',
+				parentSessionId: 'parent',
+			});
+			const onAgentClick = vi.fn();
+
+			const dataWithSessions: StatsAggregation = {
+				...mockData,
+				bySessionByDay: {
+					parent: [{ date: '2024-12-20', count: 20, duration: 1500000 }],
+					'wt-1': [{ date: '2024-12-20', count: 10, duration: 500000 }],
+				},
+			};
+
+			const { container } = render(
+				<AgentComparisonChart
+					data={dataWithSessions}
+					theme={theme}
+					sessions={[parent, worktree]}
+					onAgentClick={onAgentClick}
+				/>
+			);
+
+			// Find the worktree bar by aria-label suffix and click it.
+			const barRows = Array.from(container.querySelectorAll(BAR_ROW_SELECTOR)) as HTMLElement[];
+			const worktreeRow = barRows.find((row) =>
+				row.getAttribute('aria-label')?.startsWith('Claude Code (Worktree)')
+			);
+			expect(worktreeRow).toBeDefined();
+
+			fireEvent.click(worktreeRow!);
+
+			expect(onAgentClick).toHaveBeenCalledWith('claude-code__worktree', 'Claude Code (Worktree)');
 		});
 	});
 
