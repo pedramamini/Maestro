@@ -16,7 +16,7 @@ import { memo, useMemo } from 'react';
 import type { Theme, Session } from '../../types';
 import type { StatsAggregation } from '../../hooks/stats/useStats';
 import { COLORBLIND_AGENT_PALETTE } from '../../constants/colorblindPalettes';
-import { findSessionByStatId, isWorktreeAgent } from './chartUtils';
+import { findSessionByStatId, isWorktreeAgent, buildNameMap } from './chartUtils';
 
 interface AgentEfficiencyChartProps {
 	/** Aggregated stats data from the API */
@@ -25,7 +25,8 @@ interface AgentEfficiencyChartProps {
 	theme: Theme;
 	/** Enable colorblind-friendly colors */
 	colorBlindMode?: boolean;
-	/** Current sessions list — when provided, worktree agents render with a dashed/striped pattern. */
+	/** Current sessions list — when provided, agents are labeled with their
+	 * user-assigned session names and worktree agents render with a striped pattern. */
 	sessions?: Session[];
 }
 
@@ -47,23 +48,6 @@ function formatDuration(ms: number): string {
 		return `${minutes}m ${seconds}s`;
 	}
 	return `${seconds}s`;
-}
-
-/**
- * Format agent type display name
- */
-function formatAgentName(agent: string): string {
-	const names: Record<string, string> = {
-		'claude-code': 'Claude Code',
-		opencode: 'OpenCode',
-		'openai-codex': 'OpenAI Codex',
-		codex: 'Codex',
-		'gemini-cli': 'Gemini CLI',
-		'qwen3-coder': 'Qwen3 Coder',
-		'factory-droid': 'Factory Droid',
-		terminal: 'Terminal',
-	};
-	return names[agent] || agent;
 }
 
 /**
@@ -152,12 +136,25 @@ export const AgentEfficiencyChart = memo(function AgentEfficiencyChart({
 
 		const entries: Entry[] = [];
 
+		// Resolve raw provider keys (e.g. "claude-code") to user-facing names
+		// (e.g. the user's "Backend API" session name, or the prettified
+		// "Claude Code" fallback). Built from the union of byAgent and the split
+		// aggregation so both rendering paths get coherent labels.
+		const providerKeys = Array.from(
+			new Set([
+				...Object.keys(data.byAgent),
+				...(splitAggregation ? Object.keys(splitAggregation) : []),
+			])
+		);
+		const nameMap = buildNameMap(providerKeys, sessions);
+
 		if (splitAggregation) {
 			for (const [provider, buckets] of Object.entries(splitAggregation)) {
+				const baseLabel = nameMap.get(provider)?.name ?? provider;
 				if (buckets.regular.count > 0) {
 					entries.push({
 						key: provider,
-						label: formatAgentName(provider),
+						label: baseLabel,
 						agent: provider,
 						avgDuration: buckets.regular.duration / buckets.regular.count,
 						totalQueries: buckets.regular.count,
@@ -168,7 +165,7 @@ export const AgentEfficiencyChart = memo(function AgentEfficiencyChart({
 				if (buckets.worktree.count > 0) {
 					entries.push({
 						key: `${provider}__worktree`,
-						label: `${formatAgentName(provider)} (Worktree)`,
+						label: `${baseLabel} (Worktree)`,
 						agent: provider,
 						avgDuration: buckets.worktree.duration / buckets.worktree.count,
 						totalQueries: buckets.worktree.count,
@@ -180,20 +177,21 @@ export const AgentEfficiencyChart = memo(function AgentEfficiencyChart({
 		} else {
 			for (const [agent, stats] of Object.entries(data.byAgent)) {
 				if (stats.count <= 0) continue;
+				const resolved = nameMap.get(agent);
 				entries.push({
 					key: agent,
-					label: formatAgentName(agent),
+					label: resolved?.name ?? agent,
 					agent,
 					avgDuration: stats.duration / stats.count,
 					totalQueries: stats.count,
 					totalDuration: stats.duration,
-					isWorktree: false,
+					isWorktree: resolved?.isWorktree ?? false,
 				});
 			}
 		}
 
 		return entries.sort((a, b) => a.avgDuration - b.avgDuration); // Fastest first
-	}, [data.byAgent, splitAggregation]);
+	}, [data.byAgent, splitAggregation, sessions]);
 
 	const hasWorktreeBars = useMemo(() => efficiencyData.some((e) => e.isWorktree), [efficiencyData]);
 
