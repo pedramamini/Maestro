@@ -81,29 +81,48 @@ function queryBySource(db: Database.Database, startTime: number): { user: number
 function queryByWorktreeStatus(
 	db: Database.Database,
 	startTime: number
-): { worktreeQueries: number; parentQueries: number } {
+): {
+	worktreeQueries: number;
+	parentQueries: number;
+	byWorktreeStatus: {
+		worktree: { count: number; duration: number };
+		parent: { count: number; duration: number };
+	};
+} {
 	const perfStart = perfMetrics.start();
 	const rows = db
 		.prepare(
 			`
-      SELECT COALESCE(is_worktree, 0) as is_worktree, COUNT(*) as count
+      SELECT COALESCE(is_worktree, 0) as is_worktree,
+             COUNT(*) as count,
+             COALESCE(SUM(duration), 0) as duration
       FROM query_events
       WHERE start_time >= ?
       GROUP BY COALESCE(is_worktree, 0)
     `
 		)
-		.all(startTime) as Array<{ is_worktree: number; count: number }>;
+		.all(startTime) as Array<{ is_worktree: number; count: number; duration: number }>;
 
-	const result = { worktreeQueries: 0, parentQueries: 0 };
+	const byWorktreeStatus = {
+		worktree: { count: 0, duration: 0 },
+		parent: { count: 0, duration: 0 },
+	};
 	for (const row of rows) {
 		if (row.is_worktree === 1) {
-			result.worktreeQueries = row.count;
+			byWorktreeStatus.worktree.count += row.count;
+			byWorktreeStatus.worktree.duration += row.duration;
 		} else {
-			result.parentQueries += row.count;
+			// Treat NULL (legacy data) and 0 as parent
+			byWorktreeStatus.parent.count += row.count;
+			byWorktreeStatus.parent.duration += row.duration;
 		}
 	}
 	perfMetrics.end(perfStart, 'getAggregatedStats:byWorktreeStatus');
-	return result;
+	return {
+		worktreeQueries: byWorktreeStatus.worktree.count,
+		parentQueries: byWorktreeStatus.parent.count,
+		byWorktreeStatus,
+	};
 }
 
 function queryByLocation(
@@ -380,5 +399,6 @@ export function getAggregatedStats(db: Database.Database, range: StatsTimeRange)
 		bySessionByDay,
 		worktreeQueries: worktreeStatus.worktreeQueries,
 		parentQueries: worktreeStatus.parentQueries,
+		byWorktreeStatus: worktreeStatus.byWorktreeStatus,
 	};
 }

@@ -2239,6 +2239,10 @@ interface MaestroAPI {
 			bySessionByDay: Record<string, Array<{ date: string; count: number; duration: number }>>;
 			worktreeQueries: number;
 			parentQueries: number;
+			byWorktreeStatus: {
+				worktree: { count: number; duration: number };
+				parent: { count: number; duration: number };
+			};
 		}>;
 		// Export query events to CSV
 		exportCsv: (range: 'day' | 'week' | 'month' | 'quarter' | 'year' | 'all') => Promise<string>;

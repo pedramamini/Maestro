@@ -105,6 +105,11 @@ export interface StatsAggregation {
 	worktreeQueries: number;
 	/** Count of queries originating from parent (non-worktree) agents */
 	parentQueries: number;
+	/** Detailed worktree breakdown including duration totals (for activity split bar) */
+	byWorktreeStatus: {
+		worktree: { count: number; duration: number };
+		parent: { count: number; duration: number };
+	};
 }
 
 /**
