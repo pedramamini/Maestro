@@ -102,9 +102,17 @@ const CREATE_CUE_EVENT_QUEUE_SQL = `
     action TEXT,
     command_json TEXT,
     chain_depth INTEGER DEFAULT 0,
-    queued_at INTEGER NOT NULL
+    queued_at INTEGER NOT NULL,
+    chain_root_id TEXT,
+    parent_event_id TEXT
   )
 `;
+
+// Phase 01 additive columns on the persisted queue. Kept separate from the
+// `cue_events` additive set because the two tables migrate independently:
+// queue rows are transient (deleted on dispatch), so the migration only needs
+// to keep schema in sync without backfilling values.
+const CUE_EVENT_QUEUE_ADDITIVE_COLUMNS = ['chain_root_id', 'parent_event_id'] as const;
 
 const CREATE_CUE_EVENT_QUEUE_INDEXES_SQL = `
   CREATE INDEX IF NOT EXISTS idx_cue_event_queue_session ON cue_event_queue(session_id);
@@ -173,6 +181,7 @@ export function initCueDb(
 	db.prepare(CREATE_CUE_GITHUB_SEEN_SQL).run();
 	db.prepare(CREATE_CUE_GITHUB_SEEN_INDEX_SQL).run();
 	db.prepare(CREATE_CUE_EVENT_QUEUE_SQL).run();
+	migrateCueEventQueueAdditiveColumns(db);
 	for (const sql of CREATE_CUE_EVENT_QUEUE_INDEXES_SQL.split(';').filter((s) => s.trim())) {
 		db.prepare(sql).run();
 	}
@@ -221,6 +230,23 @@ function migrateCueEventsAdditiveColumns(database: Database.Database): void {
 	for (const column of CUE_EVENTS_ADDITIVE_COLUMNS) {
 		if (!existingNames.has(column)) {
 			database.prepare(`ALTER TABLE cue_events ADD COLUMN ${column} TEXT`).run();
+		}
+	}
+}
+
+/**
+ * Idempotent migration: ensures the `cue_event_queue` table carries the Phase
+ * 01 chain-lineage columns (`chain_root_id`, `parent_event_id`) so persisted
+ * queue rows survive a crash with their lineage intact. Without this, recovery
+ * would orphan resumed runs into fresh chain roots in stats. Mirrors the
+ * conditional-ALTER pattern of `migrateCueEventsAdditiveColumns`.
+ */
+function migrateCueEventQueueAdditiveColumns(database: Database.Database): void {
+	const existing = database.pragma('table_info(cue_event_queue)') as Array<{ name: string }>;
+	const existingNames = new Set(existing.map((row) => row.name));
+	for (const column of CUE_EVENT_QUEUE_ADDITIVE_COLUMNS) {
+		if (!existingNames.has(column)) {
+			database.prepare(`ALTER TABLE cue_event_queue ADD COLUMN ${column} TEXT`).run();
 		}
 	}
 }
@@ -501,6 +527,11 @@ export interface CueQueuedEventRecord {
 	commandJson: string | null;
 	chainDepth: number;
 	queuedAt: number;
+	/** Phase 01 — chain root identity copied from the parent run, NULL for roots
+	 *  and for queue rows persisted before usageStats was enabled. */
+	chainRootId: string | null;
+	/** Phase 01 — immediate parent's runId, NULL for roots. */
+	parentEventId: string | null;
 }
 
 /** Persist a queued event. Throws on DB failure — use safePersistQueuedEvent for
@@ -510,8 +541,9 @@ export function persistQueuedEvent(record: CueQueuedEventRecord): void {
 		.prepare(
 			`INSERT OR REPLACE INTO cue_event_queue
 			 (id, session_id, subscription_name, event_json, prompt, output_prompt,
-			  cli_output_json, action, command_json, chain_depth, queued_at)
-			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+			  cli_output_json, action, command_json, chain_depth, queued_at,
+			  chain_root_id, parent_event_id)
+			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
 		)
 		.run(
 			record.id,
@@ -524,7 +556,9 @@ export function persistQueuedEvent(record: CueQueuedEventRecord): void {
 			record.action,
 			record.commandJson,
 			record.chainDepth,
-			record.queuedAt
+			record.queuedAt,
+			record.chainRootId,
+			record.parentEventId
 		);
 }
 
@@ -556,6 +590,8 @@ export function getQueuedEvents(sessionId?: string): CueQueuedEventRecord[] {
 		command_json: string | null;
 		chain_depth: number;
 		queued_at: number;
+		chain_root_id: string | null;
+		parent_event_id: string | null;
 	}>;
 
 	return rows.map((row) => ({
@@ -570,6 +606,8 @@ export function getQueuedEvents(sessionId?: string): CueQueuedEventRecord[] {
 		commandJson: row.command_json,
 		chainDepth: row.chain_depth,
 		queuedAt: row.queued_at,
+		chainRootId: row.chain_root_id,
+		parentEventId: row.parent_event_id,
 	}));
 }
 

@@ -525,6 +525,25 @@ const mockDb = {
 				{ name: 'parent_event_id' },
 			];
 		}
+		// Phase 01 — same idea for the persisted queue table; return the full
+		// column set so the additive migration is a no-op under the mock.
+		if (typeof query === 'string' && query.startsWith('table_info(cue_event_queue)')) {
+			return [
+				{ name: 'id' },
+				{ name: 'session_id' },
+				{ name: 'subscription_name' },
+				{ name: 'event_json' },
+				{ name: 'prompt' },
+				{ name: 'output_prompt' },
+				{ name: 'cli_output_json' },
+				{ name: 'action' },
+				{ name: 'command_json' },
+				{ name: 'chain_depth' },
+				{ name: 'queued_at' },
+				{ name: 'chain_root_id' },
+				{ name: 'parent_event_id' },
+			];
+		}
 		return undefined;
 	}),
 	prepare: vi.fn(() => mockStatement),

@@ -64,6 +64,27 @@ const mockDb = {
 				{ name: 'parent_event_id' },
 			];
 		}
+		// Same idea for cue_event_queue — Phase 01 added chain_root_id /
+		// parent_event_id so persisted queue rows survive restart with
+		// lineage intact. Returning the full column set keeps the additive
+		// migration a no-op under the mock.
+		if (query.startsWith('table_info(cue_event_queue)')) {
+			return [
+				{ name: 'id' },
+				{ name: 'session_id' },
+				{ name: 'subscription_name' },
+				{ name: 'event_json' },
+				{ name: 'prompt' },
+				{ name: 'output_prompt' },
+				{ name: 'cli_output_json' },
+				{ name: 'action' },
+				{ name: 'command_json' },
+				{ name: 'chain_depth' },
+				{ name: 'queued_at' },
+				{ name: 'chain_root_id' },
+				{ name: 'parent_event_id' },
+			];
+		}
 		return undefined;
 	}),
 	prepare: vi.fn((sql: string) => {

@@ -502,7 +502,13 @@ export class CueEngine {
 					// column for it). The summary builder will fall back to
 					// stripping the `-chain-N` suffix off subscriptionName, so
 					// restored runs degrade gracefully to the legacy label.
-					undefined
+					undefined,
+					// Phase 01 — chain lineage round-tripped through the
+					// queue table so resumed runs stay attached to their
+					// chain root in stats. Roots and rows persisted before
+					// usageStats was enabled come back as undefined.
+					entry.chainRootId,
+					entry.parentEventId
 				);
 			}
 		}

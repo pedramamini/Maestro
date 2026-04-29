@@ -767,6 +767,8 @@ export function createCueRunManager(deps: CueRunManagerDeps): CueRunManager {
 						command,
 						chainDepth,
 						queuedAt,
+						chainRootId,
+						parentEventId,
 					});
 				}
 
