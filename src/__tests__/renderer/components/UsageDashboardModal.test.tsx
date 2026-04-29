@@ -28,6 +28,7 @@ vi.mock('lucide-react', () => {
 		RefreshCw: createIcon('refresh', '🔄'),
 		Database: createIcon('database', '💾'),
 		// SummaryCards icons
+		Filter: createIcon('filter', '🔍'),
 		MessageSquare: createIcon('message-square', '💬'),
 		Clock: createIcon('clock', '🕐'),
 		Timer: createIcon('timer', '⏱️'),
@@ -381,6 +382,64 @@ describe('UsageDashboardModal', () => {
 				expect(options[3]).toHaveValue('quarter');
 				expect(options[4]).toHaveValue('year');
 				expect(options[5]).toHaveValue('all');
+			});
+		});
+	});
+
+	describe('Drill-down Filter Reset', () => {
+		// Helper: click the first agent row in the rendered AgentComparisonChart
+		// to set the dashboard filter. The chart renders rows as
+		// role="listitem" with an aria-label that includes "Click to filter
+		// dashboard." when the row is interactive.
+		async function activateFilterByClickingBar() {
+			const clickableBars = await screen.findAllByLabelText(/Click to filter dashboard\./);
+			expect(clickableBars.length).toBeGreaterThan(0);
+			fireEvent.click(clickableBars[0]);
+		}
+
+		it('clears the active filter when the time range changes', async () => {
+			render(<UsageDashboardModal isOpen={true} onClose={onClose} theme={theme} />);
+
+			// Wait for data to load and the chart to render
+			await waitFor(() => {
+				expect(mockGetAggregation).toHaveBeenCalledWith('week');
+			});
+
+			await activateFilterByClickingBar();
+
+			// Filter bar should be visible
+			await waitFor(() => {
+				expect(screen.getByTestId('dashboard-filter-bar')).toBeInTheDocument();
+			});
+
+			// Change the time range — this should reset the filter
+			const select = screen.getByRole('combobox');
+			fireEvent.change(select, { target: { value: 'month' } });
+
+			await waitFor(() => {
+				expect(screen.queryByTestId('dashboard-filter-bar')).not.toBeInTheDocument();
+			});
+		});
+
+		it('clears the active filter when switching dashboard tabs', async () => {
+			render(<UsageDashboardModal isOpen={true} onClose={onClose} theme={theme} />);
+
+			await waitFor(() => {
+				expect(mockGetAggregation).toHaveBeenCalledWith('week');
+			});
+
+			await activateFilterByClickingBar();
+
+			await waitFor(() => {
+				expect(screen.getByTestId('dashboard-filter-bar')).toBeInTheDocument();
+			});
+
+			// Switch to the Agents tab — the useEffect should clear the filter
+			const tabs = screen.getAllByRole('tab');
+			fireEvent.click(tabs[1]); // 'agents' tab
+
+			await waitFor(() => {
+				expect(screen.queryByTestId('dashboard-filter-bar')).not.toBeInTheDocument();
 			});
 		});
 	});

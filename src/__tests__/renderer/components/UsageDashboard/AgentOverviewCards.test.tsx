@@ -20,6 +20,15 @@ import { THEMES } from '../../../../shared/themes';
 
 const theme = THEMES['dracula'];
 
+// JSDOM normalises hex colors to rgb() when they're read back off `element.style`
+const hexToRgb = (hex: string): string => {
+	const v = hex.replace('#', '');
+	const r = parseInt(v.slice(0, 2), 16);
+	const g = parseInt(v.slice(2, 4), 16);
+	const b = parseInt(v.slice(4, 6), 16);
+	return `rgb(${r}, ${g}, ${b})`;
+};
+
 const buildSession = (overrides: Partial<Session>): Session =>
 	({
 		id: 'sess-1',
@@ -209,6 +218,130 @@ describe('AgentOverviewCards', () => {
 
 		const card = screen.getByTestId('agent-card');
 		expect(card.querySelector('[data-testid="sparkline-empty"]')).not.toBeNull();
+	});
+
+	describe('Drill-down filter highlight', () => {
+		it('does not highlight any card when activeFilterKey is null', () => {
+			const sessions: Session[] = [
+				buildSession({ id: 's1', name: 'Alpha', toolType: 'claude-code' }),
+				buildSession({ id: 's2', name: 'Beta', toolType: 'codex' }),
+			];
+
+			render(
+				<AgentOverviewCards
+					sessions={sessions}
+					data={buildData()}
+					theme={theme}
+					activeFilterKey={null}
+				/>
+			);
+
+			const cards = screen.getAllByTestId('agent-card');
+			cards.forEach((card) => {
+				expect(card.dataset.selected).toBeUndefined();
+				expect(card.style.border).not.toContain('2px');
+			});
+		});
+
+		it('highlights only the parent card whose toolType matches a provider key', () => {
+			const sessions: Session[] = [
+				buildSession({ id: 's1', name: 'Claude', toolType: 'claude-code' }),
+				buildSession({ id: 's2', name: 'Codex', toolType: 'codex' }),
+				buildSession({
+					id: 's3',
+					name: 'Claude WT',
+					toolType: 'claude-code',
+					parentSessionId: 's1',
+					worktreeBranch: 'feature/x',
+				}),
+			];
+
+			render(
+				<AgentOverviewCards
+					sessions={sessions}
+					data={buildData()}
+					theme={theme}
+					activeFilterKey="claude-code"
+				/>
+			);
+
+			const cards = screen.getAllByTestId('agent-card');
+			// Parent claude-code card should be selected
+			expect(cards[0].dataset.selected).toBe('true');
+			expect(cards[0].style.border).toBe(`2px solid ${hexToRgb(theme.colors.accent)}`);
+			// codex card should not be selected
+			expect(cards[1].dataset.selected).toBeUndefined();
+			// Worktree of claude-code should NOT match the bare provider key
+			expect(cards[2].dataset.selected).toBeUndefined();
+			expect(cards[2].style.border).toContain('dashed');
+		});
+
+		it('highlights only worktree cards when filter key has __worktree suffix', () => {
+			const sessions: Session[] = [
+				buildSession({ id: 'p1', name: 'Claude Parent', toolType: 'claude-code' }),
+				buildSession({
+					id: 'wt1',
+					name: 'Claude WT',
+					toolType: 'claude-code',
+					parentSessionId: 'p1',
+					worktreeBranch: 'feature/x',
+				}),
+			];
+
+			render(
+				<AgentOverviewCards
+					sessions={sessions}
+					data={buildData()}
+					theme={theme}
+					activeFilterKey="claude-code__worktree"
+				/>
+			);
+
+			const cards = screen.getAllByTestId('agent-card');
+			// Parent should NOT be highlighted by the worktree key
+			expect(cards[0].dataset.selected).toBeUndefined();
+			// Worktree card should be highlighted
+			expect(cards[1].dataset.selected).toBe('true');
+			expect(cards[1].style.border).toBe(`2px solid ${hexToRgb(theme.colors.accent)}`);
+		});
+
+		it('highlights a single card when filter key matches the session id', () => {
+			const sessions: Session[] = [
+				buildSession({ id: 's1', name: 'Alpha', toolType: 'claude-code' }),
+				buildSession({ id: 's2', name: 'Beta', toolType: 'claude-code' }),
+			];
+
+			render(
+				<AgentOverviewCards
+					sessions={sessions}
+					data={buildData()}
+					theme={theme}
+					activeFilterKey="s2"
+				/>
+			);
+
+			const cards = screen.getAllByTestId('agent-card');
+			expect(cards[0].dataset.selected).toBeUndefined();
+			expect(cards[1].dataset.selected).toBe('true');
+		});
+
+		it('highlights nothing when the filter key does not match any session', () => {
+			const sessions: Session[] = [
+				buildSession({ id: 's1', name: 'Alpha', toolType: 'claude-code' }),
+			];
+
+			render(
+				<AgentOverviewCards
+					sessions={sessions}
+					data={buildData()}
+					theme={theme}
+					activeFilterKey="opencode"
+				/>
+			);
+
+			const cards = screen.getAllByTestId('agent-card');
+			expect(cards[0].dataset.selected).toBeUndefined();
+		});
 	});
 
 	it('staggers card-enter animation delays at 60ms per card', () => {

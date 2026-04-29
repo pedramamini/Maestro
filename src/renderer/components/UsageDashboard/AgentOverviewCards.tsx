@@ -51,12 +51,41 @@ function buildSessionSparkline(sessionByDay: ByDayEntry[] | undefined): number[]
 	return [...new Array(SPARKLINE_DAYS - counts.length).fill(0), ...counts];
 }
 
+/**
+ * Resolve whether a session card should be highlighted by the current
+ * drill-down filter. The filter key originates from a few different surfaces:
+ *
+ *   - `AgentComparisonChart` emits provider keys like `claude-code` (parent)
+ *     or `claude-code__worktree` (worktree variant).
+ *   - `AgentUsageChart` emits per-session keys (e.g. `${provider}:${id}` or
+ *     bare session ids).
+ *
+ * We highlight cards by matching against either the session id directly, or
+ * — for provider-shaped keys — the session's `toolType`, separating worktree
+ * and non-worktree variants so a "Worktrees" filter doesn't paint the parent
+ * card and vice versa.
+ */
+function isSessionHighlighted(session: Session, activeFilterKey: string | null): boolean {
+	if (!activeFilterKey) return false;
+	if (activeFilterKey === session.id) return true;
+
+	const WORKTREE_SUFFIX = '__worktree';
+	if (activeFilterKey.endsWith(WORKTREE_SUFFIX)) {
+		const provider = activeFilterKey.slice(0, -WORKTREE_SUFFIX.length);
+		return Boolean(session.parentSessionId) && session.toolType === provider;
+	}
+
+	return !session.parentSessionId && session.toolType === activeFilterKey;
+}
+
 interface AgentCardProps {
 	session: Session;
 	data: StatsAggregation;
 	theme: Theme;
 	/** 0-based index for the staggered card-enter animation */
 	animationIndex: number;
+	/** When true, render the card with a thicker accent border to flag the active filter */
+	isSelected: boolean;
 }
 
 const AgentCard = memo(function AgentCard({
@@ -64,6 +93,7 @@ const AgentCard = memo(function AgentCard({
 	data,
 	theme,
 	animationIndex,
+	isSelected,
 }: AgentCardProps) {
 	const isWorktree = Boolean(session.parentSessionId);
 	const isBusy = session.state === 'busy';
@@ -86,17 +116,27 @@ const AgentCard = memo(function AgentCard({
 
 	const sparklineColor = isWorktree ? theme.colors.accent : statusColor;
 
+	// When the dashboard filter selects this card's agent, the 1px default
+	// border is replaced with a 2px solid accent border. Worktree dashing is
+	// suppressed for the duration — the highlight outranks the worktree
+	// affordance, and the existing "WT" badge keeps the worktree distinction
+	// visible.
+	const border = isSelected
+		? `2px solid ${theme.colors.accent}`
+		: isWorktree
+			? `1px dashed ${theme.colors.accent}99`
+			: `1px solid ${theme.colors.border}`;
+
 	return (
 		<div
 			className="card-enter relative p-3 rounded-lg flex flex-col gap-1.5"
 			style={{
 				backgroundColor: theme.colors.bgActivity,
-				border: isWorktree
-					? `1px dashed ${theme.colors.accent}99`
-					: `1px solid ${theme.colors.border}`,
+				border,
 				animationDelay: `${animationIndex * 60}ms`,
 			}}
 			data-testid="agent-card"
+			data-selected={isSelected ? 'true' : undefined}
 			role="group"
 			aria-label={`${session.name}, ${session.state}, ${queryCount} ${
 				queryCount === 1 ? 'query' : 'queries'
@@ -173,12 +213,19 @@ interface AgentOverviewCardsProps {
 	data: StatsAggregation;
 	/** Current theme for color-aware styling */
 	theme: Theme;
+	/**
+	 * Active dashboard drill-down filter key. When set, the matching session
+	 * card(s) render with a 2px accent border so the selection is visible at
+	 * the top of the dashboard. `null` means no filter is active.
+	 */
+	activeFilterKey?: string | null;
 }
 
 export const AgentOverviewCards = memo(function AgentOverviewCards({
 	sessions,
 	data,
 	theme,
+	activeFilterKey = null,
 }: AgentOverviewCardsProps) {
 	// Terminal sessions aren't "agents" — exclude them so the card row
 	// matches the agent count shown elsewhere in the dashboard.
@@ -206,6 +253,7 @@ export const AgentOverviewCards = memo(function AgentOverviewCards({
 					data={data}
 					theme={theme}
 					animationIndex={index}
+					isSelected={isSessionHighlighted(session, activeFilterKey)}
 				/>
 			))}
 		</div>

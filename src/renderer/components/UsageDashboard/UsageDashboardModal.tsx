@@ -419,6 +419,16 @@ export function UsageDashboardModal({
 		setFilter(null);
 	}, []);
 
+	// Reset the drill-down filter when the time range or active dashboard tab
+	// changes. The filter key only makes sense in the context of the data
+	// currently on screen — switching to a different time range or view can
+	// surface a totally different set of agents, so leaving a stale filter
+	// active would silently hide all charts. setState with `null` is a no-op
+	// when no filter is active, so this is cheap on the common path.
+	useEffect(() => {
+		setFilter(null);
+	}, [timeRange, viewMode]);
+
 	// Apply the active filter to the aggregation. When no filter is set, pass
 	// the raw stats through unchanged so referential equality is preserved
 	// (downstream charts can rely on memoization).
@@ -937,6 +947,7 @@ export function UsageDashboardModal({
 												sessions={sessions}
 												data={filteredStats ?? data}
 												theme={theme}
+												activeFilterKey={filter?.key ?? null}
 											/>
 										</ChartErrorBoundary>
 									)}
