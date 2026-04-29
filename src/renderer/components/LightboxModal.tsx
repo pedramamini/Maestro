@@ -3,6 +3,7 @@ import { Copy, Check, Trash2 } from 'lucide-react';
 import { useLayerStack } from '../contexts/LayerStackContext';
 import { MODAL_PRIORITIES } from '../constants/modalPriorities';
 import { ConfirmModal } from './ConfirmModal';
+import { useImageAnnotatorStore } from './ImageAnnotator/imageAnnotatorStore';
 import type { Theme } from '../types';
 import { formatShortcutKeys } from '../utils/shortcutFormatter';
 import { safeClipboardWriteImage } from '../utils/clipboard';
@@ -15,6 +16,8 @@ interface LightboxModalProps {
 	onNavigate: (image: string) => void;
 	/** Callback to delete the current image from staged images */
 	onDelete?: (image: string) => void;
+	/** Callback to replace the current image with an annotated version */
+	onUpdateImage?: (oldImage: string, newDataUrl: string) => void;
 	/** Theme for ConfirmModal styling */
 	theme?: Theme;
 }
@@ -25,14 +28,17 @@ export function LightboxModal({
 	onClose,
 	onNavigate,
 	onDelete,
+	onUpdateImage,
 	theme,
 }: LightboxModalProps) {
 	const lightboxRef = useRef<HTMLDivElement>(null);
 	const currentIndex = stagedImages.indexOf(image);
 	const canNavigate = stagedImages.length > 1;
 	const canDelete = Boolean(onDelete);
+	const canAnnotate = Boolean(onUpdateImage);
 	const layerIdRef = useRef<string>();
 	const { registerLayer, unregisterLayer, updateLayerHandler } = useLayerStack();
+	const openAnnotator = useImageAnnotatorStore((state) => state.openAnnotator);
 	const [copied, setCopied] = useState(false);
 	const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
@@ -168,6 +174,15 @@ export function LightboxModal({
 				} else if (e.key === 'c' && (e.metaKey || e.ctrlKey)) {
 					e.preventDefault();
 					copyImageToClipboard();
+				} else if ((e.key === 'e' || e.key === 'E') && (e.metaKey || e.ctrlKey) && canAnnotate) {
+					e.preventDefault();
+					if (image && onUpdateImage) {
+						const oldImage = image;
+						openAnnotator(oldImage, (newDataUrl) => {
+							onUpdateImage(oldImage, newDataUrl);
+							onClose();
+						});
+					}
 				}
 			}}
 			tabIndex={-1}
