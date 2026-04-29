@@ -42,7 +42,30 @@ const mockStatement = {
 const prepareCalls: string[] = [];
 
 const mockDb = {
-	pragma: vi.fn(),
+	pragma: vi.fn((query: string) => {
+		// `table_info(<table>)` returns one row per column. Return the full
+		// column set for cue_events so the additive-column migration in
+		// initCueDb() sees no missing columns and stays a no-op under the
+		// mocked DB. Other pragmas (`journal_mode = WAL`, etc.) don't need
+		// a return value.
+		if (query.startsWith('table_info(cue_events)')) {
+			return [
+				{ name: 'id' },
+				{ name: 'type' },
+				{ name: 'trigger_name' },
+				{ name: 'session_id' },
+				{ name: 'subscription_name' },
+				{ name: 'status' },
+				{ name: 'created_at' },
+				{ name: 'completed_at' },
+				{ name: 'payload' },
+				{ name: 'pipeline_id' },
+				{ name: 'chain_root_id' },
+				{ name: 'parent_event_id' },
+			];
+		}
+		return undefined;
+	}),
 	prepare: vi.fn((sql: string) => {
 		prepareCalls.push(sql);
 		return mockStatement;

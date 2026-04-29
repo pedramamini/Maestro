@@ -505,7 +505,28 @@ const mockStatement = {
 	all: vi.fn(() => []),
 };
 const mockDb = {
-	pragma: vi.fn(),
+	pragma: vi.fn((query: string) => {
+		// Phase 01: initCueDb's additive-column migration calls
+		// `pragma('table_info(cue_events)')`. Return the full column set so the
+		// migration sees no missing columns and stays a no-op under the mock.
+		if (typeof query === 'string' && query.startsWith('table_info(cue_events)')) {
+			return [
+				{ name: 'id' },
+				{ name: 'type' },
+				{ name: 'trigger_name' },
+				{ name: 'session_id' },
+				{ name: 'subscription_name' },
+				{ name: 'status' },
+				{ name: 'created_at' },
+				{ name: 'completed_at' },
+				{ name: 'payload' },
+				{ name: 'pipeline_id' },
+				{ name: 'chain_root_id' },
+				{ name: 'parent_event_id' },
+			];
+		}
+		return undefined;
+	}),
 	prepare: vi.fn(() => mockStatement),
 	close: vi.fn(),
 };

@@ -28,6 +28,9 @@ export interface CueEventRecord {
 	createdAt: number;
 	completedAt: number | null;
 	payload: string | null;
+	pipelineId?: string | null;
+	chainRootId?: string | null;
+	parentEventId?: string | null;
 }
 
 // ============================================================================
@@ -44,13 +47,24 @@ const CREATE_CUE_EVENTS_SQL = `
     status TEXT NOT NULL,
     created_at INTEGER NOT NULL,
     completed_at INTEGER,
-    payload TEXT
+    payload TEXT,
+    pipeline_id TEXT,
+    chain_root_id TEXT,
+    parent_event_id TEXT
   )
 `;
 
+// Phase 01 additive columns. These are nullable on purpose: existing callers
+// that don't pass lineage / pipeline metadata (e.g. when usageStats is off)
+// must continue to record events. The migration block in initCueDb() ALTERs
+// existing databases to match the CREATE TABLE schema.
+const CUE_EVENTS_ADDITIVE_COLUMNS = ['pipeline_id', 'chain_root_id', 'parent_event_id'] as const;
+
 const CREATE_CUE_EVENTS_INDEXES_SQL = `
   CREATE INDEX IF NOT EXISTS idx_cue_events_created ON cue_events(created_at);
-  CREATE INDEX IF NOT EXISTS idx_cue_events_session ON cue_events(session_id)
+  CREATE INDEX IF NOT EXISTS idx_cue_events_session ON cue_events(session_id);
+  CREATE INDEX IF NOT EXISTS idx_cue_events_pipeline ON cue_events(pipeline_id);
+  CREATE INDEX IF NOT EXISTS idx_cue_events_chain_root ON cue_events(chain_root_id)
 `;
 
 const CREATE_CUE_HEARTBEAT_SQL = `
@@ -151,6 +165,7 @@ export function initCueDb(
 
 	// Create tables
 	db.prepare(CREATE_CUE_EVENTS_SQL).run();
+	migrateCueEventsAdditiveColumns(db);
 	for (const sql of CREATE_CUE_EVENTS_INDEXES_SQL.split(';').filter((s) => s.trim())) {
 		db.prepare(sql).run();
 	}
@@ -192,12 +207,36 @@ function getDb(): Database.Database {
 	return db;
 }
 
+/**
+ * Idempotent migration: ensures the `cue_events` table carries the Phase 01
+ * additive columns (`pipeline_id`, `chain_root_id`, `parent_event_id`). Safe to
+ * run on fresh databases (CREATE TABLE already added the columns, so nothing
+ * is missing) and on existing databases where ALTER TABLE backfills only the
+ * columns that aren't already present. Mirrors the conditional-ALTER pattern
+ * used by `src/main/stats/migrations.ts`.
+ */
+function migrateCueEventsAdditiveColumns(database: Database.Database): void {
+	const existing = database.pragma('table_info(cue_events)') as Array<{ name: string }>;
+	const existingNames = new Set(existing.map((row) => row.name));
+	for (const column of CUE_EVENTS_ADDITIVE_COLUMNS) {
+		if (!existingNames.has(column)) {
+			database.prepare(`ALTER TABLE cue_events ADD COLUMN ${column} TEXT`).run();
+		}
+	}
+}
+
 // ============================================================================
 // Event Journal
 // ============================================================================
 
 /**
  * Record a new Cue event in the journal.
+ *
+ * `pipelineId`, `chainRootId`, `parentEventId` are Phase 01 additive fields:
+ * the dispatch path snapshots them at write time so per-pipeline and per-chain
+ * stats queries don't have to recompute lineage from in-memory state that's
+ * already been discarded. All three are optional and stored as NULL when
+ * omitted (e.g. when the usageStats Encore flag is off).
  */
 export function recordCueEvent(event: {
 	id: string;
@@ -207,11 +246,14 @@ export function recordCueEvent(event: {
 	subscriptionName: string;
 	status: string;
 	payload?: string;
+	pipelineId?: string | null;
+	chainRootId?: string | null;
+	parentEventId?: string | null;
 }): void {
 	getDb()
 		.prepare(
-			`INSERT OR REPLACE INTO cue_events (id, type, trigger_name, session_id, subscription_name, status, created_at, payload)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+			`INSERT OR REPLACE INTO cue_events (id, type, trigger_name, session_id, subscription_name, status, created_at, payload, pipeline_id, chain_root_id, parent_event_id)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
 		)
 		.run(
 			event.id,
@@ -221,7 +263,10 @@ export function recordCueEvent(event: {
 			event.subscriptionName,
 			event.status,
 			Date.now(),
-			event.payload ?? null
+			event.payload ?? null,
+			event.pipelineId ?? null,
+			event.chainRootId ?? null,
+			event.parentEventId ?? null
 		);
 }
 
@@ -326,6 +371,9 @@ export function getRecentCueEvents(since: number, limit?: number): CueEventRecor
 		created_at: number;
 		completed_at: number | null;
 		payload: string | null;
+		pipeline_id: string | null;
+		chain_root_id: string | null;
+		parent_event_id: string | null;
 	}>;
 
 	return rows.map((row) => ({
@@ -338,6 +386,9 @@ export function getRecentCueEvents(since: number, limit?: number): CueEventRecor
 		createdAt: row.created_at,
 		completedAt: row.completed_at,
 		payload: row.payload,
+		pipelineId: row.pipeline_id,
+		chainRootId: row.chain_root_id,
+		parentEventId: row.parent_event_id,
 	}));
 }
 
