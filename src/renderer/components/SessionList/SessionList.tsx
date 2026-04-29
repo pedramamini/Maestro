@@ -1311,6 +1311,7 @@ function SessionListInner(props: SessionListProps) {
 								participantStates={participantStates}
 								groupChatStates={groupChatStates}
 								allGroupChatParticipantStates={allGroupChatParticipantStates}
+								showUnreadAgentsOnly={showUnreadAgentsOnly}
 							/>
 						)}
 				</div>

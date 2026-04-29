@@ -37,7 +37,10 @@ import {
 	fileFingerprint,
 	multiFileFingerprint,
 } from '../../../main/utils/history-bucket-cache';
-import { buildBucketAggregate } from '../../../main/utils/history-bucket-builder';
+import {
+	buildBucketAggregate,
+	LOCAL_HOST_AGG_KEY,
+} from '../../../main/utils/history-bucket-builder';
 
 function makeEntry(overrides: Partial<HistoryEntry>): HistoryEntry {
 	return {
@@ -126,6 +129,45 @@ describe('buildBucketAggregate', () => {
 			expect(result.buckets).toHaveLength(6);
 			expect(result.earliestTimestamp).toBe(now - lookbackMs);
 			expect(result.latestTimestamp).toBe(now);
+			expect(result.hostCounts).toEqual({});
+		});
+	});
+
+	describe('hostCounts aggregation', () => {
+		it('keys entries with no hostname under LOCAL_HOST_AGG_KEY', () => {
+			const entries = [
+				makeEntry({ id: '1', timestamp: 100 }),
+				makeEntry({ id: '2', timestamp: 200 }),
+			];
+			const result = buildBucketAggregate(entries, 4);
+			expect(result.hostCounts).toEqual({ [LOCAL_HOST_AGG_KEY]: 2 });
+		});
+
+		it('separates remote hostnames from local entries', () => {
+			const entries = [
+				makeEntry({ id: '1', timestamp: 100, hostname: 'workstation' }),
+				makeEntry({ id: '2', timestamp: 200, hostname: 'workstation' }),
+				makeEntry({ id: '3', timestamp: 300, hostname: 'laptop' }),
+				makeEntry({ id: '4', timestamp: 400 }),
+			];
+			const result = buildBucketAggregate(entries, 4);
+			expect(result.hostCounts).toEqual({
+				workstation: 2,
+				laptop: 1,
+				[LOCAL_HOST_AGG_KEY]: 1,
+			});
+		});
+
+		it('only counts entries inside the lookback window', () => {
+			const now = 10_000_000;
+			const lookbackMs = 1_000;
+			const entries = [
+				makeEntry({ id: 'out', timestamp: now - 100_000, hostname: 'old-host' }),
+				makeEntry({ id: 'in1', timestamp: now - 500, hostname: 'new-host' }),
+				makeEntry({ id: 'in2', timestamp: now, hostname: 'new-host' }),
+			];
+			const result = buildBucketAggregate(entries, 4, { lookbackMs, endTime: now });
+			expect(result.hostCounts).toEqual({ 'new-host': 2 });
 		});
 	});
 });
@@ -230,6 +272,7 @@ describe('HistoryBucketCache', () => {
 		autoCount: 1,
 		userCount: 2,
 		cueCount: 3,
+		hostCounts: { [LOCAL_HOST_AGG_KEY]: 6 },
 		computedAt: Date.now(),
 	});
 
@@ -243,6 +286,14 @@ describe('HistoryBucketCache', () => {
 		expect(hit).not.toBeNull();
 		expect(hit?.totalCount).toBe(6);
 		expect(hit?.buckets[2].cue).toBe(3);
+		expect(hit?.hostCounts).toEqual({ [LOCAL_HOST_AGG_KEY]: 6 });
+	});
+
+	it('treats older cache versions as a miss (schema bump invalidates disk entries)', () => {
+		const entry = sampleEntry('stale-version');
+		cache.set({ ...entry, version: HISTORY_BUCKET_CACHE_VERSION - 1 });
+		const fresh = new HistoryBucketCache(cacheDir);
+		expect(fresh.get('stale-version', 'fp-1')).toBeNull();
 	});
 
 	it('returns null when the fingerprint does not match (cache miss)', () => {

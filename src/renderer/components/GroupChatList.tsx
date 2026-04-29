@@ -159,6 +159,8 @@ interface GroupChatListProps {
 	groupChatStates?: Map<string, GroupChatState>;
 	/** Participant states for ALL group chats (groupChatId -> Map<participantName, state>) */
 	allGroupChatParticipantStates?: Map<string, Map<string, 'idle' | 'working'>>;
+	/** When true, only show group chats that are busy (moderator/participant working) or the active chat */
+	showUnreadAgentsOnly?: boolean;
 }
 
 export function GroupChatList({
@@ -178,7 +180,8 @@ export function GroupChatList({
 	participantStates,
 	groupChatStates,
 	allGroupChatParticipantStates,
-}: GroupChatListProps): JSX.Element {
+	showUnreadAgentsOnly = false,
+}: GroupChatListProps): JSX.Element | null {
 	// Support both controlled and uncontrolled modes
 	// If isExpanded prop is provided, use it as controlled state
 	// Otherwise, use internal state (default: expanded if there are group chats)
@@ -228,10 +231,43 @@ export function GroupChatList({
 	const archivedCount = useMemo(() => groupChats.filter((c) => c.archived).length, [groupChats]);
 	const activeCount = groupChats.length - archivedCount;
 
-	// Filter and sort group chats: show active chats, plus archived if toggled
+	// Determine which chats are busy (moderator thinking or any participant working).
+	// Mirrors the per-chat status logic in the render below so the unread filter
+	// matches what the user sees as a non-green status dot.
+	const isChatBusy = useCallback(
+		(chatId: string): boolean => {
+			const isActive = activeGroupChatId === chatId;
+			const chatState = isActive ? groupChatState : groupChatStates?.get(chatId) || 'idle';
+			if (chatState !== 'idle') return true;
+			const chatParticipantStates = isActive
+				? participantStates
+				: allGroupChatParticipantStates?.get(chatId);
+			if (!chatParticipantStates) return false;
+			for (const s of chatParticipantStates.values()) {
+				if (s === 'working') return true;
+			}
+			return false;
+		},
+		[
+			activeGroupChatId,
+			groupChatState,
+			groupChatStates,
+			participantStates,
+			allGroupChatParticipantStates,
+		]
+	);
+
+	// Filter and sort group chats: show active chats, plus archived if toggled.
+	// When the unread-agents filter is on, also drop idle chats (keeping the
+	// active one so the user doesn't lose their place).
 	const sortedGroupChats = useMemo(() => {
 		return [...groupChats]
 			.filter((c) => (showArchived ? true : !c.archived))
+			.filter((c) => {
+				if (!showUnreadAgentsOnly) return true;
+				if (c.id === activeGroupChatId) return true;
+				return isChatBusy(c.id);
+			})
 			.sort((a, b) => {
 				// When showing archived, group active chats first
 				if (showArchived && a.archived !== b.archived) {
@@ -239,7 +275,11 @@ export function GroupChatList({
 				}
 				return (b.updatedAt ?? b.createdAt) - (a.updatedAt ?? a.createdAt);
 			});
-	}, [groupChats, showArchived]);
+	}, [groupChats, showArchived, showUnreadAgentsOnly, activeGroupChatId, isChatBusy]);
+
+	// When the unread-agents filter hides everything, drop the section entirely
+	// rather than leaving an empty header dangling at the bottom of the sidebar.
+	if (showUnreadAgentsOnly && sortedGroupChats.length === 0) return null;
 
 	return (
 		<div className="border-t mt-4" style={{ borderColor: theme.colors.border }}>

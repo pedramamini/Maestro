@@ -40,15 +40,6 @@ export const HostSourceFilter = memo(function HostSourceFilter({
 
 	useClickOutside(containerRef, () => setOpen(false), open);
 
-	const totalCount = useMemo(() => {
-		let n = 0;
-		for (const c of hostCounts.values()) n += c;
-		return n;
-	}, [hostCounts]);
-
-	const triggerLabel = selectedHost ? labelForHost(selectedHost) : 'All Sources';
-	const triggerCount = selectedHost ? (hostCounts.get(selectedHost) ?? 0) : totalCount;
-
 	const handleSelect = useCallback(
 		(host: string | null) => {
 			onSelect(host);
@@ -56,6 +47,16 @@ export const HostSourceFilter = memo(function HostSourceFilter({
 		},
 		[onSelect]
 	);
+
+	// Trigger label: host name with parenthesized count when a specific
+	// host is selected; just "All Sources" (no count) when not. Counts
+	// reflect the renderer's active lookback window because they come
+	// from the server-side aggregate keyed by lookback.
+	const triggerLabel = useMemo(() => {
+		if (!selectedHost) return 'All Sources';
+		const count = hostCounts.get(selectedHost) ?? 0;
+		return `${labelForHost(selectedHost)} (${count})`;
+	}, [selectedHost, hostCounts]);
 
 	return (
 		<div ref={containerRef} className="relative">
@@ -68,19 +69,14 @@ export const HostSourceFilter = memo(function HostSourceFilter({
 					}}
 				>
 					<button
-						className="w-full px-3 py-2 text-left text-xs flex items-center justify-between hover:bg-white/10 transition-colors"
+						className="w-full px-3 py-2 text-left text-xs flex items-center gap-2 hover:bg-white/10 transition-colors"
 						style={{
 							color: selectedHost === null ? theme.colors.accent : theme.colors.textMain,
 						}}
 						onClick={() => handleSelect(null)}
 					>
-						<span className="flex items-center gap-2">
-							<Server className="w-3 h-3" />
-							All Sources
-						</span>
-						<span className="font-mono text-[10px]" style={{ color: theme.colors.textDim }}>
-							{totalCount}
-						</span>
+						<Server className="w-3 h-3 flex-shrink-0" />
+						<span className="font-mono">All Sources</span>
 					</button>
 					<div className="h-px" style={{ backgroundColor: theme.colors.border }} />
 					{[...hostCounts.entries()].map(([host, count]) => {
@@ -88,21 +84,15 @@ export const HostSourceFilter = memo(function HostSourceFilter({
 						return (
 							<button
 								key={host}
-								className="w-full px-3 py-2 text-left text-xs flex items-center justify-between hover:bg-white/10 transition-colors"
+								className="w-full px-3 py-2 text-left text-xs flex items-center gap-2 hover:bg-white/10 transition-colors"
 								style={{
 									color: isSelected ? theme.colors.accent : theme.colors.textMain,
 								}}
 								onClick={() => handleSelect(host)}
 							>
-								<span className="flex items-center gap-2 min-w-0">
-									<Server className="w-3 h-3 flex-shrink-0" />
-									<span className="font-mono truncate">{labelForHost(host)}</span>
-								</span>
-								<span
-									className="font-mono text-[10px] flex-shrink-0 ml-2"
-									style={{ color: theme.colors.textDim }}
-								>
-									{count}
+								<Server className="w-3 h-3 flex-shrink-0" />
+								<span className="font-mono truncate min-w-0">
+									{labelForHost(host)} ({count})
 								</span>
 							</button>
 						);
@@ -124,18 +114,13 @@ export const HostSourceFilter = memo(function HostSourceFilter({
 					<Server className="w-3 h-3 flex-shrink-0" />
 					<span className="font-mono truncate">{triggerLabel}</span>
 				</span>
-				<span className="flex items-center gap-2 flex-shrink-0">
-					<span className="font-mono text-[10px]" style={{ color: theme.colors.textDim }}>
-						{triggerCount}
-					</span>
-					<ChevronUp
-						className="w-3 h-3 transition-transform"
-						style={{
-							transform: open ? 'rotate(0deg)' : 'rotate(180deg)',
-							color: theme.colors.textDim,
-						}}
-					/>
-				</span>
+				<ChevronUp
+					className="w-3 h-3 flex-shrink-0 transition-transform"
+					style={{
+						transform: open ? 'rotate(0deg)' : 'rotate(180deg)',
+						color: theme.colors.textDim,
+					}}
+				/>
 			</button>
 		</div>
 	);

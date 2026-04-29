@@ -116,6 +116,13 @@ export const HistoryPanel = React.memo(
 		const [graphRange, setGraphRange] = useState<{ start: number; end: number } | undefined>(
 			undefined
 		);
+		// Per-host counts from the server-side aggregate. Lookback-aware:
+		// flipping the lookback selector triggers a refetch, which updates
+		// these. Used by the source picker so the parenthesized counts next
+		// to each host name reflect the current window.
+		const [graphHostCounts, setGraphHostCounts] = useState<Record<string, number> | undefined>(
+			undefined
+		);
 		const graphRefreshScheduled = useRef(false);
 
 		const listRef = useRef<HTMLDivElement>(null);
@@ -192,10 +199,12 @@ export const HistoryPanel = React.memo(
 				);
 				setGraphBuckets(data.buckets);
 				setGraphRange({ start: data.earliestTimestamp, end: data.latestTimestamp });
+				setGraphHostCounts(data.hostCounts);
 			} catch (error) {
 				logger.error('Failed to load history graph data:', undefined, error);
 				setGraphBuckets(undefined);
 				setGraphRange(undefined);
+				setGraphHostCounts(undefined);
 			}
 		}, [session.id, session, graphLookbackHours]);
 
@@ -313,22 +322,30 @@ export const HistoryPanel = React.memo(
 			});
 		}, [historyEntries, activeFilters, searchFilter, selectedHost]);
 
-		// Tally hosts from the loaded window. Sorted with `LOCAL_HOST_KEY`
-		// first (the user's own machine), then remote hostnames
-		// alphabetically for stable display.
+		// Tally hosts. Prefers the server-side aggregate from `getGraphData`
+		// (already filtered by the active lookback window and covers the
+		// full source, not just the loaded pagination window) and falls
+		// back to client-side counting from the loaded window when the
+		// server response hasn't arrived yet. Sorted with `LOCAL_HOST_KEY`
+		// first, then remote hostnames alphabetically for stable display.
 		const hostCounts = useMemo(() => {
-			const counts = new Map<string, number>();
-			for (const entry of historyEntries) {
-				const key = entry?.hostname ?? LOCAL_HOST_KEY;
-				counts.set(key, (counts.get(key) ?? 0) + 1);
+			const raw = new Map<string, number>();
+			const serverEntries = graphHostCounts ? Object.entries(graphHostCounts) : [];
+			if (serverEntries.length > 0) {
+				for (const [k, v] of serverEntries) raw.set(k, v);
+			} else {
+				for (const entry of historyEntries) {
+					const key = entry?.hostname ?? LOCAL_HOST_KEY;
+					raw.set(key, (raw.get(key) ?? 0) + 1);
+				}
 			}
 			const sorted = new Map<string, number>();
-			if (counts.has(LOCAL_HOST_KEY)) sorted.set(LOCAL_HOST_KEY, counts.get(LOCAL_HOST_KEY)!);
-			for (const key of [...counts.keys()].filter((k) => k !== LOCAL_HOST_KEY).sort()) {
-				sorted.set(key, counts.get(key)!);
+			if (raw.has(LOCAL_HOST_KEY)) sorted.set(LOCAL_HOST_KEY, raw.get(LOCAL_HOST_KEY)!);
+			for (const key of [...raw.keys()].filter((k) => k !== LOCAL_HOST_KEY).sort()) {
+				sorted.set(key, raw.get(key)!);
 			}
 			return sorted;
-		}, [historyEntries]);
+		}, [graphHostCounts, historyEntries]);
 
 		// Clear the host filter if the selected host falls out of the
 		// loaded window (e.g. session switch, lookback narrowed).

@@ -349,6 +349,7 @@ export function registerDirectorNotesHandlers(deps: DirectorNotesHandlerDependen
 						autoCount: hit.autoCount,
 						userCount: hit.userCount,
 						cueCount: hit.cueCount,
+						hostCounts: hit.hostCounts,
 						cached: true,
 						stats: {
 							agentCount,
@@ -386,6 +387,7 @@ export function registerDirectorNotesHandlers(deps: DirectorNotesHandlerDependen
 					autoCount: agg.autoCount,
 					userCount: agg.userCount,
 					cueCount: agg.cueCount,
+					hostCounts: agg.hostCounts,
 					computedAt: Date.now(),
 				});
 
@@ -398,6 +400,7 @@ export function registerDirectorNotesHandlers(deps: DirectorNotesHandlerDependen
 					autoCount: agg.autoCount,
 					userCount: agg.userCount,
 					cueCount: agg.cueCount,
+					hostCounts: agg.hostCounts,
 					cached: false,
 					stats: {
 						agentCount: agentSet.size,

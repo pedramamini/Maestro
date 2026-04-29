@@ -24,7 +24,7 @@ import { captureException } from './sentry';
 const LOG_CONTEXT = '[HistoryBucketCache]';
 
 /** Bump to invalidate every existing cache entry on disk. */
-export const HISTORY_BUCKET_CACHE_VERSION = 1;
+export const HISTORY_BUCKET_CACHE_VERSION = 2;
 
 /**
  * Single bucket of the activity graph — counts of each entry type within the
@@ -58,6 +58,12 @@ export interface CachedBucketData {
 	autoCount: number;
 	userCount: number;
 	cueCount: number;
+	/**
+	 * Per-host entry counts within the same window the buckets cover. Key
+	 * is the entry's `hostname`, or the synthetic `"__local__"` for entries
+	 * with no hostname (i.e. written by this machine's per-session store).
+	 */
+	hostCounts: Record<string, number>;
 	/** Unix ms when the cache entry was written. */
 	computedAt: number;
 }

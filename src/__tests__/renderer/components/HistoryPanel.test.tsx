@@ -228,6 +228,7 @@ describe('HistoryPanel', () => {
 					autoCount: 0,
 					userCount: 0,
 					cueCount: 0,
+					hostCounts: {},
 					cached: false,
 				}),
 				getOffsetForTimestamp: vi.fn().mockResolvedValue(0),
@@ -792,12 +793,11 @@ describe('HistoryPanel', () => {
 			const trigger = await screen.findByText('All Sources');
 			fireEvent.click(trigger);
 
-			// Popover lists hosts — select the remote one. The same host
-			// string also appears in the entry's hostname pill, so disambiguate
-			// by looking for the option in the popover's button.
-			const remoteOption = (await screen.findAllByText('pedopswat')).find((el) =>
-				el.closest('button')
-			)!;
+			// Popover renders host names with a parenthesized count, e.g.
+			// "pedopswat (1)". The entry's hostname pill in the footer
+			// renders just the bare host name, so this matcher is unique
+			// to the popover row.
+			const remoteOption = await screen.findByText(/pedopswat \(\d+\)/);
 			fireEvent.click(remoteOption);
 
 			await waitFor(() => {

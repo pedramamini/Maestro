@@ -62,6 +62,14 @@ export interface HistoryGraphData {
 	autoCount: number;
 	userCount: number;
 	cueCount: number;
+	/**
+	 * Per-host entry counts in the same window the buckets cover. Key is
+	 * the entry's `hostname`, or `"__local__"` for entries with no
+	 * hostname. Lookback-aware via the same `lookbackMs` that bucketing
+	 * uses, so flipping the renderer's lookback selector updates these
+	 * numbers too.
+	 */
+	hostCounts: Record<string, number>;
 	/** True when served from the disk cache (diagnostics only). */
 	cached: boolean;
 }
@@ -75,6 +83,7 @@ interface BucketAggregateLike {
 	autoCount: number;
 	userCount: number;
 	cueCount: number;
+	hostCounts: Record<string, number>;
 }
 
 function aggregateToGraphData(
@@ -91,6 +100,7 @@ function aggregateToGraphData(
 		autoCount: agg.autoCount,
 		userCount: agg.userCount,
 		cueCount: agg.cueCount,
+		hostCounts: agg.hostCounts,
 		cached,
 	};
 }
@@ -105,6 +115,7 @@ function cachedToGraphData(
 		autoCount: number;
 		userCount: number;
 		cueCount: number;
+		hostCounts: Record<string, number>;
 	},
 	fromCache: boolean
 ): HistoryGraphData {
@@ -117,6 +128,7 @@ function cachedToGraphData(
 		autoCount: cached.autoCount,
 		userCount: cached.userCount,
 		cueCount: cached.cueCount,
+		hostCounts: cached.hostCounts,
 		cached: fromCache,
 	};
 }
@@ -353,6 +365,7 @@ export function registerHistoryHandlers(deps: HistoryHandlerDependencies): void 
 						autoCount: agg.autoCount,
 						userCount: agg.userCount,
 						cueCount: agg.cueCount,
+						hostCounts: agg.hostCounts,
 						computedAt: Date.now(),
 					});
 					return aggregateToGraphData(agg, safeBucketCount, false);

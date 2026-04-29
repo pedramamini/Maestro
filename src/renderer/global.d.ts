@@ -1556,6 +1556,7 @@ interface MaestroAPI {
 			autoCount: number;
 			userCount: number;
 			cueCount: number;
+			hostCounts: Record<string, number>;
 			cached: boolean;
 		}>;
 		getOffsetForTimestamp: (
