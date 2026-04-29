@@ -13,7 +13,11 @@
 import { describe, it, expect } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import React from 'react';
-import { SummaryCards } from '../../../../renderer/components/UsageDashboard/SummaryCards';
+import {
+	AnimatedNumber,
+	BouncingDots,
+	SummaryCards,
+} from '../../../../renderer/components/UsageDashboard/SummaryCards';
 import type { StatsAggregation } from '../../../../renderer/hooks/stats/useStats';
 import type { Session } from '../../../../renderer/types';
 import { THEMES } from '../../../../shared/themes';
@@ -161,11 +165,11 @@ describe('SummaryCards', () => {
 			expect(cards).toHaveLength(10);
 		});
 
-		it('renders Total Queries metric', () => {
+		it('renders Total Queries metric', async () => {
 			render(<SummaryCards data={mockData} theme={theme} />);
 
 			expect(screen.getByText('Total Queries')).toBeInTheDocument();
-			expect(screen.getByText('150')).toBeInTheDocument();
+			expect(await screen.findByText('150')).toBeInTheDocument();
 		});
 
 		it('renders Total Time metric', () => {
@@ -218,30 +222,30 @@ describe('SummaryCards', () => {
 	});
 
 	describe('Number Formatting', () => {
-		it('formats thousands with K suffix', () => {
+		it('formats thousands with K suffix', async () => {
 			const dataWithThousands: StatsAggregation = {
 				...mockData,
 				totalQueries: 1500,
 			};
 			render(<SummaryCards data={dataWithThousands} theme={theme} />);
 
-			expect(screen.getByText('1.5K')).toBeInTheDocument();
+			expect(await screen.findByText('1.5K')).toBeInTheDocument();
 		});
 
-		it('formats millions with M suffix', () => {
+		it('formats millions with M suffix', async () => {
 			render(<SummaryCards data={largeNumbersData} theme={theme} />);
 
-			expect(screen.getByText('1.5M')).toBeInTheDocument();
+			expect(await screen.findByText('1.5M')).toBeInTheDocument();
 		});
 
-		it('displays small numbers without suffix', () => {
+		it('displays small numbers without suffix', async () => {
 			const dataWithSmallNumbers: StatsAggregation = {
 				...mockData,
 				totalQueries: 42,
 			};
 			render(<SummaryCards data={dataWithSmallNumbers} theme={theme} />);
 
-			expect(screen.getByText('42')).toBeInTheDocument();
+			expect(await screen.findByText('42')).toBeInTheDocument();
 		});
 	});
 
@@ -426,10 +430,10 @@ describe('SummaryCards', () => {
 			expect(screen.getAllByText('0').length).toBeGreaterThanOrEqual(1);
 		});
 
-		it('handles very large numbers', () => {
+		it('handles very large numbers', async () => {
 			render(<SummaryCards data={largeNumbersData} theme={theme} />);
 
-			expect(screen.getByText('1.5M')).toBeInTheDocument();
+			expect(await screen.findByText('1.5M')).toBeInTheDocument();
 			expect(screen.getByText('100h 0m')).toBeInTheDocument();
 		});
 
@@ -456,5 +460,109 @@ describe('SummaryCards', () => {
 			const valueElements = container.querySelectorAll('[title]');
 			expect(valueElements.length).toBeGreaterThan(0);
 		});
+	});
+});
+
+describe('AnimatedNumber', () => {
+	it('renders the final numeric value after the count-up animation completes', async () => {
+		render(<AnimatedNumber value="150" />);
+
+		expect(await screen.findByText('150')).toBeInTheDocument();
+	});
+
+	it('starts numeric values from 0 before the animation runs', () => {
+		const { container } = render(<AnimatedNumber value="150" />);
+
+		// Initial state renders the count-up start, not the final value.
+		expect(container.textContent).toBe('0');
+	});
+
+	it('preserves the K suffix and decimal precision while animating', async () => {
+		render(<AnimatedNumber value="1.5K" />);
+
+		expect(await screen.findByText('1.5K')).toBeInTheDocument();
+	});
+
+	it('preserves the M suffix and decimal precision while animating', async () => {
+		render(<AnimatedNumber value="2.0M" />);
+
+		expect(await screen.findByText('2.0M')).toBeInTheDocument();
+	});
+
+	it('preserves the % suffix while animating', async () => {
+		render(<AnimatedNumber value="80%" />);
+
+		expect(await screen.findByText('80%')).toBeInTheDocument();
+	});
+
+	it('renders duration strings immediately without animation', () => {
+		render(<AnimatedNumber value="12h 34m" />);
+
+		// Strings that aren't pure numerics display the final value on the first render.
+		expect(screen.getByText('12h 34m')).toBeInTheDocument();
+	});
+
+	it('renders peak hour strings immediately without animation', () => {
+		render(<AnimatedNumber value="9 AM" />);
+
+		expect(screen.getByText('9 AM')).toBeInTheDocument();
+	});
+
+	it('renders agent name strings immediately without animation', () => {
+		render(<AnimatedNumber value="claude-code" />);
+
+		expect(screen.getByText('claude-code')).toBeInTheDocument();
+	});
+
+	it('renders the N/A placeholder immediately without animation', () => {
+		render(<AnimatedNumber value="N/A" />);
+
+		expect(screen.getByText('N/A')).toBeInTheDocument();
+	});
+
+	it('renders zero values without breaking', () => {
+		const { container } = render(<AnimatedNumber value="0" />);
+
+		// 0 → 0 animation displays 0 throughout, including initial state.
+		expect(container.textContent).toBe('0');
+	});
+});
+
+describe('BouncingDots', () => {
+	it('renders three dot spans inside the bounce-dots container', () => {
+		const { container } = render(<BouncingDots />);
+
+		const root = container.querySelector('.bounce-dots');
+		expect(root).not.toBeNull();
+		expect(root?.querySelectorAll('span').length).toBe(3);
+	});
+
+	it('has a status role with a default loading label for screen readers', () => {
+		render(<BouncingDots />);
+
+		const root = screen.getByTestId('bouncing-dots');
+		expect(root).toHaveAttribute('role', 'status');
+		expect(root).toHaveAttribute('aria-label', 'Loading');
+	});
+
+	it('accepts a custom aria-label', () => {
+		render(<BouncingDots label="Agent thinking" />);
+
+		expect(screen.getByTestId('bouncing-dots')).toHaveAttribute('aria-label', 'Agent thinking');
+	});
+
+	it('applies the color prop as inline color so dots inherit currentColor', () => {
+		render(<BouncingDots color="#ff79c6" />);
+
+		const root = screen.getByTestId('bouncing-dots');
+		expect(root).toHaveStyle({ color: '#ff79c6' });
+	});
+
+	it('omits inline color when no color prop is provided', () => {
+		render(<BouncingDots />);
+
+		const root = screen.getByTestId('bouncing-dots');
+		// Without a color prop, the element falls through to currentColor from CSS.
+		expect(root.getAttribute('style')).toBeFalsy();
 	});
 });

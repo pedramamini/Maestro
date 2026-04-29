@@ -1159,7 +1159,10 @@ describe('UsageDashboardModal', () => {
 			});
 
 			// Initial state shows 67% interactive (100/150)
-			expect(screen.getByText('67%')).toBeInTheDocument();
+			// Wrapped in waitFor because the value count-up animation runs over 600ms.
+			await waitFor(() => {
+				expect(screen.getByText('67%')).toBeInTheDocument();
+			});
 
 			mockGetAggregation.mockResolvedValueOnce(afterAutoRunData);
 

@@ -17,7 +17,7 @@
  * - Formatted values for readability
  */
 
-import React, { memo, useMemo, useState } from 'react';
+import React, { memo, useEffect, useMemo, useState } from 'react';
 import {
 	MessageSquare,
 	Clock,
@@ -135,6 +135,122 @@ export function getCardStyles(
 }
 
 /**
+ * Parses a metric value to determine if it can be animated as a count-up.
+ * Matches pure numeric values with an optional `K` / `M` / `%` suffix
+ * (the formats produced by `formatNumber` and percentage formatters).
+ *
+ * Returns `null` for strings like durations (`"12h 34m"`), peak hour
+ * (`"9 AM"`), agent names, or `"N/A"` — these display immediately.
+ */
+function parseAnimatedValue(
+	value: string
+): { target: number; suffix: string; decimals: number } | null {
+	const match = value.match(/^(\d+(?:\.\d+)?)([KM%])?$/);
+	if (!match) return null;
+	const numStr = match[1];
+	const suffix = match[2] ?? '';
+	const dotIdx = numStr.indexOf('.');
+	const decimals = dotIdx >= 0 ? numStr.length - dotIdx - 1 : 0;
+	return { target: parseFloat(numStr), suffix, decimals };
+}
+
+function formatProgress(current: number, decimals: number, suffix: string): string {
+	return `${current.toFixed(decimals)}${suffix}`;
+}
+
+interface AnimatedNumberProps {
+	/** Final value to display. Numeric strings count up; non-numeric display immediately. */
+	value: string;
+	/** Animation duration in ms (default: 600) */
+	duration?: number;
+}
+
+/**
+ * Animates a numeric `value` from 0 to its target using an ease-out cubic
+ * curve. String values that don't parse as pure numbers (durations, agent
+ * names, etc.) are rendered immediately without animation. Respects the
+ * user's `prefers-reduced-motion` setting.
+ */
+export const AnimatedNumber = memo(function AnimatedNumber({
+	value,
+	duration = 600,
+}: AnimatedNumberProps) {
+	const parsed = useMemo(() => parseAnimatedValue(value), [value]);
+	const [display, setDisplay] = useState(() =>
+		parsed ? formatProgress(0, parsed.decimals, parsed.suffix) : value
+	);
+
+	useEffect(() => {
+		if (!parsed) {
+			setDisplay(value);
+			return;
+		}
+
+		const prefersReducedMotion =
+			typeof window !== 'undefined' &&
+			window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+		if (prefersReducedMotion) {
+			setDisplay(value);
+			return;
+		}
+
+		const { target, suffix, decimals } = parsed;
+		setDisplay(formatProgress(0, decimals, suffix));
+
+		let raf = 0;
+		let start = 0;
+
+		const tick = (now: number) => {
+			if (start === 0) start = now;
+			const progress = Math.min(1, (now - start) / duration);
+			const eased = 1 - Math.pow(1 - progress, 3);
+			setDisplay(formatProgress(target * eased, decimals, suffix));
+			if (progress < 1) {
+				raf = requestAnimationFrame(tick);
+			}
+		};
+
+		raf = requestAnimationFrame(tick);
+		return () => cancelAnimationFrame(raf);
+	}, [value, parsed, duration]);
+
+	return <>{display}</>;
+});
+
+interface BouncingDotsProps {
+	/** Color for the dots — defaults to `currentColor` so callers can tint via CSS */
+	color?: string;
+	/** Optional ARIA label; defaults to `"Loading"` for screen readers */
+	label?: string;
+}
+
+/**
+ * Three dots that bounce in sequence for loading / thinking states.
+ *
+ * Animation, sizing, and stagger delays live in `index.css` under the
+ * `.bounce-dots` selector and respect `prefers-reduced-motion`.
+ */
+export const BouncingDots = memo(function BouncingDots({
+	color,
+	label = 'Loading',
+}: BouncingDotsProps) {
+	const style: React.CSSProperties | undefined = color ? { color } : undefined;
+	return (
+		<span
+			className="bounce-dots"
+			style={style}
+			role="status"
+			aria-label={label}
+			data-testid="bouncing-dots"
+		>
+			<span aria-hidden="true" />
+			<span aria-hidden="true" />
+			<span aria-hidden="true" />
+		</span>
+	);
+});
+
+/**
  * Single metric card component
  */
 interface MetricCardProps {
@@ -203,7 +319,7 @@ const MetricCard = memo(function MetricCard({
 					}}
 					title={value}
 				>
-					{value}
+					<AnimatedNumber value={value} />
 				</div>
 				{extra}
 			</div>
