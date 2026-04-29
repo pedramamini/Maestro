@@ -957,12 +957,16 @@ export const CueStats = memo(function CueStats({
 			const result = await window.maestro.cueStats.getAggregation(timeRange);
 			setAggregation(result);
 		} catch (err) {
-			const message = err instanceof Error ? err.message : String(err);
-			if (message !== 'CueStatsDisabled') {
+			// Electron wraps thrown errors as
+			// `Error invoking remote method '<channel>': Error: <original>`,
+			// so equality on the original sentinel never matches in production.
+			const rawMessage = err instanceof Error ? err.message : String(err);
+			const isDisabled = rawMessage.includes('CueStatsDisabled');
+			if (!isDisabled) {
 				logger.error('Failed to fetch Cue stats:', undefined, err);
 				captureException(err, { extra: { timeRange } });
 			}
-			setError(message);
+			setError(isDisabled ? 'CueStatsDisabled' : rawMessage);
 			setAggregation(null);
 		} finally {
 			setLoading(false);

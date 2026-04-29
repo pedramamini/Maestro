@@ -407,8 +407,18 @@ describe('CueStats', () => {
 	});
 
 	describe('Disabled state', () => {
-		it('renders the friendly disabled note when the IPC throws CueStatsDisabled', async () => {
-			mockGetAggregation.mockRejectedValue(new Error('CueStatsDisabled'));
+		// Two cases: the bare sentinel (defensive — the main process *could*
+		// surface it un-wrapped one day) and the Electron-wrapped form that
+		// `ipcRenderer.invoke` actually produces in production. The wrapped
+		// form is the one that previously slipped through equality checks.
+		it.each([
+			['bare sentinel', 'CueStatsDisabled'],
+			[
+				'Electron-wrapped IPC error',
+				"Error invoking remote method 'cue-stats:get-aggregation': Error: CueStatsDisabled",
+			],
+		])('renders the friendly disabled note for the %s', async (_label, message) => {
+			mockGetAggregation.mockRejectedValue(new Error(message));
 
 			render(<CueStats timeRange="week" theme={theme} />);
 
@@ -420,6 +430,8 @@ describe('CueStats', () => {
 			// Defense-in-depth copy mentions both Encore features
 			expect(screen.getByText(/Maestro Cue/)).toBeInTheDocument();
 			expect(screen.getByText(/Usage Dashboard/)).toBeInTheDocument();
+			// The retry-style ErrorNote must NOT have rendered.
+			expect(screen.queryByTestId('cue-stats-error')).not.toBeInTheDocument();
 		});
 	});
 
