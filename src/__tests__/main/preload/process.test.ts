@@ -259,6 +259,87 @@ describe('Process Preload API', () => {
 		});
 	});
 
+	describe('onTerminalCommandState', () => {
+		it('should register event listener for process:terminal-command-state', () => {
+			const callback = vi.fn();
+
+			const cleanup = api.onTerminalCommandState(callback);
+
+			expect(mockOn).toHaveBeenCalledWith('process:terminal-command-state', expect.any(Function));
+			expect(typeof cleanup).toBe('function');
+		});
+
+		it('should call callback with sessionId and state', () => {
+			const callback = vi.fn();
+			let registeredHandler: (event: unknown, sessionId: string, state: unknown) => void;
+
+			mockOn.mockImplementation((channel: string, handler: typeof registeredHandler) => {
+				if (channel === 'process:terminal-command-state') {
+					registeredHandler = handler;
+				}
+			});
+
+			api.onTerminalCommandState(callback);
+
+			const state = {
+				currentCommand: 'btop',
+				commandRunning: true,
+				lastExitCode: undefined,
+			};
+			registeredHandler!({}, 'session-123', state);
+
+			expect(callback).toHaveBeenCalledWith('session-123', state);
+		});
+
+		it('should remove listener on cleanup', () => {
+			const callback = vi.fn();
+
+			const cleanup = api.onTerminalCommandState(callback);
+			cleanup();
+
+			expect(mockRemoveListener).toHaveBeenCalledWith(
+				'process:terminal-command-state',
+				expect.any(Function)
+			);
+		});
+	});
+
+	describe('onTerminalCwd', () => {
+		it('should register event listener for process:terminal-cwd', () => {
+			const callback = vi.fn();
+
+			const cleanup = api.onTerminalCwd(callback);
+
+			expect(mockOn).toHaveBeenCalledWith('process:terminal-cwd', expect.any(Function));
+			expect(typeof cleanup).toBe('function');
+		});
+
+		it('should call callback with sessionId and cwd', () => {
+			const callback = vi.fn();
+			let registeredHandler: (event: unknown, sessionId: string, cwd: string) => void;
+
+			mockOn.mockImplementation((channel: string, handler: typeof registeredHandler) => {
+				if (channel === 'process:terminal-cwd') {
+					registeredHandler = handler;
+				}
+			});
+
+			api.onTerminalCwd(callback);
+			registeredHandler!({}, 'session-123', '/Users/me/Downloads');
+
+			expect(callback).toHaveBeenCalledWith('session-123', '/Users/me/Downloads');
+		});
+
+		it('should remove listener on cleanup', () => {
+			const callback = vi.fn();
+
+			const cleanup = api.onTerminalCwd(callback);
+			cleanup();
+
+			expect(mockRemoveListener).toHaveBeenCalledWith('process:terminal-cwd', expect.any(Function));
+		});
+	});
+
 	describe('sendRemoteNewTabResponse', () => {
 		it('should send response via ipcRenderer.send', () => {
 			api.sendRemoteNewTabResponse('response-channel', { tabId: 'tab-123' });

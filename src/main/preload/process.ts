@@ -130,6 +130,21 @@ export interface SshRemoteInfo {
 }
 
 /**
+ * Snapshot of shell-integration command state forwarded from the main process
+ * when an OSC 133;B (command-start) or 133;D (command-finished) sequence fires.
+ *
+ * Mirrors `TerminalCommandState` in `src/main/process-manager/types.ts` —
+ * duplicated here (rather than imported) to keep the preload decoupled from
+ * main-process type imports, matching the convention already used for
+ * `UsageStats`, `AgentError`, and `ToolExecutionEvent` above.
+ */
+export interface TerminalCommandState {
+	currentCommand?: string;
+	commandRunning: boolean;
+	lastExitCode?: number;
+}
+
+/**
  * Creates the process API object for preload exposure
  */
 export function createProcessApi() {
@@ -253,6 +268,31 @@ export function createProcessApi() {
 				callback(sessionId, sshRemote);
 			ipcRenderer.on('process:ssh-remote', handler);
 			return () => ipcRenderer.removeListener('process:ssh-remote', handler);
+		},
+
+		/**
+		 * Subscribe to terminal shell-integration command-state snapshots.
+		 * Emitted when an OSC 133 B (command-start) or D (command-finished)
+		 * sequence is parsed from a terminal tab's PTY output.
+		 */
+		onTerminalCommandState: (
+			callback: (sessionId: string, state: TerminalCommandState) => void
+		): (() => void) => {
+			const handler = (_: unknown, sessionId: string, state: TerminalCommandState) =>
+				callback(sessionId, state);
+			ipcRenderer.on('process:terminal-command-state', handler);
+			return () => ipcRenderer.removeListener('process:terminal-command-state', handler);
+		},
+
+		/**
+		 * Subscribe to terminal CWD changes.
+		 * Emitted when an OSC 7 sequence is parsed from a terminal tab's PTY
+		 * output (e.g. after `cd`).
+		 */
+		onTerminalCwd: (callback: (sessionId: string, cwd: string) => void): (() => void) => {
+			const handler = (_: unknown, sessionId: string, cwd: string) => callback(sessionId, cwd);
+			ipcRenderer.on('process:terminal-cwd', handler);
+			return () => ipcRenderer.removeListener('process:terminal-cwd', handler);
 		},
 
 		/**
