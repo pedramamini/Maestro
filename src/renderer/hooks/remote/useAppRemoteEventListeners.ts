@@ -497,6 +497,8 @@ export function useAppRemoteEventListeners(deps: UseAppRemoteEventListenersDeps)
 			// Probe git repo state for the cwd so the header badge shows the branch
 			// instead of "LOCAL". Mirrors the GUI's useSessionCrud flow. For SSH
 			// sessions, defer the check until onSshRemote fires (see useAgentListeners).
+			// gitService methods route through createIpcMethod with a defaultValue,
+			// so they swallow IPC errors (and report to Sentry) rather than throwing.
 			const sshConfig = config?.sessionSshRemoteConfig as
 				| { enabled?: boolean; remoteId?: string | null }
 				| undefined;
@@ -506,17 +508,13 @@ export function useAppRemoteEventListeners(deps: UseAppRemoteEventListenersDeps)
 			let gitTags: string[] | undefined;
 			let gitRefsCacheTime: number | undefined;
 			if (!isRemoteSession) {
-				try {
-					isGitRepo = await gitService.isRepo(cwd);
-					if (isGitRepo) {
-						[gitBranches, gitTags] = await Promise.all([
-							gitService.getBranches(cwd),
-							gitService.getTags(cwd),
-						]);
-						gitRefsCacheTime = Date.now();
-					}
-				} catch (err) {
-					logger.error('[Remote] git probe failed during session create', undefined, err);
+				isGitRepo = await gitService.isRepo(cwd);
+				if (isGitRepo) {
+					[gitBranches, gitTags] = await Promise.all([
+						gitService.getBranches(cwd),
+						gitService.getTags(cwd),
+					]);
+					gitRefsCacheTime = Date.now();
 				}
 			}
 
