@@ -183,7 +183,10 @@ export const SessionStats = memo(function SessionStats({
 	if (agentSessions.length === 0) {
 		return (
 			<div className="p-4 rounded-lg" style={{ backgroundColor: theme.colors.bgMain }}>
-				<h3 className="text-sm font-medium mb-4" style={{ color: theme.colors.textMain }}>
+				<h3
+					className="text-sm font-medium mb-4"
+					style={{ color: theme.colors.textMain, animation: 'card-enter 0.4s ease both' }}
+				>
 					Agent Statistics
 				</h3>
 				<div
@@ -198,7 +201,10 @@ export const SessionStats = memo(function SessionStats({
 
 	return (
 		<div className="p-4 rounded-lg" style={{ backgroundColor: theme.colors.bgMain }}>
-			<h3 className="text-sm font-medium mb-4" style={{ color: theme.colors.textMain }}>
+			<h3
+				className="text-sm font-medium mb-4"
+				style={{ color: theme.colors.textMain, animation: 'card-enter 0.4s ease both' }}
+			>
 				Agent Statistics
 			</h3>
 

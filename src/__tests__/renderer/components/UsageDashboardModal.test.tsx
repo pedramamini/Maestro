@@ -54,6 +54,10 @@ vi.mock('lucide-react', () => {
 		// WeekdayComparisonChart icons
 		Briefcase: createIcon('briefcase', '💼'),
 		Coffee: createIcon('coffee', '☕'),
+		// RealtimeMetricsCard icons
+		Cpu: createIcon('cpu', '🖥️'),
+		DollarSign: createIcon('dollar', '💲'),
+		Activity: createIcon('activity', '📈'),
 	};
 });
 
