@@ -1553,7 +1553,8 @@ interface MaestroAPI {
 			sessionId: string,
 			bucketCount: number,
 			lookbackHours: number | null,
-			sharedContext?: { sshRemoteId: string; remoteCwd: string }
+			sharedContext?: { sshRemoteId: string; remoteCwd: string },
+			projectPath?: string
 		) => Promise<{
 			buckets: Array<{ auto: number; user: number; cue: number }>;
 			bucketCount: number;

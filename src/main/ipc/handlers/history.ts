@@ -27,6 +27,7 @@ import {
 	writeEntryLocal,
 	readRemoteEntriesSsh,
 	readRemoteEntriesLocal,
+	hasLocalSharedHistory,
 } from '../../shared-history-manager';
 import { withIpcErrorLogging, CreateHandlerOptions } from '../../utils/ipcHandler';
 import type { SafeSendFn } from '../../utils/safe-send';
@@ -330,18 +331,27 @@ export function registerHistoryHandlers(deps: HistoryHandlerDependencies): void 
 				sessionId: string,
 				bucketCount: number,
 				lookbackHours: number | null,
-				sharedContext?: SharedHistoryContext
+				sharedContext?: SharedHistoryContext,
+				projectPath?: string
 			): Promise<HistoryGraphData> => {
 				const safeBucketCount = Math.max(1, bucketCount | 0);
 				const lookbackMs =
 					lookbackHours !== null && lookbackHours > 0 ? lookbackHours * 60 * 60 * 1000 : null;
 				const filePath = historyManager.getHistoryFilePath(sessionId);
 				const hasShared = Boolean(sharedContext?.sshRemoteId && sharedContext?.remoteCwd);
+				// Local-shared overlay: a non-SSH session whose project dir
+				// has foreign-host JSONL files in `.maestro/history/`.
+				// Typical of an agent running directly on the remote machine
+				// with `shareHistoryToProjectDir` on so a paired Maestro
+				// (SSH'd in from elsewhere) can observe its work.
+				const hasLocalShared = Boolean(
+					!hasShared && projectPath && hasLocalSharedHistory(projectPath)
+				);
 
-				// Cache only when there is no shared history overlay — shared
-				// entries come from arbitrary remote/local files we don't
-				// fingerprint. Bypassing the cache keeps the simple path simple.
-				if (filePath && !hasShared) {
+				// Cache only when there is no shared-history overlay (SSH or
+				// local-mirror). Shared entries come from arbitrary files we
+				// don't fingerprint, so the simple cached path can't see them.
+				if (filePath && !hasShared && !hasLocalShared) {
 					const cache = getHistoryBucketCache();
 					const lookbackKey = lookbackHours === null ? 'all' : String(lookbackHours);
 					const cacheKey = `single:${sessionId}:bc=${safeBucketCount}:lb=${lookbackKey}`;
@@ -393,6 +403,19 @@ export function registerHistoryHandlers(deps: HistoryHandlerDependencies): void 
 						}
 					} catch (err) {
 						logger.warn(`Failed to read shared history for graph: ${err}`, LOG_CONTEXT);
+					}
+				} else if (hasLocalShared) {
+					try {
+						const sharedEntries = readRemoteEntriesLocal(projectPath!, maxEntries);
+						const seen = new Set(entries.map((e) => e.id));
+						for (const e of sharedEntries) {
+							if (!seen.has(e.id)) {
+								entries.push(e);
+								seen.add(e.id);
+							}
+						}
+					} catch (err) {
+						logger.warn(`Failed to read local shared history for graph: ${err}`, LOG_CONTEXT);
 					}
 				}
 				const agg = buildBucketAggregate(entries, safeBucketCount, { lookbackMs });

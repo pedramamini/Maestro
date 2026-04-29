@@ -151,10 +151,18 @@ export const HistoryPanel = React.memo(
 				session.sessionSshRemoteConfig?.syncHistory,
 			]
 		);
+		// `projectPath` is what lets the handler merge a non-SSH session's
+		// `<projectPath>/.maestro/history/*.jsonl` files (entries written
+		// by other Maestro instances pointed at the same project — typically
+		// a peer SSH'd into this machine, or vice-versa). Without it, a
+		// machine running the agent locally never sees foreign-host entries
+		// even when the JSONL files are sitting right there on disk.
+		const projectPathForHistory = session.projectRoot || session.cwd || undefined;
 		const loadPage = useCallback(
 			async (offset: number, limit: number): Promise<PaginatedPage<HistoryEntry>> => {
 				const result = await window.maestro.history.getAllPaginated({
 					sessionId: session.id,
+					projectPath: projectPathForHistory,
 					sharedContext: sharedContextSnapshot,
 					lookbackHours: graphLookbackHours,
 					pagination: { offset, limit },
@@ -165,7 +173,7 @@ export const HistoryPanel = React.memo(
 					total: result.total,
 				};
 			},
-			[session.id, sharedContextSnapshot, graphLookbackHours]
+			[session.id, projectPathForHistory, sharedContextSnapshot, graphLookbackHours]
 		);
 
 		const getEntryId = useCallback((entry: HistoryEntry) => entry.id, []);
@@ -195,7 +203,8 @@ export const HistoryPanel = React.memo(
 					session.id,
 					bucketCountForLookback(graphLookbackHours),
 					graphLookbackHours,
-					buildSharedHistoryContext(session)
+					buildSharedHistoryContext(session),
+					projectPathForHistory
 				);
 				setGraphBuckets(data.buckets);
 				setGraphRange({ start: data.earliestTimestamp, end: data.latestTimestamp });
@@ -206,7 +215,7 @@ export const HistoryPanel = React.memo(
 				setGraphRange(undefined);
 				setGraphHostCounts(undefined);
 			}
-		}, [session.id, session, graphLookbackHours]);
+		}, [session.id, session, graphLookbackHours, projectPathForHistory]);
 
 		useEffect(() => {
 			refreshGraphData();

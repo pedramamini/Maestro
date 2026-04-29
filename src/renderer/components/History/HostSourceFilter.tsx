@@ -62,16 +62,24 @@ export const HostSourceFilter = memo(function HostSourceFilter({
 		<div ref={containerRef} className="relative">
 			{open && (
 				<div
-					className="absolute left-0 right-0 bottom-full mb-1 rounded border shadow-lg overflow-hidden z-30"
+					className="absolute left-0 right-0 bottom-full mb-1 rounded border-2 overflow-hidden z-50"
 					style={{
-						backgroundColor: theme.colors.bgSidebar,
-						borderColor: theme.colors.border,
+						// Use the elevated `bgActivity` shade (vs the trigger's
+						// `bgSidebar`) so the popover reads as ABOVE the entry
+						// list rather than blending into it. Accent border +
+						// strong drop shadow + backdrop blur kill any residual
+						// bleed from entries that scroll under the trigger.
+						backgroundColor: theme.colors.bgActivity,
+						borderColor: theme.colors.accent,
+						boxShadow: `0 8px 24px -4px ${theme.colors.bgMain}, 0 0 0 1px ${theme.colors.bgMain}`,
+						backdropFilter: 'blur(8px)',
 					}}
 				>
 					<button
 						className="w-full px-3 py-2 text-left text-xs flex items-center gap-2 hover:bg-white/10 transition-colors"
 						style={{
 							color: selectedHost === null ? theme.colors.accent : theme.colors.textMain,
+							fontWeight: selectedHost === null ? 600 : 400,
 						}}
 						onClick={() => handleSelect(null)}
 					>
@@ -87,6 +95,7 @@ export const HostSourceFilter = memo(function HostSourceFilter({
 								className="w-full px-3 py-2 text-left text-xs flex items-center gap-2 hover:bg-white/10 transition-colors"
 								style={{
 									color: isSelected ? theme.colors.accent : theme.colors.textMain,
+									fontWeight: isSelected ? 600 : 400,
 								}}
 								onClick={() => handleSelect(host)}
 							>
