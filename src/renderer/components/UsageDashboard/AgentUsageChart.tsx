@@ -61,9 +61,13 @@ interface AgentUsageChartProps {
 	colorBlindMode?: boolean;
 	/** Current sessions for mapping IDs to names */
 	sessions?: Session[];
-	/** Drill-down click handler — wired by the dashboard, consumed in a follow-up task. */
+	/** Drill-down click handler — fires with the legend item's session key + display name. */
 	onAgentClick?: (key: string, displayName: string) => void;
-	/** Active drill-down filter key — consumed in a follow-up task to dim non-selected lines. */
+	/**
+	 * Active drill-down filter key. When set, the matching line is rendered with
+	 * a thicker stroke and the legend item is highlighted; non-matching lines
+	 * dim to 15% stroke opacity. `null`/undefined means no filter is active.
+	 */
 	activeFilterKey?: string | null;
 }
 
@@ -146,6 +150,8 @@ export const AgentUsageChart = memo(function AgentUsageChart({
 	theme,
 	colorBlindMode = false,
 	sessions,
+	onAgentClick,
+	activeFilterKey = null,
 }: AgentUsageChartProps) {
 	const [hoveredDay, setHoveredDay] = useState<{ dayIndex: number; agent?: string } | null>(null);
 	const [tooltipPos, setTooltipPos] = useState<{ x: number; y: number } | null>(null);
@@ -316,6 +322,17 @@ export const AgentUsageChart = memo(function AgentUsageChart({
 		setTooltipPos(null);
 	}, []);
 
+	// Forward legend clicks to the dashboard's drill-down handler. Toggle
+	// behavior (clicking the active legend item clears the filter) is owned by
+	// the dashboard; this component just reports which agent was clicked.
+	const handleAgentClick = useCallback(
+		(agentKey: string, displayName: string) => {
+			if (!onAgentClick) return;
+			onAgentClick(agentKey, displayName);
+		},
+		[onAgentClick]
+	);
+
 	return (
 		<div
 			className="p-4 rounded-lg"
@@ -325,7 +342,10 @@ export const AgentUsageChart = memo(function AgentUsageChart({
 		>
 			{/* Header with title and metric toggle */}
 			<div className="flex items-center justify-between mb-4">
-				<h3 className="text-sm font-medium" style={{ color: theme.colors.textMain }}>
+				<h3
+					className="text-sm font-medium"
+					style={{ color: theme.colors.textMain, animation: 'card-enter 0.4s ease both' }}
+				>
 					Agent Usage Over Time
 				</h3>
 				<div className="flex items-center gap-2">
@@ -433,17 +453,24 @@ export const AgentUsageChart = memo(function AgentUsageChart({
 						{agents.map((agent, agentIdx) => {
 							const color = getAgentColor(agentIdx, colorBlindMode);
 							const isWorktree = worktreeAgents.has(agent);
+							const isFiltered = activeFilterKey != null;
+							const isSelected = isFiltered && activeFilterKey === agent;
+							const isDimmed = isFiltered && !isSelected;
 							return (
 								<path
 									key={`line-${agent}`}
 									d={linePaths[agent]}
 									fill="none"
 									stroke={color}
-									strokeWidth={2}
+									strokeWidth={isSelected ? 2.5 : 2}
+									strokeOpacity={isDimmed ? 0.15 : 1}
 									strokeLinecap="round"
 									strokeLinejoin="round"
 									strokeDasharray={isWorktree ? '5 3' : undefined}
-									style={{ transition: 'd 0.5s cubic-bezier(0.4, 0, 0.2, 1)' }}
+									style={{
+										transition:
+											'd 0.5s cubic-bezier(0.4, 0, 0.2, 1), stroke-opacity 0.2s ease, stroke-width 0.2s ease',
+									}}
 								/>
 							);
 						})}
@@ -451,6 +478,9 @@ export const AgentUsageChart = memo(function AgentUsageChart({
 						{/* Data points for each agent */}
 						{agents.map((agent, agentIdx) => {
 							const color = getAgentColor(agentIdx, colorBlindMode);
+							const isFiltered = activeFilterKey != null;
+							const isSelected = isFiltered && activeFilterKey === agent;
+							const isDimmed = isFiltered && !isSelected;
 							return chartData[agent].map((day, dayIdx) => {
 								const x = xScale(dayIdx);
 								const y = yScale(metricMode === 'count' ? day.count : day.duration);
@@ -465,9 +495,10 @@ export const AgentUsageChart = memo(function AgentUsageChart({
 										fill={isHovered ? color : theme.colors.bgMain}
 										stroke={color}
 										strokeWidth={2}
+										opacity={isDimmed ? 0.15 : 1}
 										style={{
 											cursor: 'pointer',
-											transition: 'r 0.15s ease',
+											transition: 'r 0.15s ease, opacity 0.2s ease',
 										}}
 										onMouseEnter={(e) => handleMouseEnter(dayIdx, agent, e)}
 										onMouseLeave={handleMouseLeave}
@@ -527,7 +558,7 @@ export const AgentUsageChart = memo(function AgentUsageChart({
 				)}
 			</div>
 
-			{/* Legend */}
+			{/* Legend — clickable when `onAgentClick` is wired (drill-down filter). */}
 			<div
 				className="flex items-center justify-center gap-4 mt-3 pt-3 border-t flex-wrap"
 				style={{ borderColor: theme.colors.border }}
@@ -535,8 +566,39 @@ export const AgentUsageChart = memo(function AgentUsageChart({
 				{agents.map((agent, idx) => {
 					const color = getAgentColor(idx, colorBlindMode);
 					const isWorktree = worktreeAgents.has(agent);
+					const displayName = agentDisplayNames[agent];
+					const isClickable = !!onAgentClick;
+					const isFiltered = activeFilterKey != null;
+					const isSelected = isFiltered && activeFilterKey === agent;
+					const isDimmed = isFiltered && !isSelected;
 					return (
-						<div key={agent} className="flex items-center gap-1.5">
+						<div
+							key={agent}
+							className="flex items-center gap-1.5 rounded"
+							style={{
+								padding: isClickable ? '2px 6px' : undefined,
+								margin: isClickable ? '-2px -6px' : undefined,
+								cursor: isClickable ? 'pointer' : undefined,
+								backgroundColor: isSelected ? `${theme.colors.accent}26` : undefined,
+								opacity: isDimmed ? 0.5 : 1,
+								transition: 'background-color 0.2s ease, opacity 0.2s ease',
+							}}
+							onClick={isClickable ? () => handleAgentClick(agent, displayName) : undefined}
+							onKeyDown={
+								isClickable
+									? (e) => {
+											if (e.key === 'Enter' || e.key === ' ') {
+												e.preventDefault();
+												handleAgentClick(agent, displayName);
+											}
+										}
+									: undefined
+							}
+							role={isClickable ? 'button' : undefined}
+							tabIndex={isClickable ? 0 : undefined}
+							aria-pressed={isClickable ? isSelected : undefined}
+							aria-label={isClickable ? `${displayName}. Click to filter dashboard.` : undefined}
+						>
 							{isWorktree ? (
 								<svg width={12} height={2} aria-hidden="true">
 									<line
@@ -553,7 +615,7 @@ export const AgentUsageChart = memo(function AgentUsageChart({
 								<div className="w-3 h-0.5 rounded" style={{ backgroundColor: color }} />
 							)}
 							<span className="text-xs" style={{ color: theme.colors.textDim }}>
-								{agentDisplayNames[agent]}
+								{displayName}
 							</span>
 						</div>
 					);

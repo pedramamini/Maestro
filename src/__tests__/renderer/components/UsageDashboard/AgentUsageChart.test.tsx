@@ -7,8 +7,8 @@
  * names (or the prettified type fallback) instead of raw UUID prefixes.
  */
 
-import { describe, it, expect } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { describe, it, expect, vi } from 'vitest';
+import { render, screen, fireEvent } from '@testing-library/react';
 import { AgentUsageChart } from '../../../../renderer/components/UsageDashboard/AgentUsageChart';
 import type { StatsAggregation } from '../../../../renderer/hooks/stats/useStats';
 import type { Session } from '../../../../renderer/types';
@@ -150,6 +150,172 @@ describe('AgentUsageChart', () => {
 			render(<AgentUsageChart data={data} timeRange="week" theme={theme} sessions={[]} />);
 
 			expect(screen.getByText('Claude Code')).toBeInTheDocument();
+		});
+	});
+
+	describe('Drill-down filter', () => {
+		// Two-session fixture used across the drill-down tests below.
+		function buildTwoSessionFixture() {
+			const sessionA = makeSession({ id: 'sess-aaa', name: 'Backend' });
+			const sessionB = makeSession({ id: 'sess-bbb', name: 'Frontend' });
+			const data = dataForSessions({
+				'sess-aaa': [{ date: '2024-12-20', count: 5, duration: 60_000 }],
+				'sess-bbb': [{ date: '2024-12-20', count: 3, duration: 30_000 }],
+			});
+			return { sessions: [sessionA, sessionB], data };
+		}
+
+		it('renders legend items as non-interactive when onAgentClick is not provided', () => {
+			const { sessions, data } = buildTwoSessionFixture();
+			const { container } = render(
+				<AgentUsageChart data={data} timeRange="week" theme={theme} sessions={sessions} />
+			);
+
+			const legendButtons = container.querySelectorAll('[role="button"]');
+			expect(legendButtons.length).toBe(0);
+		});
+
+		it('renders legend items as buttons with tabIndex when onAgentClick is provided', () => {
+			const { sessions, data } = buildTwoSessionFixture();
+			const { container } = render(
+				<AgentUsageChart
+					data={data}
+					timeRange="week"
+					theme={theme}
+					sessions={sessions}
+					onAgentClick={vi.fn()}
+				/>
+			);
+
+			const legendButtons = container.querySelectorAll('[role="button"]');
+			// Sorted by total queries desc → Backend (5), Frontend (3).
+			expect(legendButtons.length).toBe(2);
+			legendButtons.forEach((btn) => {
+				expect(btn.getAttribute('tabIndex')).toBe('0');
+				expect((btn as HTMLElement).style.cursor).toBe('pointer');
+			});
+		});
+
+		it('fires onAgentClick with the session key and resolved display name', () => {
+			const { sessions, data } = buildTwoSessionFixture();
+			const onAgentClick = vi.fn();
+			const { container } = render(
+				<AgentUsageChart
+					data={data}
+					timeRange="week"
+					theme={theme}
+					sessions={sessions}
+					onAgentClick={onAgentClick}
+				/>
+			);
+
+			const legendButtons = container.querySelectorAll('[role="button"]');
+			fireEvent.click(legendButtons[0]); // Backend (sorted first by total)
+
+			expect(onAgentClick).toHaveBeenCalledTimes(1);
+			expect(onAgentClick).toHaveBeenCalledWith('sess-aaa', 'Backend');
+		});
+
+		it('fires onAgentClick on Enter and Space key activation', () => {
+			const { sessions, data } = buildTwoSessionFixture();
+			const onAgentClick = vi.fn();
+			const { container } = render(
+				<AgentUsageChart
+					data={data}
+					timeRange="week"
+					theme={theme}
+					sessions={sessions}
+					onAgentClick={onAgentClick}
+				/>
+			);
+
+			const legendButtons = container.querySelectorAll('[role="button"]');
+			fireEvent.keyDown(legendButtons[0], { key: 'Enter' });
+			fireEvent.keyDown(legendButtons[0], { key: ' ' });
+
+			expect(onAgentClick).toHaveBeenCalledTimes(2);
+		});
+
+		it('highlights the matching legend item with an accent background', () => {
+			const { sessions, data } = buildTwoSessionFixture();
+			const { container } = render(
+				<AgentUsageChart
+					data={data}
+					timeRange="week"
+					theme={theme}
+					sessions={sessions}
+					onAgentClick={vi.fn()}
+					activeFilterKey="sess-aaa"
+				/>
+			);
+
+			const legendButtons = container.querySelectorAll(
+				'[role="button"]'
+			) as NodeListOf<HTMLElement>;
+			// Backend (sorted first) is selected; Frontend is not.
+			expect(legendButtons[0].style.backgroundColor).not.toBe('');
+			expect(legendButtons[1].style.backgroundColor).toBe('');
+		});
+
+		it('reflects selection state via aria-pressed', () => {
+			const { sessions, data } = buildTwoSessionFixture();
+			const { container } = render(
+				<AgentUsageChart
+					data={data}
+					timeRange="week"
+					theme={theme}
+					sessions={sessions}
+					onAgentClick={vi.fn()}
+					activeFilterKey="sess-bbb"
+				/>
+			);
+
+			const legendButtons = container.querySelectorAll('[role="button"]');
+			// Sorted: Backend (false), Frontend (true).
+			expect(legendButtons[0].getAttribute('aria-pressed')).toBe('false');
+			expect(legendButtons[1].getAttribute('aria-pressed')).toBe('true');
+		});
+
+		it('dims non-selected lines to 0.15 stroke-opacity and thickens the selected line', () => {
+			const { sessions, data } = buildTwoSessionFixture();
+			const { container } = render(
+				<AgentUsageChart
+					data={data}
+					timeRange="week"
+					theme={theme}
+					sessions={sessions}
+					onAgentClick={vi.fn()}
+					activeFilterKey="sess-aaa"
+				/>
+			);
+
+			// Two lines, sorted: sess-aaa (selected), sess-bbb (dimmed).
+			const lines = container.querySelectorAll('path');
+			expect(lines.length).toBe(2);
+			expect(lines[0].getAttribute('stroke-opacity')).toBe('1');
+			expect(lines[0].getAttribute('stroke-width')).toBe('2.5');
+			expect(lines[1].getAttribute('stroke-opacity')).toBe('0.15');
+			expect(lines[1].getAttribute('stroke-width')).toBe('2');
+		});
+
+		it('renders all lines at full opacity and default width when no filter is active', () => {
+			const { sessions, data } = buildTwoSessionFixture();
+			const { container } = render(
+				<AgentUsageChart
+					data={data}
+					timeRange="week"
+					theme={theme}
+					sessions={sessions}
+					onAgentClick={vi.fn()}
+					activeFilterKey={null}
+				/>
+			);
+
+			const lines = container.querySelectorAll('path');
+			lines.forEach((line) => {
+				expect(line.getAttribute('stroke-opacity')).toBe('1');
+				expect(line.getAttribute('stroke-width')).toBe('2');
+			});
 		});
 	});
 });
