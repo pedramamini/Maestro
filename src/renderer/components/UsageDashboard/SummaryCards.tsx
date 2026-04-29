@@ -89,6 +89,8 @@ interface MetricCardProps {
 	theme: Theme;
 	/** Animation delay index for staggered entrance (0-based) */
 	animationIndex?: number;
+	/** Optional content rendered below the value (e.g. status breakdown) */
+	extra?: React.ReactNode;
 }
 
 const MetricCard = memo(function MetricCard({
@@ -97,6 +99,7 @@ const MetricCard = memo(function MetricCard({
 	value,
 	theme,
 	animationIndex = 0,
+	extra,
 }: MetricCardProps) {
 	return (
 		<div
@@ -128,6 +131,7 @@ const MetricCard = memo(function MetricCard({
 				<div className="text-2xl font-bold" style={{ color: theme.colors.textMain }} title={value}>
 					{value}
 				</div>
+				{extra}
 			</div>
 		</div>
 	);
@@ -168,6 +172,56 @@ export const SummaryCards = memo(function SummaryCards({
 		}, 0);
 	}, [sessions]);
 
+	// Per-state agent counts for the mini status breakdown shown under the Agents card.
+	// Excludes terminal sessions to match `agentCount`.
+	const statusCounts = useMemo(() => {
+		if (!sessions) return null;
+		let busy = 0;
+		let idle = 0;
+		let error = 0;
+		for (const s of sessions) {
+			if (s.toolType === 'terminal') continue;
+			if (s.state === 'busy') busy++;
+			else if (s.state === 'error') error++;
+			else if (s.state === 'idle') idle++;
+		}
+		return { busy, idle, error };
+	}, [sessions]);
+
+	const statusBreakdown = statusCounts ? (
+		<div
+			className="flex items-center gap-2 mt-1.5 text-[10px]"
+			style={{ color: theme.colors.textDim }}
+			data-testid="agent-status-breakdown"
+			aria-label={`${statusCounts.busy} busy, ${statusCounts.idle} idle, ${statusCounts.error} errors`}
+		>
+			<span className="flex items-center gap-1" title={`${statusCounts.busy} busy`}>
+				<span
+					className="w-1.5 h-1.5 rounded-full"
+					style={{ backgroundColor: theme.colors.warning }}
+					aria-hidden="true"
+				/>
+				{statusCounts.busy}
+			</span>
+			<span className="flex items-center gap-1" title={`${statusCounts.idle} idle`}>
+				<span
+					className="w-1.5 h-1.5 rounded-full"
+					style={{ backgroundColor: theme.colors.success }}
+					aria-hidden="true"
+				/>
+				{statusCounts.idle}
+			</span>
+			<span className="flex items-center gap-1" title={`${statusCounts.error} errors`}>
+				<span
+					className="w-1.5 h-1.5 rounded-full"
+					style={{ backgroundColor: theme.colors.error }}
+					aria-hidden="true"
+				/>
+				{statusCounts.error}
+			</span>
+		</div>
+	) : null;
+
 	// Calculate derived metrics
 	const { mostActiveAgent, interactiveRatio, peakHour, localVsRemote, queriesPerSession } =
 		useMemo(() => {
@@ -206,11 +260,17 @@ export const SummaryCards = memo(function SummaryCards({
 			};
 		}, [data.byAgent, data.bySource, data.byHour, data.byLocation, agentCount, data.totalQueries]);
 
-	const metrics = [
+	const metrics: Array<{
+		icon: React.ReactNode;
+		label: string;
+		value: string;
+		extra?: React.ReactNode;
+	}> = [
 		{
 			icon: <Layers className="w-4 h-4" />,
 			label: 'Agents',
 			value: formatNumber(agentCount),
+			extra: statusBreakdown,
 		},
 		{
 			icon: <PanelTop className="w-4 h-4" />,
@@ -277,6 +337,7 @@ export const SummaryCards = memo(function SummaryCards({
 					value={metric.value}
 					theme={theme}
 					animationIndex={index}
+					extra={metric.extra}
 				/>
 			))}
 		</div>
