@@ -113,6 +113,13 @@ interface QuickAction {
 		busyTabName?: string;
 		queueCount: number;
 	};
+	// Jump-to-agent actions only: the underlying session's bookmark flag and a
+	// stable key derived from the bare agent name. When two jump entries share
+	// the same agentSortKey (e.g. a top-level "rc" and a "Maestro subagent: rc"
+	// worktree child), the bookmarked one wins the tiebreaker so it gets the
+	// default highlight and Enter-to-jump.
+	bookmarked?: boolean;
+	agentSortKey?: string;
 }
 
 interface QuickActionsModalProps {
@@ -477,6 +484,8 @@ export const QuickActionsModal = memo(function QuickActionsModal(props: QuickAct
 				}
 			},
 			subtext: s.state.toUpperCase(),
+			bookmarked: !!s.bookmarked,
+			agentSortKey: alphabetizeKey(s.name),
 		};
 	});
 
@@ -1913,6 +1922,8 @@ export const QuickActionsModal = memo(function QuickActionsModal(props: QuickAct
 			subtext: undefined,
 			isRunningAgent: isRunning,
 			runningInfo,
+			bookmarked: !!s.bookmarked,
+			agentSortKey: alphabetizeKey(s.name),
 		};
 	});
 
@@ -1932,6 +1943,17 @@ export const QuickActionsModal = memo(function QuickActionsModal(props: QuickAct
 			return a.label.toLowerCase().includes(searchLower);
 		})
 		.sort((a, b) => {
+			// When two jump-to-agent entries refer to the same agent name (e.g. a
+			// top-level "rc" and a "Maestro subagent: rc" worktree child), prefer the
+			// bookmarked one so it lands on selectedIndex 0 and gets the default
+			// highlight + Enter-to-jump.
+			const sameAgent =
+				a.agentSortKey !== undefined &&
+				b.agentSortKey !== undefined &&
+				a.agentSortKey === b.agentSortKey;
+			if (sameAgent && !!a.bookmarked !== !!b.bookmarked) {
+				return a.bookmarked ? -1 : 1;
+			}
 			// In agents mode, bucket running agents above idle ones; alphabetize within
 			// each bucket while skipping any leading emoji or punctuation so that
 			// "🚀 Atlas" sorts next to "Atlas" rather than at the top of the list.

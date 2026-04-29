@@ -8,6 +8,9 @@ import crypto from 'crypto';
 import { ProcessManager } from './process-manager';
 import { WebServer } from './web-server';
 import { AgentDetector } from './agents';
+import { getAgentDefinition } from './agents/definitions';
+import { DEFAULT_CONTEXT_WINDOWS, FALLBACK_CONTEXT_WINDOW } from '../shared/agentConstants';
+import type { AgentId } from '../shared/agentIds';
 import { CueEngine } from './cue/cue-engine';
 import {
 	executeCuePrompt,
@@ -1211,6 +1214,17 @@ function setupProcessListeners() {
 			isCueEnabled: () => {
 				const ef = store.get('encoreFeatures', {}) as Record<string, boolean>;
 				return !!ef.maestroCue;
+			},
+			getSshRemoteByName: (name: string) => {
+				const remotes = store.get('sshRemotes', []);
+				return remotes.find((r) => r.name === name) ?? null;
+			},
+			getAgentContextWindow: (agentId: string) => {
+				const def = getAgentDefinition(agentId);
+				const contextOpt = def?.configOptions?.find((o) => o.key === 'contextWindow');
+				const fallbackDefault =
+					typeof contextOpt?.default === 'number' ? contextOpt.default : FALLBACK_CONTEXT_WINDOW;
+				return DEFAULT_CONTEXT_WINDOWS[agentId as AgentId] ?? fallbackDefault;
 			},
 		});
 

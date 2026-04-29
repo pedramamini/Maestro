@@ -6,6 +6,7 @@
 
 import { Fragment, useMemo, useState } from 'react';
 import {
+	AlertTriangle,
 	ChevronDown,
 	ChevronRight,
 	Search,
@@ -19,7 +20,7 @@ import type { CueRunResult } from '../../hooks/useCue';
 import { CUE_COLOR } from '../../../shared/cue-pipeline-types';
 import { PipelineDot } from './StatusDot';
 import { ActivityLogDetail } from './ActivityLogDetail';
-import { formatDuration, getPipelineForSubscription } from './cueModalUtils';
+import { cleanStderrForDisplay, formatDuration, getPipelineForSubscription } from './cueModalUtils';
 
 interface ActivityLogProps {
 	log: CueRunResult[];
@@ -229,6 +230,8 @@ export function ActivityLog({ log, theme, subscriptionPipelineMap }: ActivityLog
 										: '';
 								const isReconciled = entry.event.payload?.reconciled === true;
 								const isExpanded = expandedRunIds.has(entry.runId);
+								const hasStderr =
+									entry.stderr.length > 0 && cleanStderrForDisplay(entry.stderr).trim().length > 0;
 								const pInfo = getPipelineForSubscription(
 									entry.subscriptionName,
 									subscriptionPipelineMap
@@ -289,15 +292,26 @@ export function ActivityLog({ log, theme, subscriptionPipelineMap }: ActivityLog
 												{githubPayload}
 											</td>
 											<td className="py-1.5 pr-2 whitespace-nowrap text-right">
-												{isFailed ? (
-													<span style={{ color: theme.colors.error }}>{entry.status} ✗</span>
-												) : entry.status === 'stopped' ? (
-													<span style={{ color: theme.colors.warning }}>stopped</span>
-												) : (
-													<span style={{ color: theme.colors.success }}>
-														completed in {formatDuration(entry.durationMs)} ✓
-													</span>
-												)}
+												<span className="inline-flex items-center gap-1.5 justify-end">
+													{hasStderr && !isFailed && (
+														<span title="Run produced error output" className="inline-flex">
+															<AlertTriangle
+																className="w-3 h-3"
+																style={{ color: theme.colors.warning }}
+																aria-label="Run produced error output"
+															/>
+														</span>
+													)}
+													{isFailed ? (
+														<span style={{ color: theme.colors.error }}>{entry.status} ✗</span>
+													) : entry.status === 'stopped' ? (
+														<span style={{ color: theme.colors.warning }}>stopped</span>
+													) : (
+														<span style={{ color: theme.colors.success }}>
+															completed in {formatDuration(entry.durationMs)} ✓
+														</span>
+													)}
+												</span>
 											</td>
 										</tr>
 										{isExpanded && (

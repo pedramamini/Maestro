@@ -3170,12 +3170,16 @@ interface MaestroAPI {
 				category: string;
 				content: string;
 				isModified: boolean;
+				hasDefaultDrifted: boolean;
 			}>;
 			error?: string;
 		}>;
 		getAllIds: () => Promise<{ success: boolean; ids?: string[]; error?: string }>;
 		save: (id: string, content: string) => Promise<{ success: boolean; error?: string }>;
 		reset: (id: string) => Promise<{ success: boolean; content?: string; error?: string }>;
+		getBundledDefault: (
+			id: string
+		) => Promise<{ success: boolean; content?: string; error?: string }>;
 		getPath: () => Promise<{ success: boolean; path?: string; error?: string }>;
 		listFiles: () => Promise<{
 			success: boolean;
