@@ -204,17 +204,20 @@ export function useAutoRunDocumentLoader(): UseAutoRunDocumentLoaderReturn {
 				);
 				if (disposed) return;
 				if (contentResult.success) {
-					setSessions((prev) =>
-						prev.map((s) =>
+					const nextContent = contentResult.content || '';
+					setSessions((prev) => {
+						const target = prev.find((s) => s.id === sessionId);
+						if (!target || target.autoRunContent === nextContent) return prev;
+						return prev.map((s) =>
 							s.id === sessionId
 								? {
 										...s,
-										autoRunContent: contentResult.content || '',
+										autoRunContent: nextContent,
 										autoRunContentVersion: (s.autoRunContentVersion || 0) + 1,
 									}
 								: s
-						)
-					);
+						);
+					});
 				}
 			}
 		};
@@ -235,7 +238,7 @@ export function useAutoRunDocumentLoader(): UseAutoRunDocumentLoaderReturn {
 						if (!disposed) {
 							remotePollTimeout = setTimeout(() => {
 								void runRemotePoll();
-							}, 3000);
+							}, 20000);
 						}
 					}
 				};
