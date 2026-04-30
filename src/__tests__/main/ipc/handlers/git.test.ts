@@ -86,6 +86,11 @@ vi.mock('../../../../main/utils/remote-git', () => ({
 	execGit: vi.fn(),
 }));
 
+// Mock remote-fs (used by scanWorktreeDirectory's SSH branch)
+vi.mock('../../../../main/utils/remote-fs', () => ({
+	readDirRemote: vi.fn(),
+}));
+
 // Mock the stores module — git.ts now imports getSshRemoteById from here
 // instead of receiving it via dependency injection. We delegate to the
 // mockSettingsStore so existing tests can still drive SSH remote lookups
@@ -4305,6 +4310,29 @@ branch refs/heads/bugfix-123
 
 			expect(result.gitSubdirs).toHaveLength(0);
 			expect(result.scanFailed).toBeFalsy();
+		});
+
+		it('should set scanFailed when SSH readDirRemote fails at the top level', async () => {
+			// Regression: previously the SSH branch in readSubdirs returned null on
+			// failure, scanLevel returned [], the outer try/catch never fired, and
+			// the renderer received { gitSubdirs: [] } with no scanFailed flag.
+			// That triggered bulk-removal of every SSH worktree session whenever
+			// the remote read failed (network blip, expired auth, missing path).
+			mockSettingsStore.get.mockReturnValue([
+				{ id: 'ssh-1', host: 'remote.example.com', user: 'me' },
+			]);
+
+			const remoteFs = await import('../../../../main/utils/remote-fs');
+			vi.mocked(remoteFs.readDirRemote).mockResolvedValue({
+				success: false,
+				error: 'connection timed out',
+			} as any);
+
+			const handler = handlers.get('git:scanWorktreeDirectory');
+			const result = await handler!({} as any, '/remote/worktrees', 'ssh-1');
+
+			expect(result.gitSubdirs).toEqual([]);
+			expect(result.scanFailed).toBe(true);
 		});
 
 		it('should swallow read errors on nested group directories', async () => {

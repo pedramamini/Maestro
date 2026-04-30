@@ -1108,12 +1108,23 @@ export function registerGitHandlers(_deps: GitHandlerDependencies): void {
 							: `${parent}/${child}`
 						: path.join(parent, child);
 
-				const readSubdirs = async (dir: string): Promise<SubdirEntry[] | null> => {
+				// Throws on read failure (matching local `fs.readdir` behavior) so the
+				// outer try/catch can surface scanFailed: true at the top level. Nested
+				// recursion wraps this in its own try/catch and swallows the throw.
+				// Without this, an SSH `readDirRemote` failure would silently return []
+				// and the renderer would bulk-remove every child session.
+				const readSubdirs = async (dir: string): Promise<SubdirEntry[]> => {
 					if (sshRemote) {
 						const result = await readDirRemote(dir, sshRemote);
 						if (!result.success || !result.data) {
-							logger.error(`Failed to read remote directory ${dir}: ${result.error}`, LOG_CONTEXT);
-							return null;
+							const err = new Error(
+								`Failed to read remote directory ${dir}: ${result.error || 'unknown error'}`
+							) as NodeJS.ErrnoException;
+							// Tag as ENOENT so the outer catch's Sentry-quieting branch applies —
+							// remote read failures are typically "path no longer exists / not reachable",
+							// not bugs worth paging on.
+							err.code = 'ENOENT';
+							throw err;
 						}
 						return result.data.filter((e) => e.isDirectory && !e.name.startsWith('.'));
 					}
@@ -1196,14 +1207,10 @@ export function registerGitHandlers(_deps: GitHandlerDependencies): void {
 							repoRoot = path.dirname(commonDirAbs);
 						}
 					} else {
-						const repoRootResult = await execGit(
-							['rev-parse', '--show-toplevel'],
-							subdirPath,
-							sshRemote
-						);
-						if (repoRootResult.exitCode === 0) {
-							repoRoot = repoRootResult.stdout.trim();
-						}
+						// For non-worktree git repos, the toplevel IS the repo root —
+						// reuse the value we already fetched above instead of re-running
+						// `git rev-parse --show-toplevel`.
+						repoRoot = toplevel;
 					}
 
 					return {
@@ -1217,13 +1224,12 @@ export function registerGitHandlers(_deps: GitHandlerDependencies): void {
 
 				// Walk a directory level: inspect each subdir, then recurse into any
 				// non-git subdirs (up to MAX_DEPTH below the original parentPath).
-				// Failures while reading a nested directory are swallowed: a missing
-				// or unreadable group dir shouldn't fail the entire scan.
+				// Failures while reading a nested directory are swallowed by the
+				// inner try/catch — a missing or unreadable group dir shouldn't fail
+				// the entire scan. Top-level failure propagates up to the outer
+				// try/catch so scanFailed is surfaced and the renderer skips removal.
 				const scanLevel = async (dir: string, depthRemaining: number): Promise<ScanEntry[]> => {
 					const subdirs = await readSubdirs(dir);
-					if (subdirs === null) {
-						return [];
-					}
 
 					const results = await Promise.all(
 						subdirs.map(async (subdir) => {
@@ -1426,7 +1432,15 @@ export function registerGitHandlers(_deps: GitHandlerDependencies): void {
 						worktreeWatchDebounceTimers.set(debounceKey, timer);
 					});
 
-					// Handler for directory removals (e.g., git worktree remove from CLI)
+					// Handler for directory removals (e.g., `git worktree remove` from CLI).
+					//
+					// With depth: 1 this can fire spuriously for an intermediate group
+					// directory (e.g. <basePath>/fix) when its last nested worktree is
+					// removed and the empty parent is cleaned up. We forward the event
+					// regardless because (a) the dir is gone so we can't run git checks
+					// to validate, and (b) the renderer's onWorktreeRemoved handler
+					// already filters by registered child cwds — an unknown path is a
+					// no-op, not a session removal. See useWorktreeHandlers.ts.
 					watcher.on('unlinkDir', (dirPath: string) => {
 						if (dirPath === worktreePath) return;
 
