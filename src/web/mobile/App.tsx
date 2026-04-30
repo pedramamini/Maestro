@@ -1070,6 +1070,48 @@ function GroupChatListSheet({ chats, onSelectChat, onNewChat, onClose }: GroupCh
 }
 
 /**
+ * Build the tooltip for the in-cycle "Thinking N tokens" indicator.
+ * Adds the lifetime input/output/cache/reasoning breakdown when available so
+ * the mobile surface reaches parity with the desktop usage display. Reasoning
+ * tokens are reported separately by some agents but are already rolled into
+ * outputTokens upstream — they show as a labeled breakdown line, never added
+ * to the total again.
+ */
+function buildTokenTooltip(
+	currentCycleTokens: number,
+	usageStats?: Partial<import('../../shared/types').UsageStats> | null
+): string {
+	const cycleLine = `${currentCycleTokens.toLocaleString('en-US')} tokens this cycle`;
+	if (!usageStats) return cycleLine;
+
+	const inputTokens = usageStats.inputTokens ?? 0;
+	const outputTokens = usageStats.outputTokens ?? 0;
+	const reasoningTokens = usageStats.reasoningTokens ?? 0;
+	const cacheReadTokens = usageStats.cacheReadInputTokens ?? 0;
+	const cacheCreationTokens = usageStats.cacheCreationInputTokens ?? 0;
+	const totalTokens = inputTokens + outputTokens;
+
+	if (totalTokens === 0) return cycleLine;
+
+	const parts: string[] = [
+		cycleLine,
+		`Input: ${inputTokens.toLocaleString('en-US')}`,
+		`Output: ${outputTokens.toLocaleString('en-US')}`,
+	];
+	if (cacheReadTokens > 0) {
+		parts.push(`Cache read: ${cacheReadTokens.toLocaleString('en-US')}`);
+	}
+	if (cacheCreationTokens > 0) {
+		parts.push(`Cache create: ${cacheCreationTokens.toLocaleString('en-US')}`);
+	}
+	if (reasoningTokens > 0) {
+		parts.push(`Reasoning (in output): ${reasoningTokens.toLocaleString('en-US')}`);
+	}
+	parts.push(`Total: ${totalTokens.toLocaleString('en-US')} tokens`);
+	return parts.join(' | ');
+}
+
+/**
  * Main mobile app component with WebSocket connection management
  */
 export default function MobileApp() {
@@ -2956,7 +2998,6 @@ export default function MobileApp() {
 		const currentLogs =
 			activeSession.inputMode === 'ai' ? sessionLogs.aiLogs : sessionLogs.shellLogs;
 		const queue = activeSession.executionQueue || [];
-		const gitStatus = activeSession.gitStatus;
 		const currentCycleTokens = activeSession.currentCycleTokens || 0;
 
 		// Show message history
@@ -2974,7 +3015,7 @@ export default function MobileApp() {
 					overflow: 'hidden', // Contain MessageHistory's scroll
 				}}
 			>
-				{(queue.length > 0 || gitStatus || currentCycleTokens > 0) && (
+				{(queue.length > 0 || currentCycleTokens > 0) && (
 					<div
 						style={{
 							display: 'flex',
@@ -2997,16 +3038,8 @@ export default function MobileApp() {
 							}}
 						>
 							{currentCycleTokens > 0 && (
-								<span title={`${currentCycleTokens.toLocaleString('en-US')} tokens this cycle`}>
+								<span title={buildTokenTooltip(currentCycleTokens, activeSession.usageStats)}>
 									Thinking {currentCycleTokens.toLocaleString('en-US')} tokens
-								</span>
-							)}
-							{gitStatus && (
-								<span title="Git status">
-									Git {gitStatus.fileCount} files
-									{gitStatus.branch ? ` on ${gitStatus.branch}` : ''}
-									{gitStatus.ahead > 0 ? ` ↑${gitStatus.ahead}` : ''}
-									{gitStatus.behind > 0 ? ` ↓${gitStatus.behind}` : ''}
 								</span>
 							)}
 							{queue.length > 0 && <span>{queue.length} queued</span>}
