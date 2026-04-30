@@ -51,6 +51,7 @@ import {
 	DurationTrendsChartSkeleton,
 	SummaryCardsSkeleton,
 } from './ChartSkeletons';
+import { MetricCard } from './SummaryCards';
 import { StatusDot } from '../CueModal/StatusDot';
 
 interface CueStatsProps {
@@ -123,66 +124,53 @@ const CoverageWarningsBanner = memo(function CoverageWarningsBanner({
 
 /* ----------------------------- Summary cards ----------------------------- */
 
-interface MetricCardProps {
-	icon: React.ReactNode;
-	label: string;
-	value: string;
-	sublabel?: string;
-	theme: Theme;
-}
+const SUMMARY_SPARKLINE_LIMIT = 14;
 
-const MetricCard = memo(function MetricCard({
-	icon,
-	label,
-	value,
-	sublabel,
-	theme,
-}: MetricCardProps) {
-	return (
-		<div
-			className="p-4 rounded-lg flex items-start gap-3"
-			style={{ backgroundColor: theme.colors.bgMain }}
-			role="group"
-			aria-label={`${label}: ${value}`}
-		>
-			<div
-				className="flex-shrink-0 p-2 rounded-md"
-				style={{
-					backgroundColor: `${theme.colors.accent}15`,
-					color: theme.colors.accent,
-				}}
-			>
-				{icon}
-			</div>
-			<div className="min-w-0 flex-1">
-				<div
-					className="text-xs uppercase tracking-wide mb-1"
-					style={{ color: theme.colors.textDim }}
-				>
-					{label}
-				</div>
-				<div className="text-2xl font-bold" style={{ color: theme.colors.textMain }} title={value}>
-					{value}
-				</div>
-				{sublabel && (
-					<div className="text-xs mt-0.5" style={{ color: theme.colors.textDim }}>
-						{sublabel}
-					</div>
-				)}
-			</div>
-		</div>
-	);
-});
+/**
+ * Right-aligned slice of the time-series buckets used to draw a 7–14 point
+ * sparkline beneath each summary card. We pad with leading zeros if the range
+ * has fewer buckets so geometry stays stable.
+ */
+function lastBucketCounts(buckets: CueTimeBucket[], pick: (b: CueTimeBucket) => number): number[] {
+	const slice = buckets.slice(-SUMMARY_SPARKLINE_LIMIT).map(pick);
+	if (slice.length >= SUMMARY_SPARKLINE_LIMIT) return slice;
+	return [...new Array(SUMMARY_SPARKLINE_LIMIT - slice.length).fill(0), ...slice];
+}
 
 const SummaryCardsRow = memo(function SummaryCardsRow({
 	totals,
+	timeSeries,
 	theme,
 }: {
 	totals: CueStatsTotals;
+	timeSeries: CueTimeBucket[];
 	theme: Theme;
 }) {
 	const successPct = formatPercent(successRate(totals));
 	const tokens = totalTokens(totals);
+
+	const occurrenceSparkline = useMemo(
+		() => lastBucketCounts(timeSeries, (b) => b.occurrences),
+		[timeSeries]
+	);
+	const tokenSparkline = useMemo(
+		() => lastBucketCounts(timeSeries, (b) => b.inputTokens + b.outputTokens),
+		[timeSeries]
+	);
+	const successSparkline = useMemo(
+		() =>
+			lastBucketCounts(timeSeries, (b) => {
+				const tracked = b.successCount + b.failureCount;
+				return tracked === 0 ? 0 : Math.round((b.successCount / tracked) * 100);
+			}),
+		[timeSeries]
+	);
+
+	const sublabelStyle: React.CSSProperties = {
+		fontSize: '10px',
+		color: theme.colors.textDim,
+		marginTop: 2,
+	};
 
 	return (
 		<div
@@ -195,29 +183,41 @@ const SummaryCardsRow = memo(function SummaryCardsRow({
 				icon={<Zap className="w-4 h-4" />}
 				label="Occurrences"
 				value={formatNumber(totals.occurrences)}
+				animationIndex={0}
+				sparklineData={occurrenceSparkline}
 			/>
 			<MetricCard
 				theme={theme}
 				icon={<CheckCircle2 className="w-4 h-4" />}
 				label="Success Rate"
 				value={successPct}
-				sublabel={`${formatNumber(totals.successCount)} ok / ${formatNumber(totals.failureCount)} failed`}
+				animationIndex={1}
+				sparklineData={successSparkline}
+				sparklineColor={theme.colors.success}
+				extra={
+					<div style={sublabelStyle}>
+						{formatNumber(totals.successCount)} ok / {formatNumber(totals.failureCount)} failed
+					</div>
+				}
 			/>
 			<MetricCard
 				theme={theme}
 				icon={<Clock className="w-4 h-4" />}
 				label="Total Duration"
 				value={formatDurationHuman(totals.totalDurationMs)}
+				animationIndex={2}
 			/>
 			<MetricCard
 				theme={theme}
 				icon={<Coins className="w-4 h-4" />}
 				label="Total Tokens"
 				value={formatTokensCompact(tokens)}
-				sublabel={
-					totals.totalCostUsd != null && totals.totalCostUsd > 0
-						? formatCost(totals.totalCostUsd)
-						: undefined
+				animationIndex={3}
+				sparklineData={tokenSparkline}
+				extra={
+					totals.totalCostUsd != null && totals.totalCostUsd > 0 ? (
+						<div style={sublabelStyle}>{formatCost(totals.totalCostUsd)}</div>
+					) : undefined
 				}
 			/>
 		</div>
@@ -304,7 +304,10 @@ const TimeSeriesChart = memo(function TimeSeriesChart({
 			aria-label={`Cue occurrences and tokens over time (${buckets.length} buckets).`}
 		>
 			<div className="flex items-center justify-between mb-3">
-				<h3 className="text-sm font-medium" style={{ color: theme.colors.textMain }}>
+				<h3
+					className="text-sm font-medium"
+					style={{ color: theme.colors.textMain, animation: 'card-enter 0.4s ease both' }}
+				>
 					Occurrences & Tokens Over Time
 				</h3>
 				<div className="flex items-center gap-3 text-xs" style={{ color: theme.colors.textDim }}>
@@ -558,7 +561,10 @@ const GroupTable = memo(function GroupTable({
 			role="region"
 			aria-label={title}
 		>
-			<h3 className="text-sm font-medium mb-3" style={{ color: theme.colors.textMain }}>
+			<h3
+				className="text-sm font-medium mb-3"
+				style={{ color: theme.colors.textMain, animation: 'card-enter 0.4s ease both' }}
+			>
 				{title}
 			</h3>
 			{rows.length === 0 ? (
@@ -681,7 +687,10 @@ const AgentTokensChart = memo(function AgentTokensChart({
 			role="figure"
 			aria-label="Total tokens by agent"
 		>
-			<h3 className="text-sm font-medium mb-3" style={{ color: theme.colors.textMain }}>
+			<h3
+				className="text-sm font-medium mb-3"
+				style={{ color: theme.colors.textMain, animation: 'card-enter 0.4s ease both' }}
+			>
 				Tokens by Agent
 			</h3>
 			{sorted.length === 0 ? (
@@ -778,7 +787,10 @@ const ChainList = memo(function ChainList({ chains, theme }: { chains: CueChain[
 			role="region"
 			aria-label="Cue chains"
 		>
-			<h3 className="text-sm font-medium mb-3" style={{ color: theme.colors.textMain }}>
+			<h3
+				className="text-sm font-medium mb-3"
+				style={{ color: theme.colors.textMain, animation: 'card-enter 0.4s ease both' }}
+			>
 				Chains
 			</h3>
 			{chains.length === 0 ? (
@@ -1005,7 +1017,11 @@ export const CueStats = memo(function CueStats({
 			)}
 
 			<ChartErrorBoundary theme={theme} chartName="Cue Summary">
-				<SummaryCardsRow totals={aggregation.totals} theme={theme} />
+				<SummaryCardsRow
+					totals={aggregation.totals}
+					timeSeries={aggregation.timeSeries}
+					theme={theme}
+				/>
 			</ChartErrorBoundary>
 
 			<ChartErrorBoundary theme={theme} chartName="Cue Time Series">

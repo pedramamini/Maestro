@@ -272,7 +272,7 @@ interface MetricCardProps {
 	sparklineColor?: string;
 }
 
-const MetricCard = memo(function MetricCard({
+export const MetricCard = memo(function MetricCard({
 	icon,
 	label,
 	value,

@@ -321,6 +321,20 @@ describe('CueStats', () => {
 			).toBeInTheDocument();
 		});
 
+		it('renders trend sparklines on the occurrences, success rate, and tokens cards', async () => {
+			render(<CueStats timeRange="week" theme={theme} />);
+
+			await waitFor(() => {
+				expect(screen.getByTestId('cue-stats-summary-cards')).toBeInTheDocument();
+			});
+
+			const summary = screen.getByTestId('cue-stats-summary-cards');
+			// Three of the four cards (Occurrences, Success Rate, Total Tokens) feed
+			// the shared MetricCard a sparkline; Total Duration intentionally has
+			// none because the per-bucket totals don't track duration.
+			expect(within(summary).getAllByTestId('sparkline')).toHaveLength(3);
+		});
+
 		it('renders the time-series chart', async () => {
 			render(<CueStats timeRange="week" theme={theme} />);
 
