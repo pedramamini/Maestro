@@ -4178,6 +4178,181 @@ branch refs/heads/bugfix-123
 			expect(result.gitSubdirs[0].branch).toBe('feature-branch');
 			expect(result.scanFailed).toBeFalsy();
 		});
+
+		it('should discover nested worktrees from slash-named branches', async () => {
+			// Regression: branches like "fix/worktree-removal" produce a nested
+			// path <basePath>/fix/worktree-removal. Without one-level recursion,
+			// the scan misses these and the renderer wrongly removes the session.
+			vi.mocked(mockFs.readdir).mockImplementation(async (dir: any) => {
+				if (String(dir) === '/parent') {
+					return [
+						// Flat worktree (existing happy path)
+						{ name: 'flat-branch', isDirectory: () => true },
+						// Group directory containing nested worktrees
+						{ name: 'fix', isDirectory: () => true },
+					] as any;
+				}
+				if (String(dir) === path.join('/parent', 'fix')) {
+					return [
+						{ name: 'worktree-removal', isDirectory: () => true },
+						{ name: 'files-restart', isDirectory: () => true },
+					] as any;
+				}
+				return [] as any;
+			});
+
+			vi.mocked(execFile.execFileNoThrow).mockImplementation(async (cmd, args, cwd) => {
+				const cwdStr = String(cwd);
+
+				// Group directory itself is NOT a git repo
+				if (cwdStr === path.join('/parent', 'fix')) {
+					if (args?.includes('--is-inside-work-tree')) {
+						return { stdout: '', stderr: 'fatal: not a git repository', exitCode: 128 };
+					}
+				}
+
+				// Helper: act like a real worktree at the given path
+				const respondAsWorktreeAt = (workPath: string, branch: string) => {
+					if (cwdStr === workPath) {
+						if (args?.includes('--is-inside-work-tree')) {
+							return { stdout: 'true\n', stderr: '', exitCode: 0 };
+						}
+						if (args?.includes('--show-toplevel')) {
+							return { stdout: workPath, stderr: '', exitCode: 0 };
+						}
+						if (args?.includes('--git-dir')) {
+							return {
+								stdout: `/parent/main-repo/.git/worktrees/${branch}`,
+								stderr: '',
+								exitCode: 0,
+							};
+						}
+						if (args?.includes('--git-common-dir')) {
+							return { stdout: '/parent/main-repo/.git', stderr: '', exitCode: 0 };
+						}
+						if (args?.includes('--abbrev-ref')) {
+							return { stdout: `${branch}\n`, stderr: '', exitCode: 0 };
+						}
+					}
+					return null;
+				};
+
+				return (
+					respondAsWorktreeAt(path.join('/parent', 'flat-branch'), 'flat-branch') ??
+					respondAsWorktreeAt(
+						path.join('/parent', 'fix', 'worktree-removal'),
+						'fix/worktree-removal'
+					) ??
+					respondAsWorktreeAt(
+						path.join('/parent', 'fix', 'files-restart'),
+						'fix/files-restart'
+					) ?? { stdout: '', stderr: 'fatal: not a git repository', exitCode: 128 }
+				);
+			});
+
+			const handler = handlers.get('git:scanWorktreeDirectory');
+			const result = await handler!({} as any, '/parent');
+
+			const paths = (result.gitSubdirs as Array<{ path: string; branch: string }>)
+				.map((e) => e.path)
+				.sort();
+			expect(paths).toEqual(
+				[
+					path.join('/parent', 'flat-branch'),
+					path.join('/parent', 'fix', 'files-restart'),
+					path.join('/parent', 'fix', 'worktree-removal'),
+				].sort()
+			);
+			const nested = (result.gitSubdirs as Array<{ path: string; branch: string }>).find(
+				(e) => e.path === path.join('/parent', 'fix', 'worktree-removal')
+			);
+			expect(nested?.branch).toBe('fix/worktree-removal');
+			expect(result.scanFailed).toBeFalsy();
+		});
+
+		it('should not recurse beyond one level', async () => {
+			// MAX_DEPTH=1 means we cover <basePath>/<group>/<branch> but not deeper.
+			// Worktrees at <basePath>/a/b/c must NOT appear.
+			vi.mocked(mockFs.readdir).mockImplementation(async (dir: any) => {
+				const s = String(dir);
+				if (s === '/parent') return [{ name: 'a', isDirectory: () => true }] as any;
+				if (s === path.join('/parent', 'a')) return [{ name: 'b', isDirectory: () => true }] as any;
+				if (s === path.join('/parent', 'a', 'b'))
+					return [{ name: 'c', isDirectory: () => true }] as any;
+				return [] as any;
+			});
+
+			// Make every level look like "not a git repo" except the deepest one.
+			vi.mocked(execFile.execFileNoThrow).mockImplementation(async (cmd, args, cwd) => {
+				const cwdStr = String(cwd);
+				if (cwdStr === path.join('/parent', 'a', 'b', 'c')) {
+					if (args?.includes('--is-inside-work-tree')) {
+						return { stdout: 'true\n', stderr: '', exitCode: 0 };
+					}
+					if (args?.includes('--show-toplevel')) {
+						return { stdout: cwdStr, stderr: '', exitCode: 0 };
+					}
+					if (args?.includes('--abbrev-ref')) {
+						return { stdout: 'too-deep\n', stderr: '', exitCode: 0 };
+					}
+					return { stdout: '.git', stderr: '', exitCode: 0 };
+				}
+				return { stdout: '', stderr: 'fatal: not a git repository', exitCode: 128 };
+			});
+
+			const handler = handlers.get('git:scanWorktreeDirectory');
+			const result = await handler!({} as any, '/parent');
+
+			expect(result.gitSubdirs).toHaveLength(0);
+			expect(result.scanFailed).toBeFalsy();
+		});
+
+		it('should swallow read errors on nested group directories', async () => {
+			// If recursing into a group dir fails (perms, race with deletion), the
+			// rest of the scan must still succeed. Without this, a transient
+			// failure on one nested branch wipes every sibling worktree session.
+			vi.mocked(mockFs.readdir).mockImplementation(async (dir: any) => {
+				const s = String(dir);
+				if (s === '/parent') {
+					return [
+						{ name: 'good-flat', isDirectory: () => true },
+						{ name: 'broken-group', isDirectory: () => true },
+					] as any;
+				}
+				if (s === path.join('/parent', 'broken-group')) {
+					const err = new Error('EACCES: permission denied') as NodeJS.ErrnoException;
+					err.code = 'EACCES';
+					throw err;
+				}
+				return [] as any;
+			});
+
+			vi.mocked(execFile.execFileNoThrow).mockImplementation(async (cmd, args, cwd) => {
+				const cwdStr = String(cwd);
+				if (cwdStr === path.join('/parent', 'good-flat')) {
+					if (args?.includes('--is-inside-work-tree')) {
+						return { stdout: 'true\n', stderr: '', exitCode: 0 };
+					}
+					if (args?.includes('--show-toplevel')) {
+						return { stdout: cwdStr, stderr: '', exitCode: 0 };
+					}
+					if (args?.includes('--abbrev-ref')) {
+						return { stdout: 'good-flat\n', stderr: '', exitCode: 0 };
+					}
+					return { stdout: '.git', stderr: '', exitCode: 0 };
+				}
+				return { stdout: '', stderr: 'fatal: not a git repository', exitCode: 128 };
+			});
+
+			const handler = handlers.get('git:scanWorktreeDirectory');
+			const result = await handler!({} as any, '/parent');
+
+			expect(result.gitSubdirs).toHaveLength(1);
+			expect((result.gitSubdirs as Array<{ name: string }>)[0].name).toBe('good-flat');
+			// Whole-scan failure must NOT be flagged — that would trigger the renderer's
+			// removal-skip fallback; we only flag scanFailed for the top-level read.
+			expect(result.scanFailed).toBeFalsy();
+		});
 	});
 
 	describe('git:watchWorktreeDirectory', () => {
@@ -4208,7 +4383,7 @@ branch refs/heads/bugfix-123
 				ignored: /(^|[/\\])\../,
 				persistent: true,
 				ignoreInitial: true,
-				depth: 0,
+				depth: 1,
 			});
 			expect(mockWatcher.on).toHaveBeenCalledWith('addDir', expect.any(Function));
 			expect(mockWatcher.on).toHaveBeenCalledWith('error', expect.any(Function));
