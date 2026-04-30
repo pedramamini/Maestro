@@ -1015,7 +1015,11 @@ describe('useAutoRunDocumentLoader', () => {
 			});
 
 			mockListDocs.mockResolvedValue({ success: true, files: ['doc'], tree: [] });
-			mockReadDoc.mockResolvedValue({ success: true, content: 'new content from disk' });
+			// Different content per pass: the loader skips the version bump when
+			// the new content matches the existing content (see applySelectedContent).
+			mockReadDoc
+				.mockResolvedValueOnce({ success: true, content: 'initial content from disk' })
+				.mockResolvedValueOnce({ success: true, content: 'updated content from disk' });
 
 			const session = createMockSession({
 				id: 'session-1',
