@@ -88,9 +88,15 @@ describe('NotificationPopover', () => {
 
 	it('removes its keydown listener on unmount (no leak)', () => {
 		const spies = spyOnListeners(document);
-		const { unmount } = render(<Harness onClose={onClose} />);
-		unmount();
-		expectAllListenersRemoved(spies.addSpy, spies.removeSpy);
-		spies.restore();
+		try {
+			const { unmount } = render(<Harness onClose={onClose} />);
+			unmount();
+			expectAllListenersRemoved(spies.addSpy, spies.removeSpy);
+		} finally {
+			// Restore in finally so the document spy is undone even if the
+			// assertion throws — otherwise the prototype patch leaks into the
+			// next test in this worker.
+			spies.restore();
+		}
 	});
 });

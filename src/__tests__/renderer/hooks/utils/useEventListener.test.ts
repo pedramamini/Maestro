@@ -68,17 +68,22 @@ describe('useEventListener', () => {
 		it('attaches to a DOM element target and removes the listener on unmount', () => {
 			const el = document.createElement('div');
 			document.body.appendChild(el);
-			const handler = vi.fn();
-			const { unmount } = renderHook(() => useEventListener('click', handler, { target: el }));
+			try {
+				const handler = vi.fn();
+				const { unmount } = renderHook(() => useEventListener('click', handler, { target: el }));
 
-			fireEvent.click(el);
-			expect(handler).toHaveBeenCalledTimes(1);
+				fireEvent.click(el);
+				expect(handler).toHaveBeenCalledTimes(1);
 
-			unmount();
-			fireEvent.click(el);
-			expect(handler).toHaveBeenCalledTimes(1);
-
-			document.body.removeChild(el);
+				unmount();
+				fireEvent.click(el);
+				expect(handler).toHaveBeenCalledTimes(1);
+			} finally {
+				// Always remove the appended element, even if an assertion threw —
+				// otherwise an orphan <div> persists in document.body for the next
+				// test in this worker.
+				document.body.removeChild(el);
+			}
 		});
 
 		it('does not attach a listener when target is null', () => {
