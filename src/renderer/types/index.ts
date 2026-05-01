@@ -1026,6 +1026,9 @@ export interface EncoreFeatureFlags {
 	usageStats: boolean;
 	symphony: boolean;
 	maestroCue: boolean;
+	agentDispatch: boolean;
+	deliveryPlanner: boolean;
+	planningPipeline: boolean;
 }
 
 // Director's Notes settings for synopsis generation
