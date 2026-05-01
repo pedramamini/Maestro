@@ -83,6 +83,7 @@ import {
 	registerPmToolsHandlers,
 	registerPmAuditHandlers,
 	registerPmHeartbeatHandlers,
+	registerProjectRolesHandlers,
 	initConversationalPrdStore,
 	setupLoggerEventForwarding,
 	cleanupAllGroomingSessions,
@@ -1359,6 +1360,7 @@ function setupIpcHandlers() {
 
 	// pm-heartbeat — agent liveness signal for stale-claim sweeper (#435)
 	registerPmHeartbeatHandlers({ settingsStore: store });
+	registerProjectRolesHandlers(store as never);
 }
 
 // Handle process output streaming (set up after initialization)
