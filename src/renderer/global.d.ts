@@ -3130,6 +3130,13 @@ interface MaestroAPI {
 		getEventCount: () => Promise<number>;
 		enable: () => Promise<void>;
 		disable: () => Promise<void>;
+		/**
+		 * Visibility-aware pause. Flip to false while the app is hidden so
+		 * the Cue scanner subsystem skips expensive background work; flip
+		 * back to true on visibility. Different from `disable`, which tears
+		 * the engine down entirely.
+		 */
+		setActive: (active: boolean) => Promise<void>;
 		stopRun: (runId: string) => Promise<boolean>;
 		stopAll: () => Promise<void>;
 		triggerSubscription: (
