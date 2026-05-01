@@ -32,12 +32,20 @@
 		"groups": [
 			{
 				"group": "Overview",
-				"pages": ["index", "about/overview", "features", "screenshots"],
+				"pages": [
+					"index",
+					"about/overview",
+					"features",
+					"screenshots"
+				],
 				"icon": "house"
 			},
 			{
 				"group": "Getting Started",
-				"pages": ["installation", "getting-started"]
+				"pages": [
+					"installation",
+					"getting-started"
+				]
 			},
 			{
 				"group": "General Usage",
@@ -50,6 +58,8 @@
 					"memories",
 					"context-management",
 					"document-graph",
+					"delivery-planner",
+					"living-wiki",
 					"git-worktrees",
 					"group-chat",
 					"remote-control",
@@ -78,6 +88,7 @@
 					"director-notes",
 					"usage-dashboard",
 					"symphony",
+					"agent-dispatch",
 					{
 						"group": "Maestro Cue",
 						"icon": "bolt",
@@ -94,16 +105,29 @@
 			},
 			{
 				"group": "Providers & CLI",
-				"pages": ["provider-notes", "multi-claude", "cli"]
+				"pages": [
+					"provider-notes",
+					"multi-claude",
+					"cli",
+					"work-graph-cli"
+				]
 			},
 			{
 				"group": "Integrations",
-				"pages": ["mcp-server", "deep-links"],
+				"pages": [
+					"mcp-server",
+					"deep-links"
+				],
 				"icon": "plug"
 			},
 			{
 				"group": "Reference",
-				"pages": ["releases", "achievements", "performance-profiling", "troubleshooting"],
+				"pages": [
+					"releases",
+					"achievements",
+					"performance-profiling",
+					"troubleshooting"
+				],
 				"icon": "life-ring"
 			}
 		]
