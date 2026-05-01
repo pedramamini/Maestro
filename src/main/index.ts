@@ -77,7 +77,6 @@ import {
 	registerMemoryHandlers,
 	registerAgentDispatchHandlers,
 	registerAgentDispatchSlashCommandHandlers,
-	registerAgentDispatchMcpHandlers,
 	registerDeliveryPlannerHandlers,
 	registerPlanningPipelineHandlers,
 	registerConversationalPrdHandlers,
@@ -1239,7 +1238,6 @@ function setupIpcHandlers() {
 		settingsStore: store,
 	});
 	registerAgentDispatchSlashCommandHandlers({ settingsStore: store });
-	registerAgentDispatchMcpHandlers({ settingsStore: store });
 
 	// Delivery Planner — PRD/Epic/Tasks; returns service used by Conv-PRD finalize
 	const plannerService = registerDeliveryPlannerHandlers({
