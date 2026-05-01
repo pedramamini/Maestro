@@ -1014,7 +1014,7 @@ describe('persistence IPC handlers', () => {
 			expect(mockWebServer.broadcastSessionStateChange).not.toHaveBeenCalled();
 		});
 
-		it('returns false on ENOSPC write error', async () => {
+		it('returns false on ENOSPC write error (recoverable)', async () => {
 			const error = new Error('ENOSPC: no space left on device') as NodeJS.ErrnoException;
 			error.code = 'ENOSPC';
 			mockSessionsStore.set.mockImplementation(() => {
@@ -1028,9 +1028,11 @@ describe('persistence IPC handlers', () => {
 			expect(result).toBe(false);
 		});
 
-		it('returns false on JSON serialization error', async () => {
+		it('returns false on ENFILE write error (recoverable)', async () => {
+			const error = new Error('ENFILE: too many open files') as NodeJS.ErrnoException;
+			error.code = 'ENFILE';
 			mockSessionsStore.set.mockImplementation(() => {
-				throw new TypeError('Converting circular structure to JSON');
+				throw error;
 			});
 			mockSessionsStore.get.mockReturnValue([]);
 
@@ -1038,6 +1040,19 @@ describe('persistence IPC handlers', () => {
 			const result = await handler!({} as any, [{ ...baseSession }], []);
 
 			expect(result).toBe(false);
+		});
+
+		it('rethrows unexpected errors so withIpcErrorLogging can surface them to Sentry', async () => {
+			mockSessionsStore.set.mockImplementation(() => {
+				throw new TypeError('Converting circular structure to JSON');
+			});
+			mockSessionsStore.get.mockReturnValue([]);
+
+			const handler = handlers.get('sessions:setMany');
+
+			await expect(handler!({} as any, [{ ...baseSession }], [])).rejects.toThrow(
+				'Converting circular structure to JSON'
+			);
 		});
 	});
 

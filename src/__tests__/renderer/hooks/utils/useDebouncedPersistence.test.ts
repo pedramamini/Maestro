@@ -955,7 +955,7 @@ describe('useDebouncedPersistence', () => {
 		});
 
 		describe('session with no aiTabs', () => {
-			it('should return session as-is when aiTabs is empty', () => {
+			it('should still strip runtime-only fields when aiTabs is empty', () => {
 				const session = makeSession({
 					aiTabs: [],
 					activeTabId: '',
@@ -971,9 +971,11 @@ describe('useDebouncedPersistence', () => {
 				});
 
 				const persisted = vi.mocked(window.maestro.sessions.setAll).mock.calls[0][0] as Session[];
-				// When aiTabs is empty, the session is returned as-is
+				// aiTabs stays empty, but runtime state is reset so a stuck
+				// busy state can't survive a restart with no process backing it.
 				expect(persisted[0].aiTabs).toEqual([]);
-				expect(persisted[0].state).toBe('busy');
+				expect(persisted[0].state).toBe('idle');
+				expect(persisted[0].busySource).toBeUndefined();
 			});
 		});
 
@@ -1278,7 +1280,7 @@ describe('useDebouncedPersistence', () => {
 				expect(result.current.isPending).toBe(true);
 			});
 
-			it('should become false after debounce timer fires', () => {
+			it('should become false after debounce timer fires', async () => {
 				const sessions = [makeSession()];
 				const initialLoadRef = makeInitialLoadRef(true);
 
@@ -1289,14 +1291,16 @@ describe('useDebouncedPersistence', () => {
 
 				expect(result.current.isPending).toBe(true);
 
-				act(() => {
-					vi.advanceTimersByTime(2000);
+				// Async because persistInternal awaits the IPC; isPending is
+				// only flipped after the awaited promise resolves.
+				await act(async () => {
+					await vi.advanceTimersByTimeAsync(2000);
 				});
 
 				expect(result.current.isPending).toBe(false);
 			});
 
-			it('should become false after flushNow', () => {
+			it('should become false after flushNow', async () => {
 				const sessions = [makeSession()];
 				const initialLoadRef = makeInitialLoadRef(true);
 
@@ -1307,8 +1311,11 @@ describe('useDebouncedPersistence', () => {
 
 				expect(result.current.isPending).toBe(true);
 
-				act(() => {
+				await act(async () => {
 					result.current.flushNow();
+					// Flush microtasks so the awaited persistInternal resolves
+					// and isPending is updated.
+					await vi.advanceTimersByTimeAsync(0);
 				});
 
 				expect(result.current.isPending).toBe(false);
@@ -1869,7 +1876,7 @@ describe('useDebouncedPersistence', () => {
 			expect(window.maestro.sessions.setMany).not.toHaveBeenCalled();
 		});
 
-		it('second flush with one mutated session ships only that session via setMany', () => {
+		it('second flush with one mutated session ships only that session via setMany', async () => {
 			const s1 = makeSession({ id: 's1', name: 'One' });
 			const s2 = makeSession({ id: 's2', name: 'Two' });
 			const initialLoadRef = makeInitialLoadRef(true);
@@ -1878,17 +1885,19 @@ describe('useDebouncedPersistence', () => {
 				({ sessions }) => useDebouncedPersistence(sessions, initialLoadRef),
 				{ initialProps: { sessions: [s1, s2] } }
 			);
-			// First flush — establishes baseline via setAll
-			act(() => {
-				vi.advanceTimersByTime(2000);
+			// First flush — establishes baseline via setAll. Async because
+			// persistInternal awaits the IPC; the baseline is only captured
+			// after the mock's resolved promise flushes through microtasks.
+			await act(async () => {
+				await vi.advanceTimersByTimeAsync(2000);
 			});
 			expect(window.maestro.sessions.setAll).toHaveBeenCalledTimes(1);
 
 			// Mutate s1 only — Zustand pattern produces a new session object
 			const s1Updated = { ...s1, name: 'One Updated' };
 			rerender({ sessions: [s1Updated, s2] });
-			act(() => {
-				vi.advanceTimersByTime(2000);
+			await act(async () => {
+				await vi.advanceTimersByTimeAsync(2000);
 			});
 
 			expect(window.maestro.sessions.setMany).toHaveBeenCalledTimes(1);
@@ -1902,7 +1911,7 @@ describe('useDebouncedPersistence', () => {
 			expect(removeIds).toEqual([]);
 		});
 
-		it('second flush with no changes is a no-op (no IPC call)', () => {
+		it('second flush with no changes is a no-op (no IPC call)', async () => {
 			const s1 = makeSession({ id: 's1', name: 'One' });
 			const initialLoadRef = makeInitialLoadRef(true);
 
@@ -1910,8 +1919,8 @@ describe('useDebouncedPersistence', () => {
 				({ sessions }) => useDebouncedPersistence(sessions, initialLoadRef),
 				{ initialProps: { sessions: [s1] } }
 			);
-			act(() => {
-				vi.advanceTimersByTime(2000);
+			await act(async () => {
+				await vi.advanceTimersByTimeAsync(2000);
 			});
 			vi.mocked(window.maestro.sessions.setAll).mockClear();
 			vi.mocked(window.maestro.sessions.setMany).mockClear();
@@ -1919,15 +1928,15 @@ describe('useDebouncedPersistence', () => {
 			// Same array reference — re-render forces effect to re-run but the
 			// diff finds nothing changed.
 			rerender({ sessions: [s1] });
-			act(() => {
-				vi.advanceTimersByTime(2000);
+			await act(async () => {
+				await vi.advanceTimersByTimeAsync(2000);
 			});
 
 			expect(window.maestro.sessions.setAll).not.toHaveBeenCalled();
 			expect(window.maestro.sessions.setMany).not.toHaveBeenCalled();
 		});
 
-		it('second flush with one removed session ships empty updates + tombstone id', () => {
+		it('second flush with one removed session ships empty updates + tombstone id', async () => {
 			const s1 = makeSession({ id: 's1' });
 			const s2 = makeSession({ id: 's2' });
 			const initialLoadRef = makeInitialLoadRef(true);
@@ -1936,14 +1945,14 @@ describe('useDebouncedPersistence', () => {
 				({ sessions }) => useDebouncedPersistence(sessions, initialLoadRef),
 				{ initialProps: { sessions: [s1, s2] } }
 			);
-			act(() => {
-				vi.advanceTimersByTime(2000);
+			await act(async () => {
+				await vi.advanceTimersByTimeAsync(2000);
 			});
 			vi.mocked(window.maestro.sessions.setMany).mockClear();
 
 			rerender({ sessions: [s1] });
-			act(() => {
-				vi.advanceTimersByTime(2000);
+			await act(async () => {
+				await vi.advanceTimersByTimeAsync(2000);
 			});
 
 			expect(window.maestro.sessions.setMany).toHaveBeenCalledTimes(1);
@@ -1955,7 +1964,7 @@ describe('useDebouncedPersistence', () => {
 			expect(removeIds).toEqual(['s2']);
 		});
 
-		it('second flush with one new session ships it as an update (no tombstones)', () => {
+		it('second flush with one new session ships it as an update (no tombstones)', async () => {
 			const s1 = makeSession({ id: 's1' });
 			const s2 = makeSession({ id: 's2' });
 			const initialLoadRef = makeInitialLoadRef(true);
@@ -1964,14 +1973,14 @@ describe('useDebouncedPersistence', () => {
 				({ sessions }) => useDebouncedPersistence(sessions, initialLoadRef),
 				{ initialProps: { sessions: [s1] } }
 			);
-			act(() => {
-				vi.advanceTimersByTime(2000);
+			await act(async () => {
+				await vi.advanceTimersByTimeAsync(2000);
 			});
 			vi.mocked(window.maestro.sessions.setMany).mockClear();
 
 			rerender({ sessions: [s1, s2] });
-			act(() => {
-				vi.advanceTimersByTime(2000);
+			await act(async () => {
+				await vi.advanceTimersByTimeAsync(2000);
 			});
 
 			const [updates, removeIds] = vi.mocked(window.maestro.sessions.setMany).mock.calls[0] as [
@@ -1983,7 +1992,7 @@ describe('useDebouncedPersistence', () => {
 			expect(removeIds).toEqual([]);
 		});
 
-		it('second flush handles mixed update + add + remove in one call', () => {
+		it('second flush handles mixed update + add + remove in one call', async () => {
 			const s1 = makeSession({ id: 's1', name: 'Keep' });
 			const s2 = makeSession({ id: 's2', name: 'Mutate' });
 			const s3 = makeSession({ id: 's3', name: 'Drop' });
@@ -1993,16 +2002,16 @@ describe('useDebouncedPersistence', () => {
 				({ sessions }) => useDebouncedPersistence(sessions, initialLoadRef),
 				{ initialProps: { sessions: [s1, s2, s3] } }
 			);
-			act(() => {
-				vi.advanceTimersByTime(2000);
+			await act(async () => {
+				await vi.advanceTimersByTimeAsync(2000);
 			});
 			vi.mocked(window.maestro.sessions.setMany).mockClear();
 
 			const s2Updated = { ...s2, name: 'Mutated' };
 			const s4 = makeSession({ id: 's4', name: 'New' });
 			rerender({ sessions: [s1, s2Updated, s4] });
-			act(() => {
-				vi.advanceTimersByTime(2000);
+			await act(async () => {
+				await vi.advanceTimersByTimeAsync(2000);
 			});
 
 			const [updates, removeIds] = vi.mocked(window.maestro.sessions.setMany).mock.calls[0] as [
@@ -2013,7 +2022,7 @@ describe('useDebouncedPersistence', () => {
 			expect(removeIds).toEqual(['s3']);
 		});
 
-		it('rapid mutations within one debounce window collapse into one setMany', () => {
+		it('rapid mutations within one debounce window collapse into one setMany', async () => {
 			const s1 = makeSession({ id: 's1', name: 'A' });
 			const initialLoadRef = makeInitialLoadRef(true);
 
@@ -2021,23 +2030,23 @@ describe('useDebouncedPersistence', () => {
 				({ sessions }) => useDebouncedPersistence(sessions, initialLoadRef),
 				{ initialProps: { sessions: [s1] } }
 			);
-			act(() => {
-				vi.advanceTimersByTime(2000);
+			await act(async () => {
+				await vi.advanceTimersByTimeAsync(2000);
 			});
 			vi.mocked(window.maestro.sessions.setMany).mockClear();
 
 			// Three rapid mutations within the debounce window
 			rerender({ sessions: [{ ...s1, name: 'B' }] });
-			act(() => {
-				vi.advanceTimersByTime(500);
+			await act(async () => {
+				await vi.advanceTimersByTimeAsync(500);
 			});
 			rerender({ sessions: [{ ...s1, name: 'C' }] });
-			act(() => {
-				vi.advanceTimersByTime(500);
+			await act(async () => {
+				await vi.advanceTimersByTimeAsync(500);
 			});
 			rerender({ sessions: [{ ...s1, name: 'D' }] });
-			act(() => {
-				vi.advanceTimersByTime(2000);
+			await act(async () => {
+				await vi.advanceTimersByTimeAsync(2000);
 			});
 
 			expect(window.maestro.sessions.setMany).toHaveBeenCalledTimes(1);
@@ -2048,7 +2057,7 @@ describe('useDebouncedPersistence', () => {
 			expect(updates[0].name).toBe('D'); // Final value wins
 		});
 
-		it('flushNow() after first flush uses setMany for dirty changes', () => {
+		it('flushNow() after first flush uses setMany for dirty changes', async () => {
 			const s1 = makeSession({ id: 's1', name: 'A' });
 			const initialLoadRef = makeInitialLoadRef(true);
 
@@ -2056,20 +2065,21 @@ describe('useDebouncedPersistence', () => {
 				({ sessions }) => useDebouncedPersistence(sessions, initialLoadRef),
 				{ initialProps: { sessions: [s1] } }
 			);
-			act(() => {
-				vi.advanceTimersByTime(2000);
+			await act(async () => {
+				await vi.advanceTimersByTimeAsync(2000);
 			});
 			vi.mocked(window.maestro.sessions.setMany).mockClear();
 
 			rerender({ sessions: [{ ...s1, name: 'B' }] });
-			act(() => {
+			await act(async () => {
 				result.current.flushNow();
+				await vi.advanceTimersByTimeAsync(0);
 			});
 
 			expect(window.maestro.sessions.setMany).toHaveBeenCalledTimes(1);
 		});
 
-		it('unmount after first flush uses setMany when dirty', () => {
+		it('unmount after first flush uses setMany when dirty', async () => {
 			const s1 = makeSession({ id: 's1', name: 'A' });
 			const initialLoadRef = makeInitialLoadRef(true);
 
@@ -2077,8 +2087,8 @@ describe('useDebouncedPersistence', () => {
 				({ sessions }) => useDebouncedPersistence(sessions, initialLoadRef),
 				{ initialProps: { sessions: [s1] } }
 			);
-			act(() => {
-				vi.advanceTimersByTime(2000);
+			await act(async () => {
+				await vi.advanceTimersByTimeAsync(2000);
 			});
 			vi.mocked(window.maestro.sessions.setAll).mockClear();
 			vi.mocked(window.maestro.sessions.setMany).mockClear();

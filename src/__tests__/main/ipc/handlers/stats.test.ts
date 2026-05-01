@@ -153,6 +153,38 @@ describe('stats IPC handlers', () => {
 				expect(handlers.has(channel)).toBe(true);
 			}
 		});
+
+		// PR-B 1.5: registerStatsHandlers must wire flushQueryEventsSync to
+		// app:before-quit so buffered events aren't lost on quit.
+		it('registers a before-quit handler that flushes the query event buffer', async () => {
+			const { app } = await import('electron');
+			const beforeQuitCalls = vi.mocked(app.on).mock.calls.filter((c) => c[0] === 'before-quit');
+			expect(beforeQuitCalls.length).toBeGreaterThanOrEqual(1);
+
+			// Capture the most-recently-registered before-quit handler — the
+			// stats handler is one of several modules that may register on
+			// this event, so we don't assume length === 1.
+			const handler = beforeQuitCalls[beforeQuitCalls.length - 1][1] as () => void;
+			mockFlushQueryEventsSync.mockClear();
+
+			handler();
+
+			expect(mockFlushQueryEventsSync).toHaveBeenCalledTimes(1);
+		});
+
+		it('before-quit handler swallows flush errors (does not block shutdown)', async () => {
+			const { app } = await import('electron');
+			const beforeQuitCalls = vi.mocked(app.on).mock.calls.filter((c) => c[0] === 'before-quit');
+			const handler = beforeQuitCalls[beforeQuitCalls.length - 1][1] as () => void;
+
+			mockFlushQueryEventsSync.mockImplementationOnce(() => {
+				throw new Error('disk full');
+			});
+
+			// Should NOT propagate — failing to flush stats must not block
+			// app shutdown. Sentry capture is fire-and-forget inside the catch.
+			expect(() => handler()).not.toThrow();
+		});
 	});
 
 	describe('stats:updated broadcast verification', () => {

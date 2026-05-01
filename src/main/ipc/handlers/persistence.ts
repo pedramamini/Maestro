@@ -25,7 +25,7 @@ import {
 // Re-export types from canonical source so existing imports from './persistence' still work
 export type { MaestroSettings, SessionsData, GroupsData } from '../../stores/types';
 import type { MaestroSettings, SessionsData, GroupsData, StoredSession } from '../../stores/types';
-import type { Group } from '../../../shared/types';
+import type { Group, SessionCliActivity } from '../../../shared/types';
 
 /**
  * Shallow-compare cliActivity for the diff broadcast.
@@ -38,8 +38,8 @@ import type { Group } from '../../../shared/types';
  * magnitude cheaper.
  */
 function cliActivityChanged(
-	prev: { playbookId?: string; playbookName?: string; startedAt?: number } | null | undefined,
-	curr: { playbookId?: string; playbookName?: string; startedAt?: number } | null | undefined
+	prev: SessionCliActivity | null | undefined,
+	curr: SessionCliActivity | null | undefined
 ): boolean {
 	// Existence change (one is null/undefined, the other isn't) — broadcast.
 	if (!prev !== !curr) return true;
@@ -266,11 +266,23 @@ export function registerPersistenceHandlers(deps: PersistenceHandlerDependencies
 				sessionsStore.set('sessions', merged);
 			} catch (err) {
 				const code = (err as NodeJS.ErrnoException).code;
-				logger.warn(
-					`Failed to persist sessions (setMany): ${code || (err as Error).message}`,
-					'Sessions'
+				// Recoverable filesystem errors — the next debounced flush will
+				// retry when conditions improve. Log warn and return false so
+				// the renderer's flush path can mark the write as unconfirmed.
+				if (code === 'ENOSPC' || code === 'ENFILE' || code === 'EMFILE') {
+					logger.warn(`Failed to persist sessions (setMany): ${code}`, 'Sessions');
+					return false;
+				}
+				// Anything else is unexpected — log error and rethrow so
+				// withIpcErrorLogging surfaces it to Sentry. Per CLAUDE.md
+				// §"Error Handling & Sentry", silent swallows hide bugs from
+				// production telemetry.
+				logger.error(
+					`Unexpected error persisting sessions (setMany): ${(err as Error).message}`,
+					'Sessions',
+					err
 				);
-				return false;
+				throw err;
 			}
 
 			return true;

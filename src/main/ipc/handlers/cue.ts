@@ -140,7 +140,16 @@ export function registerCueHandlers(deps: CueHandlerDependencies): void {
 	ipcMain.handle(
 		'cue:setActive',
 		withIpcErrorLogging(handlerOpts('setActive'), async (active: boolean): Promise<void> => {
-			setCueActive(Boolean(active));
+			// Strict type check rather than Boolean(active) coercion. Coercion
+			// would silently accept truthy strings / numbers / objects from a
+			// misbehaving caller, hiding the bug. withIpcErrorLogging surfaces
+			// thrown TypeErrors to Sentry so we get a real signal.
+			if (typeof active !== 'boolean') {
+				throw new TypeError(
+					`cue:setActive expected boolean, got ${typeof active} (${String(active)})`
+				);
+			}
+			setCueActive(active);
 		})
 	);
 

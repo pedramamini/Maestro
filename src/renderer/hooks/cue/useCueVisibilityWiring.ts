@@ -15,12 +15,19 @@
 import { useEffect } from 'react';
 import { useEventListener } from '../utils/useEventListener';
 import { logger } from '../../utils/logger';
+import { captureException } from '../../utils/sentry';
 
 function notifyMain(active: boolean): void {
 	const cue = window.maestro?.cue;
 	if (!cue || typeof cue.setActive !== 'function') return;
 	cue.setActive(active).catch((err: unknown) => {
 		logger.debug('[Cue] setActive IPC failed', undefined, err);
+		// Fail-soft locally (worst case scanners stay running, which is the
+		// pre-existing behavior) but surface to Sentry — repeated failures
+		// would otherwise be invisible. Per CLAUDE.md §"Error Handling & Sentry".
+		captureException(err instanceof Error ? err : new Error(String(err)), {
+			extra: { operation: 'cue.setActive', active },
+		});
 	});
 }
 

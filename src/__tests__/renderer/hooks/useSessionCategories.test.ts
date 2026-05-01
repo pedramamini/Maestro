@@ -694,18 +694,24 @@ describe('useSessionCategories', () => {
 			expect(map.has('pa-c2')).toBe(false);
 		});
 
-		it('getWorktreeChildren returns identical arrays to map lookup', () => {
+		it('getWorktreeChildren returns the SAME array reference as map lookup', () => {
 			const fx = buildFixture();
 			resetStore(fx.allSessions, fx.groups);
 			const { result } = renderHook(() => useSessionCategories('', fx.sortedSessions));
 
-			// getWorktreeChildren must return the same array as the (unsorted) map.get
-			expect(result.current.getWorktreeChildren('pa')).toEqual(
+			// Identity (toBe), not deep-equal (toEqual): consumers may
+			// memoize on this reference. If a future change accidentally
+			// returns a clone instead of the original, dependent useMemo /
+			// React.memo bail-outs would silently break.
+			expect(result.current.getWorktreeChildren('pa')).toBe(
 				result.current.worktreeChildrenByParentId.get('pa')
 			);
-			expect(result.current.getWorktreeChildren('pb')).toEqual(
+			expect(result.current.getWorktreeChildren('pb')).toBe(
 				result.current.worktreeChildrenByParentId.get('pb')
 			);
+			// Unknown parent: caller-side fallback to a fresh [] each call,
+			// so identity does not hold here — content equality is the
+			// right contract.
 			expect(result.current.getWorktreeChildren('nonexistent')).toEqual([]);
 		});
 

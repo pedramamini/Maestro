@@ -14,6 +14,7 @@
 
 import { ipcMain, BrowserWindow, app } from 'electron';
 import { logger } from '../../utils/logger';
+import { captureException } from '../../utils/sentry';
 import { withIpcErrorLogging, CreateHandlerOptions } from '../../utils/ipcHandler';
 import { getStatsDB } from '../../stats';
 import { enqueueQueryEvent, flushQueryEventsSync } from '../../stats/query-events-buffer';
@@ -87,6 +88,12 @@ export function registerStatsHandlers(deps: StatsHandlerDependencies): void {
 			flushQueryEventsSync();
 		} catch (err) {
 			logger.warn('Failed to flush query event buffer on quit', LOG_CONTEXT, err);
+			// Surface to Sentry so we get a real signal in production —
+			// quit-time data loss is the worst time to lose telemetry, since
+			// we can't retry. Per CLAUDE.md §"Error Handling & Sentry".
+			void captureException(err instanceof Error ? err : new Error(String(err)), {
+				operation: 'stats:beforeQuitFlush',
+			});
 		}
 	});
 

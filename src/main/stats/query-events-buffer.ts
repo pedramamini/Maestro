@@ -20,14 +20,14 @@
  * calls `enqueueQueryEvent(db, event)`; main process registers
  * `flushQueryEventsSync()` on `app:before-quit`.
  *
- * See PR-B 1.5 (`/Users/saifccript/.claude/plans/...`) and
- * CLAUDE-PERFORMANCE.md§"Update Batching".
+ * See PR-B 1.5 and CLAUDE-PERFORMANCE.md §"Update Batching".
  */
 
 import type Database from 'better-sqlite3';
 import type { QueryEvent } from '../../shared/stats-types';
 import { generateId, normalizePath, LOG_CONTEXT, StatementCache } from './utils';
 import { logger } from '../utils/logger';
+import { captureException } from '../utils/sentry';
 
 /** Flush when this many events accumulate. */
 export const QUERY_EVENT_BATCH_SIZE = 50;
@@ -128,6 +128,14 @@ export function flushQueryEventsSync(): void {
 		logger.error('Failed to flush query event buffer', LOG_CONTEXT, {
 			count: events.length,
 			error: err instanceof Error ? err.message : String(err),
+		});
+		// Surface to Sentry with the full Error object (not just .message) so
+		// the stack trace makes it across the wire — matters for diagnosing
+		// rare DB corruption / lock contention. Per CLAUDE.md §"Error
+		// Handling & Sentry".
+		void captureException(err instanceof Error ? err : new Error(String(err)), {
+			operation: 'stats:flushQueryEventBuffer',
+			count: events.length,
 		});
 		// Don't re-buffer — events are lost rather than risk an infinite
 		// retry loop if the DB is in a permanently bad state.

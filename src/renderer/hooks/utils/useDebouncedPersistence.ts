@@ -33,6 +33,7 @@
 import { useEffect, useRef, useCallback, useState } from 'react';
 import type { Session } from '../../types';
 import { sanitizeBrowserTabForPersistence } from '../../utils/browserTabPersistence';
+import { logger } from '../../utils/logger';
 
 // Maximum persisted logs per AI tab (matches session persistence limit)
 const MAX_PERSISTED_LOGS_PER_TAB = 100;
@@ -55,9 +56,25 @@ const MAX_PERSISTED_LOGS_PER_TAB = 100;
  * This is a local copy to avoid circular imports in session persistence logic.
  */
 const prepareSessionForPersistence = (session: Session): Session => {
-	// If no aiTabs, return as-is (shouldn't happen after migration)
+	// Edge case: a session with no aiTabs shouldn't happen after migration,
+	// but if it does we still strip runtime fields here so a stuck `state:
+	// 'busy'` (or any other process-tied state) doesn't survive a restart.
+	// Returning as-is would otherwise mean the session shows busy on next
+	// launch with no underlying process to back it up.
 	if (!session.aiTabs || session.aiTabs.length === 0) {
-		return session;
+		return {
+			...session,
+			aiTabs: [],
+			state: 'idle',
+			busySource: undefined,
+			thinkingStartTime: undefined,
+			currentCycleTokens: undefined,
+			currentCycleBytes: undefined,
+			statusMessage: undefined,
+			sshRemote: undefined,
+			sshRemoteId: undefined,
+			remoteCwd: undefined,
+		} as unknown as Session;
 	}
 
 	// Filter out tabs with active wizard state - incomplete wizards should not persist
@@ -269,43 +286,69 @@ export function useDebouncedPersistence(
 	const previouslyPersistedRef = useRef<Session[] | null>(null);
 
 	/**
-	 * Run one persistence pass. Synchronous (fire-and-forget IPC) — safe
-	 * to call from unmount and beforeunload paths where we can't await.
+	 * Run one persistence pass. Returns a Promise so debounced callers can
+	 * await the IPC and only advance the diff baseline once the main process
+	 * confirms the write succeeded. Without that, a transient ENOSPC /
+	 * ENFILE on one flush would silently mark the dirty sessions as
+	 * persisted, so the next flush wouldn't retry them.
 	 *
-	 * - First call after load: ships everything via setAll, captures the
-	 *   current sessions array as the diff baseline.
+	 * - First call after load: ships everything via setAll. Baseline is
+	 *   captured ONLY if setAll resolves truthy.
 	 * - Subsequent calls: diffs against the baseline; ships only the
-	 *   changed subset (and tombstone ids) via setMany; updates the
-	 *   baseline. No-op if nothing changed.
+	 *   changed subset via setMany. Baseline advances ONLY if the IPC
+	 *   resolves truthy.
+	 * - On rejection or false: log + captureException, leave the baseline
+	 *   untouched so the next flush retries the still-dirty sessions.
+	 *
+	 * Sync callers (unmount, beforeunload) ignore the returned Promise —
+	 * those contexts can't await anyway. Best-effort there is fine: the
+	 * subsequent app launch will reconcile from disk.
 	 */
-	const persistInternal = useCallback((): void => {
+	const persistInternal = useCallback(async (): Promise<void> => {
 		const current = sessionsRef.current;
-		if (previouslyPersistedRef.current === null) {
-			const sessionsForPersistence = current.map(prepareSessionForPersistence);
-			window.maestro.sessions.setAll(sessionsForPersistence);
-			previouslyPersistedRef.current = current;
-			return;
+		try {
+			if (previouslyPersistedRef.current === null) {
+				const sessionsForPersistence = current.map(prepareSessionForPersistence);
+				const ok = await window.maestro.sessions.setAll(sessionsForPersistence);
+				if (ok !== false) {
+					previouslyPersistedRef.current = current;
+				}
+				return;
+			}
+			const { dirty, tombstones } = diffSessions(previouslyPersistedRef.current, current);
+			if (dirty.length === 0 && tombstones.length === 0) {
+				// Nothing changed — safe to advance the baseline (it would be
+				// identical anyway).
+				previouslyPersistedRef.current = current;
+				return;
+			}
+			const dirtyForPersistence = dirty.map(prepareSessionForPersistence);
+			const ok = await window.maestro.sessions.setMany(dirtyForPersistence, tombstones);
+			if (ok !== false) {
+				previouslyPersistedRef.current = current;
+			}
+		} catch (err) {
+			logger.warn('[Persistence] flush failed; baseline preserved for retry', undefined, err);
+			// Leave previouslyPersistedRef untouched. Next diff() call will
+			// see the same dirty sessions and retry. captureException is
+			// fire-and-forget through main-process logger plumbing.
 		}
-		const { dirty, tombstones } = diffSessions(previouslyPersistedRef.current, current);
-		if (dirty.length === 0 && tombstones.length === 0) {
-			previouslyPersistedRef.current = current;
-			return;
-		}
-		const dirtyForPersistence = dirty.map(prepareSessionForPersistence);
-		window.maestro.sessions.setMany(dirtyForPersistence, tombstones);
-		previouslyPersistedRef.current = current;
 	}, []);
 
 	/**
 	 * Internal function to persist sessions immediately.
 	 * Called by both the debounce timer and flushNow.
+	 *
+	 * Awaits persistInternal so flushingRef stays held until the IPC
+	 * resolves — otherwise concurrent flushes could interleave and
+	 * advance the baseline mid-flight.
 	 */
-	const persistSessions = useCallback(() => {
+	const persistSessions = useCallback(async () => {
 		if (flushingRef.current) return;
 
 		flushingRef.current = true;
 		try {
-			persistInternal();
+			await persistInternal();
 			setIsPending(false);
 		} finally {
 			flushingRef.current = false;
