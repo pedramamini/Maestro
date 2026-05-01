@@ -19,12 +19,26 @@ import type { Session, Group, Theme } from '../types';
 // ============================================================================
 
 /**
+ * True when a Claude Code agent has not bound to any provider session yet.
+ *
+ * `Session.agentSessionId` was deprecated by commit 505ce17c6 — Claude Code
+ * stopped writing it to avoid storing throwaway fork IDs that break `--resume`.
+ * Per-tab `aiTabs[].agentSessionId` is now the source of truth, so check both:
+ * the agent is only "unbound" when no tab has an ID either.
+ */
+export function hasNoClaudeProviderSession(session: Session): boolean {
+	if (session.toolType !== 'claude-code') return false;
+	if (session.agentSessionId) return false;
+	return !session.aiTabs?.some((tab) => tab.agentSessionId);
+}
+
+/**
  * Maps session state (plus batch / disconnected overrides) to a status color,
  * an animation flag, and a human-readable label used for the status dot tooltip.
  *
  * Special cases:
  * - `isInBatch`: always warning + pulse (Auto Run takes precedence over agent state)
- * - Claude Code without an `agentSessionId`: hollow dot signal (textDim, no animation)
+ * - Claude Code with no tab bound to a provider session: hollow dot signal
  */
 export function getEnhancedStatusColor(
 	session: Session,
@@ -35,7 +49,7 @@ export function getEnhancedStatusColor(
 		return { color: theme.colors.warning, animate: true, label: 'Auto Run active' };
 	}
 
-	if (session.toolType === 'claude-code' && !session.agentSessionId) {
+	if (hasNoClaudeProviderSession(session)) {
 		return { color: theme.colors.textDim, animate: false, label: 'No active Claude session' };
 	}
 
@@ -156,8 +170,7 @@ export const SessionItem = memo(function SessionItem({
 	// Status indicator: enhanced color/animation/label, plus hollow signal for
 	// Claude Code agents that haven't bound to a provider session yet.
 	const statusInfo = getEnhancedStatusColor(session, theme, isInBatch);
-	const isDisconnected =
-		session.toolType === 'claude-code' && !session.agentSessionId && !isInBatch;
+	const isDisconnected = !isInBatch && hasNoClaudeProviderSession(session);
 
 	// Determine container styling based on variant
 	const getContainerClassName = () => {
