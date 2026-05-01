@@ -208,6 +208,7 @@ const mockMaestro = {
 		get: vi.fn().mockResolvedValue([]),
 		save: vi.fn().mockResolvedValue(undefined),
 		setAll: vi.fn().mockResolvedValue(undefined),
+		setMany: vi.fn().mockResolvedValue(undefined),
 		getActiveSessionId: vi.fn().mockResolvedValue(''),
 		setActiveSessionId: vi.fn().mockResolvedValue(undefined),
 	},

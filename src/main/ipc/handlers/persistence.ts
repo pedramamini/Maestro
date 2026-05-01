@@ -151,6 +151,132 @@ export function registerPersistenceHandlers(deps: PersistenceHandlerDependencies
 		sessionsStore.set('activeSessionId', id);
 	});
 
+	/**
+	 * Incremental session persistence: merge a subset of dirty sessions into
+	 * the existing stored sessions, optionally removing some by id.
+	 *
+	 * This is the preferred path for the renderer's debounced persistence —
+	 * it avoids cloning + serializing the entire sessions tree on every
+	 * change. `sessions:setAll` remains as the bootstrap path and as a
+	 * fallback when no diff baseline is available.
+	 *
+	 * Semantics:
+	 *  - `updates`: sessions to merge. If id matches an existing session,
+	 *    replaces it. If id is new, appends it. Order of new sessions
+	 *    follows the order in `updates`.
+	 *  - `removeIds`: sessions to remove. Applied alongside updates; a
+	 *    session in both lists is removed (remove wins).
+	 *  - Sessions not mentioned in either list are preserved as-is.
+	 *  - Broadcasts to web clients fire only for the touched sessions
+	 *    (added / state-changed / removed), matching `setAll` semantics.
+	 */
+	ipcMain.handle(
+		'sessions:setMany',
+		async (_, updates: StoredSession[] = [], removeIds: string[] = []) => {
+			const previousSessions = sessionsStore.get('sessions', []);
+			const previousMap = new Map(previousSessions.map((s) => [s.id, s]));
+			const removeSet = new Set(removeIds);
+			const updateMap = new Map(updates.map((s) => [s.id, s]));
+
+			// Build merged array preserving the existing order. Apply updates and
+			// skip removals in a single pass, then append any new sessions whose
+			// ids weren't seen in the existing array.
+			const merged: StoredSession[] = [];
+			for (const prev of previousSessions) {
+				if (removeSet.has(prev.id)) continue;
+				const update = updateMap.get(prev.id);
+				if (update) {
+					merged.push(update);
+					updateMap.delete(prev.id);
+				} else {
+					merged.push(prev);
+				}
+			}
+			for (const newSession of updateMap.values()) {
+				if (removeSet.has(newSession.id)) continue;
+				merged.push(newSession);
+			}
+
+			// Lifecycle logging (parallel to setAll's debug logs)
+			for (const session of updates) {
+				if (!previousMap.has(session.id) && !removeSet.has(session.id)) {
+					logger.debug('Session created', 'Sessions', {
+						sessionId: session.id,
+						name: session.name,
+						toolType: session.toolType,
+						cwd: session.cwd,
+					});
+				}
+			}
+			for (const id of removeIds) {
+				const prev = previousMap.get(id);
+				if (prev) {
+					logger.debug('Session destroyed', 'Sessions', {
+						sessionId: prev.id,
+						name: prev.name,
+					});
+				}
+			}
+
+			const webServer = getWebServer();
+			if (webServer && webServer.getWebClientCount() > 0) {
+				for (const session of updates) {
+					if (removeSet.has(session.id)) continue;
+					const prev = previousMap.get(session.id);
+					if (prev) {
+						if (
+							prev.state !== session.state ||
+							prev.inputMode !== session.inputMode ||
+							prev.name !== session.name ||
+							prev.cwd !== session.cwd ||
+							cliActivityChanged(prev.cliActivity, session.cliActivity)
+						) {
+							webServer.broadcastSessionStateChange(session.id, session.state, {
+								name: session.name,
+								toolType: session.toolType,
+								inputMode: session.inputMode,
+								cwd: session.cwd,
+								cliActivity: session.cliActivity,
+							});
+						}
+					} else {
+						webServer.broadcastSessionAdded({
+							id: session.id,
+							name: session.name,
+							toolType: session.toolType,
+							state: session.state,
+							inputMode: session.inputMode,
+							cwd: session.cwd,
+							groupId: session.groupId || null,
+							groupName: session.groupName || null,
+							groupEmoji: session.groupEmoji || null,
+							parentSessionId: session.parentSessionId || null,
+							worktreeBranch: session.worktreeBranch || null,
+						});
+					}
+				}
+				for (const id of removeIds) {
+					if (previousMap.has(id)) {
+						webServer.broadcastSessionRemoved(id);
+					}
+				}
+			}
+
+			try {
+				sessionsStore.set('sessions', merged);
+			} catch (err) {
+				const code = (err as NodeJS.ErrnoException).code;
+				logger.warn(
+					`Failed to persist sessions (setMany): ${code || (err as Error).message}`,
+					'Sessions'
+				);
+				return false;
+			}
+
+			return true;
+		}
+	);
+
 	ipcMain.handle('sessions:setAll', async (_, sessions: StoredSession[]) => {
 		// Get previous sessions to detect changes
 		const previousSessions = sessionsStore.get('sessions', []);
