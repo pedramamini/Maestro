@@ -52,6 +52,20 @@ function buildSessionSparkline(sessionByDay: ByDayEntry[] | undefined): number[]
 }
 
 /**
+ * Resolve the query count shown on a session's card. Prefers the per-session
+ * breakdown when available; otherwise falls back to the provider-level total
+ * for that agent type. Shared between the parent (for sort order) and
+ * `AgentCard` (for display) so both stay in sync.
+ */
+function getSessionQueryCount(session: Session, data: StatsAggregation): number {
+	const sessionByDay = data.bySessionByDay?.[session.id];
+	if (sessionByDay && sessionByDay.length > 0) {
+		return sessionByDay.reduce((sum, d) => sum + d.count, 0);
+	}
+	return data.byAgent?.[session.toolType]?.count ?? 0;
+}
+
+/**
  * Resolve whether a session card should be highlighted by the current
  * drill-down filter. The filter key originates from a few different surfaces:
  *
@@ -101,18 +115,9 @@ const AgentCard = memo(function AgentCard({
 
 	const { queryCount, sparklineData } = useMemo(() => {
 		const sessionByDay = data.bySessionByDay?.[session.id];
-		if (sessionByDay && sessionByDay.length > 0) {
-			const total = sessionByDay.reduce((sum, d) => sum + d.count, 0);
-			return { queryCount: total, sparklineData: buildSessionSparkline(sessionByDay) };
-		}
-		// Per-session breakdown isn't available — fall back to the
-		// provider-level total so we still surface a count.
-		const agentData = data.byAgent?.[session.toolType];
-		return {
-			queryCount: agentData?.count ?? 0,
-			sparklineData: buildSessionSparkline(undefined),
-		};
-	}, [data.bySessionByDay, data.byAgent, session.id, session.toolType]);
+		const sparkline = buildSessionSparkline(sessionByDay);
+		return { queryCount: getSessionQueryCount(session, data), sparklineData: sparkline };
+	}, [data, session]);
 
 	const sparklineColor = isWorktree ? theme.colors.accent : statusColor;
 
@@ -228,10 +233,16 @@ export const AgentOverviewCards = memo(function AgentOverviewCards({
 	activeFilterKey = null,
 }: AgentOverviewCardsProps) {
 	// Terminal sessions aren't "agents" — exclude them so the card row
-	// matches the agent count shown elsewhere in the dashboard.
+	// matches the agent count shown elsewhere in the dashboard. Sort by
+	// query count desc so the most-used agents lead the grid (stable for
+	// ties — relies on Array.prototype.sort stability per ES2019).
 	const activeSessions = useMemo(
-		() => sessions.filter((s) => s.toolType !== 'terminal'),
-		[sessions]
+		() =>
+			sessions
+				.filter((s) => s.toolType !== 'terminal')
+				.slice()
+				.sort((a, b) => getSessionQueryCount(b, data) - getSessionQueryCount(a, data)),
+		[sessions, data]
 	);
 
 	if (activeSessions.length === 0) return null;

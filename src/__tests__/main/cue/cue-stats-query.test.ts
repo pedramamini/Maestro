@@ -398,6 +398,93 @@ describe('cue-stats-query — getCueStatsAggregation', () => {
 		});
 	});
 
+	describe('byTriggerType rollup', () => {
+		it('groups events by event.type and sorts by occurrences desc', async () => {
+			const now = Date.now();
+			mockEvents = [
+				makeEvent({ id: 'e1', type: 'file.changed', createdAt: now - 60_000 }),
+				makeEvent({ id: 'e2', type: 'file.changed', createdAt: now - 50_000 }),
+				makeEvent({ id: 'e3', type: 'file.changed', createdAt: now - 40_000 }),
+				makeEvent({ id: 'e4', type: 'time.scheduled', createdAt: now - 30_000 }),
+				makeEvent({ id: 'e5', type: 'time.scheduled', createdAt: now - 20_000 }),
+				makeEvent({ id: 'e6', type: 'github.pull_request', createdAt: now - 10_000 }),
+			];
+
+			const result = await getCueStatsAggregation('day');
+
+			expect(result.byTriggerType.map((g) => g.key)).toEqual([
+				'file.changed',
+				'time.scheduled',
+				'github.pull_request',
+			]);
+			expect(result.byTriggerType[0].label).toBe('File Change');
+			expect(result.byTriggerType[0].totals.occurrences).toBe(3);
+			expect(result.byTriggerType[1].label).toBe('Scheduled');
+			expect(result.byTriggerType[1].totals.occurrences).toBe(2);
+			expect(result.byTriggerType[2].label).toBe('GitHub PR');
+			expect(result.byTriggerType[2].totals.occurrences).toBe(1);
+		});
+
+		it('preserves the raw key as label for unknown trigger types', async () => {
+			const now = Date.now();
+			mockEvents = [
+				makeEvent({ id: 'e1', type: 'custom.future-trigger', createdAt: now - 60_000 }),
+			];
+
+			const result = await getCueStatsAggregation('day');
+
+			expect(result.byTriggerType).toHaveLength(1);
+			expect(result.byTriggerType[0].key).toBe('custom.future-trigger');
+			expect(result.byTriggerType[0].label).toBe('custom.future-trigger');
+		});
+	});
+
+	describe('byHourOfDay distribution', () => {
+		it('always returns 24 entries (hour 0..23) regardless of input volume', async () => {
+			mockEvents = [];
+			const result = await getCueStatsAggregation('day');
+			expect(result.byHourOfDay).toHaveLength(24);
+			expect(result.byHourOfDay.map((b) => b.hour)).toEqual(
+				Array.from({ length: 24 }, (_, i) => i)
+			);
+		});
+
+		it('buckets events by their local-time hour and tracks success / failure counts', async () => {
+			// Build timestamps anchored to a known local hour by constructing
+			// Date objects in the host TZ, so the assertion is deterministic
+			// regardless of where the test runs.
+			const at = (hour: number, status: string, idx: number) => {
+				const d = new Date();
+				d.setHours(hour, 30, 0, 0);
+				return makeEvent({ id: `e-${hour}-${idx}`, status, createdAt: d.getTime() });
+			};
+			mockEvents = [
+				at(9, 'completed', 1),
+				at(9, 'completed', 2),
+				at(9, 'failed', 3),
+				at(14, 'completed', 1),
+			];
+
+			const result = await getCueStatsAggregation('day');
+
+			expect(result.byHourOfDay[9]).toEqual({
+				hour: 9,
+				occurrences: 3,
+				successCount: 2,
+				failureCount: 1,
+			});
+			expect(result.byHourOfDay[14]).toEqual({
+				hour: 14,
+				occurrences: 1,
+				successCount: 1,
+				failureCount: 0,
+			});
+			// Hours with no events stay at zero.
+			expect(result.byHourOfDay[0].occurrences).toBe(0);
+			expect(result.byHourOfDay[23].occurrences).toBe(0);
+		});
+	});
+
 	describe('bucketSizeMs', () => {
 		it("is 3600000 (1 hour) for 'day'", async () => {
 			const result = await getCueStatsAggregation('day');

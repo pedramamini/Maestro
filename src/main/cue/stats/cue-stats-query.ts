@@ -21,6 +21,7 @@ import { getSessionTokenSummaries, type SessionTokenSummary } from './cue-token-
 import type {
 	CueChain,
 	CueChainNode,
+	CueHourBucket,
 	CueStatsAggregation,
 	CueStatsByGroup,
 	CueStatsTimeRange,
@@ -167,6 +168,29 @@ function pipelineGroupKey(
 function agentGroupKey(agentType: string | null): { key: string; label: string } {
 	if (!agentType) return { key: UNKNOWN_AGENT_KEY, label: UNKNOWN_AGENT_LABEL };
 	return { key: agentType, label: getAgentDisplayName(agentType) };
+}
+
+/**
+ * Friendly labels for the dotted `event.type` strings persisted on
+ * `cue_events`. Unknown types fall through with the raw key — a defensive
+ * default so a future trigger introduced upstream is still visible (just
+ * unstyled) instead of silently bucketed as "Unknown".
+ */
+const TRIGGER_TYPE_LABELS: Record<string, string> = {
+	'app.startup': 'App Startup',
+	'time.heartbeat': 'Heartbeat',
+	'time.scheduled': 'Scheduled',
+	'file.changed': 'File Change',
+	'agent.completed': 'Agent Completion',
+	'github.pull_request': 'GitHub PR',
+	'github.issue': 'GitHub Issue',
+	'task.pending': 'Task Pending',
+	'cli.trigger': 'CLI Trigger',
+};
+
+function triggerTypeGroupKey(eventType: string): { key: string; label: string } {
+	const label = TRIGGER_TYPE_LABELS[eventType] ?? eventType;
+	return { key: eventType, label };
 }
 
 interface GroupAccumulator {
@@ -324,6 +348,31 @@ function buildChains(
 	return chains;
 }
 
+/**
+ * Bucket events into a 24-entry hour-of-day distribution using the host's
+ * local timezone (matches how the rest of the stats dashboard treats day
+ * boundaries). Always returns 24 entries — hours with zero occurrences
+ * keep their slot so the renderer can draw a continuous 24-bar strip.
+ */
+function buildHourOfDay(events: CueEventRecord[]): CueHourBucket[] {
+	const buckets: CueHourBucket[] = Array.from({ length: 24 }, (_, hour) => ({
+		hour,
+		occurrences: 0,
+		successCount: 0,
+		failureCount: 0,
+	}));
+	for (const event of events) {
+		const hour = new Date(event.createdAt).getHours();
+		const bucket = buckets[hour];
+		if (!bucket) continue;
+		bucket.occurrences += 1;
+		const { isSuccess, isFailure } = classifyStatus(event.status);
+		if (isSuccess) bucket.successCount += 1;
+		if (isFailure) bucket.failureCount += 1;
+	}
+	return buckets;
+}
+
 function buildCoverageWarnings(summaries: Map<string, SessionTokenSummary>): string[] {
 	const partial = new Set<string>();
 	const unsupported = new Set<string>();
@@ -384,6 +433,7 @@ export async function getCueStatsAggregation(
 	const byPipeline = new Map<string, GroupAccumulator>();
 	const byAgent = new Map<string, GroupAccumulator>();
 	const bySubscription = new Map<string, GroupAccumulator>();
+	const byTriggerType = new Map<string, GroupAccumulator>();
 
 	for (const event of events) {
 		const { isSuccess, isFailure } = classifyStatus(event.status);
@@ -410,10 +460,14 @@ export async function getCueStatsAggregation(
 			ensureGroup(bySubscription, event.subscriptionName, event.subscriptionName, false).totals,
 			contrib
 		);
+
+		const trigger = triggerTypeGroupKey(event.type);
+		applyEvent(ensureGroup(byTriggerType, trigger.key, trigger.label, false).totals, contrib);
 	}
 
 	const chains = buildChains(events, tokensBySession, agentTypeBySession);
 	const timeSeries = buildTimeSeries(events, tokensBySession, bucketSizeMs);
+	const byHourOfDay = buildHourOfDay(events);
 	const coverageWarnings = buildCoverageWarnings(tokensBySession);
 
 	return {
@@ -424,6 +478,8 @@ export async function getCueStatsAggregation(
 		byPipeline: freezeGroups(byPipeline),
 		byAgent: freezeGroups(byAgent),
 		bySubscription: freezeGroups(bySubscription),
+		byTriggerType: freezeGroups(byTriggerType),
+		byHourOfDay,
 		chains,
 		timeSeries,
 		bucketSizeMs,

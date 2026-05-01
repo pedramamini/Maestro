@@ -1,29 +1,47 @@
 /**
  * YearInPixelsStrip
  *
- * Single-row "year in pixels" hero — one cell per day for the last 365
- * days, colored by activity intensity (same 5-bucket scale used by the
- * Activity Heatmap so the colors are consistent across the dashboard).
+ * Single-row "year in pixels" hero — one cell per day across the active
+ * dashboard time range, colored by activity intensity (same 5-bucket scale
+ * used by the Activity Heatmap so the colors are consistent across the
+ * dashboard).
  *
  * Designed to sit at the top of the Overview tab as a glanceable signature
- * graphic — the user sees their entire year of work in one strip, with
+ * graphic — the user sees their selected window of work in one strip, with
  * peaks, dry spells, and recent momentum all readable at once.
  */
 
 import { memo, useMemo, useState } from 'react';
 import type { Theme } from '../../types';
 import type { StatsAggregation } from '../../hooks/stats/useStats';
+import type { StatsTimeRange } from '../../../shared/stats-types';
 import { formatDurationHuman as formatDuration, formatNumber } from '../../../shared/formatters';
 import { COLORBLIND_HEATMAP_SCALE } from '../../constants/colorblindPalettes';
 import { clampTooltipToViewport } from './chartUtils';
-
-const TOTAL_DAYS = 365;
 
 interface YearInPixelsStripProps {
 	data: StatsAggregation;
 	theme: Theme;
 	colorBlindMode?: boolean;
+	/** Active dashboard time window — controls how many day cells render. */
+	timeRange: StatsTimeRange;
 }
+
+const RANGE_TITLES: Record<StatsTimeRange, string> = {
+	day: 'Today',
+	week: 'Past Week',
+	month: 'Past Month',
+	quarter: 'Past Quarter',
+	year: 'Past Year',
+	all: 'All Time',
+};
+
+const FIXED_RANGE_DAYS: Partial<Record<StatsTimeRange, number>> = {
+	week: 7,
+	month: 30,
+	quarter: 90,
+	year: 365,
+};
 
 interface DayCell {
 	dateStr: string;
@@ -98,27 +116,56 @@ export const YearInPixelsStrip = memo(function YearInPixelsStrip({
 	data,
 	theme,
 	colorBlindMode = false,
+	timeRange,
 }: YearInPixelsStripProps) {
 	const [hovered, setHovered] = useState<DayCell | null>(null);
 	const [anchor, setAnchor] = useState<{ x: number; y: number } | null>(null);
 
-	const { cells, monthMarkers, hasData } = useMemo(() => {
+	const { cells, monthMarkers, totalDays, hasData } = useMemo(() => {
 		// Index byDay rows by date for O(1) lookup.
 		const byDate = new Map<string, { count: number; duration: number }>();
 		for (const day of data.byDay) {
 			byDate.set(day.date, { count: day.count, duration: day.duration });
 		}
 
+		const fmt = (d: Date) =>
+			`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+
+		// Resolve total day count for the active range. For 'all' we span from
+		// the earliest recorded day to today; for fixed ranges we use the
+		// canonical lookback (matches getTimeRangeStart in main/stats/utils.ts).
 		const today = new Date();
+		today.setHours(0, 0, 0, 0);
+		let total: number;
+		if (timeRange === 'all') {
+			// Parse YYYY-MM-DD as a local-midnight date (matches how `fmt`
+			// emits the keys above) so the day-count math matches the cell
+			// iteration below across DST and timezone boundaries.
+			let earliestMs: number | null = null;
+			for (const day of data.byDay) {
+				const m = day.date.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+				if (!m) continue;
+				const localMidnight = new Date(+m[1], +m[2] - 1, +m[3]).getTime();
+				if (earliestMs === null || localMidnight < earliestMs) {
+					earliestMs = localMidnight;
+				}
+			}
+			if (earliestMs === null) {
+				total = 0;
+			} else {
+				const diffDays = Math.round((today.getTime() - earliestMs) / (24 * 60 * 60 * 1000));
+				total = Math.max(1, diffDays + 1);
+			}
+		} else {
+			total = FIXED_RANGE_DAYS[timeRange] ?? 1;
+		}
+
 		const arr: DayCell[] = [];
 		const markers: Array<{ index: number; label: string }> = [];
 		let lastMonth = -1;
 		let max = 0;
 
-		const fmt = (d: Date) =>
-			`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-
-		for (let i = TOTAL_DAYS - 1; i >= 0; i--) {
+		for (let i = total - 1; i >= 0; i--) {
 			const date = new Date(today);
 			date.setDate(date.getDate() - i);
 			const dateStr = fmt(date);
@@ -127,7 +174,7 @@ export const YearInPixelsStrip = memo(function YearInPixelsStrip({
 			const monthIndex = date.getMonth();
 			const isFirstOfMonth = monthIndex !== lastMonth;
 			if (isFirstOfMonth) {
-				markers.push({ index: TOTAL_DAYS - 1 - i, label: MONTH_ABBR[monthIndex] });
+				markers.push({ index: total - 1 - i, label: MONTH_ABBR[monthIndex] });
 			}
 			lastMonth = monthIndex;
 			arr.push({
@@ -149,10 +196,12 @@ export const YearInPixelsStrip = memo(function YearInPixelsStrip({
 		// Second pass: assign intensities now that max is known.
 		for (const cell of arr) cell.intensity = calcIntensity(cell.count, max);
 
-		return { cells: arr, monthMarkers: markers, hasData: max > 0 };
-	}, [data.byDay]);
+		return { cells: arr, monthMarkers: markers, totalDays: total, hasData: max > 0 };
+	}, [data.byDay, timeRange]);
 
-	if (!hasData) {
+	// Hide for ranges where a strip has no visual value (single-day window),
+	// or when there's no activity at all in the range.
+	if (!hasData || timeRange === 'day' || totalDays < 2) {
 		return null;
 	}
 
@@ -171,7 +220,7 @@ export const YearInPixelsStrip = memo(function YearInPixelsStrip({
 			className="p-4 rounded-lg"
 			style={{ backgroundColor: theme.colors.bgMain }}
 			role="figure"
-			aria-label="Activity over the past 365 days"
+			aria-label={`Activity over ${totalDays} ${totalDays === 1 ? 'day' : 'days'}`}
 			data-testid="year-in-pixels-strip"
 		>
 			<div className="flex items-baseline justify-between mb-2">
@@ -179,10 +228,10 @@ export const YearInPixelsStrip = memo(function YearInPixelsStrip({
 					className="text-xs font-medium uppercase tracking-wide"
 					style={{ color: theme.colors.textDim }}
 				>
-					Past Year
+					{RANGE_TITLES[timeRange]}
 				</h3>
 				<span className="text-[10px]" style={{ color: theme.colors.textDim }}>
-					{TOTAL_DAYS} days
+					{totalDays} {totalDays === 1 ? 'day' : 'days'}
 				</span>
 			</div>
 
@@ -226,7 +275,7 @@ export const YearInPixelsStrip = memo(function YearInPixelsStrip({
 							className="absolute text-[10px]"
 							style={{
 								color: theme.colors.textDim,
-								left: `${(marker.index / TOTAL_DAYS) * 100}%`,
+								left: `${(marker.index / totalDays) * 100}%`,
 								transform: 'translateX(-50%)',
 							}}
 						>

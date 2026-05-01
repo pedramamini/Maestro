@@ -59,6 +59,19 @@ export interface CueTimeBucket {
 	outputTokens: number;
 }
 
+/**
+ * One bucket of the 24-hour time-of-day distribution. `hour` is a local-timezone
+ * hour in `[0, 23]`. Buckets with zero occurrences are still included so the
+ * chart can render a continuous 24-bar strip without gap-filling on the
+ * renderer side.
+ */
+export interface CueHourBucket {
+	hour: number;
+	occurrences: number;
+	successCount: number;
+	failureCount: number;
+}
+
 export interface CueStatsAggregation {
 	timeRange: CueStatsTimeRange;
 	windowStartMs: number;
@@ -67,6 +80,10 @@ export interface CueStatsAggregation {
 	byPipeline: CueStatsByGroup[];
 	byAgent: CueStatsByGroup[];
 	bySubscription: CueStatsByGroup[];
+	/** Distribution by event trigger type (e.g. `file.changed`, `time.scheduled`). */
+	byTriggerType: CueStatsByGroup[];
+	/** Always 24 entries, hour 0..23 in local time. */
+	byHourOfDay: CueHourBucket[];
 	chains: CueChain[];
 	timeSeries: CueTimeBucket[];
 	/** 3600000 for day/week, 86400000 for month+ */

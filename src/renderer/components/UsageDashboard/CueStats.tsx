@@ -2,9 +2,9 @@
  * CueStats
  *
  * Renders the "Cue" tab of the Usage Dashboard. Consumes
- * `window.maestro.cueStats.getAggregation()` (Phase 03) and surfaces
- * occurrence / duration / token / success-rate metrics broken down by
- * pipeline, agent, subscription, and chain.
+ * `window.maestro.cueStats.getAggregation()` and surfaces totals plus a set of
+ * focused diagnostic panels: failure spotlight, time-series, hour-of-day,
+ * trigger-type, pipeline, agent, and slowest-runs.
  *
  * The component is responsible only for read+display — gating lives in the
  * parent dashboard (tab is hidden when `encoreFeatures.maestroCue` is off)
@@ -14,22 +14,13 @@
 
 import React, { memo, useCallback, useEffect, useMemo, useState } from 'react';
 import { format } from 'date-fns';
-import {
-	AlertTriangle,
-	CheckCircle2,
-	ChevronDown,
-	ChevronRight,
-	Clock,
-	Coins,
-	XCircle,
-	Zap,
-} from 'lucide-react';
+import { AlertTriangle, CheckCircle2, Clock, Coins, TimerReset, XCircle, Zap } from 'lucide-react';
 // AlertTriangle still used by `DisabledNote`; CoverageWarningsBanner was removed.
 import type { Theme } from '../../types';
 import type { StatsTimeRange } from '../../../shared/stats-types';
 import type {
 	CueChain,
-	CueChainNode,
+	CueHourBucket,
 	CueStatsAggregation,
 	CueStatsByGroup,
 	CueStatsTotals,
@@ -53,21 +44,11 @@ import {
 	SummaryCardsSkeleton,
 } from './ChartSkeletons';
 import { MetricCard } from './SummaryCards';
-import { StatusDot } from '../CueModal/StatusDot';
 
 interface CueStatsProps {
 	timeRange: StatsTimeRange;
 	theme: Theme;
 	colorBlindMode?: boolean;
-}
-
-const SUCCESS_STATUSES = new Set(['completed', 'success']);
-const FAILURE_STATUSES = new Set(['failed', 'failure', 'timeout', 'stopped', 'error']);
-
-function chainNodeStatusKind(status: string): 'active' | 'paused' | 'none' {
-	if (SUCCESS_STATUSES.has(status)) return 'active';
-	if (FAILURE_STATUSES.has(status)) return 'none';
-	return 'paused';
 }
 
 function totalTokens(t: CueStatsTotals): number {
@@ -713,154 +694,568 @@ const AgentTokensChart = memo(function AgentTokensChart({
 	);
 });
 
-/* --------------------------------- Chains -------------------------------- */
+/* ---------------------------- Failure spotlight -------------------------- */
 
-interface ChainTreeRow {
-	node: CueChainNode;
-	depth: number;
-}
+/**
+ * Friendly summary of any subscription that failed at least once in the
+ * window. Always renders — when nothing failed, shows a small "all clean"
+ * affirmation instead, so the section is discoverable.
+ *
+ * We deliberately render this as a focused list rather than reusing
+ * `GroupTable`. The full subscription table was previously dropped because
+ * its content was redundant; this panel exists specifically to surface
+ * actionable failures and stays out of the way the rest of the time.
+ */
+const FailureSpotlight = memo(function FailureSpotlight({
+	rows,
+	theme,
+}: {
+	rows: CueStatsByGroup[];
+	theme: Theme;
+}) {
+	const failing = useMemo(() => {
+		return rows
+			.filter((r) => r.totals.failureCount > 0)
+			.sort((a, b) => {
+				if (b.totals.failureCount !== a.totals.failureCount) {
+					return b.totals.failureCount - a.totals.failureCount;
+				}
+				// Tie-break with worst success rate, so two subs with the same
+				// failure count surface the most-broken one first.
+				return successRate(a.totals) - successRate(b.totals);
+			});
+	}, [rows]);
 
-function flattenChain(chain: CueChain): ChainTreeRow[] {
-	const byParent = new Map<string | null, CueChainNode[]>();
-	for (const node of chain.nodes) {
-		const list = byParent.get(node.parentEventId) ?? [];
-		list.push(node);
-		byParent.set(node.parentEventId, list);
-	}
-	for (const list of byParent.values()) {
-		list.sort((a, b) => a.startedAtMs - b.startedAtMs);
-	}
-
-	const rows: ChainTreeRow[] = [];
-	const walk = (parentId: string | null, depth: number) => {
-		const children = byParent.get(parentId) ?? [];
-		for (const child of children) {
-			rows.push({ node: child, depth });
-			walk(child.eventId, depth + 1);
-		}
+	const headerStyle: React.CSSProperties = {
+		color: theme.colors.textDim,
+		borderColor: theme.colors.border,
 	};
-	walk(null, 0);
-
-	if (rows.length === 0) {
-		// Fallback: render nodes in order (handles malformed parent links).
-		return chain.nodes.map((n) => ({ node: n, depth: 0 }));
-	}
-	return rows;
-}
-
-const ChainList = memo(function ChainList({ chains, theme }: { chains: CueChain[]; theme: Theme }) {
-	const [expanded, setExpanded] = useState<Set<string>>(new Set());
-
-	const toggle = useCallback((id: string) => {
-		setExpanded((prev) => {
-			const next = new Set(prev);
-			if (next.has(id)) next.delete(id);
-			else next.add(id);
-			return next;
-		});
-	}, []);
 
 	return (
 		<div
 			className="p-4 rounded-lg"
 			style={{ backgroundColor: theme.colors.bgMain }}
-			data-testid="cue-stats-chains"
+			data-testid="cue-stats-failure-spotlight"
 			role="region"
-			aria-label="Cue chains"
+			aria-label="Cue subscriptions that failed in the selected window"
+		>
+			<div className="flex items-center gap-2 mb-3">
+				{failing.length === 0 ? (
+					<CheckCircle2 className="w-4 h-4" style={{ color: theme.colors.success }} />
+				) : (
+					<AlertTriangle className="w-4 h-4" style={{ color: theme.colors.warning }} />
+				)}
+				<h3
+					className="text-sm font-medium"
+					style={{ color: theme.colors.textMain, animation: 'card-enter 0.4s ease both' }}
+				>
+					{failing.length === 0 ? 'No failures' : 'Needs attention'}
+				</h3>
+			</div>
+
+			{failing.length === 0 ? (
+				<div className="text-sm py-2" style={{ color: theme.colors.textDim }}>
+					All Cue runs in this range completed successfully.
+				</div>
+			) : (
+				<div className="overflow-x-auto">
+					<table
+						className="w-full text-sm"
+						style={{ borderCollapse: 'separate', borderSpacing: 0 }}
+					>
+						<thead>
+							<tr>
+								<th
+									className="text-left text-xs font-medium uppercase tracking-wider px-3 py-2 border-b"
+									style={headerStyle}
+								>
+									Subscription
+								</th>
+								<th
+									className="text-left text-xs font-medium uppercase tracking-wider px-3 py-2 border-b"
+									style={headerStyle}
+								>
+									Failures
+								</th>
+								<th
+									className="text-left text-xs font-medium uppercase tracking-wider px-3 py-2 border-b"
+									style={headerStyle}
+								>
+									Success Rate
+								</th>
+								<th
+									className="text-left text-xs font-medium uppercase tracking-wider px-3 py-2 border-b"
+									style={headerStyle}
+								>
+									Runs
+								</th>
+								<th
+									className="text-left text-xs font-medium uppercase tracking-wider px-3 py-2 border-b"
+									style={headerStyle}
+								>
+									Avg Duration
+								</th>
+							</tr>
+						</thead>
+						<tbody>
+							{failing.map((row, idx) => {
+								const avg =
+									row.totals.occurrences > 0
+										? row.totals.totalDurationMs / row.totals.occurrences
+										: 0;
+								return (
+									<tr
+										key={row.key}
+										data-testid="cue-stats-failure-row"
+										style={{
+											backgroundColor: idx % 2 === 0 ? 'transparent' : `${theme.colors.border}10`,
+										}}
+									>
+										<td className="px-3 py-2" style={{ color: theme.colors.textMain }}>
+											{row.label}
+										</td>
+										<td
+											className="px-3 py-2 font-mono font-semibold"
+											style={{ color: theme.colors.error }}
+										>
+											{formatNumber(row.totals.failureCount)}
+										</td>
+										<td className="px-3 py-2 font-mono" style={{ color: theme.colors.textDim }}>
+											{formatPercent(successRate(row.totals))}
+										</td>
+										<td className="px-3 py-2 font-mono" style={{ color: theme.colors.textDim }}>
+											{formatNumber(row.totals.occurrences)}
+										</td>
+										<td className="px-3 py-2 font-mono" style={{ color: theme.colors.textDim }}>
+											{formatDurationHuman(avg)}
+										</td>
+									</tr>
+								);
+							})}
+						</tbody>
+					</table>
+				</div>
+			)}
+		</div>
+	);
+});
+
+/* ---------------------------- Slowest runs ------------------------------- */
+
+const SLOWEST_RUNS_LIMIT = 10;
+
+interface SlowRun {
+	eventId: string;
+	subscriptionName: string;
+	agentType: string | null;
+	startedAtMs: number;
+	durationMs: number;
+	tokens: number;
+}
+
+function collectSlowestRuns(chains: CueChain[], limit: number): SlowRun[] {
+	const flat: SlowRun[] = [];
+	for (const chain of chains) {
+		for (const node of chain.nodes) {
+			if (node.durationMs == null) continue;
+			flat.push({
+				eventId: node.eventId,
+				subscriptionName: node.subscriptionName,
+				agentType: node.agentType,
+				startedAtMs: node.startedAtMs,
+				durationMs: node.durationMs,
+				tokens: node.inputTokens + node.outputTokens,
+			});
+		}
+	}
+	flat.sort((a, b) => b.durationMs - a.durationMs);
+	return flat.slice(0, limit);
+}
+
+/**
+ * Top-N individual chain runs ordered by duration, regardless of which
+ * pipeline or chain they came from. Replaces the per-chain tree (dropped)
+ * with a flat ranked view that answers "what's slow?" in one glance.
+ */
+const SlowestRunsTable = memo(function SlowestRunsTable({
+	chains,
+	theme,
+}: {
+	chains: CueChain[];
+	theme: Theme;
+}) {
+	const rows = useMemo(() => collectSlowestRuns(chains, SLOWEST_RUNS_LIMIT), [chains]);
+
+	const headerStyle: React.CSSProperties = {
+		color: theme.colors.textDim,
+		borderColor: theme.colors.border,
+	};
+
+	return (
+		<div
+			className="p-4 rounded-lg"
+			style={{ backgroundColor: theme.colors.bgMain }}
+			data-testid="cue-stats-slowest-runs"
+			role="region"
+			aria-label="Slowest Cue runs in the selected window"
+		>
+			<div className="flex items-center gap-2 mb-3">
+				<TimerReset className="w-4 h-4" style={{ color: theme.colors.accent }} />
+				<h3
+					className="text-sm font-medium"
+					style={{ color: theme.colors.textMain, animation: 'card-enter 0.4s ease both' }}
+				>
+					Slowest Runs
+				</h3>
+			</div>
+
+			{rows.length === 0 ? (
+				<div className="text-sm py-2" style={{ color: theme.colors.textDim }}>
+					No completed runs in this range.
+				</div>
+			) : (
+				<div className="overflow-x-auto">
+					<table
+						className="w-full text-sm"
+						style={{ borderCollapse: 'separate', borderSpacing: 0 }}
+					>
+						<thead>
+							<tr>
+								<th
+									className="text-left text-xs font-medium uppercase tracking-wider px-3 py-2 border-b"
+									style={headerStyle}
+								>
+									Subscription
+								</th>
+								<th
+									className="text-left text-xs font-medium uppercase tracking-wider px-3 py-2 border-b"
+									style={headerStyle}
+								>
+									Agent
+								</th>
+								<th
+									className="text-left text-xs font-medium uppercase tracking-wider px-3 py-2 border-b"
+									style={headerStyle}
+								>
+									Started
+								</th>
+								<th
+									className="text-left text-xs font-medium uppercase tracking-wider px-3 py-2 border-b"
+									style={headerStyle}
+								>
+									Duration
+								</th>
+								<th
+									className="text-left text-xs font-medium uppercase tracking-wider px-3 py-2 border-b"
+									style={headerStyle}
+								>
+									Tokens
+								</th>
+							</tr>
+						</thead>
+						<tbody>
+							{rows.map((row, idx) => (
+								<tr
+									key={row.eventId}
+									data-testid="cue-stats-slow-run"
+									style={{
+										backgroundColor: idx % 2 === 0 ? 'transparent' : `${theme.colors.border}10`,
+									}}
+								>
+									<td className="px-3 py-2" style={{ color: theme.colors.textMain }}>
+										{row.subscriptionName}
+									</td>
+									<td className="px-3 py-2" style={{ color: theme.colors.textDim }}>
+										{row.agentType ? getAgentDisplayName(row.agentType) : '—'}
+									</td>
+									<td className="px-3 py-2 font-mono" style={{ color: theme.colors.textDim }}>
+										{format(new Date(row.startedAtMs), 'MMM d HH:mm')}
+									</td>
+									<td
+										className="px-3 py-2 font-mono font-semibold"
+										style={{ color: theme.colors.textMain }}
+									>
+										{formatDurationHuman(row.durationMs)}
+									</td>
+									<td className="px-3 py-2 font-mono" style={{ color: theme.colors.textDim }}>
+										{formatTokensCompact(row.tokens)}
+									</td>
+								</tr>
+							))}
+						</tbody>
+					</table>
+				</div>
+			)}
+		</div>
+	);
+});
+
+/* ---------------------------- Trigger types ------------------------------ */
+
+/**
+ * Horizontal bar chart of occurrences by trigger type. Tells the user how
+ * Cue is actually being used (file watches vs scheduled vs PR polls etc).
+ */
+const TriggerTypeChart = memo(function TriggerTypeChart({
+	rows,
+	theme,
+	colorBlindMode,
+}: {
+	rows: CueStatsByGroup[];
+	theme: Theme;
+	colorBlindMode: boolean;
+}) {
+	const sorted = useMemo(() => {
+		return [...rows].sort((a, b) => b.totals.occurrences - a.totals.occurrences);
+	}, [rows]);
+
+	const total = useMemo(() => sorted.reduce((sum, r) => sum + r.totals.occurrences, 0), [sorted]);
+
+	const max = useMemo(() => {
+		if (sorted.length === 0) return 1;
+		return Math.max(1, ...sorted.map((r) => r.totals.occurrences));
+	}, [sorted]);
+
+	const colorFor = useCallback(
+		(idx: number) =>
+			colorBlindMode
+				? COLORBLIND_AGENT_PALETTE[idx % COLORBLIND_AGENT_PALETTE.length]
+				: theme.colors.accent,
+		[colorBlindMode, theme.colors.accent]
+	);
+
+	return (
+		<div
+			className="p-4 rounded-lg"
+			style={{ backgroundColor: theme.colors.bgMain }}
+			data-testid="cue-stats-trigger-types"
+			role="figure"
+			aria-label="Occurrences by Cue trigger type"
 		>
 			<h3
 				className="text-sm font-medium mb-3"
 				style={{ color: theme.colors.textMain, animation: 'card-enter 0.4s ease both' }}
 			>
-				Chains
+				By Trigger Type
 			</h3>
-			{chains.length === 0 ? (
-				<div className="text-sm py-4" style={{ color: theme.colors.textDim }}>
-					No chains in this range.
+			{sorted.length === 0 ? (
+				<div className="text-sm py-2" style={{ color: theme.colors.textDim }}>
+					No trigger data in this range.
 				</div>
 			) : (
-				<ul className="space-y-2">
-					{chains.map((chain) => {
-						const isOpen = expanded.has(chain.rootId);
-						const tokens = totalTokens(chain.totals);
-						const rows = isOpen ? flattenChain(chain) : [];
+				<div className="space-y-2">
+					{sorted.map((row, idx) => {
+						const occ = row.totals.occurrences;
+						const widthPct = (occ / max) * 100;
+						const sharePct = total > 0 ? Math.round((occ / total) * 100) : 0;
 						return (
-							<li
-								key={chain.rootId}
-								className="rounded border"
-								style={{ borderColor: theme.colors.border }}
-								data-testid="cue-stats-chain"
+							<div
+								key={row.key}
+								className="flex items-center gap-3"
+								style={{ height: 28 }}
+								data-testid="cue-stats-trigger-row"
 							>
-								<button
-									type="button"
-									onClick={() => toggle(chain.rootId)}
-									className="w-full flex items-center gap-2 px-3 py-2 text-left"
-									aria-expanded={isOpen}
-									style={{ color: theme.colors.textMain }}
+								<div
+									className="text-xs truncate"
+									style={{ width: 140, color: theme.colors.textDim }}
+									title={row.label}
 								>
-									{isOpen ? (
-										<ChevronDown className="w-4 h-4" />
-									) : (
-										<ChevronRight className="w-4 h-4" />
-									)}
-									<span className="font-medium flex-1 truncate">{chain.rootSubscriptionName}</span>
-									<span className="text-xs" style={{ color: theme.colors.textDim }}>
-										{formatNumber(chain.nodes.length)} nodes ·{' '}
-										{formatDurationHuman(chain.totals.totalDurationMs)} ·{' '}
-										{formatTokensCompact(tokens)} tokens
-									</span>
-								</button>
-								{isOpen && rows.length > 0 && (
+									{row.label}
+								</div>
+								<div className="flex-1 relative" style={{ height: 20 }}>
 									<div
-										className="border-t"
-										style={{ borderColor: theme.colors.border }}
-										data-testid="cue-stats-chain-body"
-									>
-										{rows.map((row) => {
-											const dur =
-												row.node.durationMs != null
-													? formatDurationHuman(row.node.durationMs)
-													: '—';
-											const nodeTokens = row.node.inputTokens + row.node.outputTokens;
-											return (
-												<div
-													key={row.node.eventId}
-													className="flex items-center gap-3 px-3 py-1.5 text-sm"
-													style={{ paddingLeft: 12 + row.depth * 16 }}
-													data-testid="cue-stats-chain-node"
-													data-depth={row.depth}
-												>
-													<StatusDot status={chainNodeStatusKind(row.node.status)} theme={theme} />
-													<span
-														className="flex-1 truncate"
-														style={{ color: theme.colors.textMain }}
-													>
-														{row.node.subscriptionName}
-													</span>
-													<span className="text-xs" style={{ color: theme.colors.textDim }}>
-														{row.node.agentType ? getAgentDisplayName(row.node.agentType) : '—'}
-													</span>
-													<span
-														className="text-xs font-mono"
-														style={{ color: theme.colors.textDim, width: 64, textAlign: 'right' }}
-													>
-														{dur}
-													</span>
-													<span
-														className="text-xs font-mono"
-														style={{ color: theme.colors.textDim, width: 56, textAlign: 'right' }}
-													>
-														{formatTokensCompact(nodeTokens)}
-													</span>
-												</div>
-											);
-										})}
-									</div>
-								)}
-							</li>
+										className="absolute inset-y-0 left-0 rounded"
+										style={{ width: `${widthPct}%`, backgroundColor: colorFor(idx) }}
+									/>
+								</div>
+								<div
+									className="text-xs font-mono"
+									style={{ width: 80, textAlign: 'right', color: theme.colors.textMain }}
+								>
+									{formatNumber(occ)}
+									<span className="ml-1" style={{ color: theme.colors.textDim }}>
+										({sharePct}%)
+									</span>
+								</div>
+							</div>
 						);
 					})}
-				</ul>
+				</div>
+			)}
+		</div>
+	);
+});
+
+/* ---------------------------- Hour-of-day chart -------------------------- */
+
+const HOUR_LABEL_INTERVAL = 3; // 0, 3, 6, … 21 — keeps the strip readable.
+
+/**
+ * 24-bar histogram showing when Cue runs in the local day. Helps the user
+ * spot under-used windows when planning new schedules. Bars are colored by
+ * the warning palette when the bucket has any failures, so a hot-spot of
+ * trouble at 3am is visible without expanding a tooltip.
+ */
+const HourOfDayChart = memo(function HourOfDayChart({
+	buckets,
+	theme,
+	colorBlindMode,
+}: {
+	buckets: CueHourBucket[];
+	theme: Theme;
+	colorBlindMode: boolean;
+}) {
+	const chartWidth = 600;
+	const chartHeight = 160;
+	const padding = { top: 16, right: 12, bottom: 28, left: 36 };
+	const innerWidth = chartWidth - padding.left - padding.right;
+	const innerHeight = chartHeight - padding.top - padding.bottom;
+
+	const max = useMemo(() => {
+		const values = buckets.map((b) => b.occurrences);
+		return Math.max(1, ...values);
+	}, [buckets]);
+
+	const tickCount = 4;
+	const yTicks = useMemo(() => {
+		const step = Math.max(1, Math.ceil(max / (tickCount - 1)));
+		return Array.from({ length: tickCount }, (_, i) => i * step);
+	}, [max]);
+
+	const yMax = yTicks[yTicks.length - 1] || 1;
+
+	const yScale = useCallback(
+		(value: number) => chartHeight - padding.bottom - (value / yMax) * innerHeight,
+		[chartHeight, innerHeight, padding.bottom, yMax]
+	);
+
+	const slotWidth = innerWidth / 24;
+	const barWidth = Math.max(2, slotWidth - 4);
+
+	const baseColor = colorBlindMode ? COLORBLIND_AGENT_PALETTE[0] : theme.colors.accent;
+	const failureColor = theme.colors.warning ?? theme.colors.error;
+
+	const currentHour = useMemo(() => new Date().getHours(), []);
+	const hasAnyData = useMemo(() => buckets.some((b) => b.occurrences > 0), [buckets]);
+
+	return (
+		<div
+			className="p-4 rounded-lg"
+			style={{ backgroundColor: theme.colors.bgMain }}
+			data-testid="cue-stats-hour-of-day"
+			role="figure"
+			aria-label="Cue occurrences by hour of day in local time"
+		>
+			<div className="flex items-center justify-between mb-3">
+				<h3
+					className="text-sm font-medium"
+					style={{ color: theme.colors.textMain, animation: 'card-enter 0.4s ease both' }}
+				>
+					By Hour of Day
+				</h3>
+				<span className="text-xs" style={{ color: theme.colors.textDim }}>
+					Local time
+				</span>
+			</div>
+			{!hasAnyData ? (
+				<div className="text-sm py-2" style={{ color: theme.colors.textDim }}>
+					No occurrences in this range.
+				</div>
+			) : (
+				<svg
+					width="100%"
+					viewBox={`0 0 ${chartWidth} ${chartHeight}`}
+					preserveAspectRatio="xMidYMid meet"
+					role="img"
+					aria-label="24-hour distribution of Cue occurrences"
+				>
+					{/* Y grid lines + labels */}
+					{yTicks.map((tick, idx) => (
+						<g key={`y-${idx}`}>
+							<line
+								x1={padding.left}
+								y1={yScale(tick)}
+								x2={chartWidth - padding.right}
+								y2={yScale(tick)}
+								stroke={theme.colors.border}
+								strokeOpacity={0.3}
+								strokeDasharray="4,4"
+							/>
+							<text
+								x={padding.left - 8}
+								y={yScale(tick)}
+								textAnchor="end"
+								dominantBaseline="middle"
+								fontSize={10}
+								fill={theme.colors.textDim}
+							>
+								{tick}
+							</text>
+						</g>
+					))}
+
+					{/* Bars */}
+					{buckets.map((bucket) => {
+						const cx = padding.left + slotWidth * bucket.hour + slotWidth / 2;
+						const x = cx - barWidth / 2;
+						const y = yScale(bucket.occurrences);
+						const height = chartHeight - padding.bottom - y;
+						const fill = bucket.failureCount > 0 ? failureColor : baseColor;
+						const isCurrent = bucket.hour === currentHour;
+						return (
+							<g key={`hour-${bucket.hour}`}>
+								<rect
+									x={x}
+									y={y}
+									width={barWidth}
+									height={Math.max(0, height)}
+									fill={fill}
+									opacity={bucket.occurrences === 0 ? 0.15 : 0.85}
+									rx={2}
+									data-testid="cue-stats-hour-bar"
+									data-hour={bucket.hour}
+								>
+									<title>
+										{`${String(bucket.hour).padStart(2, '0')}:00 — ${formatNumber(
+											bucket.occurrences
+										)} ${bucket.occurrences === 1 ? 'run' : 'runs'}${
+											bucket.failureCount > 0 ? `, ${bucket.failureCount} failed` : ''
+										}`}
+									</title>
+								</rect>
+								{isCurrent && (
+									<line
+										x1={cx}
+										x2={cx}
+										y1={padding.top - 4}
+										y2={chartHeight - padding.bottom}
+										stroke={theme.colors.accent}
+										strokeOpacity={0.6}
+										strokeDasharray="2,2"
+									/>
+								)}
+							</g>
+						);
+					})}
+
+					{/* X-axis labels every HOUR_LABEL_INTERVAL hours */}
+					{buckets.map((bucket) => {
+						if (bucket.hour % HOUR_LABEL_INTERVAL !== 0) return null;
+						const cx = padding.left + slotWidth * bucket.hour + slotWidth / 2;
+						return (
+							<text
+								key={`x-${bucket.hour}`}
+								x={cx}
+								y={chartHeight - padding.bottom + 16}
+								textAnchor="middle"
+								fontSize={10}
+								fill={theme.colors.textDim}
+							>
+								{String(bucket.hour).padStart(2, '0')}
+							</text>
+						);
+					})}
+				</svg>
 			)}
 		</div>
 	);
@@ -1010,10 +1405,30 @@ export const CueStats = memo(function CueStats({
 				/>
 			</ChartErrorBoundary>
 
+			<ChartErrorBoundary theme={theme} chartName="Cue Failure Spotlight">
+				<FailureSpotlight rows={aggregation.bySubscription} theme={theme} />
+			</ChartErrorBoundary>
+
 			<ChartErrorBoundary theme={theme} chartName="Cue Time Series">
 				<TimeSeriesChart
 					buckets={aggregation.timeSeries}
 					bucketSizeMs={aggregation.bucketSizeMs}
+					theme={theme}
+					colorBlindMode={colorBlindMode}
+				/>
+			</ChartErrorBoundary>
+
+			<ChartErrorBoundary theme={theme} chartName="Cue Hour of Day">
+				<HourOfDayChart
+					buckets={aggregation.byHourOfDay}
+					theme={theme}
+					colorBlindMode={colorBlindMode}
+				/>
+			</ChartErrorBoundary>
+
+			<ChartErrorBoundary theme={theme} chartName="Cue Trigger Types">
+				<TriggerTypeChart
+					rows={aggregation.byTriggerType}
 					theme={theme}
 					colorBlindMode={colorBlindMode}
 				/>
@@ -1040,19 +1455,8 @@ export const CueStats = memo(function CueStats({
 				</ChartErrorBoundary>
 			)}
 
-			<ChartErrorBoundary theme={theme} chartName="Cue By Subscription">
-				<GroupTable
-					title="By Subscription"
-					rows={aggregation.bySubscription}
-					theme={theme}
-					testId="cue-stats-subscription-table"
-					keyLabel="Subscription"
-					hideTokenColumns={!hasTokenData}
-				/>
-			</ChartErrorBoundary>
-
-			<ChartErrorBoundary theme={theme} chartName="Cue Chains">
-				<ChainList chains={aggregation.chains} theme={theme} />
+			<ChartErrorBoundary theme={theme} chartName="Cue Slowest Runs">
+				<SlowestRunsTable chains={aggregation.chains} theme={theme} />
 			</ChartErrorBoundary>
 		</div>
 	);

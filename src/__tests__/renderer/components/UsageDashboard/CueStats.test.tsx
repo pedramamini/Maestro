@@ -4,15 +4,15 @@
  * Verifies:
  * - Loading skeleton renders before the IPC resolves
  * - Empty state renders when aggregation has zero occurrences
- * - Populated state renders summary cards, time-series, pipeline table,
- *   agent chart, subscription table, and chain list
+ * - Populated state renders summary cards, time-series, pipeline table, and
+ *   agent chart (the per-subscription table and per-chain list were dropped
+ *   because their content was redundant with the pipeline / agent breakdowns).
  * - Coverage warnings banner renders when warnings are present
  * - 'CueStatsDisabled' IPC error renders the friendly disabled note
- * - Chains with multiple nodes render with correct indentation depth
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, render, screen, waitFor, within } from '@testing-library/react';
 import React from 'react';
 import { CueStats } from '../../../../renderer/components/UsageDashboard/CueStats';
 import { THEMES } from '../../../../shared/themes';
@@ -36,6 +36,13 @@ function makeTotals(overrides: Partial<CueStatsTotals> = {}): CueStatsTotals {
 	return { ...zeroTotals, ...overrides };
 }
 
+const emptyHourBuckets = Array.from({ length: 24 }, (_, hour) => ({
+	hour,
+	occurrences: 0,
+	successCount: 0,
+	failureCount: 0,
+}));
+
 const emptyAggregation: CueStatsAggregation = {
 	timeRange: 'week',
 	windowStartMs: 0,
@@ -44,6 +51,8 @@ const emptyAggregation: CueStatsAggregation = {
 	byPipeline: [],
 	byAgent: [],
 	bySubscription: [],
+	byTriggerType: [],
+	byHourOfDay: emptyHourBuckets,
 	chains: [],
 	timeSeries: [],
 	bucketSizeMs: 3_600_000,
@@ -217,6 +226,25 @@ const populatedAggregation: CueStatsAggregation = {
 			outputTokens: 2_000,
 		},
 	],
+	byTriggerType: [
+		{
+			key: 'file.changed',
+			label: 'File Change',
+			totals: makeTotals({ occurrences: 7, successCount: 6, failureCount: 1 }),
+		},
+		{
+			key: 'time.heartbeat',
+			label: 'Heartbeat',
+			totals: makeTotals({ occurrences: 5, successCount: 3, failureCount: 2 }),
+		},
+	],
+	byHourOfDay: emptyHourBuckets.map((b, i) => {
+		// Seed a couple of busy hours so the chart actually paints — others
+		// stay zero. Hour 9 has a failure to exercise the warning color path.
+		if (i === 9) return { hour: 9, occurrences: 7, successCount: 5, failureCount: 2 };
+		if (i === 14) return { hour: 14, occurrences: 5, successCount: 5, failureCount: 0 };
+		return b;
+	}),
 	bucketSizeMs: 3_600_000,
 	coverageWarnings: [],
 };
@@ -367,30 +395,102 @@ describe('CueStats', () => {
 			expect(screen.getByText('Tokens by Agent')).toBeInTheDocument();
 		});
 
-		it('renders the By Subscription table with the subscriptions', async () => {
+		it('renders the failure spotlight with rows for subscriptions that failed', async () => {
 			render(<CueStats timeRange="week" theme={theme} />);
 
 			await waitFor(() => {
-				expect(screen.getByTestId('cue-stats-subscription-table')).toBeInTheDocument();
+				expect(screen.getByTestId('cue-stats-failure-spotlight')).toBeInTheDocument();
 			});
 
-			// "sub-watch-files" also appears as the root subscription name in the
-			// chains list, so scope the lookup to the subscription table.
-			const subTable = screen.getByTestId('cue-stats-subscription-table');
-			expect(within(subTable).getByText('By Subscription')).toBeInTheDocument();
-			expect(within(subTable).getByText('sub-watch-files')).toBeInTheDocument();
-			expect(within(subTable).getByText('sub-interval')).toBeInTheDocument();
+			const spotlight = screen.getByTestId('cue-stats-failure-spotlight');
+			expect(within(spotlight).getByText('Needs attention')).toBeInTheDocument();
+			// Both fixture subscriptions had failures (1 and 2) so both should appear,
+			// with the worse one (2 failures) ranked first.
+			const rows = within(spotlight).getAllByTestId('cue-stats-failure-row');
+			expect(rows).toHaveLength(2);
+			expect(within(rows[0]).getByText('sub-interval')).toBeInTheDocument();
+			expect(within(rows[1]).getByText('sub-watch-files')).toBeInTheDocument();
 		});
 
-		it('renders the chains list with one chain entry', async () => {
+		it('renders the failure spotlight in its all-clean state when nothing failed', async () => {
+			mockGetAggregation.mockResolvedValue({
+				...populatedAggregation,
+				bySubscription: populatedAggregation.bySubscription.map((row) => ({
+					...row,
+					totals: { ...row.totals, failureCount: 0, successCount: row.totals.occurrences },
+				})),
+			});
+
 			render(<CueStats timeRange="week" theme={theme} />);
 
 			await waitFor(() => {
-				expect(screen.getByTestId('cue-stats-chains')).toBeInTheDocument();
+				expect(screen.getByTestId('cue-stats-failure-spotlight')).toBeInTheDocument();
 			});
 
-			const chains = screen.getAllByTestId('cue-stats-chain');
-			expect(chains).toHaveLength(1);
+			expect(screen.getByText('No failures')).toBeInTheDocument();
+			expect(screen.queryByTestId('cue-stats-failure-row')).not.toBeInTheDocument();
+		});
+
+		it('renders the slowest-runs leaderboard sorted by duration', async () => {
+			render(<CueStats timeRange="week" theme={theme} />);
+
+			await waitFor(() => {
+				expect(screen.getByTestId('cue-stats-slowest-runs')).toBeInTheDocument();
+			});
+
+			const slow = screen.getByTestId('cue-stats-slowest-runs');
+			const runs = within(slow).getAllByTestId('cue-stats-slow-run');
+			// Three nodes in the fixture chain; the 60s root should rank first.
+			expect(runs).toHaveLength(3);
+			expect(within(runs[0]).getByText('sub-watch-files')).toBeInTheDocument();
+			expect(within(runs[0]).getByText('1m 0s')).toBeInTheDocument();
+			expect(within(runs[1]).getByText('sub-followup')).toBeInTheDocument();
+			expect(within(runs[2]).getByText('sub-leaf')).toBeInTheDocument();
+		});
+
+		it('renders the trigger-type breakdown with one row per trigger', async () => {
+			render(<CueStats timeRange="week" theme={theme} />);
+
+			await waitFor(() => {
+				expect(screen.getByTestId('cue-stats-trigger-types')).toBeInTheDocument();
+			});
+
+			const triggers = screen.getByTestId('cue-stats-trigger-types');
+			const rows = within(triggers).getAllByTestId('cue-stats-trigger-row');
+			expect(rows).toHaveLength(2);
+			// File Change has 7 occurrences vs Heartbeat's 5, so it leads.
+			expect(within(rows[0]).getByText('File Change')).toBeInTheDocument();
+			expect(within(rows[1]).getByText('Heartbeat')).toBeInTheDocument();
+		});
+
+		it('renders 24 bars on the hour-of-day chart', async () => {
+			render(<CueStats timeRange="week" theme={theme} />);
+
+			await waitFor(() => {
+				expect(screen.getByTestId('cue-stats-hour-of-day')).toBeInTheDocument();
+			});
+
+			const bars = screen.getAllByTestId('cue-stats-hour-bar');
+			expect(bars).toHaveLength(24);
+			// Hours 0..23 each have a corresponding bar.
+			const hours = bars
+				.map((b) => b.getAttribute('data-hour'))
+				.sort((a, b) => Number(a) - Number(b));
+			expect(hours).toEqual(Array.from({ length: 24 }, (_, i) => String(i)));
+		});
+
+		it('does not render the dropped By Subscription / Chains sections', async () => {
+			// The per-subscription table and per-chain list were removed from the
+			// Cue tab; the underlying aggregation still includes them, so this
+			// guards against a regression that re-renders either section.
+			render(<CueStats timeRange="week" theme={theme} />);
+
+			await waitFor(() => {
+				expect(screen.getByTestId('cue-stats')).toBeInTheDocument();
+			});
+
+			expect(screen.queryByTestId('cue-stats-subscription-table')).not.toBeInTheDocument();
+			expect(screen.queryByTestId('cue-stats-chains')).not.toBeInTheDocument();
 		});
 
 		it('does not render the coverage warnings banner when there are no warnings', async () => {
@@ -449,40 +549,6 @@ describe('CueStats', () => {
 			expect(screen.getByText(/Usage Dashboard/)).toBeInTheDocument();
 			// The retry-style ErrorNote must NOT have rendered.
 			expect(screen.queryByTestId('cue-stats-error')).not.toBeInTheDocument();
-		});
-	});
-
-	describe('Chain rendering', () => {
-		it('renders one row per node and respects parent-child indentation depth', async () => {
-			mockGetAggregation.mockResolvedValue(populatedAggregation);
-
-			render(<CueStats timeRange="week" theme={theme} />);
-
-			await waitFor(() => {
-				expect(screen.getByTestId('cue-stats-chains')).toBeInTheDocument();
-			});
-
-			// Expand the chain so its body is rendered
-			const chainHeader = screen.getByRole('button', { name: /sub-watch-files/i });
-			await act(async () => {
-				fireEvent.click(chainHeader);
-			});
-
-			await waitFor(() => {
-				expect(screen.getByTestId('cue-stats-chain-body')).toBeInTheDocument();
-			});
-
-			const nodeRows = screen.getAllByTestId('cue-stats-chain-node');
-			expect(nodeRows).toHaveLength(3);
-
-			// Verify the depth attribute reflects the parent chain (0 → 1 → 2)
-			const depths = nodeRows.map((row) => row.getAttribute('data-depth'));
-			expect(depths).toEqual(['0', '1', '2']);
-
-			// Verify the inline padding scales with depth (12 + depth * 16)
-			expect(nodeRows[0]).toHaveStyle({ paddingLeft: '12px' });
-			expect(nodeRows[1]).toHaveStyle({ paddingLeft: '28px' });
-			expect(nodeRows[2]).toHaveStyle({ paddingLeft: '44px' });
 		});
 	});
 });

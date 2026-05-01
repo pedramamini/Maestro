@@ -21,7 +21,7 @@ src/renderer/components/UsageDashboard/
 ├── SourceDistributionChart.tsx  # Pie chart for user vs auto queries
 ├── LocationDistributionChart.tsx # Local vs remote distribution
 ├── RadialActivityChart.tsx      # Polar chart pair: hour-of-day + day-of-week (replaces flat Peak Hours)
-├── YearInPixelsStrip.tsx        # 365-day hero strip on the Overview tab
+├── YearInPixelsStrip.tsx        # Time-range-adaptive day-cell hero strip on the Overview tab (week/month/quarter/year/all)
 ├── ActivityHeatmap.tsx          # Weekly activity heatmap (GitHub-style)
 ├── WeekdayComparisonChart.tsx   # Weekday vs weekend comparison (Activity tab)
 ├── DurationTrendsChart.tsx      # Line chart for duration over time
