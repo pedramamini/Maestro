@@ -375,7 +375,6 @@ export function useDebouncedPersistence(
 				persistInternal();
 			}
 		};
-		 
 	}, []);
 
 	// Flush on visibility change (user switching away from app)
