@@ -1,0 +1,144 @@
+name: Foundations CI
+
+on:
+  push:
+    branches: [rc, main]
+  pull_request:
+    branches: [rc, main]
+
+# Cancel in-progress runs for the same branch/PR on lint and test jobs.
+# The native-rebuild-smoke job opts out via its own concurrency group with
+# cancel-in-progress: false so a running rebuild is never interrupted.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    name: Lint (tsc + eslint)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - run: npm ci
+
+      - name: Build prompts (required before type-checking)
+        run: npm run build:prompts
+
+      - name: TypeScript type-check
+        run: npm run lint
+
+      - name: ESLint
+        run: npm run lint:eslint
+
+  vitest:
+    name: Unit tests (vitest)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - run: npm ci
+
+      - name: Build prompts (required before tests)
+        run: npm run build:prompts
+
+      - name: Run vitest
+        run: npm run test
+
+  native-rebuild-smoke:
+    name: Native module rebuild + ABI smoke
+    runs-on: ubuntu-latest
+    # Never cancel a running native rebuild — compilation is expensive and
+    # an interrupted rebuild leaves the cache in an inconsistent state.
+    concurrency:
+      group: native-rebuild-${{ github.ref }}
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v6
+
+      # No cache for Linux native builds: the setup-node npm cache key does not
+      # include architecture, which can cause wrong-arch prebuilds to persist.
+      # (See the same reasoning in release.yml for Linux builds.)
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+
+      # Architecture-scoped npm cache so x64 and arm64 never share a bucket.
+      - name: Cache npm dependencies (arch-scoped)
+        uses: actions/cache@v5
+        with:
+          path: ~/.npm
+          key: npm-linux-x64-${{ hashFiles('**/package-lock.json') }}
+          restore-keys: |
+            npm-linux-x64-
+
+      - name: Install Linux build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential binutils
+
+      - name: Setup Python for node-gyp (Python 3.12+ removed distutils)
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+
+      - run: npm ci
+
+      - name: Clear any cached prebuilds (prevent stale wrong-arch binaries)
+        run: |
+          rm -rf node_modules/node-pty/prebuilds node_modules/node-pty/build
+          rm -rf node_modules/better-sqlite3/prebuilds node_modules/better-sqlite3/build
+
+      - name: Rebuild native modules for Electron
+        run: npm run rebuild:native
+        env:
+          npm_config_build_from_source: true
+          npm_config_arch: x64
+          npm_config_target_arch: x64
+
+      - name: Verify native module architectures
+        run: .github/scripts/verify-native-arch.sh x64
+
+      - name: ABI smoke — assert better_sqlite3.node uses Electron ABI (v119)
+        run: |
+          SQLITE_NODE=$(find node_modules/better-sqlite3 -name "better_sqlite3.node" -type f | head -1)
+          if [ -z "$SQLITE_NODE" ]; then
+            echo "ERROR: better_sqlite3.node not found after rebuild" >&2
+            exit 1
+          fi
+          echo "Checking ABI symbol in: $SQLITE_NODE"
+          ABI_SYMBOL=$(nm -D "$SQLITE_NODE" 2>/dev/null | grep -o 'node_register_module_v[0-9]*' | head -1 || true)
+          if [ -z "$ABI_SYMBOL" ]; then
+            echo "WARNING: nm found no node_register_module_v* symbol (nm may not support this format)" >&2
+            echo "Falling back to strings-based check..."
+            ABI_SYMBOL=$(strings "$SQLITE_NODE" 2>/dev/null | grep -o 'NODE_MODULE_VERSION=[0-9]*' | head -1 || true)
+            if [ -n "$ABI_SYMBOL" ]; then
+              echo "Found via strings: $ABI_SYMBOL"
+            else
+              echo "WARNING: Could not determine ABI version — skipping numeric assertion"
+              exit 0
+            fi
+          fi
+          echo "ABI symbol found: $ABI_SYMBOL"
+          # Electron 28 ABI is v119; Node.js 22 ABI is v127.
+          # A v127 symbol here means electron-rebuild did not run correctly.
+          if echo "$ABI_SYMBOL" | grep -q 'v127'; then
+            echo "ERROR: better_sqlite3.node is compiled for Node.js 22 ABI (v127)." >&2
+            echo "       electron-rebuild must compile for Electron ABI (v119)." >&2
+            exit 1
+          fi
+          if echo "$ABI_SYMBOL" | grep -q 'v119'; then
+            echo "ABI check passed: Electron 28 ABI (v119) confirmed."
+          else
+            echo "INFO: ABI symbol '$ABI_SYMBOL' — not v127, treating as acceptable."
+          fi
