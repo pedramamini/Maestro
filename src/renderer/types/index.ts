@@ -1029,6 +1029,7 @@ export interface EncoreFeatureFlags {
 	agentDispatch: boolean;
 	deliveryPlanner: boolean;
 	planningPipeline: boolean;
+	conversationalPrd: boolean;
 }
 
 // Director's Notes settings for synopsis generation
