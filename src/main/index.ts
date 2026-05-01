@@ -84,6 +84,7 @@ import {
 	registerPmAuditHandlers,
 	registerPmHeartbeatHandlers,
 	registerProjectRolesHandlers,
+	registerPmOrchestratorHandlers,
 	initConversationalPrdStore,
 	setupLoggerEventForwarding,
 	cleanupAllGroomingSessions,
@@ -1357,6 +1358,7 @@ function setupIpcHandlers() {
 
 	// pm-audit — rule-based in-flight work sweep (#434)
 	registerPmAuditHandlers({ settingsStore: store });
+	registerPmOrchestratorHandlers({ settingsStore: store, getMainWindow: () => mainWindow });
 
 	// pm-heartbeat — agent liveness signal for stale-claim sweeper (#435)
 	registerPmHeartbeatHandlers({ settingsStore: store });
