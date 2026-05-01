@@ -544,7 +544,7 @@ export const GroupChatInput = React.memo(function GroupChatInput({
 										);
 								}}
 								title="Annotate image"
-								className="absolute -top-1 -right-5 w-4 h-4 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+								className="absolute -top-1 -left-1 w-4 h-4 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
 								style={{
 									backgroundColor: theme.colors.bgActivity,
 									color: theme.colors.textMain,

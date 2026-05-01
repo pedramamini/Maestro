@@ -136,7 +136,7 @@ export const AnnotatorToolbar = memo(function AnnotatorToolbar({
 		<div
 			role="toolbar"
 			aria-label="Image annotator toolbar"
-			className="absolute top-4 left-1/2 z-10 flex items-center gap-1 rounded-lg px-2 py-1.5"
+			className="absolute top-4 left-1/2 z-30 flex items-center gap-1 rounded-lg px-2 py-1.5"
 			style={{
 				transform: 'translateX(-50%)',
 				backgroundColor: `${theme.colors.bgSidebar}d9`,
@@ -144,6 +144,7 @@ export const AnnotatorToolbar = memo(function AnnotatorToolbar({
 				WebkitBackdropFilter: 'blur(12px) saturate(150%)',
 				border: `1px solid ${theme.colors.border}`,
 				boxShadow: '0 8px 24px -8px rgba(0, 0, 0, 0.5)',
+				pointerEvents: 'auto',
 			}}
 			onPointerDown={(e) => e.stopPropagation()}
 			onWheel={(e) => e.stopPropagation()}

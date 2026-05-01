@@ -174,13 +174,13 @@ export const SETTINGS_METADATA: Record<string, SettingMetadata> = {
 		description:
 			'Default pen color (hex string) for the image annotator. Seeds from theme accent on first run; user-selected color persists thereafter.',
 		type: 'string',
-		default: '#ec4899',
+		default: '#9146FF',
 		category: 'appearance',
 	},
 	annotatorPenSize: {
 		description: 'Default pen size (in pixels) for the image annotator stroke.',
 		type: 'number',
-		default: 8,
+		default: 16,
 		category: 'appearance',
 	},
 	annotatorThinning: {

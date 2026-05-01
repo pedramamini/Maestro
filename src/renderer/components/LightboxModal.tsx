@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
-import { Copy, Check, Trash2 } from 'lucide-react';
+import { Copy, Check, PenLine, Trash2 } from 'lucide-react';
 import { useLayerStack } from '../contexts/LayerStackContext';
 import { MODAL_PRIORITIES } from '../constants/modalPriorities';
 import { ConfirmModal } from './ConfirmModal';
@@ -209,8 +209,28 @@ export function LightboxModal({
 				onClick={(e) => e.stopPropagation()}
 			/>
 
-			{/* Top right buttons: Copy, Delete (if available) */}
+			{/* Top right buttons: Annotate, Copy, Delete (if available) */}
 			<div className="absolute top-4 right-4 flex gap-2">
+				{/* Annotate button - only if onUpdateImage is provided */}
+				{canAnnotate && (
+					<button
+						onClick={(e) => {
+							e.stopPropagation();
+							if (image && onUpdateImage) {
+								const oldImage = image;
+								openAnnotator(oldImage, (newDataUrl) => {
+									onUpdateImage(oldImage, newDataUrl);
+									onClose();
+								});
+							}
+						}}
+						className="bg-white/10 hover:bg-white/20 text-white rounded-full p-3 backdrop-blur-sm transition-colors"
+						title={`Annotate image (${formatShortcutKeys(['Meta', 'e'])})`}
+					>
+						<PenLine className="w-5 h-5" />
+					</button>
+				)}
+
 				{/* Copy to clipboard button */}
 				<button
 					onClick={(e) => {

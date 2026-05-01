@@ -31,8 +31,8 @@ const SWATCHES: readonly string[] = [
 
 // Mirror of `src/main/stores/defaults.ts`. Keep these in lock-step.
 const ANNOTATOR_DEFAULTS = {
-	annotatorPenColor: '#ec4899',
-	annotatorPenSize: 8,
+	annotatorPenColor: '#9146FF',
+	annotatorPenSize: 16,
 	annotatorThinning: 0.5,
 	annotatorSmoothing: 0.5,
 	annotatorStreamline: 0.5,
