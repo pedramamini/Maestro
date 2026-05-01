@@ -2100,6 +2100,80 @@ describe('useDebouncedPersistence', () => {
 			expect(window.maestro.sessions.setAll).not.toHaveBeenCalled();
 		});
 
+		// Retry contract: when the IPC reports a recoverable failure, the
+		// baseline must NOT advance and isPending must NOT clear — otherwise
+		// beforeunload (which gates on isPending) would have no chance to
+		// retry, and the next debounce flush would diff against a baseline
+		// that doesn't reflect what's actually on disk.
+		it('keeps isPending true and does not advance baseline when setMany returns false', async () => {
+			const s1 = makeSession({ id: 's1', name: 'One' });
+			const initialLoadRef = makeInitialLoadRef(true);
+
+			const { result, rerender } = renderHook(
+				({ sessions }) => useDebouncedPersistence(sessions, initialLoadRef),
+				{ initialProps: { sessions: [s1] } }
+			);
+			// First flush succeeds (mock returns undefined, treated as truthy).
+			await act(async () => {
+				await vi.advanceTimersByTimeAsync(2000);
+			});
+			vi.mocked(window.maestro.sessions.setMany).mockClear();
+			expect(result.current.isPending).toBe(false);
+
+			// Next flush hits a recoverable disk error.
+			vi.mocked(window.maestro.sessions.setMany).mockResolvedValueOnce(false);
+			rerender({ sessions: [{ ...s1, name: 'Two' }] });
+			await act(async () => {
+				await vi.advanceTimersByTimeAsync(2000);
+			});
+
+			// setMany was called and returned false. isPending stays true so
+			// the next mutation OR beforeunload will retry.
+			expect(window.maestro.sessions.setMany).toHaveBeenCalledTimes(1);
+			expect(result.current.isPending).toBe(true);
+
+			// Recovery: next flush should re-ship the same dirty session
+			// because the baseline didn't advance on the previous failure.
+			vi.mocked(window.maestro.sessions.setMany).mockClear();
+			rerender({ sessions: [{ ...s1, name: 'Two' }] });
+			await act(async () => {
+				await vi.advanceTimersByTimeAsync(2000);
+			});
+			// The same session is dirty again because previouslyPersistedRef
+			// was preserved at the pre-failure baseline.
+			const [updates] = vi.mocked(window.maestro.sessions.setMany).mock.calls[0] as [
+				Session[],
+				string[],
+			];
+			expect(updates).toHaveLength(1);
+			expect(updates[0].id).toBe('s1');
+			expect(updates[0].name).toBe('Two');
+		});
+
+		it('keeps isPending true when persistInternal rejects (unexpected exception)', async () => {
+			const s1 = makeSession({ id: 's1', name: 'One' });
+			const initialLoadRef = makeInitialLoadRef(true);
+
+			const { result, rerender } = renderHook(
+				({ sessions }) => useDebouncedPersistence(sessions, initialLoadRef),
+				{ initialProps: { sessions: [s1] } }
+			);
+			await act(async () => {
+				await vi.advanceTimersByTimeAsync(2000);
+			});
+			vi.mocked(window.maestro.sessions.setMany).mockClear();
+
+			vi.mocked(window.maestro.sessions.setMany).mockRejectedValueOnce(
+				new Error('IPC channel closed')
+			);
+			rerender({ sessions: [{ ...s1, name: 'Two' }] });
+			await act(async () => {
+				await vi.advanceTimersByTimeAsync(2000);
+			});
+
+			expect(result.current.isPending).toBe(true);
+		});
+
 		it('reference-equal session prop on rerender is treated as unchanged', () => {
 			const s1 = makeSession({ id: 's1' });
 			const initialLoadRef = makeInitialLoadRef(true);
