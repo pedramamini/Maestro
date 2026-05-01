@@ -107,6 +107,7 @@ export interface SessionItemProps {
 	cueActiveRun?: boolean; // Whether a Cue pipeline is currently running for this agent
 	worktreeChildCount?: number; // Number of worktree children (used for collapsed count badge)
 	dispatchRole?: DispatchRole; // Current pipeline role assigned to this agent (#426)
+	dispatchActive?: boolean; // Whether this agent currently holds an active dispatch claim (#442)
 
 	// Handlers
 	onSelect: () => void;
@@ -152,6 +153,7 @@ export const SessionItem = memo(function SessionItem({
 	cueActiveRun,
 	worktreeChildCount,
 	dispatchRole,
+	dispatchActive,
 	onSelect,
 	onDragStart,
 	onDragOver,
@@ -310,18 +312,33 @@ export const SessionItem = memo(function SessionItem({
 							</span>
 						)}
 						{dispatchRole != null && (
-							<span className="shrink-0 flex items-center" title={`Dispatch role: ${dispatchRole}`}>
+							<span
+								className={`shrink-0 flex items-center${dispatchActive && !cueActiveRun ? ' animate-pulse' : ''}`}
+								title={`Dispatch role: ${dispatchRole}${dispatchActive ? ' (active claim)' : ''}`}
+							>
 								{dispatchRole === 'runner' && (
-									<Hammer className="w-3 h-3" style={{ color: '#a78bfa' }} />
+									<Hammer
+										className="w-3 h-3"
+										style={{ color: '#a78bfa', opacity: dispatchActive ? 1 : 0.5 }}
+									/>
 								)}
 								{dispatchRole === 'fixer' && (
-									<Wrench className="w-3 h-3" style={{ color: '#f59e0b' }} />
+									<Wrench
+										className="w-3 h-3"
+										style={{ color: '#f59e0b', opacity: dispatchActive ? 1 : 0.5 }}
+									/>
 								)}
 								{dispatchRole === 'reviewer' && (
-									<Eye className="w-3 h-3" style={{ color: '#38bdf8' }} />
+									<Eye
+										className="w-3 h-3"
+										style={{ color: '#38bdf8', opacity: dispatchActive ? 1 : 0.5 }}
+									/>
 								)}
 								{dispatchRole === 'merger' && (
-									<GitMerge className="w-3 h-3" style={{ color: '#34d399' }} />
+									<GitMerge
+										className="w-3 h-3"
+										style={{ color: '#34d399', opacity: dispatchActive ? 1 : 0.5 }}
+									/>
 								)}
 							</span>
 						)}
