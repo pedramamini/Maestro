@@ -33,3 +33,9 @@ export { ShortcutFilterButton } from './ShortcutFilterButton';
 export type { ShortcutFilterButtonProps } from './ShortcutFilterButton';
 
 export { WorktreePill } from './WorktreePill';
+
+export { EmptyState } from './EmptyState';
+export type { EmptyStateProps } from './EmptyState';
+
+export { InlineHelp } from './InlineHelp';
+export type { InlineHelpProps } from './InlineHelp';
