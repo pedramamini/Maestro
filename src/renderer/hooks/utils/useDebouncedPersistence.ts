@@ -5,6 +5,24 @@
  * During AI streaming, sessions can change 100+ times per second.
  * This hook batches those changes and writes at most once every 2 seconds.
  *
+ * Persistence path (after PR-A 1.1):
+ *  - First flush after load: ship the entire prepared sessions array via
+ *    `sessions:setAll`. This seeds the main process and establishes a
+ *    diff baseline (`previouslyPersistedRef`).
+ *  - Subsequent flushes: diff `sessionsRef.current` against the baseline
+ *    using reference equality per session, then ship only the changed
+ *    sessions plus the ids of any removed sessions via
+ *    `sessions:setMany`. With Zustand's immutable update pattern, every
+ *    mutated session gets a fresh object reference — so the diff catches
+ *    every real change in O(N) without needing per-mutator dirty
+ *    tracking.
+ *
+ * Why diff in the hook rather than tracking dirty IDs in the store: the
+ * 200+ existing `setSessions((prev) => prev.map(...))` call sites use
+ * the functional updater form. Wrapping every site to record dirty IDs
+ * would risk regressions; reference-diff captures the same information
+ * in one place with no caller-side changes.
+ *
  * Features:
  * - Configurable debounce delay (default 2 seconds)
  * - Flush-on-unmount to prevent data loss
@@ -181,6 +199,43 @@ export interface UseDebouncedPersistenceReturn {
 export const DEFAULT_DEBOUNCE_DELAY = 2000;
 
 /**
+ * Diff two sessions arrays by reference identity per element.
+ *
+ * Returns the subset of `curr` whose session reference differs from the
+ * matching id in `prev` (these are the sessions that need to be shipped),
+ * plus the ids of any sessions that existed in `prev` but not in `curr`
+ * (tombstones).
+ *
+ * Reference equality works because mutators always create new session
+ * objects via spread (`{ ...session, ...updates }`) — that's the React/Zustand
+ * paradigm and the same constraint that React.memo relies on.
+ */
+function diffSessions(
+	prev: Session[],
+	curr: Session[]
+): { dirty: Session[]; tombstones: string[] } {
+	const prevById = new Map<string, Session>();
+	for (const session of prev) prevById.set(session.id, session);
+
+	const dirty: Session[] = [];
+	const currIds = new Set<string>();
+	for (const session of curr) {
+		currIds.add(session.id);
+		const prevSession = prevById.get(session.id);
+		if (!prevSession || prevSession !== session) {
+			dirty.push(session);
+		}
+	}
+
+	const tombstones: string[] = [];
+	for (const id of prevById.keys()) {
+		if (!currIds.has(id)) tombstones.push(id);
+	}
+
+	return { dirty, tombstones };
+}
+
+/**
  * Hook that debounces session persistence to reduce disk writes.
  *
  * @param sessions - Array of sessions to persist
@@ -206,6 +261,41 @@ export function useDebouncedPersistence(
 	// Track if flush is in progress to prevent double-flushing
 	const flushingRef = useRef(false);
 
+	// Snapshot of the sessions array as it existed at the previous flush.
+	// Starts null — the first flush after load uses setAll to seed the main
+	// process and captures the snapshot. Every subsequent flush diffs the
+	// current sessions array against this snapshot and ships only the
+	// changed subset via setMany.
+	const previouslyPersistedRef = useRef<Session[] | null>(null);
+
+	/**
+	 * Run one persistence pass. Synchronous (fire-and-forget IPC) — safe
+	 * to call from unmount and beforeunload paths where we can't await.
+	 *
+	 * - First call after load: ships everything via setAll, captures the
+	 *   current sessions array as the diff baseline.
+	 * - Subsequent calls: diffs against the baseline; ships only the
+	 *   changed subset (and tombstone ids) via setMany; updates the
+	 *   baseline. No-op if nothing changed.
+	 */
+	const persistInternal = useCallback((): void => {
+		const current = sessionsRef.current;
+		if (previouslyPersistedRef.current === null) {
+			const sessionsForPersistence = current.map(prepareSessionForPersistence);
+			window.maestro.sessions.setAll(sessionsForPersistence);
+			previouslyPersistedRef.current = current;
+			return;
+		}
+		const { dirty, tombstones } = diffSessions(previouslyPersistedRef.current, current);
+		if (dirty.length === 0 && tombstones.length === 0) {
+			previouslyPersistedRef.current = current;
+			return;
+		}
+		const dirtyForPersistence = dirty.map(prepareSessionForPersistence);
+		window.maestro.sessions.setMany(dirtyForPersistence, tombstones);
+		previouslyPersistedRef.current = current;
+	}, []);
+
 	/**
 	 * Internal function to persist sessions immediately.
 	 * Called by both the debounce timer and flushNow.
@@ -215,13 +305,12 @@ export function useDebouncedPersistence(
 
 		flushingRef.current = true;
 		try {
-			const sessionsForPersistence = sessionsRef.current.map(prepareSessionForPersistence);
-			window.maestro.sessions.setAll(sessionsForPersistence);
+			persistInternal();
 			setIsPending(false);
 		} finally {
 			flushingRef.current = false;
 		}
-	}, []);
+	}, [persistInternal]);
 
 	/**
 	 * Force immediate persistence of pending changes.
@@ -283,10 +372,10 @@ export function useDebouncedPersistence(
 			// Only flush if initial load is complete - otherwise we might save an empty array
 			// before sessions have been loaded, wiping out the user's data
 			if (initialLoadComplete.current) {
-				const sessionsForPersistence = sessionsRef.current.map(prepareSessionForPersistence);
-				window.maestro.sessions.setAll(sessionsForPersistence);
+				persistInternal();
 			}
 		};
+		 
 	}, []);
 
 	// Flush on visibility change (user switching away from app)
@@ -308,9 +397,9 @@ export function useDebouncedPersistence(
 	useEffect(() => {
 		const handleBeforeUnload = () => {
 			if (isPending) {
-				// Synchronous flush for beforeunload
-				const sessionsForPersistence = sessionsRef.current.map(prepareSessionForPersistence);
-				window.maestro.sessions.setAll(sessionsForPersistence);
+				// Synchronous flush for beforeunload — uses the same dirty-only
+				// path as the debounce timer (see persistInternal).
+				persistInternal();
 			}
 		};
 
@@ -319,7 +408,7 @@ export function useDebouncedPersistence(
 		return () => {
 			window.removeEventListener('beforeunload', handleBeforeUnload);
 		};
-	}, [isPending]);
+	}, [isPending, persistInternal]);
 
 	return { isPending, flushNow };
 }

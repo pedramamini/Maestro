@@ -1847,4 +1847,269 @@ describe('useDebouncedPersistence', () => {
 			expect(tab2.name).toBe('Tab 2'); // Metadata preserved
 		});
 	});
+
+	// -----------------------------------------------------------------------
+	// PR-A 1.1: dirty-only flushes via setMany after first flush
+	//
+	// First flush after load uses setAll to seed main process and capture a
+	// diff baseline. Subsequent flushes diff sessions by reference and ship
+	// only the changed subset (and tombstone ids) via setMany.
+	// -----------------------------------------------------------------------
+	describe('dirty-only flushes (PR-A 1.1)', () => {
+		it('first flush after load uses setAll to seed the baseline', () => {
+			const s1 = makeSession({ id: 's1', name: 'One' });
+			const initialLoadRef = makeInitialLoadRef(true);
+
+			renderHook(() => useDebouncedPersistence([s1], initialLoadRef));
+			act(() => {
+				vi.advanceTimersByTime(2000);
+			});
+
+			expect(window.maestro.sessions.setAll).toHaveBeenCalledTimes(1);
+			expect(window.maestro.sessions.setMany).not.toHaveBeenCalled();
+		});
+
+		it('second flush with one mutated session ships only that session via setMany', () => {
+			const s1 = makeSession({ id: 's1', name: 'One' });
+			const s2 = makeSession({ id: 's2', name: 'Two' });
+			const initialLoadRef = makeInitialLoadRef(true);
+
+			const { rerender } = renderHook(
+				({ sessions }) => useDebouncedPersistence(sessions, initialLoadRef),
+				{ initialProps: { sessions: [s1, s2] } }
+			);
+			// First flush — establishes baseline via setAll
+			act(() => {
+				vi.advanceTimersByTime(2000);
+			});
+			expect(window.maestro.sessions.setAll).toHaveBeenCalledTimes(1);
+
+			// Mutate s1 only — Zustand pattern produces a new session object
+			const s1Updated = { ...s1, name: 'One Updated' };
+			rerender({ sessions: [s1Updated, s2] });
+			act(() => {
+				vi.advanceTimersByTime(2000);
+			});
+
+			expect(window.maestro.sessions.setMany).toHaveBeenCalledTimes(1);
+			const [updates, removeIds] = vi.mocked(window.maestro.sessions.setMany).mock.calls[0] as [
+				Session[],
+				string[],
+			];
+			expect(updates).toHaveLength(1);
+			expect(updates[0].id).toBe('s1');
+			expect(updates[0].name).toBe('One Updated');
+			expect(removeIds).toEqual([]);
+		});
+
+		it('second flush with no changes is a no-op (no IPC call)', () => {
+			const s1 = makeSession({ id: 's1', name: 'One' });
+			const initialLoadRef = makeInitialLoadRef(true);
+
+			const { rerender } = renderHook(
+				({ sessions }) => useDebouncedPersistence(sessions, initialLoadRef),
+				{ initialProps: { sessions: [s1] } }
+			);
+			act(() => {
+				vi.advanceTimersByTime(2000);
+			});
+			vi.mocked(window.maestro.sessions.setAll).mockClear();
+			vi.mocked(window.maestro.sessions.setMany).mockClear();
+
+			// Same array reference — re-render forces effect to re-run but the
+			// diff finds nothing changed.
+			rerender({ sessions: [s1] });
+			act(() => {
+				vi.advanceTimersByTime(2000);
+			});
+
+			expect(window.maestro.sessions.setAll).not.toHaveBeenCalled();
+			expect(window.maestro.sessions.setMany).not.toHaveBeenCalled();
+		});
+
+		it('second flush with one removed session ships empty updates + tombstone id', () => {
+			const s1 = makeSession({ id: 's1' });
+			const s2 = makeSession({ id: 's2' });
+			const initialLoadRef = makeInitialLoadRef(true);
+
+			const { rerender } = renderHook(
+				({ sessions }) => useDebouncedPersistence(sessions, initialLoadRef),
+				{ initialProps: { sessions: [s1, s2] } }
+			);
+			act(() => {
+				vi.advanceTimersByTime(2000);
+			});
+			vi.mocked(window.maestro.sessions.setMany).mockClear();
+
+			rerender({ sessions: [s1] });
+			act(() => {
+				vi.advanceTimersByTime(2000);
+			});
+
+			expect(window.maestro.sessions.setMany).toHaveBeenCalledTimes(1);
+			const [updates, removeIds] = vi.mocked(window.maestro.sessions.setMany).mock.calls[0] as [
+				Session[],
+				string[],
+			];
+			expect(updates).toEqual([]);
+			expect(removeIds).toEqual(['s2']);
+		});
+
+		it('second flush with one new session ships it as an update (no tombstones)', () => {
+			const s1 = makeSession({ id: 's1' });
+			const s2 = makeSession({ id: 's2' });
+			const initialLoadRef = makeInitialLoadRef(true);
+
+			const { rerender } = renderHook(
+				({ sessions }) => useDebouncedPersistence(sessions, initialLoadRef),
+				{ initialProps: { sessions: [s1] } }
+			);
+			act(() => {
+				vi.advanceTimersByTime(2000);
+			});
+			vi.mocked(window.maestro.sessions.setMany).mockClear();
+
+			rerender({ sessions: [s1, s2] });
+			act(() => {
+				vi.advanceTimersByTime(2000);
+			});
+
+			const [updates, removeIds] = vi.mocked(window.maestro.sessions.setMany).mock.calls[0] as [
+				Session[],
+				string[],
+			];
+			expect(updates).toHaveLength(1);
+			expect(updates[0].id).toBe('s2');
+			expect(removeIds).toEqual([]);
+		});
+
+		it('second flush handles mixed update + add + remove in one call', () => {
+			const s1 = makeSession({ id: 's1', name: 'Keep' });
+			const s2 = makeSession({ id: 's2', name: 'Mutate' });
+			const s3 = makeSession({ id: 's3', name: 'Drop' });
+			const initialLoadRef = makeInitialLoadRef(true);
+
+			const { rerender } = renderHook(
+				({ sessions }) => useDebouncedPersistence(sessions, initialLoadRef),
+				{ initialProps: { sessions: [s1, s2, s3] } }
+			);
+			act(() => {
+				vi.advanceTimersByTime(2000);
+			});
+			vi.mocked(window.maestro.sessions.setMany).mockClear();
+
+			const s2Updated = { ...s2, name: 'Mutated' };
+			const s4 = makeSession({ id: 's4', name: 'New' });
+			rerender({ sessions: [s1, s2Updated, s4] });
+			act(() => {
+				vi.advanceTimersByTime(2000);
+			});
+
+			const [updates, removeIds] = vi.mocked(window.maestro.sessions.setMany).mock.calls[0] as [
+				Session[],
+				string[],
+			];
+			expect(updates.map((s) => s.id).sort()).toEqual(['s2', 's4']);
+			expect(removeIds).toEqual(['s3']);
+		});
+
+		it('rapid mutations within one debounce window collapse into one setMany', () => {
+			const s1 = makeSession({ id: 's1', name: 'A' });
+			const initialLoadRef = makeInitialLoadRef(true);
+
+			const { rerender } = renderHook(
+				({ sessions }) => useDebouncedPersistence(sessions, initialLoadRef),
+				{ initialProps: { sessions: [s1] } }
+			);
+			act(() => {
+				vi.advanceTimersByTime(2000);
+			});
+			vi.mocked(window.maestro.sessions.setMany).mockClear();
+
+			// Three rapid mutations within the debounce window
+			rerender({ sessions: [{ ...s1, name: 'B' }] });
+			act(() => {
+				vi.advanceTimersByTime(500);
+			});
+			rerender({ sessions: [{ ...s1, name: 'C' }] });
+			act(() => {
+				vi.advanceTimersByTime(500);
+			});
+			rerender({ sessions: [{ ...s1, name: 'D' }] });
+			act(() => {
+				vi.advanceTimersByTime(2000);
+			});
+
+			expect(window.maestro.sessions.setMany).toHaveBeenCalledTimes(1);
+			const [updates] = vi.mocked(window.maestro.sessions.setMany).mock.calls[0] as [
+				Session[],
+				string[],
+			];
+			expect(updates[0].name).toBe('D'); // Final value wins
+		});
+
+		it('flushNow() after first flush uses setMany for dirty changes', () => {
+			const s1 = makeSession({ id: 's1', name: 'A' });
+			const initialLoadRef = makeInitialLoadRef(true);
+
+			const { result, rerender } = renderHook(
+				({ sessions }) => useDebouncedPersistence(sessions, initialLoadRef),
+				{ initialProps: { sessions: [s1] } }
+			);
+			act(() => {
+				vi.advanceTimersByTime(2000);
+			});
+			vi.mocked(window.maestro.sessions.setMany).mockClear();
+
+			rerender({ sessions: [{ ...s1, name: 'B' }] });
+			act(() => {
+				result.current.flushNow();
+			});
+
+			expect(window.maestro.sessions.setMany).toHaveBeenCalledTimes(1);
+		});
+
+		it('unmount after first flush uses setMany when dirty', () => {
+			const s1 = makeSession({ id: 's1', name: 'A' });
+			const initialLoadRef = makeInitialLoadRef(true);
+
+			const { rerender, unmount } = renderHook(
+				({ sessions }) => useDebouncedPersistence(sessions, initialLoadRef),
+				{ initialProps: { sessions: [s1] } }
+			);
+			act(() => {
+				vi.advanceTimersByTime(2000);
+			});
+			vi.mocked(window.maestro.sessions.setAll).mockClear();
+			vi.mocked(window.maestro.sessions.setMany).mockClear();
+
+			rerender({ sessions: [{ ...s1, name: 'B' }] });
+			unmount();
+
+			expect(window.maestro.sessions.setMany).toHaveBeenCalledTimes(1);
+			expect(window.maestro.sessions.setAll).not.toHaveBeenCalled();
+		});
+
+		it('reference-equal session prop on rerender is treated as unchanged', () => {
+			const s1 = makeSession({ id: 's1' });
+			const initialLoadRef = makeInitialLoadRef(true);
+
+			const { rerender } = renderHook(
+				({ sessions }) => useDebouncedPersistence(sessions, initialLoadRef),
+				{ initialProps: { sessions: [s1] } }
+			);
+			act(() => {
+				vi.advanceTimersByTime(2000);
+			});
+			vi.mocked(window.maestro.sessions.setMany).mockClear();
+
+			// Same s1 reference inside a new array — the diff sees no per-session change
+			rerender({ sessions: [s1] });
+			act(() => {
+				vi.advanceTimersByTime(2000);
+			});
+
+			expect(window.maestro.sessions.setMany).not.toHaveBeenCalled();
+		});
+	});
 });
