@@ -64,6 +64,8 @@ import { createConversationalPrdApi } from './conversationalPrd';
 import { createWorkGraphApi } from './workGraph';
 import { createPmToolsApi } from './pmTools';
 import { createPmAuditApi } from './pmAudit';
+import { createPmHeartbeatApi } from './pmHeartbeat';
+import { createPmApi } from './pm';
 
 // Expose protected methods that allow the renderer process to use
 // the ipcRenderer without exposing the entire object
@@ -246,6 +248,12 @@ contextBridge.exposeInMainWorld('maestro', {
 
 	// pm-audit API (rule-based in-flight work sweep, #434)
 	pmAudit: createPmAuditApi(),
+
+	// pm-heartbeat API (#435): agent liveness signal for stale-claim sweeper
+	pmHeartbeat: createPmHeartbeatApi(),
+
+	// PM slash-command suite (#428 + #436): /PM orchestrate, prd-*, epic-*, issue-*, standup, status
+	pm: createPmApi(),
 });
 
 // Re-export factory functions for external consumers (e.g., tests)
@@ -346,6 +354,10 @@ export {
 	createConversationalPrdApi,
 	// pm-tools
 	createPmToolsApi,
+	// pm-heartbeat
+	createPmHeartbeatApi,
+	// PM slash-command suite
+	createPmApi,
 };
 
 // Re-export types for TypeScript consumers
@@ -613,3 +625,7 @@ export type {
 	// From pmAudit
 	PmAuditApi,
 } from './pmAudit';
+export type {
+	// From pmHeartbeat
+	PmHeartbeatApi,
+} from './pmHeartbeat';
