@@ -164,7 +164,9 @@ import { startBranchHygieneCron } from './pm-branch-hygiene/cron';
 // pm-reverse-sync poller removed (#444): GitHub-as-truth, no local DB to sync to
 import { startStaleClaimSweeper } from './pm-heartbeat/stale-sweeper';
 import { startDispatchPoller, stopDispatchPoller } from './agent-dispatch/dispatch-poller';
-import { getGithubClient, getGithubClientForProject } from './agent-dispatch/github-client';
+import { createGithubAutoPickupCoordinator } from './agent-dispatch/github-auto-pickup';
+import { getGithubProjectCoordinator } from './agent-dispatch/github-project-coordinator';
+import { flushPendingWrites } from './agent-dispatch/github-pending-writes';
 import { getClaimTracker } from './agent-dispatch/claim-tracker';
 import { auditLog } from './agent-dispatch/dispatch-audit-log';
 import { executeSlot } from './agent-dispatch/slot-executor';
@@ -851,27 +853,22 @@ app.whenReady().then(async () => {
 						return;
 					}
 
-					// 3. Query GitHub Projects v2 for items that are Tasks Ready and have
-					//    no AI Assigned Slot set (i.e. unclaimed).
-					const client = getGithubClientForProject({
-						projectOwner: projectCoords.owner,
-						projectNumber: projectCoords.projectNumber,
+					// 3. Query GitHub Projects v2 through the dispatch GitHub
+					//    coordinator. This keeps GitHub reads/writes out of the
+					//    poller startup path.
+					const githubAutoPickup = createGithubAutoPickupCoordinator({
+						...projectCoords,
+						projectPath,
 					});
 					let eligibleItems;
 					let inFlightItems;
 					try {
-						eligibleItems = await client.listProjectItems({
-							statusIn: ['Tasks Ready'],
-							assignedSlotMatches: '',
-						});
+						eligibleItems = await githubAutoPickup.listTasksReadyUnassigned();
 						// Also pull items already In Progress so we can rehydrate the
 						// in-memory claim tracker after a maestro restart and re-emit
 						// claimStarted to the renderer (otherwise the role icon stops
 						// flashing even though the runner is still alive remotely).
-						inFlightItems = await client.listProjectItems({
-							statusIn: ['In Progress'],
-							assignedSlotMatches: runnerSlot.agentId,
-						});
+						inFlightItems = await githubAutoPickup.listInProgressAssignedToSlot(runnerSlot.agentId);
 					} catch (err) {
 						logger.warn(
 							`${LOG} GitHub query failed for "${projectPath}": ${err instanceof Error ? err.message : String(err)}`,
@@ -953,16 +950,6 @@ app.whenReady().then(async () => {
 					const agentConfigValues = getAgentConfigForAgent(agentDef.id);
 					const sshStore = createSshRemoteStoreAdapter(store);
 					const claimTracker = getClaimTracker();
-					let projectId: string;
-					try {
-						projectId = await client.readProjectId();
-					} catch (err) {
-						logger.warn(
-							`${LOG} Failed to read project ID for "${projectPath}": ${err instanceof Error ? err.message : String(err)}`,
-							'Startup'
-						);
-						return;
-					}
 
 					// 5. For each eligible item, claim it and spawn the runner agent.
 					let claimed = 0;
@@ -972,18 +959,10 @@ app.whenReady().then(async () => {
 							continue;
 						}
 
+						let projectId: string;
 						try {
-							// Write AI Assigned Slot to GitHub — this is the durable claim.
-							await client.setItemFieldValue(
-								projectId,
-								item.id,
-								'AI Assigned Slot',
-								runnerSlot.agentId
-							);
-							// Flip AI Status to "In Progress" so the kanban view + the
-							// poller's own statusIn filter exclude this item from being
-							// re-claimed.
-							await client.setItemFieldValue(projectId, item.id, 'AI Status', 'In Progress');
+							// Durable GitHub claim: assign runner slot and mark In Progress.
+							({ projectId } = await githubAutoPickup.claimRunnerSlot(item.id, runnerSlot.agentId));
 						} catch (err) {
 							logger.warn(
 								`${LOG} Failed to claim item ${item.id}: ${err instanceof Error ? err.message : String(err)}`,
@@ -1074,8 +1053,7 @@ app.whenReady().then(async () => {
 							sshStore,
 							releaseClaim: async (workItemId, opts) => {
 								try {
-									await client.setItemFieldValue(projectId, workItemId, 'AI Assigned Slot', '');
-									await client.setItemFieldValue(projectId, workItemId, 'AI Status', 'Tasks Ready');
+									await githubAutoPickup.releaseRunnerSlot(workItemId);
 									claimTracker.removeClaim(runnerSlot.agentId, 'runner');
 									auditLog('release', {
 										actor: opts?.actor ? String(opts.actor.id) : 'dispatch-poller',
@@ -1150,7 +1128,7 @@ app.whenReady().then(async () => {
 	// point at this Maestro install from a previous run (in-memory state was lost on
 	// restart; those claims are stale by definition).
 	if (encoreFeatures.agentDispatch || encoreFeatures.deliveryPlanner) {
-		void reconcileStaleGithubClaims();
+		void recoverGithubProjectStateOnStartup();
 	}
 
 	// Start Cue engine if the Encore Feature flag is enabled
@@ -1761,6 +1739,26 @@ function setupProcessListeners() {
 // Self-healing reconciliation (#444)
 // ---------------------------------------------------------------------------
 
+async function recoverGithubProjectStateOnStartup(): Promise<void> {
+	await flushPendingGithubWritesOnStartup();
+	await reconcileStaleGithubClaims();
+}
+
+async function flushPendingGithubWritesOnStartup(): Promise<void> {
+	const LOG = '[GithubPendingWrites]';
+	try {
+		const flushed = await flushPendingWrites(getGithubProjectCoordinator());
+		if (flushed.length > 0) {
+			logger.info(`Startup flushed ${flushed.length} pending GitHub Project write(s)`, LOG);
+		}
+	} catch (err) {
+		logger.warn(
+			`Startup pending GitHub write flush failed: ${err instanceof Error ? err.message : String(err)}`,
+			LOG
+		);
+	}
+}
+
 /**
  * On startup, release any GitHub Projects v2 items whose AI Assigned Slot
  * points at this Maestro install from a previous run.  In-memory state
@@ -1775,45 +1773,61 @@ function setupProcessListeners() {
 async function reconcileStaleGithubClaims(): Promise<void> {
 	const LOG = '[StartupReconcile]';
 	try {
-		const client = getGithubClient();
-		const projectId = await client.readProjectId();
-		const items = await client.listProjectItems({
-			// Only items with a non-empty AI Assigned Slot
-			assignedSlotMatches: ':',
-		});
+		const githubMap = store.get('projectGithubMap', {}) as Record<
+			string,
+			{ owner: string; projectNumber: number; projectTitle?: string }
+		>;
+		const projects = Object.entries(githubMap);
+		if (projects.length === 0) {
+			logger.info('Startup reconcile: no GitHub project mappings found', LOG);
+			return;
+		}
 
-		if (items.length === 0) {
+		const coordinator = getGithubProjectCoordinator();
+		const tracker = getClaimTracker();
+		let found = 0;
+		let released = 0;
+
+		for (const [projectPath, mapping] of projects) {
+			const project = {
+				projectOwner: mapping.owner,
+				projectNumber: mapping.projectNumber,
+				projectPath,
+			};
+			const snapshot = await coordinator.getBoardSnapshot(project);
+			const assignedItems = snapshot.items.filter(
+				(item) => (item.fields['AI Assigned Slot'] ?? '') !== ''
+			);
+			found += assignedItems.length;
+
+			for (const item of assignedItems) {
+				// If we already have an in-memory claim for this item, it's active — skip
+				if (tracker.getByProjectItemId(item.id)) continue;
+
+				// No in-memory claim → stale from previous run → release
+				try {
+					await coordinator.releaseItem(project, item.id, 'Tasks Ready');
+					auditLog('reconcile_stale', {
+						actor: 'startup-reconcile',
+						workItemId: item.id,
+						reason: `Startup: AI Assigned Slot was "${item.fields['AI Assigned Slot']}" but no in-memory claim — cleared`,
+					});
+					released++;
+				} catch (err) {
+					logger.warn(
+						`Startup reconcile: failed to release item ${item.id}: ${err instanceof Error ? err.message : String(err)}`,
+						LOG
+					);
+				}
+			}
+		}
+
+		if (found === 0) {
 			logger.info('Startup reconcile: no assigned slots found — nothing to release', LOG);
 			return;
 		}
 
-		logger.info(`Startup reconcile: found ${items.length} item(s) with AI Assigned Slot set`, LOG);
-		const tracker = getClaimTracker();
-		let released = 0;
-
-		for (const item of items) {
-			// If we already have an in-memory claim for this item, it's active — skip
-			if (tracker.getByProjectItemId(item.id)) continue;
-
-			// No in-memory claim → stale from previous run → release
-			try {
-				await client.setItemFieldValue(projectId, item.id, 'AI Assigned Slot', '');
-				await client.setItemFieldValue(projectId, item.id, 'AI Status', 'Tasks Ready');
-				auditLog('reconcile_stale', {
-					actor: 'startup-reconcile',
-					workItemId: item.id,
-					reason: `Startup: AI Assigned Slot was "${item.fields['AI Assigned Slot']}" but no in-memory claim — cleared`,
-				});
-				released++;
-			} catch (err) {
-				logger.warn(
-					`Startup reconcile: failed to release item ${item.id}: ${err instanceof Error ? err.message : String(err)}`,
-					LOG
-				);
-			}
-		}
-
-		logger.info(`Startup reconcile: released ${released} stale claim(s)`, LOG);
+		logger.info(`Startup reconcile: released ${released}/${found} stale claim(s)`, LOG);
 	} catch (err) {
 		logger.warn(
 			`Startup reconcile: failed — ${err instanceof Error ? err.message : String(err)}`,

@@ -350,4 +350,62 @@ describe('happy path', () => {
 			expect(result.mapping.repo).toBe('my-repo');
 		}
 	});
+
+	it('handles GitHub repo names containing dots', async () => {
+		mockExec.mockImplementation(async (cmd: string, args: string[]) => {
+			if (cmd === 'gh' && args[0] === '--version') return ok('gh version 2.40.0');
+			if (cmd === 'gh' && args[0] === 'auth') return ok('Logged in');
+			if (isGitCmd(cmd, args, 'rev-parse')) return ok('true');
+			if (isGitCmd(cmd, args, 'remote')) {
+				return ok('https://github.com/acme/docs.example.com.git');
+			}
+			if (cmd === 'gh' && args[0] === 'project' && args[1] === 'list') {
+				return ok(
+					JSON.stringify({
+						projects: [{ id: 'pid-docs', number: 12, title: 'docs.example.com AI Project' }],
+					})
+				);
+			}
+			return ok('{}');
+		});
+
+		const result = await discoverGithubProject('/some/docs');
+		expect(result.ok).toBe(true);
+		if (result.ok) {
+			expect(result.mapping.owner).toBe('acme');
+			expect(result.mapping.repo).toBe('docs.example.com');
+			expect(result.mapping.projectNumber).toBe(12);
+		}
+	});
+
+	it('matches human-readable project titles for separator and camel-case repo names', async () => {
+		mockExec.mockImplementation(async (cmd: string, args: string[]) => {
+			if (cmd === 'gh' && args[0] === '--version') return ok('gh version 2.40.0');
+			if (cmd === 'gh' && args[0] === 'auth') return ok('Logged in');
+			if (isGitCmd(cmd, args, 'rev-parse')) return ok('true');
+			if (isGitCmd(cmd, args, 'remote')) {
+				return ok('https://github.com/HumpfTech/HumpfAI_AIRouter.git');
+			}
+			if (cmd === 'gh' && args[0] === 'project' && args[1] === 'list') {
+				return ok(
+					JSON.stringify({
+						projects: [
+							{ id: 'pid-docs', number: 8, title: 'Docs Hub' },
+							{ id: 'pid-router', number: 11, title: 'AI Router' },
+						],
+					})
+				);
+			}
+			return ok('{}');
+		});
+
+		const result = await discoverGithubProject('/some/ai-router');
+		expect(result.ok).toBe(true);
+		if (result.ok) {
+			expect(result.mapping.owner).toBe('HumpfTech');
+			expect(result.mapping.repo).toBe('HumpfAI_AIRouter');
+			expect(result.mapping.projectNumber).toBe(11);
+			expect(result.mapping.projectTitle).toBe('AI Router');
+		}
+	});
 });

@@ -109,11 +109,9 @@ export async function discoverGithubProject(
 	if (!listResult.ok) return { ok: false, error: listResult.error };
 	const projects = listResult.projects;
 
-	// 3. Find matching candidates (title contains repo name, case-insensitive)
-	const repoLower = repo.toLowerCase();
-	const matches = projects.filter(
-		(p) => typeof p.title === 'string' && p.title.toLowerCase().includes(repoLower)
-	);
+	// 3. Find matching candidates. Prefer exact/raw repo title matches, then
+	// separator/camel-case aliases (e.g. HumpfAI_AIRouter -> AI Router).
+	const matches = findMatchingProjects(projects, repo);
 
 	if (matches.length === 1) {
 		const candidate = matches[0];
@@ -279,7 +277,7 @@ async function parseGitRemote(
 	const url = result.stdout.trim();
 
 	// git@github.com:owner/repo.git  or  git@github.com:owner/repo
-	const sshMatch = /git@([^:]+):([^/]+)\/([^/.]+)(?:\.git)?$/.exec(url);
+	const sshMatch = /^git@([^:]+):([^/]+)\/([^/]+?)(?:\.git)?\/?$/.exec(url);
 	if (sshMatch) {
 		const host = sshMatch[1];
 		if (!host.includes('github.com')) {
@@ -296,7 +294,7 @@ async function parseGitRemote(
 	}
 
 	// https://github.com/owner/repo.git  or  https://github.com/owner/repo
-	const httpsMatch = /https?:\/\/([^/]+)\/([^/]+)\/([^/.]+)(?:\.git)?$/.exec(url);
+	const httpsMatch = /^https?:\/\/([^/]+)\/([^/]+)\/([^/]+?)(?:\.git)?\/?$/.exec(url);
 	if (httpsMatch) {
 		const host = httpsMatch[1];
 		if (!host.includes('github.com')) {
@@ -320,6 +318,73 @@ async function parseGitRemote(
 			detail: `Unrecognised git remote URL format: "${url}"`,
 		},
 	};
+}
+
+function findMatchingProjects(projects: RawProject[], repo: string): RawProject[] {
+	const scored = projects
+		.map((project) => ({ project, score: scoreProjectMatch(project.title, repo) }))
+		.filter((entry) => entry.score > 0);
+
+	if (scored.length === 0) return [];
+
+	const topScore = Math.max(...scored.map((entry) => entry.score));
+	return scored.filter((entry) => entry.score === topScore).map((entry) => entry.project);
+}
+
+function scoreProjectMatch(title: string, repo: string): number {
+	if (typeof title !== 'string') return 0;
+
+	const titleLower = title.toLowerCase();
+	const repoLower = repo.toLowerCase();
+	if (titleLower.includes(repoLower)) return 100;
+
+	const titleCompact = compactForMatch(title);
+	const repoCompact = compactForMatch(repo);
+	if (repoCompact && titleCompact.includes(repoCompact)) return 95;
+
+	const aliases = buildRepoAliases(repo);
+	for (const alias of aliases) {
+		if (alias.compact && titleCompact.includes(alias.compact)) {
+			return alias.score;
+		}
+	}
+
+	return 0;
+}
+
+function buildRepoAliases(repo: string): Array<{ compact: string; score: number }> {
+	const tokens = tokenizeForMatch(repo);
+	const aliases: Array<{ compact: string; score: number }> = [];
+	const seen = new Set<string>();
+
+	for (let start = 0; start < tokens.length; start += 1) {
+		const suffix = tokens.slice(start);
+		if (suffix.length === 0) continue;
+		if (suffix.length === 1 && suffix[0].length < 3) continue;
+
+		const compact = suffix.join('');
+		if (seen.has(compact)) continue;
+		seen.add(compact);
+		aliases.push({
+			compact,
+			score: 40 + suffix.length,
+		});
+	}
+
+	return aliases.sort((a, b) => b.score - a.score);
+}
+
+function compactForMatch(value: string): string {
+	return tokenizeForMatch(value).join('');
+}
+
+function tokenizeForMatch(value: string): string[] {
+	return value
+		.replace(/([a-z0-9])([A-Z])/g, '$1 $2')
+		.replace(/([A-Z]+)([A-Z][a-z])/g, '$1 $2')
+		.toLowerCase()
+		.split(/[^a-z0-9]+/)
+		.filter(Boolean);
 }
 
 export interface RawProject {
