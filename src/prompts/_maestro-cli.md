@@ -8,6 +8,8 @@ Maestro provides a command-line interface (`maestro-cli`) that you can use to in
 
 Add `--json` for machine-readable output and `-v` / `--verbose` for descriptions where supported. Prefer the CLI over telling the user to click through the UI — every setting and feature is reachable through it.
 
+Remote/SSH agents: `maestro-cli` normally discovers the running Maestro app from the local host's discovery file. Maestro injects `MAESTRO_CLI_BASE_URL` into spawned agents when the web server is running so CLI commands target the central Maestro service instead of the SSH host's localhost. If that variable is missing in a remote shell, set it to the central Maestro web URL including its security token before invoking CLI commands. Without that bridge, do not fake Maestro state by writing files directly.
+
 ### Settings Management
 
 Read or change any Maestro setting or per-agent configuration. Changes take effect instantly in the running desktop app — no restart required.

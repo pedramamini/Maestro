@@ -76,9 +76,16 @@ export interface PmWorkUpdateOptions {
 }
 
 function getBaseUrl(): string {
+	const envBaseUrl = process.env.MAESTRO_CLI_BASE_URL?.trim();
+	if (envBaseUrl) {
+		return `${envBaseUrl.replace(/\/+$/, '')}/api/work-graph`;
+	}
+
 	const info = readCliServerInfo();
 	if (!info) {
-		throw new Error('Maestro desktop app is not running');
+		throw new Error(
+			'Maestro desktop app is not running. For remote/SSH agents, set MAESTRO_CLI_BASE_URL to the running Maestro web URL including its security token.'
+		);
 	}
 	if (!isCliServerRunning()) {
 		throw new Error('Maestro discovery file is stale (app may have crashed)');

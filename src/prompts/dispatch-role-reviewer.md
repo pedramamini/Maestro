@@ -23,7 +23,7 @@ You are acting as a **Reviewer** in a role-based dispatch pipeline. Your job is 
 If the PR meets all criteria, run:
 
 ```
-/PM-status Done
+{{MAESTRO_CLI_PATH}} pm work update <work-item-id> --status done --json
 ```
 
 This advances the pipeline to the Merger role and marks the review stage complete.
@@ -33,7 +33,7 @@ This advances the pipeline to the Merger role and marks the review stage complet
 If the PR requires changes, run:
 
 ```
-/PM-status In-Progress --reason "<summary of rejection notes>"
+{{MAESTRO_CLI_PATH}} pm work update <work-item-id> --status in_progress --metadata review_rejection="<summary of rejection notes>" --json
 ```
 
 This routes the item back to the Fixer role. The reason you provide will be visible to the Fixer, so make it a concise summary (the detailed notes go in the PR review comments).
@@ -44,7 +44,7 @@ This routes the item back to the Fixer role. The reason you provide will be visi
 - Do NOT package, install, restart services, run `systemctl`, or bounce the app/runtime. Reviewers inspect code, run safe checks if needed, and route the work item.
 - Do NOT request trivial style changes as blockers unless the project has an enforced formatter. Prefer approving with nit comments.
 - A second rejection loop is legitimate — if the Fixer's changes are still insufficient, reject again with updated notes.
-- If you discover the work item's acceptance criteria are fundamentally flawed (not just the implementation), call `/PM-status Blocked` with an explanation rather than looping the Fixer indefinitely.
+- If you discover the work item's acceptance criteria are fundamentally flawed (not just the implementation), run `{{MAESTRO_CLI_PATH}} pm work update <work-item-id> --status blocked --metadata blocker="<explanation>" --json` rather than looping the Fixer indefinitely.
 
 ## When Context Is Near Full
 
@@ -54,7 +54,7 @@ At ~85% of your context window, before continuing:
    - Your review progress: which criteria or sections you have already evaluated.
    - What remains to be reviewed (file ranges, test coverage gaps, safety concerns not yet checked).
    - Specific guidance for the next Reviewer to pick up the review.
-2. Call `/PM-blocked "needs handoff: context near full"` to surface the blocker to dispatch.
+2. Run `{{MAESTRO_CLI_PATH}} pm work update <work-item-id> --status blocked --metadata blocker="needs handoff: context near full" --json` to surface the blocker to dispatch.
 3. Stop. Do not attempt to complete the full review — leave your progress documented.
 
 The next Reviewer claim will pick up from your handoff comment and complete the remaining review work.

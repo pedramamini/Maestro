@@ -25,6 +25,7 @@ import * as path from 'path';
 import { app, BrowserWindow } from 'electron';
 import type { DispatchRole, RoleSlotAssignment } from '../../shared/project-roles-types';
 import type { WorkItem, WorkGraphActor } from '../../shared/work-graph-types';
+import { substituteTemplateVariables } from '../../shared/templateVariables';
 import { logger } from '../utils/logger';
 import { buildAgentArgs, applyAgentConfigOverrides } from '../utils/agent-args';
 import { wrapSpawnWithSsh } from '../utils/ssh-spawn-wrapper';
@@ -188,6 +189,8 @@ export interface SlotExecutorContext {
 	processManager: SlotExecutorProcessManager;
 	/** SSH settings store — required when session has SSH remote enabled. */
 	sshStore?: SshRemoteSettingsStore | null;
+	/** Central Maestro web URL for CLI/API calls from local or SSH-spawned agents. */
+	maestroCliBaseUrl?: string | null;
 	/**
 	 * Called when the work item should be released after execution.
 	 */
@@ -282,6 +285,7 @@ export async function executeSlot(ctx: SlotExecutorContext): Promise<SlotExecuto
 		agentConfigValues,
 		processManager,
 		sshStore,
+		maestroCliBaseUrl,
 		releaseClaim,
 		advancePipeline,
 		auditLog,
@@ -306,7 +310,7 @@ export async function executeSlot(ctx: SlotExecutorContext): Promise<SlotExecuto
 
 	// 1. Build prompt from role template + work item context
 	const templatePrompt = loadRolePromptTemplate(role);
-	const prompt = buildPrompt(templatePrompt, workItem);
+	const prompt = buildPrompt(templatePrompt, workItem, agentId, role, sessionConfig.toolType);
 
 	// 2. Build agent args
 	const baseArgs = buildAgentArgs(agentDef as Parameters<typeof buildAgentArgs>[0], {
@@ -338,6 +342,12 @@ export async function executeSlot(ctx: SlotExecutorContext): Promise<SlotExecuto
 	let resolvedCommand = sessionConfig.customPath || agentDef.path || agentDef.command;
 	let resolvedCwd = workItem.projectPath;
 	let resolvedEnvVars = configResolution.effectiveCustomEnvVars;
+	if (maestroCliBaseUrl && !resolvedEnvVars?.MAESTRO_CLI_BASE_URL) {
+		resolvedEnvVars = {
+			...(resolvedEnvVars || {}),
+			MAESTRO_CLI_BASE_URL: maestroCliBaseUrl,
+		};
+	}
 	let sshStdinScript: string | undefined;
 	let resolvedPrompt: string | undefined = prompt;
 
@@ -561,11 +571,28 @@ export async function executeSlot(ctx: SlotExecutorContext): Promise<SlotExecuto
 // Prompt builder
 // ---------------------------------------------------------------------------
 
-function buildPrompt(template: string, workItem: WorkItem): string {
-	const parts: string[] = [template.trim()];
+function buildPrompt(
+	template: string,
+	workItem: WorkItem,
+	agentId: string,
+	role: DispatchRole,
+	toolType: string
+): string {
+	const renderedTemplate = substituteTemplateVariables(template.trim(), {
+		session: {
+			id: agentId,
+			name: `${role} slot`,
+			toolType,
+			cwd: workItem.projectPath,
+			projectRoot: workItem.projectPath,
+			fullPath: workItem.projectPath,
+		},
+	});
+	const parts: string[] = [renderedTemplate];
 
 	parts.push('');
 	parts.push('## Work Item');
+	parts.push(`**ID:** ${workItem.id}`);
 	parts.push(`**Title:** ${workItem.title}`);
 	if (workItem.description) {
 		parts.push('');

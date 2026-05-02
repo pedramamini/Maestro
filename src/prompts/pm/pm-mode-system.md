@@ -136,8 +136,8 @@ Filter: Work Graph `status = ready`, not currently claimed, no unresolved depend
 
 ### "Claim" / "Start working on task N"
 
-1. Verify the Work Graph item exists and is `ready` with `/PM issue-show <id>` or `maestro-cli fleet board --project <path> --json`.
-2. Create/update the Work Graph claim for the runner slot with `/PM issue-start <id>` or `maestro-cli fleet claim <workItemId> --to <fleetEntryId> --json`.
+1. Verify the Work Graph item exists and is `ready` with `/PM issue-show <id>` or `{{MAESTRO_CLI_PATH}} fleet board --project <path> --json`.
+2. Create/update the Work Graph claim for the runner slot with `/PM issue-start <id>` or `{{MAESTRO_CLI_PATH}} fleet claim <workItemId> --to <fleetEntryId> --json`.
 3. Ensure heartbeat/expiry is active.
 4. See handbook/05-dispatch-claim.md.
 
@@ -157,7 +157,7 @@ Filter: Work Graph `status = ready`, not currently claimed, no unresolved depend
 
 ### "Audit" / "Check for stale claims"
 
-1. Query active Work Graph claims with PM audit/health or `maestro-cli fleet board --project <path> --json`.
+1. Query active Work Graph claims with PM audit/health or `{{MAESTRO_CLI_PATH}} fleet board --project <path> --json`.
 2. For each, check heartbeat/expiry. If stale (>5 min), flag as potentially stuck.
 3. Offer to release stale claims and reset item status to `ready`.
 4. See handbook/08-blocked-and-recovery.md.

@@ -270,6 +270,7 @@ export function registerAllHandlers(deps: HandlerDependencies): void {
 		settingsStore: deps.settingsStore,
 		getMainWindow: deps.getMainWindow,
 		sessionsStore: deps.sessionsStore,
+		getMaestroCliBaseUrl: () => deps.getWebServer()?.getSecureUrl(),
 	});
 	registerPersistenceHandlers({
 		settingsStore: deps.settingsStore,

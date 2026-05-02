@@ -6,7 +6,7 @@ When the user asks `/PM check health`, `/PM dispatch status`, or anything about 
 >
 > The PM agent runs inside whichever runner/cwd is hosting the conversation — typically NOT on the maestro main server. That means:
 >
-> - **You CAN** query Maestro Board / Work Graph state with `/PM status`, `/PM standup`, PM audit/health, or `maestro-cli fleet board --project <path> --json` when available
+> - **You CAN** query Maestro Board / Work Graph state with `/PM status`, `/PM standup`, PM audit/health, or `{{MAESTRO_CLI_PATH}} fleet board --project <path> --json` when available
 > - **You CAN** check whether processes on **the same host you're on** are alive (`ps aux | grep`)
 > - **You CANNOT** introspect the maestro headless service, the dispatch poller, the in-memory ClaimTracker, or the renderer's claim map
 > - **You CANNOT** SSH into the maestro host unless the user explicitly grants you that access

@@ -1019,6 +1019,7 @@ app.whenReady().then(async () => {
 							agentConfigValues,
 							processManager: processManager!,
 							sshStore,
+							maestroCliBaseUrl: webServer?.getSecureUrl(),
 							releaseClaim: async (workItemId, opts) => {
 								try {
 									await localAutoPickup.releaseRunnerSlot(workItemId);
@@ -1341,6 +1342,7 @@ function setupIpcHandlers() {
 		settingsStore: store,
 		getMainWindow: () => mainWindow,
 		sessionsStore,
+		getMaestroCliBaseUrl: () => webServer?.getSecureUrl(),
 		getCueProcesses: () => {
 			// Always query the executor's active process map — processes may still be
 			// running even if the engine has been disabled (in-flight runs complete

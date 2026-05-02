@@ -63,8 +63,8 @@ Do not use GitHub issues, labels, or project-board fields as PM state.
 /PM issue-start <id>
 
 # Shell dispatch inspection/repair
-maestro-cli fleet board --project <path> --json
-maestro-cli fleet list --json
-maestro-cli fleet claim <workItemId> --to <fleetEntryId> --json
-maestro-cli fleet release <workItemId> --json
+{{MAESTRO_CLI_PATH}} fleet board --project <path> --json
+{{MAESTRO_CLI_PATH}} fleet list --json
+{{MAESTRO_CLI_PATH}} fleet claim <workItemId> --to <fleetEntryId> --json
+{{MAESTRO_CLI_PATH}} fleet release <workItemId> --json
 ```

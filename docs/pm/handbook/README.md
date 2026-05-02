@@ -70,7 +70,7 @@ Before any PM operations can run, the following must be configured:
 Use these concrete surfaces for local Work Graph reads and writes:
 
 - **Slash commands in Maestro chat**: `/PM status`, `/PM standup`, `/PM next`, `/PM prd-list`, `/PM epic-list`, `/PM epic-show <id>`, `/PM issue-show <id>`, `/PM issue-status <id>`, `/PM epic-sync <id>`, `/PM issue-sync <id>`, `/PM issue-start <id>`.
-- **Shell dispatch inspection**: `maestro-cli fleet board --project <path> --json`, `maestro-cli fleet list --json`, `maestro-cli fleet claim <workItemId> --to <fleetEntryId> --json`, `maestro-cli fleet release <workItemId> --json`.
+- **Shell dispatch inspection**: `{{MAESTRO_CLI_PATH}} fleet board --project <path> --json`, `{{MAESTRO_CLI_PATH}} fleet list --json`, `{{MAESTRO_CLI_PATH}} fleet claim <workItemId> --to <fleetEntryId> --json`, `{{MAESTRO_CLI_PATH}} fleet release <workItemId> --json`.
 - **App/preload IPC channels**: use the named `pm:*`, `delivery-planner:*`, and `agentDispatch:*` channels documented in the relevant prompt or preload surface when running inside Maestro.
 
 Markdown under `docs/pm/` is a readable local mirror/spec. Creating or editing markdown alone does not create PM work; the corresponding Work Graph item must also be created or updated.

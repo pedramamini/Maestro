@@ -51,6 +51,7 @@ type SettingsTabId =
 	| 'aicommands'
 	| 'ssh'
 	| 'environment'
+	| 'devteams'
 	| 'encore'
 	| 'prompts';
 
