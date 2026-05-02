@@ -2,7 +2,7 @@
  * Dispatch Poller (#443).
  *
  * A single long-running setInterval that fires once every `intervalMs`
- * (default: 60 s).  On each tick it:
+ * (default: 5 min).  On each tick it:
  *
  *   1. Checks whether the `agentDispatch` Encore Feature is enabled — if not,
  *      skips silently.
@@ -24,7 +24,7 @@
  */
 
 export interface DispatchPollerDeps {
-	/** How often to run the pickup pass. Default: 60 000 ms (1 minute). */
+	/** How often to run the pickup pass. Default: 300 000 ms (5 minutes). */
 	intervalMs?: number;
 	/** Returns true when the agentDispatch Encore Feature is currently enabled. */
 	isEncoreEnabled: () => boolean;
@@ -51,7 +51,7 @@ export interface DispatchPollerDeps {
  * stop it on app shutdown via `stopDispatchPoller`.
  */
 export function startDispatchPoller(deps: DispatchPollerDeps): NodeJS.Timeout {
-	const intervalMs = deps.intervalMs ?? 60_000;
+	const intervalMs = deps.intervalMs ?? 5 * 60_000;
 	const log = deps.logger ?? { info: () => undefined, warn: () => undefined };
 
 	log.info(`Dispatch poller started (intervalMs=${intervalMs})`);
