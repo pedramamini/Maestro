@@ -674,14 +674,14 @@ export function EditAgentModal({
 					</div>
 				)}
 
-				{/* Dispatch profile editor — only shown when Agent Dispatch encore feature is enabled */}
+				{/* Board runner profile editor — only shown when Agent Dispatch encore feature is enabled */}
 				{agentDispatchEnabled && (
 					<div>
 						<div
 							className="block text-xs font-bold opacity-70 uppercase mb-2"
 							style={{ color: theme.colors.textMain }}
 						>
-							Dispatch
+							Board Runner
 						</div>
 						<DispatchProfileFields
 							profile={dispatchProfileDraft}

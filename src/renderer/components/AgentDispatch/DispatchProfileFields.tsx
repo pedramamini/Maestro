@@ -2,8 +2,8 @@
  * DispatchProfileFields — shared field set for editing an AgentDispatchProfile.
  *
  * Renders:
- *   - Dev Crew eligibility toggle (fleetEnabled)
- *   - Auto-pickup toggle (autoPickupEnabled)
+ *   - Board runner toggle (fleetEnabled)
+ *   - Auto-claim toggle (autoPickupEnabled)
  *   - Max concurrent claims (numeric input)
  *   - Capability tags (chip list with add/remove)
  *   - Runner script path (text input)
@@ -90,34 +90,41 @@ export function DispatchProfileFields({
 
 	return (
 		<div className="flex flex-col gap-3">
-			{/* Dev Crew eligibility toggle */}
+			{/* Board runner toggle */}
 			{showFleetToggle && (
-				<label className="flex items-center gap-2 cursor-pointer">
+				<label className="flex items-start gap-2 cursor-pointer">
 					<input
 						type="checkbox"
 						className="rounded"
 						checked={profile.fleetEnabled ?? false}
 						onChange={(e) => onChange({ ...profile, fleetEnabled: e.target.checked })}
 					/>
-					<span className="text-sm" style={{ color: theme.colors.textMain }}>
-						Dev Crew eligible
-					</span>
-					<span className="text-xs" style={{ color: theme.colors.textDim }}>
-						(can receive Maestro Board work items)
+					<span className="min-w-0">
+						<span className="block text-sm" style={{ color: theme.colors.textMain }}>
+							Board runner
+						</span>
+						<span className="block text-xs" style={{ color: theme.colors.textDim }}>
+							Can receive Maestro Board work.
+						</span>
 					</span>
 				</label>
 			)}
 
-			{/* Auto-pickup toggle */}
-			<label className="flex items-center gap-2 cursor-pointer">
+			{/* Auto-claim toggle */}
+			<label className="flex items-start gap-2 cursor-pointer">
 				<input
 					type="checkbox"
 					className="rounded"
 					checked={profile.autoPickupEnabled}
 					onChange={(e) => onChange({ ...profile, autoPickupEnabled: e.target.checked })}
 				/>
-				<span className="text-sm" style={{ color: theme.colors.textMain }}>
-					Auto-pickup enabled
+				<span className="min-w-0">
+					<span className="block text-sm" style={{ color: theme.colors.textMain }}>
+						Auto-claim ready work
+					</span>
+					<span className="block text-xs" style={{ color: theme.colors.textDim }}>
+						When idle, this runner can claim matching ready items.
+					</span>
 				</span>
 			</label>
 

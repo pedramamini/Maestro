@@ -72,7 +72,7 @@ export function AgentDispatchProfileEditor({
 					className="font-medium text-xs uppercase tracking-wide"
 					style={{ color: theme.colors.textDim }}
 				>
-					Dispatch Profile — {entry.displayName}
+					Board Runner — {entry.displayName}
 				</span>
 				<button
 					className="p-0.5 rounded hover:opacity-70"
