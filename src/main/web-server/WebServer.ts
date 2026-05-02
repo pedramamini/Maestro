@@ -44,6 +44,7 @@ import {
 	registerConversationalPrdRoutes,
 	registerProjectRolesRoutes,
 	registerWorkGraphRoutes,
+	type WorkGraphRouteDependencies,
 } from './routes';
 import type {
 	AgentDispatchRouteDependencies,
@@ -814,7 +815,12 @@ export class WebServer {
 		this.apiRoutes.registerRoutes(this.server);
 
 		// Register local Work Graph routes for CLI and agent-accessible board updates.
-		registerWorkGraphRoutes(this.server, this.securityToken, this.rateLimitConfig);
+		registerWorkGraphRoutes(
+			this.server,
+			this.securityToken,
+			this.rateLimitConfig,
+			this.getWorkGraphRouteDeps()
+		);
 
 		// Register Agent Dispatch routes when deps have been supplied
 		if (this.agentDispatchDeps) {
@@ -1261,5 +1267,16 @@ export class WebServer {
 
 	getServer(): FastifyInstance {
 		return this.server;
+	}
+
+	private getWorkGraphRouteDeps(): WorkGraphRouteDependencies {
+		return {
+			getSettingsStore: () =>
+				this.deliveryPlannerDeps?.settingsStore ??
+				this.agentDispatchDeps?.settingsStore ??
+				this.planningPipelineDeps?.settingsStore ??
+				this.conversationalPrdDeps?.settingsStore ??
+				null,
+		};
 	}
 }

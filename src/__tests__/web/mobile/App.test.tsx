@@ -90,6 +90,7 @@ vi.mock('../../../web/main', () => ({
 // Mock useWebSocket hook
 const mockConnect = vi.fn();
 const mockSend = vi.fn(() => true);
+const mockSubscribe = vi.fn(() => true);
 const mockSendRequest = vi.fn(() => Promise.resolve({}));
 const mockDisconnect = vi.fn();
 let mockWebSocketState = 'connected';
@@ -109,6 +110,7 @@ vi.mock('../../../web/hooks/useWebSocket', () => ({
 			state: mockWebSocketState,
 			connect: mockConnect,
 			send: mockSend,
+			subscribe: mockSubscribe,
 			sendRequest: mockSendRequest,
 			disconnect: mockDisconnect,
 			error: mockWebSocketError,
@@ -1114,6 +1116,16 @@ describe('MobileApp', () => {
 			fireEvent.click(screen.getByLabelText('Agents'));
 			expect(screen.getByTestId('session-session-1')).toBeInTheDocument();
 			expect(screen.getByTestId('session-session-2')).toBeInTheDocument();
+		});
+
+		it('subscribes websocket broadcasts when active session is selected', async () => {
+			render(<MobileApp />);
+
+			await act(async () => {
+				mockHandlers.onSessionsUpdate?.([createMockSession({ id: 'session-1' })]);
+			});
+
+			expect(mockSubscribe).toHaveBeenCalledWith('session-1');
 		});
 
 		it('handles session selection', async () => {

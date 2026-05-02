@@ -1432,6 +1432,7 @@ export default function MobileApp() {
 		state: connectionState,
 		connect,
 		send,
+		subscribe,
 		sendRequest,
 		error,
 		reconnectAttempts,
@@ -1512,6 +1513,13 @@ export default function MobileApp() {
 	useEffect(() => {
 		wsSendRef.current = send;
 	}, [send]);
+
+	useEffect(() => {
+		if (!activeSessionId) return;
+		if (connectionState !== 'connected' && connectionState !== 'authenticated') return;
+
+		subscribe(activeSessionId);
+	}, [activeSessionId, connectionState, subscribe]);
 
 	// Listen for notification click events to navigate to the relevant session
 	useEffect(() => {

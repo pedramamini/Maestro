@@ -78,6 +78,12 @@ export function registerAgentDispatchRoutes(
 			},
 		},
 		async (request, reply) => {
+			const gateError = requireEncoreFeature(deps.settingsStore, 'agentDispatch');
+			if (gateError) {
+				logger.debug('agentDispatch flag off — rejecting GET board', LOG_CONTEXT);
+				return replyFeatureDisabled(reply);
+			}
+
 			try {
 				const query = request.query as Record<string, unknown> | undefined;
 				const filters = normalizeBoardFilters(query);
@@ -109,6 +115,12 @@ export function registerAgentDispatchRoutes(
 			},
 		},
 		async (_request, reply) => {
+			const gateError = requireEncoreFeature(deps.settingsStore, 'agentDispatch');
+			if (gateError) {
+				logger.debug('agentDispatch flag off — rejecting GET fleet', LOG_CONTEXT);
+				return replyFeatureDisabled(reply);
+			}
+
 			try {
 				const runtime = deps.getRuntime();
 				const data = runtime ? runtime.fleetRegistry.getEntries() : [];

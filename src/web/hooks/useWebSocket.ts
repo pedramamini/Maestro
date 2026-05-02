@@ -723,6 +723,8 @@ export interface UseWebSocketReturn {
 	authenticate: (token: string) => void;
 	/** Send a ping message */
 	ping: () => void;
+	/** Subscribe this WebSocket connection to live updates for a session */
+	subscribe: (sessionId: string) => boolean;
 	/** Send a raw message to the server */
 	send: (message: object) => boolean;
 	/** Send a request and wait for a correlated response */
@@ -1347,6 +1349,13 @@ export function useWebSocket(options: UseWebSocketOptions = {}): UseWebSocketRet
 		return false;
 	}, []);
 
+	const subscribe = useCallback(
+		(sessionId: string): boolean => {
+			return send({ type: 'subscribe', sessionId });
+		},
+		[send]
+	);
+
 	/**
 	 * Send a request and wait for a correlated response.
 	 * The server must echo back the requestId in its response.
@@ -1421,6 +1430,7 @@ export function useWebSocket(options: UseWebSocketOptions = {}): UseWebSocketRet
 		disconnect,
 		authenticate,
 		ping,
+		subscribe,
 		send,
 		sendRequest,
 	};

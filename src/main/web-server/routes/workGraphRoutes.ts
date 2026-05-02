@@ -11,8 +11,10 @@
  */
 
 import { FastifyInstance, FastifyReply } from 'fastify';
+import { requireEncoreFeature } from '../../utils/requireEncoreFeature';
 import { getWorkGraphItemStore } from '../../work-graph';
 import { logger } from '../../utils/logger';
+import type { SettingsStoreInterface } from '../../stores/types';
 import type { RateLimitConfig } from '../types';
 import type {
 	WorkGraphListResult,
@@ -26,6 +28,7 @@ import type {
 } from '../../../shared/work-graph-types';
 
 const LOG_CONTEXT = 'WebServer:WorkGraph';
+const WRITE_FEATURE_FLAG = 'deliveryPlanner';
 
 interface WorkGraphListQuery {
 	projectPath?: string;
@@ -47,14 +50,57 @@ interface WorkGraphUpdateBody {
 	expectedVersion?: number;
 }
 
+export interface WorkGraphRouteDependencies {
+	getSettingsStore: () => SettingsStoreInterface | null;
+}
+
 export function registerWorkGraphRoutes(
 	server: FastifyInstance,
 	token: string,
-	rateLimitConfig: RateLimitConfig
+	rateLimitConfig: RateLimitConfig,
+	deps: WorkGraphRouteDependencies
 ): void {
 	const workGraph = getWorkGraphItemStore();
 
+	const replyFeatureDisabled = (reply: FastifyReply) => {
+		return reply.code(403).send({
+			success: false,
+			code: 'FEATURE_DISABLED',
+			feature: WRITE_FEATURE_FLAG,
+			timestamp: Date.now(),
+		});
+	};
+
+	const requireWriteAccess = (reply: FastifyReply) => {
+		const settingsStore = deps.getSettingsStore();
+		if (!settingsStore) {
+			return replyFeatureDisabled(reply);
+		}
+		const gateError = requireEncoreFeature(settingsStore, WRITE_FEATURE_FLAG);
+		if (gateError) {
+			return replyFeatureDisabled(reply);
+		}
+		return null;
+	};
+
+	const replyStaleVersion = (reply: FastifyReply, err: StaleVersionError) => {
+		return reply.code(409).send({
+			success: false,
+			code: 'STALE_VERSION',
+			error: err.message,
+			currentVersion: err.currentVersion,
+			timestamp: Date.now(),
+		});
+	};
+
 	const handleRouteError = (reply: FastifyReply, operation: string, err: unknown) => {
+		if (isStaleVersionError(err)) {
+			logger.debug(`${operation} stale version conflict`, LOG_CONTEXT, {
+				currentVersion: err.currentVersion,
+			});
+			return replyStaleVersion(reply, err);
+		}
+
 		logger.error(`${operation} error`, LOG_CONTEXT, { error: String(err) });
 		return reply.code(500).send({
 			success: false,
@@ -95,6 +141,9 @@ export function registerWorkGraphRoutes(
 			},
 		},
 		async (request, reply) => {
+			const gate = requireWriteAccess(reply);
+			if (gate) return gate;
+
 			const input = request.body as WorkGraphCreateBody | undefined;
 			if (!input?.title || !input.projectPath || !input.gitPath || !input.type || !input.source) {
 				return reply.code(400).send({
@@ -164,6 +213,9 @@ export function registerWorkGraphRoutes(
 			},
 		},
 		async (request, reply) => {
+			const gate = requireWriteAccess(reply);
+			if (gate) return gate;
+
 			const { id } = request.params as { id?: string };
 			const input = request.body as WorkGraphUpdateBody | undefined;
 			if (!id) {
@@ -235,3 +287,17 @@ export type {
 	WorkGraphListResult,
 	WorkItem,
 };
+
+interface StaleVersionError extends Error {
+	code: 'STALE_VERSION';
+	currentVersion?: number;
+}
+
+function isStaleVersionError(err: unknown): err is StaleVersionError {
+	return (
+		typeof err === 'object' &&
+		err !== null &&
+		'code' in err &&
+		(err as { code?: unknown }).code === 'STALE_VERSION'
+	);
+}

@@ -167,6 +167,7 @@ describe('useWebSocket', () => {
 			expect(typeof result.current.disconnect).toBe('function');
 			expect(typeof result.current.authenticate).toBe('function');
 			expect(typeof result.current.ping).toBe('function');
+			expect(typeof result.current.subscribe).toBe('function');
 			expect(typeof result.current.send).toBe('function');
 		});
 
@@ -177,6 +178,7 @@ describe('useWebSocket', () => {
 			const initialDisconnect = result.current.disconnect;
 			const initialAuthenticate = result.current.authenticate;
 			const initialPing = result.current.ping;
+			const initialSubscribe = result.current.subscribe;
 			const initialSend = result.current.send;
 
 			rerender();
@@ -185,6 +187,7 @@ describe('useWebSocket', () => {
 			expect(result.current.disconnect).toBe(initialDisconnect);
 			expect(result.current.authenticate).toBe(initialAuthenticate);
 			expect(result.current.ping).toBe(initialPing);
+			expect(result.current.subscribe).toBe(initialSubscribe);
 			expect(result.current.send).toBe(initialSend);
 		});
 	});
@@ -1371,6 +1374,35 @@ describe('useWebSocket', () => {
 
 			expect(success).toBe(true);
 			expect(ws.send).toHaveBeenCalledWith(JSON.stringify({ type: 'custom', data: 'test' }));
+		});
+
+		it('sends subscribe messages when connected', () => {
+			const { result } = renderHook(() => useWebSocket());
+
+			act(() => {
+				result.current.connect();
+			});
+
+			const ws = MockWebSocket.getLastInstance();
+			act(() => {
+				ws.simulateOpen();
+				ws.simulateMessage({
+					type: 'connected',
+					clientId: 'client-123',
+					message: 'Connected',
+					authenticated: true,
+				} as ConnectedMessage);
+			});
+
+			let success = false;
+			act(() => {
+				success = result.current.subscribe('session-1');
+			});
+
+			expect(success).toBe(true);
+			expect(ws.send).toHaveBeenCalledWith(
+				JSON.stringify({ type: 'subscribe', sessionId: 'session-1' })
+			);
 		});
 
 		it('returns false when WebSocket is not connected', () => {
