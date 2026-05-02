@@ -537,6 +537,7 @@ describe('useRemoteHandlers - remote command stdin flags (integration)', () => {
 			);
 		});
 
+		expect((window as any).maestro.process.spawn).toHaveBeenCalled();
 		const spawnCall = (window as any).maestro.process.spawn.mock.calls[0][0];
 		expect(spawnCall.prompt).toBe('what do you see?');
 	});
