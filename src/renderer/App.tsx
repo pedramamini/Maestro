@@ -1315,6 +1315,9 @@ function MaestroConsoleInner() {
 		handleSkipCurrentDocument,
 		handleResumeAfterError,
 		handleAbortBatchOnError,
+		resumeAfterError: resumeAutoRunAfterError,
+		skipCurrentDocument: skipCurrentAutoRunDocument,
+		abortBatchOnError: abortAutoRunBatchOnError,
 		activeBatchSessionIds,
 		currentSessionBatchState,
 		activeBatchRunState,
@@ -1846,6 +1849,9 @@ function MaestroConsoleInner() {
 		handleAutoRunRefresh,
 		startBatchRun,
 		stopBatchRun,
+		resumeAfterError: resumeAutoRunAfterError,
+		skipCurrentDocument: skipCurrentAutoRunDocument,
+		abortBatchOnError: abortAutoRunBatchOnError,
 	});
 
 	// --- GROUP MANAGEMENT ---
