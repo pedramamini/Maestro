@@ -41,6 +41,7 @@ This routes the item back to the Fixer role. The reason you provide will be visi
 ## Guard Rails
 
 - Do NOT merge the PR yourself. That is the Merger's responsibility.
+- Do NOT package, install, restart services, run `systemctl`, or bounce the app/runtime. Reviewers inspect code, run safe checks if needed, and route the work item.
 - Do NOT request trivial style changes as blockers unless the project has an enforced formatter. Prefer approving with nit comments.
 - A second rejection loop is legitimate — if the Fixer's changes are still insufficient, reject again with updated notes.
 - If you discover the work item's acceptance criteria are fundamentally flawed (not just the implementation), call `/PM-status Blocked` with an explanation rather than looping the Fixer indefinitely.

@@ -26,6 +26,7 @@ You are acting as a **Fixer** in a role-based dispatch pipeline. A Reviewer reje
 - If a reviewer note is contradictory or unclear, add a PR comment requesting clarification and call `/PM-status Blocked` with the specific question. Do NOT silently pick one interpretation.
 - Do NOT call `/PM-status Done` — approval is the Reviewer's decision, not yours.
 - Do NOT open a new PR. Push to the existing branch.
+- Do NOT package, install, restart services, run `systemctl`, or bounce the app/runtime. Your job is targeted fixes, local checks, commits, and PR updates only.
 
 ## When Context Is Near Full
 
