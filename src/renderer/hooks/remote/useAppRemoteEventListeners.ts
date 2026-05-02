@@ -21,6 +21,7 @@ import {
 } from '../../utils/terminalTabHelpers';
 import type { Session, AITab, ToolType, Group, BatchRunConfig, BrowserTab } from '../../types';
 import { logger } from '../../utils/logger';
+import { captureException, captureMessage } from '../../utils/sentry';
 import { DEFAULT_BATCH_PROMPT } from '../batch/batchUtils';
 
 // ============================================================================
@@ -267,6 +268,9 @@ export function useAppRemoteEventListeners(deps: UseAppRemoteEventListenersDeps)
 			try {
 				listResult = await window.maestro.autorun.listDocs(folderPath, sshRemoteId);
 			} catch (error) {
+				captureException(error, {
+					extra: { sessionId, folderPath, responseChannel, sshRemoteId },
+				});
 				listResult = {
 					success: false,
 					error: error instanceof Error ? error.message : String(error),
@@ -277,6 +281,10 @@ export function useAppRemoteEventListeners(deps: UseAppRemoteEventListenersDeps)
 			// silently repoint the session at an unreadable folder and the caller
 			// gets a false-positive `{ success: true }`.
 			if (!listResult?.success) {
+				captureMessage('AutoRun listDocs returned failure', {
+					level: 'error',
+					extra: { sessionId, folderPath, responseChannel, sshRemoteId, listResult },
+				});
 				window.maestro.process.sendRemoteSetAutoRunFolderResponse(responseChannel, {
 					success: false,
 					error: listResult?.error || `Could not read folder ${folderPath}`,
@@ -319,6 +327,7 @@ export function useAppRemoteEventListeners(deps: UseAppRemoteEventListenersDeps)
 				success: true,
 			});
 		} catch (error) {
+			captureException(error, { extra: { sessionId, folderPath, responseChannel } });
 			window.maestro.process.sendRemoteSetAutoRunFolderResponse(responseChannel, {
 				success: false,
 				error: error instanceof Error ? error.message : String(error),
@@ -614,11 +623,28 @@ export function useAppRemoteEventListeners(deps: UseAppRemoteEventListenersDeps)
 				reset,
 				sshRemoteId
 			);
+			// Mirror the reset back into session state so the renderer's right
+			// panel reflects the new content immediately instead of waiting for
+			// the next refresh — and the autoRunContent stays in sync with disk.
+			if (writeResult?.success && session.autoRunSelectedFile + '.md' === filename) {
+				setSessions((prev) =>
+					prev.map((s) =>
+						s.id === sessionId
+							? {
+									...s,
+									autoRunContent: reset,
+									autoRunContentVersion: (s.autoRunContentVersion || 0) + 1,
+								}
+							: s
+					)
+				);
+			}
 			window.maestro.process.sendRemoteResetAutoRunDocTasksResponse(
 				responseChannel,
 				Boolean(writeResult?.success)
 			);
 		} catch (error) {
+			captureException(error, { extra: { sessionId, filename, responseChannel } });
 			logger.error('[Remote] Failed to reset auto-run doc tasks:', undefined, error);
 			window.maestro.process.sendRemoteResetAutoRunDocTasksResponse(responseChannel, false);
 		}
@@ -631,6 +657,9 @@ export function useAppRemoteEventListeners(deps: UseAppRemoteEventListenersDeps)
 			resumeAfterError(sessionId);
 			window.maestro.process.sendRemoteResumeAutoRunErrorResponse(responseChannel, true);
 		} catch (error) {
+			captureException(error, {
+				extra: { event: 'maestro:resumeAutoRunError', sessionId, responseChannel },
+			});
 			logger.error('[Remote] Failed to resume auto-run error:', undefined, error);
 			window.maestro.process.sendRemoteResumeAutoRunErrorResponse(responseChannel, false);
 		}
@@ -642,6 +671,9 @@ export function useAppRemoteEventListeners(deps: UseAppRemoteEventListenersDeps)
 			skipCurrentDocument(sessionId);
 			window.maestro.process.sendRemoteSkipAutoRunDocumentResponse(responseChannel, true);
 		} catch (error) {
+			captureException(error, {
+				extra: { event: 'maestro:skipAutoRunDocument', sessionId, responseChannel },
+			});
 			logger.error('[Remote] Failed to skip auto-run document:', undefined, error);
 			window.maestro.process.sendRemoteSkipAutoRunDocumentResponse(responseChannel, false);
 		}
@@ -653,6 +685,9 @@ export function useAppRemoteEventListeners(deps: UseAppRemoteEventListenersDeps)
 			abortBatchOnError(sessionId);
 			window.maestro.process.sendRemoteAbortAutoRunErrorResponse(responseChannel, true);
 		} catch (error) {
+			captureException(error, {
+				extra: { event: 'maestro:abortAutoRunError', sessionId, responseChannel },
+			});
 			logger.error('[Remote] Failed to abort auto-run error:', undefined, error);
 			window.maestro.process.sendRemoteAbortAutoRunErrorResponse(responseChannel, false);
 		}
@@ -668,6 +703,9 @@ export function useAppRemoteEventListeners(deps: UseAppRemoteEventListenersDeps)
 				Array.isArray(result?.playbooks) ? result.playbooks : []
 			);
 		} catch (error) {
+			captureException(error, {
+				extra: { event: 'maestro:listPlaybooks', sessionId, responseChannel },
+			});
 			logger.error('[Remote] Failed to list playbooks:', undefined, error);
 			window.maestro.process.sendRemoteListPlaybooksResponse(responseChannel, []);
 		}
@@ -682,6 +720,9 @@ export function useAppRemoteEventListeners(deps: UseAppRemoteEventListenersDeps)
 				result?.playbook ?? null
 			);
 		} catch (error) {
+			captureException(error, {
+				extra: { event: 'maestro:createPlaybook', sessionId, responseChannel },
+			});
 			logger.error('[Remote] Failed to create playbook:', undefined, error);
 			window.maestro.process.sendRemoteCreatePlaybookResponse(responseChannel, null);
 		}
@@ -696,6 +737,9 @@ export function useAppRemoteEventListeners(deps: UseAppRemoteEventListenersDeps)
 				result?.playbook ?? null
 			);
 		} catch (error) {
+			captureException(error, {
+				extra: { event: 'maestro:updatePlaybook', sessionId, playbookId, responseChannel },
+			});
 			logger.error('[Remote] Failed to update playbook:', undefined, error);
 			window.maestro.process.sendRemoteUpdatePlaybookResponse(responseChannel, null);
 		}
@@ -710,6 +754,15 @@ export function useAppRemoteEventListeners(deps: UseAppRemoteEventListenersDeps)
 			// the mobile UI optimistically drops the entry and the list goes stale.
 			const result = await window.maestro.playbooks.delete(sessionId, playbookId);
 			if (!result?.success) {
+				captureMessage('playbooks.delete returned failure', {
+					level: 'error',
+					extra: {
+						event: 'maestro:deletePlaybook',
+						sessionId,
+						playbookId,
+						error: result?.error,
+					},
+				});
 				logger.error('[Remote] Failed to delete playbook:', undefined, result?.error);
 			}
 			window.maestro.process.sendRemoteDeletePlaybookResponse(
@@ -717,6 +770,9 @@ export function useAppRemoteEventListeners(deps: UseAppRemoteEventListenersDeps)
 				Boolean(result?.success)
 			);
 		} catch (error) {
+			captureException(error, {
+				extra: { event: 'maestro:deletePlaybook', sessionId, playbookId, responseChannel },
+			});
 			logger.error('[Remote] Failed to delete playbook:', undefined, error);
 			window.maestro.process.sendRemoteDeletePlaybookResponse(responseChannel, false);
 		}

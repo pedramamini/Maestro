@@ -922,6 +922,14 @@ export function createProcessApi() {
 		/**
 		 * Subscribe to remote playbook CRUD from web interface (request-response).
 		 * Renderer forwards to window.maestro.playbooks.* IPC and replies on the channel.
+		 *
+		 * Failure handling: each handler acks the IPC channel with a neutral
+		 * fallback (`[]` / `null` / `false`) so the web client doesn't hang on a
+		 * regression, and rethrows the error so Sentry's global unhandled-rejection
+		 * hook still reports the cause. The web UI currently can't distinguish a
+		 * legitimate empty list from a transport failure with this shape — a
+		 * follow-up will move these to the structured `{ success, error }` payload
+		 * used by `onRemoteSetAutoRunFolder` (tracked in the AutoRun follow-up gist).
 		 */
 		onRemoteListPlaybooks: (
 			callback: (sessionId: string, responseChannel: string) => void

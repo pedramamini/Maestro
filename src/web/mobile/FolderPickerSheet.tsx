@@ -153,11 +153,27 @@ export function FolderPickerSheet({
 		setSelected(e.target.value);
 	}, []);
 
+	// Normalize a typed path the same way the tree returns `node.path`:
+	// trim leading/trailing whitespace and any trailing separators (so
+	// `/Users/me/project/` → `/Users/me/project`). Returns `''` for
+	// whitespace-only input so callers can treat it as "no selection".
+	const normalizeSelected = useCallback((raw: string | null): string => {
+		if (!raw) return '';
+		const trimmed = raw.trim();
+		if (!trimmed) return '';
+		// Strip trailing slashes/backslashes but preserve a bare root (`/` or `C:\`).
+		if (trimmed === '/' || /^[a-zA-Z]:[\\/]$/.test(trimmed)) return trimmed;
+		return trimmed.replace(/[\\/]+$/, '');
+	}, []);
+
+	const canSubmit = !!normalizeSelected(selected) && !submitting;
+
 	const handleConfirm = useCallback(async () => {
-		if (!selected || submitting) return;
+		const normalized = normalizeSelected(selected);
+		if (!normalized || submitting) return;
 		setSubmitting(true);
 		try {
-			await onConfirm(selected);
+			await onConfirm(normalized);
 			triggerHaptic(HAPTIC_PATTERNS.success);
 			handleClose();
 		} catch (err: unknown) {
@@ -166,17 +182,17 @@ export function FolderPickerSheet({
 			setError(message || 'Failed to set folder');
 			setSubmitting(false);
 		}
-	}, [selected, submitting, onConfirm, handleClose]);
+	}, [selected, submitting, onConfirm, handleClose, normalizeSelected]);
 
 	// Close on Escape; keep nested dialogs (none currently) able to intercept first
 	useEffect(() => {
 		const onKey = (e: KeyboardEvent) => {
 			if (e.key === 'Escape') handleClose();
-			if (e.key === 'Enter' && selected && !submitting) handleConfirm();
+			if (e.key === 'Enter' && canSubmit) handleConfirm();
 		};
 		document.addEventListener('keydown', onKey);
 		return () => document.removeEventListener('keydown', onKey);
-	}, [handleClose, handleConfirm, selected, submitting]);
+	}, [handleClose, handleConfirm, canSubmit]);
 
 	const renderNode = (node: FileNode, depth: number): JSX.Element | null => {
 		if (node.type !== 'folder') return null;
@@ -273,6 +289,9 @@ export function FolderPickerSheet({
 
 	const folderRows = useMemo(
 		() => tree.map((node) => renderNode(node, 0)).filter(Boolean),
+		// renderNode is recreated each render but only reads stable callbacks
+		// (handleSelect, toggleFolder via useCallback) plus the listed state.
+		// eslint-disable-next-line react-hooks/exhaustive-deps
 		[tree, expanded, selected, colors]
 	);
 
@@ -477,17 +496,17 @@ export function FolderPickerSheet({
 					<button
 						type="button"
 						onClick={handleConfirm}
-						disabled={!selected || submitting}
+						disabled={!canSubmit}
 						style={{
 							flex: 1,
 							padding: '12px',
 							borderRadius: '8px',
 							border: 'none',
-							backgroundColor: !selected || submitting ? `${colors.accent}40` : colors.accent,
+							backgroundColor: canSubmit ? colors.accent : `${colors.accent}40`,
 							color: 'white',
 							fontSize: '14px',
 							fontWeight: 600,
-							cursor: !selected || submitting ? 'not-allowed' : 'pointer',
+							cursor: canSubmit ? 'pointer' : 'not-allowed',
 						}}
 					>
 						{submitting ? 'Setting…' : 'Use this folder'}

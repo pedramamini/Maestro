@@ -112,4 +112,64 @@ describe('FolderPickerSheet typeable path input', () => {
 		fireEvent.change(input, { target: { value: '/somewhere' } });
 		expect(confirmBtn).not.toBeDisabled();
 	});
+
+	it('keeps the confirm button disabled for whitespace-only input', async () => {
+		render(
+			<FolderPickerSheet
+				sessionId="s1"
+				startPath="/Users/test/project"
+				onClose={vi.fn()}
+				onConfirm={vi.fn()}
+				sendRequest={sendRequest}
+			/>
+		);
+		const confirmBtn = await screen.findByRole('button', { name: /use this folder/i });
+		const input = screen.getByLabelText('Auto Run folder path');
+		fireEvent.change(input, { target: { value: '   ' } });
+		expect(confirmBtn).toBeDisabled();
+	});
+
+	it('strips trailing slashes and whitespace before passing to onConfirm', async () => {
+		const onConfirm = vi.fn().mockResolvedValue(undefined);
+		render(
+			<FolderPickerSheet
+				sessionId="s1"
+				startPath="/Users/test/project"
+				onClose={vi.fn()}
+				onConfirm={onConfirm}
+				sendRequest={sendRequest}
+			/>
+		);
+		const input = await screen.findByLabelText('Auto Run folder path');
+		fireEvent.change(input, { target: { value: '  /Users/test/project/playbooks/  ' } });
+
+		const confirmBtn = screen.getByRole('button', { name: /use this folder/i });
+		fireEvent.click(confirmBtn);
+
+		await waitFor(() => {
+			expect(onConfirm).toHaveBeenCalledWith('/Users/test/project/playbooks');
+		});
+	});
+
+	it('preserves a bare root path when normalizing', async () => {
+		const onConfirm = vi.fn().mockResolvedValue(undefined);
+		render(
+			<FolderPickerSheet
+				sessionId="s1"
+				startPath="/"
+				onClose={vi.fn()}
+				onConfirm={onConfirm}
+				sendRequest={sendRequest}
+			/>
+		);
+		const input = await screen.findByLabelText('Auto Run folder path');
+		fireEvent.change(input, { target: { value: '/' } });
+
+		const confirmBtn = screen.getByRole('button', { name: /use this folder/i });
+		fireEvent.click(confirmBtn);
+
+		await waitFor(() => {
+			expect(onConfirm).toHaveBeenCalledWith('/');
+		});
+	});
 });

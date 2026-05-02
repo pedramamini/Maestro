@@ -244,6 +244,14 @@ export function AutoRunInline({
 		onSelectedDocumentChange?.(selectedFile);
 	}, [selectedFile, onSelectedDocumentChange]);
 
+	// Save toast helper — declared early so the document-load effect below can
+	// surface load failures without falling into a TDZ.
+	const showSaveMessage = useCallback((text: string, type: 'success' | 'error') => {
+		setSaveMessage({ text, type });
+		if (saveMessageTimerRef.current) clearTimeout(saveMessageTimerRef.current);
+		saveMessageTimerRef.current = setTimeout(() => setSaveMessage(null), 2500);
+	}, []);
+
 	// Load content whenever the selected file changes.
 	useEffect(() => {
 		if (!selectedFile) return;
@@ -262,10 +270,13 @@ export function AutoRunInline({
 				undoStackRef.current = [];
 				redoStackRef.current = [];
 				setHistoryTick((t) => t + 1);
-			} catch {
+			} catch (err) {
 				if (cancelled) return;
-				setSavedContent('');
-				setLocalContent('');
+				// Don't clear the buffers on transient failure — wiping a valid
+				// in-memory document on a network hiccup creates an
+				// accidental-overwrite path. Surface the error and keep what we have.
+				console.error('[AutoRunInline] get_auto_run_document failed', err);
+				showSaveMessage('Failed to load document', 'error');
 			} finally {
 				if (!cancelled) setIsLoadingDoc(false);
 			}
@@ -273,7 +284,7 @@ export function AutoRunInline({
 		return () => {
 			cancelled = true;
 		};
-	}, [sessionId, selectedFile, sendRequest]);
+	}, [sessionId, selectedFile, sendRequest, showSaveMessage]);
 
 	// Auto-switch to preview when a run starts; remember the previous mode and
 	// restore it when the run ends (matches desktop AutoRun.tsx behaviour).
@@ -297,12 +308,6 @@ export function AutoRunInline({
 		},
 		[]
 	);
-
-	const showSaveMessage = useCallback((text: string, type: 'success' | 'error') => {
-		setSaveMessage({ text, type });
-		if (saveMessageTimerRef.current) clearTimeout(saveMessageTimerRef.current);
-		saveMessageTimerRef.current = setTimeout(() => setSaveMessage(null), 2500);
-	}, []);
 
 	const pushHistory = useCallback((value: string) => {
 		undoStackRef.current.push(value);
@@ -362,7 +367,8 @@ export function AutoRunInline({
 				triggerHaptic(HAPTIC_PATTERNS.error);
 				showSaveMessage('Save failed', 'error');
 			}
-		} catch {
+		} catch (err) {
+			console.error('[AutoRunInline] save failed', err);
 			triggerHaptic(HAPTIC_PATTERNS.error);
 			showSaveMessage('Save failed', 'error');
 		} finally {
@@ -410,10 +416,15 @@ export function AutoRunInline({
 				// Server-side reset endpoint as fallback.
 				const serverReset = await resetDocumentTasks(sessionId, `${selectedFile}.md`);
 				if (serverReset) {
+					// Server already wrote the reset; keep local + savedContent in sync
+					// so isDirty doesn't show stale "unsaved changes" and Revert
+					// doesn't restore the old checked-task content.
+					setSavedContent(reset);
 					await loadDocuments(sessionId);
 				}
 			}
-		} catch {
+		} catch (err) {
+			console.error('[AutoRunInline] reset failed', err);
 			triggerHaptic(HAPTIC_PATTERNS.error);
 			showSaveMessage('Reset failed', 'error');
 		} finally {
@@ -482,8 +493,9 @@ export function AutoRunInline({
 					triggerHaptic(HAPTIC_PATTERNS.tap);
 					void loadDocuments(sessionId);
 				}
-			} catch {
-				/* leave the local edit; user can save manually */
+			} catch (err) {
+				// Leave the local edit so the user can save manually.
+				console.error('[AutoRunInline] auto-save on toggle failed', err);
 			}
 		},
 		[
@@ -521,7 +533,8 @@ export function AutoRunInline({
 				triggerHaptic(HAPTIC_PATTERNS.error);
 				showSaveMessage('Could not create document', 'error');
 			}
-		} catch {
+		} catch (err) {
+			console.error('[AutoRunInline] create document failed', err);
 			triggerHaptic(HAPTIC_PATTERNS.error);
 			showSaveMessage('Could not create document', 'error');
 		} finally {

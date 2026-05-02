@@ -34,6 +34,7 @@ import path from 'path';
 import fs from 'fs/promises';
 import { WebSocket } from 'ws';
 import { logger } from '../../utils/logger';
+import { captureException } from '../../utils/sentry';
 import type {
 	AutoRunDocument,
 	AutoRunState,
@@ -335,6 +336,24 @@ export class WebSocketMessageHandler {
 	 */
 	private sendError(client: WebClient, message: string, extra?: Record<string, unknown>): void {
 		this.send(client, { type: 'error', message, ...extra });
+	}
+
+	/**
+	 * Report a handler exception to Sentry and send an error response. Use in
+	 * `.catch(...)` blocks where we'd otherwise silently swallow the cause —
+	 * lets us keep the user-facing message tight while preserving production
+	 * diagnostics.
+	 */
+	private reportHandlerError(
+		client: WebClient,
+		error: unknown,
+		handler: string,
+		extra: Record<string, unknown>,
+		userMessagePrefix: string
+	): void {
+		const err = error instanceof Error ? error : new Error(String(error));
+		captureException(err, { extra: { area: 'web-server', handler, ...extra } });
+		this.sendError(client, `${userMessagePrefix}: ${err.message}`);
 	}
 
 	/**
@@ -1538,8 +1557,12 @@ export class WebSocketMessageHandler {
 	private handleSetAutoRunFolder(client: WebClient, message: WebClientMessage): void {
 		const sessionId = message.sessionId as string;
 		const folderPath = message.folderPath as string;
+		// Avoid logging the raw folder path: it can contain user/home/project
+		// identifiers that count as PII in production logs. The basename is
+		// usually enough for debugging without leaking the full path.
+		const folderPathHint = typeof folderPath === 'string' ? path.basename(folderPath) : '<invalid>';
 		logger.info(
-			`[Web] Received set_auto_run_folder message: session=${sessionId}, folderPath=${folderPath}`,
+			`[Web] Received set_auto_run_folder message: session=${sessionId}, folderBasename=${folderPathHint}, folderPathLength=${folderPath?.length ?? 0}`,
 			LOG_CONTEXT
 		);
 
@@ -1571,7 +1594,16 @@ export class WebSocketMessageHandler {
 				});
 			})
 			.catch((error) => {
-				this.sendError(client, `Failed to set Auto Run folder: ${error.message}`);
+				const err = error instanceof Error ? error : new Error(String(error));
+				captureException(err, {
+					extra: {
+						area: 'web-server',
+						handler: 'set_auto_run_folder',
+						sessionId,
+						requestId: message.requestId,
+					},
+				});
+				this.sendError(client, `Failed to set Auto Run folder: ${err.message}`);
 			});
 	}
 
@@ -1979,7 +2011,7 @@ export class WebSocketMessageHandler {
 		if (!this.isValidFilename(filename)) {
 			this.sendError(
 				client,
-				'Invalid filename: must not contain path separators or traversal sequences'
+				'Invalid filename: must not contain `..` traversal segments, backslashes, or absolute paths (POSIX `/` or Windows drive-letter). Forward-slash subpaths are allowed.'
 			);
 			return;
 		}
@@ -2030,7 +2062,7 @@ export class WebSocketMessageHandler {
 		if (!this.isValidFilename(filename)) {
 			this.sendError(
 				client,
-				'Invalid filename: must not contain path separators or traversal sequences'
+				'Invalid filename: must not contain `..` traversal segments, backslashes, or absolute paths (POSIX `/` or Windows drive-letter). Forward-slash subpaths are allowed.'
 			);
 			return;
 		}
@@ -2138,7 +2170,13 @@ export class WebSocketMessageHandler {
 				});
 			})
 			.catch((error) => {
-				this.sendError(client, `Failed to reset auto-run doc tasks: ${error.message}`);
+				this.reportHandlerError(
+					client,
+					error,
+					'reset_auto_run_doc_tasks',
+					{ sessionId, filename, requestId: message.requestId },
+					'Failed to reset auto-run doc tasks'
+				);
 			});
 	}
 
@@ -2166,7 +2204,13 @@ export class WebSocketMessageHandler {
 				});
 			})
 			.catch((error) => {
-				this.sendError(client, `Failed to resume auto-run: ${error.message}`);
+				this.reportHandlerError(
+					client,
+					error,
+					'resume_auto_run_error',
+					{ sessionId, requestId: message.requestId },
+					'Failed to resume auto-run'
+				);
 			});
 	}
 
@@ -2195,7 +2239,13 @@ export class WebSocketMessageHandler {
 				});
 			})
 			.catch((error) => {
-				this.sendError(client, `Failed to skip auto-run document: ${error.message}`);
+				this.reportHandlerError(
+					client,
+					error,
+					'skip_auto_run_document',
+					{ sessionId, requestId: message.requestId },
+					'Failed to skip auto-run document'
+				);
 			});
 	}
 
@@ -2223,7 +2273,13 @@ export class WebSocketMessageHandler {
 				});
 			})
 			.catch((error) => {
-				this.sendError(client, `Failed to abort auto-run: ${error.message}`);
+				this.reportHandlerError(
+					client,
+					error,
+					'abort_auto_run_error',
+					{ sessionId, requestId: message.requestId },
+					'Failed to abort auto-run'
+				);
 			});
 	}
 
@@ -2251,7 +2307,13 @@ export class WebSocketMessageHandler {
 				});
 			})
 			.catch((error) => {
-				this.sendError(client, `Failed to list playbooks: ${error.message}`);
+				this.reportHandlerError(
+					client,
+					error,
+					'list_playbooks',
+					{ sessionId, requestId: message.requestId },
+					'Failed to list playbooks'
+				);
 			});
 	}
 
@@ -2329,7 +2391,13 @@ export class WebSocketMessageHandler {
 				});
 			})
 			.catch((error) => {
-				this.sendError(client, `Failed to create playbook: ${error.message}`);
+				this.reportHandlerError(
+					client,
+					error,
+					'create_playbook',
+					{ sessionId, requestId: message.requestId },
+					'Failed to create playbook'
+				);
 			});
 	}
 
@@ -2425,7 +2493,13 @@ export class WebSocketMessageHandler {
 				});
 			})
 			.catch((error) => {
-				this.sendError(client, `Failed to update playbook: ${error.message}`);
+				this.reportHandlerError(
+					client,
+					error,
+					'update_playbook',
+					{ sessionId, playbookId, requestId: message.requestId },
+					'Failed to update playbook'
+				);
 			});
 	}
 
@@ -2455,7 +2529,13 @@ export class WebSocketMessageHandler {
 				});
 			})
 			.catch((error) => {
-				this.sendError(client, `Failed to delete playbook: ${error.message}`);
+				this.reportHandlerError(
+					client,
+					error,
+					'delete_playbook',
+					{ sessionId, playbookId, requestId: message.requestId },
+					'Failed to delete playbook'
+				);
 			});
 	}
 

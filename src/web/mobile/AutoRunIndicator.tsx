@@ -81,9 +81,13 @@ export function AutoRunIndicator({
 	const badgeTextColor = errorPaused ? colors.error : isStopping ? colors.warning : colors.accent;
 	const titleText = errorPaused ? 'Auto Run Paused' : isStopping ? 'Stopping...' : 'AutoRun Active';
 
-	const stopHandlerProvided = Boolean(onResume || onSkipDocument || onAbort);
-	const showRecoveryActions = errorPaused && stopHandlerProvided;
-	const canResume = errorRecoverable !== false && Boolean(onResume);
+	// Compute per-button visibility first so we can gate the wrapper on at
+	// least one visible action; otherwise a paused run with only a non-recoverable
+	// onResume handler would render an empty actions row.
+	const canResume = errorPaused && errorRecoverable !== false && Boolean(onResume);
+	const canSkip = errorPaused && Boolean(onSkipDocument);
+	const canAbort = errorPaused && Boolean(onAbort);
+	const showRecoveryActions = canResume || canSkip || canAbort;
 
 	return (
 		<div
@@ -301,7 +305,7 @@ export function AutoRunIndicator({
 									{pendingAction === 'resume' ? 'Resuming...' : 'Resume'}
 								</button>
 							)}
-							{onSkipDocument && (
+							{canSkip && (
 								<button
 									onClick={(e) => {
 										e.stopPropagation();
@@ -327,7 +331,7 @@ export function AutoRunIndicator({
 									{pendingAction === 'skip' ? 'Skipping...' : 'Skip Doc'}
 								</button>
 							)}
-							{onAbort && (
+							{canAbort && (
 								<button
 									onClick={(e) => {
 										e.stopPropagation();

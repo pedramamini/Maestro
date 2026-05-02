@@ -827,6 +827,8 @@ export class WebServer {
 				sessionId: string,
 				config: Parameters<CallbackRegistry['configureAutoRun']>[1]
 			) => this.callbackRegistry.configureAutoRun(sessionId, config),
+			setSessionAutoRunFolder: async (sessionId: string, folderPath: string) =>
+				this.callbackRegistry.setSessionAutoRunFolder(sessionId, folderPath),
 			getSessions: () => this.callbackRegistry.getSessions(),
 			getLiveSessionInfo: (sessionId: string) =>
 				this.liveSessionManager.getLiveSessionInfo(sessionId),

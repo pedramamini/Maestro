@@ -139,12 +139,14 @@ export function AutoRunDocumentViewer({
 		};
 	}, []);
 
-	// Focus textarea when entering edit mode
+	// Focus textarea when entering edit mode — but skip when search is open,
+	// otherwise the search-toggle path that flips isEditing to true would steal
+	// focus from the search input and start typing into the document.
 	useEffect(() => {
-		if (isEditing && textareaRef.current) {
+		if (isEditing && !searchOpen && textareaRef.current) {
 			textareaRef.current.focus();
 		}
-	}, [isEditing]);
+	}, [isEditing, searchOpen]);
 
 	const showSaveMessage = useCallback((text: string, type: 'success' | 'error') => {
 		setSaveMessage({ text, type });
