@@ -26,6 +26,7 @@ import {
 import { useSettings } from '../../../hooks';
 import type { Theme } from '../../../types';
 import { ToggleButtonGroup } from '../../ToggleButtonGroup';
+import { WorktreePill } from '../../ui/WorktreePill';
 import { FontConfigurationPanel } from '../../FontConfigurationPanel';
 import { IgnorePatternsSection } from '../IgnorePatternsSection';
 import { FilePanelSettingsSection } from '../FilePanelSettingsSection';
@@ -70,6 +71,8 @@ export function DisplayTab({ theme }: DisplayTabProps) {
 		setUseNativeTitleBar,
 		autoHideMenuBar,
 		setAutoHideMenuBar,
+		showAgentName,
+		setShowAgentName,
 		showSessionIdPill,
 		setShowSessionIdPill,
 		showSessionCostPill,
@@ -352,8 +355,40 @@ export function DisplayTab({ theme }: DisplayTabProps) {
 						backgroundColor: theme.colors.bgMain,
 					}}
 				>
-					{/* Show session ID pill */}
+					{/* Show agent name */}
 					<div className="flex items-center justify-between">
+						<div>
+							<p className="text-sm" style={{ color: theme.colors.textMain }}>
+								Show agent name
+							</p>
+							<p className="text-xs opacity-50 mt-0.5">
+								Display the agent name in the main header.
+							</p>
+						</div>
+						<button
+							onClick={() => setShowAgentName(!showAgentName)}
+							className="relative w-10 h-5 rounded-full transition-colors flex-shrink-0 outline-none"
+							tabIndex={0}
+							style={{
+								backgroundColor: showAgentName ? theme.colors.accent : theme.colors.bgActivity,
+							}}
+							role="switch"
+							aria-checked={showAgentName}
+							aria-label="Show agent name"
+						>
+							<span
+								className={`absolute left-0 top-0.5 w-4 h-4 rounded-full bg-white transition-transform ${
+									showAgentName ? 'translate-x-5' : 'translate-x-0.5'
+								}`}
+							/>
+						</button>
+					</div>
+
+					{/* Show session ID pill */}
+					<div
+						className="flex items-center justify-between pt-3 border-t"
+						style={{ borderColor: theme.colors.border }}
+					>
 						<div>
 							<p className="text-sm" style={{ color: theme.colors.textMain }}>
 								Show session ID pill
@@ -431,11 +466,14 @@ export function DisplayTab({ theme }: DisplayTabProps) {
 					{/* Show WORKTREE pill */}
 					<div className="flex items-center justify-between">
 						<div>
-							<p className="text-sm" style={{ color: theme.colors.textMain }}>
-								Show WORKTREE pill in left panel agent list
+							<p
+								className="text-sm flex items-center gap-2"
+								style={{ color: theme.colors.textMain }}
+							>
+								Show <WorktreePill theme={theme} /> pill in left panel agent list
 							</p>
 							<p className="text-xs opacity-50 mt-0.5">
-								Display the WORKTREE badge next to worktree child agents in the left panel.
+								Display the worktree badge next to worktree child agents in the left panel.
 							</p>
 						</div>
 						<button
@@ -447,7 +485,7 @@ export function DisplayTab({ theme }: DisplayTabProps) {
 							}}
 							role="switch"
 							aria-checked={showWorktreePill}
-							aria-label="Show WORKTREE pill in left panel agent list"
+							aria-label="Show worktree pill in left panel agent list"
 						>
 							<span
 								className={`absolute left-0 top-0.5 w-4 h-4 rounded-full bg-white transition-transform ${
