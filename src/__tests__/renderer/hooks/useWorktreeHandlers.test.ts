@@ -470,6 +470,60 @@ describe('handleSaveWorktreeConfig', () => {
 
 		expect(mockGit.scanWorktreeDirectory).not.toHaveBeenCalled();
 	});
+
+	it('filters out scanned subdirs whose repoRoot does not match the parent repo', async () => {
+		// Same repo-identity guard as scanWorktreeConfigs, applied at the moment
+		// the user saves the worktree config. Without this, pointing the agent
+		// at a basePath that contains worktrees from another repo would attach
+		// them on the spot, before any later rescan could clean up.
+		useSessionStore.setState({
+			sessions: [
+				{
+					...mockParentSession,
+					cwd: '/repos/repo-a',
+					worktreeConfig: undefined,
+				},
+			],
+			activeSessionId: 'parent-1',
+		} as any);
+
+		mockGit.worktreeInfo.mockResolvedValueOnce({
+			success: true,
+			exists: true,
+			isWorktree: false,
+			repoRoot: '/repos/repo-a',
+		});
+
+		mockGit.scanWorktreeDirectory.mockResolvedValue({
+			gitSubdirs: [
+				{
+					path: '/shared/worktrees/feat-mine',
+					branch: 'feat-mine',
+					name: 'feat-mine',
+					repoRoot: '/repos/repo-a',
+				},
+				{
+					path: '/shared/worktrees/feat-other',
+					branch: 'feat-other',
+					name: 'feat-other',
+					repoRoot: '/repos/repo-b',
+				},
+			],
+		});
+
+		const { result } = renderHook(() => useWorktreeHandlers());
+
+		await act(async () => {
+			await result.current.handleSaveWorktreeConfig({
+				basePath: '/shared/worktrees',
+				watchEnabled: false,
+			});
+		});
+
+		const sessions = useSessionStore.getState().sessions;
+		const children = sessions.filter((s) => s.parentSessionId === 'parent-1');
+		expect(children.map((s) => s.worktreeBranch)).toEqual(['feat-mine']);
+	});
 });
 
 // ============================================================================
@@ -1976,6 +2030,7 @@ describe('Effects', () => {
 				sessionsLoaded: true,
 			} as any);
 
+			(notifyToast as any).mockClear();
 			renderHook(() => useWorktreeHandlers());
 
 			await act(async () => {
@@ -1985,6 +2040,90 @@ describe('Effects', () => {
 			const sessions = useSessionStore.getState().sessions;
 			expect(sessions.some((s) => s.id === 'wrong-agent-child')).toBe(false);
 			expect(sessions.some((s) => s.id === 'correct-child')).toBe(true);
+			// Wrong-agent detachments must NOT fire the misleading "Worktree Removed"
+			// toast — the worktree still exists on disk. Use "Worktree Re-assigned"
+			// (or no toast) so the user isn't told the worktree was deleted.
+			expect(notifyToast).not.toHaveBeenCalledWith(
+				expect.objectContaining({ title: 'Worktree Removed' })
+			);
+			expect(notifyToast).toHaveBeenCalledWith(
+				expect.objectContaining({ title: 'Worktree Re-assigned', message: 'feat-other' })
+			);
+		});
+
+		it('attaches wrong-agent child to the correct parent in the same scan pass', async () => {
+			// Regression for the "queued stale children block same-pass reattachment"
+			// edge case: parent-a flags a misattached child for detachment, then
+			// parent-b's iteration must NOT skip that path because of the
+			// (about-to-be-removed) wrong-agent session still in the store.
+			vi.useFakeTimers();
+
+			const parentA = {
+				...mockParentSession,
+				id: 'parent-a',
+				cwd: '/repos/repo-a',
+				worktreeConfig: { basePath: '/shared/worktrees', watchEnabled: false },
+			};
+			const parentB = {
+				...mockParentSession,
+				id: 'parent-b',
+				cwd: '/repos/repo-b',
+				worktreeConfig: { basePath: '/shared/worktrees', watchEnabled: false },
+			};
+
+			// Wrong-agent child: cwd is a worktree of repo-b but it's attached to parent-a
+			const wrongAgentChild = createChildSession({
+				id: 'wrong-agent-child',
+				cwd: '/shared/worktrees/feat-b',
+				worktreeBranch: 'feat-b',
+				parentSessionId: 'parent-a',
+			});
+
+			// First call (parent-a) → repo-a; second call (parent-b) → repo-b
+			mockGit.worktreeInfo
+				.mockResolvedValueOnce({
+					success: true,
+					exists: true,
+					isWorktree: false,
+					repoRoot: '/repos/repo-a',
+				})
+				.mockResolvedValueOnce({
+					success: true,
+					exists: true,
+					isWorktree: false,
+					repoRoot: '/repos/repo-b',
+				});
+
+			mockGit.scanWorktreeDirectory.mockResolvedValue({
+				gitSubdirs: [
+					{
+						path: '/shared/worktrees/feat-b',
+						branch: 'feat-b',
+						name: 'feat-b',
+						repoRoot: '/repos/repo-b',
+					},
+				],
+			});
+
+			useSessionStore.setState({
+				sessions: [parentA, parentB, wrongAgentChild],
+				activeSessionId: 'parent-a',
+				sessionsLoaded: true,
+			} as any);
+
+			renderHook(() => useWorktreeHandlers());
+
+			await act(async () => {
+				await vi.runAllTimersAsync();
+			});
+
+			const sessions = useSessionStore.getState().sessions;
+			// Old child gone, new child created under the correct parent in the same pass
+			expect(sessions.some((s) => s.id === 'wrong-agent-child')).toBe(false);
+			const childrenB = sessions.filter((s) => s.parentSessionId === 'parent-b');
+			expect(childrenB).toHaveLength(1);
+			expect(childrenB[0].worktreeBranch).toBe('feat-b');
+			expect(childrenB[0].cwd).toBe('/shared/worktrees/feat-b');
 		});
 
 		it('two parents sharing a basePath each receive only their own repo worktrees', async () => {

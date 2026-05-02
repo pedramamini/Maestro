@@ -211,9 +211,24 @@ export function useWorktreeHandlers(): WorktreeHandlersReturn {
 				if (gitSubdirs.length > 0) {
 					const newWorktreeSessions: Session[] = [];
 
+					// Same repo-identity guard as scanWorktreeConfigs: if the user just
+					// pointed this agent at a basePath that contains worktrees from a
+					// different repo, skip those subdirs instead of attaching them.
+					const parentRepoRoot = await resolveRepoRoot(activeSession.cwd, parentSshRemoteId);
+
 					for (const subdir of gitSubdirs) {
 						// Skip main/master/HEAD branches — they're typically the main repo
 						if (isSkippableBranch(subdir.branch)) continue;
+
+						// Repo-identity check (mirrors scanWorktreeConfigs). Falls back to
+						// legacy behavior when either side can't be resolved.
+						if (
+							parentRepoRoot &&
+							subdir.repoRoot &&
+							normalizePath(subdir.repoRoot) !== parentRepoRoot
+						) {
+							continue;
+						}
 
 						// Check if session already exists (read latest state each iteration)
 						const latestSessions = useSessionStore.getState().sessions;
@@ -575,7 +590,13 @@ export function useWorktreeHandlers(): WorktreeHandlersReturn {
 		if (sessionsWithWorktreeConfig.length === 0) return;
 
 		const newWorktreeSessions: Session[] = [];
+		// Children that no longer exist on disk — surfaced as "Worktree Removed".
 		const staleSessionIds: string[] = [];
+		// Children whose cwd still exists but belongs to a different repo. Surfaced
+		// as "Worktree Re-assigned" instead of "Worktree Removed" so the user isn't
+		// told their worktree was deleted (it wasn't — it just attaches to the
+		// correct parent on the next scan / chokidar event).
+		const reassignedSessionIds: string[] = [];
 
 		for (const parentSession of sessionsWithWorktreeConfig) {
 			try {
@@ -613,7 +634,16 @@ export function useWorktreeHandlers(): WorktreeHandlersReturn {
 
 					const normalizedSubdirPath = normalizePath(subdir.path);
 					const latestSessions = useSessionStore.getState().sessions;
+					// Sessions queued for stale-removal or re-assignment are about to be
+					// detached at the end of this scan, so they must NOT block other
+					// parents in the same pass from creating the correct child. Without
+					// this, in the overlapping-basePath recovery case parent A would
+					// queue a wrong-agent child for detachment and parent B would skip
+					// the same path because the (about-to-be-removed) session still
+					// matches by cwd in the store.
+					const stalePending = new Set([...staleSessionIds, ...reassignedSessionIds]);
 					const existingSession = latestSessions.find((s) => {
+						if (stalePending.has(s.id)) return false;
 						const normalizedCwd = normalizePath(s.cwd);
 						return (
 							normalizedCwd === normalizedSubdirPath ||
@@ -692,7 +722,7 @@ export function useWorktreeHandlers(): WorktreeHandlersReturn {
 								logger.warn(
 									`[WorktreeScan] Detaching ${child.id} from ${parentSession.id}: child cwd ${child.cwd} belongs to repo ${subdirRepoRoot}, not parent's repo ${parentRepoRoot}`
 								);
-								staleSessionIds.push(child.id);
+								reassignedSessionIds.push(child.id);
 							}
 						}
 					}
@@ -704,6 +734,36 @@ export function useWorktreeHandlers(): WorktreeHandlersReturn {
 					err
 				);
 			}
+		}
+
+		// Apply removals BEFORE additions so the additions' cwd-dedup doesn't see
+		// soon-to-be-detached wrong-agent children and filter out the correct
+		// re-attached child. Without this ordering the same-pass recovery
+		// (parent A flags wrong-agent child stale, parent B creates the correct
+		// child for the same cwd) would silently drop the new child.
+		if (staleSessionIds.length > 0 || reassignedSessionIds.length > 0) {
+			const staleSet = new Set(staleSessionIds);
+			const reassignedSet = new Set(reassignedSessionIds);
+			const removalSet = new Set([...staleSessionIds, ...reassignedSessionIds]);
+			useSessionStore.getState().setSessions((prev) => {
+				const removed = prev.filter((s) => removalSet.has(s.id));
+				for (const s of removed) {
+					if (reassignedSet.has(s.id)) {
+						notifyToast({
+							type: 'info',
+							title: 'Worktree Re-assigned',
+							message: s.worktreeBranch || s.name,
+						});
+					} else if (staleSet.has(s.id)) {
+						notifyToast({
+							type: 'info',
+							title: 'Worktree Removed',
+							message: s.worktreeBranch || s.name,
+						});
+					}
+				}
+				return prev.filter((s) => !removalSet.has(s.id));
+			});
 		}
 
 		if (newWorktreeSessions.length > 0) {
@@ -720,21 +780,6 @@ export function useWorktreeHandlers(): WorktreeHandlersReturn {
 				.setSessions((prev) =>
 					prev.map((s) => (parentIds.has(s.id) ? { ...s, worktreesExpanded: true } : s))
 				);
-		}
-
-		if (staleSessionIds.length > 0) {
-			const staleSet = new Set(staleSessionIds);
-			useSessionStore.getState().setSessions((prev) => {
-				const removed = prev.filter((s) => staleSet.has(s.id));
-				for (const s of removed) {
-					notifyToast({
-						type: 'info',
-						title: 'Worktree Removed',
-						message: s.worktreeBranch || s.name,
-					});
-				}
-				return prev.filter((s) => !staleSet.has(s.id));
-			});
 		}
 	}, []);
 
