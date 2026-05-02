@@ -92,9 +92,11 @@ export function useQueueProcessing(deps: UseQueueProcessingDeps): UseQueueProces
 		if (!sessionsLoaded || processedQueuesOnStartup.current) return;
 		processedQueuesOnStartup.current = true;
 
-		// Find sessions with queued items that are idle (stuck from previous session)
+		// Find sessions with queued items that are idle (stuck from previous session).
+		// Skip sessions where every queued item is paused — paused items intentionally
+		// stay in the queue without being dispatched until the user resumes them.
 		const sessionsWithQueuedItems = sessions.filter(
-			(s) => s.state === 'idle' && s.executionQueue && s.executionQueue.length > 0
+			(s) => s.state === 'idle' && s.executionQueue && s.executionQueue.some((item) => !item.paused)
 		);
 
 		if (sessionsWithQueuedItems.length > 0) {
@@ -102,11 +104,13 @@ export function useQueueProcessing(deps: UseQueueProcessingDeps): UseQueueProces
 				`[App] Found ${sessionsWithQueuedItems.length} session(s) with leftover queued items from previous session`
 			);
 
-			// Process the first queued item from each session
-			// Delay to ensure all refs and handlers are set up
+			// Process the first non-paused queued item from each session.
+			// Delay to ensure all refs and handlers are set up.
 			const startupTimerId = setTimeout(() => {
 				sessionsWithQueuedItems.forEach((session) => {
-					const firstItem = session.executionQueue[0];
+					const firstNonPausedIndex = session.executionQueue.findIndex((item) => !item.paused);
+					if (firstNonPausedIndex === -1) return;
+					const firstItem = session.executionQueue[firstNonPausedIndex];
 					console.log(`[App] Processing leftover queued item for session ${session.id}:`, {
 						id: firstItem.id,
 						tabId: firstItem.tabId,
@@ -118,7 +122,14 @@ export function useQueueProcessing(deps: UseQueueProcessingDeps): UseQueueProces
 						prev.map((s) => {
 							if (s.id !== session.id) return s;
 
-							const [, ...remainingQueue] = s.executionQueue;
+							const dispatchIndex = s.executionQueue.findIndex((item) => item.id === firstItem.id);
+							const remainingQueue =
+								dispatchIndex === -1
+									? s.executionQueue
+									: [
+											...s.executionQueue.slice(0, dispatchIndex),
+											...s.executionQueue.slice(dispatchIndex + 1),
+										];
 							const targetTab =
 								s.aiTabs.find((tab) => tab.id === firstItem.tabId) || getActiveTab(s);
 

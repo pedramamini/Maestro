@@ -83,10 +83,11 @@ export function useInterruptHandler(deps: UseInterruptHandlerDeps): UseInterrupt
 				item: QueuedItem;
 			} | null = null;
 
-			if (currentSession && currentSession.executionQueue.length > 0) {
+			const interruptNextRunnable = currentSession?.executionQueue.find((item) => !item.paused);
+			if (currentSession && interruptNextRunnable) {
 				queuedItemToProcess = {
 					sessionId: activeSession.id,
-					item: currentSession.executionQueue[0],
+					item: interruptNextRunnable,
 				};
 			}
 
@@ -106,9 +107,14 @@ export function useInterruptHandler(deps: UseInterruptHandlerDeps): UseInterrupt
 				prev.map((s) => {
 					if (s.id !== activeSession.id) return s;
 
-					// If there are queued items, start processing the next one
-					if (s.executionQueue.length > 0) {
-						const [nextItem, ...remainingQueue] = s.executionQueue;
+					// If there are queued items, start processing the next non-paused one
+					const nextRunnableIndex = s.executionQueue.findIndex((item) => !item.paused);
+					if (nextRunnableIndex !== -1) {
+						const nextItem = s.executionQueue[nextRunnableIndex];
+						const remainingQueue = [
+							...s.executionQueue.slice(0, nextRunnableIndex),
+							...s.executionQueue.slice(nextRunnableIndex + 1),
+						];
 						const targetTab = s.aiTabs.find((tab) => tab.id === nextItem.tabId) || getActiveTab(s);
 
 						if (!targetTab) {
@@ -244,10 +250,13 @@ export function useInterruptHandler(deps: UseInterruptHandlerDeps): UseInterrupt
 						item: QueuedItem;
 					} | null = null;
 
-					if (currentSessionForKill && currentSessionForKill.executionQueue.length > 0) {
+					const killNextRunnable = currentSessionForKill?.executionQueue.find(
+						(item) => !item.paused
+					);
+					if (currentSessionForKill && killNextRunnable) {
 						queuedItemAfterKill = {
 							sessionId: activeSession.id,
-							item: currentSessionForKill.executionQueue[0],
+							item: killNextRunnable,
 						};
 					}
 
@@ -277,9 +286,14 @@ export function useInterruptHandler(deps: UseInterruptHandlerDeps): UseInterrupt
 								updatedSession.shellLogs = [...s.shellLogs, killLog];
 							}
 
-							// If there are queued items, start processing the next one
-							if (s.executionQueue.length > 0) {
-								const [nextItem, ...remainingQueue] = s.executionQueue;
+							// If there are queued items, start processing the next non-paused one
+							const nextRunnableIndexKill = s.executionQueue.findIndex((item) => !item.paused);
+							if (nextRunnableIndexKill !== -1) {
+								const nextItem = s.executionQueue[nextRunnableIndexKill];
+								const remainingQueue = [
+									...s.executionQueue.slice(0, nextRunnableIndexKill),
+									...s.executionQueue.slice(nextRunnableIndexKill + 1),
+								];
 								const targetTab =
 									s.aiTabs.find((tab) => tab.id === nextItem.tabId) || getActiveTab(s);
 

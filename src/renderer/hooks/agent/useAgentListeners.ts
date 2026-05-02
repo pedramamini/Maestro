@@ -378,13 +378,16 @@ export function useAgentListeners(deps: UseAgentListenersDeps): void {
 				if (isFromAi) {
 					const currentSession = getSessions().find((s) => s.id === actualSessionId);
 					if (currentSession) {
+						// Find the first queued item that isn't paused — paused items
+						// are held in place until the user resumes them.
+						const nextRunnableItem = currentSession.executionQueue.find((item) => !item.paused);
 						if (
-							currentSession.executionQueue.length > 0 &&
+							nextRunnableItem &&
 							!(currentSession.state === 'error' && currentSession.agentError)
 						) {
 							queuedItemToProcess = {
 								sessionId: actualSessionId,
-								item: currentSession.executionQueue[0],
+								item: nextRunnableItem,
 							};
 						}
 
@@ -467,8 +470,11 @@ export function useAgentListeners(deps: UseAgentListenersDeps): void {
 							),
 						};
 
+						// Synopsis fires when the turn is genuinely done, including when
+						// remaining queue items are all paused (won't auto-run).
+						const hasRunnableQueueItem = currentSession.executionQueue.some((item) => !item.paused);
 						const shouldSynopsis =
-							currentSession.executionQueue.length === 0 &&
+							!hasRunnableQueueItem &&
 							(completedTab?.agentSessionId || currentSession.agentSessionId) &&
 							(completedTab?.saveToHistory || currentSession.pendingAICommandForSynopsis);
 
@@ -536,8 +542,13 @@ export function useAgentListeners(deps: UseAgentListenersDeps): void {
 								};
 							}
 
-							if (s.executionQueue.length > 0) {
-								const [nextItem, ...remainingQueue] = s.executionQueue;
+							const nextRunnableIndex = s.executionQueue.findIndex((item) => !item.paused);
+							if (nextRunnableIndex !== -1) {
+								const nextItem = s.executionQueue[nextRunnableIndex];
+								const remainingQueue = [
+									...s.executionQueue.slice(0, nextRunnableIndex),
+									...s.executionQueue.slice(nextRunnableIndex + 1),
+								];
 
 								const targetTab =
 									s.aiTabs.find((tab) => tab.id === nextItem.tabId) || getActiveTab(s);

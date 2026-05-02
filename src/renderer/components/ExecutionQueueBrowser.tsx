@@ -1,5 +1,15 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { X, MessageSquare, Command, Trash2, Clock, Folder, FolderOpen } from 'lucide-react';
+import {
+	X,
+	MessageSquare,
+	Command,
+	Trash2,
+	Clock,
+	Folder,
+	FolderOpen,
+	Pause,
+	Play,
+} from 'lucide-react';
 import { useLayerStack } from '../contexts/LayerStackContext';
 import { MODAL_PRIORITIES } from '../constants/modalPriorities';
 import type { Session, Theme, QueuedItem } from '../types';
@@ -13,6 +23,7 @@ interface ExecutionQueueBrowserProps {
 	onRemoveItem: (sessionId: string, itemId: string) => void;
 	onSwitchSession: (sessionId: string) => void;
 	onReorderItems?: (sessionId: string, fromIndex: number, toIndex: number) => void;
+	onTogglePauseItem?: (sessionId: string, itemId: string) => void;
 }
 
 interface DragState {
@@ -39,6 +50,7 @@ export function ExecutionQueueBrowser({
 	onRemoveItem,
 	onSwitchSession,
 	onReorderItems,
+	onTogglePauseItem,
 }: ExecutionQueueBrowserProps) {
 	const [viewMode, setViewMode] = useState<'current' | 'global'>('current');
 	const [dragState, setDragState] = useState<DragState | null>(null);
@@ -244,6 +256,11 @@ export function ExecutionQueueBrowser({
 												index={index}
 												theme={theme}
 												onRemove={() => onRemoveItem(session.id, item.id)}
+												onTogglePause={
+													onTogglePauseItem
+														? () => onTogglePauseItem(session.id, item.id)
+														: undefined
+												}
 												onSwitchToSession={() => {
 													onSwitchSession(session.id);
 													onClose();
@@ -314,6 +331,7 @@ interface QueueItemRowProps {
 	index: number;
 	theme: Theme;
 	onRemove: () => void;
+	onTogglePause?: () => void;
 	onSwitchToSession: () => void;
 	isDragging?: boolean;
 	canDrag?: boolean;
@@ -329,6 +347,7 @@ function QueueItemRow({
 	index,
 	theme,
 	onRemove,
+	onTogglePause,
 	onSwitchToSession,
 	isDragging,
 	canDrag,
@@ -440,7 +459,8 @@ function QueueItemRow({
 	// Visual states
 	const showDragReady = canDrag && isHovered && !isDragging && !isAnyDragging;
 	const showGrabbed = isPressed || isDragging;
-	const isDimmed = isAnyDragging && !isDragging;
+	const isPaused = !!item.paused;
+	const isDimmed = (isAnyDragging && !isDragging) || isPaused;
 
 	return (
 		<div
@@ -593,6 +613,38 @@ function QueueItemRow({
 						</div>
 					)}
 				</div>
+
+				{/* Pause/Resume + HELD badge */}
+				{onTogglePause && (
+					<button
+						onClick={(e) => {
+							e.stopPropagation();
+							onTogglePause();
+						}}
+						className={`p-1.5 rounded transition-all ${
+							isPaused ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
+						} hover:bg-black/20`}
+						style={{ color: isPaused ? theme.colors.warning : theme.colors.textDim }}
+						title={
+							isPaused
+								? 'Resume — let this message run when its turn comes up'
+								: 'Hold — keep this message in the queue but skip it during dispatch'
+						}
+					>
+						{isPaused ? <Play className="w-4 h-4" /> : <Pause className="w-4 h-4" />}
+					</button>
+				)}
+				{isPaused && (
+					<span
+						className="px-1.5 py-0.5 self-start rounded text-[10px] font-bold tracking-wider"
+						style={{
+							backgroundColor: theme.colors.warning + '30',
+							color: theme.colors.warning,
+						}}
+					>
+						HELD
+					</span>
+				)}
 
 				{/* Remove button */}
 				<button

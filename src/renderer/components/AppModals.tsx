@@ -958,6 +958,7 @@ export interface AppUtilityModalsProps {
 	onRemoveQueueItem: (sessionId: string, itemId: string) => void;
 	onSwitchQueueSession: (sessionId: string) => void;
 	onReorderQueueItems: (sessionId: string, fromIndex: number, toIndex: number) => void;
+	onTogglePauseQueueItem: (sessionId: string, itemId: string) => void;
 }
 
 /**
@@ -1136,6 +1137,7 @@ export const AppUtilityModals = memo(function AppUtilityModals({
 	onRemoveQueueItem,
 	onSwitchQueueSession,
 	onReorderQueueItems,
+	onTogglePauseQueueItem,
 }: AppUtilityModalsProps) {
 	return (
 		<>
@@ -1381,6 +1383,7 @@ export const AppUtilityModals = memo(function AppUtilityModals({
 					onRemoveItem={onRemoveQueueItem}
 					onSwitchSession={onSwitchQueueSession}
 					onReorderItems={onReorderQueueItems}
+					onTogglePauseItem={onTogglePauseQueueItem}
 				/>
 			)}
 		</>
@@ -2045,6 +2048,7 @@ export interface AppModalsProps {
 	onRemoveQueueItem: (sessionId: string, itemId: string) => void;
 	onSwitchQueueSession: (sessionId: string) => void;
 	onReorderQueueItems: (sessionId: string, fromIndex: number, toIndex: number) => void;
+	onTogglePauseQueueItem: (sessionId: string, itemId: string) => void;
 
 	// --- AppGroupChatModals props ---
 	onCloseNewGroupChatModal: () => void;
@@ -2404,6 +2408,7 @@ export const AppModals = memo(function AppModals(props: AppModalsProps) {
 		onRemoveQueueItem,
 		onSwitchQueueSession,
 		onReorderQueueItems,
+		onTogglePauseQueueItem,
 		// Group Chat modals
 		onCloseNewGroupChatModal,
 		onCreateGroupChat,
@@ -2715,6 +2720,7 @@ export const AppModals = memo(function AppModals(props: AppModalsProps) {
 				onRemoveQueueItem={onRemoveQueueItem}
 				onSwitchQueueSession={onSwitchQueueSession}
 				onReorderQueueItems={onReorderQueueItems}
+				onTogglePauseQueueItem={onTogglePauseQueueItem}
 			/>
 
 			{/* Group Chat Modals */}

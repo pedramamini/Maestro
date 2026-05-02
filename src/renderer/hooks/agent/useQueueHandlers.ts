@@ -5,6 +5,7 @@
  *   - Remove a queued item from a session
  *   - Switch to a session that has queued items
  *   - Reorder queued items within a session
+ *   - Toggle the paused/hold state of a queued item
  *
  * Reads from: sessionStore (setSessions, setActiveSessionId)
  */
@@ -23,6 +24,8 @@ export interface UseQueueHandlersReturn {
 	handleSwitchQueueSession: (sessionId: string) => void;
 	/** Reorder queued items within a session (move item from fromIndex to toIndex) */
 	handleReorderQueueItems: (sessionId: string, fromIndex: number, toIndex: number) => void;
+	/** Toggle the paused/hold state of a queued item */
+	handleTogglePauseQueueItem: (sessionId: string, itemId: string) => void;
 }
 
 // ============================================================================
@@ -73,9 +76,24 @@ export function useQueueHandlers(): UseQueueHandlersReturn {
 		[]
 	);
 
+	const handleTogglePauseQueueItem = useCallback((sessionId: string, itemId: string) => {
+		setSessions((prev) =>
+			prev.map((s) => {
+				if (s.id !== sessionId) return s;
+				return {
+					...s,
+					executionQueue: s.executionQueue.map((item) =>
+						item.id === itemId ? { ...item, paused: !item.paused } : item
+					),
+				};
+			})
+		);
+	}, []);
+
 	return {
 		handleRemoveQueueItem,
 		handleSwitchQueueSession,
 		handleReorderQueueItems,
+		handleTogglePauseQueueItem,
 	};
 }
