@@ -4,6 +4,47 @@
  * This file makes the window.maestro API available throughout the renderer.
  */
 
+import type {
+	DeliveryPlannerBugFollowUpRequest,
+	DeliveryPlannerCreatePrdRequest,
+	DeliveryPlannerDecomposeEpicRequest,
+	DeliveryPlannerDecomposePrdRequest,
+	DeliveryPlannerPathResolutionRequest,
+	DeliveryPlannerPathResolutionResult,
+	DeliveryPlannerProgressComment,
+	DeliveryPlannerProgressCommentRequest,
+	DeliveryPlannerProgressEvent,
+	DeliveryPlannerProgressSnapshot,
+	DeliveryPlannerPromoteDocGapRequest,
+	DeliveryPlannerPromoteDocGapResult,
+	DeliveryPlannerSyncRequest,
+} from '../shared/delivery-planner-types';
+import type {
+	AiWikiContextPacket,
+	AiWikiProjectRequest,
+	AiWikiSourceSnapshot,
+} from '../shared/ai-wiki-types';
+import type {
+	AgentReadyWorkFilter,
+	TagDefinition,
+	WorkGraphBroadcastEnvelope,
+	WorkGraphImportInput,
+	WorkGraphImportSummary,
+	WorkGraphListResult,
+	WorkItem,
+	WorkItemClaim,
+	WorkItemClaimCompleteInput,
+	WorkItemClaimInput,
+	WorkItemClaimReleaseInput,
+	WorkItemClaimRenewInput,
+	WorkItemCreateInput,
+	WorkItemEvent,
+	WorkItemFilters,
+	WorkItemSearchFilters,
+	WorkItemUpdateInput,
+} from '../shared/work-graph-types';
+import type { GitStatusData, QueuedItemData, ToolExecutionData } from '../main/web-server/types';
+
 // Vite raw imports for .md files
 declare module '*.md?raw' {
 	const content: string;
@@ -88,6 +129,133 @@ type ShellInfo = import('../shared/types').ShellInfo;
 type UsageStats = import('../shared/types').UsageStats;
 
 type HistoryEntryType = import('../shared/types').HistoryEntryType;
+
+// Types from work-graph-types used by delivery-planner, Maestro Board, and agent-dispatch UIs
+type WorkGraphListResult = import('../shared/work-graph-types').WorkGraphListResult;
+type WorkGraphActor = import('../shared/work-graph-types').WorkGraphActor;
+
+// Agent Dispatch types
+type AgentDispatchFleetEntry = import('../shared/agent-dispatch-types').AgentDispatchFleetEntry;
+type ManualAssignmentInput = import('../main/agent-dispatch/dispatch-engine').ManualAssignmentInput;
+type RoleEligibilityError = import('../main/agent-dispatch/dispatch-engine').RoleEligibilityError;
+type SlotDisabledError = import('../main/agent-dispatch/dispatch-engine').SlotDisabledError;
+
+// Delivery Planner types
+type DeliveryPlannerCreatePrdRequest =
+	import('../shared/delivery-planner-types').DeliveryPlannerCreatePrdRequest;
+type DeliveryPlannerDecomposePrdRequest =
+	import('../shared/delivery-planner-types').DeliveryPlannerDecomposePrdRequest;
+type DeliveryPlannerDecomposeEpicRequest =
+	import('../shared/delivery-planner-types').DeliveryPlannerDecomposeEpicRequest;
+type DeliveryPlannerDashboardSnapshot =
+	import('../shared/delivery-planner-types').DeliveryPlannerDashboardSnapshot;
+type DeliveryPlannerSyncRequest =
+	import('../shared/delivery-planner-types').DeliveryPlannerSyncRequest;
+type DeliveryPlannerBugFollowUpRequest =
+	import('../shared/delivery-planner-types').DeliveryPlannerBugFollowUpRequest;
+type DeliveryPlannerProgressCommentRequest =
+	import('../shared/delivery-planner-types').DeliveryPlannerProgressCommentRequest;
+type DeliveryPlannerProgressComment =
+	import('../shared/delivery-planner-types').DeliveryPlannerProgressComment;
+type DeliveryPlannerPathResolutionRequest =
+	import('../shared/delivery-planner-types').DeliveryPlannerPathResolutionRequest;
+type DeliveryPlannerPathResolutionResult =
+	import('../shared/delivery-planner-types').DeliveryPlannerPathResolutionResult;
+type DeliveryPlannerProgressSnapshot =
+	import('../shared/delivery-planner-types').DeliveryPlannerProgressSnapshot;
+type DeliveryPlannerProgressEvent =
+	import('../shared/delivery-planner-types').DeliveryPlannerProgressEvent;
+type DeliveryPlannerPromoteDocGapRequest =
+	import('../shared/delivery-planner-types').DeliveryPlannerPromoteDocGapRequest;
+type DeliveryPlannerPromoteDocGapResult =
+	import('../shared/delivery-planner-types').DeliveryPlannerPromoteDocGapResult;
+
+// Planning Pipeline types
+type PipelineDashboardResult =
+	import('../main/ipc/handlers/planning-pipeline').PipelineDashboardResult;
+
+// Conversational PRD types
+type ConversationalPrdStartRequest =
+	import('../shared/conversational-prd-types').ConversationalPrdStartRequest;
+type ConversationalPrdTurnRequest =
+	import('../shared/conversational-prd-types').ConversationalPrdTurnRequest;
+type ConversationalPrdFinalizeRequest =
+	import('../shared/conversational-prd-types').ConversationalPrdFinalizeRequest;
+type ConversationalPrdStartResponse =
+	import('../shared/conversational-prd-types').ConversationalPrdStartResponse;
+type ConversationalPrdTurnResponse =
+	import('../shared/conversational-prd-types').ConversationalPrdTurnResponse;
+type ConversationalPrdFinalizeResponse =
+	import('../shared/conversational-prd-types').ConversationalPrdFinalizeResponse;
+type ConversationalPrdSession =
+	import('../shared/conversational-prd-types').ConversationalPrdSession;
+
+type IpcDataResponse<T> = { success: true; data: T } | { success: false; error: string };
+
+// PM slash-command request/response types
+interface PmCommandRequest {
+	args?: string;
+	projectPath?: string;
+	gitPath?: string;
+	actor?: { sessionId?: string; name?: string };
+}
+
+interface PmCommandResponse {
+	success: boolean;
+	message?: string;
+	data?: unknown;
+	error?: string;
+	code?: string;
+}
+
+interface PmOpenConvPrdEvent {
+	conversationId?: string;
+	startRequest?: {
+		projectPath: string;
+		gitPath: string;
+		greeting?: string;
+		actor?: unknown;
+	};
+	/** 'new' = fresh session, 'edit' = load existing PRD (set by /PM prd-edit) */
+	mode?: 'new' | 'edit';
+	seed?: string;
+	prdId?: string;
+	projectPath?: string;
+	idea?: string;
+	autoDecompose?: boolean;
+}
+
+/** Emitted by pm:openDeliveryPlanner — renderer should open Delivery Planner. */
+interface PmOpenDeliveryPlannerEvent {
+	mode: 'decompose-prd' | 'edit-epic' | 'sync-epic' | 'sync-issue';
+	prdId?: string;
+	epicId?: string;
+	taskId?: string;
+	projectPath?: string;
+}
+
+/** Emitted by pm:openAgentDispatch — renderer should open Agent Dispatch to claim a task. */
+interface PmOpenAgentDispatchEvent {
+	mode: 'claim';
+	taskId: string;
+	sessionId?: string;
+}
+
+/** Emitted by pm:openPlanningPipeline — renderer should kick Planning Pipeline for an epic. */
+interface PmOpenPlanningPipelineEvent {
+	mode: 'start-epic';
+	epicId: string;
+	projectPath?: string;
+}
+
+/** Legacy planning prompt seed event (used by /PM <idea>). */
+interface PmOpenPlanningPromptEvent {
+	mode: 'orchestrate' | 'prd-new';
+	idea?: string;
+	name?: string;
+	projectPath?: string;
+	gitPath?: string;
+}
 
 /**
  * Result type for reading session messages from agent storage.
@@ -459,6 +627,10 @@ interface MaestroAPI {
 			) => void
 		) => () => void;
 		sendRemoteTriggerCueSubscriptionResponse: (responseChannel: string, result: unknown) => void;
+		onRemoteRemoveQueueItem: (callback: (sessionId: string, itemId: string) => void) => () => void;
+		onRemoteReorderQueue: (
+			callback: (sessionId: string, fromIndex: number, toIndex: number) => void
+		) => () => void;
 		onStderr: (callback: (sessionId: string, data: string) => void) => () => void;
 		onCommandExit: (callback: (sessionId: string, code: number) => void) => () => void;
 		onUsage: (callback: (sessionId: string, usageStats: UsageStats) => void) => () => void;
@@ -578,6 +750,16 @@ interface MaestroAPI {
 			}>,
 			activeTabId: string
 		) => Promise<void>;
+		broadcastGitStatus: (sessionId: string, gitStatus: GitStatusData | null) => Promise<boolean>;
+		broadcastExecutionQueue: (
+			sessionId: string,
+			executionQueue: QueuedItemData[]
+		) => Promise<boolean>;
+		broadcastToolExecution: (
+			sessionId: string,
+			tabId: string | undefined,
+			tool: ToolExecutionData
+		) => Promise<boolean>;
 		broadcastSessionState: (
 			sessionId: string,
 			state: string,
@@ -586,6 +768,8 @@ interface MaestroAPI {
 				toolType?: string;
 				inputMode?: string;
 				cwd?: string;
+				currentCycleTokens?: number;
+				thinkingStartTime?: number;
 			}
 		) => Promise<boolean>;
 	};
@@ -902,6 +1086,22 @@ interface MaestroAPI {
 		}>;
 		get: (agentId: string, sshRemoteId?: string) => Promise<AgentConfig | null>;
 		getCapabilities: (agentId: string) => Promise<AgentCapabilities>;
+		getDispatchSettings: () => Promise<
+			import('../shared/agent-dispatch-types').AgentDispatchSettings
+		>;
+		setDispatchSettings: (
+			settings: import('../shared/agent-dispatch-types').AgentDispatchSettings
+		) => Promise<boolean>;
+		getDispatchProfiles: () => Promise<
+			Record<string, import('../shared/agent-dispatch-types').AgentDispatchProfile>
+		>;
+		getDispatchProfile: (
+			agentId: string
+		) => Promise<import('../shared/agent-dispatch-types').AgentDispatchProfile>;
+		setDispatchProfile: (
+			agentId: string,
+			profile: import('../shared/agent-dispatch-types').AgentDispatchProfile
+		) => Promise<boolean>;
 		getConfig: (agentId: string) => Promise<Record<string, any>>;
 		setConfig: (agentId: string, config: Record<string, any>) => Promise<boolean>;
 		getConfigValue: (agentId: string, key: string) => Promise<any>;
@@ -3274,6 +3474,432 @@ interface MaestroAPI {
 			projectPath: string,
 			agentId?: string
 		) => Promise<{ success: boolean; path?: string; error?: string }>;
+	};
+
+	// Work Graph API (durable local PM / Maestro Board state)
+	workGraph: {
+		listItems: (filters?: WorkItemFilters) => Promise<IpcDataResponse<WorkGraphListResult>>;
+		searchItems: (filters: WorkItemSearchFilters) => Promise<IpcDataResponse<WorkGraphListResult>>;
+		getItem: (id: string) => Promise<IpcDataResponse<WorkItem | undefined>>;
+		createItem: (input: WorkItemCreateInput) => Promise<IpcDataResponse<WorkItem>>;
+		updateItem: (input: WorkItemUpdateInput) => Promise<IpcDataResponse<WorkItem>>;
+		deleteItem: (id: string) => Promise<IpcDataResponse<boolean>>;
+		claimItem: (input: WorkItemClaimInput) => Promise<IpcDataResponse<WorkItemClaim>>;
+		renewClaim: (input: WorkItemClaimRenewInput) => Promise<IpcDataResponse<WorkItemClaim>>;
+		releaseClaim: (
+			input: WorkItemClaimReleaseInput
+		) => Promise<IpcDataResponse<WorkItemClaim | undefined>>;
+		completeClaim: (
+			input: WorkItemClaimCompleteInput
+		) => Promise<IpcDataResponse<WorkItemClaim | undefined>>;
+		listEvents: (workItemId: string, limit?: number) => Promise<IpcDataResponse<WorkItemEvent[]>>;
+		listTags: () => Promise<IpcDataResponse<TagDefinition[]>>;
+		upsertTag: (definition: TagDefinition) => Promise<IpcDataResponse<TagDefinition>>;
+		importItems: (input: WorkGraphImportInput) => Promise<IpcDataResponse<WorkGraphImportSummary>>;
+		getUnblockedAgentReadyWork: (
+			filters?: AgentReadyWorkFilter
+		) => Promise<IpcDataResponse<WorkGraphListResult>>;
+		onChanged: (handler: (event: WorkGraphBroadcastEnvelope) => void) => () => void;
+	};
+
+	// AI Wiki API (project memory/context storage under Electron userData)
+	aiWiki: {
+		status: (request: AiWikiProjectRequest) => Promise<IpcDataResponse<AiWikiSourceSnapshot>>;
+		refresh: (request: AiWikiProjectRequest) => Promise<IpcDataResponse<AiWikiSourceSnapshot>>;
+		getContextPacket: (
+			request: AiWikiProjectRequest
+		) => Promise<IpcDataResponse<AiWikiContextPacket>>;
+	};
+
+	// Agent Dispatch API (fleet, board, assign, release, pause/resume, claim events)
+	// getBoard returns in-memory ClaimTracker state; use workGraph for durable board items.
+	agentDispatch: {
+		getBoard: () => Promise<IpcDataResponse<{ items: unknown[]; total: number }>>;
+		getFleet: () => Promise<IpcDataResponse<AgentDispatchFleetEntry[]>>;
+		assignManually: (
+			input: ManualAssignmentInput
+		) => Promise<IpcDataResponse<WorkItem | RoleEligibilityError | SlotDisabledError>>;
+		releaseClaim: (input: {
+			projectItemId: string;
+			agentSessionId: string;
+			role: string;
+		}) => Promise<IpcDataResponse<{ released: boolean; projectItemId: string }>>;
+		pauseAgent: (agentId: string) => Promise<IpcDataResponse<{ paused: boolean }>>;
+		resumeAgent: (agentId: string) => Promise<IpcDataResponse<{ paused: boolean }>>;
+		listEligible: () => Promise<
+			IpcDataResponse<
+				Array<{
+					id: string;
+					title: string;
+					status: string;
+					dependsOn: string[];
+					claimedBySessionId?: string;
+					claimedAt?: string;
+					parentId?: string;
+				}>
+			>
+		>;
+		createSubtask: (params: { title: string; parentId: string; dependsOn?: string[] }) => Promise<
+			IpcDataResponse<{
+				id: string;
+				title: string;
+				status: string;
+				dependsOn: string[];
+				parentId?: string;
+			}>
+		>;
+		listAgents: () => Promise<{ success: boolean; agents?: unknown[]; error?: string }>;
+		assign: (params: { itemId: string; sessionId: string }) => Promise<{
+			success: boolean;
+			item?: unknown;
+			error?: string;
+		}>;
+		release: (params: { itemId: string }) => Promise<{
+			success: boolean;
+			item?: unknown;
+			error?: string;
+		}>;
+		pause: (params: { sessionId: string }) => Promise<{
+			success: boolean;
+			agent?: unknown;
+			error?: string;
+		}>;
+		resume: (params: { sessionId: string }) => Promise<{
+			success: boolean;
+			agent?: unknown;
+			error?: string;
+		}>;
+		status: () => Promise<{
+			success: boolean;
+			agents?: unknown[];
+			eligible?: unknown[];
+			inProgress?: unknown[];
+			error?: string;
+		}>;
+		/**
+		 * Subscribe to claim-started events (#444).
+		 * Emitted by SlotExecutor just before the agent process is spawned.
+		 * Returns an unsubscribe function.
+		 */
+		onClaimStarted: (
+			handler: (event: {
+				projectPath: string;
+				role: string;
+				agentId: string;
+				sessionId: string;
+				issueNumber?: number;
+				issueTitle?: string;
+				claimedAt: string;
+			}) => void
+		) => () => void;
+		/**
+		 * Subscribe to claim-ended events (#444).
+		 * Emitted by SlotExecutor after the agent process exits (success or failure).
+		 * Returns an unsubscribe function.
+		 */
+		onClaimEnded: (
+			handler: (event: {
+				projectPath: string;
+				role: string;
+				agentId: string;
+				sessionId: string;
+				exitCode?: number;
+			}) => void
+		) => () => void;
+	};
+
+	/** Per-project role slot roster (#429). */
+	projectRoles: {
+		get: (
+			projectPath: string
+		) => Promise<
+			| { success: true; data: import('../shared/project-roles-types').ProjectRoleSlots }
+			| { success: false; error: string }
+		>;
+		list: () => Promise<
+			| {
+					success: true;
+					data: Record<string, import('../shared/project-roles-types').ProjectRoleSlots>;
+			  }
+			| { success: false; error: string }
+		>;
+		set: (
+			projectPath: string,
+			slots: import('../shared/project-roles-types').ProjectRoleSlots
+		) => Promise<{ success: true } | { success: false; error: string }>;
+	};
+
+	deliveryPlanner: {
+		createPrd: (input: DeliveryPlannerCreatePrdRequest) => Promise<IpcDataResponse<WorkItem>>;
+		decomposePrd: (input: DeliveryPlannerDecomposePrdRequest) => Promise<IpcDataResponse<WorkItem>>;
+		decomposeEpic: (
+			input: DeliveryPlannerDecomposeEpicRequest
+		) => Promise<IpcDataResponse<unknown>>;
+		dashboard: (filters?: {
+			projectPath?: string;
+			gitPath?: string;
+		}) => Promise<IpcDataResponse<DeliveryPlannerDashboardSnapshot>>;
+		sync: (input: DeliveryPlannerSyncRequest) => Promise<IpcDataResponse<WorkItem>>;
+		createBugFollowUp: (
+			input: DeliveryPlannerBugFollowUpRequest
+		) => Promise<IpcDataResponse<WorkItem>>;
+		addProgressComment: (
+			input: DeliveryPlannerProgressCommentRequest
+		) => Promise<IpcDataResponse<{ item: WorkItem; comment: DeliveryPlannerProgressComment }>>;
+		resolvePaths: (
+			input?: DeliveryPlannerPathResolutionRequest
+		) => Promise<IpcDataResponse<DeliveryPlannerPathResolutionResult>>;
+		getProgress: (
+			id: string
+		) => Promise<IpcDataResponse<DeliveryPlannerProgressSnapshot | undefined>>;
+		listProgress: () => Promise<IpcDataResponse<DeliveryPlannerProgressSnapshot[]>>;
+		promoteDocGap: (
+			input: DeliveryPlannerPromoteDocGapRequest
+		) => Promise<IpcDataResponse<DeliveryPlannerPromoteDocGapResult>>;
+		onProgress: (handler: (event: DeliveryPlannerProgressEvent) => void) => () => void;
+	};
+
+	pipeline: {
+		getDashboard: () => Promise<IpcDataResponse<PipelineDashboardResult>>;
+	};
+
+	// Conversational PRD Planner API
+	conversationalPrd: {
+		createSession: (
+			input: ConversationalPrdStartRequest
+		) => Promise<IpcDataResponse<ConversationalPrdStartResponse>>;
+		sendMessage: (
+			input: ConversationalPrdTurnRequest
+		) => Promise<IpcDataResponse<ConversationalPrdTurnResponse>>;
+		getSession: (
+			conversationId: string
+		) => Promise<IpcDataResponse<ConversationalPrdSession | null>>;
+		listSessions: (filters?: {
+			projectPath?: string;
+			includeArchived?: boolean;
+		}) => Promise<IpcDataResponse<ConversationalPrdSession[]>>;
+		archiveSession: (input: {
+			sessionId: string;
+			actor?: WorkGraphActor;
+		}) => Promise<IpcDataResponse<ConversationalPrdSession>>;
+		finalizeSession: (
+			input: ConversationalPrdFinalizeRequest
+		) => Promise<IpcDataResponse<ConversationalPrdFinalizeResponse>>;
+	};
+
+	// PM slash-command suite (#428 + #436)
+	pm: {
+		/** /PM <idea> — full orchestration pipeline: Conv-PRD → Epic → Tasks → GitHub */
+		orchestrate: (req: PmCommandRequest) => Promise<PmCommandResponse>;
+		/** /PM prd-new <name> — open Conv-PRD modal seeded with a name */
+		prdNew: (req: PmCommandRequest) => Promise<PmCommandResponse>;
+		/** /PM prd-edit <id> — open Conv-PRD modal in edit mode for existing PRD */
+		prdEdit: (req: PmCommandRequest) => Promise<PmCommandResponse>;
+		/** /PM prd-status <id> — quick PRD status lookup */
+		prdStatus: (req: PmCommandRequest) => Promise<PmCommandResponse>;
+		/** /PM prd-parse <id> — convert PRD to structured planner input */
+		prdParse: (req: PmCommandRequest) => Promise<PmCommandResponse>;
+		/** /PM prd-list — list PRDs for the current project */
+		prdList: (req?: PmCommandRequest) => Promise<PmCommandResponse>;
+		/** /PM epic-decompose <prd-id> — decompose PRD into epic + tasks */
+		epicDecompose: (req: PmCommandRequest) => Promise<PmCommandResponse>;
+		/** /PM epic-edit <id> — open Delivery Planner with epic preloaded */
+		epicEdit: (req: PmCommandRequest) => Promise<PmCommandResponse>;
+		/** /PM epic-list — table of all epics */
+		epicList: (req?: PmCommandRequest) => Promise<PmCommandResponse>;
+		/** /PM epic-show <id> — full epic detail including tasks */
+		epicShow: (req: PmCommandRequest) => Promise<PmCommandResponse>;
+		/** /PM epic-sync <id> — local Work Graph / mirror sync via Delivery Planner */
+		epicSync: (req: PmCommandRequest) => Promise<PmCommandResponse>;
+		/** /PM epic-start <id> — kick Planning Pipeline for the epic */
+		epicStart: (req: PmCommandRequest) => Promise<PmCommandResponse>;
+		/** /PM issue-start <task-id> — manual claim into Agent Dispatch */
+		issueStart: (req: PmCommandRequest) => Promise<PmCommandResponse>;
+		/** /PM issue-show <task-id> — full task detail */
+		issueShow: (req: PmCommandRequest) => Promise<PmCommandResponse>;
+		/** /PM issue-status <task-id> — quick task status */
+		issueStatus: (req: PmCommandRequest) => Promise<PmCommandResponse>;
+		/** /PM issue-sync <task-id> — GitHub roundtrip for a task */
+		issueSync: (req: PmCommandRequest) => Promise<PmCommandResponse>;
+		/** /PM next — next eligible work item */
+		next: (req?: PmCommandRequest) => Promise<PmCommandResponse>;
+		/** /PM status — board snapshot */
+		status: (req?: PmCommandRequest) => Promise<PmCommandResponse>;
+		/** /PM standup — rich standup from Work Graph (yesterday/today/blockers) */
+		standup: (req?: PmCommandRequest) => Promise<PmCommandResponse>;
+		/** Open Conv-PRD modal (new or edit mode). Returns unsubscribe fn. */
+		onOpenConvPrd: (handler: (event: PmOpenConvPrdEvent) => void) => () => void;
+		/** Open Delivery Planner with a mode. Returns unsubscribe fn. */
+		onOpenDeliveryPlanner: (handler: (event: PmOpenDeliveryPlannerEvent) => void) => () => void;
+		/** Open Agent Dispatch to claim a task. Returns unsubscribe fn. */
+		onOpenAgentDispatch: (handler: (event: PmOpenAgentDispatchEvent) => void) => () => void;
+		/** Open Planning Pipeline to start an epic. Returns unsubscribe fn. */
+		onOpenPlanningPipeline: (handler: (event: PmOpenPlanningPipelineEvent) => void) => () => void;
+		/** Legacy planning prompt seed event (used by /PM <idea>). Returns unsubscribe fn. */
+		onOpenPlanningPrompt: (handler: (event: PmOpenPlanningPromptEvent) => void) => () => void;
+		/** Load all /PM verb prompts for the customAICommands dispatch path. */
+		loadCommands: () => Promise<{
+			success: boolean;
+			commands?: Array<{ id: string; command: string; description: string; prompt: string }>;
+			error?: string;
+		}>;
+	};
+
+	// pm-tools API — agent-callable project management tools (#430)
+	pmTools: {
+		/**
+		 * Update local Work Graph status metadata for the agent's currently-claimed work item.
+		 * Scoped to the calling agent's own claim — cannot update items it doesn't own.
+		 * @param agentSessionId - the calling agent's session ID
+		 * @param status - one of: Idea | PRD Draft | Refinement | Tasks Ready | In Progress | In Review | Blocked | Done
+		 */
+		setStatus: (
+			agentSessionId: string,
+			status: string
+		) => Promise<IpcDataResponse<{ workItemId: string; field: string; value: string }>>;
+		/**
+		 * Update local Work Graph role metadata for the agent's currently-claimed work item.
+		 * @param agentSessionId - the calling agent's session ID
+		 * @param role - one of: runner | fixer | reviewer | merger
+		 */
+		setRole: (
+			agentSessionId: string,
+			role: string
+		) => Promise<IpcDataResponse<{ workItemId: string; field: string; value: string }>>;
+		/**
+		 * Set the work item to Blocked status and record the reason locally.
+		 * @param agentSessionId - the calling agent's session ID
+		 * @param reason - human-readable explanation
+		 */
+		setBlocked: (
+			agentSessionId: string,
+			reason: string
+		) => Promise<IpcDataResponse<{ workItemId: string; field: string; value: string }>>;
+	};
+
+	// pm-heartbeat API — agent liveness beat (#435)
+	pmHeartbeat: {
+		/**
+		 * Emit a heartbeat for the agent's currently-claimed work item.
+		 * Call every 60 s while the claim is held. Stop on release.
+		 * Returns success=false once the claim is gone (signal to stop the loop).
+		 *
+		 * @param workItemId - the ID of the claimed work item
+		 */
+		beat: (
+			workItemId: string
+		) => Promise<IpcDataResponse<{ workItemId: string; lastHeartbeat: string }>>;
+	};
+
+	// pm-audit API — rule-based in-flight work sweep (#434)
+	pmAudit: {
+		/**
+		 * Run the full 7-check audit sweep over all non-archived work items.
+		 *
+		 * Gated by the `agentDispatch` encore feature flag.
+		 *
+		 * @param opts - Optional overrides (staleClaimMs, projectRoleSlots).
+		 * @returns Structured AuditReport with autoFixed and needsAttention findings.
+		 */
+		run: (opts?: {
+			/** Override the staleness threshold in milliseconds. Default: 5 minutes. */
+			staleClaimMs?: number;
+			/** Project path used to scope the local Maestro Board / Work Graph audit. */
+			projectPath?: string;
+			/**
+			 * Per-project role slot map (role → agentId).
+			 * When omitted, the ORPHANED_SLOT_AGENT check is skipped.
+			 */
+			projectRoleSlots?: Partial<Record<string, string>>;
+		}) => Promise<
+			| {
+					success: true;
+					data: {
+						totalAudited: number;
+						autoFixed: Array<{
+							workItemId: string;
+							checkId: string;
+							message: string;
+							severity: 'auto-fix' | 'needs-attention';
+						}>;
+						needsAttention: Array<{
+							workItemId: string;
+							checkId: string;
+							message: string;
+							severity: 'auto-fix' | 'needs-attention';
+						}>;
+						errors: Array<{ workItemId: string; error: string }>;
+					};
+			  }
+			| { success: false; error: string }
+		>;
+	};
+
+	// pm-resolveGithubProject API — optional external GitHub mirror mapping (#447)
+	pmResolveGithubProject: {
+		/**
+		 * Resolve (or discover) the optional external project-board mirror mapping for a project path.
+		 * Returns a cached result if one exists in settings; runs discovery otherwise.
+		 *
+		 * Pass `sshRemoteId` when the session's project lives on an SSH remote so
+		 * that git commands run on that host rather than the Maestro install machine.
+		 *
+		 * @param input - { projectPath, forceRefresh?, sshRemoteId? }
+		 */
+		resolve: (input: {
+			projectPath: string;
+			forceRefresh?: boolean;
+			/** SSH remote ID for the active session (null/undefined = local). */
+			sshRemoteId?: string | null;
+		}) => Promise<
+			| {
+					success: true;
+					data: {
+						owner: string;
+						repo: string;
+						projectNumber: number;
+						projectId: string;
+						projectTitle: string;
+						discoveredAt: string;
+					};
+					fromCache: boolean;
+			  }
+			| {
+					success: false;
+					error: string;
+					code:
+						| 'GH_CLI_MISSING'
+						| 'GH_AUTH_REQUIRED'
+						| 'NOT_A_GIT_REPO'
+						| 'NO_ORIGIN_REMOTE'
+						| 'NOT_GITHUB'
+						| 'NO_PROJECT_AND_CANNOT_CREATE'
+						| 'MULTIPLE_MATCHES'
+						| 'GH_CLI_OUTPUT_UNRECOGNIZED'
+						| 'GH_PERMISSION_DENIED'
+						| 'UNKNOWN'
+						| 'FEATURE_DISABLED'
+						| 'INVALID_INPUT';
+					detail?: string;
+					candidates?: Array<{ id: string; number: number; title: string }>;
+			  }
+		>;
+	};
+
+	// pm-init API — /PM-init idempotent field bootstrap (#445)
+	pmInit: {
+		/**
+		 * Idempotently initialize local Maestro Board / Work Graph PM state.
+		 * Gated by the `deliveryPlanner` encore feature flag.
+		 *
+		 * @param input - Optional { repo } override (reserved for future use).
+		 * @returns { created, existing, errors }
+		 */
+		initRepo: (input?: { repo?: string }) => Promise<{
+			created: string[];
+			existing: string[];
+			errors: string[];
+		}>;
 	};
 }
 

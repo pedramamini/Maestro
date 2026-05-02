@@ -74,6 +74,8 @@ export interface ProcessHandlerDependencies {
 	settingsStore: Store<MaestroSettings>;
 	getMainWindow: () => BrowserWindow | null;
 	sessionsStore: Store<{ sessions: any[] }>;
+	/** Optional central web URL used by CLI commands from local or SSH agents. */
+	getMaestroCliBaseUrl?: () => string | null | undefined;
 	/** Optional callback to get active Cue run processes for Process Monitor */
 	getCueProcesses?: () => CueProcessEntry[];
 }
@@ -220,6 +222,13 @@ export function registerProcessHandlers(deps: ProcessHandlerDependencies): void 
 					effectiveCustomEnvVars = {
 						...(effectiveCustomEnvVars || {}),
 						...agent.readOnlyEnvOverrides,
+					};
+				}
+				const maestroCliBaseUrl = deps.getMaestroCliBaseUrl?.();
+				if (maestroCliBaseUrl && !effectiveCustomEnvVars?.MAESTRO_CLI_BASE_URL) {
+					effectiveCustomEnvVars = {
+						...(effectiveCustomEnvVars || {}),
+						MAESTRO_CLI_BASE_URL: maestroCliBaseUrl,
 					};
 				}
 				if (configResolution.customEnvSource !== 'none' && effectiveCustomEnvVars) {

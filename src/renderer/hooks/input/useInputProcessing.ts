@@ -16,6 +16,7 @@ import { hasCapabilityCached } from '../agent/useAgentCapabilities';
 import { gitService } from '../../services/git';
 import { useSettingsStore } from '../../stores/settingsStore';
 import { logger } from '../../utils/logger';
+import { notifyToast } from '../../stores/notificationStore';
 
 let cachedImageOnlyPrompt: string = '';
 let inputProcessingPromptsLoaded = false;
@@ -272,21 +273,96 @@ export function useInputProcessing(deps: UseInputProcessingDeps): UseInputProces
 					return;
 				}
 
+				// Handle /PM-init (#445) — must appear before the generic /PM block
+				// because /PM-init starts with the /PM prefix.
+				if (!isTerminalMode && commandText.startsWith('/PM-init')) {
+					const repoArg = commandText.slice('/PM-init'.length).trim() || undefined;
+					setInputValue('');
+					setSlashCommandOpen(false);
+					syncAiInputToSession('');
+					if (inputRef.current) inputRef.current.style.height = 'auto';
+
+					notifyToast({
+						color: 'theme',
+						title: '/PM-init',
+						message: 'Initializing Project Meta fields…',
+					});
+
+					window.maestro.pmInit
+						.initRepo({ repo: repoArg })
+						.then((res) => {
+							const { created, existing, errors } = res;
+							if (errors.length > 0) {
+								notifyToast({
+									color: 'red',
+									title: '/PM-init failed',
+									message: errors.join('; '),
+									dismissible: true,
+								});
+								return;
+							}
+							const parts: string[] = [];
+							if (created.length > 0)
+								parts.push(`Created ${created.length} field${created.length !== 1 ? 's' : ''}`);
+							if (existing.length > 0) parts.push(`${existing.length} already existed`);
+							notifyToast({
+								color: 'green',
+								title: '/PM-init complete',
+								message: parts.join(', ') || 'No fields needed',
+							});
+						})
+						.catch((err: unknown) => {
+							notifyToast({
+								color: 'red',
+								title: '/PM-init error',
+								message: err instanceof Error ? err.message : String(err),
+								dismissible: true,
+							});
+						});
+
+					return;
+				}
+
 				// Check for custom AI commands (only in AI mode)
 				if (!isTerminalMode) {
-					// Parse command and arguments: "/speckit.plan Blah blah" -> baseCommand="/speckit.plan", args="Blah blah"
+					// Parse command and arguments.
+					// For single-word commands (e.g. "/speckit.plan Blah blah"):
+					//   baseCommand="/speckit.plan", commandArgs="Blah blah"
+					// For multi-word commands (e.g. "/PM prd-new <name>"):
+					//   Try the longest matching prefix first so "/PM prd-new" is preferred
+					//   over "/PM" when the user types "/PM prd-new some name".
 					const firstSpaceIndex = commandText.indexOf(' ');
 					const baseCommand =
 						firstSpaceIndex === -1 ? commandText : commandText.substring(0, firstSpaceIndex);
-					const commandArgs =
-						firstSpaceIndex === -1 ? '' : commandText.substring(firstSpaceIndex + 1).trim();
+
+					// Try to find a multi-word command that is a prefix of commandText.
+					// A multi-word command "X Y" matches if commandText equals "X Y" (no args)
+					// or starts with "X Y " (with trailing args).
+					const multiWordMatch = customAICommands.find((cmd) => {
+						if (!cmd.command.includes(' ')) return false;
+						return commandText === cmd.command || commandText.startsWith(cmd.command + ' ');
+					});
+
+					// Determine the effective command and args.
+					// Multi-word match takes precedence over single-word baseCommand match.
+					let effectiveCommand: string;
+					let commandArgs: string;
+					if (multiWordMatch) {
+						effectiveCommand = multiWordMatch.command;
+						commandArgs = commandText.slice(multiWordMatch.command.length).trim();
+					} else {
+						effectiveCommand = baseCommand;
+						commandArgs =
+							firstSpaceIndex === -1 ? '' : commandText.substring(firstSpaceIndex + 1).trim();
+					}
 
 					// Check custom AI commands first, then agent-discovered commands with prompts
 					const matchingAgentCommand = activeSession.agentCommands?.find(
-						(cmd) => cmd.command === baseCommand && cmd.prompt
+						(cmd) => cmd.command === effectiveCommand && cmd.prompt
 					);
 					const matchingCustomCommand =
-						customAICommands.find((cmd) => cmd.command === baseCommand) ||
+						multiWordMatch ||
+						customAICommands.find((cmd) => cmd.command === effectiveCommand) ||
 						(matchingAgentCommand
 							? {
 									command: matchingAgentCommand.command,

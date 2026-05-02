@@ -22,12 +22,14 @@ import { useUnreadBadge } from '../hooks/useUnreadBadge';
 import { useOfflineQueue } from '../hooks/useOfflineQueue';
 import { useMobileSessionManagement } from '../hooks/useMobileSessionManagement';
 import { useOfflineStatus, useDesktopTheme } from '../main';
-import { buildApiUrl } from '../utils/config';
+import { buildApiUrl, getDashboardUrl } from '../utils/config';
 import { triggerHaptic, HAPTIC_PATTERNS } from './constants';
 import { webLogger } from '../utils/logger';
 import { AllSessionsView } from './AllSessionsView';
 import { type RightDrawerTab } from './RightDrawer';
 import { RightPanel } from './RightPanel';
+import { MaestroBoardPanel } from './MaestroBoardPanel';
+import { DevCrewPanel } from './DevCrewPanel';
 import { LeftPanel } from './LeftPanel';
 import { useIsMobile } from '../hooks/useIsMobile';
 import { useGitStatus } from '../hooks/useGitStatus';
@@ -396,8 +398,8 @@ function MobileHeader({
 				<button
 					onClick={onRightDrawerTap}
 					style={headerIconButton(colors, isRightPanelOpen)}
-					aria-label="Files & History"
-					title="Files / History / Git"
+					aria-label="Work panel"
+					title="Work / Files / History / Git"
 				>
 					<svg
 						width="14"
@@ -1070,6 +1072,48 @@ function GroupChatListSheet({ chats, onSelectChat, onNewChat, onClose }: GroupCh
 }
 
 /**
+ * Build the tooltip for the in-cycle "Thinking N tokens" indicator.
+ * Adds the lifetime input/output/cache/reasoning breakdown when available so
+ * the mobile surface reaches parity with the desktop usage display. Reasoning
+ * tokens are reported separately by some agents but are already rolled into
+ * outputTokens upstream — they show as a labeled breakdown line, never added
+ * to the total again.
+ */
+function buildTokenTooltip(
+	currentCycleTokens: number,
+	usageStats?: Partial<import('../../shared/types').UsageStats> | null
+): string {
+	const cycleLine = `${currentCycleTokens.toLocaleString('en-US')} tokens this cycle`;
+	if (!usageStats) return cycleLine;
+
+	const inputTokens = usageStats.inputTokens ?? 0;
+	const outputTokens = usageStats.outputTokens ?? 0;
+	const reasoningTokens = usageStats.reasoningTokens ?? 0;
+	const cacheReadTokens = usageStats.cacheReadInputTokens ?? 0;
+	const cacheCreationTokens = usageStats.cacheCreationInputTokens ?? 0;
+	const totalTokens = inputTokens + outputTokens;
+
+	if (totalTokens === 0) return cycleLine;
+
+	const parts: string[] = [
+		cycleLine,
+		`Input: ${inputTokens.toLocaleString('en-US')}`,
+		`Output: ${outputTokens.toLocaleString('en-US')}`,
+	];
+	if (cacheReadTokens > 0) {
+		parts.push(`Cache read: ${cacheReadTokens.toLocaleString('en-US')}`);
+	}
+	if (cacheCreationTokens > 0) {
+		parts.push(`Cache create: ${cacheCreationTokens.toLocaleString('en-US')}`);
+	}
+	if (reasoningTokens > 0) {
+		parts.push(`Reasoning (in output): ${reasoningTokens.toLocaleString('en-US')}`);
+	}
+	parts.push(`Total: ${totalTokens.toLocaleString('en-US')} tokens`);
+	return parts.join(' | ');
+}
+
+/**
  * Main mobile app component with WebSocket connection management
  */
 export default function MobileApp() {
@@ -1115,8 +1159,18 @@ export default function MobileApp() {
 	const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
 	// Bell filter state is lifted so it survives LeftPanel unmount/remount on mobile.
 	const [showUnreadAgentsOnly, setShowUnreadAgentsOnly] = useState(false);
+	const pathParts = window.location.pathname.split('/').filter(Boolean);
+	const isBoardRoute = pathParts[1] === 'board';
+	const routeProjectPath = new URLSearchParams(window.location.search).get('projectPath');
 	const [showRightDrawer, setShowRightDrawer] = useState(false);
-	const [rightDrawerTab, setRightDrawerTab] = useState<RightDrawerTab>('files');
+	const [rightDrawerTab, setRightDrawerTab] = useState<RightDrawerTab>('board');
+	const [showFullBoard, setShowFullBoard] = useState(isBoardRoute);
+	// Latest claim lifecycle message forwarded to DevCrewPanel for live updates (#448).
+	const [lastClaimMessage, setLastClaimMessage] = useState<
+		| import('../hooks/useWebSocket').AgentDispatchClaimStartedMessage
+		| import('../hooks/useWebSocket').AgentDispatchClaimEndedMessage
+		| null
+	>(null);
 	const [showTabSearch, setShowTabSearch] = useState(savedState.showTabSearch);
 	const [thinkingMode, setThinkingMode] = useState<ThinkingMode>('off');
 	const [commandDrafts, setCommandDrafts] = useState<CommandDraftStore>({});
@@ -1129,6 +1183,11 @@ export default function MobileApp() {
 
 	// Custom slash commands from desktop
 	const [customCommands, setCustomCommands] = useState<CustomCommand[]>([]);
+
+	// Slash commands fetched from the server registry (surface=web, encore-filtered)
+	const [registrySlashCommands, setRegistrySlashCommands] = useState<SlashCommand[]>([]);
+	// Timestamp of last successful registry fetch (for 60s TTL cache)
+	const registryFetchedAtRef = useRef<number>(0);
 
 	// AutoRun state per session (batch processing on desktop)
 	const [autoRunStates, setAutoRunStates] = useState<Record<string, AutoRunState | null>>({});
@@ -1376,6 +1435,7 @@ export default function MobileApp() {
 		state: connectionState,
 		connect,
 		send,
+		subscribe,
 		sendRequest,
 		error,
 		reconnectAttempts,
@@ -1406,6 +1466,12 @@ export default function MobileApp() {
 					);
 				}
 			},
+			// TODO(#432): Terminal PTY for SSH-remote agents spawns an SSH PTY
+			// on the backend (web-server-factory setSpawnTerminalForWebCallback).
+			// The web client cannot currently display a banner indicating the
+			// terminal is connected to a remote host because sessionSshRemoteConfig
+			// is not included in SessionBroadcastData. Deferred: the SSH session
+			// is functional; only the informational banner is missing.
 			onTerminalData: (sessionId, data) => {
 				const inputMode = (activeSession?.inputMode as InputMode | undefined) || 'ai';
 				if (sessionId !== activeSessionId || inputMode !== 'terminal') return;
@@ -1440,6 +1506,9 @@ export default function MobileApp() {
 			onGroupChatStateChange: (chatId, state) => {
 				groupChatStateChangeRef.current?.(chatId, state);
 			},
+			// Dev Crew live updates (#448)
+			onAgentDispatchClaimStarted: (msg) => setLastClaimMessage(msg),
+			onAgentDispatchClaimEnded: (msg) => setLastClaimMessage(msg),
 		},
 	});
 
@@ -1447,6 +1516,13 @@ export default function MobileApp() {
 	useEffect(() => {
 		wsSendRef.current = send;
 	}, [send]);
+
+	useEffect(() => {
+		if (!activeSessionId) return;
+		if (connectionState !== 'connected' && connectionState !== 'authenticated') return;
+
+		subscribe(activeSessionId);
+	}, [activeSessionId, connectionState, subscribe]);
 
 	// Listen for notification click events to navigate to the relevant session
 	useEffect(() => {
@@ -1616,6 +1692,37 @@ export default function MobileApp() {
 
 	// Cue automation hook — uses WebSocket for Cue subscription/activity management
 	const cue = useCue(sendRequest, send, isActuallyConnected);
+
+	// Fetch slash command registry from server (surface=web, encore-filtered).
+	// Cached for 60 s — re-fetches when connection is (re)established.
+	useEffect(() => {
+		if (!isActuallyConnected) return;
+
+		const CACHE_TTL_MS = 60_000;
+		const now = Date.now();
+		if (now - registryFetchedAtRef.current < CACHE_TTL_MS) return;
+
+		const url = buildApiUrl('/slash-commands?surface=web');
+		fetch(url)
+			.then((res) => (res.ok ? res.json() : null))
+			.then(
+				(
+					data: { commands?: Array<{ verb: string; description: string; aiOnly?: boolean }> } | null
+				) => {
+					if (!data?.commands) return;
+					const mapped: SlashCommand[] = data.commands.map((cmd) => ({
+						command: cmd.verb,
+						description: cmd.description,
+						aiOnly: cmd.aiOnly ?? false,
+					}));
+					setRegistrySlashCommands(mapped);
+					registryFetchedAtRef.current = Date.now();
+				}
+			)
+			.catch(() => {
+				// Graceful degradation: registry unavailable → keep previous/defaults
+			});
+	}, [isActuallyConnected]);
 
 	// Keep settings changed ref in sync
 	useEffect(() => {
@@ -1921,11 +2028,36 @@ export default function MobileApp() {
 	}, [cue]);
 
 	// Handle opening the right drawer on a specific tab
-	const handleOpenRightDrawer = useCallback((tab: RightDrawerTab = 'files') => {
+	const handleOpenRightDrawer = useCallback((tab: RightDrawerTab = 'board') => {
 		setRightDrawerTab(tab);
 		setShowRightDrawer(true);
 		triggerHaptic(HAPTIC_PATTERNS.tap);
 	}, []);
+
+	const handleOpenFullBoard = useCallback(() => {
+		setShowFullBoard(true);
+		triggerHaptic(HAPTIC_PATTERNS.tap);
+	}, []);
+
+	const handleCloseFullBoard = useCallback(() => {
+		if (isBoardRoute) {
+			window.location.href = getDashboardUrl();
+			return;
+		}
+		setShowFullBoard(false);
+		triggerHaptic(HAPTIC_PATTERNS.tap);
+	}, [isBoardRoute]);
+
+	useEffect(() => {
+		if (!showFullBoard) return;
+		const handleKeyDown = (event: KeyboardEvent) => {
+			if (event.key === 'Escape') {
+				handleCloseFullBoard();
+			}
+		};
+		document.addEventListener('keydown', handleKeyDown);
+		return () => document.removeEventListener('keydown', handleKeyDown);
+	}, [handleCloseFullBoard, showFullBoard]);
 
 	// Handle closing the right drawer
 	const handleCloseRightDrawer = useCallback(() => {
@@ -2057,7 +2189,7 @@ export default function MobileApp() {
 		}
 	}, [activeSessionId]);
 
-	// Combined slash commands (default + custom from desktop)
+	// Combined slash commands (registry from server > static defaults + custom from desktop)
 	const allSlashCommands = useMemo((): SlashCommand[] => {
 		// Convert custom commands to SlashCommand format
 		const customSlashCommands: SlashCommand[] = customCommands.map((cmd) => ({
@@ -2065,9 +2197,14 @@ export default function MobileApp() {
 			description: cmd.description,
 			aiOnly: true, // Custom commands are AI-only
 		}));
-		// Combine defaults with custom commands
-		return [...DEFAULT_SLASH_COMMANDS, ...customSlashCommands];
-	}, [customCommands]);
+		// Use server registry when available (encore-filtered, surface=web).
+		// Fall back to static DEFAULT_SLASH_COMMANDS when not yet fetched.
+		const base = registrySlashCommands.length > 0 ? registrySlashCommands : DEFAULT_SLASH_COMMANDS;
+		// Append custom commands, deduplicating by command string
+		const baseVerbs = new Set(base.map((c) => c.command));
+		const uniqueCustom = customSlashCommands.filter((c) => !baseVerbs.has(c.command));
+		return [...base, ...uniqueCustom];
+	}, [customCommands, registrySlashCommands]);
 
 	// Collect all responses from sessions for navigation
 	const allResponses = useMemo((): ResponseItem[] => {
@@ -2128,6 +2265,51 @@ export default function MobileApp() {
 	const resolvedShortcuts = useMemo(
 		() => resolveWebShortcuts(settingsHook.settings?.shortcuts),
 		[settingsHook.settings?.shortcuts]
+	);
+
+	const handleRemoveQueueItem = useCallback(
+		(itemId: string) => {
+			if (!activeSessionId) return;
+			send({ type: 'remove_queue_item', sessionId: activeSessionId, itemId });
+			setSessions((prev) =>
+				prev.map((s) =>
+					s.id === activeSessionId
+						? {
+								...s,
+								executionQueue: (s.executionQueue || []).filter((item) => item.id !== itemId),
+							}
+						: s
+				)
+			);
+		},
+		[activeSessionId, send, setSessions]
+	);
+
+	const handleReorderQueueItem = useCallback(
+		(fromIndex: number, toIndex: number) => {
+			if (!activeSessionId) return;
+			const queueLength = activeSession?.executionQueue?.length ?? 0;
+			if (
+				fromIndex === toIndex ||
+				fromIndex < 0 ||
+				fromIndex >= queueLength ||
+				toIndex < 0 ||
+				toIndex >= queueLength
+			) {
+				return;
+			}
+			send({ type: 'reorder_queue', sessionId: activeSessionId, fromIndex, toIndex });
+			setSessions((prev) =>
+				prev.map((s) => {
+					if (s.id !== activeSessionId) return s;
+					const executionQueue = [...(s.executionQueue || [])];
+					const [movedItem] = executionQueue.splice(fromIndex, 1);
+					executionQueue.splice(toIndex, 0, movedItem);
+					return { ...s, executionQueue };
+				})
+			);
+		},
+		[activeSession?.executionQueue?.length, activeSessionId, send, setSessions]
 	);
 
 	useMobileKeyboardHandler({
@@ -2213,7 +2395,7 @@ export default function MobileApp() {
 				edgeSwipeRef.current = null;
 				if (edge === 'right' && deltaX < 0) {
 					// Swipe left from right edge — open right drawer
-					handleOpenRightDrawer('files');
+					handleOpenRightDrawer('board');
 				} else if (edge === 'left' && deltaX > 0) {
 					// Swipe right from left edge — open left panel
 					setShowLeftPanel(true);
@@ -2266,6 +2448,29 @@ export default function MobileApp() {
 				</svg>
 			),
 			action: () => setShowAllSessions(true),
+		});
+		acts.push({
+			id: 'nav-maestro-board',
+			label: 'Open Maestro Board',
+			category: 'Navigation',
+			icon: (
+				<svg
+					width="18"
+					height="18"
+					viewBox="0 0 24 24"
+					fill="none"
+					stroke="currentColor"
+					strokeWidth="2"
+					strokeLinecap="round"
+					strokeLinejoin="round"
+				>
+					<rect x="3" y="3" width="7" height="7" rx="1" />
+					<rect x="14" y="3" width="7" height="7" rx="1" />
+					<rect x="3" y="14" width="7" height="7" rx="1" />
+					<rect x="14" y="14" width="7" height="7" rx="1" />
+				</svg>
+			),
+			action: handleOpenFullBoard,
 		});
 		acts.push({
 			id: 'nav-files',
@@ -2793,6 +2998,7 @@ export default function MobileApp() {
 		activeGroupChats.length,
 		settingsHook,
 		agentManagement,
+		handleOpenFullBoard,
 		handleOpenRightDrawer,
 		handleOpenAutoRunPanel,
 		handleModeToggle,
@@ -2910,6 +3116,8 @@ export default function MobileApp() {
 		// Get logs based on current input mode
 		const currentLogs =
 			activeSession.inputMode === 'ai' ? sessionLogs.aiLogs : sessionLogs.shellLogs;
+		const queue = activeSession.executionQueue || [];
+		const currentCycleTokens = activeSession.currentCycleTokens || 0;
 
 		// Show message history
 		return (
@@ -2926,6 +3134,114 @@ export default function MobileApp() {
 					overflow: 'hidden', // Contain MessageHistory's scroll
 				}}
 			>
+				{(queue.length > 0 || currentCycleTokens > 0) && (
+					<div
+						style={{
+							display: 'flex',
+							flexDirection: 'column',
+							gap: '6px',
+							padding: '8px 10px',
+							backgroundColor: colors.bgSidebar,
+							border: `1px solid ${colors.border}`,
+							borderRadius: '6px',
+							fontSize: '12px',
+						}}
+					>
+						<div
+							style={{
+								display: 'flex',
+								alignItems: 'center',
+								gap: '8px',
+								flexWrap: 'wrap',
+								color: colors.textDim,
+							}}
+						>
+							{currentCycleTokens > 0 && (
+								<span title={buildTokenTooltip(currentCycleTokens, activeSession.usageStats)}>
+									Thinking {currentCycleTokens.toLocaleString('en-US')} tokens
+								</span>
+							)}
+							{queue.length > 0 && <span>{queue.length} queued</span>}
+						</div>
+						{queue.length > 0 && (
+							<div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+								{queue.map((item, index) => (
+									<div
+										key={item.id}
+										style={{
+											display: 'grid',
+											gridTemplateColumns: '1fr auto auto auto',
+											alignItems: 'center',
+											gap: '6px',
+											minHeight: '28px',
+										}}
+									>
+										<span
+											style={{
+												overflow: 'hidden',
+												textOverflow: 'ellipsis',
+												whiteSpace: 'nowrap',
+												color: colors.textMain,
+											}}
+											title={item.text || item.command || item.commandDescription || item.type}
+										>
+											{item.command || item.text || item.commandDescription || item.type}
+										</span>
+										<button
+											type="button"
+											onClick={() => handleReorderQueueItem(index, index - 1)}
+											disabled={index === 0}
+											aria-disabled={index === 0}
+											style={{
+												width: '28px',
+												height: '28px',
+												borderRadius: '4px',
+												border: `1px solid ${colors.border}`,
+												backgroundColor: colors.bgMain,
+												color: index === 0 ? colors.textDim : colors.textMain,
+											}}
+											title="Move queued item up"
+										>
+											↑
+										</button>
+										<button
+											type="button"
+											onClick={() => handleReorderQueueItem(index, index + 1)}
+											disabled={index === queue.length - 1}
+											aria-disabled={index === queue.length - 1}
+											style={{
+												width: '28px',
+												height: '28px',
+												borderRadius: '4px',
+												border: `1px solid ${colors.border}`,
+												backgroundColor: colors.bgMain,
+												color: index === queue.length - 1 ? colors.textDim : colors.textMain,
+											}}
+											title="Move queued item down"
+										>
+											↓
+										</button>
+										<button
+											type="button"
+											onClick={() => handleRemoveQueueItem(item.id)}
+											style={{
+												width: '28px',
+												height: '28px',
+												borderRadius: '4px',
+												border: `1px solid ${colors.border}`,
+												backgroundColor: colors.bgMain,
+												color: colors.error,
+											}}
+											title="Remove queued item"
+										>
+											×
+										</button>
+									</div>
+								))}
+							</div>
+						)}
+					</div>
+				)}
 				{currentInputMode === 'terminal' ? (
 					<WebTerminal
 						key={`terminal-${activeSessionId}`}
@@ -3024,7 +3340,7 @@ export default function MobileApp() {
 					if (showRightDrawer) {
 						handleCloseRightDrawer();
 					} else {
-						handleOpenRightDrawer('files');
+						handleOpenRightDrawer('board');
 					}
 				}}
 				isRightPanelOpen={showRightDrawer}
@@ -3271,6 +3587,67 @@ export default function MobileApp() {
 				/>
 			)}
 
+			{showFullBoard && (
+				<div
+					style={{
+						position: 'fixed',
+						inset: 0,
+						zIndex: 420,
+						display: 'flex',
+						flexDirection: 'column',
+						backgroundColor: colors.bgMain,
+						color: colors.textMain,
+					}}
+					role="dialog"
+					aria-label="Maestro Board"
+				>
+					<div
+						style={{
+							display: 'flex',
+							alignItems: 'center',
+							justifyContent: 'space-between',
+							padding: 'max(12px, env(safe-area-inset-top)) 14px 10px',
+							borderBottom: `1px solid ${colors.border}`,
+							backgroundColor: colors.bgSidebar,
+							flexShrink: 0,
+						}}
+					>
+						<div>
+							<div style={{ fontSize: '15px', fontWeight: 750 }}>Maestro Board</div>
+							<div style={{ fontSize: '11px', color: colors.textDim }}>
+								{routeProjectPath ?? activeSession?.cwd ?? 'No project selected'}
+							</div>
+						</div>
+						<button
+							onClick={handleCloseFullBoard}
+							style={{
+								border: `1px solid ${colors.border}`,
+								borderRadius: '8px',
+								backgroundColor: colors.bgMain,
+								color: colors.textMain,
+								padding: '7px 10px',
+								fontSize: '12px',
+								fontWeight: 650,
+							}}
+						>
+							Close
+						</button>
+					</div>
+					<div style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden' }}>
+						<MaestroBoardPanel
+							projectPath={routeProjectPath ?? activeSession?.cwd}
+							displayMode="full"
+						/>
+						<div style={{ borderTop: `1px solid ${colors.border}` }}>
+							<DevCrewPanel
+								projectPath={routeProjectPath ?? activeSession?.cwd}
+								lastMessage={lastClaimMessage}
+							/>
+						</div>
+					</div>
+				</div>
+			)}
+
 			{/* Horizontal layout: main content + optional right panel */}
 			<div
 				style={{
@@ -3366,6 +3743,9 @@ export default function MobileApp() {
 						panelRef={isMobile ? undefined : rightPanelResize.panelRef}
 						width={isMobile ? undefined : rightPanelResize.width}
 						onResizeStart={isMobile ? undefined : rightPanelResize.onResizeStart}
+						devCrewEnabled={true}
+						lastClaimMessage={lastClaimMessage}
+						onOpenFullBoard={handleOpenFullBoard}
 					/>
 				)}
 			</div>

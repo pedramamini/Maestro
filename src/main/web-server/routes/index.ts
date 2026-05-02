@@ -27,3 +27,20 @@ export {
 	LiveSessionInfo as WsLiveSessionInfo,
 	CustomAICommand as WsCustomAICommand,
 } from './wsRoute';
+
+export { registerAgentDispatchRoutes, AgentDispatchRouteDependencies } from './agentDispatchRoutes';
+export {
+	registerDeliveryPlannerRoutes,
+	DeliveryPlannerRouteDependencies,
+} from './deliveryPlannerRoutes';
+export {
+	registerPlanningPipelineRoutes,
+	PlanningPipelineRouteDependencies,
+} from './planningPipelineRoutes';
+export {
+	registerConversationalPrdRoutes,
+	ConversationalPrdRouteDependencies,
+} from './conversationalPrdRoutes';
+export { registerProjectRolesRoutes, ProjectRolesRouteDependencies } from './projectRolesRoutes';
+export { registerWorkGraphRoutes, WorkGraphRouteDependencies } from './workGraphRoutes';
+export { registerAiWikiRoutes, AiWikiRouteDependencies } from './aiWikiRoutes';

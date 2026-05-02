@@ -239,6 +239,12 @@ interface QuickActionsModalProps {
 	// Maestro Cue
 	onOpenMaestroCue?: () => void;
 	onConfigureCue?: (session: Session) => void;
+	// Maestro Board
+	onOpenAgentDispatch?: () => void;
+	// Delivery Planner
+	onOpenDeliveryPlanner?: () => void;
+	// Conversational PRD Planner
+	onOpenConversationalPrd?: () => void;
 }
 
 export const QuickActionsModal = memo(function QuickActionsModal(props: QuickActionsModalProps) {
@@ -336,6 +342,9 @@ export const QuickActionsModal = memo(function QuickActionsModal(props: QuickAct
 		onOpenDirectorNotes,
 		onOpenMaestroCue,
 		onConfigureCue,
+		onOpenAgentDispatch,
+		onOpenDeliveryPlanner,
+		onOpenConversationalPrd,
 	} = props;
 
 	// UI store actions for search commands (avoid threading more props through 3-layer chain)
@@ -1565,6 +1574,51 @@ export const QuickActionsModal = memo(function QuickActionsModal(props: QuickAct
 						subtext: 'Open YAML editor for event-driven automation',
 						action: () => {
 							onConfigureCue(activeSession);
+							setQuickActionOpen(false);
+						},
+					},
+				]
+			: []),
+		// Maestro Board - full project-scoped work board
+		...(onOpenAgentDispatch
+			? [
+					{
+						id: 'agentDispatch',
+						label: 'Maestro Board',
+						shortcut: shortcuts.openAgentDispatch,
+						subtext: 'Open the local Work Graph board for this project',
+						action: () => {
+							onOpenAgentDispatch();
+							setQuickActionOpen(false);
+						},
+					},
+				]
+			: []),
+		// Delivery Planner
+		...(onOpenDeliveryPlanner
+			? [
+					{
+						id: 'deliveryPlanner',
+						label: 'Delivery Planner',
+						shortcut: shortcuts.openDeliveryPlanner,
+						subtext: 'Manage PRDs, epics, and local Work Graph sync',
+						action: () => {
+							onOpenDeliveryPlanner();
+							setQuickActionOpen(false);
+						},
+					},
+				]
+			: []),
+		// Conversational PRD Planner
+		...(onOpenConversationalPrd
+			? [
+					{
+						id: 'conversationalPrd',
+						label: 'Conversational PRD',
+						shortcut: shortcuts.openConversationalPrd,
+						subtext: 'Plan a new feature with AI-guided PRD conversation',
+						action: () => {
+							onOpenConversationalPrd();
 							setQuickActionOpen(false);
 						},
 					},

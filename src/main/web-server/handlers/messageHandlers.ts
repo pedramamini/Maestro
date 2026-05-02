@@ -28,6 +28,8 @@
  * - stop_auto_run: Stop an active auto-run for a session
  * - get_settings: Fetch current web settings
  * - set_setting: Modify a single setting (allowlisted keys only)
+ * - remove_queue_item: Remove a queued session item
+ * - reorder_queue: Reorder queued session items
  */
 
 import path from 'path';
@@ -204,6 +206,8 @@ export interface MessageHandlerCallbacks {
 			};
 		}
 	) => Promise<{ success: boolean; playbookId?: string; error?: string }>;
+	removeQueueItem: (sessionId: string, itemId: string) => Promise<boolean>;
+	reorderQueue: (sessionId: string, fromIndex: number, toIndex: number) => Promise<boolean>;
 	getSessions: () => Array<{
 		id: string;
 		name: string;
@@ -271,6 +275,23 @@ export interface MessageHandlerCallbacks {
 		config: { cwd: string; cols?: number; rows?: number }
 	) => Promise<{ success: boolean; pid: number }>;
 	killTerminalForWeb: (sessionId: string) => boolean;
+	/**
+	 * Build a file tree for a session, routing to SSH when the session is SSH-remote.
+	 * Returns the tree array when the session is SSH-remote (runs `find` on the remote),
+	 * or `null` when the session is local (handler falls back to local fs).
+	 * Throws an Error with message starting with "SSH_REMOTE_UNRESOLVED" when SSH is
+	 * configured but the remote cannot be resolved — the handler will surface a clear error.
+	 */
+	buildSshFileTree: (
+		sessionId: string,
+		dirPath: string,
+		maxDepth: number
+	) => Promise<Array<{
+		name: string;
+		type: 'file' | 'folder';
+		children?: any[];
+		path: string;
+	}> | null>;
 	notifyToast: (params: NotifyToastParams) => Promise<boolean>;
 	notifyCenterFlash: (params: NotifyCenterFlashParams) => Promise<boolean>;
 }
@@ -551,6 +572,14 @@ export class WebSocketMessageHandler {
 				this.handleNotifyCenterFlash(client, message);
 				break;
 
+			case 'remove_queue_item':
+				this.handleRemoveQueueItem(client, message);
+				break;
+
+			case 'reorder_queue':
+				this.handleReorderQueue(client, message);
+				break;
+
 			default:
 				this.handleUnknown(client, message);
 		}
@@ -615,23 +644,9 @@ export class WebSocketMessageHandler {
 			return;
 		}
 
-		// Check if session is busy - prevent race conditions between desktop and web.
-		// `force: true` opts out of this guard (see `maestro-cli send --live --force`).
-		if (sessionDetail.state === 'busy' && !force) {
-			this.sendError(
-				client,
-				'Session is busy - please wait for the current operation to complete',
-				{
-					sessionId,
-				}
-			);
-			logger.debug(`Command rejected - session ${sessionId} is busy`, LOG_CONTEXT);
-			return;
-		}
 		if (sessionDetail.state === 'busy' && force) {
 			logger.info(`[Web Command] Force-dispatching to busy session ${sessionId}`, LOG_CONTEXT);
 		}
-
 		// Use client's inputMode if provided, otherwise fall back to server state
 		const effectiveMode = clientInputMode || sessionDetail.inputMode;
 		const isAiMode = effectiveMode === 'ai';
@@ -858,6 +873,55 @@ export class WebSocketMessageHandler {
 			});
 			this.send(client, { type: 'sessions_list', sessions: sessionsWithLiveInfo });
 		}
+	}
+
+	private handleRemoveQueueItem(client: WebClient, message: WebClientMessage): void {
+		const sessionId = message.sessionId as string;
+		const itemId = message.itemId as string;
+
+		if (!sessionId || !itemId) {
+			this.sendError(client, 'Missing sessionId or itemId');
+			return;
+		}
+
+		if (!this.callbacks.removeQueueItem) {
+			this.sendError(client, 'Queue removal not configured');
+			return;
+		}
+
+		this.callbacks
+			.removeQueueItem(sessionId, itemId)
+			.then((success) => {
+				this.send(client, { type: 'remove_queue_item_result', success, sessionId, itemId });
+			})
+			.catch((error) => {
+				this.sendError(client, `Failed to remove queue item: ${error.message}`);
+			});
+	}
+
+	private handleReorderQueue(client: WebClient, message: WebClientMessage): void {
+		const sessionId = message.sessionId as string;
+		const fromIndex = Number(message.fromIndex);
+		const toIndex = Number(message.toIndex);
+
+		if (!sessionId || !Number.isInteger(fromIndex) || !Number.isInteger(toIndex)) {
+			this.sendError(client, 'Missing sessionId, fromIndex, or toIndex');
+			return;
+		}
+
+		if (!this.callbacks.reorderQueue) {
+			this.sendError(client, 'Queue reorder not configured');
+			return;
+		}
+
+		this.callbacks
+			.reorderQueue(sessionId, fromIndex, toIndex)
+			.then((success) => {
+				this.send(client, { type: 'reorder_queue_result', success, sessionId, fromIndex, toIndex });
+			})
+			.catch((error) => {
+				this.sendError(client, `Failed to reorder queue: ${error.message}`);
+			});
 	}
 
 	/**
@@ -1150,8 +1214,10 @@ export class WebSocketMessageHandler {
 	}
 
 	/**
-	 * Handle get_file_tree message - read directory tree for file explorer
-	 * Uses Node.js fs directly (no IPC to renderer needed)
+	 * Handle get_file_tree message - read directory tree for file explorer.
+	 * For SSH-remote sessions, delegates to the buildSshFileTree callback which
+	 * runs `find` on the remote host instead of reading the local filesystem.
+	 * For local sessions, uses Node.js fs directly (no IPC to renderer needed).
 	 */
 	private handleGetFileTree(client: WebClient, message: WebClientMessage): void {
 		const sessionId = message.sessionId as string;
@@ -1176,14 +1242,36 @@ export class WebSocketMessageHandler {
 			return;
 		}
 
-		this.buildFileTree(dirPath, maxDepth)
-			.then((tree) => {
-				this.send(client, {
-					type: 'file_tree_data',
-					sessionId,
-					tree,
-					path: dirPath,
-					requestId: message.requestId,
+		// Attempt SSH-aware file tree first.  The callback returns:
+		//   - Array  → session is SSH-remote; use the returned tree directly.
+		//   - null   → session is local; fall through to local fs.
+		//   - throws → SSH was configured but unresolvable; propagate the error.
+		const sshTreePromise = this.callbacks.buildSshFileTree
+			? this.callbacks.buildSshFileTree(sessionId, dirPath, maxDepth)
+			: Promise.resolve(null);
+
+		sshTreePromise
+			.then((sshTree) => {
+				if (sshTree !== null) {
+					// SSH path taken — tree already built remotely
+					this.send(client, {
+						type: 'file_tree_data',
+						sessionId,
+						tree: sshTree,
+						path: dirPath,
+						requestId: message.requestId,
+					});
+					return;
+				}
+				// Local path — build tree from local filesystem
+				return this.buildFileTree(dirPath, maxDepth).then((tree) => {
+					this.send(client, {
+						type: 'file_tree_data',
+						sessionId,
+						tree,
+						path: dirPath,
+						requestId: message.requestId,
+					});
 				});
 			})
 			.catch((error) => {

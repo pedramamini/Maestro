@@ -81,6 +81,7 @@ export const SETTINGS_DEFAULTS: MaestroSettings = {
 	annotatorStreamline: 0.5,
 	annotatorTaperStart: 0,
 	annotatorTaperEnd: 0,
+	projectGithubMap: {},
 };
 
 export const SESSIONS_DEFAULTS: SessionsData = {

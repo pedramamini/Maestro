@@ -141,7 +141,7 @@ describe('ApiRoutes', () => {
 
 	describe('Route Registration', () => {
 		it('should register all API routes', () => {
-			expect(mockFastify.get).toHaveBeenCalledTimes(4); // sessions, session/:id, theme, history
+			expect(mockFastify.get).toHaveBeenCalledTimes(5); // sessions, session/:id, theme, history, slash-commands
 			expect(mockFastify.post).toHaveBeenCalledTimes(2); // send, interrupt
 		});
 

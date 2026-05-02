@@ -23,6 +23,7 @@ export interface SearchableSetting {
 		| 'theme'
 		| 'notifications'
 		| 'aicommands'
+		| 'devteams'
 		| 'ssh'
 		| 'environment'
 		| 'encore'
@@ -720,6 +721,32 @@ export const AI_COMMANDS_SETTINGS: SearchableSetting[] = [
 ];
 
 // ---------------------------------------------------------------------------
+// Dev Teams Tab
+// ---------------------------------------------------------------------------
+export const DEV_TEAMS_SETTINGS: SearchableSetting[] = [
+	{
+		id: 'devteams-roster',
+		tab: 'devteams',
+		tabLabel: 'Dev Teams',
+		label: 'Dev Teams',
+		description:
+			'Configure per-project runner, fixer, reviewer, and merger role assignments for Maestro Board automation',
+		keywords: [
+			'dev crew',
+			'roles',
+			'maestro board',
+			'runner',
+			'fixer',
+			'reviewer',
+			'merger',
+			'auto pickup',
+			'team',
+			'project',
+		],
+	},
+];
+
+// ---------------------------------------------------------------------------
 // SSH Hosts Tab
 // ---------------------------------------------------------------------------
 export const SSH_SETTINGS: SearchableSetting[] = [
@@ -838,6 +865,38 @@ export const ENCORE_SETTINGS: SearchableSetting[] = [
 		],
 	},
 	{
+		id: 'encore-agent-dispatch',
+		tab: 'encore',
+		tabLabel: 'Encore Features',
+		label: 'Dev Crew Automation',
+		description: 'Runner roles, claims, and automatic pickup for Maestro Board work',
+		keywords: ['dev crew', 'agent dispatch', 'runner', 'claim', 'pickup', 'maestro board'],
+	},
+	{
+		id: 'encore-delivery-planner',
+		tab: 'encore',
+		tabLabel: 'Encore Features',
+		label: 'Delivery Planner',
+		description: 'PRD to epic to task planning with local Work Graph sync',
+		keywords: ['delivery planner', 'prd', 'epic', 'task', 'work graph', 'planning'],
+	},
+	{
+		id: 'encore-planning-pipeline',
+		tab: 'encore',
+		tabLabel: 'Encore Features',
+		label: 'Planning Pipeline',
+		description: 'Column-per-stage dashboard from idea through merged work',
+		keywords: ['planning pipeline', 'stage', 'dashboard', 'idea', 'merged'],
+	},
+	{
+		id: 'encore-conversational-prd',
+		tab: 'encore',
+		tabLabel: 'Encore Features',
+		label: 'Conversational PRD',
+		description: 'Plan features via AI-guided conversation, then commit as a PRD item',
+		keywords: ['conversational prd', 'prd', 'interview', 'planning', 'feature'],
+	},
+	{
 		id: 'encore-director-notes',
 		tab: 'encore',
 		tabLabel: 'Encore Features',
@@ -897,6 +956,7 @@ export const ALL_SEARCHABLE_SETTINGS: SearchableSetting[] = [
 	...THEME_SETTINGS,
 	...NOTIFICATION_SETTINGS,
 	...AI_COMMANDS_SETTINGS,
+	...DEV_TEAMS_SETTINGS,
 	...SSH_SETTINGS,
 	...ENVIRONMENT_SETTINGS,
 	...ENCORE_SETTINGS,

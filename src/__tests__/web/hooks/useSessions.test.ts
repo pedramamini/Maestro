@@ -32,13 +32,17 @@ function createMockWebSocketReturn(
 	return {
 		state: 'disconnected' as WebSocketState,
 		isAuthenticated: false,
-		isConnecting: false,
+		isConnected: false,
 		error: null,
 		clientId: null,
+		reconnectAttempts: 0,
 		connect: vi.fn(),
 		disconnect: vi.fn(),
 		authenticate: vi.fn(),
+		ping: vi.fn(),
+		subscribe: vi.fn().mockReturnValue(true),
 		send: vi.fn().mockReturnValue(true),
+		sendRequest: vi.fn(),
 		...overrides,
 	};
 }

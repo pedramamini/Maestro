@@ -33,6 +33,7 @@ function TabBarInner({
 	onNewFileTab,
 	onNewBrowserTab,
 	onNewTerminalTab,
+	onOpenPmChat,
 	onRequestRename,
 	onTabReorder,
 	onTabStar,
@@ -636,6 +637,7 @@ function TabBarInner({
 				onNewFileTab={onNewFileTab}
 				onNewBrowserTab={onNewBrowserTab}
 				onNewTerminalTab={onNewTerminalTab}
+				onOpenPmChat={onOpenPmChat}
 				newTabKeys={tabShortcuts.newTab?.keys ?? ['Meta', 't']}
 				fileTabKeys={tabShortcuts.newFileTab?.keys ?? ['Alt', 'n']}
 				browserTabKeys={tabShortcuts.newBrowserTab?.keys ?? ['Meta', 'b']}

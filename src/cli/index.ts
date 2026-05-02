@@ -42,6 +42,31 @@ import { promptsGet, promptsList } from './commands/prompts-get';
 import { gistCreate } from './commands/gist';
 import { notifyToast } from './commands/notify-toast';
 import { notifyFlash } from './commands/notify-flash';
+import {
+	plannerDashboard,
+	plannerPrdCreate,
+	plannerPrdDecompose,
+	plannerEpicDecompose,
+	plannerSync,
+} from './commands/planner';
+import {
+	fleetBoard,
+	fleetList,
+	fleetClaim,
+	fleetRelease,
+	fleetPause,
+	fleetResume,
+} from './commands/fleet';
+import {
+	convPrdList,
+	convPrdStart,
+	convPrdAsk,
+	convPrdShow,
+	convPrdFinalize,
+	convPrdArchive,
+} from './commands/conv-prd';
+import { pmWorkList, pmWorkCreate, pmWorkUpdate } from './commands/pm-work';
+import { aiWikiStatus, aiWikiRefresh, aiWikiContext } from './commands/ai-wiki';
 
 // Injected at build time by scripts/build-cli.mjs via esbuild `define`.
 // The typeof guard keeps non-esbuild execution paths (ts-node, plain tsc output) from
@@ -522,6 +547,349 @@ notify
 	.option('-d, --duration <ms>', 'Auto-dismiss after N ms (range: (0, 5000]; default 1500)')
 	.option('--json', 'Output as JSON (for scripting)')
 	.action(notifyFlash);
+
+// Planner commands — Delivery Planner (PRD → epic → tasks → GitHub sync).
+// Requires the running Maestro desktop app with the Delivery Planner encore feature on.
+const planner = program
+	.command('planner')
+	.description('Manage Delivery Planner work items (PRDs, epics, tasks)');
+
+planner
+	.command('dashboard')
+	.description('Show all work items in the Delivery Planner dashboard')
+	.option('-p, --project <path>', 'Project root path (defaults to current directory)')
+	.option('--git-path <path>', 'Git repository root (defaults to --project)')
+	.option('--json', 'Output as JSON (for scripting)')
+	.action((options) =>
+		plannerDashboard({ project: options.project, gitPath: options.gitPath, json: options.json })
+	);
+
+const prd = planner.command('prd').description('Manage PRDs (Product Requirement Documents)');
+
+prd
+	.command('create')
+	.description('Create a new PRD')
+	.requiredOption('-t, --title <title>', 'PRD title')
+	.option('-p, --project <path>', 'Project root path (defaults to current directory)')
+	.option('--git-path <path>', 'Git repository root (defaults to --project)')
+	.option('-d, --description <text>', 'Optional PRD description / problem statement')
+	.option('--json', 'Output as JSON (for scripting)')
+	.action((options) =>
+		plannerPrdCreate({
+			title: options.title,
+			project: options.project,
+			gitPath: options.gitPath,
+			description: options.description,
+			json: options.json,
+		})
+	);
+
+prd
+	.command('decompose <id>')
+	.description('Decompose a PRD into an epic and tasks')
+	.option('--json', 'Output as JSON (for scripting)')
+	.action((id, options) => plannerPrdDecompose(id, { json: options.json }));
+
+const epic = planner.command('epic').description('Manage epics');
+
+epic
+	.command('decompose <id>')
+	.description('Decompose an epic into tasks')
+	.option('--json', 'Output as JSON (for scripting)')
+	.action((id, options) => plannerEpicDecompose(id, { json: options.json }));
+
+planner
+	.command('sync <id>')
+	.description('Sync a work item to external systems')
+	.option('--target <target>', 'Sync target: github | mirror | all (default: all)', 'all')
+	.option('--json', 'Output as JSON (for scripting)')
+	.action((id, options) =>
+		plannerSync(id, {
+			target: options.target as 'github' | 'mirror' | 'all',
+			json: options.json,
+		})
+	);
+
+// PM commands - local Maestro Board / Work Graph access for project agents.
+const pm = program
+	.command('pm')
+	.description('Manage local PM surfaces backed by Maestro Board / Work Graph');
+
+const pmWork = pm.command('work').description('List, create, and update local Work Graph items');
+
+pmWork
+	.command('list')
+	.description('List local Maestro Board work items')
+	.option('-p, --project <path>', 'Filter by project root path')
+	.option('--git-path <path>', 'Filter by Git repository root')
+	.option(
+		'--status <status...>',
+		'Filter by status; accepts repeated values or comma-separated lists'
+	)
+	.option(
+		'--type <type...>',
+		'Filter by item type; accepts repeated values or comma-separated lists'
+	)
+	.option('--tag <tag...>', 'Require tag; accepts repeated values or comma-separated lists')
+	.option(
+		'--source <source...>',
+		'Filter by source; accepts repeated values or comma-separated lists'
+	)
+	.option('--limit <count>', 'Maximum number of items to return')
+	.option('--json', 'Output as JSON (for scripting)')
+	.action((options) =>
+		pmWorkList({
+			project: options.project,
+			gitPath: options.gitPath,
+			status: options.status,
+			type: options.type,
+			tag: options.tag,
+			source: options.source,
+			limit: options.limit,
+			json: options.json,
+		})
+	);
+
+pmWork
+	.command('create')
+	.description('Create a local Maestro Board work item')
+	.requiredOption('-t, --title <title>', 'Work item title')
+	.option('-p, --project <path>', 'Project root path (defaults to current directory)')
+	.option('--git-path <path>', 'Git repository root (defaults to --project)')
+	.option(
+		'--kind <kind>',
+		'PM shortcut kind: prd, epic, or task. Maps to valid Work Graph type/tags.'
+	)
+	.option('--type <type>', 'Work item type (default: task, or kind-derived)')
+	.option('--status <status>', 'Initial work item status')
+	.option('--source <source>', 'Work item source (default: manual)', 'manual')
+	.option('-d, --description <text>', 'Optional description')
+	.option('--tag <tag...>', 'Tag to attach; accepts repeated values or comma-separated lists')
+	.option('--file <path...>', 'Artifact path to attach in metadata.files')
+	.option('--metadata <key=value...>', 'Metadata entry; value may be JSON')
+	.option('--parent <id>', 'Parent Work Graph item ID')
+	.option('--priority <number>', 'Numeric priority')
+	.option('--json', 'Output as JSON (for scripting)')
+	.action((options) =>
+		pmWorkCreate({
+			title: options.title,
+			project: options.project,
+			gitPath: options.gitPath,
+			kind: options.kind,
+			type: options.type,
+			status: options.status,
+			source: options.source,
+			description: options.description,
+			tag: options.tag,
+			file: options.file,
+			metadata: options.metadata,
+			parent: options.parent,
+			priority: options.priority,
+			json: options.json,
+		})
+	);
+
+pmWork
+	.command('update <id>')
+	.description('Update a local Maestro Board work item')
+	.option('-t, --title <title>', 'New title')
+	.option('-d, --description <text>', 'New description')
+	.option('--status <status>', 'New status')
+	.option('--type <type>', 'New work item type')
+	.option('--tag <tag...>', 'Replace tags; accepts repeated values or comma-separated lists')
+	.option('--file <path...>', 'Replace metadata.files with artifact path(s)')
+	.option('--metadata <key=value...>', 'Merge metadata entry; value may be JSON')
+	.option('--parent <id>', 'Set parent Work Graph item ID; pass empty string to clear')
+	.option('--priority <number>', 'Numeric priority')
+	.option('--expected-version <number>', 'Optimistic lock version')
+	.option('--json', 'Output as JSON (for scripting)')
+	.action((id, options) =>
+		pmWorkUpdate(id, {
+			title: options.title,
+			description: options.description,
+			status: options.status,
+			type: options.type,
+			tag: options.tag,
+			file: options.file,
+			metadata: options.metadata,
+			parent: options.parent,
+			priority: options.priority,
+			expectedVersion: options.expectedVersion,
+			json: options.json,
+		})
+	);
+
+// AI Wiki commands - trigger and inspect the app-owned project wiki writer.
+const aiWiki = program
+	.command('ai-wiki')
+	.description('Trigger and inspect AI Wiki files managed by the running Maestro app');
+
+aiWiki
+	.command('status')
+	.description('Show AI Wiki status for a project')
+	.requiredOption('-p, --project <path>', 'Project root path')
+	.option('--ssh-remote <id>', 'SSH remote ID for remote project access')
+	.option('--project-id <id>', 'Override derived wiki project ID')
+	.option('--json', 'Output as JSON (for scripting)')
+	.action((options) =>
+		aiWikiStatus({
+			project: options.project,
+			sshRemote: options.sshRemote,
+			projectId: options.projectId,
+			json: options.json,
+		})
+	);
+
+aiWiki
+	.command('refresh')
+	.description('Refresh AI Wiki files for a project')
+	.requiredOption('-p, --project <path>', 'Project root path')
+	.option('--ssh-remote <id>', 'SSH remote ID for remote project access')
+	.option('--project-id <id>', 'Override derived wiki project ID')
+	.option('--json', 'Output as JSON (for scripting)')
+	.action((options) =>
+		aiWikiRefresh({
+			project: options.project,
+			sshRemote: options.sshRemote,
+			projectId: options.projectId,
+			json: options.json,
+		})
+	);
+
+aiWiki
+	.command('context')
+	.description('Print the compact AI Wiki context packet for a project')
+	.requiredOption('-p, --project <path>', 'Project root path')
+	.option('--ssh-remote <id>', 'SSH remote ID for remote project access')
+	.option('--project-id <id>', 'Override derived wiki project ID')
+	.option('--json', 'Output as JSON (for scripting)')
+	.action((options) =>
+		aiWikiContext({
+			project: options.project,
+			sshRemote: options.sshRemote,
+			projectId: options.projectId,
+			json: options.json,
+		})
+	);
+
+// Fleet commands — Agent Dispatch: manage the fleet of agents that claim Work Graph items.
+// NOTE: "fleet" = Agent Dispatch (long-lived agents claiming work items).
+//       "dispatch" = Tab Dispatch (send a prompt to an agent tab). They are different.
+const fleet = program
+	.command('fleet')
+	.description(
+		'Manage the Agent Dispatch fleet (long-lived agents claiming Work Graph items).\n' +
+			'  NOTE: for tab dispatch (sending prompts to a tab), use `maestro-cli dispatch`.'
+	);
+
+fleet
+	.command('board')
+	.description('Show work items grouped by status (kanban-style board)')
+	.option('-p, --project <path>', 'Filter by project root path')
+	.option('--json', 'Output as JSON (for scripting)')
+	.action((options) => fleetBoard({ project: options.project, json: options.json }));
+
+fleet
+	.command('list')
+	.description('List all fleet entries with readiness, current load, and pickup status')
+	.option('--json', 'Output as JSON (for scripting)')
+	.action((options) => fleetList({ json: options.json }));
+
+fleet
+	.command('claim <workItemId>')
+	.description('Manually assign a work item to a fleet entry')
+	.requiredOption('--to <fleetEntryId>', 'Fleet entry ID to assign the work item to')
+	.option('--note <text>', 'Optional note to attach to the claim')
+	.option('--json', 'Output as JSON (for scripting)')
+	.action((workItemId, options) =>
+		fleetClaim(workItemId, { to: options.to, note: options.note, json: options.json })
+	);
+
+fleet
+	.command('release <workItemId>')
+	.description('Release an active claim on a work item')
+	.option('--json', 'Output as JSON (for scripting)')
+	.action((workItemId, options) => fleetRelease(workItemId, { json: options.json }));
+
+fleet
+	.command('pause <agentId>')
+	.description('Pause auto-pickup for an agent (resets on app restart)')
+	.option('--json', 'Output as JSON (for scripting)')
+	.action((agentId, options) => fleetPause(agentId, { json: options.json }));
+
+fleet
+	.command('resume <agentId>')
+	.description('Resume auto-pickup for a previously-paused agent')
+	.option('--json', 'Output as JSON (for scripting)')
+	.action((agentId, options) => fleetResume(agentId, { json: options.json }));
+
+// Conv-PRD commands — Conversational PRD planner: drive a PRD draft interactively via CLI.
+// Requires the running Maestro desktop app with the Conversational PRD encore feature on.
+// Sessions are persisted to ~/.config/maestro/conversational-prd-sessions.json (Linux/Windows)
+// or ~/Library/Application Support/maestro/conversational-prd-sessions.json (macOS).
+const convPrd = program
+	.command('conv-prd')
+	.description(
+		'Drive the Conversational PRD planner (start sessions, send messages, finalize into Delivery Planner PRDs).\n' +
+			'  Requires Maestro desktop running with Conversational PRD encore feature enabled.'
+	);
+
+convPrd
+	.command('list')
+	.description('List all Conversational PRD sessions')
+	.option('-p, --project <path>', 'Filter by project root path')
+	.option('--include-archived', 'Include archived sessions in the list')
+	.option('--json', 'Output as JSON (for scripting)')
+	.action((options) =>
+		convPrdList({
+			json: options.json,
+			project: options.project,
+			includeArchived: options.includeArchived,
+		})
+	);
+
+convPrd
+	.command('start')
+	.description('Start a new Conversational PRD session, returns { sessionId }')
+	.option('--initial <md>', 'Initial markdown content or brief to seed the session')
+	.option('-p, --project <path>', 'Project root path for the PRD')
+	.option('--json', 'Output as JSON (for scripting)')
+	.action((options) =>
+		convPrdStart({ initial: options.initial, project: options.project, json: options.json })
+	);
+
+convPrd
+	.command('ask <sessionId> <message>')
+	.description('Add a user turn to an existing session and receive the assistant reply')
+	.option('--json', 'Output as JSON (for scripting)')
+	.action((sessionId, message, options) => convPrdAsk(sessionId, message, { json: options.json }));
+
+convPrd
+	.command('show <sessionId>')
+	.description('Show the current state of a session (messages + draft)')
+	.option('--json', 'Output as JSON (for scripting)')
+	.action((sessionId, options) => convPrdShow(sessionId, { json: options.json }));
+
+convPrd
+	.command('finalize <sessionId>')
+	.description(
+		'Finalize the PRD session — emits the final PRD.\n' +
+			'  With --handoff-to-planner, creates a Delivery Planner PRD work item from the result.'
+	)
+	.option('--handoff-to-planner', 'Create a Delivery Planner PRD work item and return its ID')
+	.option('--json', 'Output as JSON (for scripting)')
+	.action((sessionId, options) =>
+		convPrdFinalize(sessionId, {
+			handoffToPlanner: options.handoffToPlanner,
+			json: options.json,
+		})
+	);
+
+convPrd
+	.command('archive <sessionId>')
+	.description('Archive a session (hides it from the default list)')
+	.option('--json', 'Output as JSON (for scripting)')
+	.action((sessionId, options) => convPrdArchive(sessionId, { json: options.json }));
 
 // Commander auto-switches to from: 'electron' when process.versions.electron is
 // set, which is still true under ELECTRON_RUN_AS_NODE=1. In that mode Commander

@@ -60,9 +60,34 @@ vi.mock('lucide-react', () => ({
 			Loading
 		</span>
 	),
+	CheckCircle2: ({ className }: { className?: string }) => (
+		<span data-testid="check-circle-2" className={className}>
+			CheckCircle2
+		</span>
+	),
+	Clock: ({ className }: { className?: string }) => (
+		<span data-testid="clock" className={className}>
+			Clock
+		</span>
+	),
+	WifiOff: ({ className }: { className?: string }) => (
+		<span data-testid="wifi-off" className={className}>
+			WifiOff
+		</span>
+	),
 	GitBranch: ({ className }: { className?: string }) => (
 		<span data-testid="git-branch" className={className}>
 			GitBranch
+		</span>
+	),
+	LayoutDashboard: ({ className }: { className?: string }) => (
+		<span data-testid="layout-dashboard" className={className}>
+			LayoutDashboard
+		</span>
+	),
+	Users: ({ className }: { className?: string }) => (
+		<span data-testid="users" className={className}>
+			Users
 		</span>
 	),
 	Skull: ({ className }: { className?: string }) => (
@@ -73,6 +98,31 @@ vi.mock('lucide-react', () => ({
 	AlertTriangle: ({ className }: { className?: string }) => (
 		<span data-testid="alert-triangle" className={className}>
 			AlertTriangle
+		</span>
+	),
+	Hammer: ({ className }: { className?: string }) => (
+		<span data-testid="hammer" className={className}>
+			Hammer
+		</span>
+	),
+	Wrench: ({ className }: { className?: string }) => (
+		<span data-testid="wrench" className={className}>
+			Wrench
+		</span>
+	),
+	Eye: ({ className }: { className?: string }) => (
+		<span data-testid="eye" className={className}>
+			Eye
+		</span>
+	),
+	GitMerge: ({ className }: { className?: string }) => (
+		<span data-testid="git-merge" className={className}>
+			GitMerge
+		</span>
+	),
+	ShieldCheck: ({ className }: { className?: string }) => (
+		<span data-testid="shield-check" className={className}>
+			ShieldCheck
 		</span>
 	),
 	Play: ({ className }: { className?: string }) => (
@@ -1504,7 +1554,7 @@ describe('RightPanel', () => {
 			const props = createDefaultProps();
 			render(<RightPanel {...props} />);
 
-			expect(screen.getAllByRole('button')).toHaveLength(4); // toggle + 3 tabs
+			expect(screen.getAllByRole('button')).toHaveLength(6); // toggle + Files/Board/History/Auto Run/Dev Crew tabs
 		});
 	});
 

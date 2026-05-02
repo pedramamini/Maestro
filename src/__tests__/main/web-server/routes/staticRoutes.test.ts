@@ -73,8 +73,8 @@ describe('StaticRoutes', () => {
 
 	describe('Route Registration', () => {
 		it('should register all static routes', () => {
-			// 8 routes: /, /health, manifest.json, sw.js, dashboard, dashboard/, session/:id, /:token
-			expect(mockFastify.get).toHaveBeenCalledTimes(8);
+			// 9 routes: /, /health, manifest.json, sw.js, dashboard, dashboard/, board, session/:id, /:token
+			expect(mockFastify.get).toHaveBeenCalledTimes(9);
 		});
 
 		it('should register routes with correct paths', () => {
@@ -84,6 +84,7 @@ describe('StaticRoutes', () => {
 			expect(mockFastify.routes.has(`GET:/${securityToken}/sw.js`)).toBe(true);
 			expect(mockFastify.routes.has(`GET:/${securityToken}`)).toBe(true);
 			expect(mockFastify.routes.has(`GET:/${securityToken}/`)).toBe(true);
+			expect(mockFastify.routes.has(`GET:/${securityToken}/board`)).toBe(true);
 			expect(mockFastify.routes.has(`GET:/${securityToken}/session/:sessionId`)).toBe(true);
 			expect(mockFastify.routes.has('GET:/:token')).toBe(true);
 		});
@@ -168,6 +169,7 @@ describe('StaticRoutes', () => {
 			customRoutes.registerRoutes(customFastify as any);
 
 			expect(customFastify.routes.has(`GET:/${customToken}`)).toBe(true);
+			expect(customFastify.routes.has(`GET:/${customToken}/board`)).toBe(true);
 			expect(customFastify.routes.has(`GET:/${customToken}/manifest.json`)).toBe(true);
 			expect(customFastify.routes.has(`GET:/${customToken}/sw.js`)).toBe(true);
 			expect(customFastify.routes.has(`GET:/${customToken}/session/:sessionId`)).toBe(true);

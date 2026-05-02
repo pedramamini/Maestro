@@ -1,5 +1,5 @@
 import { memo } from 'react';
-import type { Theme, Session, ToolType } from '../../types';
+import type { Theme, Session, ToolType, AgentDispatchProfile } from '../../types';
 
 // Session Management Modal Components
 import { NewInstanceModal, EditAgentModal } from '../NewInstanceModal';
@@ -61,7 +61,9 @@ export interface AppSessionModalsProps {
 			enabled: boolean;
 			remoteId: string | null;
 			workingDirOverride?: string;
-		}
+		},
+		dispatchProfile?: AgentDispatchProfile,
+		aiWikiEnabled?: boolean
 	) => void;
 	editAgentSession: Session | null;
 

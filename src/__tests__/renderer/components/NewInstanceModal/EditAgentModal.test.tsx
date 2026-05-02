@@ -296,7 +296,13 @@ describe('EditAgentModal', () => {
 			{ API_KEY: 'test-key' },
 			expect.anything(), // model
 			expect.anything(), // contextWindow
-			expect.objectContaining({ enabled: false }) // SSH disabled
+			expect.objectContaining({ enabled: false }), // SSH disabled
+			expect.objectContaining({
+				autoPickupEnabled: false,
+				fleetEnabled: false,
+				maxConcurrentClaims: 1,
+			}),
+			false // Project Wiki & PM disabled by default
 		);
 		expect(onClose).toHaveBeenCalled();
 	});
@@ -521,7 +527,13 @@ describe('EditAgentModal', () => {
 				enabled: true,
 				remoteId: 'remote-1',
 				workingDirOverride: '/home/devuser/my-project',
-			})
+			}),
+			expect.objectContaining({
+				autoPickupEnabled: false,
+				fleetEnabled: false,
+				maxConcurrentClaims: 1,
+			}),
+			false // Project Wiki & PM disabled by default
 		);
 	});
 
@@ -586,7 +598,13 @@ describe('EditAgentModal', () => {
 				enabled: true,
 				remoteId: 'remote-1',
 				workingDirOverride: '/explicit/remote/path',
-			})
+			}),
+			expect.objectContaining({
+				autoPickupEnabled: false,
+				fleetEnabled: false,
+				maxConcurrentClaims: 1,
+			}),
+			false // Project Wiki & PM disabled by default
 		);
 	});
 
@@ -657,7 +675,13 @@ describe('EditAgentModal', () => {
 				enabled: false,
 				remoteId: null,
 				shareHistoryToProjectDir: true,
-			})
+			}),
+			expect.objectContaining({
+				autoPickupEnabled: false,
+				fleetEnabled: false,
+				maxConcurrentClaims: 1,
+			}),
+			false // Project Wiki & PM disabled by default
 		);
 	});
 

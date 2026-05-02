@@ -34,6 +34,7 @@ import { useSettingsStore } from '../../stores/settingsStore';
 import { useBatchStore, selectActiveBatchSessionIds } from '../../stores/batchStore';
 import { useShallow } from 'zustand/react/shallow';
 import { useGroupChatStore } from '../../stores/groupChatStore';
+import { useDispatchClaimsStore } from '../../stores/dispatchClaimsStore';
 import { getModalActions, useModalStore } from '../../stores/modalStore';
 import { SessionContextMenu } from './SessionContextMenu';
 import { HamburgerMenuContent } from './HamburgerMenuContent';
@@ -46,6 +47,7 @@ import { useSessionFilterMode } from '../../hooks/session/useSessionFilterMode';
 import { cueService } from '../../services/cue';
 import { captureException } from '../../utils/sentry';
 import { useEventListener } from '../../hooks/utils/useEventListener';
+import type { DispatchRole } from '../../../shared/agent-dispatch-types';
 
 // ============================================================================
 // SessionContextMenu - Right-click context menu for session items
@@ -190,6 +192,78 @@ function SessionListInner(props: SessionListProps) {
 		};
 		// Re-fetch when sessions change so newly added agents show their Cue indicator
 	}, [sessions.length]);
+
+	// Dispatch slot icons: maps session ID → { role, active } for sidebar role icons (#442).
+	// Reads projectRoleSlots for EVERY unique project root across all sessions so icons
+	// render on agents in any configured project, not just the active one.
+	const projectPaths = useMemo(() => {
+		const seen = new Set<string>();
+		for (const s of sessions) if (s.projectRoot) seen.add(s.projectRoot);
+		return Array.from(seen);
+	}, [sessions]);
+	const [allSlots, setAllSlots] = useState<Map<string, Record<string, { agentId?: string }>>>(
+		new Map()
+	);
+	useEffect(() => {
+		let cancelled = false;
+		const api = (
+			window as unknown as {
+				maestro?: { projectRoles?: { get?: (p: string) => Promise<unknown> } };
+			}
+		).maestro?.projectRoles;
+		if (!api?.get) return;
+		(async () => {
+			const m = new Map<string, Record<string, { agentId?: string }>>();
+			for (const path of projectPaths) {
+				try {
+					const res = (await api.get!(path)) as
+						| { success?: boolean; data?: Record<string, { agentId?: string }> }
+						| Record<string, { agentId?: string }>
+						| null;
+					const slots: Record<string, { agentId?: string }> =
+						res &&
+						typeof res === 'object' &&
+						'success' in res &&
+						(res as { success?: boolean }).success
+							? ((res as { data?: Record<string, { agentId?: string }> }).data ?? {})
+							: ((res as Record<string, { agentId?: string }> | null) ?? {});
+					m.set(path, slots);
+				} catch {
+					// ignore — leave path out of map
+				}
+			}
+			if (!cancelled) setAllSlots(m);
+		})();
+		return () => {
+			cancelled = true;
+		};
+	}, [projectPaths]);
+	const activeClaimsByProject = useDispatchClaimsStore((s) => s.claimsByProject);
+	useEffect(() => {
+		useDispatchClaimsStore.getState().initialize();
+	}, []);
+
+	const dispatchSessionMap = useMemo(() => {
+		const map = new Map<string, { roles: DispatchRole[]; activeRoles: Set<DispatchRole> }>();
+		const roles: DispatchRole[] = ['runner', 'fixer', 'reviewer', 'merger'];
+		for (const session of sessions) {
+			if (!session.projectRoot) continue;
+			const slots = allSlots.get(session.projectRoot);
+			if (!slots) continue;
+			const matched: DispatchRole[] = [];
+			const active = new Set<DispatchRole>();
+			for (const role of roles) {
+				if (slots[role]?.agentId === session.id) {
+					matched.push(role);
+					const claimAgentId = activeClaimsByProject.get(session.projectRoot)?.get(role);
+					if (claimAgentId?.agentId === session.id) active.add(role);
+				}
+			}
+			if (matched.length > 0) map.set(session.id, { roles: matched, activeRoles: active });
+		}
+		return map;
+	}, [sessions, allSlots, activeClaimsByProject]);
+
 	const groupChats = useGroupChatStore((s) => s.groupChats);
 	const activeGroupChatId = useGroupChatStore((s) => s.activeGroupChatId);
 	const groupChatState = useGroupChatStore((s) => s.groupChatState);
@@ -576,7 +650,11 @@ function SessionListInner(props: SessionListProps) {
 					jumpNumber={getSessionJumpNumber(session.id)}
 					cueSubscriptionCount={cueSessionMap.get(session.id)?.count}
 					cueActiveRun={cueSessionMap.get(session.id)?.active}
+					aiWikiEnabled={session.aiWikiEnabled}
+					aiWikiUpdating={session.aiWikiUpdating}
 					worktreeChildCount={worktreeChildren.length}
+					dispatchRoles={dispatchSessionMap.get(session.id)?.roles}
+					dispatchActiveRoles={dispatchSessionMap.get(session.id)?.activeRoles}
 					onSelect={selectHandlers.get(session.id)!}
 					onDragStart={dragStartHandlers.get(session.id)!}
 					onDragOver={handleDragOver}
@@ -627,6 +705,10 @@ function SessionListInner(props: SessionListProps) {
 										jumpNumber={getSessionJumpNumber(child.id)}
 										cueSubscriptionCount={cueSessionMap.get(child.id)?.count}
 										cueActiveRun={cueSessionMap.get(child.id)?.active}
+										aiWikiEnabled={child.aiWikiEnabled}
+										aiWikiUpdating={child.aiWikiUpdating}
+										dispatchRoles={dispatchSessionMap.get(child.id)?.roles}
+										dispatchActiveRoles={dispatchSessionMap.get(child.id)?.activeRoles}
 										onSelect={selectHandlers.get(child.id)!}
 										onDragStart={dragStartHandlers.get(child.id)!}
 										onContextMenu={contextMenuHandlers.get(child.id)!}

@@ -81,6 +81,36 @@ export interface MaestroSettings {
 	lastSelectedPromptId: string | null;
 	// Spell check in input areas
 	spellCheck: boolean;
+	// Delivery Planner GitHub configuration (user-set; no default — absent means
+	// the config-driven safety guards are no-ops until the user opts in).
+	deliveryPlannerGithub?: {
+		/** GitHub owner (org or user) that the Delivery Planner may write to. */
+		owner?: string;
+		/** GitHub repository name that the Delivery Planner may write to. */
+		repo?: string;
+		/**
+		 * Optional upstream that must NEVER be targeted (e.g. the canonical
+		 * open-source project this fork was cloned from).  When set, the
+		 * fork-only guard rejects any write that targets this slug.
+		 */
+		upstream?: { owner: string; repo: string };
+	};
+	// Per-project external GitHub Project mapping (#447).
+	// Legacy cache retained only for compatibility with older callers. Maestro
+	// Board / Work Graph is the PM source of truth and no longer populates this
+	// cache during normal PM/dispatch flows.
+	projectGithubMap: Record<
+		string,
+		{
+			owner: string;
+			repo: string;
+			projectNumber: number;
+			projectId: string;
+			projectTitle: string;
+			defaultBranch?: string;
+			discoveredAt: string;
+		}
+	>;
 	// Allow dynamic settings keys (electron-store is a key-value store
 	// with many settings not explicitly declared above)
 	[key: string]: any;

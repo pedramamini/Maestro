@@ -1,7 +1,7 @@
 /**
  * RightDrawer component for Maestro mobile web interface
  *
- * A unified slide-out drawer combining Files, History, Auto Run, and Git tabs.
+ * A unified slide-out drawer with Work first, plus utility tabs.
  * Slides in from the right edge with overlay backdrop.
  * Supports swipe-right-to-close gesture.
  */
@@ -12,14 +12,21 @@ import { useSwipeGestures } from '../hooks/useSwipeGestures';
 import { triggerHaptic, HAPTIC_PATTERNS } from './constants';
 import { GitStatusPanel } from './GitStatusPanel';
 import { DocumentCard } from './AutoRunDocumentCard';
+import { DevCrewPanel } from './DevCrewPanel';
+import { MaestroBoardPanel } from './MaestroBoardPanel';
 import { useAutoRun } from '../hooks/useAutoRun';
-import type { AutoRunState, UseWebSocketReturn } from '../hooks/useWebSocket';
+import type {
+	AutoRunState,
+	UseWebSocketReturn,
+	AgentDispatchClaimStartedMessage,
+	AgentDispatchClaimEndedMessage,
+} from '../hooks/useWebSocket';
 import type { UseGitStatusReturn } from '../hooks/useGitStatus';
 
 /**
  * Tab identifiers for the drawer
  */
-export type RightDrawerTab = 'files' | 'history' | 'autorun' | 'git';
+export type RightDrawerTab = 'board' | 'files' | 'history' | 'autorun' | 'git';
 
 /**
  * Props for RightDrawer component
@@ -40,17 +47,29 @@ export interface RightDrawerProps {
 	send: UseWebSocketReturn['send'];
 	/** Callback when a git file is tapped for diff viewing */
 	onViewDiff?: (filePath: string) => void;
+	/** When true, the Work tab includes Dev Crew status (Encore: agentDispatch). */
+	devCrewEnabled?: boolean;
+	/** Latest claim event message forwarded from the WebSocket hook. */
+	lastClaimMessage?: AgentDispatchClaimStartedMessage | AgentDispatchClaimEndedMessage | null;
+	onOpenFullBoard?: () => void;
 }
 
 /**
- * Tab configuration
+ * Base tab configuration (always visible)
  */
-const TABS: { id: RightDrawerTab; label: string }[] = [
+const BASE_TABS: { id: RightDrawerTab; label: string }[] = [
+	{ id: 'board', label: 'Work' },
 	{ id: 'files', label: 'Files' },
 	{ id: 'history', label: 'History' },
-	{ id: 'autorun', label: 'Auto Run' },
+	{ id: 'autorun', label: 'Run' },
 	{ id: 'git', label: 'Git' },
 ];
+
+function compactProjectName(projectPath: string | undefined): string {
+	if (!projectPath) return 'No project selected';
+	const normalized = projectPath.replace(/\/+$/, '');
+	return normalized.split('/').filter(Boolean).pop() || projectPath;
+}
 
 /**
  * RightDrawer component
@@ -59,7 +78,7 @@ const TABS: { id: RightDrawerTab; label: string }[] = [
  */
 export function RightDrawer({
 	sessionId,
-	activeTab = 'history',
+	activeTab = 'board',
 	autoRunState,
 	gitStatus,
 	onClose,
@@ -70,9 +89,14 @@ export function RightDrawer({
 	sendRequest,
 	send,
 	onViewDiff,
+	devCrewEnabled = false,
+	lastClaimMessage,
+	onOpenFullBoard,
 }: RightDrawerProps) {
 	const colors = useThemeColors();
 	const [currentTab, setCurrentTab] = useState<RightDrawerTab>(activeTab);
+
+	const tabs = BASE_TABS;
 	const [isOpen, setIsOpen] = useState(false);
 	const drawerRef = useRef<HTMLDivElement>(null);
 
@@ -175,6 +199,99 @@ export function RightDrawer({
 				role="dialog"
 				aria-label="Right drawer"
 			>
+				<div
+					style={{
+						display: 'flex',
+						alignItems: 'center',
+						justifyContent: 'space-between',
+						gap: '10px',
+						padding: 'max(12px, env(safe-area-inset-top)) 12px 10px',
+						borderBottom: `1px solid ${colors.border}`,
+						backgroundColor: colors.bgSidebar,
+						flexShrink: 0,
+					}}
+				>
+					<div style={{ minWidth: 0 }}>
+						<div
+							style={{
+								fontSize: '11px',
+								fontWeight: 700,
+								textTransform: 'uppercase',
+								letterSpacing: '0.06em',
+								color: colors.textDim,
+							}}
+						>
+							Web Work Panel
+						</div>
+						<div
+							style={{
+								marginTop: '2px',
+								fontSize: '14px',
+								fontWeight: 750,
+								color: colors.textMain,
+								overflow: 'hidden',
+								textOverflow: 'ellipsis',
+								whiteSpace: 'nowrap',
+							}}
+							title={projectPath}
+						>
+							{compactProjectName(projectPath)}
+						</div>
+					</div>
+					<div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexShrink: 0 }}>
+						{currentTab === 'board' && onOpenFullBoard && (
+							<button
+								onClick={onOpenFullBoard}
+								style={{
+									border: `1px solid ${colors.accent}55`,
+									borderRadius: '7px',
+									backgroundColor: `${colors.accent}16`,
+									color: colors.accent,
+									padding: '6px 8px',
+									fontSize: '12px',
+									fontWeight: 650,
+									cursor: 'pointer',
+								}}
+							>
+								Full board
+							</button>
+						)}
+						<button
+							onClick={handleClose}
+							style={{
+								width: '30px',
+								height: '30px',
+								border: `1px solid ${colors.border}`,
+								borderRadius: '7px',
+								backgroundColor: colors.bgMain,
+								color: colors.textDim,
+								cursor: 'pointer',
+								display: 'flex',
+								alignItems: 'center',
+								justifyContent: 'center',
+								flexShrink: 0,
+								touchAction: 'manipulation',
+							}}
+							aria-label="Close drawer"
+							title="Close drawer"
+						>
+							<svg
+								width="14"
+								height="14"
+								viewBox="0 0 24 24"
+								fill="none"
+								stroke="currentColor"
+								strokeWidth="2"
+								strokeLinecap="round"
+								strokeLinejoin="round"
+							>
+								<line x1="18" y1="6" x2="6" y2="18" />
+								<line x1="6" y1="6" x2="18" y2="18" />
+							</svg>
+						</button>
+					</div>
+				</div>
+
 				{/* Tab bar */}
 				<div
 					style={{
@@ -182,14 +299,13 @@ export function RightDrawer({
 						alignItems: 'stretch',
 						borderBottom: `1px solid ${colors.border}`,
 						backgroundColor: colors.bgSidebar,
-						paddingTop: 'max(0px, env(safe-area-inset-top))',
 						flexShrink: 0,
 						overflowX: 'auto',
 						overflowY: 'hidden',
 						WebkitOverflowScrolling: 'touch',
 					}}
 				>
-					{TABS.map((tab) => {
+					{tabs.map((tab) => {
 						const isActive = currentTab === tab.id;
 						return (
 							<button
@@ -237,6 +353,20 @@ export function RightDrawer({
 							projectPath={projectPath}
 						/>
 					)}
+					{currentTab === 'board' && (
+						<div>
+							<MaestroBoardPanel
+								projectPath={projectPath}
+								onOpenFullBoard={onOpenFullBoard}
+								displayMode="panel"
+							/>
+							{devCrewEnabled && (
+								<div style={{ borderTop: `1px solid ${colors.border}`, marginTop: '2px' }}>
+									<DevCrewPanel projectPath={projectPath} lastMessage={lastClaimMessage} />
+								</div>
+							)}
+						</div>
+					)}
 					{currentTab === 'history' && (
 						<HistoryTabContent sessionId={sessionId} projectPath={projectPath} />
 					)}
@@ -281,6 +411,14 @@ interface FilesTabContentProps {
 
 /**
  * Files tab content - file explorer tree
+ *
+ * TODO(#432): SessionBroadcastData does not expose sessionSshRemoteConfig to
+ * web clients, so the UI cannot surface a banner when the agent is SSH-remote.
+ * The backend already routes get_file_tree through buildSshFileTree for SSH
+ * sessions (web-server-factory.ts), so file listing works correctly — but
+ * displaying an informational note ("files are on remote host X") requires
+ * plumbing sshRemoteConfig through SessionBroadcastData → useWebSocket →
+ * FilesTabContent props. Deferred: low user-visible impact given backend routing.
  */
 function FilesTabContent({
 	sessionId,

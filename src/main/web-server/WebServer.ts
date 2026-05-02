@@ -34,7 +34,27 @@ import { getLocalIpAddress } from '../utils/networkUtils';
 import { captureException } from '../utils/sentry';
 import { WebSocketMessageHandler } from './handlers';
 import { BroadcastService } from './services';
-import { ApiRoutes, StaticRoutes, WsRoute } from './routes';
+import {
+	ApiRoutes,
+	StaticRoutes,
+	WsRoute,
+	registerAgentDispatchRoutes,
+	registerDeliveryPlannerRoutes,
+	registerPlanningPipelineRoutes,
+	registerConversationalPrdRoutes,
+	registerProjectRolesRoutes,
+	registerWorkGraphRoutes,
+	registerAiWikiRoutes,
+	type WorkGraphRouteDependencies,
+} from './routes';
+import type {
+	AgentDispatchRouteDependencies,
+	DeliveryPlannerRouteDependencies,
+	PlanningPipelineRouteDependencies,
+	ConversationalPrdRouteDependencies,
+	ProjectRolesRouteDependencies,
+	AiWikiRouteDependencies,
+} from './routes';
 import { LiveSessionManager, CallbackRegistry } from './managers';
 
 // Import shared types from canonical location
@@ -49,6 +69,9 @@ import type {
 	CliActivity,
 	NotificationEvent,
 	SessionBroadcastData,
+	GitStatusData,
+	ToolExecutionData,
+	QueuedItemData,
 	WebClient,
 	WebClientMessage,
 	WebSettings,
@@ -73,6 +96,8 @@ import type {
 	NewAITabWithPromptCallback,
 	RefreshAutoRunDocsCallback,
 	ConfigureAutoRunCallback,
+	RemoveQueueItemCallback,
+	ReorderQueueCallback,
 	GetThemeCallback,
 	GetBionifyReadingModeCallback,
 	GetCustomCommandsCallback,
@@ -158,6 +183,27 @@ export class WebServer {
 	private apiRoutes: ApiRoutes;
 	private staticRoutes: StaticRoutes;
 	private wsRoute: WsRoute;
+
+	// Optional Agent Dispatch route dependencies (set before start())
+	private agentDispatchDeps: AgentDispatchRouteDependencies | null = null;
+
+	// Optional Delivery Planner route dependencies (set before start())
+	private deliveryPlannerDeps: DeliveryPlannerRouteDependencies | null = null;
+
+	// Optional Planning Pipeline route dependencies (set before start())
+	private planningPipelineDeps: PlanningPipelineRouteDependencies | null = null;
+
+	// Optional Conversational PRD route dependencies (set before start())
+	private conversationalPrdDeps: ConversationalPrdRouteDependencies | null = null;
+
+	// Optional Project Roles route dependencies (set before start())
+	private projectRolesDeps: ProjectRolesRouteDependencies | null = null;
+
+	// Optional AI Wiki route dependencies (set before start())
+	private aiWikiDeps: AiWikiRouteDependencies | null = null;
+
+	// Callback for reading current encore feature flags (injected by web-server-factory)
+	private getEncoreFeaturesCallback: (() => Record<string, boolean>) | null = null;
 
 	constructor(port: number = 0, securityToken?: string) {
 		// Use port 0 to let OS assign a random available port
@@ -361,6 +407,18 @@ export class WebServer {
 		  ) => Promise<{ success: boolean; pid: number }>)
 		| null = null;
 	private killTerminalForWebCallback: ((sessionId: string) => boolean) | null = null;
+	private buildSshFileTreeCallback:
+		| ((
+				sessionId: string,
+				dirPath: string,
+				maxDepth: number
+		  ) => Promise<Array<{
+				name: string;
+				type: 'file' | 'folder';
+				children?: any[];
+				path: string;
+		  }> | null>)
+		| null = null;
 
 	setWriteToTerminalCallback(callback: (sessionId: string, data: string) => boolean): void {
 		this.writeToTerminalCallback = callback;
@@ -383,6 +441,21 @@ export class WebServer {
 
 	setKillTerminalForWebCallback(callback: (sessionId: string) => boolean): void {
 		this.killTerminalForWebCallback = callback;
+	}
+
+	setBuildSshFileTreeCallback(
+		callback: (
+			sessionId: string,
+			dirPath: string,
+			maxDepth: number
+		) => Promise<Array<{
+			name: string;
+			type: 'file' | 'folder';
+			children?: any[];
+			path: string;
+		}> | null>
+	): void {
+		this.buildSshFileTreeCallback = callback;
 	}
 
 	setExecuteCommandCallback(callback: ExecuteCommandCallback): void {
@@ -455,6 +528,14 @@ export class WebServer {
 
 	setConfigureAutoRunCallback(callback: ConfigureAutoRunCallback): void {
 		this.callbackRegistry.setConfigureAutoRunCallback(callback);
+	}
+
+	setRemoveQueueItemCallback(callback: RemoveQueueItemCallback): void {
+		this.callbackRegistry.setRemoveQueueItemCallback(callback);
+	}
+
+	setReorderQueueCallback(callback: ReorderQueueCallback): void {
+		this.callbackRegistry.setReorderQueueCallback(callback);
 	}
 
 	setGetHistoryCallback(callback: GetHistoryCallback): void {
@@ -597,8 +678,57 @@ export class WebServer {
 		this.callbackRegistry.setNotifyCenterFlashCallback(callback);
 	}
 
+	setAgentDispatchDeps(deps: AgentDispatchRouteDependencies): void {
+		this.agentDispatchDeps = deps;
+	}
+
+	setDeliveryPlannerDeps(deps: DeliveryPlannerRouteDependencies): void {
+		this.deliveryPlannerDeps = deps;
+	}
+
+	setPlanningPipelineDeps(deps: PlanningPipelineRouteDependencies): void {
+		this.planningPipelineDeps = deps;
+	}
+
+	setConversationalPrdDeps(deps: ConversationalPrdRouteDependencies): void {
+		this.conversationalPrdDeps = deps;
+	}
+
+	setProjectRolesDeps(deps: ProjectRolesRouteDependencies): void {
+		this.projectRolesDeps = deps;
+	}
+
+	setAiWikiDeps(deps: AiWikiRouteDependencies): void {
+		this.aiWikiDeps = deps;
+	}
+
+	/**
+	 * Inject a callback for reading the current encore feature flags.
+	 * Used by /api/slash-commands to filter commands by their encoreFlag.
+	 */
+	setGetEncoreFeaturesCallback(callback: () => Record<string, boolean>): void {
+		this.getEncoreFeaturesCallback = callback;
+	}
+
 	broadcastGroupsChanged(groups: GroupData[]): void {
 		this.broadcastService.broadcastGroupsChanged(groups);
+	}
+
+	/** Broadcast agentDispatch claim-started to all web clients (#448). */
+	broadcastClaimStarted(event: {
+		projectPath: string;
+		role: string;
+		projectItemId?: string;
+		issueNumber?: number;
+		issueTitle?: string;
+		claimedAt: string;
+	}): void {
+		this.broadcastService.broadcastClaimStarted(event);
+	}
+
+	/** Broadcast agentDispatch claim-ended to all web clients (#448). */
+	broadcastClaimEnded(event: { projectPath: string; role: string }): void {
+		this.broadcastService.broadcastClaimEnded(event);
 	}
 
 	// ============ Rate Limiting ============
@@ -688,8 +818,73 @@ export class WebServer {
 				this.callbackRegistry.getHistory(projectPath, sessionId),
 			getLiveSessionInfo: (sessionId) => this.liveSessionManager.getLiveSessionInfo(sessionId),
 			isSessionLive: (sessionId) => this.liveSessionManager.isSessionLive(sessionId),
+			getEncoreFeatures: () =>
+				this.getEncoreFeaturesCallback ? this.getEncoreFeaturesCallback() : {},
 		});
 		this.apiRoutes.registerRoutes(this.server);
+
+		// Register local Work Graph routes for CLI and agent-accessible board updates.
+		registerWorkGraphRoutes(
+			this.server,
+			this.securityToken,
+			this.rateLimitConfig,
+			this.getWorkGraphRouteDeps()
+		);
+
+		// Register AI Wiki routes when deps have been supplied.
+		if (this.aiWikiDeps) {
+			registerAiWikiRoutes(this.server, this.securityToken, this.rateLimitConfig, this.aiWikiDeps);
+		}
+
+		// Register Agent Dispatch routes when deps have been supplied
+		if (this.agentDispatchDeps) {
+			registerAgentDispatchRoutes(
+				this.server,
+				this.securityToken,
+				this.rateLimitConfig,
+				this.agentDispatchDeps
+			);
+		}
+
+		// Register Delivery Planner routes when deps have been supplied
+		if (this.deliveryPlannerDeps) {
+			registerDeliveryPlannerRoutes(
+				this.server,
+				this.securityToken,
+				this.rateLimitConfig,
+				this.deliveryPlannerDeps
+			);
+		}
+
+		// Register Planning Pipeline routes when deps have been supplied
+		if (this.planningPipelineDeps) {
+			registerPlanningPipelineRoutes(
+				this.server,
+				this.securityToken,
+				this.rateLimitConfig,
+				this.planningPipelineDeps
+			);
+		}
+
+		// Register Conversational PRD routes when deps have been supplied
+		if (this.conversationalPrdDeps) {
+			registerConversationalPrdRoutes(
+				this.server,
+				this.securityToken,
+				this.rateLimitConfig,
+				this.conversationalPrdDeps
+			);
+		}
+
+		// Register Project Roles routes when deps have been supplied (#448)
+		if (this.projectRolesDeps) {
+			registerProjectRolesRoutes(
+				this.server,
+				this.securityToken,
+				this.rateLimitConfig,
+				this.projectRolesDeps
+			);
+		}
 
 		// Setup WebSocket route callbacks and register route
 		this.wsRoute.setCallbacks({
@@ -782,6 +977,10 @@ export class WebServer {
 				sessionId: string,
 				config: Parameters<CallbackRegistry['configureAutoRun']>[1]
 			) => this.callbackRegistry.configureAutoRun(sessionId, config),
+			removeQueueItem: async (sessionId: string, itemId: string) =>
+				this.callbackRegistry.removeQueueItem(sessionId, itemId),
+			reorderQueue: async (sessionId: string, fromIndex: number, toIndex: number) =>
+				this.callbackRegistry.reorderQueue(sessionId, fromIndex, toIndex),
 			getSessions: () => this.callbackRegistry.getSessions(),
 			getLiveSessionInfo: (sessionId: string) =>
 				this.liveSessionManager.getLiveSessionInfo(sessionId),
@@ -856,6 +1055,8 @@ export class WebServer {
 				Promise.resolve({ success: false, pid: 0 }),
 			killTerminalForWeb: (sessionId: string) =>
 				this.killTerminalForWebCallback?.(sessionId) ?? false,
+			buildSshFileTree: (sessionId: string, dirPath: string, maxDepth: number) =>
+				this.buildSshFileTreeCallback?.(sessionId, dirPath, maxDepth) ?? Promise.resolve(null),
 			notifyToast: async (params) => this.callbackRegistry.notifyToast(params),
 			notifyCenterFlash: async (params) => this.callbackRegistry.notifyCenterFlash(params),
 		});
@@ -884,6 +1085,8 @@ export class WebServer {
 			inputMode?: string;
 			cwd?: string;
 			cliActivity?: CliActivity;
+			currentCycleTokens?: number;
+			thinkingStartTime?: number;
 		}
 	): void {
 		this.broadcastService.broadcastSessionStateChange(sessionId, state, additionalData);
@@ -907,6 +1110,22 @@ export class WebServer {
 
 	broadcastTabsChange(sessionId: string, aiTabs: AITabData[], activeTabId: string): void {
 		this.broadcastService.broadcastTabsChange(sessionId, aiTabs, activeTabId);
+	}
+
+	broadcastGitStatus(sessionId: string, gitStatus: GitStatusData | null): void {
+		this.broadcastService.broadcastGitStatus(sessionId, gitStatus);
+	}
+
+	broadcastExecutionQueue(sessionId: string, executionQueue: QueuedItemData[]): void {
+		this.broadcastService.broadcastExecutionQueue(sessionId, executionQueue);
+	}
+
+	broadcastToolExecution(
+		sessionId: string,
+		tabId: string | undefined,
+		tool: ToolExecutionData
+	): void {
+		this.broadcastService.broadcastToolExecution(sessionId, tabId, tool);
 	}
 
 	broadcastThemeChange(theme: Theme): void {
@@ -1062,5 +1281,17 @@ export class WebServer {
 
 	getServer(): FastifyInstance {
 		return this.server;
+	}
+
+	private getWorkGraphRouteDeps(): WorkGraphRouteDependencies {
+		return {
+			getSettingsStore: () =>
+				this.deliveryPlannerDeps?.settingsStore ??
+				this.agentDispatchDeps?.settingsStore ??
+				this.planningPipelineDeps?.settingsStore ??
+				this.conversationalPrdDeps?.settingsStore ??
+				this.projectRolesDeps?.settingsStore ??
+				null,
+		};
 	}
 }

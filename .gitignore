@@ -61,5 +61,10 @@ yarn-error.log*
 .VSCodeCounter
 .qodo
 
+# Local AI tooling/cache artifacts
+.aider*
+.aider.tags.cache.v4/
+.codex/
+
 # Claude Code local settings
 .claude/settings.local.json

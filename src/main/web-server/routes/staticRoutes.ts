@@ -10,6 +10,7 @@
  * - /$TOKEN/manifest.json - PWA manifest
  * - /$TOKEN/sw.js - PWA service worker
  * - /$TOKEN - Dashboard (list all sessions)
+ * - /$TOKEN/board - Full-screen Maestro Board
  * - /$TOKEN/session/:sessionId - Single session view
  * - /:token - Invalid token catch-all, redirect to GitHub
  */
@@ -210,6 +211,12 @@ export class StaticRoutes {
 
 		// Dashboard with trailing slash
 		server.get(`/${token}/`, async (_request, reply) => {
+			this.serveIndexHtml(reply);
+		});
+
+		// Full-screen Maestro Board view. The React app reads the route and opens
+		// the Work Graph board surface over the standard web shell.
+		server.get(`/${token}/board`, async (_request, reply) => {
 			this.serveIndexHtml(reply);
 		});
 

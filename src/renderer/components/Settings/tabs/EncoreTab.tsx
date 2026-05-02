@@ -20,6 +20,10 @@ import {
 	Zap,
 	Timer,
 	Key,
+	Server,
+	ScrollText,
+	GitBranch,
+	FileText,
 } from 'lucide-react';
 import { useSettings } from '../../../hooks';
 import { useAgentConfiguration } from '../../../hooks/agent/useAgentConfiguration';
@@ -993,6 +997,274 @@ export function EncoreTab({ theme, isOpen }: EncoreTabProps) {
 						</div>
 					</div>
 				)}
+			</div>
+
+			{/* Dev Crew automation section */}
+			<div
+				data-setting-id="encore-agent-dispatch"
+				className="rounded-lg border"
+				style={{
+					borderColor: encoreFeatures.agentDispatch ? theme.colors.accent : theme.colors.border,
+					backgroundColor: encoreFeatures.agentDispatch
+						? `${theme.colors.accent}08`
+						: 'transparent',
+				}}
+			>
+				<button
+					className="w-full flex items-center justify-between p-4 text-left"
+					onClick={() =>
+						setEncoreFeatures({
+							...encoreFeatures,
+							agentDispatch: !encoreFeatures.agentDispatch,
+						})
+					}
+				>
+					<div className="flex items-center gap-3">
+						<Server
+							className="w-5 h-5"
+							style={{
+								color: encoreFeatures.agentDispatch ? theme.colors.accent : theme.colors.textDim,
+							}}
+						/>
+						<div>
+							<div
+								className="text-sm font-bold flex items-center gap-2"
+								style={{ color: theme.colors.textMain }}
+							>
+								Dev Crew Automation
+								<span
+									className="px-1.5 py-0.5 rounded text-[9px] font-bold uppercase"
+									style={{
+										backgroundColor: theme.colors.warning + '30',
+										color: theme.colors.warning,
+									}}
+								>
+									Beta
+								</span>
+							</div>
+							<div className="text-xs mt-0.5" style={{ color: theme.colors.textDim }}>
+								Runner roles, claims, and automatic pickup for Maestro Board work
+							</div>
+						</div>
+					</div>
+					<div
+						className={`relative w-10 h-5 rounded-full transition-colors ${encoreFeatures.agentDispatch ? '' : 'opacity-50'}`}
+						style={{
+							backgroundColor: encoreFeatures.agentDispatch
+								? theme.colors.accent
+								: theme.colors.border,
+						}}
+					>
+						<div
+							className="absolute top-0.5 w-4 h-4 rounded-full bg-white transition-transform"
+							style={{
+								transform: encoreFeatures.agentDispatch ? 'translateX(22px)' : 'translateX(2px)',
+							}}
+						/>
+					</div>
+				</button>
+			</div>
+
+			{/* Delivery Planner Feature Section */}
+			<div
+				data-setting-id="encore-delivery-planner"
+				className="rounded-lg border"
+				style={{
+					borderColor: encoreFeatures.deliveryPlanner ? theme.colors.accent : theme.colors.border,
+					backgroundColor: encoreFeatures.deliveryPlanner
+						? `${theme.colors.accent}08`
+						: 'transparent',
+				}}
+			>
+				<button
+					className="w-full flex items-center justify-between p-4 text-left"
+					onClick={() =>
+						setEncoreFeatures({
+							...encoreFeatures,
+							deliveryPlanner: !encoreFeatures.deliveryPlanner,
+						})
+					}
+				>
+					<div className="flex items-center gap-3">
+						<ScrollText
+							className="w-5 h-5"
+							style={{
+								color: encoreFeatures.deliveryPlanner ? theme.colors.accent : theme.colors.textDim,
+							}}
+						/>
+						<div>
+							<div
+								className="text-sm font-bold flex items-center gap-2"
+								style={{ color: theme.colors.textMain }}
+							>
+								Delivery Planner
+								<span
+									className="px-1.5 py-0.5 rounded text-[9px] font-bold uppercase"
+									style={{
+										backgroundColor: theme.colors.warning + '30',
+										color: theme.colors.warning,
+									}}
+								>
+									Beta
+								</span>
+							</div>
+							<div className="text-xs mt-0.5" style={{ color: theme.colors.textDim }}>
+								PRD → Epic → Tasks → local Work Graph sync with external mirror
+							</div>
+						</div>
+					</div>
+					<div
+						className={`relative w-10 h-5 rounded-full transition-colors ${encoreFeatures.deliveryPlanner ? '' : 'opacity-50'}`}
+						style={{
+							backgroundColor: encoreFeatures.deliveryPlanner
+								? theme.colors.accent
+								: theme.colors.border,
+						}}
+					>
+						<div
+							className="absolute top-0.5 w-4 h-4 rounded-full bg-white transition-transform"
+							style={{
+								transform: encoreFeatures.deliveryPlanner ? 'translateX(22px)' : 'translateX(2px)',
+							}}
+						/>
+					</div>
+				</button>
+			</div>
+
+			{/* Planning Pipeline Feature Section */}
+			<div
+				data-setting-id="encore-planning-pipeline"
+				className="rounded-lg border"
+				style={{
+					borderColor: encoreFeatures.planningPipeline ? theme.colors.accent : theme.colors.border,
+					backgroundColor: encoreFeatures.planningPipeline
+						? `${theme.colors.accent}08`
+						: 'transparent',
+				}}
+			>
+				<button
+					className="w-full flex items-center justify-between p-4 text-left"
+					onClick={() =>
+						setEncoreFeatures({
+							...encoreFeatures,
+							planningPipeline: !encoreFeatures.planningPipeline,
+						})
+					}
+				>
+					<div className="flex items-center gap-3">
+						<GitBranch
+							className="w-5 h-5"
+							style={{
+								color: encoreFeatures.planningPipeline ? theme.colors.accent : theme.colors.textDim,
+							}}
+						/>
+						<div>
+							<div
+								className="text-sm font-bold flex items-center gap-2"
+								style={{ color: theme.colors.textMain }}
+							>
+								Planning Pipeline
+								<span
+									className="px-1.5 py-0.5 rounded text-[9px] font-bold uppercase"
+									style={{
+										backgroundColor: theme.colors.warning + '30',
+										color: theme.colors.warning,
+									}}
+								>
+									Beta
+								</span>
+							</div>
+							<div className="text-xs mt-0.5" style={{ color: theme.colors.textDim }}>
+								Column-per-stage dashboard from idea through fork-merged
+							</div>
+						</div>
+					</div>
+					<div
+						className={`relative w-10 h-5 rounded-full transition-colors ${encoreFeatures.planningPipeline ? '' : 'opacity-50'}`}
+						style={{
+							backgroundColor: encoreFeatures.planningPipeline
+								? theme.colors.accent
+								: theme.colors.border,
+						}}
+					>
+						<div
+							className="absolute top-0.5 w-4 h-4 rounded-full bg-white transition-transform"
+							style={{
+								transform: encoreFeatures.planningPipeline ? 'translateX(22px)' : 'translateX(2px)',
+							}}
+						/>
+					</div>
+				</button>
+			</div>
+
+			{/* Conversational PRD Feature Section */}
+			<div
+				data-setting-id="encore-conversational-prd"
+				className="rounded-lg border"
+				style={{
+					borderColor: encoreFeatures.conversationalPrd ? theme.colors.accent : theme.colors.border,
+					backgroundColor: encoreFeatures.conversationalPrd
+						? `${theme.colors.accent}08`
+						: 'transparent',
+				}}
+			>
+				<button
+					className="w-full flex items-center justify-between p-4 text-left"
+					onClick={() =>
+						setEncoreFeatures({
+							...encoreFeatures,
+							conversationalPrd: !encoreFeatures.conversationalPrd,
+						})
+					}
+				>
+					<div className="flex items-center gap-3">
+						<FileText
+							className="w-5 h-5"
+							style={{
+								color: encoreFeatures.conversationalPrd
+									? theme.colors.accent
+									: theme.colors.textDim,
+							}}
+						/>
+						<div>
+							<div
+								className="text-sm font-bold flex items-center gap-2"
+								style={{ color: theme.colors.textMain }}
+							>
+								Conversational PRD
+								<span
+									className="px-1.5 py-0.5 rounded text-[9px] font-bold uppercase"
+									style={{
+										backgroundColor: theme.colors.warning + '30',
+										color: theme.colors.warning,
+									}}
+								>
+									Beta
+								</span>
+							</div>
+							<div className="text-xs mt-0.5" style={{ color: theme.colors.textDim }}>
+								Plan features via AI-guided conversation, then commit as a PRD item
+							</div>
+						</div>
+					</div>
+					<div
+						className={`relative w-10 h-5 rounded-full transition-colors ${encoreFeatures.conversationalPrd ? '' : 'opacity-50'}`}
+						style={{
+							backgroundColor: encoreFeatures.conversationalPrd
+								? theme.colors.accent
+								: theme.colors.border,
+						}}
+					>
+						<div
+							className="absolute top-0.5 w-4 h-4 rounded-full bg-white transition-transform"
+							style={{
+								transform: encoreFeatures.conversationalPrd
+									? 'translateX(22px)'
+									: 'translateX(2px)',
+							}}
+						/>
+					</div>
+				</button>
 			</div>
 		</div>
 	);

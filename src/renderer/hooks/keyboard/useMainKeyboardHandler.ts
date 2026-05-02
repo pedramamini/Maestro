@@ -596,6 +596,28 @@ export function useMainKeyboardHandler(): UseMainKeyboardHandlerReturn {
 				e.preventDefault();
 				ctx.setCueModalOpen?.(true);
 				trackShortcut('openCue');
+			} else if (ctx.isShortcut(e, 'openAgentDispatch')) {
+				e.preventDefault();
+				ctx.setAgentDispatchOpen?.(true);
+				trackShortcut('openAgentDispatch');
+			} else if (ctx.isShortcut(e, 'openDeliveryPlanner') && ctx.encoreFeatures?.deliveryPlanner) {
+				e.preventDefault();
+				ctx.setDeliveryPlannerOpen?.(true);
+				trackShortcut('openDeliveryPlanner');
+			} else if (
+				ctx.isShortcut(e, 'openPlanningPipeline') &&
+				ctx.encoreFeatures?.planningPipeline
+			) {
+				e.preventDefault();
+				ctx.setPlanningPipelineOpen?.(true);
+				trackShortcut('openPlanningPipeline');
+			} else if (
+				ctx.isShortcut(e, 'openConversationalPrd') &&
+				ctx.encoreFeatures?.conversationalPrd
+			) {
+				e.preventDefault();
+				ctx.setConversationalPrdOpen?.(true);
+				trackShortcut('openConversationalPrd');
 			} else if (ctx.isShortcut(e, 'nextUnreadTab')) {
 				e.preventDefault();
 				ctx.goToNextUnreadTab();

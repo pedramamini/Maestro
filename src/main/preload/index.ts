@@ -56,6 +56,19 @@ import { createWakatimeApi } from './wakatime';
 import { createMaestroCliApi } from './maestroCli';
 import { createPromptsApi } from './prompts';
 import { createMemoryApi } from './memory';
+import { createAgentDispatchApi } from './agentDispatch';
+import { createProjectRolesApi } from './projectRoles';
+import { createDeliveryPlannerApi } from './deliveryPlanner';
+import { createPlanningPipelineApi } from './planningPipeline';
+import { createConversationalPrdApi } from './conversationalPrd';
+import { createWorkGraphApi } from './workGraph';
+import { createAiWikiApi } from './aiWiki';
+import { createPmToolsApi } from './pmTools';
+import { createPmAuditApi } from './pmAudit';
+import { createPmHeartbeatApi } from './pmHeartbeat';
+import { createPmApi } from './pm';
+import { createPmInitApi } from './pmInit';
+import { createPmResolveGithubProjectApi } from './pmResolveGithubProject';
 
 // Expose protected methods that allow the renderer process to use
 // the ipcRenderer without exposing the entire object
@@ -214,6 +227,45 @@ contextBridge.exposeInMainWorld('maestro', {
 	prompts: createPromptsApi(),
 	// Per-project Memory API (Claude Code memory viewer)
 	memory: createMemoryApi(),
+
+	// Agent Dispatch API (fleet, board, assign, release, pause/resume + MCP registry)
+	agentDispatch: createAgentDispatchApi(),
+
+	// Per-project role slot roster API (#429)
+	projectRoles: createProjectRolesApi(),
+
+	// Delivery Planner API (PRD/Epic/Task lifecycle, local mirror sync, progress)
+	deliveryPlanner: createDeliveryPlannerApi(),
+
+	// Planning Pipeline API (dashboard snapshot)
+	pipeline: createPlanningPipelineApi(),
+
+	// Conversational PRD Planner API (planning conversations → PRD items)
+	conversationalPrd: createConversationalPrdApi(),
+
+	// Work Graph API (durable local PM/Maestro Board state)
+	workGraph: createWorkGraphApi(),
+
+	// AI Wiki API (project memory/context storage)
+	aiWiki: createAiWikiApi(),
+
+	// pm-tools API (agent-callable status/role/blocked field updates, #430)
+	pmTools: createPmToolsApi(),
+
+	// pm-audit API (rule-based in-flight work sweep, #434)
+	pmAudit: createPmAuditApi(),
+
+	// pm-heartbeat API (#435): agent liveness signal for stale-claim sweeper
+	pmHeartbeat: createPmHeartbeatApi(),
+
+	// PM slash-command suite (#428 + #436): /PM orchestrate, prd-*, epic-*, issue-*, standup, status
+	pm: createPmApi(),
+
+	// PM Init API (#445): /PM-init idempotent field bootstrap
+	pmInit: createPmInitApi(),
+
+	// PM Resolve GitHub Project API (#447): per-project GitHub project mapping
+	pmResolveGithubProject: createPmResolveGithubProjectApi(),
 });
 
 // Re-export factory functions for external consumers (e.g., tests)
@@ -300,6 +352,28 @@ export {
 	createPromptsApi,
 	// Memory Viewer
 	createMemoryApi,
+	// Agent Dispatch (#444: createWorkGraphApi removed)
+	createAgentDispatchApi,
+	// AI Wiki
+	createAiWikiApi,
+	// Project Roles
+	createProjectRolesApi,
+	// Delivery Planner
+	createDeliveryPlannerApi,
+	// Planning Pipeline
+	createPlanningPipelineApi,
+	// Conversational PRD
+	createConversationalPrdApi,
+	// pm-tools
+	createPmToolsApi,
+	// pm-heartbeat
+	createPmHeartbeatApi,
+	// PM slash-command suite
+	createPmApi,
+	// pm-init
+	createPmInitApi,
+	// pm-resolve-github-project
+	createPmResolveGithubProjectApi,
 };
 
 // Re-export types for TypeScript consumers
@@ -539,3 +613,43 @@ export type {
 	PromptsApi,
 	CorePromptData,
 } from './prompts';
+export type {
+	// From workGraph
+	WorkGraphApi,
+} from './workGraph';
+export type {
+	// From agentDispatch
+	AgentDispatchApi,
+} from './agentDispatch';
+export type {
+	// From deliveryPlanner
+	DeliveryPlannerApi,
+} from './deliveryPlanner';
+export type {
+	// From planningPipeline
+	PlanningPipelineApi,
+} from './planningPipeline';
+export type {
+	// From conversationalPrd
+	ConversationalPrdApi,
+} from './conversationalPrd';
+export type {
+	// From pmTools
+	PmToolsApi,
+} from './pmTools';
+export type {
+	// From pmAudit
+	PmAuditApi,
+} from './pmAudit';
+export type {
+	// From pmHeartbeat
+	PmHeartbeatApi,
+} from './pmHeartbeat';
+export type {
+	// From pmInit
+	PmInitApi,
+} from './pmInit';
+export type {
+	// From pmResolveGithubProject
+	PmResolveGithubProjectApi,
+} from './pmResolveGithubProject';

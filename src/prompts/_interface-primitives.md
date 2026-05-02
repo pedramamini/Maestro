@@ -38,7 +38,7 @@ When the user phrases an intent in natural language, route it to the correspondi
 
 If the request doesn't match any row above but still touches Maestro's surface, scan the Reference Index table in your system prompt (or run `maestro-cli prompts list`) to identify the right include and fetch it. **Default to action over instruction** — when in doubt, do it yourself and report what you did rather than telling the user how to do it.
 
-**Read-only nuance:** Some commands (`auto-run --launch`, `send -l`, `cue trigger`) require the desktop app to be running. If `maestro-cli status` fails, fall back to writing files (e.g., the YAML or playbook) and tell the user the change will take effect when the app is next opened.
+**Read-only nuance:** Some commands (`auto-run --launch`, `send -l`, `cue trigger`) require the desktop app to be running. If `maestro-cli status` fails, fall back to writing files only for file-backed surfaces such as Cue YAML or playbooks, and tell the user the change will take effect when the app is next opened. Do not use this fallback for Maestro Board / Work Graph state; board items must be written through the running Maestro bridge.
 
 ## Capability Gating (Encore Features)
 

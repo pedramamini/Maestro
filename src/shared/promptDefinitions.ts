@@ -233,6 +233,29 @@ export const CORE_PROMPTS: PromptDefinition[] = [
 		description: 'Wizard-only file restrictions (writes limited to Auto Run folder)',
 		category: 'includes',
 	},
+	// Conversational PRD Planner
+	{
+		id: 'conversational-prd-planner',
+		filename: 'conversational-prd-planner.md',
+		description: 'Conversational PRD planner system prompt',
+		category: 'conversational-prd',
+	},
+	// PM suite — two registered prompts: mode system (loaded by /PM) and init (loaded by /PM-init).
+	// The verb-specific prompt files (pm-prd-new.md, pm-epic-decompose.md, etc.) remain on disk as
+	// reference content the agent can read mid-conversation, but they are not registered as
+	// separate slash commands.
+	{
+		id: 'pm-mode-system',
+		filename: 'pm/pm-mode-system.md',
+		description: '/PM mode system prompt — comprehensive PM persona and workflow reference',
+		category: 'pm',
+	},
+	{
+		id: 'pm-init',
+		filename: 'pm/pm-init.md',
+		description: '/PM-init idempotent field bootstrap prompt',
+		category: 'pm',
+	},
 ];
 
 /**
@@ -271,6 +294,11 @@ export const PROMPT_IDS = {
 	DIRECTOR_NOTES: 'director-notes',
 	FEEDBACK: 'feedback',
 	FEEDBACK_CONVERSATION: 'feedback-conversation',
+	// Conversational PRD Planner
+	CONVERSATIONAL_PRD_PLANNER: 'conversational-prd-planner',
+	// PM suite — /PM loads the mode system prompt, /PM-init loads pm-init
+	PM_MODE_SYSTEM: 'pm-mode-system',
+	PM_INIT: 'pm-init',
 } as const;
 
 export type PromptId = (typeof PROMPT_IDS)[keyof typeof PROMPT_IDS];

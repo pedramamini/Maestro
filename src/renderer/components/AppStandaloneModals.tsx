@@ -59,6 +59,24 @@ const CueModal = lazy(() => import('./CueModal').then((m) => ({ default: m.CueMo
 const CueYamlEditor = lazy(() =>
 	import('./CueYamlEditor').then((m) => ({ default: m.CueYamlEditor }))
 );
+const AgentDispatchModal = lazy(() =>
+	import('./AgentDispatch/AgentDispatchModal').then((m) => ({ default: m.AgentDispatchModal }))
+);
+const DeliveryPlannerModal = lazy(() =>
+	import('./DeliveryPlanner/DeliveryPlannerModal').then((m) => ({
+		default: m.DeliveryPlannerModal,
+	}))
+);
+const PlanningPipelineModal = lazy(() =>
+	import('./PlanningPipeline/PlanningPipelineModal').then((m) => ({
+		default: m.PlanningPipelineModal,
+	}))
+);
+const ConversationalPrdModal = lazy(() =>
+	import('./ConversationalPRD/ConversationalPrdModal').then((m) => ({
+		default: m.ConversationalPrdModal,
+	}))
+);
 
 /**
  * Props for the AppStandaloneModals component.
@@ -241,6 +259,15 @@ function AppStandaloneModalsInner({
 		cueYamlEditorSessionId,
 		cueYamlEditorProjectRoot,
 		closeCueYamlEditor,
+		agentDispatchOpen,
+		agentDispatchData,
+		setAgentDispatchOpen,
+		deliveryPlannerOpen,
+		setDeliveryPlannerOpen,
+		planningPipelineOpen,
+		setPlanningPipelineOpen,
+		conversationalPrdOpen,
+		setConversationalPrdOpen,
 		deleteAgentModalOpen,
 		deleteAgentSession,
 		settingsModalOpen,
@@ -402,6 +429,54 @@ function AppStandaloneModalsInner({
 						/>
 					</Suspense>
 				)}
+
+			{/* --- MAESTRO BOARD MODAL (lazy-loaded) --- */}
+			{agentDispatchOpen && (
+				<Suspense fallback={null}>
+					<AgentDispatchModal
+						theme={theme}
+						isOpen={agentDispatchOpen}
+						projectPath={agentDispatchData?.projectPath}
+						sshRemoteId={agentDispatchData?.sshRemoteId}
+						mode={agentDispatchData?.mode}
+						onClose={() => setAgentDispatchOpen(false)}
+					/>
+				</Suspense>
+			)}
+
+			{/* --- DELIVERY PLANNER MODAL (lazy-loaded, Encore Feature) --- */}
+			{encoreFeatures.deliveryPlanner && deliveryPlannerOpen && (
+				<Suspense fallback={null}>
+					<DeliveryPlannerModal
+						theme={theme}
+						isOpen={deliveryPlannerOpen}
+						onClose={() => setDeliveryPlannerOpen(false)}
+						activeSession={activeSession}
+					/>
+				</Suspense>
+			)}
+
+			{/* --- PLANNING PIPELINE MODAL (lazy-loaded, Encore Feature) --- */}
+			{encoreFeatures.planningPipeline && planningPipelineOpen && (
+				<Suspense fallback={null}>
+					<PlanningPipelineModal
+						theme={theme}
+						isOpen={planningPipelineOpen}
+						onClose={() => setPlanningPipelineOpen(false)}
+					/>
+				</Suspense>
+			)}
+
+			{/* --- CONVERSATIONAL PRD MODAL (lazy-loaded, Encore Feature) --- */}
+			{encoreFeatures.conversationalPrd && conversationalPrdOpen && (
+				<Suspense fallback={null}>
+					<ConversationalPrdModal
+						theme={theme}
+						isOpen={conversationalPrdOpen}
+						onClose={() => setConversationalPrdOpen(false)}
+					/>
+				</Suspense>
+			)}
 
 			{/* --- GIST PUBLISH MODAL --- */}
 			{/* Supports both file preview tabs and tab context gist publishing */}

@@ -90,6 +90,7 @@ vi.mock('../../../web/main', () => ({
 // Mock useWebSocket hook
 const mockConnect = vi.fn();
 const mockSend = vi.fn(() => true);
+const mockSubscribe = vi.fn(() => true);
 const mockSendRequest = vi.fn(() => Promise.resolve({}));
 const mockDisconnect = vi.fn();
 let mockWebSocketState = 'connected';
@@ -109,6 +110,7 @@ vi.mock('../../../web/hooks/useWebSocket', () => ({
 			state: mockWebSocketState,
 			connect: mockConnect,
 			send: mockSend,
+			subscribe: mockSubscribe,
 			sendRequest: mockSendRequest,
 			disconnect: mockDisconnect,
 			error: mockWebSocketError,
@@ -1116,6 +1118,16 @@ describe('MobileApp', () => {
 			expect(screen.getByTestId('session-session-2')).toBeInTheDocument();
 		});
 
+		it('subscribes websocket broadcasts when active session is selected', async () => {
+			render(<MobileApp />);
+
+			await act(async () => {
+				mockHandlers.onSessionsUpdate?.([createMockSession({ id: 'session-1' })]);
+			});
+
+			expect(mockSubscribe).toHaveBeenCalledWith('session-1');
+		});
+
 		it('handles session selection', async () => {
 			render(<MobileApp />);
 
@@ -1669,11 +1681,11 @@ describe('MobileApp', () => {
 				]);
 			});
 
-			fireEvent.click(screen.getByLabelText('Files & History'));
+			fireEvent.click(screen.getByLabelText('Work panel'));
 
 			const panel = screen.getByTestId('right-panel');
 			expect(panel).toBeInTheDocument();
-			expect(panel).toHaveAttribute('data-active-tab', 'files');
+			expect(panel).toHaveAttribute('data-active-tab', 'board');
 		});
 
 		it('closes right panel', async () => {
@@ -1685,7 +1697,7 @@ describe('MobileApp', () => {
 				]);
 			});
 
-			fireEvent.click(screen.getByLabelText('Files & History'));
+			fireEvent.click(screen.getByLabelText('Work panel'));
 			expect(screen.getByTestId('right-panel')).toBeInTheDocument();
 
 			fireEvent.click(screen.getByTestId('close-right-panel'));
@@ -1702,17 +1714,17 @@ describe('MobileApp', () => {
 			});
 
 			// Open right panel
-			fireEvent.click(screen.getByLabelText('Files & History'));
+			fireEvent.click(screen.getByLabelText('Work panel'));
 			const panel = screen.getByTestId('right-panel');
 			expect(panel).toBeInTheDocument();
-			expect(panel).toHaveAttribute('data-active-tab', 'files');
+			expect(panel).toHaveAttribute('data-active-tab', 'board');
 
 			// Close panel
 			fireEvent.click(screen.getByTestId('close-right-panel'));
 			expect(screen.queryByTestId('right-panel')).not.toBeInTheDocument();
 
 			// Reopen
-			fireEvent.click(screen.getByLabelText('Files & History'));
+			fireEvent.click(screen.getByLabelText('Work panel'));
 			expect(screen.getByTestId('right-panel')).toBeInTheDocument();
 		});
 
@@ -1726,11 +1738,11 @@ describe('MobileApp', () => {
 			});
 
 			// Open right panel
-			fireEvent.click(screen.getByLabelText('Files & History'));
+			fireEvent.click(screen.getByLabelText('Work panel'));
 			expect(screen.getByTestId('right-panel')).toBeInTheDocument();
 
 			// Toggle off via same button
-			fireEvent.click(screen.getByLabelText('Files & History'));
+			fireEvent.click(screen.getByLabelText('Work panel'));
 			expect(screen.queryByTestId('right-panel')).not.toBeInTheDocument();
 		});
 	});

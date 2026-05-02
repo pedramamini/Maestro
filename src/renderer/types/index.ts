@@ -7,6 +7,78 @@ export * from './contextMerge';
 export type { Theme, ThemeId, ThemeMode, ThemeColors } from '../../shared/theme-types';
 export { isValidThemeId } from '../../shared/theme-types';
 
+// Re-export Work Graph contracts from shared location
+export type {
+	AgentReadyWorkFilter,
+	WorkGraphActor,
+	WorkGraphActorType,
+	WorkGraphBroadcastEnvelope,
+	WorkGraphBroadcastOperation,
+	WorkGraphCapabilityRouting,
+	WorkGraphImportItemSummary,
+	WorkGraphImportStatus,
+	WorkGraphImportSummary,
+	WorkGraphImportInput,
+	WorkGraphImportItemInput,
+	WorkGraphItemBroadcastPayload,
+	WorkGraphListResult,
+	WorkGraphReadyTag,
+	WorkItem,
+	WorkItemClaim,
+	WorkItemClaimCompleteInput,
+	WorkItemClaimInput,
+	WorkItemClaimReleaseInput,
+	WorkItemClaimRenewInput,
+	WorkItemClaimSource,
+	WorkItemClaimStatus,
+	WorkItemCreateInput,
+	WorkItemDependency,
+	WorkItemDependencyStatus,
+	WorkItemDependencyType,
+	WorkItemEvent,
+	WorkItemFilters,
+	WorkItemGithubReference,
+	WorkItemOwner,
+	WorkItemPatch,
+	WorkItemSource,
+	WorkItemStatus,
+	WorkItemType,
+	WorkItemUpdateInput,
+	TagDefinition,
+} from '../../shared/work-graph-types';
+export {
+	WORK_GRAPH_FORK_REPOSITORY,
+	WORK_GRAPH_READY_TAG,
+	WORK_GRAPH_READY_TAG_DEFINITION,
+} from '../../shared/work-graph-types';
+export type {
+	AgentDispatchProfile,
+	AgentDispatchSettings,
+	AgentDispatchSuggestedDefaults,
+} from '../../shared/agent-dispatch-types';
+export type {
+	AgentReadyWorkGraphTag,
+	DeliveryPlannerConcept,
+	DeliveryPlannerConceptWorkItemType,
+	DeliveryPlannerDashboardFilters,
+	DeliveryPlannerDashboardSnapshot,
+	DeliveryPlannerDependencyHint,
+	DeliveryPlannerDependencyPreview,
+	DeliveryPlannerDependencyPreviewRequest,
+	DeliveryPlannerDecompositionRequest,
+	DeliveryPlannerDecompositionResult,
+	DeliveryPlannerConflictHint,
+	DeliveryPlannerGithubSyncSummary,
+	DeliveryPlannerPrdCreateRequest,
+	DeliveryPlannerPrdCreateResult,
+	DeliveryPlannerWorkGraphContractRequest,
+} from '../../shared/delivery-planner-types';
+export {
+	DELIVERY_PLANNER_CONCEPT_TO_WORK_ITEM_TYPE,
+	DELIVERY_PLANNER_DEFAULT_STATUS_BY_CONCEPT,
+	DELIVERY_PLANNER_WORK_GRAPH_CONTRACT_REQUESTS,
+} from '../../shared/delivery-planner-types';
+
 // Re-export types from shared location
 export type {
 	AgentError,
@@ -26,12 +98,14 @@ export type {
 	Playbook,
 	ThinkingMode,
 	WorktreeRunTarget,
+	WorkGraphDispatchContext,
 } from '../../shared/types';
 
 // Re-export Symphony types for session metadata
 export type { SymphonySessionMetadata } from '../../shared/symphony-types';
 // Import Symphony types for use in this file
 import type { SymphonySessionMetadata } from '../../shared/symphony-types';
+import type { AgentDispatchProfile } from '../../shared/agent-dispatch-types';
 
 // Import for extension in this file
 import type {
@@ -58,13 +132,14 @@ import type { AgentError, SessionCliActivity } from '../../shared/types';
 
 export type SessionState = 'idle' | 'busy' | 'waiting_input' | 'connecting' | 'error';
 export type FileChangeType = 'modified' | 'added' | 'deleted';
-export type RightPanelTab = 'files' | 'history' | 'autorun';
+export type RightPanelTab = 'files' | 'board' | 'history' | 'autorun' | 'roles';
 export type SettingsTab =
 	| 'general'
 	| 'shortcuts'
 	| 'theme'
 	| 'notifications'
 	| 'aicommands'
+	| 'devteams'
 	| 'prompts';
 // Note: ScratchPadMode was removed as part of the Scratchpad → Auto Run migration
 export type FocusArea = 'sidebar' | 'main' | 'right';
@@ -786,6 +861,18 @@ export interface Session {
 
 	// Symphony contribution metadata (only set for Symphony sessions)
 	symphonyMetadata?: SymphonySessionMetadata;
+
+	// Per-session Agent Dispatch profile overrides
+	// fleetEnabled controls whether this agent is eligible for fleet dispatch
+	dispatchProfile?: AgentDispatchProfile;
+
+	// Project Wiki & PM opt-in. When true, Maestro may maintain AI Wiki and PM
+	// context for this agent's project root on the main Maestro server. The
+	// state is project-scoped by projectRoot + sshRemoteId, not agent-scoped.
+	aiWikiEnabled?: boolean;
+	// Runtime UI signal used to pulse the sidebar wiki/PM icon while the
+	// project wiki writer/updater is active.
+	aiWikiUpdating?: boolean;
 }
 
 // AgentConfigOption, AgentCapabilities, and AgentConfig are re-exported from shared/types above
@@ -891,6 +978,14 @@ export interface BmadMetadata {
 	sourceUrl: string; // GitHub repo URL
 }
 
+// PM command definition — one entry per /PM verb (loaded from src/prompts/pm/)
+export interface PmCommand {
+	id: string; // e.g., 'orchestrate', 'prd-new', 'epic-decompose'
+	command: string; // e.g., '/PM', '/PM prd-new', '/PM epic-decompose'
+	description: string;
+	prompt: string;
+}
+
 // Leaderboard registration data for runmaestro.ai integration
 export interface LeaderboardRegistration {
 	// Required fields
@@ -953,6 +1048,12 @@ export interface EncoreFeatureFlags {
 	usageStats: boolean;
 	symphony: boolean;
 	maestroCue: boolean;
+	agentDispatch: boolean;
+	deliveryPlanner: boolean;
+	planningPipeline: boolean;
+	conversationalPrd: boolean;
+	/** /PM slash-command suite — orchestrator, PRD planner, epic/issue verbs, standup (#428 + #436) */
+	pmSuite: boolean;
 }
 
 // Director's Notes settings for synopsis generation

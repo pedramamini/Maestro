@@ -16,6 +16,7 @@ import type {
 	SettingsTab,
 	BatchRunConfig,
 	AgentError,
+	AgentDispatchProfile,
 	ToolType,
 	LeaderboardRegistration,
 	ThinkingMode,
@@ -125,7 +126,9 @@ export interface AppModalsProps {
 			enabled: boolean;
 			remoteId: string | null;
 			workingDirOverride?: string;
-		}
+		},
+		dispatchProfile?: AgentDispatchProfile,
+		aiWikiEnabled?: boolean
 	) => void;
 	editAgentSession: Session | null;
 	renameSessionValue: string;
@@ -291,6 +294,12 @@ export interface AppModalsProps {
 	// Maestro Cue
 	onOpenMaestroCue?: () => void;
 	onConfigureCue?: (session: Session) => void;
+	// Agent Dispatch
+	onOpenAgentDispatch?: () => void;
+	// Delivery Planner
+	onOpenDeliveryPlanner?: () => void;
+	// Conversational PRD Planner
+	onOpenConversationalPrd?: () => void;
 	onCloseTabSwitcher: () => void;
 	onTabSelect: (tabId: string) => void;
 	onFileTabSelect?: (tabId: string) => void;
@@ -688,6 +697,13 @@ export const AppModals = memo(function AppModals(props: AppModalsProps) {
 		// Maestro Cue
 		onOpenMaestroCue,
 		onConfigureCue,
+		// Agent Dispatch
+		onOpenAgentDispatch,
+		// Delivery Planner
+		onOpenDeliveryPlanner,
+		// Planning Pipeline
+		// Conversational PRD Planner
+		onOpenConversationalPrd,
 		onCloseTabSwitcher,
 		onTabSelect,
 		onFileTabSelect,
@@ -994,6 +1010,9 @@ export const AppModals = memo(function AppModals(props: AppModalsProps) {
 				onOpenDirectorNotes={onOpenDirectorNotes}
 				onOpenMaestroCue={onOpenMaestroCue}
 				onConfigureCue={onConfigureCue}
+				onOpenAgentDispatch={onOpenAgentDispatch}
+				onOpenDeliveryPlanner={onOpenDeliveryPlanner}
+				onOpenConversationalPrd={onOpenConversationalPrd}
 				lightboxImage={lightboxImage}
 				lightboxImages={lightboxImages}
 				stagedImages={stagedImages}

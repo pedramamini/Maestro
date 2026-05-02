@@ -61,6 +61,51 @@ import { registerFeedbackHandlers } from './feedback';
 import { registerMaestroCliHandlers } from './maestro-cli';
 import { registerPromptsHandlers } from './prompts';
 import { registerMemoryHandlers } from './memory';
+import { registerProjectRolesHandlers } from './project-roles';
+import { registerAgentDispatchHandlers, AgentDispatchHandlerDependencies } from './agent-dispatch';
+import {
+	registerAgentDispatchSlashCommandHandlers,
+	registerAgentDispatchMcpHandlers,
+	AgentDispatchSlashCommandHandlerDependencies,
+	AgentDispatchMcpHandlerDependencies,
+} from './agent-dispatch-slash-commands';
+import {
+	registerConversationalPrdHandlers,
+	initConversationalPrdStore,
+	ConversationalPrdHandlerDependencies,
+} from './conversational-prd';
+import {
+	registerDeliveryPlannerHandlers,
+	DeliveryPlannerHandlerDependencies,
+} from './delivery-planner';
+import {
+	registerPlanningPipelineHandlers,
+	PlanningPipelineHandlerDependencies,
+} from './planning-pipeline';
+import { registerWorkGraphHandlers } from './work-graph';
+import { registerAiWikiHandlers, AiWikiHandlerDependencies } from './ai-wiki';
+// PM Orchestrator — /PM slash-command handlers (pm:orchestrate, pm:prd-new, etc.)
+import { registerPmOrchestratorHandlers } from '../../pm-orchestrator';
+// pm-tools — agent-callable pm:setStatus / pm:setRole / pm:setBlocked (#430)
+import { registerPmToolsHandlers, PmToolsHandlerDependencies } from './pm-tools';
+// pm-audit — rule-based in-flight work sweep (#434)
+import { registerPmAuditHandlers, PmAuditHandlerDependencies } from './pm-audit';
+import { registerPmHeartbeatHandlers, PmHeartbeatHandlerDependencies } from './pm-heartbeat';
+// pm-init — /PM-init idempotent field bootstrap (#445)
+import { registerPmInitHandlers, PmInitHandlerDependencies } from './pm-init';
+// pm-resolve-github-project — per-project GitHub project mapping (#447)
+import {
+	registerPmResolveGithubProjectHandlers,
+	PmResolveGithubProjectHandlerDependencies,
+} from './pm-resolve-github-project';
+// pm-commands — load /PM verb prompts for customAICommands dispatch path
+import { registerPmCommandsHandlers } from './pm-commands';
+// pm-migrate-labels — one-time migration of legacy agent:* labels → AI Status field
+import {
+	registerPmMigrateLabelsHandlers,
+	PmMigrateLabelsHandlerDependencies,
+} from './pm-migrate-labels';
+import type { AgentDispatchRuntime } from '../../agent-dispatch/runtime';
 import { AgentDetector } from '../../agents';
 import { ProcessManager } from '../../process-manager';
 import { WebServer } from '../../web-server';
@@ -117,6 +162,34 @@ export { registerFeedbackHandlers };
 export { registerMaestroCliHandlers };
 export { registerPromptsHandlers };
 export { registerMemoryHandlers };
+export { registerProjectRolesHandlers };
+export { registerAgentDispatchHandlers };
+export type { AgentDispatchHandlerDependencies };
+export { registerAgentDispatchSlashCommandHandlers, registerAgentDispatchMcpHandlers };
+export type { AgentDispatchSlashCommandHandlerDependencies, AgentDispatchMcpHandlerDependencies };
+export { registerConversationalPrdHandlers, initConversationalPrdStore };
+export type { ConversationalPrdHandlerDependencies };
+export { registerDeliveryPlannerHandlers };
+export type { DeliveryPlannerHandlerDependencies };
+export { registerPlanningPipelineHandlers };
+export type { PlanningPipelineHandlerDependencies };
+export { registerWorkGraphHandlers };
+export { registerAiWikiHandlers };
+export type { AiWikiHandlerDependencies };
+export { registerPmToolsHandlers };
+export type { PmToolsHandlerDependencies };
+export { registerPmAuditHandlers };
+export type { PmAuditHandlerDependencies };
+export { registerPmHeartbeatHandlers };
+export { registerPmOrchestratorHandlers };
+export { registerPmInitHandlers };
+export type { PmInitHandlerDependencies };
+export type { PmHeartbeatHandlerDependencies };
+export { registerPmResolveGithubProjectHandlers };
+export type { PmResolveGithubProjectHandlerDependencies };
+export { registerPmCommandsHandlers };
+export { registerPmMigrateLabelsHandlers };
+export type { PmMigrateLabelsHandlerDependencies };
 export type { AgentsHandlerDependencies };
 export type { ProcessHandlerDependencies };
 export type { PersistenceHandlerDependencies };
@@ -158,6 +231,8 @@ export interface HandlerDependencies {
 	tunnelManager: TunnelManagerType;
 	// Claude-specific dependencies
 	claudeSessionOriginsStore: Store<ClaudeSessionOriginsData>;
+	// Agent Dispatch runtime (optional — null if not yet initialized)
+	getAgentDispatchRuntime?: () => AgentDispatchRuntime | null;
 }
 
 /**
@@ -198,6 +273,7 @@ export function registerAllHandlers(deps: HandlerDependencies): void {
 		settingsStore: deps.settingsStore,
 		getMainWindow: deps.getMainWindow,
 		sessionsStore: deps.sessionsStore,
+		getMaestroCliBaseUrl: () => deps.getWebServer()?.getSecureUrl(),
 	});
 	registerPersistenceHandlers({
 		settingsStore: deps.settingsStore,
@@ -310,6 +386,49 @@ export function registerAllHandlers(deps: HandlerDependencies): void {
 	registerPromptsHandlers();
 	// Register project Memory handlers (Claude Code per-project memory viewer)
 	registerMemoryHandlers();
+	// Register per-project role slot roster handlers (#429)
+	registerProjectRolesHandlers(deps.settingsStore as unknown as Store);
+	// Register Agent Dispatch slash-command IPC handlers (gated by agentDispatch encore flag).
+	// NOTE: despite the old "-mcp" name, this registers plain ipcMain.handle channels, not MCP tools.
+	registerAgentDispatchSlashCommandHandlers({ settingsStore: deps.settingsStore });
+	// Register Agent Dispatch runtime handlers (kanban board, fleet view)
+	registerAgentDispatchHandlers({
+		getRuntime: deps.getAgentDispatchRuntime ?? (() => null),
+		settingsStore: deps.settingsStore,
+	});
+	// Register Delivery Planner handlers; returns the service for re-use by Conv-PRD
+	const plannerService = registerDeliveryPlannerHandlers({
+		getMainWindow: deps.getMainWindow,
+		settingsStore: deps.settingsStore,
+	});
+	// Register Conversational PRD handlers (optional plannerService injection)
+	void initConversationalPrdStore().catch(() => {});
+	registerConversationalPrdHandlers({ plannerService, settingsStore: deps.settingsStore });
+	// Register Planning Pipeline handlers (gated by planningPipeline encore flag)
+	registerPlanningPipelineHandlers({ settingsStore: deps.settingsStore });
+	// Register Work Graph handlers (durable local PM/Maestro Board state)
+	registerWorkGraphHandlers({ getMainWindow: deps.getMainWindow });
+	// Register AI Wiki handlers (project memory/context storage under userData)
+	registerAiWikiHandlers({ app: deps.app });
+	// Register PM Orchestrator handlers (/PM slash-command suite, gated by conversationalPrd flag)
+	registerPmOrchestratorHandlers({
+		settingsStore: deps.settingsStore,
+		getMainWindow: deps.getMainWindow,
+	});
+	// Register pm-tools IPC handlers (#430): pm:setStatus, pm:setRole, pm:setBlocked
+	registerPmToolsHandlers({ settingsStore: deps.settingsStore });
+	// Register PM Audit handlers (#434): pmAudit:run
+	registerPmAuditHandlers({ settingsStore: deps.settingsStore });
+	// Register PM Heartbeat handlers (#435): pm:heartbeat agent liveness signal
+	registerPmHeartbeatHandlers({ settingsStore: deps.settingsStore });
+	// Register PM Init handlers (#445): pm:initRepo idempotent field bootstrap
+	registerPmInitHandlers({ settingsStore: deps.settingsStore });
+	// Register legacy PM Resolve GitHub Project handler (#447): compatibility no-op, no discovery
+	registerPmResolveGithubProjectHandlers({ settingsStore: deps.settingsStore });
+	// Register PM Commands handler: pm:loadCommands for customAICommands dispatch path
+	registerPmCommandsHandlers();
+	// Register PM migrate-labels handler: pm:migrateLegacyLabels one-time label migration
+	registerPmMigrateLabelsHandlers({ settingsStore: deps.settingsStore });
 	// Setup logger event forwarding to renderer
 	setupLoggerEventForwarding(deps.getMainWindow);
 }

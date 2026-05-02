@@ -1,0 +1,557 @@
+/**
+ * Tests for discoverGithubProject — structured error codes (#447).
+ *
+ * We mock:
+ *   - `../utils/execFile` (execFileNoThrow) — controls all subprocess results
+ *   - `../utils/ssh-command-builder` (buildSshCommand) — stubbed for SSH tests
+ *
+ * NOTE: fs.existsSync is no longer used by the discovery function — git repo
+ * detection was switched to `git -C <path> rev-parse --is-inside-work-tree`
+ * so it works transparently over SSH without local filesystem access.
+ *
+ * All git calls now use `git -C <path> <subcommand>` so matchers must look at
+ * args[0] === '-C' and args[2] for the subcommand (e.g. 'rev-parse', 'remote').
+ */
+
+import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
+import * as fs from 'fs/promises';
+import * as os from 'os';
+import * as path from 'path';
+
+// ── Mock execFileNoThrow ─────────────────────────────────────────────────────
+vi.mock('../../utils/execFile', () => ({
+	execFileNoThrow: vi.fn(),
+}));
+
+// ── Mock buildSshCommand (so SSH tests don't need a real SSH binary) ─────────
+vi.mock('../../utils/ssh-command-builder', () => ({
+	buildSshCommand: vi.fn().mockResolvedValue({ command: 'ssh', args: ['-stub'] }),
+}));
+
+import { execFileNoThrow } from '../../utils/execFile';
+import { buildSshCommand } from '../../utils/ssh-command-builder';
+import { discoverGithubProject } from '../github-project-discovery';
+import type { ExecResult } from '../../utils/execFile';
+
+// Typed helpers
+const mockExec = execFileNoThrow as ReturnType<typeof vi.fn>;
+const mockBuildSshCommand = buildSshCommand as ReturnType<typeof vi.fn>;
+const tempProjectPaths: string[] = [];
+
+const ok = (stdout: string, stderr = ''): ExecResult => ({ stdout, stderr, exitCode: 0 });
+const fail = (stderr: string, exitCode: number | string = 1): ExecResult => ({
+	stdout: '',
+	stderr,
+	exitCode,
+});
+
+// A minimal valid project list JSON
+const projectListJson = JSON.stringify({
+	projects: [{ id: 'pid-1', number: 42, title: 'my-repo AI Project' }],
+});
+
+// A valid new-project JSON
+const newProjectJson = JSON.stringify({ id: 'pid-new', number: 99, title: 'my-repo AI Project' });
+
+async function writeProjectConfig(filename: string, config: unknown): Promise<string> {
+	const projectPath = await fs.mkdtemp(path.join(os.tmpdir(), 'maestro-gh-discovery-'));
+	tempProjectPaths.push(projectPath);
+	await fs.mkdir(path.join(projectPath, '.maestro'));
+	await fs.writeFile(path.join(projectPath, '.maestro', filename), JSON.stringify(config), 'utf-8');
+	return projectPath;
+}
+
+/**
+ * Helper: does this git call match the given subcommand?
+ * All git calls now use `-C <path> <subcommand> ...` so args[0] === '-C'.
+ */
+function isGitCmd(cmd: string, args: string[], subcommand: string): boolean {
+	return cmd === 'git' && args[0] === '-C' && args[2] === subcommand;
+}
+
+/** Set up default happy-path mocks. Tests override as needed. */
+function setupHappyPath() {
+	mockExec.mockImplementation(async (cmd: string, args: string[]) => {
+		// gh --version
+		if (cmd === 'gh' && args[0] === '--version') return ok('gh version 2.40.0');
+		// gh auth status
+		if (cmd === 'gh' && args[0] === 'auth') return ok('Logged in');
+		// git -C <path> rev-parse --is-inside-work-tree
+		if (isGitCmd(cmd, args, 'rev-parse')) return ok('true');
+		// git -C <path> remote get-url origin
+		if (isGitCmd(cmd, args, 'remote')) {
+			return ok('https://github.com/owner/my-repo.git');
+		}
+		// gh project list
+		if (cmd === 'gh' && args[0] === 'project' && args[1] === 'list') {
+			return ok(projectListJson);
+		}
+		return ok('{}');
+	});
+}
+
+beforeEach(() => {
+	vi.clearAllMocks();
+	mockBuildSshCommand.mockResolvedValue({ command: 'ssh', args: ['-stub'] });
+});
+
+afterEach(() => {
+	return Promise.all(
+		tempProjectPaths.splice(0).map((p) => fs.rm(p, { recursive: true, force: true }))
+	);
+});
+
+// ── gh CLI missing ───────────────────────────────────────────────────────────
+
+describe('GH_CLI_MISSING', () => {
+	it('returns GH_CLI_MISSING when gh is not on PATH (ENOENT)', async () => {
+		mockExec.mockImplementation(async (cmd: string, args: string[]) => {
+			if (cmd === 'gh' && args[0] === '--version') return fail('not found', 'ENOENT');
+			return ok('');
+		});
+
+		const result = await discoverGithubProject('/some/project');
+		expect(result.ok).toBe(false);
+		if (!result.ok) {
+			expect(result.error.code).toBe('GH_CLI_MISSING');
+			expect(result.error.message).toContain('https://cli.github.com/');
+		}
+	});
+
+	it('returns GH_CLI_MISSING when gh is not accessible (EACCES)', async () => {
+		mockExec.mockImplementation(async (cmd: string, args: string[]) => {
+			if (cmd === 'gh' && args[0] === '--version') return fail('permission denied', 'EACCES');
+			return ok('');
+		});
+
+		const result = await discoverGithubProject('/some/project');
+		expect(result.ok).toBe(false);
+		if (!result.ok) expect(result.error.code).toBe('GH_CLI_MISSING');
+	});
+});
+
+// ── Not a git repo ───────────────────────────────────────────────────────────
+
+describe('NOT_A_GIT_REPO', () => {
+	it('returns NOT_A_GIT_REPO when git rev-parse fails', async () => {
+		mockExec.mockImplementation(async (cmd: string, args: string[]) => {
+			if (cmd === 'gh' && args[0] === '--version') return ok('gh version 2.40.0');
+			if (cmd === 'gh' && args[0] === 'auth') return ok('Logged in');
+			// git rev-parse returns non-zero for non-repos
+			if (isGitCmd(cmd, args, 'rev-parse')) return fail('not a git repository', 128);
+			return ok('');
+		});
+
+		const result = await discoverGithubProject('/not/a/repo');
+		expect(result.ok).toBe(false);
+		if (!result.ok) {
+			expect(result.error.code).toBe('NOT_A_GIT_REPO');
+			expect(result.error.message).toContain('git repository');
+		}
+	});
+});
+
+// ── No origin remote ────────────────────────────────────────────────────────
+
+describe('NO_ORIGIN_REMOTE', () => {
+	it('returns NO_ORIGIN_REMOTE when git remote get-url origin fails', async () => {
+		mockExec.mockImplementation(async (cmd: string, args: string[]) => {
+			if (cmd === 'gh' && args[0] === '--version') return ok('gh version 2.40.0');
+			if (cmd === 'gh' && args[0] === 'auth') return ok('Logged in');
+			if (isGitCmd(cmd, args, 'rev-parse')) return ok('true');
+			if (isGitCmd(cmd, args, 'remote')) {
+				return fail('fatal: No such remote', 128);
+			}
+			return ok('');
+		});
+
+		const result = await discoverGithubProject('/some/repo');
+		expect(result.ok).toBe(false);
+		if (!result.ok) {
+			expect(result.error.code).toBe('NO_ORIGIN_REMOTE');
+			expect(result.error.message).toContain('origin');
+		}
+	});
+
+	it('returns NO_ORIGIN_REMOTE when git remote returns empty stdout', async () => {
+		mockExec.mockImplementation(async (cmd: string, args: string[]) => {
+			if (cmd === 'gh' && args[0] === '--version') return ok('gh version 2.40.0');
+			if (cmd === 'gh' && args[0] === 'auth') return ok('Logged in');
+			if (isGitCmd(cmd, args, 'rev-parse')) return ok('true');
+			if (isGitCmd(cmd, args, 'remote')) return ok('');
+			return ok('');
+		});
+
+		const result = await discoverGithubProject('/some/repo');
+		expect(result.ok).toBe(false);
+		if (!result.ok) expect(result.error.code).toBe('NO_ORIGIN_REMOTE');
+	});
+});
+
+// ── Not GitHub ───────────────────────────────────────────────────────────────
+
+describe('NOT_GITHUB', () => {
+	it('returns NOT_GITHUB for a GitLab SSH remote', async () => {
+		mockExec.mockImplementation(async (cmd: string, args: string[]) => {
+			if (cmd === 'gh' && args[0] === '--version') return ok('gh version 2.40.0');
+			if (cmd === 'gh' && args[0] === 'auth') return ok('Logged in');
+			if (isGitCmd(cmd, args, 'rev-parse')) return ok('true');
+			if (isGitCmd(cmd, args, 'remote')) {
+				return ok('git@gitlab.com:owner/repo.git');
+			}
+			return ok('');
+		});
+
+		const result = await discoverGithubProject('/some/repo');
+		expect(result.ok).toBe(false);
+		if (!result.ok) {
+			expect(result.error.code).toBe('NOT_GITHUB');
+			expect(result.error.message).toContain('github.com');
+		}
+	});
+
+	it('returns NOT_GITHUB for a Bitbucket HTTPS remote', async () => {
+		mockExec.mockImplementation(async (cmd: string, args: string[]) => {
+			if (cmd === 'gh' && args[0] === '--version') return ok('gh version 2.40.0');
+			if (cmd === 'gh' && args[0] === 'auth') return ok('Logged in');
+			if (isGitCmd(cmd, args, 'rev-parse')) return ok('true');
+			if (isGitCmd(cmd, args, 'remote')) {
+				return ok('https://bitbucket.org/owner/repo.git');
+			}
+			return ok('');
+		});
+
+		const result = await discoverGithubProject('/some/repo');
+		expect(result.ok).toBe(false);
+		if (!result.ok) expect(result.error.code).toBe('NOT_GITHUB');
+	});
+});
+
+// ── GH_AUTH_REQUIRED ────────────────────────────────────────────────────────
+
+describe('GH_AUTH_REQUIRED', () => {
+	it('returns GH_AUTH_REQUIRED when gh auth status fails', async () => {
+		mockExec.mockImplementation(async (cmd: string, args: string[]) => {
+			if (cmd === 'gh' && args[0] === '--version') return ok('gh version 2.40.0');
+			if (cmd === 'gh' && args[0] === 'auth') return fail('not logged in', 1);
+			return ok('');
+		});
+
+		const result = await discoverGithubProject('/some/repo');
+		expect(result.ok).toBe(false);
+		if (!result.ok) {
+			expect(result.error.code).toBe('GH_AUTH_REQUIRED');
+			expect(result.error.message).toContain('gh auth login');
+		}
+	});
+});
+
+// ── Project-local config ─────────────────────────────────────────────────────
+
+describe('project-local config', () => {
+	it('uses .maestro/project.json before git remote and project-title matching', async () => {
+		const projectPath = await writeProjectConfig('project.json', {
+			owner: 'configured-owner',
+			repo: 'configured-repo',
+			projectNumber: 77,
+			projectId: 'configured-project-id',
+			projectTitle: 'Configured Board',
+			defaultBranch: 'trunk',
+		});
+
+		mockExec.mockImplementation(async (cmd: string, args: string[]) => {
+			if (cmd === 'gh' && args[0] === '--version') return ok('gh version 2.40.0');
+			if (cmd === 'gh' && args[0] === 'auth') return ok('Logged in');
+			return fail(`unexpected command: ${cmd} ${args.join(' ')}`, 1);
+		});
+
+		const result = await discoverGithubProject(projectPath);
+		expect(result.ok).toBe(true);
+		if (result.ok) {
+			expect(result.mapping.owner).toBe('configured-owner');
+			expect(result.mapping.repo).toBe('configured-repo');
+			expect(result.mapping.projectNumber).toBe(77);
+			expect(result.mapping.projectId).toBe('configured-project-id');
+			expect(result.mapping.projectTitle).toBe('Configured Board');
+			expect(result.mapping.defaultBranch).toBe('trunk');
+		}
+		expect(mockExec).not.toHaveBeenCalledWith('git', expect.any(Array));
+		expect(mockExec).not.toHaveBeenCalledWith('gh', expect.arrayContaining(['project', 'list']));
+	});
+
+	it('views the configured project when projectId or projectTitle is missing', async () => {
+		const projectPath = await writeProjectConfig('github.json', {
+			githubProject: {
+				owner: 'configured-owner',
+				repo: 'configured-repo',
+				projectNumber: '88',
+			},
+		});
+
+		mockExec.mockImplementation(async (cmd: string, args: string[]) => {
+			if (cmd === 'gh' && args[0] === '--version') return ok('gh version 2.40.0');
+			if (cmd === 'gh' && args[0] === 'auth') return ok('Logged in');
+			if (cmd === 'gh' && args[0] === 'project' && args[1] === 'view') {
+				return ok(JSON.stringify({ id: 'viewed-project-id', number: 88, title: 'Viewed Board' }));
+			}
+			return fail(`unexpected command: ${cmd} ${args.join(' ')}`, 1);
+		});
+
+		const result = await discoverGithubProject(projectPath);
+		expect(result.ok).toBe(true);
+		if (result.ok) {
+			expect(result.mapping.owner).toBe('configured-owner');
+			expect(result.mapping.repo).toBe('configured-repo');
+			expect(result.mapping.projectNumber).toBe(88);
+			expect(result.mapping.projectId).toBe('viewed-project-id');
+			expect(result.mapping.projectTitle).toBe('Viewed Board');
+		}
+		expect(mockExec).toHaveBeenCalledWith('gh', [
+			'project',
+			'view',
+			'88',
+			'--owner',
+			'configured-owner',
+			'--format',
+			'json',
+		]);
+		expect(mockExec).not.toHaveBeenCalledWith('git', expect.any(Array));
+	});
+
+	it('reads project config over SSH before falling back to remote git discovery', async () => {
+		mockBuildSshCommand.mockResolvedValue({ command: 'ssh', args: ['remote-cat'] });
+		mockExec.mockImplementation(async (cmd: string, args: string[]) => {
+			if (cmd === 'gh' && args[0] === '--version') return ok('gh version 2.40.0');
+			if (cmd === 'gh' && args[0] === 'auth') return ok('Logged in');
+			if (cmd === 'ssh' && args[0] === 'remote-cat') {
+				return ok(
+					JSON.stringify({
+						github: {
+							owner: 'ssh-owner',
+							repo: 'ssh-repo',
+							projectNumber: 9,
+							projectId: 'ssh-project-id',
+							projectTitle: 'SSH Board',
+						},
+					})
+				);
+			}
+			return fail(`unexpected command: ${cmd} ${args.join(' ')}`, 1);
+		});
+
+		const result = await discoverGithubProject({
+			projectPath: '/remote/project',
+			sshRemoteConfig: { enabled: true, remoteId: 'remote-1' },
+			sshStore: {
+				getSshRemotes: () => [
+					{
+						id: 'remote-1',
+						name: 'Remote',
+						host: 'example.com',
+						port: 22,
+						username: 'dev',
+						privateKeyPath: '',
+						enabled: true,
+					},
+				],
+			},
+		});
+
+		expect(result.ok).toBe(true);
+		if (result.ok) {
+			expect(result.mapping.owner).toBe('ssh-owner');
+			expect(result.mapping.repo).toBe('ssh-repo');
+			expect(result.mapping.projectNumber).toBe(9);
+		}
+		expect(mockBuildSshCommand).toHaveBeenCalledWith(expect.objectContaining({ id: 'remote-1' }), {
+			command: 'cat',
+			args: ['/remote/project/.maestro/project.json'],
+		});
+		expect(mockExec).not.toHaveBeenCalledWith('git', expect.any(Array));
+	});
+});
+
+// ── Empty project list — creates or surfaces NO_PROJECT_AND_CANNOT_CREATE ───
+
+describe('empty project list', () => {
+	it('creates a new project when the list is empty and succeeds', async () => {
+		mockExec.mockImplementation(async (cmd: string, args: string[]) => {
+			if (cmd === 'gh' && args[0] === '--version') return ok('gh version 2.40.0');
+			if (cmd === 'gh' && args[0] === 'auth') return ok('Logged in');
+			if (isGitCmd(cmd, args, 'rev-parse')) return ok('true');
+			if (isGitCmd(cmd, args, 'remote')) {
+				return ok('https://github.com/owner/my-repo.git');
+			}
+			if (cmd === 'gh' && args[0] === 'project' && args[1] === 'list') {
+				return ok(JSON.stringify({ projects: [] }));
+			}
+			if (cmd === 'gh' && args[0] === 'project' && args[1] === 'create') {
+				return ok(newProjectJson);
+			}
+			return ok('{}');
+		});
+
+		const result = await discoverGithubProject('/some/repo');
+		expect(result.ok).toBe(true);
+		if (result.ok) {
+			expect(result.mapping.projectNumber).toBe(99);
+		}
+	});
+
+	it('returns NO_PROJECT_AND_CANNOT_CREATE when list is empty and create fails', async () => {
+		mockExec.mockImplementation(async (cmd: string, args: string[]) => {
+			if (cmd === 'gh' && args[0] === '--version') return ok('gh version 2.40.0');
+			if (cmd === 'gh' && args[0] === 'auth') return ok('Logged in');
+			if (isGitCmd(cmd, args, 'rev-parse')) return ok('true');
+			if (isGitCmd(cmd, args, 'remote')) {
+				return ok('https://github.com/owner/my-repo.git');
+			}
+			if (cmd === 'gh' && args[0] === 'project' && args[1] === 'list') {
+				return ok(JSON.stringify({ projects: [] }));
+			}
+			if (cmd === 'gh' && args[0] === 'project' && args[1] === 'create') {
+				return fail('Must have push access to create a project', 1);
+			}
+			return ok('{}');
+		});
+
+		const result = await discoverGithubProject('/some/repo');
+		expect(result.ok).toBe(false);
+		if (!result.ok) {
+			expect(result.error.code).toBe('NO_PROJECT_AND_CANNOT_CREATE');
+			expect(result.error.message).toContain('permissions');
+		}
+	});
+});
+
+// ── MULTIPLE_MATCHES ─────────────────────────────────────────────────────────
+
+describe('MULTIPLE_MATCHES', () => {
+	it('returns MULTIPLE_MATCHES with all candidates when >1 project title matches', async () => {
+		const multipleProjects = JSON.stringify({
+			projects: [
+				{ id: 'pid-1', number: 10, title: 'my-repo Sprint Board' },
+				{ id: 'pid-2', number: 11, title: 'my-repo Backlog' },
+			],
+		});
+		mockExec.mockImplementation(async (cmd: string, args: string[]) => {
+			if (cmd === 'gh' && args[0] === '--version') return ok('gh version 2.40.0');
+			if (cmd === 'gh' && args[0] === 'auth') return ok('Logged in');
+			if (isGitCmd(cmd, args, 'rev-parse')) return ok('true');
+			if (isGitCmd(cmd, args, 'remote')) {
+				return ok('https://github.com/owner/my-repo.git');
+			}
+			if (cmd === 'gh' && args[0] === 'project' && args[1] === 'list') {
+				return ok(multipleProjects);
+			}
+			return ok('{}');
+		});
+
+		const result = await discoverGithubProject('/some/repo');
+		expect(result.ok).toBe(false);
+		if (!result.ok) {
+			expect(result.error.code).toBe('MULTIPLE_MATCHES');
+			expect(result.error.candidates).toHaveLength(2);
+			expect(result.error.candidates?.[0].number).toBe(10);
+			expect(result.error.candidates?.[1].number).toBe(11);
+		}
+	});
+});
+
+// ── Happy path ───────────────────────────────────────────────────────────────
+
+describe('happy path', () => {
+	it('returns the matching project mapping on success', async () => {
+		setupHappyPath();
+
+		const result = await discoverGithubProject('/some/repo');
+		expect(result.ok).toBe(true);
+		if (result.ok) {
+			expect(result.mapping.owner).toBe('owner');
+			expect(result.mapping.repo).toBe('my-repo');
+			expect(result.mapping.projectNumber).toBe(42);
+		}
+	});
+
+	it('handles git@github.com SSH remote correctly', async () => {
+		mockExec.mockImplementation(async (cmd: string, args: string[]) => {
+			if (cmd === 'gh' && args[0] === '--version') return ok('gh version 2.40.0');
+			if (cmd === 'gh' && args[0] === 'auth') return ok('Logged in');
+			if (isGitCmd(cmd, args, 'rev-parse')) return ok('true');
+			if (isGitCmd(cmd, args, 'remote')) {
+				return ok('git@github.com:acme/my-repo.git');
+			}
+			if (cmd === 'gh' && args[0] === 'project' && args[1] === 'list') {
+				return ok(
+					JSON.stringify({ projects: [{ id: 'pid-3', number: 5, title: 'my-repo Board' }] })
+				);
+			}
+			return ok('{}');
+		});
+
+		const result = await discoverGithubProject('/some/repo');
+		expect(result.ok).toBe(true);
+		if (result.ok) {
+			expect(result.mapping.owner).toBe('acme');
+			expect(result.mapping.repo).toBe('my-repo');
+		}
+	});
+
+	it('handles GitHub repo names containing dots', async () => {
+		mockExec.mockImplementation(async (cmd: string, args: string[]) => {
+			if (cmd === 'gh' && args[0] === '--version') return ok('gh version 2.40.0');
+			if (cmd === 'gh' && args[0] === 'auth') return ok('Logged in');
+			if (isGitCmd(cmd, args, 'rev-parse')) return ok('true');
+			if (isGitCmd(cmd, args, 'remote')) {
+				return ok('https://github.com/acme/docs.example.com.git');
+			}
+			if (cmd === 'gh' && args[0] === 'project' && args[1] === 'list') {
+				return ok(
+					JSON.stringify({
+						projects: [{ id: 'pid-docs', number: 12, title: 'docs.example.com AI Project' }],
+					})
+				);
+			}
+			return ok('{}');
+		});
+
+		const result = await discoverGithubProject('/some/docs');
+		expect(result.ok).toBe(true);
+		if (result.ok) {
+			expect(result.mapping.owner).toBe('acme');
+			expect(result.mapping.repo).toBe('docs.example.com');
+			expect(result.mapping.projectNumber).toBe(12);
+		}
+	});
+
+	it('matches human-readable project titles for separator and camel-case repo names', async () => {
+		mockExec.mockImplementation(async (cmd: string, args: string[]) => {
+			if (cmd === 'gh' && args[0] === '--version') return ok('gh version 2.40.0');
+			if (cmd === 'gh' && args[0] === 'auth') return ok('Logged in');
+			if (isGitCmd(cmd, args, 'rev-parse')) return ok('true');
+			if (isGitCmd(cmd, args, 'remote')) {
+				return ok('https://github.com/HumpfTech/HumpfAI_AIRouter.git');
+			}
+			if (cmd === 'gh' && args[0] === 'project' && args[1] === 'list') {
+				return ok(
+					JSON.stringify({
+						projects: [
+							{ id: 'pid-docs', number: 8, title: 'Docs Hub' },
+							{ id: 'pid-router', number: 11, title: 'AI Router' },
+						],
+					})
+				);
+			}
+			return ok('{}');
+		});
+
+		const result = await discoverGithubProject('/some/ai-router');
+		expect(result.ok).toBe(true);
+		if (result.ok) {
+			expect(result.mapping.owner).toBe('HumpfTech');
+			expect(result.mapping.repo).toBe('HumpfAI_AIRouter');
+			expect(result.mapping.projectNumber).toBe(11);
+			expect(result.mapping.projectTitle).toBe('AI Router');
+		}
+	});
+});

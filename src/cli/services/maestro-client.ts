@@ -24,9 +24,20 @@ export class MaestroClient {
 	 * Throws if the app is not running or connection fails.
 	 */
 	async connect(): Promise<void> {
+		const envBaseUrl = process.env.MAESTRO_CLI_BASE_URL?.trim();
+		if (envBaseUrl) {
+			const baseUrl = new URL(envBaseUrl.replace(/\/+$/, ''));
+			const wsProtocol = baseUrl.protocol === 'https:' ? 'wss:' : 'ws:';
+			const url = `${wsProtocol}//${baseUrl.host}${baseUrl.pathname}/ws`;
+
+			return this.connectToUrl(url);
+		}
+
 		const info = readCliServerInfo();
 		if (!info) {
-			throw new Error('Maestro desktop app is not running');
+			throw new Error(
+				'Maestro desktop app is not running. For remote/SSH agents, set MAESTRO_CLI_BASE_URL to the running Maestro web URL including its security token.'
+			);
 		}
 
 		if (!isCliServerRunning()) {
@@ -38,6 +49,10 @@ export class MaestroClient {
 		// 0.0.0.0 (IPv4 only), so `localhost` yields ECONNREFUSED on ::1.
 		const url = `ws://127.0.0.1:${info.port}/${info.token}/ws`;
 
+		return this.connectToUrl(url);
+	}
+
+	private async connectToUrl(url: string): Promise<void> {
 		return new Promise<void>((resolve, reject) => {
 			let settled = false;
 

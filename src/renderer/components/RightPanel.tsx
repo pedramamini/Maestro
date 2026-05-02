@@ -15,6 +15,8 @@ import {
 	AlertTriangle,
 	Play,
 	XCircle,
+	Users,
+	LayoutDashboard,
 } from 'lucide-react';
 import { Spinner } from './ui/Spinner';
 import type { Session, Theme, RightPanelTab, BatchRunState } from '../types';
@@ -22,6 +24,8 @@ import type { FileTreeChanges } from '../utils/fileExplorer';
 import { FileExplorerPanel } from './FileExplorerPanel';
 import { HistoryPanel, HistoryPanelHandle } from './HistoryPanel';
 import { AutoRun, AutoRunHandle } from './AutoRun';
+import { RolesPanel } from './RightPanel/RolesPanel/RolesPanel';
+import { KanbanBoard } from './AgentDispatch/KanbanBoard';
 import { AutoRunExpandedModal } from './AutoRun/AutoRunExpandedModal';
 import { formatShortcutKeys } from '../utils/shortcutFormatter';
 import { ConfirmModal } from './ConfirmModal';
@@ -124,6 +128,7 @@ export const RightPanel = memo(
 	forwardRef<RightPanelHandle, RightPanelProps>(function RightPanel(props, ref) {
 		// === State from stores (direct subscriptions — no prop drilling) ===
 		const session = useSessionStore(selectActiveSession);
+		const allSessions = useSessionStore((s) => s.sessions);
 		const setSessions = useSessionStore((s) => s.setSessions);
 
 		const rightPanelOpen = useUIStore((s) => s.rightPanelOpen);
@@ -139,6 +144,7 @@ export const RightPanel = memo(
 		const setRightPanelWidth = useSettingsStore((s) => s.setRightPanelWidth);
 		const setShowHiddenFiles = useSettingsStore((s) => s.setShowHiddenFiles);
 		const autoRunDisabled = useSettingsStore((s) => s.autoRunDisabled);
+		const agentDispatchEnabled = useSettingsStore((s) => s.encoreFeatures?.agentDispatch ?? false);
 
 		const fileTreeFilter = useFileExplorerStore((s) => s.fileTreeFilter);
 		const fileTreeFilterOpen = useFileExplorerStore((s) => s.fileTreeFilterOpen);
@@ -447,18 +453,36 @@ export const RightPanel = memo(
 
 				{/* Tab Header */}
 				<div className="flex border-b h-16" style={{ borderColor: theme.colors.border }}>
-					{(['files', 'history', ...(autoRunDisabled ? [] : ['autorun'])] as const).map((tab) => (
+					{(
+						[
+							'files',
+							'board',
+							'history',
+							...(autoRunDisabled ? [] : ['autorun']),
+							...(agentDispatchEnabled ? ['roles'] : []),
+						] as RightPanelTab[]
+					).map((tab) => (
 						<button
 							key={tab}
-							onClick={() => setActiveRightTab(tab as RightPanelTab)}
-							className="flex-1 text-xs font-bold border-b-2 transition-colors"
+							onClick={() => setActiveRightTab(tab)}
+							className="flex-1 flex items-center justify-center gap-1.5 text-xs font-bold border-b-2 transition-colors px-2"
 							style={{
 								borderColor: activeRightTab === tab ? theme.colors.accent : 'transparent',
 								color: activeRightTab === tab ? theme.colors.textMain : theme.colors.textDim,
 							}}
 							data-tour={`${tab}-tab`}
 						>
-							{tab === 'autorun' ? 'Auto Run' : tab.charAt(0).toUpperCase() + tab.slice(1)}
+							{tab === 'board' && <LayoutDashboard className="w-3 h-3" />}
+							{tab === 'roles' && <Users className="w-3 h-3" />}
+							<span>
+								{tab === 'board'
+									? 'Board'
+									: tab === 'autorun'
+										? 'Auto Run'
+										: tab === 'roles'
+											? 'Dev Crew'
+											: tab.charAt(0).toUpperCase() + tab.slice(1)}
+							</span>
 						</button>
 					))}
 
@@ -478,7 +502,9 @@ export const RightPanel = memo(
 				{/* Tab Content */}
 				<div
 					ref={fileTreeContainerRef}
-					className="flex-1 px-4 pb-4 overflow-y-auto overflow-x-hidden outline-none scrollbar-thin"
+					className={`flex-1 overflow-y-auto overflow-x-hidden outline-none scrollbar-thin ${
+						activeRightTab === 'board' ? 'p-0' : 'px-4 pb-4'
+					}`}
 					tabIndex={-1}
 					onClick={(e) => {
 						setActiveFocus('right');
@@ -554,9 +580,35 @@ export const RightPanel = memo(
 						</div>
 					)}
 
+					{activeRightTab === 'board' && (
+						<div data-tour="board-panel" className="h-full">
+							<KanbanBoard theme={theme} />
+						</div>
+					)}
+
 					{activeRightTab === 'autorun' && !autoRunDisabled && (
 						<div data-tour="autorun-panel" className="h-full">
 							<AutoRun ref={autoRunRef} {...autoRunSharedProps} onExpand={handleExpandAutoRun} />
+						</div>
+					)}
+
+					{activeRightTab === 'roles' && agentDispatchEnabled && (
+						<div data-tour="roles-panel" className="h-full">
+							<RolesPanel
+								theme={theme}
+								projectPath={session.projectRoot ?? null}
+								sessions={allSessions}
+								activeRemoteId={
+									session.sessionSshRemoteConfig?.enabled
+										? (session.sessionSshRemoteConfig.remoteId ?? null)
+										: null
+								}
+								activeSshRemoteId={
+									session.sessionSshRemoteConfig?.enabled
+										? (session.sessionSshRemoteConfig.remoteId ?? null)
+										: null
+								}
+							/>
 						</div>
 					)}
 				</div>

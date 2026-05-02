@@ -75,6 +75,22 @@ import {
 	registerMaestroCliHandlers,
 	registerPromptsHandlers,
 	registerMemoryHandlers,
+	registerAgentDispatchHandlers,
+	registerAgentDispatchSlashCommandHandlers,
+	registerDeliveryPlannerHandlers,
+	registerPlanningPipelineHandlers,
+	registerConversationalPrdHandlers,
+	registerWorkGraphHandlers,
+	registerPmToolsHandlers,
+	registerPmAuditHandlers,
+	registerPmHeartbeatHandlers,
+	registerPmResolveGithubProjectHandlers,
+	registerPmInitHandlers,
+	registerPmMigrateLabelsHandlers,
+	registerPmCommandsHandlers,
+	registerProjectRolesHandlers,
+	registerPmOrchestratorHandlers,
+	initConversationalPrdStore,
 	setupLoggerEventForwarding,
 	cleanupAllGroomingSessions,
 	getActiveGroomingSessionCount,
@@ -145,6 +161,18 @@ import { setupWakaTimeListener } from './process-listeners/wakatime-listener';
 import { WakaTimeManager } from './wakatime-manager';
 import { MaestroCliManager } from './maestro-cli-manager';
 import type { TemplateContext } from '../shared/templateVariables';
+import { startBranchHygieneCron } from './pm-branch-hygiene/cron';
+// Maestro Board is the local Work Graph source of truth for PM + dispatch.
+import { startStaleClaimSweeper } from './pm-heartbeat/stale-sweeper';
+import { startDispatchPoller, stopDispatchPoller } from './agent-dispatch/dispatch-poller';
+import { createLocalPmAutoPickupCoordinator } from './agent-dispatch/local-pm-auto-pickup';
+import { getClaimTracker } from './agent-dispatch/claim-tracker';
+import { auditLog } from './agent-dispatch/dispatch-audit-log';
+import { executeSlot } from './agent-dispatch/slot-executor';
+import { createLocalPmService } from './local-pm';
+import type { ProjectRoleSlots } from '../shared/project-roles-types';
+import { AiWikiService } from './ai-wiki/service';
+import { startAiWikiPoller, stopAiWikiPoller } from './ai-wiki/poller';
 
 // ============================================================================
 // Data Directory Configuration (MUST happen before any Store initialization)
@@ -313,6 +341,8 @@ let processManager: ProcessManager | null = null;
 let webServer: WebServer | null = null;
 let agentDetector: AgentDetector | null = null;
 let cueEngine: CueEngine | null = null;
+let dispatchPollerTimer: NodeJS.Timeout | null = null;
+let aiWikiPollerTimer: NodeJS.Timeout | null = null;
 
 // Create safeSend with dependency injection (Phase 2 refactoring)
 const safeSend = createSafeSend(() => mainWindow);
@@ -347,6 +377,7 @@ const windowManager = createWindowManager({
 // Create web server factory with dependency injection (Phase 2 refactoring)
 const createWebServer = createWebServerFactory({
 	settingsStore: store,
+	userDataPath: app.getPath('userData'),
 	sessionsStore,
 	groupsStore,
 	getMainWindow: () => mainWindow,
@@ -743,8 +774,343 @@ app.whenReady().then(async () => {
 	logger.debug('Setting up process event listeners', 'Startup');
 	setupProcessListeners();
 
-	// Start Cue engine if the Encore Feature flag is enabled
+	// Start branch hygiene cron if the agentDispatch Encore Feature is enabled (#435).
+	// Uses the first available session project root as the repo path; if none is
+	// available at startup, the sweep is skipped (it will fire again next hour).
 	const encoreFeatures = store.get('encoreFeatures', {}) as Record<string, boolean>;
+	if (encoreFeatures.agentDispatch) {
+		try {
+			const storedSessions = sessionsStore.get('sessions', []) as Array<Record<string, unknown>>;
+			const firstProjectRoot =
+				storedSessions.length > 0
+					? ((storedSessions[0].projectRoot ||
+							storedSessions[0].cwd ||
+							storedSessions[0].fullPath) as string | undefined)
+					: undefined;
+			if (firstProjectRoot) {
+				startBranchHygieneCron(firstProjectRoot);
+			} else {
+				logger.debug(
+					'Branch hygiene cron skipped at boot — no project root available yet',
+					'Startup'
+				);
+			}
+		} catch (err) {
+			logger.warn(
+				`Branch hygiene cron failed to start: ${err instanceof Error ? err.message : String(err)}`,
+				'Startup'
+			);
+		}
+	}
+
+	// Start dispatch poller (#443): periodic auto-pickup safety net for all projects
+	// with active role slots.  Gated behind the agentDispatch Encore Feature.
+	if (encoreFeatures.agentDispatch) {
+		try {
+			dispatchPollerTimer = startDispatchPoller({
+				isEncoreEnabled: () => {
+					const ef = store.get('encoreFeatures', {}) as Record<string, boolean>;
+					return ef.agentDispatch === true;
+				},
+				getProjectsWithActiveDispatch: () => {
+					const slotsMap = store.get('projectRoleSlots', {}) as Record<string, unknown>;
+					return Object.keys(slotsMap).map((projectPath) => ({ projectPath }));
+				},
+				runAutoPickup: async (projectPath: string) => {
+					// (#443) Auto-pickup: query Maestro Board / Work Graph for eligible
+					// work items and claim them via the configured runner slot.
+					const LOG = '[DispatchPoller]';
+
+					// 1. Resolve runner slot configuration for this project.
+					const slotsMap = store.get('projectRoleSlots', {}) as Record<string, ProjectRoleSlots>;
+					const slots: ProjectRoleSlots = slotsMap[projectPath] ?? {};
+					const runnerSlot = slots.runner;
+					if (!runnerSlot?.agentId) {
+						logger.debug(
+							`${LOG} No runner slot configured for "${projectPath}" — skipping tick`,
+							'Startup'
+						);
+						return;
+					}
+					if (runnerSlot.enabled === false) {
+						logger.debug(
+							`${LOG} Runner slot disabled (drain mode) for "${projectPath}" — skipping tick`,
+							'Startup'
+						);
+						return;
+					}
+
+					// 2. Query local Work Graph through the Maestro Board coordinator.
+					const localPm = createLocalPmService();
+					const localAutoPickup = createLocalPmAutoPickupCoordinator({ projectPath }, localPm);
+					let eligibleItems;
+					let inFlightItems;
+					try {
+						eligibleItems = await localAutoPickup.listTasksReadyUnassigned();
+						// Also pull items already In Progress so we can rehydrate the
+						// in-memory claim tracker after a maestro restart and re-emit
+						// claimStarted to the renderer (otherwise the role icon stops
+						// flashing even though the runner is still alive in Work Graph).
+						inFlightItems = await localAutoPickup.listInProgressAssignedToSlot(runnerSlot.agentId);
+					} catch (err) {
+						logger.warn(
+							`${LOG} Work Graph query failed for "${projectPath}": ${err instanceof Error ? err.message : String(err)}`,
+							'Startup'
+						);
+						return;
+					}
+
+					// Rehydrate claim tracker for any in-flight items we don't already know about.
+					if (inFlightItems && inFlightItems.length > 0) {
+						const tracker = getClaimTracker();
+						for (const item of inFlightItems) {
+							if (item.id && tracker.getByProjectItemId(item.id)) continue;
+							const claimedAt = new Date().toISOString();
+							tracker.addClaim({
+								claimId: `rehydrate-${item.id}`,
+								projectPath,
+								role: 'runner',
+								issueNumber: item.github?.issueNumber ?? 0,
+								issueTitle: item.title ?? item.id,
+								projectItemId: item.id,
+								projectId: '',
+								agentSessionId: runnerSlot.agentId,
+								claimedAt,
+								lastHeartbeatAt: claimedAt,
+							});
+							const win = BrowserWindow.getAllWindows()[0];
+							if (win && !win.isDestroyed()) {
+								win.webContents.send('agentDispatch:claimStarted', {
+									projectPath,
+									role: 'runner',
+									agentId: runnerSlot.agentId,
+									sessionId: `dispatch-runner-${item.id}`,
+									issueNumber: item.github?.issueNumber,
+									issueTitle: item.title,
+									claimedAt,
+								});
+							}
+							logger.info(
+								`${LOG} Rehydrated in-flight Maestro Board claim for item ${item.id} — slot icon should resume flashing`,
+								'Startup'
+							);
+						}
+					}
+
+					if (eligibleItems.length === 0) {
+						logger.debug(`${LOG} No eligible items for "${projectPath}"`, 'Startup');
+						return;
+					}
+
+					logger.info(
+						`${LOG} Found ${eligibleItems.length} eligible item(s) for "${projectPath}"`,
+						'Startup'
+					);
+
+					// 4. Resolve the session config and agent definition for the slot agent.
+					const storedSessions = sessionsStore.get('sessions', []) as Array<
+						Record<string, unknown>
+					>;
+					const slotSession = storedSessions.find(
+						(s: Record<string, unknown>) => s['id'] === runnerSlot.agentId
+					);
+					if (!slotSession) {
+						logger.warn(
+							`${LOG} Runner slot agent "${runnerSlot.agentId}" not found in sessions for "${projectPath}" — skipping tick`,
+							'Startup'
+						);
+						return;
+					}
+					const agentDef = getAgentDefinition(slotSession['toolType'] as string);
+					if (!agentDef) {
+						logger.warn(
+							`${LOG} No agent definition for toolType "${slotSession['toolType']}" (session "${runnerSlot.agentId}") — skipping tick`,
+							'Startup'
+						);
+						return;
+					}
+
+					const agentConfigValues = getAgentConfigForAgent(agentDef.id);
+					const sshStore = createSshRemoteStoreAdapter(store);
+					const claimTracker = getClaimTracker();
+
+					// 5. For each eligible item, claim it and spawn the runner agent.
+					let claimed = 0;
+					for (const item of eligibleItems) {
+						// Skip if already tracked in memory (concurrent tick or prior claim).
+						if (item.id && claimTracker.getByProjectItemId(item.id)) {
+							continue;
+						}
+
+						let projectId: string;
+						try {
+							// Durable local claim: assign runner slot in Work Graph.
+							({ projectId } = await localAutoPickup.claimRunnerSlot(item.id, runnerSlot.agentId));
+						} catch (err) {
+							logger.warn(
+								`${LOG} Failed to claim item ${item.id}: ${err instanceof Error ? err.message : String(err)}`,
+								'Startup'
+							);
+							continue;
+						}
+
+						const claimedAt = new Date().toISOString();
+
+						// Register in-memory claim so heartbeat + pm-tools can resolve it.
+						claimTracker.addClaim({
+							claimId: `poller-${item.id}`,
+							projectPath,
+							role: 'runner',
+							issueNumber: item.github?.issueNumber ?? 0,
+							issueTitle: item.title ?? item.id,
+							projectItemId: item.id,
+							projectId,
+							agentSessionId: runnerSlot.agentId,
+							claimedAt,
+							lastHeartbeatAt: claimedAt,
+						});
+
+						auditLog('claim', {
+							actor: 'dispatch-poller',
+							workItemId: item.id,
+							newState: {
+								'AI Assigned Slot': runnerSlot.agentId,
+								projectPath,
+								role: 'runner',
+							},
+						});
+
+						// Construct a minimal WorkItem for the executor.
+						const workItem = {
+							id: item.id,
+							type: 'task' as const,
+							status: 'claimed' as const,
+							title: item.title ?? `Work item ${item.id}`,
+							projectPath,
+							gitPath: projectPath,
+							source: 'agent-dispatch' as const,
+							readonly: false,
+							tags: ['agent-ready'],
+							version: 0,
+							createdAt: claimedAt,
+							updatedAt: claimedAt,
+						};
+
+						const sessionConfig = {
+							id: slotSession['id'] as string,
+							toolType: slotSession['toolType'] as string,
+							customPath: slotSession['customPath'] as string | undefined,
+							customArgs: slotSession['customArgs'] as string | undefined,
+							customEnvVars: slotSession['customEnvVars'] as Record<string, string> | undefined,
+							customModel: slotSession['customModel'] as string | undefined,
+							customEffort: slotSession['customEffort'] as string | undefined,
+							sessionSshRemoteConfig: slotSession['sessionSshRemoteConfig'] as
+								| { enabled: boolean; remoteId: string | null }
+								| undefined,
+						};
+
+						// Spawn the agent — fire-and-forget from the poller's perspective.
+						// The slot executor handles the full lifecycle: spawn → pipeline-advance → release.
+						void executeSlot({
+							workItem,
+							role: 'runner',
+							slotAssignment: runnerSlot,
+							sessionConfig,
+							// Cast: AgentDefinition.configOptions uses discriminated union
+							// argBuilder types that are wider than SlotExecutorContext's
+							// inline type.  The slot executor itself casts as well.
+							agentDef: agentDef as Parameters<typeof executeSlot>[0]['agentDef'],
+							agentConfigValues,
+							processManager: processManager!,
+							sshStore,
+							maestroCliBaseUrl: webServer?.getSecureUrl(),
+							releaseClaim: async (workItemId, opts) => {
+								try {
+									await localAutoPickup.releaseRunnerSlot(workItemId);
+									claimTracker.removeClaim(runnerSlot.agentId, 'runner');
+									auditLog('release', {
+										actor: opts?.actor ? String(opts.actor.id) : 'dispatch-poller',
+										workItemId,
+										reason: opts?.note,
+									});
+								} catch (releaseErr) {
+									logger.warn(
+										`${LOG} Failed to release claim for item ${workItemId}: ${releaseErr instanceof Error ? releaseErr.message : String(releaseErr)}`,
+										'Startup'
+									);
+								}
+							},
+							advancePipeline: async (_wi, _event, _actor) => {
+								// Pipeline advancement is a no-op for the basic runner path;
+								// pm:setStatus handles field updates when the agent self-reports.
+							},
+							auditLog: (event) => {
+								auditLog(
+									event.kind === 'spawn-start'
+										? 'claim'
+										: event.kind === 'claim-released'
+											? 'release'
+											: 'status_change',
+									{
+										actor: event.sessionId ?? event.agentId,
+										workItemId: event.workItemId,
+										reason: event.detail,
+									}
+								);
+							},
+						}).catch((spawnErr) => {
+							logger.warn(
+								`${LOG} executeSlot failed for item ${item.id}: ${spawnErr instanceof Error ? spawnErr.message : String(spawnErr)}`,
+								'Startup'
+							);
+						});
+
+						claimed++;
+					}
+
+					if (claimed > 0) {
+						logger.info(`${LOG} Claimed ${claimed} item(s) for "${projectPath}"`, 'Startup');
+					}
+				},
+				logger: {
+					info: (msg) => logger.info(msg, 'Startup'),
+					warn: (msg, err) =>
+						logger.warn(
+							`${msg}${err ? `: ${err instanceof Error ? err.message : String(err)}` : ''}`,
+							'Startup'
+						),
+				},
+			});
+		} catch (err) {
+			logger.warn(
+				`Dispatch poller failed to start: ${err instanceof Error ? err.message : String(err)}`,
+				'Startup'
+			);
+		}
+	}
+
+	// Maestro Board / Work Graph is the durable PM state. GitHub mirror work must
+	// never run in the dispatch startup path.
+
+	try {
+		const aiWikiService = new AiWikiService({ userDataPath: app.getPath('userData') });
+		aiWikiPollerTimer = startAiWikiPoller({
+			service: aiWikiService,
+			getSessions: () => sessionsStore.get('sessions', []) as Array<Record<string, unknown>>,
+			logger,
+		});
+	} catch (err) {
+		logger.warn(
+			`AI Wiki poller failed to start: ${err instanceof Error ? err.message : String(err)}`,
+			'Startup'
+		);
+	}
+
+	// Start stale-claim sweeper (#435): auto-releases local claims with no heartbeat for >5 min.
+	// Not gated — sweeper is lightweight and handles absence of deliveryPlanner gracefully.
+	startStaleClaimSweeper();
+
+	// Start Cue engine if the Encore Feature flag is enabled
 	if (encoreFeatures.maestroCue && cueEngine) {
 		logger.info('Maestro Cue Encore Feature enabled — starting Cue engine', 'Startup');
 		try {
@@ -906,6 +1272,15 @@ const quitHandler = createQuitHandler({
 		if (cueEngine?.isEnabled()) {
 			cueEngine.stop();
 		}
+		// Stop dispatch poller on app quit (#443)
+		if (dispatchPollerTimer !== null) {
+			stopDispatchPoller(dispatchPollerTimer);
+			dispatchPollerTimer = null;
+		}
+		if (aiWikiPollerTimer !== null) {
+			stopAiWikiPoller(aiWikiPollerTimer);
+			aiWikiPollerTimer = null;
+		}
 	},
 	stopSettingsWatcher: () => settingsWatcher.stop(),
 	powerManager,
@@ -989,6 +1364,7 @@ function setupIpcHandlers() {
 		settingsStore: store,
 		getMainWindow: () => mainWindow,
 		sessionsStore,
+		getMaestroCliBaseUrl: () => webServer?.getSecureUrl(),
 		getCueProcesses: () => {
 			// Always query the executor's active process map — processes may still be
 			// running even if the engine has been disabled (in-flight runs complete
@@ -1224,6 +1600,50 @@ function setupIpcHandlers() {
 			bootstrapStore,
 		},
 	});
+
+	// ===== Project Meta priority feature handlers =====
+	// Agent Dispatch — fleet registry + work-graph claim/release lifecycle
+	registerAgentDispatchHandlers({
+		getRuntime: () => null,
+		settingsStore: store,
+	});
+	registerAgentDispatchSlashCommandHandlers({ settingsStore: store });
+
+	// Delivery Planner — PRD/Epic/Tasks; returns service used by Conv-PRD finalize
+	const plannerService = registerDeliveryPlannerHandlers({
+		getMainWindow: () => mainWindow,
+		settingsStore: store,
+	});
+
+	// Conversational PRD — chat-driven PRD authoring + handoff to planner
+	initConversationalPrdStore().catch((err) =>
+		console.error('[ConversationalPrd] init failed:', err)
+	);
+	registerConversationalPrdHandlers({ plannerService, settingsStore: store });
+
+	// Planning Pipeline — stage machine dashboard
+	registerPlanningPipelineHandlers({ settingsStore: store });
+
+	// Work Graph — durable local PM/Maestro Board state
+	registerWorkGraphHandlers({ getMainWindow: () => mainWindow });
+
+	// pm-tools — agent-callable pm:setStatus / pm:setRole / pm:setBlocked (#430)
+	registerPmToolsHandlers({ settingsStore: store });
+
+	// pm-audit — rule-based in-flight work sweep (#434)
+	registerPmAuditHandlers({ settingsStore: store });
+	registerPmOrchestratorHandlers({ settingsStore: store, getMainWindow: () => mainWindow });
+
+	// pm-heartbeat — agent liveness signal for stale-claim sweeper (#435)
+	registerPmHeartbeatHandlers({ settingsStore: store });
+	registerPmResolveGithubProjectHandlers({ settingsStore: store });
+	// pm-init — /PM-init idempotent field bootstrap (#445)
+	registerPmInitHandlers({ settingsStore: store });
+	// pm-migrate-labels — one-time legacy agent:* label → AI Status field migration
+	registerPmMigrateLabelsHandlers({ settingsStore: store });
+	// pm-commands — load /PM mode system prompt for customAICommands dispatch path
+	registerPmCommandsHandlers();
+	registerProjectRolesHandlers(store as never);
 }
 
 // Handle process output streaming (set up after initialization)

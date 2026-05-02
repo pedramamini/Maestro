@@ -2,17 +2,25 @@
  * RightPanel component for Maestro web interface
  *
  * An inline panel (not overlay) that sits alongside the main content area.
- * Provides Files, History, Auto Run, and Git tabs — same content as RightDrawer
- * but rendered as a persistent, toggleable side panel for desktop-like UX.
+ * Provides a web-focused project panel. The Work tab is the primary PM surface;
+ * utility tabs remain available for files/history/runs/git without copying the
+ * desktop Right Bar layout wholesale.
  */
 
 import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { useThemeColors } from '../components/ThemeProvider';
 import { GitStatusPanel } from './GitStatusPanel';
 import { FilesTabContent, HistoryTabContent, AutoRunTabContent } from './RightDrawer';
+import { DevCrewPanel } from './DevCrewPanel';
+import { MaestroBoardPanel } from './MaestroBoardPanel';
 import { useSwipeGestures } from '../hooks/useSwipeGestures';
 import { triggerHaptic, HAPTIC_PATTERNS } from './constants';
-import type { AutoRunState, UseWebSocketReturn } from '../hooks/useWebSocket';
+import type {
+	AutoRunState,
+	UseWebSocketReturn,
+	AgentDispatchClaimStartedMessage,
+	AgentDispatchClaimEndedMessage,
+} from '../hooks/useWebSocket';
 import type { UseGitStatusReturn } from '../hooks/useGitStatus';
 import type { RightDrawerTab } from './RightDrawer';
 
@@ -34,21 +42,33 @@ export interface RightPanelProps {
 	onResizeStart?: (e: React.MouseEvent) => void;
 	/** When true, renders as a full-screen overlay (mobile) instead of an inline side panel */
 	isFullScreen?: boolean;
+	/** When true, the Work tab includes Dev Crew status (Encore: agentDispatch). */
+	devCrewEnabled?: boolean;
+	/** Latest claim event message forwarded from the WebSocket hook. */
+	lastClaimMessage?: AgentDispatchClaimStartedMessage | AgentDispatchClaimEndedMessage | null;
+	onOpenFullBoard?: () => void;
 }
 
-const TABS: { id: RightDrawerTab; label: string }[] = [
+const BASE_TABS: { id: RightDrawerTab; label: string }[] = [
+	{ id: 'board', label: 'Work' },
 	{ id: 'files', label: 'Files' },
 	{ id: 'history', label: 'History' },
-	{ id: 'autorun', label: 'Auto Run' },
+	{ id: 'autorun', label: 'Run' },
 	{ id: 'git', label: 'Git' },
 ];
+
+function compactProjectName(projectPath: string | undefined): string {
+	if (!projectPath) return 'No project selected';
+	const normalized = projectPath.replace(/\/+$/, '');
+	return normalized.split('/').filter(Boolean).pop() || projectPath;
+}
 
 /**
  * Inline right panel — renders as a flex child alongside main content.
  */
 export function RightPanel({
 	sessionId,
-	activeTab = 'files',
+	activeTab = 'board',
 	autoRunState,
 	gitStatus,
 	onClose,
@@ -63,9 +83,14 @@ export function RightPanel({
 	width,
 	onResizeStart,
 	isFullScreen,
+	devCrewEnabled = false,
+	lastClaimMessage,
+	onOpenFullBoard,
 }: RightPanelProps) {
 	const colors = useThemeColors();
 	const [currentTab, setCurrentTab] = useState<RightDrawerTab>(activeTab);
+
+	const tabs = BASE_TABS;
 
 	// Slide-in animation state (full-screen overlay mode only)
 	const [isOpen, setIsOpen] = useState(false);
@@ -179,7 +204,101 @@ export function RightPanel({
 						}}
 					/>
 				)}
-				{/* Header with tabs and close button */}
+				{/* Project header */}
+				<div
+					style={{
+						display: 'flex',
+						alignItems: 'center',
+						justifyContent: 'space-between',
+						gap: '10px',
+						padding: isFullScreen ? 'max(12px, env(safe-area-inset-top)) 12px 10px' : '10px 12px',
+						borderBottom: `1px solid ${colors.border}`,
+						backgroundColor: colors.bgSidebar,
+						flexShrink: 0,
+					}}
+				>
+					<div style={{ minWidth: 0 }}>
+						<div
+							style={{
+								fontSize: '11px',
+								fontWeight: 700,
+								textTransform: 'uppercase',
+								letterSpacing: '0.06em',
+								color: colors.textDim,
+							}}
+						>
+							Web Work Panel
+						</div>
+						<div
+							style={{
+								marginTop: '2px',
+								fontSize: '14px',
+								fontWeight: 750,
+								color: colors.textMain,
+								overflow: 'hidden',
+								textOverflow: 'ellipsis',
+								whiteSpace: 'nowrap',
+							}}
+							title={projectPath}
+						>
+							{compactProjectName(projectPath)}
+						</div>
+					</div>
+					<div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexShrink: 0 }}>
+						{currentTab === 'board' && onOpenFullBoard && (
+							<button
+								onClick={onOpenFullBoard}
+								style={{
+									border: `1px solid ${colors.accent}55`,
+									borderRadius: '7px',
+									backgroundColor: `${colors.accent}16`,
+									color: colors.accent,
+									padding: '6px 8px',
+									fontSize: '12px',
+									fontWeight: 650,
+									cursor: 'pointer',
+								}}
+							>
+								Full board
+							</button>
+						)}
+						<button
+							onClick={handleClose}
+							style={{
+								width: '30px',
+								height: '30px',
+								border: `1px solid ${colors.border}`,
+								borderRadius: '7px',
+								backgroundColor: colors.bgMain,
+								color: colors.textDim,
+								cursor: 'pointer',
+								display: 'flex',
+								alignItems: 'center',
+								justifyContent: 'center',
+								flexShrink: 0,
+								touchAction: 'manipulation',
+							}}
+							aria-label="Close panel"
+							title="Close panel"
+						>
+							<svg
+								width="14"
+								height="14"
+								viewBox="0 0 24 24"
+								fill="none"
+								stroke="currentColor"
+								strokeWidth="2"
+								strokeLinecap="round"
+								strokeLinejoin="round"
+							>
+								<line x1="18" y1="6" x2="6" y2="18" />
+								<line x1="6" y1="6" x2="18" y2="18" />
+							</svg>
+						</button>
+					</div>
+				</div>
+
+				{/* Tabs */}
 				<div
 					style={{
 						display: 'flex',
@@ -189,7 +308,7 @@ export function RightPanel({
 						flexShrink: 0,
 					}}
 				>
-					{TABS.map((tab) => {
+					{tabs.map((tab) => {
 						const isActive = currentTab === tab.id;
 						return (
 							<button
@@ -219,38 +338,6 @@ export function RightPanel({
 							</button>
 						);
 					})}
-					{/* Close button */}
-					<button
-						onClick={onClose}
-						style={{
-							padding: '8px 10px',
-							border: 'none',
-							backgroundColor: 'transparent',
-							color: colors.textDim,
-							cursor: 'pointer',
-							display: 'flex',
-							alignItems: 'center',
-							justifyContent: 'center',
-							flexShrink: 0,
-							touchAction: 'manipulation',
-						}}
-						aria-label="Close panel"
-						title="Close panel"
-					>
-						<svg
-							width="14"
-							height="14"
-							viewBox="0 0 24 24"
-							fill="none"
-							stroke="currentColor"
-							strokeWidth="2"
-							strokeLinecap="round"
-							strokeLinejoin="round"
-						>
-							<line x1="18" y1="6" x2="6" y2="18" />
-							<line x1="6" y1="6" x2="18" y2="18" />
-						</svg>
-					</button>
 				</div>
 
 				{/* Tab content */}
@@ -268,6 +355,20 @@ export function RightPanel({
 							sendRequest={sendRequest}
 							projectPath={projectPath}
 						/>
+					)}
+					{currentTab === 'board' && (
+						<div>
+							<MaestroBoardPanel
+								projectPath={projectPath}
+								onOpenFullBoard={onOpenFullBoard}
+								displayMode="panel"
+							/>
+							{devCrewEnabled && (
+								<div style={{ borderTop: `1px solid ${colors.border}`, marginTop: '2px' }}>
+									<DevCrewPanel projectPath={projectPath} lastMessage={lastClaimMessage} />
+								</div>
+							)}
+						</div>
 					)}
 					{currentTab === 'history' && (
 						<HistoryTabContent sessionId={sessionId} projectPath={projectPath} />

@@ -1,0 +1,383 @@
+# CLAUDE-AGENT-DISPATCH.md
+
+Agent Dispatch documentation for the Maestro codebase. For the main guide, see [[CLAUDE.md]].
+
+---
+
+## State Source-of-Truth: Work Graph, NOT GitHub Labels Or Project Fields
+
+**This project uses Maestro Board / Work Graph as the source of truth for all dispatch state.**
+
+| Work Graph state | Purpose                                            |
+| ---------------- | -------------------------------------------------- |
+| `status`         | Work item lifecycle (`ready` → `done`)             |
+| `pipeline`       | Pipeline role (runner / fixer / reviewer / merger) |
+| `priority`       | Dispatch ordering                                  |
+| active claim row | Which slot owns the current claim                  |
+| heartbeat/expiry | Liveness data for stale-claim detection            |
+
+### Legacy `agent:*` labels
+
+The old Symphony fork-runner used GitHub **labels** (`agent:ready`, `agent:running`, `agent:review`, `agent:failed-validation`) to represent dispatch state. **These labels are decorative and completely ignored by this dispatch system.** Work Graph status and claim rows are the values the engine reads and writes.
+
+If a repository still has issues labelled with `agent:*` labels:
+
+- The dispatch engine logs a console warning (does NOT fail the dispatch).
+- Run **`/PM migrate-labels`** once per repo to convert legacy labels to the corresponding Work Graph status values and remove the labels from issues:
+
+  | Legacy label              | Work Graph status |
+  | ------------------------- | ----------------- |
+  | `agent:ready`             | `ready`           |
+  | `agent:running`           | `in_progress`     |
+  | `agent:review`            | `review`          |
+  | `agent:failed-validation` | `blocked`         |
+
+- After migration, the `agent:*` labels can be deleted from the repo's label list entirely.
+
+**IPC channel:** `pm:migrateLegacyLabels({ projectPath })` → `{ success, migrated, errors }`.  
+Requires `deliveryPlanner` encore feature flag.  
+Implemented in `src/main/ipc/handlers/pm-migrate-labels.ts`.
+
+---
+
+Agent Dispatch is the subsystem that selects an agent session, claims a Work Graph item, runs Auto Run documents, and releases the claim when work is done.
+
+> **v2 simpler 4-slot model (post-#429):** The per-project Roles tab implements the canonical 1-slot-per-role design. Each slot references an existing Left Bar agent by its `Session.id` (`agentId`-based). When a work item is claimed, `executeSlot()` in `src/main/agent-dispatch/slot-executor.ts` resolves that session's config and spawns a fresh process via ProcessManager — mirroring the Cue executor pattern. FleetRegistry's complex eligibility queries are dead code slated for removal in #433.
+
+> **Slot model — agentId-based (#429):** Dev Crew slots reference an existing Left Bar agent. Each slot stores a `RoleSlotAssignment` (`agentId` + optional `modelOverride` + `effortOverride` + `enabled`). The slot UI picker filters the Left Bar to agents whose `projectRoot` (normalised) and SSH remote ID match the active session's project and host. When work is dispatched, `slot-executor.ts`:
+>
+> 1. Loads the role's prompt template from `src/prompts/dispatch-role-<role>.md`.
+> 2. Builds CLI args via `buildAgentArgs` + `applyAgentConfigOverrides` (slot overrides win over session defaults).
+> 3. Applies SSH wrapping when the agent's `sessionSshRemoteConfig` is enabled.
+> 4. Calls `processManager.spawn()` — the same path Maestro uses for Cue prompts and group-chat agents.
+> 5. Waits for exit, advances the pipeline state, and releases the claim.
+>
+> **Agent picker filter (SlotCard.tsx):** The agent dropdown shows only sessions where `session.projectRoot` (normalised) equals the active project root AND `session.sessionSshRemoteConfig?.remoteId` (or null for local) equals the active session's SSH remote ID. Empty-state message when no eligible agents exist: _"No agents configured for this project on this host. Create a dispatch agent in the Left Bar pointing at this project root, then come back."_
+
+> **Runner role is local-only and project-scoped (#440):** The `runner` pipeline role has two hard constraints enforced by the DispatchEngine:
+>
+> 1. **Local-only** — SSH-remote agents are rejected for runner-role work items. `DispatchEngine.assignManually` rejects SSH-remote fleet entries with `{ code: 'RUNNER_REQUIRES_LOCAL', detail }`. Auto-pickup also skips SSH-remote agents for runner-role work items. (The agent picker filter in `SlotCard` already prevents selecting an SSH-remote agent when the active project is local, and vice versa.)
+> 2. **Project-scoped** — the runner must operate inside the project's local git checkout. `assignManually` calls `git remote get-url origin` in `WorkItem.projectPath` and verifies it matches `WorkItem.github.repo` (e.g. `owner/repo`). Mismatch or missing git repo rejects with `{ code: 'RUNNER_PROJECT_MISMATCH', expectedProjectPath, actualProjectPath, expectedRemote, actualRemote }`.
+>
+> Other roles (fixer, reviewer, merger) are unaffected — they may be SSH-remote.
+
+---
+
+## Local Maestro Board Dispatch
+
+Work Graph is the durable state layer for Agent Dispatch. GitHub Projects may exist as an external mirror, but dispatch must not depend on GitHub reads/writes at runtime. The local in-memory `ClaimTracker` is a live cache over Work Graph claims and a JSONL audit log records transitions.
+
+### What changed
+
+| Runtime concern            | Current behavior                                                       |
+| -------------------------- | ---------------------------------------------------------------------- |
+| Durable PM state           | Work Graph items, statuses, claims, events                             |
+| Live renderer state        | In-memory `ClaimTracker` (`Map<agentSessionId, Map<role, ClaimInfo>>`) |
+| Dispatch pickup            | `createLocalPmAutoPickupCoordinator()` over `LocalPmService`           |
+| `/PM-init`                 | Initializes local PM tags/conventions                                  |
+| pm tools                   | `setLocalPmStatus`, `setLocalPmRole`, `setLocalPmBlocked`              |
+| heartbeat/stale recovery   | Renews/releases Work Graph claims                                      |
+| Optional GitHub visibility | Mirror/sync layer only; never required for dispatch runtime            |
+
+### New source files
+
+| File                                              | Role                                                                |
+| ------------------------------------------------- | ------------------------------------------------------------------- |
+| `src/main/local-pm/service.ts`                    | Work Graph-backed local PM service                                  |
+| `src/main/agent-dispatch/local-pm-auto-pickup.ts` | Dispatch adapter over the local PM service                          |
+| `src/main/agent-dispatch/claim-tracker.ts`        | In-memory claim state (`ClaimTracker` singleton + `ClaimInfo` type) |
+| `src/main/agent-dispatch/dispatch-audit-log.ts`   | Appends JSONL to `<userData>/dispatch-audit.jsonl`                  |
+
+### ClaimInfo shape
+
+```typescript
+interface ClaimInfo {
+	claimId: string; // "<projectPath>:<role>:<issueNumber>"
+	projectPath: string;
+	role: string;
+	issueNumber: number;
+	issueTitle: string;
+	projectItemId: string; // Work Graph item ID
+	projectId: string; // compatibility project identifier
+	agentSessionId: string; // Left Bar session that owns the claim
+	claimedAt: string; // ISO timestamp
+	lastHeartbeatAt: string; // ISO timestamp (updated by pm:heartbeat)
+}
+```
+
+### Renderer live-update flow
+
+1. `DispatchEngine` calls `emitClaimStarted(mainWindow, claimInfo)` / `emitClaimEnded(mainWindow, { projectPath, role })` via `BrowserWindow.webContents.send()`.
+2. `src/main/preload/agentDispatch.ts` exposes `onClaimStarted(handler)` / `onClaimEnded(handler)` — each returns an unsubscribe function.
+3. `RolesPanel.tsx` subscribes on mount; maintains a renderer-local `Map<role, ActiveClaimInfo>` state; passes `activeClaim` to each `SlotCard`.
+4. Initial hydration: single `getBoard()` call on mount (reads ClaimTracker snapshot). No polling.
+
+### Startup resilience
+
+Dispatch polling rehydrates in-flight Work Graph claims into `ClaimTracker` at startup, and the stale-claim sweeper releases claims whose heartbeat expires. No GitHub Project read is required for startup recovery.
+
+### Files NOT deleted (callers not yet migrated)
+
+- `src/main/work-graph/` — durable PM state used by local PM, delivery-planner, planning-pipeline, pm-orchestrator, MCP tooling, runtime, and web server routes.
+- `src/shared/work-graph-types.ts` — imported by 30+ files; kept as a pure type file.
+- `src/renderer/services/workGraph.ts` — renderer IPC placeholder until a dedicated Work Graph board read API is re-exposed.
+
+---
+
+## Architecture
+
+```
+Renderer (SymphonyModal.tsx)
+    │  window.maestro.symphony.*
+    ▼
+Main process — IPC handlers (src/main/ipc/handlers/symphony.ts)
+    │  registerSymphonyHandlers(deps)
+    │
+    ├─ state: SymphonyState  ──► JSON file  ~/userData/symphony/symphony-state.json
+    ├─ cache: SymphonyCache  ──► JSON file  ~/userData/symphony/symphony-cache.json
+    │
+    ├─ startContribution()   ──► symphony-runner.ts  ──► git / gh CLI
+    └─ finalizeContribution()
+       cancelContribution()
+```
+
+### Key source files
+
+| File                                                             | Role                                                                                               |
+| ---------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
+| `src/main/ipc/handlers/symphony.ts`                              | All IPC handler registration; state read/write helpers; validation                                 |
+| `src/main/services/symphony-runner.ts`                           | Git + GitHub CLI operations (clone, branch, PR)                                                    |
+| `src/main/utils/symphony-fork.ts`                                | Fork detection and remote-reconfiguration                                                          |
+| `src/main/preload/symphony.ts`                                   | `window.maestro.symphony` bridge                                                                   |
+| `src/shared/symphony-types.ts`                                   | All type definitions                                                                               |
+| `src/shared/symphony-constants.ts`                               | TTL values, URL constants, regex patterns                                                          |
+| `src/main/ipc/handlers/agent-dispatch-slash-commands.ts`         | Eight `agentDispatch:*` IPC channels for slash-command operations                                  |
+| `src/main/ipc/handlers/agent-dispatch.ts`                        | Agent Dispatch runtime IPC handlers (kanban, fleet view)                                           |
+| `src/main/utils/requireEncoreFeature.ts`                         | Gate helper — returns `FEATURE_DISABLED` error when flag is off                                    |
+| **`src/shared/project-roles-types.ts`**                          | **`RoleSlotAssignment` (agentId-based), `ProjectRoleSlots`**                                       |
+| **`src/main/agent-dispatch/slot-executor.ts`**                   | **Slot spawn lifecycle: build args → SSH wrap → processManager.spawn → advance → release**         |
+| **`src/renderer/components/RightPanel/RolesPanel/SlotCard.tsx`** | **Slot card: agent picker (project+host filtered), modelOverride, effortOverride, enabled toggle** |
+
+> **Naming note:** `agent-dispatch-slash-commands.ts` was previously named
+> `agent-dispatch-mcp.ts`. That name was misleading — it registers plain
+> Electron `ipcMain.handle(...)` channels, **not** MCP tools. Maestro's actual
+> MCP tool surface lives in `src/main/mcp/` (currently `work-graph-tools.ts`);
+> a `grep agentDispatch src/main/mcp/*.ts` returns zero hits. If/when
+> agent-dispatch MCP tools are added to `src/main/mcp/`, they must be gated by
+> `encoreFeatures.agentDispatch` there as well.
+
+---
+
+## Runtime Lifecycle
+
+Each Symphony contribution passes through four phases that map to the "agent dispatch" lifecycle:
+
+### 1. Enroll (register)
+
+The renderer calls `symphony:registerActive` to record the agent session in persistent state before any git work begins.
+
+```
+IPC: symphony:registerActive
+State change: (none) → status: "running"   [created fresh in active list]
+```
+
+### 2. Claim (branch + draft PR)
+
+`symphony-runner.startContribution()` performs the atomic claim sequence:
+
+1. `git clone --depth=1 <repoUrl> <localPath>`
+2. `git checkout -b <branchName>`
+3. Fork detection — `ensureForkSetup()` checks push access; forks if needed
+4. `git config user.{name,email}` — set Maestro Symphony identity
+5. `git commit --allow-empty` — creates a commit so the branch can be pushed
+6. `git push -u origin <branchName>`
+7. `gh pr create --draft …` — the PR body references the Work Graph/Maestro item ID for traceability. If an external tracker mirror already exists, the PR may also include its reference, but external tracker items are not required for PM execution.
+
+**Fork support**: When the user lacks push access to the upstream repo, `ensureForkSetup()` forks the repo, re-points `origin` at the fork, and passes `--repo <upstreamSlug>` plus `--head <forkOwner>:<branchName>` to `gh pr create` so the PR targets the upstream.
+
+### 3. Status renew (heartbeat)
+
+The renderer calls `symphony:updateStatus` periodically as Auto Run progresses through documents and tasks. This is the heartbeat equivalent — it keeps the persistent `ActiveContribution` record fresh and broadcasts `symphony:updated` to the renderer so progress bars stay accurate.
+
+```typescript
+// Fields that can be updated:
+{
+  status?: ContributionStatus;         // 'running' | 'paused' | 'completing' | …
+  progress?: Partial<{
+    completedDocuments: number;
+    totalDocuments: number;
+    currentDocument?: string;
+    completedTasks: number;
+    totalTasks: number;
+  }>;
+  tokenUsage?: Partial<{ inputTokens; outputTokens; estimatedCost }>;
+  timeSpent?: number;                  // ms elapsed
+  draftPrNumber?: number;              // set after deferred PR creation
+  draftPrUrl?: string;
+  error?: string;
+}
+```
+
+### 4. Release (finalize or cancel)
+
+**Finalize** (`symphony:complete` → `symphony-runner.finalizeContribution()`):
+
+1. `git add -A` + `git commit` with a `[Symphony] Complete contribution` message
+2. `git push`
+3. `gh pr ready <prNumber>` — converts draft → ready for review
+4. `gh pr edit` — updates PR body with final summary
+5. `gh pr view` — retrieves final URL
+6. Moves `ActiveContribution` to `CompletedContribution` in state; updates stats
+
+**Cancel** (`symphony:cancel` → `symphony-runner.cancelContribution()`):
+
+1. `gh pr close <prNumber> [--delete-branch]` — closes and optionally deletes the branch
+   - `--delete-branch` is omitted for fork contributions (permission issues)
+   - `--repo <upstreamSlug>` is added for fork contributions
+2. `fs.rm(localPath, { recursive: true, force: true })` — removes cloned repo (if `cleanup=true`)
+3. Moves contribution to `history` with status `cancelled`
+
+---
+
+## IPC Namespace: `window.maestro.symphony`
+
+Defined in `src/main/preload/symphony.ts`. All calls go through `ipcRenderer.invoke(channel, …)`.
+
+### Registry & issue fetching
+
+| Method                                     | IPC channel               | Description                                          |
+| ------------------------------------------ | ------------------------- | ---------------------------------------------------- |
+| `getRegistry(forceRefresh?)`               | `symphony:getRegistry`    | Fetch `symphony-registry.json` from GitHub (2 h TTL) |
+| `getIssues(repoSlug, forceRefresh?)`       | `symphony:getIssues`      | Fetch issues with `runmaestro.ai` label (5 min TTL)  |
+| `getIssueCounts(repoSlugs, forceRefresh?)` | `symphony:getIssueCounts` | Batch issue counts (30 min TTL)                      |
+
+### State
+
+| Method                 | IPC channel             | Description                                     |
+| ---------------------- | ----------------------- | ----------------------------------------------- |
+| `getState()`           | `symphony:getState`     | Full `SymphonyState` (active + history + stats) |
+| `getActive()`          | `symphony:getActive`    | Active contributions only                       |
+| `getCompleted(limit?)` | `symphony:getCompleted` | Paginated history                               |
+| `getStats()`           | `symphony:getStats`     | Contributor statistics                          |
+
+### Contribution lifecycle
+
+| Method                             | IPC channel                 | Description                                  |
+| ---------------------------------- | --------------------------- | -------------------------------------------- |
+| `start(params)`                    | `symphony:start`            | High-level start: clone + PR in one call     |
+| `registerActive(params)`           | `symphony:registerActive`   | Low-level enroll (used by two-phase UI flow) |
+| `updateStatus(params)`             | `symphony:updateStatus`     | Heartbeat / status renew                     |
+| `complete(params)`                 | `symphony:complete`         | Finalize + mark PR ready                     |
+| `cancel(contributionId, cleanup?)` | `symphony:cancel`           | Cancel + optional cleanup                    |
+| `checkPRStatuses()`                | `symphony:checkPRStatuses`  | Poll all active PRs for merge/close          |
+| `syncContribution(id)`             | `symphony:syncContribution` | Sync single contribution PR state            |
+
+### Real-time push events
+
+| Event                          | Trigger                                  |
+| ------------------------------ | ---------------------------------------- |
+| `symphony:updated`             | Any state write (enroll, renew, release) |
+| `symphony:contributionStarted` | After successful branch + push           |
+| `symphony:prCreated`           | After draft PR creation (deferred flow)  |
+
+---
+
+## Web Routes
+
+Symphony does not expose dedicated REST or WebSocket routes. The web/mobile interface calls the same IPC channels via the Maestro web server's existing session-relay mechanism. Dedicated web-route tests are **deferred** (noted in issue #86 PR).
+
+---
+
+## Fork-Only GitHub Assumption
+
+**Maestro Symphony assumes GitHub as the only supported hosting service.**
+
+- Registry URL is hard-coded to `https://raw.githubusercontent.com/RunMaestro/Maestro/main/symphony-registry.json`.
+- `validateGitHubUrl()` rejects any URL whose hostname is not `github.com` or `www.github.com`.
+- External document attachments are restricted to the `github.com`, `raw.githubusercontent.com`, `user-images.githubusercontent.com`, and `camo.githubusercontent.com` domains.
+- `ensureForkSetup()` calls the GitHub CLI (`gh`) exclusively; it has no GitLab/Bitbucket code path.
+
+This is intentional — Symphony is a GitHub-centric feature.
+
+---
+
+## Settings (dispatch profile keys)
+
+All settings are managed via `electron-store`. Symphony-specific persistence lives in the Symphony directory (`~/userData/symphony/`), not in the global settings store. There are no user-configurable dispatch settings in `settingsMetadata.ts` at this time.
+
+Relevant constants in `src/shared/symphony-constants.ts`:
+
+| Constant                    | Default                              | Purpose                                       |
+| --------------------------- | ------------------------------------ | --------------------------------------------- |
+| `REGISTRY_CACHE_TTL_MS`     | 2 hours                              | How long the registry JSON is cached          |
+| `ISSUES_CACHE_TTL_MS`       | 5 minutes                            | How long per-repo issue lists are cached      |
+| `STARS_CACHE_TTL_MS`        | 24 hours                             | How long GitHub star counts are cached        |
+| `ISSUE_COUNTS_CACHE_TTL_MS` | 30 minutes                           | How long issue-count summaries are cached     |
+| `SYMPHONY_REPOS_DIR`        | `symphony-repos`                     | Sub-directory under userData for cloned repos |
+| `BRANCH_TEMPLATE`           | `symphony/issue-{issue}-{timestamp}` | Branch naming pattern                         |
+
+---
+
+## Troubleshooting
+
+### "GitHub CLI not authenticated"
+
+`ensureForkSetup()` calls `gh api user` as the first step. Run `gh auth login` and retry.
+
+### Draft PR created on wrong repo (fork vs. upstream)
+
+Check the `isFork` and `forkSlug` fields on `ActiveContribution`. If the user has direct push access, `isFork` is `false` and no `--repo` flag is passed. If forking was expected but skipped, the `gh api repos/<slug>` permissions check may have returned `true` unexpectedly — verify with `gh api repos/<owner>/<repo> --jq '.permissions.push'`.
+
+### Claim race: two contributors push at the same time
+
+Both can push a branch, but only the first `gh pr create --draft` that includes `Closes #<N>` wins the claim. The second contributor's `start` call will succeed technically (PR created) but the issue will appear as `in_progress` when they next call `getIssues()`. Symphony does not currently detect this race at claim time — it relies on the 5-minute issues cache expiry.
+
+### "Push failed" after fork setup
+
+`git push -u origin <branch>` targets the fork's `origin`. If the fork was just created, GitHub may need a few seconds to provision it. Re-running the contribution usually resolves it.
+
+### Contribution stuck in `cloning` status
+
+The `onStatusChange` callback calls happen synchronously as each git step starts. If `startContribution()` throws after `cloning` but before the status is set to `running`, the UI may show a stale `cloning` state. Cancel the contribution to clean up.
+
+### Local repo not removed after cancel
+
+`cancelContribution(localPath, prNumber, cleanup=false)` skips the `fs.rm` call when `cleanup` is `false`. Check the `cleanup` argument passed from the renderer. The default is `true`.
+
+---
+
+## UI Surface Decisions
+
+**Agent Dispatch lives behind a modal (Alt+D + command palette + encore-gated). Sidebar promotion is tracked for a future PR pending usage data — see #408.**
+
+Rationale: the modal is already fully wired and works; promoting it to a permanent sidebar tab would impose a constant screen-real-estate cost that is only justified if users are actively dispatching at all times. The same reasoning applies to Delivery Planner and Planning Pipeline — all three stay as modals for v1. Promotion can be revisited once we have real usage data to justify the trade-off.
+
+---
+
+## Validation Tasks
+
+Run these commands after any change to the agent-dispatch/Symphony layer:
+
+```bash
+# TypeScript: main process types
+npx tsc -p tsconfig.main.json --noEmit
+
+# TypeScript: renderer/shared types
+npx tsc -p tsconfig.lint.json --noEmit
+
+# Unit + integration tests for the dispatch layer
+npx vitest run src/__tests__/main/agent-dispatch
+npx vitest run src/__tests__/main/services/symphony-runner.test.ts
+npx vitest run src/__tests__/main/utils/symphony-fork.test.ts
+npx vitest run src/__tests__/main/ipc/handlers/symphony.test.ts
+
+# Full test suite (slow; run before pushing)
+npm run test
+```
+
+Targeted lint:
+
+```bash
+npm run lint          # tsc across all configs
+npm run lint:eslint   # ESLint quality pass
+```

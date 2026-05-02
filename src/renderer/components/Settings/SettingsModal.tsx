@@ -12,6 +12,7 @@ import {
 	Monitor,
 	Globe,
 	Wand2,
+	Users,
 } from 'lucide-react';
 import { useSettings } from '../../hooks';
 import type { Theme, LLMProvider } from '../../types';
@@ -31,6 +32,7 @@ import { EncoreTab } from './tabs/EncoreTab';
 import { ShortcutsTab } from './tabs/ShortcutsTab';
 import { ThemeTab } from './tabs/ThemeTab';
 import { EnvironmentTab } from './tabs/EnvironmentTab';
+import { DevTeamsTab } from './tabs/DevTeamsTab';
 import { useSettingsSearch, SettingsSearchInput, SettingsSearchResults } from './SettingsSearch';
 import type { SearchableSetting } from './searchableSettings';
 
@@ -49,6 +51,7 @@ type SettingsTabId =
 	| 'aicommands'
 	| 'ssh'
 	| 'environment'
+	| 'devteams'
 	| 'encore'
 	| 'prompts';
 
@@ -78,6 +81,7 @@ interface SettingsModalProps {
 		| 'aicommands'
 		| 'ssh'
 		| 'environment'
+		| 'devteams'
 		| 'encore'
 		| 'prompts';
 	initialSelectedPromptId?: string;
@@ -143,6 +147,7 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 		| 'aicommands'
 		| 'ssh'
 		| 'environment'
+		| 'devteams'
 		| 'encore'
 		| 'prompts'
 	>('general');
@@ -251,6 +256,7 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 				| 'aicommands'
 				| 'ssh'
 				| 'environment'
+				| 'devteams'
 				| 'encore'
 				| 'prompts'
 			> = FEATURE_FLAGS.LLM_SETTINGS
@@ -265,6 +271,7 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 						'prompts',
 						'ssh',
 						'environment',
+						'devteams',
 						'encore',
 					]
 				: [
@@ -277,6 +284,7 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 						'prompts',
 						'ssh',
 						'environment',
+						'devteams',
 						'encore',
 					];
 			const currentIndex = tabs.indexOf(activeTab);
@@ -427,6 +435,7 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 		{ id: 'prompts', label: 'Maestro Prompts', icon: Wand2 },
 		{ id: 'ssh', label: 'SSH Hosts', icon: Server },
 		{ id: 'environment', label: 'Environment', icon: Globe },
+		{ id: 'devteams', label: 'Dev Teams', icon: Users },
 		{ id: 'encore', label: 'Encore Features', icon: FlaskConical },
 	];
 
@@ -710,6 +719,8 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 						)}
 
 						{activeTab === 'environment' && <EnvironmentTab theme={theme} />}
+
+						{activeTab === 'devteams' && <DevTeamsTab theme={theme} />}
 
 						{activeTab === 'encore' && <EncoreTab theme={theme} isOpen={isOpen} />}
 					</div>

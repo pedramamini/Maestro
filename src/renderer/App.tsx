@@ -146,6 +146,7 @@ import {
 	updateAiTab,
 } from './stores/sessionStore';
 import { useActiveSession } from './hooks/session/useActiveSession';
+import { useClaimHeartbeat } from './hooks/agentDispatch/useClaimHeartbeat';
 // useAgentStore moved to useQueueProcessing hook
 import { InlineWizardProvider, useInlineWizardContext } from './contexts/InlineWizardContext';
 import { ToastContainer } from './components/Toast';
@@ -326,6 +327,14 @@ function MaestroConsoleInner() {
 		setCueModalOpen,
 		// Maestro Cue YAML Editor — open state, sessionId, projectRoot self-sourced in AppStandaloneModals
 		closeCueYamlEditor,
+		// Agent Dispatch Modal
+		setAgentDispatchOpen,
+		// Delivery Planner Modal
+		setDeliveryPlannerOpen,
+		// Planning Pipeline Modal
+		setPlanningPipelineOpen,
+		// Conversational PRD Planner Modal
+		setConversationalPrdOpen,
 	} = useModalActions();
 
 	// --- MOBILE LANDSCAPE MODE (reading-only view) ---
@@ -458,6 +467,18 @@ function MaestroConsoleInner() {
 		}
 	}, [encoreFeatures.maestroCue, setCueModalOpen, closeCueYamlEditor]);
 
+	useEffect(() => {
+		if (!encoreFeatures.deliveryPlanner) setDeliveryPlannerOpen(false);
+	}, [encoreFeatures.deliveryPlanner, setDeliveryPlannerOpen]);
+
+	useEffect(() => {
+		if (!encoreFeatures.planningPipeline) setPlanningPipelineOpen(false);
+	}, [encoreFeatures.planningPipeline, setPlanningPipelineOpen]);
+
+	useEffect(() => {
+		if (!encoreFeatures.conversationalPrd) setConversationalPrdOpen(false);
+	}, [encoreFeatures.conversationalPrd, setConversationalPrdOpen]);
+
 	// --- KEYBOARD SHORTCUT HELPERS ---
 	const { isShortcut, isTabShortcut } = useKeyboardShortcutHelpers({
 		shortcuts,
@@ -471,6 +492,47 @@ function MaestroConsoleInner() {
 	const activeSessionId = useSessionStore((s) => s.activeSessionId);
 	// sessionsLoaded moved to useQueueProcessing hook
 	const activeSession = useActiveSession();
+
+	// --- Claim heartbeat loop (#435) ---
+	// Keeps the stale-claim sweeper from auto-releasing our claim while the agent is running.
+	// The renderer uses agentDispatch:getBoard as the live ClaimTracker snapshot.
+	const [activeClaimProjectItemId, setActiveClaimProjectItemId] = React.useState<string | null>(
+		null
+	);
+	useEffect(() => {
+		if (!encoreFeatures.deliveryPlanner || !activeSessionId) {
+			setActiveClaimProjectItemId(null);
+			return;
+		}
+
+		const load = async () => {
+			try {
+				const result = await window.maestro.agentDispatch.getBoard();
+				if (result.success) {
+					const items =
+						(result.data as { items?: Array<{ agentSessionId?: string; projectItemId?: string }> })
+							.items ?? [];
+					const mine = items.find((item) => item.agentSessionId === activeSessionId);
+					setActiveClaimProjectItemId(mine?.projectItemId ?? null);
+				} else {
+					setActiveClaimProjectItemId(null);
+				}
+			} catch {
+				setActiveClaimProjectItemId(null);
+			}
+		};
+
+		void load();
+
+		// Refresh on claim events
+		const unsubStart = window.maestro.agentDispatch.onClaimStarted(() => void load());
+		const unsubEnd = window.maestro.agentDispatch.onClaimEnded(() => void load());
+		return () => {
+			unsubStart();
+			unsubEnd();
+		};
+	}, [encoreFeatures.deliveryPlanner, activeSessionId]);
+	useClaimHeartbeat(activeClaimProjectItemId);
 
 	// Actions — stable references from store, never trigger re-renders
 	const {
@@ -607,6 +669,7 @@ function MaestroConsoleInner() {
 		speckitCommands,
 		openspecCommands,
 		bmadCommands,
+		pmCommands,
 		saveFileGistUrl,
 	} = useAppInitialization();
 
@@ -727,11 +790,13 @@ function MaestroConsoleInner() {
 	const speckitCommandsRef = useRef(speckitCommands);
 	const openspecCommandsRef = useRef(openspecCommands);
 	const bmadCommandsRef = useRef(bmadCommands);
+	const pmCommandsRef = useRef(pmCommands);
 	const fileTabAutoRefreshEnabledRef = useRef(fileTabAutoRefreshEnabled);
 	customAICommandsRef.current = customAICommands;
 	speckitCommandsRef.current = speckitCommands;
 	openspecCommandsRef.current = openspecCommands;
 	bmadCommandsRef.current = bmadCommands;
+	pmCommandsRef.current = pmCommands;
 	fileTabAutoRefreshEnabledRef.current = fileTabAutoRefreshEnabled;
 
 	// Note: spawnBackgroundSynopsisRef and spawnAgentWithPromptRef are now provided by useAgentExecution hook
@@ -1153,8 +1218,21 @@ function MaestroConsoleInner() {
 			prompt: cmd.prompt,
 			isBuiltIn: true,
 		}));
-		return [...customAICommands, ...speckitAsCustom, ...openspecAsCustom, ...bmadAsCustom];
-	}, [customAICommands, speckitCommands, openspecCommands, bmadCommands]);
+		const pmAsCustom: CustomAICommand[] = pmCommands.map((cmd) => ({
+			id: `pm-${cmd.id}`,
+			command: cmd.command,
+			description: cmd.description,
+			prompt: cmd.prompt,
+			isBuiltIn: true,
+		}));
+		return [
+			...customAICommands,
+			...speckitAsCustom,
+			...openspecAsCustom,
+			...bmadAsCustom,
+			...pmAsCustom,
+		];
+	}, [customAICommands, speckitCommands, openspecCommands, bmadCommands, pmCommands]);
 
 	// Combine built-in slash commands with custom AI commands, bundled methodology
 	// commands, and agent-specific commands for autocomplete.
@@ -1760,6 +1838,7 @@ function MaestroConsoleInner() {
 		speckitCommandsRef,
 		openspecCommandsRef,
 		bmadCommandsRef,
+		pmCommandsRef,
 		toggleGlobalLive,
 		isLiveMode,
 		sshRemoteConfigs,
@@ -1791,6 +1870,7 @@ function MaestroConsoleInner() {
 		speckitCommandsRef,
 		openspecCommandsRef,
 		bmadCommandsRef,
+		pmCommandsRef,
 	});
 	// Bridge: keep the original processQueuedItemRef in sync
 	processQueuedItemRef.current = processQueuedItem;
@@ -2126,6 +2206,10 @@ function MaestroConsoleInner() {
 		setSymphonyModalOpen,
 		setDirectorNotesOpen,
 		setCueModalOpen,
+		setAgentDispatchOpen,
+		setDeliveryPlannerOpen,
+		setPlanningPipelineOpen,
+		setConversationalPrdOpen,
 		encoreFeatures,
 		setShowNewGroupChatModal,
 		deleteGroupChatWithConfirmation,
@@ -2860,6 +2944,13 @@ function MaestroConsoleInner() {
 					}
 					onOpenMaestroCue={encoreFeatures.maestroCue ? () => setCueModalOpen(true) : undefined}
 					onConfigureCue={encoreFeatures.maestroCue ? handleConfigureCue : undefined}
+					onOpenAgentDispatch={() => setAgentDispatchOpen(true)}
+					onOpenDeliveryPlanner={
+						encoreFeatures.deliveryPlanner ? () => setDeliveryPlannerOpen(true) : undefined
+					}
+					onOpenConversationalPrd={
+						encoreFeatures.conversationalPrd ? () => setConversationalPrdOpen(true) : undefined
+					}
 					onCloseTabSwitcher={handleCloseTabSwitcher}
 					onTabSelect={handleUtilityTabSelect}
 					onFileTabSelect={handleUtilityFileTabSelect}

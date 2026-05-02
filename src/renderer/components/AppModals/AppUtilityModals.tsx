@@ -158,6 +158,13 @@ export interface AppUtilityModalsProps {
 	onOpenMaestroCue?: () => void;
 	onConfigureCue?: (session: Session) => void;
 
+	// Agent Dispatch
+	onOpenAgentDispatch?: () => void;
+	// Delivery Planner
+	onOpenDeliveryPlanner?: () => void;
+	// Conversational PRD Planner
+	onOpenConversationalPrd?: () => void;
+
 	// LightboxModal
 	lightboxImage: string | null;
 	lightboxImages: string[];
@@ -374,6 +381,13 @@ export const AppUtilityModals = memo(function AppUtilityModals({
 	// Maestro Cue
 	onOpenMaestroCue,
 	onConfigureCue,
+	// Agent Dispatch
+	onOpenAgentDispatch,
+	// Delivery Planner
+	onOpenDeliveryPlanner,
+	// Planning Pipeline
+	// Conversational PRD Planner
+	onOpenConversationalPrd,
 	// LightboxModal
 	lightboxImage,
 	lightboxImages,
@@ -546,6 +560,9 @@ export const AppUtilityModals = memo(function AppUtilityModals({
 					onOpenDirectorNotes={onOpenDirectorNotes}
 					onOpenMaestroCue={onOpenMaestroCue}
 					onConfigureCue={onConfigureCue}
+					onOpenAgentDispatch={onOpenAgentDispatch}
+					onOpenDeliveryPlanner={onOpenDeliveryPlanner}
+					onOpenConversationalPrd={onOpenConversationalPrd}
 				/>
 			)}
 

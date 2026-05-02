@@ -121,6 +121,16 @@ export function getDashboardUrl(): string {
 }
 
 /**
+ * Get the full-screen Maestro Board URL.
+ */
+export function getBoardUrl(projectPath?: string | null): string {
+	const config = getMaestroConfig();
+	const baseUrl = `${window.location.origin}/${config.securityToken}/board`;
+	if (!projectPath) return baseUrl;
+	return `${baseUrl}?projectPath=${encodeURIComponent(projectPath)}`;
+}
+
+/**
  * Get the URL for a specific session
  */
 export function getSessionUrl(sessionId: string, tabId?: string | null): string {

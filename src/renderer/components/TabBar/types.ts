@@ -15,6 +15,8 @@ export interface TabBarProps {
 	onNewBrowserTab?: () => void;
 	/** Handler to create a new terminal tab (shown in the + button popover) */
 	onNewTerminalTab?: () => void;
+	/** Opens the server-backed project PM surface; does not create a provider chat tab. */
+	onOpenPmChat?: () => void;
 	onRequestRename?: (tabId: string) => void;
 	onTabReorder?: (fromIndex: number, toIndex: number) => void;
 	/** Handler to reorder tabs in unified tab order (AI + file tabs) */

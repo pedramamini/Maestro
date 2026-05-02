@@ -84,6 +84,26 @@ export const DEFAULT_SHORTCUTS: Record<string, Shortcut> = {
 		label: 'Maestro Cue',
 		keys: ['Alt', 'q'],
 	},
+	openAgentDispatch: {
+		id: 'openAgentDispatch',
+		label: 'Maestro Board',
+		keys: ['Alt', 'd'],
+	},
+	openDeliveryPlanner: {
+		id: 'openDeliveryPlanner',
+		label: 'Delivery Planner',
+		keys: ['Alt', 'p'],
+	},
+	openPlanningPipeline: {
+		id: 'openPlanningPipeline',
+		label: 'Planning Pipeline',
+		keys: ['Alt', 'i'],
+	},
+	openConversationalPrd: {
+		id: 'openConversationalPrd',
+		label: 'Conversational PRD',
+		keys: ['Alt', 'r'],
+	},
 	filterUnreadAgents: {
 		id: 'filterUnreadAgents',
 		label: 'Filter Unread Agents',

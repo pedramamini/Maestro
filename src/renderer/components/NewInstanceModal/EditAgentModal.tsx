@@ -2,6 +2,8 @@ import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { AlertTriangle, Copy, Check, X } from 'lucide-react';
 import { GhostIconButton } from '../ui/GhostIconButton';
 import type { AgentConfig, ToolType } from '../../types';
+import type { AgentDispatchProfile } from '../../../shared/agent-dispatch-types';
+import { DEFAULT_AGENT_DISPATCH_PROFILE } from '../../../shared/agent-dispatch-types';
 import type { SshRemoteConfig, AgentSshRemoteConfig } from '../../../shared/types';
 import { MODAL_PRIORITIES } from '../../constants/modalPriorities';
 import { validateEditSession } from '../../utils/sessionValidation';
@@ -14,9 +16,11 @@ import { getAgentDisplayName } from '../../../shared/agentMetadata';
 import { useRemotePathValidation } from '../../hooks/agent/useRemotePathValidation';
 import { NudgeMessageField } from './NudgeMessageField';
 import { RemotePathStatus } from './RemotePathStatus';
+import { DispatchProfileFields } from '../AgentDispatch/DispatchProfileFields';
 import type { EditAgentModalProps } from './types';
 import { SUPPORTED_AGENTS, NEW_SESSION_MESSAGE_MAX_LENGTH } from './types';
 import { logger } from '../../utils/logger';
+import { useSettingsStore } from '../../stores/settingsStore';
 
 /**
  * EditAgentModal - Modal for editing an existing agent's settings
@@ -51,6 +55,12 @@ export function EditAgentModal({
 	const [editLoadingDynamicOptions, setEditLoadingDynamicOptions] = useState(false);
 	const [refreshingAgent, setRefreshingAgent] = useState(false);
 	const [copiedId, setCopiedId] = useState(false);
+	const [aiWikiEnabled, setAiWikiEnabled] = useState(false);
+	// Agent Dispatch — full profile editor state
+	const [dispatchProfileDraft, setDispatchProfileDraft] = useState<AgentDispatchProfile>(
+		DEFAULT_AGENT_DISPATCH_PROFILE
+	);
+	const agentDispatchEnabled = useSettingsStore((s) => s.encoreFeatures?.agentDispatch ?? false);
 	// Provider change state
 	const [selectedToolType, setSelectedToolType] = useState<ToolType>(
 		session?.toolType ?? 'claude-code'
@@ -240,6 +250,22 @@ export function EditAgentModal({
 			setInstanceName(session.name);
 			setNudgeMessage(session.nudgeMessage || '');
 			setNewSessionMessage(session.newSessionMessage || '');
+			setAiWikiEnabled(session.aiWikiEnabled ?? false);
+			setDispatchProfileDraft({
+				autoPickupEnabled:
+					session.dispatchProfile?.autoPickupEnabled ??
+					DEFAULT_AGENT_DISPATCH_PROFILE.autoPickupEnabled,
+				capabilityTags:
+					session.dispatchProfile?.capabilityTags ?? DEFAULT_AGENT_DISPATCH_PROFILE.capabilityTags,
+				maxConcurrentClaims:
+					session.dispatchProfile?.maxConcurrentClaims ??
+					DEFAULT_AGENT_DISPATCH_PROFILE.maxConcurrentClaims,
+				fleetEnabled: session.dispatchProfile?.fleetEnabled ?? false,
+				runnerScriptPath: session.dispatchProfile?.runnerScriptPath,
+				...(session.dispatchProfile?.suggestedDefaults
+					? { suggestedDefaults: session.dispatchProfile.suggestedDefaults }
+					: {}),
+			});
 			// Only reset if different to avoid re-triggering the config loading effect
 			setSelectedToolType((prev) => (prev === session.toolType ? prev : session.toolType));
 		}
@@ -315,7 +341,10 @@ export function EditAgentModal({
 						shareHistoryToProjectDir: sshRemoteConfig?.shareHistoryToProjectDir,
 					};
 
-		// Save with per-session config fields including model, contextWindow, and SSH config
+		// Build dispatch profile only when Agent Dispatch feature is enabled
+		const dispatchProfile = agentDispatchEnabled ? dispatchProfileDraft : session.dispatchProfile;
+
+		// Save with per-session config fields including model, contextWindow, SSH config, and dispatch profile
 		onSave(
 			session.id,
 			name,
@@ -327,7 +356,9 @@ export function EditAgentModal({
 			Object.keys(customEnvVars).length > 0 ? customEnvVars : undefined,
 			modelValue,
 			contextWindowValue,
-			sessionSshRemoteConfig
+			sessionSshRemoteConfig,
+			dispatchProfile,
+			aiWikiEnabled
 		);
 		onClose();
 	}, [
@@ -345,6 +376,9 @@ export function EditAgentModal({
 		onSave,
 		onClose,
 		existingSessions,
+		dispatchProfileDraft,
+		agentDispatchEnabled,
+		aiWikiEnabled,
 	]);
 
 	// Refresh available models
@@ -639,6 +673,56 @@ export function EditAgentModal({
 						/>
 					</div>
 				)}
+
+				{/* Board runner profile editor — only shown when Agent Dispatch encore feature is enabled */}
+				{agentDispatchEnabled && (
+					<div>
+						<div
+							className="block text-xs font-bold opacity-70 uppercase mb-2"
+							style={{ color: theme.colors.textMain }}
+						>
+							Board Runner
+						</div>
+						<DispatchProfileFields
+							profile={dispatchProfileDraft}
+							onChange={setDispatchProfileDraft}
+							theme={theme}
+							suggestedDefaults={dispatchProfileDraft.suggestedDefaults}
+							showFleetToggle={true}
+						/>
+					</div>
+				)}
+
+				{/* Project Wiki & PM opt-in. State is project-scoped on the main Maestro server. */}
+				<div>
+					<label
+						className="flex items-start gap-3 p-3 rounded border cursor-pointer"
+						style={{
+							borderColor: aiWikiEnabled ? theme.colors.accent + '80' : theme.colors.border,
+							backgroundColor: aiWikiEnabled ? theme.colors.accent + '10' : theme.colors.bgActivity,
+						}}
+					>
+						<input
+							type="checkbox"
+							checked={aiWikiEnabled}
+							onChange={(e) => setAiWikiEnabled(e.target.checked)}
+							className="mt-0.5"
+						/>
+						<span className="min-w-0">
+							<span
+								className="block text-xs font-bold uppercase"
+								style={{ color: theme.colors.textMain }}
+							>
+								Project Wiki & PM
+							</span>
+							<span className="block text-xs mt-1" style={{ color: theme.colors.textDim }}>
+								Maintain wiki and PM context for this project on the main Maestro server. Agents
+								with the same project root and SSH remote share one context; it is not written into
+								the repo by default.
+							</span>
+						</span>
+					</label>
+				</div>
 
 				{/* SSH Remote Execution - Top Level.
 				    Always rendered (not gated on sshRemotes.length) because the
