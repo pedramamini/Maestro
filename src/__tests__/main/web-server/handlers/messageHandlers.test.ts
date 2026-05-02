@@ -193,7 +193,8 @@ describe('WebSocketMessageHandler', () => {
 					'Hello Claude!',
 					'ai',
 					undefined,
-					false
+					false,
+					undefined
 				);
 			});
 
@@ -216,7 +217,8 @@ describe('WebSocketMessageHandler', () => {
 					'ls -la',
 					'terminal',
 					undefined,
-					false
+					false,
+					undefined
 				);
 			});
 		});
@@ -280,13 +282,36 @@ describe('WebSocketMessageHandler', () => {
 					'Hello',
 					'ai',
 					'tab-explicit',
-					false
+					false,
+					undefined
 				);
 			});
 
 			const response = JSON.parse((client.socket.send as any).mock.calls[0][0]);
 			expect(response.type).toBe('command_result');
 			expect(response.tabId).toBe('tab-explicit');
+		});
+
+		it('forwards pasted images so the renderer can attach them to the prompt', async () => {
+			const images = ['data:image/png;base64,abc', 'data:image/png;base64,def'];
+			handler.handleMessage(client, {
+				type: 'send_command',
+				sessionId: 'session-1',
+				command: 'look at this',
+				inputMode: 'ai',
+				images,
+			});
+
+			await vi.waitFor(() => {
+				expect(callbacks.executeCommand).toHaveBeenCalledWith(
+					'session-1',
+					'look at this',
+					'ai',
+					undefined,
+					false,
+					images
+				);
+			});
 		});
 
 		it('should bypass busy guard and forward command when force=true', async () => {
@@ -306,7 +331,8 @@ describe('WebSocketMessageHandler', () => {
 					'concurrent write',
 					'ai',
 					undefined,
-					true
+					true,
+					undefined
 				);
 			});
 

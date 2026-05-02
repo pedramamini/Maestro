@@ -163,7 +163,8 @@ export interface MessageHandlerCallbacks {
 		command: string,
 		inputMode?: 'ai' | 'terminal',
 		tabId?: string,
-		force?: boolean
+		force?: boolean,
+		images?: string[]
 	) => Promise<boolean>;
 	switchMode: (sessionId: string, mode: 'ai' | 'terminal') => Promise<boolean>;
 	selectSession: (sessionId: string, tabId?: string, focus?: boolean) => Promise<boolean>;

@@ -1958,13 +1958,23 @@ export default function MobileApp() {
 			// Provide haptic feedback on send
 			triggerHaptic(HAPTIC_PATTERNS.send);
 
-			// Add user message to session logs immediately for display
-			addUserLogEntry(command, currentMode);
+			// Offline path: refuse to queue when images are staged. Our offline
+			// queue can't carry image payloads, so silently dropping them
+			// would mislead the user. Bail out early so the composer keeps
+			// the staged images for retry once the connection is back.
+			if ((isOffline || !isActuallyConnected) && effectiveImages?.length) {
+				webLogger.warn(
+					'Cannot queue pasted images while offline. Reconnect and resend with images.',
+					'Mobile'
+				);
+				return;
+			}
 
-			// If offline or not connected, queue the command for later.
-			// NOTE: the offline queue currently doesn't carry images — pasted
-			// images are dropped on offline send. Acceptable for v1; users can
-			// re-paste when reconnected.
+			// Add user message to session logs immediately for display
+			addUserLogEntry(command, currentMode, effectiveImages);
+
+			// If offline or not connected, queue the (image-free) command for
+			// later. Image-bearing sends were rejected above.
 			if (isOffline || !isActuallyConnected) {
 				const queued = queueCommand(activeSessionId, command, currentMode);
 				if (queued) {

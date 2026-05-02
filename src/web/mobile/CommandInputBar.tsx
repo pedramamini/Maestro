@@ -25,6 +25,7 @@
 
 import React, { useRef, useEffect, useState, useCallback } from 'react';
 import { useThemeColors } from '../components/ThemeProvider';
+import { webLogger } from '../utils/logger';
 import { useSwipeUp } from '../hooks/useSwipeUp';
 import { useVoiceInput } from '../hooks/useVoiceInput';
 import { useKeyboardVisibility } from '../hooks/useKeyboardVisibility';
@@ -70,6 +71,16 @@ const MOBILE_MAX_WIDTH = 480;
 
 /** Height of expanded input on mobile (50% of viewport) */
 const MOBILE_EXPANDED_HEIGHT_VH = 50;
+
+/** Maximum number of staged images per message. Prevents pathological pastes
+ *  from producing multi-megabyte WebSocket frames or stalling the renderer. */
+const MAX_STAGED_IMAGES = 5;
+
+/** Maximum decoded byte size accepted per pasted image. Base64 inflates
+ *  payloads ~33%, so a 2 MB raw image becomes ~2.7 MB on the wire — high
+ *  enough to cover screenshots, low enough to keep a single message well
+ *  under typical WebSocket frame budgets. */
+const MAX_IMAGE_BYTES = 2 * 1024 * 1024;
 
 /**
  * Detect if the device is a mobile phone (not tablet/desktop)
@@ -207,11 +218,13 @@ export function CommandInputBar({
 	const [internalValue, setInternalValue] = useState('');
 	const value = controlledValue !== undefined ? controlledValue : internalValue;
 
-	// Staged images pasted into AI mode. Mirrors desktop's `stagedImages`:
-	// stored as base64 data URLs and shipped alongside the prompt on submit.
-	// Local-only state (the web client doesn't need to round-trip this through
-	// the server) and intentionally cleared on send to avoid double-attaching.
-	const [stagedImages, setStagedImages] = useState<string[]>([]);
+	// Staged images pasted into AI mode. Each entry pairs the base64 data URL
+	// with a short stable id so React reconciliation doesn't have to compare
+	// the full data URL on every render (which can be hundreds of KB) and so
+	// duplicate-image rejection can't produce duplicate keys. Mirrors
+	// desktop's `stagedImages` semantics: local-only state, cleared on send.
+	const [stagedImages, setStagedImages] = useState<{ id: string; dataUrl: string }[]>([]);
+	const stagedImageIdSeq = useRef(0);
 
 	// Determine if input should be disabled (must be before hooks that use it)
 	// In AI mode: NEVER disable the input - user can always prep next message
@@ -279,6 +292,12 @@ export function CommandInputBar({
 	// Separate flag for whether send is blocked (AI thinking)
 	// When true, shows X button instead of send button
 	const isSendBlocked = inputMode === 'ai' && isSessionBusy;
+
+	// Disable send when there's no text AND no AI-mode image attachments.
+	// Image-only sends are explicitly AI-mode only — terminal mode never
+	// considers staged images as a reason to enable the send button.
+	const isSendDisabledForCurrentInput =
+		isDisabled || (!value.trim() && (inputMode !== 'ai' || stagedImages.length === 0));
 
 	// Get placeholder text based on state
 	const getPlaceholder = () => {
@@ -349,6 +368,12 @@ export function CommandInputBar({
 	 * push them onto `stagedImages`. Only active in AI mode (terminal mode
 	 * doesn't have a meaningful image-attach concept). Text paste is left to
 	 * the browser default so existing autocomplete/expansion logic stays put.
+	 *
+	 * Enforces both a count cap (MAX_STAGED_IMAGES) and a per-image byte cap
+	 * (MAX_IMAGE_BYTES) so a runaway paste can't produce multi-megabyte
+	 * WebSocket frames. Failures (oversize image, FileReader error) are
+	 * logged via webLogger so they're visible in production — silent drops
+	 * would mislead users into thinking the attachment was sent.
 	 */
 	const handlePaste = useCallback(
 		(e: React.ClipboardEvent<HTMLTextAreaElement | HTMLInputElement>) => {
@@ -365,11 +390,39 @@ export function CommandInputBar({
 					e.preventDefault();
 					consumed = true;
 				}
+				if (blob.size > MAX_IMAGE_BYTES) {
+					webLogger.warn(
+						`Pasted image exceeds ${MAX_IMAGE_BYTES} byte cap (got ${blob.size}); dropping`,
+						'CommandInputBar'
+					);
+					continue;
+				}
 				const reader = new FileReader();
 				reader.onload = (event) => {
 					const result = event.target?.result;
 					if (typeof result !== 'string') return;
-					setStagedImages((prev) => (prev.includes(result) ? prev : [...prev, result]));
+					setStagedImages((prev) => {
+						if (prev.length >= MAX_STAGED_IMAGES) {
+							webLogger.warn(
+								`Staged image cap reached (${MAX_STAGED_IMAGES}); dropping additional paste`,
+								'CommandInputBar'
+							);
+							return prev;
+						}
+						if (prev.some((entry) => entry.dataUrl === result)) return prev;
+						stagedImageIdSeq.current += 1;
+						return [...prev, { id: `img-${stagedImageIdSeq.current}`, dataUrl: result }];
+					});
+				};
+				reader.onerror = () => {
+					// Surface the failure rather than silently swallowing it —
+					// without this the user would see the paste 'work' (event
+					// fired, no error in console) but no thumbnail would appear.
+					webLogger.error(
+						`FileReader failed to decode pasted image (${item.type})`,
+						'CommandInputBar',
+						reader.error ?? undefined
+					);
 				};
 				reader.readAsDataURL(blob);
 			}
@@ -396,19 +449,21 @@ export function CommandInputBar({
 	);
 
 	/**
-	 * Handle form submission
+	 * Handle form submission. Image attachments are AI-mode only — terminal
+	 * sends ignore any staged images entirely so a user who pasted images and
+	 * then switched to terminal can't accidentally ship them as a payload.
 	 */
 	const handleSubmit = useCallback(
 		(e: React.FormEvent) => {
 			e.preventDefault();
-			const hasImages = stagedImages.length > 0;
+			const hasImages = inputMode === 'ai' && stagedImages.length > 0;
 			if (isDisabled) return;
 			if (!value.trim() && !hasImages) return;
 
 			// Trigger haptic feedback on successful send
 			triggerHaptic(25);
 
-			onSubmit?.(value.trim(), hasImages ? stagedImages : undefined);
+			onSubmit?.(value.trim(), hasImages ? stagedImages.map((entry) => entry.dataUrl) : undefined);
 
 			// Clear input after submit (for uncontrolled mode)
 			if (controlledValue === undefined) {
@@ -419,7 +474,7 @@ export function CommandInputBar({
 			// Keep focus on textarea after submit
 			textareaRef.current?.focus();
 		},
-		[value, isDisabled, onSubmit, controlledValue, stagedImages]
+		[value, isDisabled, onSubmit, controlledValue, stagedImages, inputMode]
 	);
 
 	/**
@@ -515,19 +570,20 @@ export function CommandInputBar({
 	}, [isExpanded, isMobilePhone, inputMode]);
 
 	/**
-	 * Collapse input when submitting on mobile
+	 * Collapse input when submitting on mobile. Same AI-mode image gating as
+	 * `handleSubmit` so terminal sends never carry image payloads.
 	 */
 	const handleMobileSubmit = useCallback(
 		(e: React.FormEvent) => {
 			e.preventDefault();
-			const hasImages = stagedImages.length > 0;
+			const hasImages = inputMode === 'ai' && stagedImages.length > 0;
 			if (isDisabled || isSendBlocked) return;
 			if (!value.trim() && !hasImages) return;
 
 			// Trigger haptic feedback on successful send
 			triggerHaptic(25);
 
-			onSubmit?.(value.trim(), hasImages ? stagedImages : undefined);
+			onSubmit?.(value.trim(), hasImages ? stagedImages.map((entry) => entry.dataUrl) : undefined);
 
 			// Clear input after submit (for uncontrolled mode)
 			if (controlledValue === undefined) {
@@ -634,7 +690,9 @@ export function CommandInputBar({
 				)}
 
 			{/* Staged images preview — base64 thumbnails of pasted images, with
-			    a remove button per item. AI mode only; matches desktop layout. */}
+			    a remove button per item. AI mode only; matches desktop layout.
+			    Stable ids are used as React keys so reconciliation doesn't
+			    have to compare full data URLs across renders. */}
 			{inputMode === 'ai' && stagedImages.length > 0 && (
 				<div
 					style={{
@@ -645,16 +703,16 @@ export function CommandInputBar({
 						padding: '0 16px 8px 16px',
 					}}
 				>
-					{stagedImages.map((img, idx) => (
+					{stagedImages.map((entry, idx) => (
 						<div
-							key={img}
+							key={entry.id}
 							style={{
 								position: 'relative',
 								flexShrink: 0,
 							}}
 						>
 							<img
-								src={img}
+								src={entry.dataUrl}
 								alt={`Staged image ${idx + 1}`}
 								style={{
 									height: '64px',
@@ -668,7 +726,7 @@ export function CommandInputBar({
 							<button
 								type="button"
 								onClick={() =>
-									setStagedImages((prev) => prev.filter((existing) => existing !== img))
+									setStagedImages((prev) => prev.filter((existing) => existing.id !== entry.id))
 								}
 								aria-label={`Remove staged image ${idx + 1}`}
 								style={{
@@ -777,7 +835,7 @@ export function CommandInputBar({
 					{/* Full-width send button below textarea */}
 					<ExpandedModeSendInterruptButton
 						isInterruptMode={inputMode === 'ai' && isSessionBusy}
-						isSendDisabled={isDisabled || (!value.trim() && stagedImages.length === 0)}
+						isSendDisabled={isSendDisabledForCurrentInput}
 						onInterrupt={handleInterrupt}
 					/>
 				</form>
@@ -875,7 +933,7 @@ export function CommandInputBar({
 							</div>
 							<SendInterruptButton
 								isInterruptMode={false}
-								isSendDisabled={isDisabled || (!value.trim() && stagedImages.length === 0)}
+								isSendDisabled={isSendDisabledForCurrentInput}
 								onInterrupt={handleInterrupt}
 								sendButtonRef={sendButtonRef}
 								onTouchStart={handleSendButtonTouchStart}
@@ -1034,7 +1092,7 @@ export function CommandInputBar({
 									<div style={{ marginLeft: 'auto' }}>
 										<SendInterruptButton
 											isInterruptMode={inputMode === 'ai' && isSessionBusy}
-											isSendDisabled={isDisabled || (!value.trim() && stagedImages.length === 0)}
+											isSendDisabled={isSendDisabledForCurrentInput}
 											onInterrupt={handleInterrupt}
 											sendButtonRef={sendButtonRef}
 											onTouchStart={handleSendButtonTouchStart}
@@ -1046,7 +1104,7 @@ export function CommandInputBar({
 							) : (
 								<SendInterruptButton
 									isInterruptMode={inputMode === 'ai' && isSessionBusy}
-									isSendDisabled={isDisabled || (!value.trim() && stagedImages.length === 0)}
+									isSendDisabled={isSendDisabledForCurrentInput}
 									onInterrupt={handleInterrupt}
 									sendButtonRef={sendButtonRef}
 									onTouchStart={handleSendButtonTouchStart}
