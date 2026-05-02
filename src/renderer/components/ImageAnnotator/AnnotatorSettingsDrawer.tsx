@@ -32,7 +32,7 @@ const SWATCHES: readonly string[] = [
 // Mirror of `src/main/stores/defaults.ts`. Keep these in lock-step.
 const ANNOTATOR_DEFAULTS = {
 	annotatorPenColor: '#9146FF',
-	annotatorPenSize: 16,
+	annotatorPenSize: 10,
 	annotatorThinning: 0.5,
 	annotatorSmoothing: 0.5,
 	annotatorStreamline: 0.5,
@@ -77,15 +77,22 @@ export function AnnotatorSettingsDrawer({ open, onClose, theme }: AnnotatorSetti
 			aria-label="Drawing settings"
 			aria-hidden={!open}
 			className="absolute top-0 right-0 bottom-0 z-20 flex flex-col overflow-y-auto border-l"
-			style={{
-				width: 320,
-				backgroundColor: theme.colors.bgSidebar,
-				borderColor: theme.colors.border,
-				color: theme.colors.textMain,
-				transform: open ? 'translateX(0)' : 'translateX(100%)',
-				transition: 'transform 200ms',
-				pointerEvents: open ? 'auto' : 'none',
-			}}
+			style={
+				{
+					width: 320,
+					backgroundColor: theme.colors.bgSidebar,
+					borderColor: theme.colors.border,
+					color: theme.colors.textMain,
+					transform: open ? 'translateX(0)' : 'translateX(100%)',
+					transition: 'transform 200ms',
+					pointerEvents: open ? 'auto' : 'none',
+					// The top 40px of the window is the Electron drag region
+					// (`-webkit-app-region: drag`). Without explicit no-drag,
+					// the OS hijacks clicks on the drawer header — including
+					// the Close button. Opt out for the whole drawer.
+					WebkitAppRegion: 'no-drag',
+				} as React.CSSProperties
+			}
 			onPointerDown={(e) => e.stopPropagation()}
 			onWheel={(e) => e.stopPropagation()}
 		>

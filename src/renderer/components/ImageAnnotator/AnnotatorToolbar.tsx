@@ -14,11 +14,14 @@
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import {
+	ArrowUpRight,
 	Check,
+	Circle,
 	Copy,
 	Eraser,
 	Move,
 	PenLine,
+	Square,
 	SlidersHorizontal,
 	Trash2,
 	Undo2,
@@ -27,7 +30,6 @@ import {
 } from 'lucide-react';
 import type { Theme } from '../../../shared/theme-types';
 import { GhostIconButton } from '../ui/GhostIconButton';
-import { useEventListener } from '../../hooks/utils/useEventListener';
 import { notifyCenterFlash } from '../../stores/centerFlashStore';
 import type { AnnotatorTool, UseAnnotatorStateReturn } from './useAnnotatorState';
 
@@ -52,24 +54,49 @@ export const AnnotatorToolbar = memo(function AnnotatorToolbar({
 	onCopy,
 	onCancel,
 }: AnnotatorToolbarProps) {
-	const { tool, setTool, strokes, undo, clear } = state;
+	const { tool, setTool, strokes, shapes, undo, clear } = state;
 	const [confirmingClear, setConfirmingClear] = useState(false);
 	const confirmWrapRef = useRef<HTMLDivElement>(null);
+	const hasContent = strokes.length > 0 || shapes.length > 0;
 
-	useEventListener('keydown', (event: Event) => {
-		const e = event as KeyboardEvent;
-		if (
-			e.target instanceof HTMLInputElement ||
-			e.target instanceof HTMLTextAreaElement ||
-			(e.target instanceof HTMLElement && e.target.isContentEditable)
-		) {
-			return;
-		}
-		if ((e.metaKey || e.ctrlKey) && !e.shiftKey && !e.altKey && e.key.toLowerCase() === 'z') {
-			e.preventDefault();
-			undo();
-		}
-	});
+	// Cmd/Ctrl+Z (undo) and Cmd/Ctrl+S (save+exit) for the annotator.
+	//
+	// Attached at the *capture* phase on `window`, with `stopImmediatePropagation`
+	// after we handle the event, so our handler always wins regardless of how
+	// many other window-level keydown listeners (App's main keyboard handler,
+	// other modals' useEventListener hooks, etc.) are registered. This is
+	// defensive: the main keyboard handler already early-returns when the
+	// annotator's modal layer is open, but we don't want to depend on that
+	// invariant — annotator shortcuts should be self-contained.
+	const undoRef = useRef(undo);
+	undoRef.current = undo;
+	const onSaveRef = useRef(onSave);
+	onSaveRef.current = onSave;
+	useEffect(() => {
+		const onKeyDown = (event: KeyboardEvent) => {
+			if (
+				event.target instanceof HTMLInputElement ||
+				event.target instanceof HTMLTextAreaElement ||
+				(event.target instanceof HTMLElement && event.target.isContentEditable)
+			) {
+				return;
+			}
+			const cmd = event.metaKey || event.ctrlKey;
+			if (!cmd || event.shiftKey || event.altKey) return;
+			const key = event.key.toLowerCase();
+			if (key === 'z') {
+				event.preventDefault();
+				event.stopImmediatePropagation();
+				undoRef.current();
+			} else if (key === 's') {
+				event.preventDefault();
+				event.stopImmediatePropagation();
+				void onSaveRef.current();
+			}
+		};
+		window.addEventListener('keydown', onKeyDown, { capture: true });
+		return () => window.removeEventListener('keydown', onKeyDown, { capture: true });
+	}, []);
 
 	useEffect(() => {
 		if (!confirmingClear) return;
@@ -83,8 +110,8 @@ export const AnnotatorToolbar = memo(function AnnotatorToolbar({
 	}, [confirmingClear]);
 
 	useEffect(() => {
-		if (strokes.length === 0 && confirmingClear) setConfirmingClear(false);
-	}, [strokes.length, confirmingClear]);
+		if (!hasContent && confirmingClear) setConfirmingClear(false);
+	}, [hasContent, confirmingClear]);
 
 	const handleConfirmClear = useCallback(() => {
 		clear();
@@ -104,6 +131,9 @@ export const AnnotatorToolbar = memo(function AnnotatorToolbar({
 		void onSave();
 	}, [onSave]);
 
+	const ICON_CLASS = 'w-5 h-5';
+	const BUTTON_PADDING = 'p-2';
+
 	const renderToolButton = (value: AnnotatorTool, Icon: LucideIcon, label: string) => {
 		const active = tool === value;
 		return (
@@ -111,49 +141,75 @@ export const AnnotatorToolbar = memo(function AnnotatorToolbar({
 				onClick={() => setTool(value)}
 				ariaLabel={label}
 				title={label}
+				padding={BUTTON_PADDING}
 				color={active ? theme.colors.accent : theme.colors.textMain}
 				style={active ? { backgroundColor: `${theme.colors.accent}26` } : undefined}
 			>
-				<Icon className="w-4 h-4" />
+				<Icon className={ICON_CLASS} />
 			</GhostIconButton>
 		);
 	};
 
+	// Horizontal divider for the vertical toolbar layout.
 	const divider = (
 		<div
 			aria-hidden
 			style={{
-				width: 1,
-				height: 18,
+				width: 22,
+				height: 1,
 				backgroundColor: theme.colors.border,
-				margin: '0 4px',
+				margin: '4px 0',
 			}}
 		/>
 	);
 
-	const canUndo = strokes.length > 0;
+	const canUndo = hasContent;
+
+	// Slide the toolbar left when the settings drawer opens, so the drawer
+	// can take the right edge without occluding the buttons. The drawer
+	// itself is 320px wide; we leave a 24px gap on either side.
+	const DRAWER_WIDTH = 320;
+	const EDGE_GAP = 24;
+	const rightOffset = drawerOpen ? DRAWER_WIDTH + EDGE_GAP : EDGE_GAP;
 
 	return createPortal(
 		<div
 			role="toolbar"
 			aria-label="Image annotator toolbar"
-			className="fixed top-4 left-1/2 flex items-center gap-1 rounded-lg px-2 py-1.5"
-			style={{
-				zIndex: 170,
-				transform: 'translateX(-50%)',
-				backgroundColor: `${theme.colors.bgSidebar}d9`,
-				backdropFilter: 'blur(12px) saturate(150%)',
-				WebkitBackdropFilter: 'blur(12px) saturate(150%)',
-				border: `1px solid ${theme.colors.border}`,
-				boxShadow: '0 8px 24px -8px rgba(0, 0, 0, 0.5)',
-				pointerEvents: 'auto',
-			}}
+			aria-orientation="vertical"
+			className="fixed top-1/2 flex flex-col items-center gap-1 rounded-xl px-1.5 py-2"
+			style={
+				{
+					zIndex: 170,
+					right: rightOffset,
+					transform: 'translateY(-50%)',
+					transition: 'right 200ms ease-out',
+					backgroundColor: `${theme.colors.bgSidebar}d9`,
+					backdropFilter: 'blur(12px) saturate(150%)',
+					WebkitBackdropFilter: 'blur(12px) saturate(150%)',
+					border: `1px solid ${theme.colors.border}`,
+					boxShadow: '0 8px 24px -8px rgba(0, 0, 0, 0.5)',
+					pointerEvents: 'auto',
+					// Electron has a 40px draggable title bar (`-webkit-app-region:
+					// drag`) at the top of the window. App-region hijacks clicks
+					// before they reach React, regardless of z-index. We're well
+					// clear of it on the right edge, but `no-drag` is belt-and-
+					// suspenders so this can never bite again.
+					WebkitAppRegion: 'no-drag',
+				} as React.CSSProperties
+			}
 			onPointerDown={(e) => e.stopPropagation()}
 			onWheel={(e) => e.stopPropagation()}
 		>
 			{renderToolButton('pen', PenLine, 'Pen')}
 			{renderToolButton('eraser', Eraser, 'Eraser')}
-			{renderToolButton('pan', Move, 'Pan')}
+			{renderToolButton('pan', Move, 'Pan (or hold Shift / Space)')}
+
+			{divider}
+
+			{renderToolButton('rect', Square, 'Rectangle')}
+			{renderToolButton('ellipse', Circle, 'Ellipse')}
+			{renderToolButton('arrow', ArrowUpRight, 'Arrow')}
 
 			{divider}
 
@@ -161,10 +217,11 @@ export const AnnotatorToolbar = memo(function AnnotatorToolbar({
 				onClick={undo}
 				ariaLabel="Undo"
 				title="Undo (⌘Z)"
+				padding={BUTTON_PADDING}
 				disabled={!canUndo}
 				color={theme.colors.textMain}
 			>
-				<Undo2 className="w-4 h-4" />
+				<Undo2 className={ICON_CLASS} />
 			</GhostIconButton>
 
 			<div ref={confirmWrapRef} style={{ position: 'relative' }}>
@@ -175,19 +232,21 @@ export const AnnotatorToolbar = memo(function AnnotatorToolbar({
 					}}
 					ariaLabel="Clear all strokes"
 					title="Clear all strokes"
+					padding={BUTTON_PADDING}
 					disabled={!canUndo}
 					color={theme.colors.error}
 				>
-					<Trash2 className="w-4 h-4" />
+					<Trash2 className={ICON_CLASS} />
 				</GhostIconButton>
 				{confirmingClear && (
 					<div
 						role="dialog"
 						aria-label="Clear all strokes?"
-						className="absolute left-1/2 mt-2 flex flex-col gap-2 rounded-md p-3 text-sm"
+						className="absolute mr-2 flex flex-col gap-2 rounded-md p-3 text-sm"
 						style={{
-							top: '100%',
-							transform: 'translateX(-50%)',
+							right: '100%',
+							top: '50%',
+							transform: 'translateY(-50%)',
 							minWidth: 200,
 							backgroundColor: theme.colors.bgMain,
 							border: `1px solid ${theme.colors.border}`,
@@ -228,37 +287,41 @@ export const AnnotatorToolbar = memo(function AnnotatorToolbar({
 				onClick={onToggleDrawer}
 				ariaLabel="Drawing settings"
 				title="Drawing settings"
+				padding={BUTTON_PADDING}
 				color={drawerOpen ? theme.colors.accent : theme.colors.textMain}
 				style={drawerOpen ? { backgroundColor: `${theme.colors.accent}26` } : undefined}
 			>
-				<SlidersHorizontal className="w-4 h-4" />
+				<SlidersHorizontal className={ICON_CLASS} />
 			</GhostIconButton>
 
 			<GhostIconButton
 				onClick={() => void handleCopy()}
 				ariaLabel="Copy to clipboard"
 				title="Copy to clipboard"
+				padding={BUTTON_PADDING}
 				color={theme.colors.textMain}
 			>
-				<Copy className="w-4 h-4" />
+				<Copy className={ICON_CLASS} />
 			</GhostIconButton>
 
 			<GhostIconButton
 				onClick={handleSave}
 				ariaLabel="Save"
-				title="Save"
+				title="Save (⌘S)"
+				padding={BUTTON_PADDING}
 				color={theme.colors.success}
 			>
-				<Check className="w-4 h-4" />
+				<Check className={ICON_CLASS} />
 			</GhostIconButton>
 
 			<GhostIconButton
 				onClick={onCancel}
 				ariaLabel="Cancel"
 				title="Cancel (Esc)"
+				padding={BUTTON_PADDING}
 				color={theme.colors.textDim}
 			>
-				<X className="w-4 h-4" />
+				<X className={ICON_CLASS} />
 			</GhostIconButton>
 		</div>,
 		document.body

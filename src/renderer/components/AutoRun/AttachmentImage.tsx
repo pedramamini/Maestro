@@ -307,7 +307,7 @@ export function ImagePreview({
 						onAnnotate();
 					}}
 					title="Annotate image"
-					className="absolute -top-2 -right-9 w-5 h-5 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+					className="absolute -top-2 -left-2 w-5 h-5 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
 					style={{
 						backgroundColor: theme.colors.bgActivity,
 						color: theme.colors.textMain,

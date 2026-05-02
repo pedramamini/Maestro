@@ -561,7 +561,7 @@ export const InputArea = React.memo(function InputArea(props: InputAreaProps) {
 									);
 								}}
 								title="Annotate image"
-								className="absolute top-0.5 right-7 bg-black/60 text-white rounded-full p-1 shadow-md hover:bg-black/80 transition-colors opacity-90 hover:opacity-100 outline-none focus-visible:ring-2 focus-visible:ring-white"
+								className="absolute top-0.5 left-0.5 bg-black/60 text-white rounded-full p-1 shadow-md hover:bg-black/80 transition-colors opacity-90 hover:opacity-100 outline-none focus-visible:ring-2 focus-visible:ring-white"
 							>
 								<PenLine className="w-3 h-3" />
 							</button>

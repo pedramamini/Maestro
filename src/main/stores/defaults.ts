@@ -75,7 +75,7 @@ export const SETTINGS_DEFAULTS: MaestroSettings = {
 	lastSelectedPromptId: null,
 	spellCheck: false,
 	annotatorPenColor: '#9146FF',
-	annotatorPenSize: 16,
+	annotatorPenSize: 10,
 	annotatorThinning: 0.5,
 	annotatorSmoothing: 0.5,
 	annotatorStreamline: 0.5,
