@@ -730,11 +730,11 @@ export const DEV_TEAMS_SETTINGS: SearchableSetting[] = [
 		tabLabel: 'Dev Teams',
 		label: 'Dev Teams',
 		description:
-			'Configure per-project runner, fixer, reviewer, and merger role assignments for Agent Dispatch',
+			'Configure per-project runner, fixer, reviewer, and merger role assignments for Maestro Board automation',
 		keywords: [
 			'dev crew',
 			'roles',
-			'agent dispatch',
+			'maestro board',
 			'runner',
 			'fixer',
 			'reviewer',

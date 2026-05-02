@@ -1,18 +1,17 @@
 /**
  * AgentDispatchModal
  *
- * Thin modal shell wrapping the Agent Dispatch views (Fleet + Kanban).
+ * Thin modal shell wrapping the Maestro Board work view.
  * Mirrors the SymphonyModal pattern: portal-mounted, layer-stack registered,
  * Escape-to-close, backdrop click to close.
  */
 
-import { useState, useRef } from 'react';
+import { useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { X, Server, LayoutDashboard } from 'lucide-react';
+import { X } from 'lucide-react';
 import type { Theme } from '../../types';
 import { useModalLayer } from '../../hooks/ui/useModalLayer';
 import { MODAL_PRIORITIES } from '../../constants/modalPriorities';
-import { FleetView } from './FleetView';
 import { KanbanBoard } from './KanbanBoard';
 
 export interface AgentDispatchModalProps {
@@ -21,10 +20,7 @@ export interface AgentDispatchModalProps {
 	onClose: () => void;
 }
 
-type Tab = 'fleet' | 'kanban';
-
 export function AgentDispatchModal({ theme, isOpen, onClose }: AgentDispatchModalProps) {
-	const [activeTab, setActiveTab] = useState<Tab>('kanban');
 	const onCloseRef = useRef(onClose);
 	onCloseRef.current = onClose;
 
@@ -33,11 +29,6 @@ export function AgentDispatchModal({ theme, isOpen, onClose }: AgentDispatchModa
 	});
 
 	if (!isOpen) return null;
-
-	const tabs: { id: Tab; label: string; icon: React.ReactNode }[] = [
-		{ id: 'kanban', label: 'Work Board', icon: <LayoutDashboard className="w-4 h-4" /> },
-		{ id: 'fleet', label: 'Fleet', icon: <Server className="w-4 h-4" /> },
-	];
 
 	return createPortal(
 		<div
@@ -70,26 +61,6 @@ export function AgentDispatchModal({ theme, isOpen, onClose }: AgentDispatchModa
 						<span className="text-sm font-bold" style={{ color: theme.colors.textMain }}>
 							Maestro Board
 						</span>
-						{/* Tabs */}
-						<div
-							className="flex items-center gap-1 rounded-lg p-0.5"
-							style={{ backgroundColor: theme.colors.bgActivity }}
-						>
-							{tabs.map((tab) => (
-								<button
-									key={tab.id}
-									onClick={() => setActiveTab(tab.id)}
-									className="flex items-center gap-1.5 px-3 py-1 rounded text-xs font-medium transition-colors"
-									style={{
-										backgroundColor: activeTab === tab.id ? theme.colors.bgMain : 'transparent',
-										color: activeTab === tab.id ? theme.colors.textMain : theme.colors.textDim,
-									}}
-								>
-									{tab.icon}
-									{tab.label}
-								</button>
-							))}
-						</div>
 					</div>
 					<button
 						onClick={onClose}
@@ -103,8 +74,7 @@ export function AgentDispatchModal({ theme, isOpen, onClose }: AgentDispatchModa
 
 				{/* Content */}
 				<div className="flex-1 overflow-hidden">
-					{activeTab === 'kanban' && <KanbanBoard theme={theme} />}
-					{activeTab === 'fleet' && <FleetView theme={theme} />}
+					<KanbanBoard theme={theme} />
 				</div>
 			</div>
 		</div>,

@@ -239,12 +239,10 @@ interface QuickActionsModalProps {
 	// Maestro Cue
 	onOpenMaestroCue?: () => void;
 	onConfigureCue?: (session: Session) => void;
-	// Agent Dispatch
+	// Maestro Board
 	onOpenAgentDispatch?: () => void;
 	// Delivery Planner
 	onOpenDeliveryPlanner?: () => void;
-	// Planning Pipeline
-	onOpenPlanningPipeline?: () => void;
 	// Conversational PRD Planner
 	onOpenConversationalPrd?: () => void;
 }
@@ -346,7 +344,6 @@ export const QuickActionsModal = memo(function QuickActionsModal(props: QuickAct
 		onConfigureCue,
 		onOpenAgentDispatch,
 		onOpenDeliveryPlanner,
-		onOpenPlanningPipeline,
 		onOpenConversationalPrd,
 	} = props;
 
@@ -1582,14 +1579,14 @@ export const QuickActionsModal = memo(function QuickActionsModal(props: QuickAct
 					},
 				]
 			: []),
-		// Maestro Board - fleet and work board
+		// Maestro Board - full project-scoped work board
 		...(onOpenAgentDispatch
 			? [
 					{
 						id: 'agentDispatch',
 						label: 'Maestro Board',
 						shortcut: shortcuts.openAgentDispatch,
-						subtext: 'View Work Graph board and dev crew status',
+						subtext: 'Open the local Work Graph board for this project',
 						action: () => {
 							onOpenAgentDispatch();
 							setQuickActionOpen(false);
@@ -1607,21 +1604,6 @@ export const QuickActionsModal = memo(function QuickActionsModal(props: QuickAct
 						subtext: 'Manage PRDs, epics, and local Work Graph sync',
 						action: () => {
 							onOpenDeliveryPlanner();
-							setQuickActionOpen(false);
-						},
-					},
-				]
-			: []),
-		// Planning Pipeline
-		...(onOpenPlanningPipeline
-			? [
-					{
-						id: 'planningPipeline',
-						label: 'Planning Pipeline',
-						shortcut: shortcuts.openPlanningPipeline,
-						subtext: 'View planning stage pipeline dashboard',
-						action: () => {
-							onOpenPlanningPipeline();
 							setQuickActionOpen(false);
 						},
 					},

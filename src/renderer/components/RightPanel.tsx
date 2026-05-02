@@ -16,6 +16,7 @@ import {
 	Play,
 	XCircle,
 	Users,
+	LayoutDashboard,
 } from 'lucide-react';
 import { Spinner } from './ui/Spinner';
 import type { Session, Theme, RightPanelTab, BatchRunState } from '../types';
@@ -24,6 +25,7 @@ import { FileExplorerPanel } from './FileExplorerPanel';
 import { HistoryPanel, HistoryPanelHandle } from './HistoryPanel';
 import { AutoRun, AutoRunHandle } from './AutoRun';
 import { RolesPanel } from './RightPanel/RolesPanel/RolesPanel';
+import { KanbanBoard } from './AgentDispatch/KanbanBoard';
 import { AutoRunExpandedModal } from './AutoRun/AutoRunExpandedModal';
 import { formatShortcutKeys } from '../utils/shortcutFormatter';
 import { ConfirmModal } from './ConfirmModal';
@@ -454,6 +456,7 @@ export const RightPanel = memo(
 					{(
 						[
 							'files',
+							'board',
 							'history',
 							...(autoRunDisabled ? [] : ['autorun']),
 							...(agentDispatchEnabled ? ['roles'] : []),
@@ -469,13 +472,16 @@ export const RightPanel = memo(
 							}}
 							data-tour={`${tab}-tab`}
 						>
+							{tab === 'board' && <LayoutDashboard className="w-3 h-3" />}
 							{tab === 'roles' && <Users className="w-3 h-3" />}
 							<span>
-								{tab === 'autorun'
-									? 'Auto Run'
-									: tab === 'roles'
-										? 'Dev Crew'
-										: tab.charAt(0).toUpperCase() + tab.slice(1)}
+								{tab === 'board'
+									? 'Board'
+									: tab === 'autorun'
+										? 'Auto Run'
+										: tab === 'roles'
+											? 'Dev Crew'
+											: tab.charAt(0).toUpperCase() + tab.slice(1)}
 							</span>
 						</button>
 					))}
@@ -496,7 +502,9 @@ export const RightPanel = memo(
 				{/* Tab Content */}
 				<div
 					ref={fileTreeContainerRef}
-					className="flex-1 px-4 pb-4 overflow-y-auto overflow-x-hidden outline-none scrollbar-thin"
+					className={`flex-1 overflow-y-auto overflow-x-hidden outline-none scrollbar-thin ${
+						activeRightTab === 'board' ? 'p-0' : 'px-4 pb-4'
+					}`}
 					tabIndex={-1}
 					onClick={(e) => {
 						setActiveFocus('right');
@@ -569,6 +577,12 @@ export const RightPanel = memo(
 								fileTree={filteredFileTree}
 								onFileClick={onFileClick}
 							/>
+						</div>
+					)}
+
+					{activeRightTab === 'board' && (
+						<div data-tour="board-panel" className="h-full">
+							<KanbanBoard theme={theme} />
 						</div>
 					)}
 

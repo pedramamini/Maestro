@@ -2948,9 +2948,6 @@ function MaestroConsoleInner() {
 					onOpenDeliveryPlanner={
 						encoreFeatures.deliveryPlanner ? () => setDeliveryPlannerOpen(true) : undefined
 					}
-					onOpenPlanningPipeline={
-						encoreFeatures.planningPipeline ? () => setPlanningPipelineOpen(true) : undefined
-					}
 					onOpenConversationalPrd={
 						encoreFeatures.conversationalPrd ? () => setConversationalPrdOpen(true) : undefined
 					}

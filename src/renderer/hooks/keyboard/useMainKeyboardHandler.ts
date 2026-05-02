@@ -596,7 +596,7 @@ export function useMainKeyboardHandler(): UseMainKeyboardHandlerReturn {
 				e.preventDefault();
 				ctx.setCueModalOpen?.(true);
 				trackShortcut('openCue');
-			} else if (ctx.isShortcut(e, 'openAgentDispatch') && ctx.encoreFeatures?.agentDispatch) {
+			} else if (ctx.isShortcut(e, 'openAgentDispatch')) {
 				e.preventDefault();
 				ctx.setAgentDispatchOpen?.(true);
 				trackShortcut('openAgentDispatch');

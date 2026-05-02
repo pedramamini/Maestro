@@ -2,7 +2,7 @@
  * DispatchProfileFields — shared field set for editing an AgentDispatchProfile.
  *
  * Renders:
- *   - Fleet member toggle (fleetEnabled)
+ *   - Dev Crew eligibility toggle (fleetEnabled)
  *   - Auto-pickup toggle (autoPickupEnabled)
  *   - Max concurrent claims (numeric input)
  *   - Capability tags (chip list with add/remove)
@@ -90,7 +90,7 @@ export function DispatchProfileFields({
 
 	return (
 		<div className="flex flex-col gap-3">
-			{/* Fleet member toggle */}
+			{/* Dev Crew eligibility toggle */}
 			{showFleetToggle && (
 				<label className="flex items-center gap-2 cursor-pointer">
 					<input
@@ -100,10 +100,10 @@ export function DispatchProfileFields({
 						onChange={(e) => onChange({ ...profile, fleetEnabled: e.target.checked })}
 					/>
 					<span className="text-sm" style={{ color: theme.colors.textMain }}>
-						Fleet member
+						Dev Crew eligible
 					</span>
 					<span className="text-xs" style={{ color: theme.colors.textDim }}>
-						(eligible to receive dispatch work items)
+						(can receive Maestro Board work items)
 					</span>
 				</label>
 			)}

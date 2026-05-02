@@ -132,7 +132,7 @@ import type { AgentError, SessionCliActivity } from '../../shared/types';
 
 export type SessionState = 'idle' | 'busy' | 'waiting_input' | 'connecting' | 'error';
 export type FileChangeType = 'modified' | 'added' | 'deleted';
-export type RightPanelTab = 'files' | 'history' | 'autorun' | 'roles';
+export type RightPanelTab = 'files' | 'board' | 'history' | 'autorun' | 'roles';
 export type SettingsTab =
 	| 'general'
 	| 'shortcuts'

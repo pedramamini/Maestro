@@ -999,7 +999,7 @@ export function EncoreTab({ theme, isOpen }: EncoreTabProps) {
 				)}
 			</div>
 
-			{/* Agent Dispatch Feature Section */}
+			{/* Dev Crew automation section */}
 			<div
 				data-setting-id="encore-agent-dispatch"
 				className="rounded-lg border"
@@ -1031,7 +1031,7 @@ export function EncoreTab({ theme, isOpen }: EncoreTabProps) {
 								className="text-sm font-bold flex items-center gap-2"
 								style={{ color: theme.colors.textMain }}
 							>
-								Agent Dispatch
+								Dev Crew Automation
 								<span
 									className="px-1.5 py-0.5 rounded text-[9px] font-bold uppercase"
 									style={{
@@ -1043,7 +1043,7 @@ export function EncoreTab({ theme, isOpen }: EncoreTabProps) {
 								</span>
 							</div>
 							<div className="text-xs mt-0.5" style={{ color: theme.colors.textDim }}>
-								Fleet view and Kanban work board for dispatching tasks across agents
+								Runner roles, claims, and automatic pickup for Maestro Board work
 							</div>
 						</div>
 					</div>

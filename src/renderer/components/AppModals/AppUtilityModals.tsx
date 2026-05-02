@@ -162,8 +162,6 @@ export interface AppUtilityModalsProps {
 	onOpenAgentDispatch?: () => void;
 	// Delivery Planner
 	onOpenDeliveryPlanner?: () => void;
-	// Planning Pipeline
-	onOpenPlanningPipeline?: () => void;
 	// Conversational PRD Planner
 	onOpenConversationalPrd?: () => void;
 
@@ -388,7 +386,6 @@ export const AppUtilityModals = memo(function AppUtilityModals({
 	// Delivery Planner
 	onOpenDeliveryPlanner,
 	// Planning Pipeline
-	onOpenPlanningPipeline,
 	// Conversational PRD Planner
 	onOpenConversationalPrd,
 	// LightboxModal
@@ -565,7 +562,6 @@ export const AppUtilityModals = memo(function AppUtilityModals({
 					onConfigureCue={onConfigureCue}
 					onOpenAgentDispatch={onOpenAgentDispatch}
 					onOpenDeliveryPlanner={onOpenDeliveryPlanner}
-					onOpenPlanningPipeline={onOpenPlanningPipeline}
 					onOpenConversationalPrd={onOpenConversationalPrd}
 				/>
 			)}

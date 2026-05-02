@@ -14,6 +14,7 @@ import {
 	Server,
 	Bookmark,
 	Brain,
+	LayoutDashboard,
 } from 'lucide-react';
 import { GhostIconButton } from '../ui/GhostIconButton';
 import { Spinner } from '../ui/Spinner';
@@ -23,6 +24,7 @@ import { GitStatusWidget } from '../GitStatusWidget';
 import { useHoverTooltip } from '../../hooks';
 import { useSettingsStore } from '../../stores/settingsStore';
 import { useUIStore } from '../../stores/uiStore';
+import { getModalActions } from '../../stores/modalStore';
 import type { Session, Theme, BatchRunState, AITab } from '../../types';
 import type { AgentCapabilities } from '../../hooks/agent/useAgentCapabilities';
 import { openUrl } from '../../utils/openUrl';
@@ -94,6 +96,7 @@ export const MainPanelHeader = React.memo(function MainPanelHeader({
 	const showSessionIdPill = useSettingsStore((s) => s.showSessionIdPill);
 	const showSessionCostPill = useSettingsStore((s) => s.showSessionCostPill);
 	const rightPanelOpen = useUIStore((s) => s.rightPanelOpen);
+	const { setAgentDispatchOpen } = getModalActions();
 
 	const headerRef = useRef<HTMLDivElement>(null);
 	const gitTooltip = useHoverTooltip(150);
@@ -642,6 +645,16 @@ export const MainPanelHeader = React.memo(function MainPanelHeader({
 							)}
 						</div>
 					)}
+
+				{/* Memory Viewer Button - only show if agent maintains per-project memory */}
+				<button
+					onClick={() => setAgentDispatchOpen(true)}
+					className="p-2 rounded hover:bg-white/5"
+					title={`Open Maestro Board (${formatShortcutKeys(shortcuts.openAgentDispatch.keys)})`}
+					data-tour="maestro-board-button"
+				>
+					<LayoutDashboard className="w-4 h-4" style={{ color: theme.colors.textDim }} />
+				</button>
 
 				{/* Memory Viewer Button - only show if agent maintains per-project memory */}
 				{hasCapability('supportsProjectMemory') && (

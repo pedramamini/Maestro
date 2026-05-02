@@ -1,5 +1,5 @@
 /**
- * KanbanBoard — Agent Dispatch desktop kanban board.
+ * KanbanBoard — Maestro Board desktop work board.
  *
  * Columns correspond to canonical Work Graph lifecycle statuses.
  * Cards support drag/drop to change status (calls lifecycle APIs) and
@@ -16,6 +16,7 @@ import type { AgentDispatchFleetEntry } from '../../../shared/agent-dispatch-typ
 import { agentDispatchService } from '../../services/agentDispatch';
 import { workGraphService } from '../../services/workGraph';
 import { notifyToast } from '../../stores/notificationStore';
+import { useSessionStore, selectActiveSession } from '../../stores/sessionStore';
 import { EmptyState, InlineHelp } from '../ui';
 import { DispatchCard } from './DispatchCard';
 import { DispatchCardDetail } from './DispatchCardDetail';
@@ -233,9 +234,15 @@ function deriveAvailableValues(items: WorkItem[]) {
 
 export interface KanbanBoardProps {
 	theme: Theme;
+	/**
+	 * Project scope for the board. Undefined uses the active agent project.
+	 * Null intentionally shows all projects.
+	 */
+	projectPath?: string | null;
 }
 
-export const KanbanBoard = memo(function KanbanBoard({ theme }: KanbanBoardProps) {
+export const KanbanBoard = memo(function KanbanBoard({ theme, projectPath }: KanbanBoardProps) {
+	const activeSession = useSessionStore(selectActiveSession);
 	const [allItems, setAllItems] = useState<WorkItem[]>([]);
 	const [fleet, setFleet] = useState<AgentDispatchFleetEntry[]>([]);
 	const [loading, setLoading] = useState(true);
@@ -276,7 +283,13 @@ export const KanbanBoard = memo(function KanbanBoard({ theme }: KanbanBoardProps
 	// Derived data
 	// ---------------------------------------------------------------------------
 
-	const filteredItems = useMemo(() => applyFilters(allItems, filters), [allItems, filters]);
+	const effectiveProjectPath =
+		projectPath === undefined ? (activeSession?.projectRoot ?? null) : projectPath;
+	const projectItems = useMemo(() => {
+		if (!effectiveProjectPath) return allItems;
+		return allItems.filter((item) => item.projectPath === effectiveProjectPath);
+	}, [allItems, effectiveProjectPath]);
+	const filteredItems = useMemo(() => applyFilters(projectItems, filters), [projectItems, filters]);
 
 	const columnItems = useMemo<Record<WorkItemStatus, WorkItem[]>>(() => {
 		const map = Object.fromEntries(COLUMNS.map((c) => [c.status, [] as WorkItem[]])) as Record<
@@ -291,7 +304,7 @@ export const KanbanBoard = memo(function KanbanBoard({ theme }: KanbanBoardProps
 		return map;
 	}, [filteredItems]);
 
-	const available = useMemo(() => deriveAvailableValues(allItems), [allItems]);
+	const available = useMemo(() => deriveAvailableValues(projectItems), [projectItems]);
 
 	// ---------------------------------------------------------------------------
 	// Drag/drop
@@ -321,7 +334,7 @@ export const KanbanBoard = memo(function KanbanBoard({ theme }: KanbanBoardProps
 			const workItemId = e.dataTransfer.getData('workItemId');
 			if (!workItemId) return;
 
-			const item = allItems.find((i) => i.id === workItemId);
+			const item = projectItems.find((i) => i.id === workItemId);
 			if (!item || item.status === targetStatus) {
 				setDraggingId(null);
 				return;
@@ -341,7 +354,7 @@ export const KanbanBoard = memo(function KanbanBoard({ theme }: KanbanBoardProps
 			// If dropped on the claimed column, we attempt a manual assign to a ready agent
 			if (targetStatus === 'claimed') {
 				const readyAgent = fleet.find((a) => a.readiness === 'ready' || a.readiness === 'idle');
-				const droppedItem = allItems.find((i) => i.id === workItemId);
+				const droppedItem = projectItems.find((i) => i.id === workItemId);
 				if (readyAgent && droppedItem) {
 					try {
 						await agentDispatchService.assignManually({
@@ -377,7 +390,7 @@ export const KanbanBoard = memo(function KanbanBoard({ theme }: KanbanBoardProps
 				void load();
 			}
 		},
-		[allItems, fleet, load]
+		[projectItems, fleet, load]
 	);
 
 	const handleDragEnd = useCallback(() => {
@@ -412,12 +425,12 @@ export const KanbanBoard = memo(function KanbanBoard({ theme }: KanbanBoardProps
 			>
 				<div className="flex items-center gap-2">
 					<span className="text-sm font-bold" style={{ color: theme.colors.textMain }}>
-						Agent Dispatch
+						Maestro Board
 					</span>
 					<span className="text-xs" style={{ color: theme.colors.textDim }}>
-						{filteredItems.length !== allItems.length
-							? `${filteredItems.length} / ${allItems.length} items`
-							: `${allItems.length} items`}
+						{effectiveProjectPath
+							? `${filteredItems.length !== projectItems.length ? `${filteredItems.length} / ` : ''}${projectItems.length} project items`
+							: `${filteredItems.length !== allItems.length ? `${filteredItems.length} / ` : ''}${allItems.length} items`}
 					</span>
 				</div>
 				<div className="flex items-center gap-2">
@@ -472,8 +485,8 @@ export const KanbanBoard = memo(function KanbanBoard({ theme }: KanbanBoardProps
 					title="Failed to load board"
 					description={error}
 					primaryAction={{ label: 'Retry', onClick: () => void load() }}
-					helpHref="https://docs.runmaestro.ai/agent-dispatch"
-					helpLabel="Agent Dispatch docs"
+					helpHref="https://docs.runmaestro.ai"
+					helpLabel="Maestro docs"
 					className="flex-1"
 				/>
 			)}
@@ -483,19 +496,23 @@ export const KanbanBoard = memo(function KanbanBoard({ theme }: KanbanBoardProps
 				<div className="flex flex-1 min-h-0">
 					{/* Columns */}
 					<div className="flex-1 overflow-x-auto overflow-y-hidden">
-						{!loading && allItems.length === 0 ? (
+						{!loading && projectItems.length === 0 ? (
 							<div className="flex flex-col items-center justify-center h-full">
 								<EmptyState
 									theme={theme}
 									icon={<Inbox className="w-10 h-10" />}
 									title="No work items yet"
-									description="Add tasks to the Work Graph to start dispatching."
-									helpHref="https://docs.runmaestro.ai/agent-dispatch"
-									helpLabel="Learn about Agent Dispatch"
+									description={
+										effectiveProjectPath
+											? 'No local Work Graph items for the active project yet.'
+											: 'Add tasks to the Work Graph to start dispatching.'
+									}
+									helpHref="https://docs.runmaestro.ai"
+									helpLabel="Learn about Maestro"
 								/>
 								<div className="mt-1">
-									<InlineHelp label="What is Agent Dispatch?">
-										Agent Dispatch routes Work Graph items to agents automatically. Create tasks via
+									<InlineHelp label="What is Maestro Board?">
+										Maestro Board routes Work Graph items to agents automatically. Create tasks via
 										the Delivery Planner or Work Graph MCP tools, then come back here to watch them
 										move through the board.
 									</InlineHelp>
