@@ -9,7 +9,7 @@
  *   3. Posting a comment on the linked GitHub issue
  *
  * #444: work-graph SQLite removed. The sweeper uses the ClaimTracker (in-memory)
- * and GithubClient (GitHub as truth) instead of the DB.
+ * and the GitHub project coordinator (GitHub as truth) instead of the DB.
  *
  * This is intentionally separate from the pmAudit on-demand runner (#434):
  *   - sweeper = continuous background auto-release
@@ -18,9 +18,15 @@
 
 import { getClaimTracker, type ClaimInfo } from '../agent-dispatch/claim-tracker';
 import { getGithubClient } from '../agent-dispatch/github-client';
+import { getGithubProjectCoordinator } from '../agent-dispatch/github-project-coordinator';
+import {
+	getProjectReferenceForPath,
+	getProjectRepoSlug,
+} from '../agent-dispatch/github-project-mapping';
 import { auditLog } from '../agent-dispatch/dispatch-audit-log';
 import { logger } from '../utils/logger';
 import { DELIVERY_PLANNER_GITHUB_REPOSITORY } from '../delivery-planner/github-safety';
+import { getSettingsStore } from '../stores';
 
 const LOG_CONTEXT = '[StaleSweeper]';
 
@@ -74,17 +80,23 @@ async function runSweep(staleMs: number): Promise<void> {
 
 async function releaseStale(claim: ClaimInfo): Promise<void> {
 	const tracker = getClaimTracker();
-	const client = getGithubClient();
 
 	try {
 		// 1. Clear AI Assigned Slot and reset AI Status on GitHub
-		await client.setItemFieldValue(claim.projectId, claim.projectItemId, 'AI Assigned Slot', '');
-		await client.setItemFieldValue(
-			claim.projectId,
-			claim.projectItemId,
-			'AI Status',
-			'Tasks Ready'
-		);
+		const settingsStore = getSettingsStore();
+		const project = getProjectReferenceForPath(settingsStore, claim.projectPath);
+		if (project) {
+			await getGithubProjectCoordinator().releaseItem(project, claim.projectItemId);
+		} else {
+			const client = getGithubClient();
+			await client.setItemFieldValue(claim.projectId, claim.projectItemId, 'AI Assigned Slot', '');
+			await client.setItemFieldValue(
+				claim.projectId,
+				claim.projectItemId,
+				'AI Status',
+				'Tasks Ready'
+			);
+		}
 
 		// 2. Remove from in-memory tracker
 		tracker.removeClaim(claim.agentSessionId, claim.role);
@@ -123,10 +135,19 @@ async function releaseStale(claim: ClaimInfo): Promise<void> {
 }
 
 async function postStaleComment(claim: ClaimInfo): Promise<void> {
-	const client = getGithubClient();
-	await client.addItemComment(
+	const settingsStore = getSettingsStore();
+	const project = getProjectReferenceForPath(settingsStore, claim.projectPath);
+	const repoSlug = getProjectRepoSlug(settingsStore, claim.projectPath);
+	const body =
+		'**Agent timeout** — claim auto-released after missing heartbeat. Item returned to Tasks Ready.';
+	if (project && repoSlug) {
+		await getGithubProjectCoordinator().addItemComment(project, claim.issueNumber, repoSlug, body);
+		return;
+	}
+
+	await getGithubClient().addItemComment(
 		claim.issueNumber,
 		DELIVERY_PLANNER_GITHUB_REPOSITORY,
-		'**Agent timeout** — claim auto-released after missing heartbeat. Item returned to Tasks Ready.'
+		body
 	);
 }

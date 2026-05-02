@@ -36,6 +36,8 @@ import type { SettingsStoreInterface } from '../../stores/types';
 import { logger } from '../../utils/logger';
 import { getClaimTracker } from '../../agent-dispatch/claim-tracker';
 import { getGithubClient } from '../../agent-dispatch/github-client';
+import { getGithubProjectCoordinator } from '../../agent-dispatch/github-project-coordinator';
+import { getProjectReferenceForPath } from '../../agent-dispatch/github-project-mapping';
 import { auditLog } from '../../agent-dispatch/dispatch-audit-log';
 
 const LOG_CONTEXT = '[AgentDispatch]';
@@ -176,19 +178,24 @@ export function registerAgentDispatchHandlers(deps: AgentDispatchHandlerDependen
 						error: `No active claim for projectItemId: ${input.projectItemId}`,
 					};
 				}
-				const client = getGithubClient();
-				await client.setItemFieldValue(
-					claim.projectId,
-					claim.projectItemId,
-					'AI Assigned Slot',
-					''
-				);
-				await client.setItemFieldValue(
-					claim.projectId,
-					claim.projectItemId,
-					'AI Status',
-					'Tasks Ready'
-				);
+				const project = getProjectReferenceForPath(deps.settingsStore, claim.projectPath);
+				if (project) {
+					await getGithubProjectCoordinator().releaseItem(project, claim.projectItemId);
+				} else {
+					const client = getGithubClient();
+					await client.setItemFieldValue(
+						claim.projectId,
+						claim.projectItemId,
+						'AI Assigned Slot',
+						''
+					);
+					await client.setItemFieldValue(
+						claim.projectId,
+						claim.projectItemId,
+						'AI Status',
+						'Tasks Ready'
+					);
+				}
 				tracker.removeClaim(claim.agentSessionId, claim.role);
 				auditLog('release', {
 					actor: input.agentSessionId ?? 'user',

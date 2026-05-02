@@ -13,7 +13,10 @@
  * args[0] === '-C' and args[2] for the subcommand (e.g. 'rev-parse', 'remote').
  */
 
-import { describe, expect, it, vi, beforeEach } from 'vitest';
+import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
+import * as fs from 'fs/promises';
+import * as os from 'os';
+import * as path from 'path';
 
 // ── Mock execFileNoThrow ─────────────────────────────────────────────────────
 vi.mock('../../utils/execFile', () => ({
@@ -26,11 +29,14 @@ vi.mock('../../utils/ssh-command-builder', () => ({
 }));
 
 import { execFileNoThrow } from '../../utils/execFile';
+import { buildSshCommand } from '../../utils/ssh-command-builder';
 import { discoverGithubProject } from '../github-project-discovery';
 import type { ExecResult } from '../../utils/execFile';
 
 // Typed helpers
 const mockExec = execFileNoThrow as ReturnType<typeof vi.fn>;
+const mockBuildSshCommand = buildSshCommand as ReturnType<typeof vi.fn>;
+const tempProjectPaths: string[] = [];
 
 const ok = (stdout: string, stderr = ''): ExecResult => ({ stdout, stderr, exitCode: 0 });
 const fail = (stderr: string, exitCode: number | string = 1): ExecResult => ({
@@ -46,6 +52,14 @@ const projectListJson = JSON.stringify({
 
 // A valid new-project JSON
 const newProjectJson = JSON.stringify({ id: 'pid-new', number: 99, title: 'my-repo AI Project' });
+
+async function writeProjectConfig(filename: string, config: unknown): Promise<string> {
+	const projectPath = await fs.mkdtemp(path.join(os.tmpdir(), 'maestro-gh-discovery-'));
+	tempProjectPaths.push(projectPath);
+	await fs.mkdir(path.join(projectPath, '.maestro'));
+	await fs.writeFile(path.join(projectPath, '.maestro', filename), JSON.stringify(config), 'utf-8');
+	return projectPath;
+}
 
 /**
  * Helper: does this git call match the given subcommand?
@@ -78,6 +92,13 @@ function setupHappyPath() {
 
 beforeEach(() => {
 	vi.clearAllMocks();
+	mockBuildSshCommand.mockResolvedValue({ command: 'ssh', args: ['-stub'] });
+});
+
+afterEach(() => {
+	return Promise.all(
+		tempProjectPaths.splice(0).map((p) => fs.rm(p, { recursive: true, force: true }))
+	);
 });
 
 // ── gh CLI missing ───────────────────────────────────────────────────────────
@@ -222,6 +243,131 @@ describe('GH_AUTH_REQUIRED', () => {
 			expect(result.error.code).toBe('GH_AUTH_REQUIRED');
 			expect(result.error.message).toContain('gh auth login');
 		}
+	});
+});
+
+// ── Project-local config ─────────────────────────────────────────────────────
+
+describe('project-local config', () => {
+	it('uses .maestro/project.json before git remote and project-title matching', async () => {
+		const projectPath = await writeProjectConfig('project.json', {
+			owner: 'configured-owner',
+			repo: 'configured-repo',
+			projectNumber: 77,
+			projectId: 'configured-project-id',
+			projectTitle: 'Configured Board',
+			defaultBranch: 'trunk',
+		});
+
+		mockExec.mockImplementation(async (cmd: string, args: string[]) => {
+			if (cmd === 'gh' && args[0] === '--version') return ok('gh version 2.40.0');
+			if (cmd === 'gh' && args[0] === 'auth') return ok('Logged in');
+			return fail(`unexpected command: ${cmd} ${args.join(' ')}`, 1);
+		});
+
+		const result = await discoverGithubProject(projectPath);
+		expect(result.ok).toBe(true);
+		if (result.ok) {
+			expect(result.mapping.owner).toBe('configured-owner');
+			expect(result.mapping.repo).toBe('configured-repo');
+			expect(result.mapping.projectNumber).toBe(77);
+			expect(result.mapping.projectId).toBe('configured-project-id');
+			expect(result.mapping.projectTitle).toBe('Configured Board');
+			expect(result.mapping.defaultBranch).toBe('trunk');
+		}
+		expect(mockExec).not.toHaveBeenCalledWith('git', expect.any(Array));
+		expect(mockExec).not.toHaveBeenCalledWith('gh', expect.arrayContaining(['project', 'list']));
+	});
+
+	it('views the configured project when projectId or projectTitle is missing', async () => {
+		const projectPath = await writeProjectConfig('github.json', {
+			githubProject: {
+				owner: 'configured-owner',
+				repo: 'configured-repo',
+				projectNumber: '88',
+			},
+		});
+
+		mockExec.mockImplementation(async (cmd: string, args: string[]) => {
+			if (cmd === 'gh' && args[0] === '--version') return ok('gh version 2.40.0');
+			if (cmd === 'gh' && args[0] === 'auth') return ok('Logged in');
+			if (cmd === 'gh' && args[0] === 'project' && args[1] === 'view') {
+				return ok(JSON.stringify({ id: 'viewed-project-id', number: 88, title: 'Viewed Board' }));
+			}
+			return fail(`unexpected command: ${cmd} ${args.join(' ')}`, 1);
+		});
+
+		const result = await discoverGithubProject(projectPath);
+		expect(result.ok).toBe(true);
+		if (result.ok) {
+			expect(result.mapping.owner).toBe('configured-owner');
+			expect(result.mapping.repo).toBe('configured-repo');
+			expect(result.mapping.projectNumber).toBe(88);
+			expect(result.mapping.projectId).toBe('viewed-project-id');
+			expect(result.mapping.projectTitle).toBe('Viewed Board');
+		}
+		expect(mockExec).toHaveBeenCalledWith('gh', [
+			'project',
+			'view',
+			'88',
+			'--owner',
+			'configured-owner',
+			'--format',
+			'json',
+		]);
+		expect(mockExec).not.toHaveBeenCalledWith('git', expect.any(Array));
+	});
+
+	it('reads project config over SSH before falling back to remote git discovery', async () => {
+		mockBuildSshCommand.mockResolvedValue({ command: 'ssh', args: ['remote-cat'] });
+		mockExec.mockImplementation(async (cmd: string, args: string[]) => {
+			if (cmd === 'gh' && args[0] === '--version') return ok('gh version 2.40.0');
+			if (cmd === 'gh' && args[0] === 'auth') return ok('Logged in');
+			if (cmd === 'ssh' && args[0] === 'remote-cat') {
+				return ok(
+					JSON.stringify({
+						github: {
+							owner: 'ssh-owner',
+							repo: 'ssh-repo',
+							projectNumber: 9,
+							projectId: 'ssh-project-id',
+							projectTitle: 'SSH Board',
+						},
+					})
+				);
+			}
+			return fail(`unexpected command: ${cmd} ${args.join(' ')}`, 1);
+		});
+
+		const result = await discoverGithubProject({
+			projectPath: '/remote/project',
+			sshRemoteConfig: { enabled: true, remoteId: 'remote-1' },
+			sshStore: {
+				getSshRemotes: () => [
+					{
+						id: 'remote-1',
+						name: 'Remote',
+						host: 'example.com',
+						port: 22,
+						username: 'dev',
+						privateKeyPath: '',
+						enabled: true,
+					},
+				],
+			},
+		});
+
+		expect(result.ok).toBe(true);
+		if (result.ok) {
+			expect(result.mapping.owner).toBe('ssh-owner');
+			expect(result.mapping.repo).toBe('ssh-repo');
+			expect(result.mapping.projectNumber).toBe(9);
+		}
+		expect(mockBuildSshCommand).toHaveBeenCalledWith(expect.objectContaining({ id: 'remote-1' }), {
+			command: 'cat',
+			args: ['/remote/project/.maestro/project.json'],
+		});
+		expect(mockExec).not.toHaveBeenCalledWith('git', expect.any(Array));
 	});
 });
 

@@ -23,6 +23,10 @@
 
 import type { GithubProjectItem } from '../agent-dispatch/github-client';
 import { getGithubClient } from '../agent-dispatch/github-client';
+import {
+	getGithubProjectCoordinator,
+	type GithubProjectReference,
+} from '../agent-dispatch/github-project-coordinator';
 import { getClaimTracker } from '../agent-dispatch/claim-tracker';
 import { auditLog } from '../agent-dispatch/dispatch-audit-log';
 import { logger } from '../utils/logger';
@@ -55,8 +59,10 @@ export interface AuditContext {
 	 * projectRoleSlots store. Used by check ORPHANED_SLOT_AGENT.
 	 */
 	projectRoleSlots?: Partial<Record<string, string>>;
-	/** GitHub project ID for write operations (setItemFieldValue). */
-	projectId: string;
+	/** GitHub project coordinates for coordinator-backed reads/writes. */
+	project?: GithubProjectReference;
+	/** GitHub project ID for legacy write operations (setItemFieldValue). */
+	projectId?: string;
 }
 
 export interface AuditReport {
@@ -87,9 +93,8 @@ const checkStaleClaim: AuditCheck = {
 				message: `AI Assigned Slot="${slot}" but no in-memory claim exists (likely stale from previous run).`,
 				severity: 'auto-fix',
 				autoFixAction: async () => {
-					const client = getGithubClient();
-					await client.setItemFieldValue(ctx.projectId, item.id, 'AI Assigned Slot', '');
-					await client.setItemFieldValue(ctx.projectId, item.id, 'AI Status', 'Tasks Ready');
+					await setAuditItemFieldValue(ctx, item.id, 'AI Assigned Slot', '');
+					await setAuditItemFieldValue(ctx, item.id, 'AI Status', 'Tasks Ready');
 					auditLog('heartbeat_stale', {
 						actor: 'pm-audit-runner',
 						workItemId: item.id,
@@ -109,9 +114,8 @@ const checkStaleClaim: AuditCheck = {
 			message: `AI Assigned Slot="${slot}" but last heartbeat was ${Math.round((ctx.now - lastBeat) / 1000)}s ago (threshold: ${ctx.staleClaimMs / 1000}s).`,
 			severity: 'auto-fix',
 			autoFixAction: async () => {
-				const client = getGithubClient();
-				await client.setItemFieldValue(ctx.projectId, item.id, 'AI Assigned Slot', '');
-				await client.setItemFieldValue(ctx.projectId, item.id, 'AI Status', 'Tasks Ready');
+				await setAuditItemFieldValue(ctx, item.id, 'AI Assigned Slot', '');
+				await setAuditItemFieldValue(ctx, item.id, 'AI Status', 'Tasks Ready');
 				auditLog('heartbeat_stale', {
 					actor: 'pm-audit-runner',
 					workItemId: item.id,
@@ -210,8 +214,7 @@ const checkInProgressNoRole: AuditCheck = {
 			message: `"${item.title ?? item.id}" is In Progress but has no AI Role. Auto-setting Status to Blocked.`,
 			severity: 'auto-fix',
 			autoFixAction: async () => {
-				const client = getGithubClient();
-				await client.setItemFieldValue(ctx.projectId, item.id, 'AI Status', 'Blocked');
+				await setAuditItemFieldValue(ctx, item.id, 'AI Status', 'Blocked');
 				auditLog('auto_fix', {
 					actor: 'pm-audit-runner',
 					workItemId: item.id,
@@ -300,20 +303,9 @@ export async function runAudit(ctx: AuditContext): Promise<AuditReport> {
 		checkDoneNoCode,
 	];
 
-	const client = getGithubClient();
 	let items: GithubProjectItem[];
 	try {
-		items = await client.listProjectItems({
-			statusIn: [
-				'Idea',
-				'PRD Draft',
-				'Refinement',
-				'Tasks Ready',
-				'In Progress',
-				'In Review',
-				'Blocked',
-			],
-		});
+		items = await listAuditItems(ctx);
 	} catch (err) {
 		logger.warn(
 			`pmAudit: GitHub query failed — ${err instanceof Error ? err.message : String(err)}`,
@@ -363,4 +355,43 @@ export async function runAudit(ctx: AuditContext): Promise<AuditReport> {
 	}
 
 	return report;
+}
+
+const AUDIT_STATUS_FILTER = [
+	'Idea',
+	'PRD Draft',
+	'Refinement',
+	'Tasks Ready',
+	'In Progress',
+	'In Review',
+	'Blocked',
+];
+
+async function listAuditItems(ctx: AuditContext): Promise<GithubProjectItem[]> {
+	if (ctx.project) {
+		const snapshot = await getGithubProjectCoordinator().getBoardSnapshot(ctx.project);
+		return snapshot.items.filter((item) =>
+			AUDIT_STATUS_FILTER.includes(item.fields['AI Status'] ?? '')
+		);
+	}
+
+	return getGithubClient().listProjectItems({
+		statusIn: AUDIT_STATUS_FILTER,
+	});
+}
+
+async function setAuditItemFieldValue(
+	ctx: AuditContext,
+	itemId: string,
+	fieldName: string,
+	value: string
+): Promise<void> {
+	if (ctx.project) {
+		await getGithubProjectCoordinator().setItemFieldValue(ctx.project, itemId, fieldName, value);
+		return;
+	}
+
+	const client = getGithubClient();
+	const projectId = ctx.projectId ?? (ctx.projectId = await client.readProjectId());
+	await client.setItemFieldValue(projectId, itemId, fieldName, value);
 }

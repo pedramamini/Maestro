@@ -106,6 +106,7 @@ export interface MaestroSettings {
 			projectNumber: number;
 			projectId: string;
 			projectTitle: string;
+			defaultBranch?: string;
 			discoveredAt: string;
 		}
 	>;

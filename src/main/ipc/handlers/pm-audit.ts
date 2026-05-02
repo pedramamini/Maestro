@@ -17,7 +17,8 @@ import { runAudit } from '../../pm-audit/audit-runner';
 import type { AuditReport } from '../../pm-audit/audit-runner';
 import type { SettingsStoreInterface } from '../../stores/types';
 import { logger } from '../../utils/logger';
-import { getGithubClient } from '../../agent-dispatch/github-client';
+import { getProjectReferenceForPath } from '../../agent-dispatch/github-project-mapping';
+import type { GithubProjectReference } from '../../agent-dispatch/github-project-coordinator';
 
 const LOG_CONTEXT = '[PmAudit]';
 
@@ -25,6 +26,8 @@ const LOG_CONTEXT = '[PmAudit]';
 export interface PmAuditRunOptions {
 	/** Override the staleness threshold in milliseconds. Default: 5 minutes. */
 	staleClaimMs?: number;
+	/** Project path used to resolve per-project GitHub Projects v2 coordinates. */
+	projectPath?: string;
 	/**
 	 * Per-project role slot map (role → agentId). When omitted, check
 	 * ORPHANED_SLOT_AGENT is skipped for this run.
@@ -53,15 +56,15 @@ export function registerPmAuditHandlers(deps: PmAuditHandlerDependencies): void 
 		}
 
 		try {
-			// Resolve the GitHub project ID once (cached after first call)
-			const client = getGithubClient();
-			const projectId = await client.readProjectId();
+			const project = opts.projectPath
+				? getProjectReferenceForPath(deps.settingsStore, opts.projectPath)
+				: getOnlyProjectReference(deps.settingsStore);
 
 			const report = await runAudit({
 				now: Date.now(),
 				staleClaimMs: opts.staleClaimMs ?? 5 * 60 * 1000,
 				projectRoleSlots: opts.projectRoleSlots,
-				projectId,
+				...(project && { project }),
 			});
 
 			logger.info(
@@ -78,4 +81,14 @@ export function registerPmAuditHandlers(deps: PmAuditHandlerDependencies): void 
 	});
 
 	logger.info('PM Audit IPC handlers registered', LOG_CONTEXT);
+}
+
+function getOnlyProjectReference(
+	settingsStore: SettingsStoreInterface
+): GithubProjectReference | undefined {
+	const map = settingsStore.get<Record<string, unknown>>('projectGithubMap', {});
+	const entries = Object.entries(map);
+	if (entries.length !== 1) return undefined;
+	const [projectPath] = entries[0];
+	return getProjectReferenceForPath(settingsStore, projectPath);
 }

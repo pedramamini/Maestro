@@ -26,10 +26,11 @@ import type { SettingsStoreInterface } from '../../stores/types';
 import { getClaimTracker } from '../../agent-dispatch/claim-tracker';
 import type { ClaimInfo } from '../../agent-dispatch/claim-tracker';
 import { getGithubClient } from '../../agent-dispatch/github-client';
+import { getGithubProjectCoordinator } from '../../agent-dispatch/github-project-coordinator';
 import {
-	getGithubProjectCoordinator,
-	type GithubProjectReference,
-} from '../../agent-dispatch/github-project-coordinator';
+	getProjectReferenceForPath,
+	getProjectRepoSlug,
+} from '../../agent-dispatch/github-project-mapping';
 import { auditLog } from '../../agent-dispatch/dispatch-audit-log';
 import { sweepMergedBranches } from '../../pm-branch-hygiene/branch-cleaner';
 import { DELIVERY_PLANNER_GITHUB_REPOSITORY } from '../../delivery-planner/github-safety';
@@ -64,15 +65,6 @@ export interface PmToolsResult {
 
 export interface PmToolsHandlerDependencies {
 	settingsStore: SettingsStoreInterface;
-}
-
-interface ProjectGithubMapEntry {
-	owner: string;
-	repo: string;
-	projectNumber: number;
-	projectId?: string;
-	projectTitle?: string;
-	discoveredAt?: string;
 }
 
 export function registerPmToolsHandlers(deps: PmToolsHandlerDependencies): void {
@@ -218,38 +210,13 @@ export function registerPmToolsHandlers(deps: PmToolsHandlerDependencies): void 
 
 // ── GitHub project gateway helpers ─────────────────────────────────────────
 
-function getProjectMapping(
-	settingsStore: SettingsStoreInterface,
-	projectPath: string | undefined
-): ProjectGithubMapEntry | undefined {
-	if (!projectPath) return undefined;
-	const map = settingsStore.get<Record<string, ProjectGithubMapEntry>>('projectGithubMap', {});
-	const mapping = map[projectPath];
-	if (!mapping?.owner || !mapping.projectNumber) return undefined;
-	return mapping;
-}
-
-function getProjectReference(
-	settingsStore: SettingsStoreInterface,
-	claim: ClaimInfo
-): GithubProjectReference | undefined {
-	const mapping = getProjectMapping(settingsStore, claim.projectPath);
-	if (!mapping) return undefined;
-
-	return {
-		projectOwner: mapping.owner,
-		projectNumber: mapping.projectNumber,
-		projectPath: claim.projectPath,
-	};
-}
-
 async function setClaimItemFieldValue(
 	settingsStore: SettingsStoreInterface,
 	claim: ClaimInfo,
 	fieldName: string,
 	value: string
 ): Promise<void> {
-	const project = getProjectReference(settingsStore, claim);
+	const project = getProjectReferenceForPath(settingsStore, claim.projectPath);
 	if (project) {
 		await getGithubProjectCoordinator().setItemFieldValue(
 			project,
@@ -268,15 +235,10 @@ async function addClaimItemComment(
 	claim: ClaimInfo,
 	body: string
 ): Promise<void> {
-	const project = getProjectReference(settingsStore, claim);
-	const mapping = getProjectMapping(settingsStore, claim.projectPath);
-	if (project && mapping?.repo) {
-		await getGithubProjectCoordinator().addItemComment(
-			project,
-			claim.issueNumber,
-			`${mapping.owner}/${mapping.repo}`,
-			body
-		);
+	const project = getProjectReferenceForPath(settingsStore, claim.projectPath);
+	const repoSlug = getProjectRepoSlug(settingsStore, claim.projectPath);
+	if (project && repoSlug) {
+		await getGithubProjectCoordinator().addItemComment(project, claim.issueNumber, repoSlug, body);
 		return;
 	}
 
