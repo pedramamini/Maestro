@@ -3580,6 +3580,13 @@ interface MaestroAPI {
 			| { success: true; data: import('../shared/project-roles-types').ProjectRoleSlots }
 			| { success: false; error: string }
 		>;
+		list: () => Promise<
+			| {
+					success: true;
+					data: Record<string, import('../shared/project-roles-types').ProjectRoleSlots>;
+			  }
+			| { success: false; error: string }
+		>;
 		set: (
 			projectPath: string,
 			slots: import('../shared/project-roles-types').ProjectRoleSlots

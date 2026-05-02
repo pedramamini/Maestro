@@ -139,6 +139,7 @@ export type SettingsTab =
 	| 'theme'
 	| 'notifications'
 	| 'aicommands'
+	| 'devteams'
 	| 'prompts';
 // Note: ScratchPadMode was removed as part of the Scratchpad → Auto Run migration
 export type FocusArea = 'sidebar' | 'main' | 'right';
