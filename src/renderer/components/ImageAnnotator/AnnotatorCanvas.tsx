@@ -807,7 +807,7 @@ export const AnnotatorCanvas = forwardRef<SVGSVGElement, AnnotatorCanvasProps>(
 									if (tool === 'eraser') eraseStrokeAt(idx);
 								};
 								return (
-									<g key={`stroke-${idx}`}>
+									<g key={`stroke-${s.id}`}>
 										<path
 											d={d}
 											fill={s.style.color}

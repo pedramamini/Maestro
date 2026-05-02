@@ -784,6 +784,14 @@ export function registerAutorunHandlers(
 					const remotePath = `${folderPath}/${normalizedPathPosix}`;
 					logger.debug(`${LOG_CONTEXT} replaceImage via SSH: ${remotePath}`, LOG_CONTEXT);
 
+					// Mirror the local branch's "overwrite only" contract — without
+					// the existence check, a stale annotator save could silently
+					// recreate a file that was deleted on the remote.
+					const stat = await statRemote(remotePath, sshConfig);
+					if (!stat.success) {
+						throw new Error('Image file not found');
+					}
+
 					const result = await writeFileRemote(remotePath, imageBuffer, sshConfig);
 					if (!result.success) {
 						throw new Error(result.error || 'Failed to write remote image file');

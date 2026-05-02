@@ -290,12 +290,14 @@ export const AutoRunLightbox = memo(
 					{/* Annotate image - only for local attachments */}
 					{!lightboxExternalUrl && onAnnotate && (
 						<button
+							type="button"
 							onClick={(e) => {
 								e.stopPropagation();
 								triggerAnnotate();
 							}}
 							className="bg-white/10 hover:bg-white/20 text-white rounded-full p-3 backdrop-blur-sm transition-colors"
 							title={`Annotate image (${formatShortcutKeys(['Meta', 'e'])})`}
+							aria-label="Annotate image"
 						>
 							<PenLine className="w-5 h-5" />
 						</button>

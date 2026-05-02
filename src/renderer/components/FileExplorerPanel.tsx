@@ -1436,7 +1436,10 @@ function FileExplorerPanelInner(props: FileExplorerPanelProps) {
 					{/* Show loading progress when file tree is actively loading */}
 					{session.fileTreeLoading &&
 						(() => {
-							const isRemote = !!(session.sshRemoteId || session.sessionSshRemoteConfig?.enabled);
+							// Reuse the same SSH detection as `sshRemoteId` above (line ~769)
+							// — gating on `.enabled` here would diverge if a session has a
+							// configured `remoteId` but `enabled === false`, or vice versa.
+							const isRemote = !!sshRemoteId;
 							return (
 								<FileTreeLoadingProgress
 									theme={theme}

@@ -302,12 +302,14 @@ export function ImagePreview({
 			/>
 			{onAnnotate && (
 				<button
+					type="button"
 					onClick={(e) => {
 						e.stopPropagation();
 						onAnnotate();
 					}}
 					title="Annotate image"
-					className="absolute -top-2 -left-2 w-5 h-5 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+					aria-label="Annotate image"
+					className="absolute -top-2 -left-2 w-5 h-5 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 focus-visible:opacity-100 transition-opacity outline-none focus-visible:ring-2 focus-visible:ring-offset-1"
 					style={{
 						backgroundColor: theme.colors.bgActivity,
 						color: theme.colors.textMain,

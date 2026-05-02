@@ -525,7 +525,7 @@ export const GroupChatInput = React.memo(function GroupChatInput({
 			{/* Staged images preview */}
 			{stagedImages.length > 0 && (
 				<div className="flex gap-2 mb-2 flex-wrap">
-					{stagedImages.map((img, idx) => (
+					{stagedImages.map((img) => (
 						<div key={img} className="relative group">
 							<img
 								src={img}
@@ -535,16 +535,21 @@ export const GroupChatInput = React.memo(function GroupChatInput({
 								onClick={() => onOpenLightbox?.(img, stagedImages, 'staged')}
 							/>
 							<button
+								type="button"
 								onClick={(e) => {
 									e.stopPropagation();
+									// Match by content rather than captured `idx` — index can
+									// shift if the user removes another staged image while the
+									// annotator is open.
 									useImageAnnotatorStore
 										.getState()
 										.openAnnotator(img, (newDataUrl) =>
-											setStagedImages((prev) => prev.map((s, i) => (i === idx ? newDataUrl : s)))
+											setStagedImages((prev) => prev.map((s) => (s === img ? newDataUrl : s)))
 										);
 								}}
 								title="Annotate image"
-								className="absolute -top-1 -left-1 w-4 h-4 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+								aria-label="Annotate image"
+								className="absolute -top-1 -left-1 w-4 h-4 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 focus-visible:opacity-100 transition-opacity outline-none focus-visible:ring-2 focus-visible:ring-white"
 								style={{
 									backgroundColor: theme.colors.bgActivity,
 									color: theme.colors.textMain,

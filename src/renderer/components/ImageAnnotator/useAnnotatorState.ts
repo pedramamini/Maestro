@@ -18,6 +18,7 @@
  */
 
 import { useCallback, useState } from 'react';
+import { generateId } from '../../utils/ids';
 
 export type AnnotatorTool = 'pen' | 'eraser' | 'pan' | 'rect' | 'ellipse' | 'arrow';
 
@@ -34,6 +35,7 @@ export interface StrokeStyle {
 }
 
 export interface Stroke {
+	id: string;
 	points: StrokePoint[];
 	style: StrokeStyle;
 }
@@ -70,7 +72,7 @@ export interface AnnotatorView {
 
 const INITIAL_VIEW: AnnotatorView = { x: 0, y: 0, scale: 1 };
 
-type HistoryEntry = { kind: 'stroke' } | { kind: 'shape'; id: string };
+type HistoryEntry = { kind: 'stroke'; id: string } | { kind: 'shape'; id: string };
 
 export interface UseAnnotatorStateReturn {
 	strokes: Stroke[];
@@ -129,17 +131,22 @@ export function useAnnotatorState(): UseAnnotatorStateReturn {
 	const endStroke = useCallback((style: StrokeStyle) => {
 		setCurrentPoints((prev) => {
 			if (prev.length === 0) return prev;
-			setStrokes((s) => [...s, { points: prev, style }]);
-			setHistory((h) => [...h, { kind: 'stroke' }]);
+			const id = generateId();
+			setStrokes((s) => [...s, { id, points: prev, style }]);
+			setHistory((h) => [...h, { kind: 'stroke', id }]);
 			return [];
 		});
 	}, []);
 
+	// Erase removes the stroke and its matching history entry so a subsequent
+	// `undo()` doesn't pop a different stroke than the one the user erased.
 	const eraseStrokeAt = useCallback((index: number) => {
 		setStrokes((prev) => {
 			if (index < 0 || index >= prev.length) return prev;
+			const erased = prev[index];
 			const next = prev.slice();
 			next.splice(index, 1);
+			setHistory((h) => h.filter((entry) => !(entry.kind === 'stroke' && entry.id === erased.id)));
 			return next;
 		});
 	}, []);
@@ -193,7 +200,9 @@ export function useAnnotatorState(): UseAnnotatorStateReturn {
 			if (prev.length === 0) return prev;
 			const last = prev[prev.length - 1];
 			if (last.kind === 'stroke') {
-				setStrokes((s) => (s.length === 0 ? s : s.slice(0, -1)));
+				// Match by id so undo removes the same stroke that history points
+				// at, even if earlier strokes were erased mid-session.
+				setStrokes((s) => s.filter((stroke) => stroke.id !== last.id));
 			} else {
 				setShapes((s) => s.filter((sh) => sh.id !== last.id));
 				setSelectedShapeId((sel) => (sel === last.id ? null : sel));

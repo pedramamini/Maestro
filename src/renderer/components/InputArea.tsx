@@ -554,13 +554,18 @@ export const InputArea = React.memo(function InputArea(props: InputAreaProps) {
 								/>
 							</button>
 							<button
+								type="button"
 								onClick={(e) => {
 									e.stopPropagation();
+									// Match by content rather than captured `idx`: if other
+									// thumbnails are removed while the annotator is open the
+									// indices shift, but the data URL we opened with is stable.
 									openAnnotator(img, (newDataUrl) =>
-										setStagedImages((prev) => prev.map((s, i) => (i === idx ? newDataUrl : s)))
+										setStagedImages((prev) => prev.map((s) => (s === img ? newDataUrl : s)))
 									);
 								}}
 								title="Annotate image"
+								aria-label="Annotate image"
 								className="absolute top-0.5 left-0.5 bg-black/60 text-white rounded-full p-1 shadow-md hover:bg-black/80 transition-colors opacity-90 hover:opacity-100 outline-none focus-visible:ring-2 focus-visible:ring-white"
 							>
 								<PenLine className="w-3 h-3" />
