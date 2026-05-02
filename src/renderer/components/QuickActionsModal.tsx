@@ -1582,14 +1582,14 @@ export const QuickActionsModal = memo(function QuickActionsModal(props: QuickAct
 					},
 				]
 			: []),
-		// Agent Dispatch - fleet and work board
+		// Maestro Board - fleet and work board
 		...(onOpenAgentDispatch
 			? [
 					{
 						id: 'agentDispatch',
-						label: 'Agent Dispatch',
+						label: 'Maestro Board',
 						shortcut: shortcuts.openAgentDispatch,
-						subtext: 'View fleet and work item board',
+						subtext: 'View Work Graph board and dev crew status',
 						action: () => {
 							onOpenAgentDispatch();
 							setQuickActionOpen(false);
@@ -1604,7 +1604,7 @@ export const QuickActionsModal = memo(function QuickActionsModal(props: QuickAct
 						id: 'deliveryPlanner',
 						label: 'Delivery Planner',
 						shortcut: shortcuts.openDeliveryPlanner,
-						subtext: 'Manage PRDs, epics, and GitHub sync',
+						subtext: 'Manage PRDs, epics, and local Work Graph sync',
 						action: () => {
 							onOpenDeliveryPlanner();
 							setQuickActionOpen(false);

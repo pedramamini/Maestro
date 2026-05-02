@@ -28,7 +28,7 @@ export function AgentDispatchModal({ theme, isOpen, onClose }: AgentDispatchModa
 	const onCloseRef = useRef(onClose);
 	onCloseRef.current = onClose;
 
-	useModalLayer(MODAL_PRIORITIES.AGENT_DISPATCH, 'Agent Dispatch', () => onCloseRef.current(), {
+	useModalLayer(MODAL_PRIORITIES.AGENT_DISPATCH, 'Maestro Board', () => onCloseRef.current(), {
 		enabled: isOpen,
 	});
 
@@ -68,7 +68,7 @@ export function AgentDispatchModal({ theme, isOpen, onClose }: AgentDispatchModa
 				>
 					<div className="flex items-center gap-3">
 						<span className="text-sm font-bold" style={{ color: theme.colors.textMain }}>
-							Agent Dispatch
+							Maestro Board
 						</span>
 						{/* Tabs */}
 						<div
@@ -95,7 +95,7 @@ export function AgentDispatchModal({ theme, isOpen, onClose }: AgentDispatchModa
 						onClick={onClose}
 						className="p-1.5 rounded-lg transition-colors hover:bg-white/10"
 						style={{ color: theme.colors.textDim }}
-						aria-label="Close Agent Dispatch"
+						aria-label="Close Maestro Board"
 					>
 						<X className="w-4 h-4" />
 					</button>

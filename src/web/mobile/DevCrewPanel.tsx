@@ -4,16 +4,14 @@
  * Renders 4 slot cards (runner / fixer / reviewer / merger) with:
  *   - Role icon + brand colour
  *   - Role label (uppercase)
- *   - Status badge: On (Available) | On (Busy: #N) | Off (Draining: #N) | Off (Idle)
+ *   - Status badge with local Work Graph item IDs for active claims
  *   - Agent assignment (read-only for v1 — edit from desktop)
  *
  * Live claim updates arrive via `agent_dispatch_claim_started` /
  * `agent_dispatch_claim_ended` WebSocket broadcasts pushed by the web server.
  * Initial state is loaded from GET /api/project-roles?projectPath=<path>.
  *
- * Encore-gated: only rendered when the `agentDispatch` feature flag is on
- * (the route returns HTTP 403 when the flag is off, which collapses the panel
- * to an empty-state message).
+ * Backed by local Maestro Board / Work Graph state.
  */
 
 import { useState, useEffect, useCallback } from 'react';
@@ -27,10 +25,6 @@ import type {
 import type { ProjectRoleSlots, RoleSlotAssignment } from '../../shared/project-roles-types';
 import { DISPATCH_ROLES, DISPATCH_ROLE_LABELS } from '../../shared/project-roles-types';
 import type { DispatchRole } from '../../shared/project-roles-types';
-import {
-	LEGACY_HUMPFTECH_OWNER,
-	LEGACY_HUMPFTECH_REPO,
-} from '../../shared/legacy-humpftech-fallback';
 
 // ---------------------------------------------------------------------------
 // Role icon + colour registry — mirrors desktop SlotCard.tsx exactly.
@@ -57,6 +51,7 @@ const ROLE_COLOR: Record<DispatchRole, string> = {
 export interface ActiveClaimInfo {
 	projectPath: string;
 	role: string;
+	projectItemId?: string;
 	issueNumber?: number;
 	issueTitle?: string;
 	claimedAt: string;
@@ -96,17 +91,7 @@ function SlotCard({
 				: 'off-idle'
 		: null;
 
-	const githubNumber = activeClaim?.issueNumber;
-	const workItemLabel = githubNumber ? `#${githubNumber}` : undefined;
-
-	const openGithub = useCallback(() => {
-		if (githubNumber) {
-			window.open(
-				`https://github.com/${LEGACY_HUMPFTECH_OWNER}/${LEGACY_HUMPFTECH_REPO}/issues/${githubNumber}`,
-				'_blank'
-			);
-		}
-	}, [githubNumber]);
+	const workItemLabel = activeClaim?.projectItemId ?? activeClaim?.issueTitle;
 
 	const statusBgColor = (v: StatusVariant) => {
 		if (v === 'on-busy' || v === 'off-draining') return `${colors.warning}25`;
@@ -172,22 +157,20 @@ function SlotCard({
 							<>
 								On (Busy:{' '}
 								{workItemLabel ? (
-									<button
-										onClick={openGithub}
+									<span
 										style={{
 											background: 'none',
 											border: 'none',
 											padding: 0,
-											cursor: 'pointer',
 											color: colors.warning,
 											fontSize: 'inherit',
 											fontWeight: 'inherit',
-											textDecoration: 'underline',
+											fontFamily: 'monospace',
 										}}
 										title={activeClaim?.issueTitle ?? ''}
 									>
 										{workItemLabel}
-									</button>
+									</span>
 								) : (
 									'…'
 								)}
@@ -198,22 +181,20 @@ function SlotCard({
 							<>
 								Off (Draining:{' '}
 								{workItemLabel ? (
-									<button
-										onClick={openGithub}
+									<span
 										style={{
 											background: 'none',
 											border: 'none',
 											padding: 0,
-											cursor: 'pointer',
 											color: colors.warning,
 											fontSize: 'inherit',
 											fontWeight: 'inherit',
-											textDecoration: 'underline',
+											fontFamily: 'monospace',
 										}}
 										title={activeClaim?.issueTitle ?? ''}
 									>
 										{workItemLabel}
-									</button>
+									</span>
 								) : (
 									'…'
 								)}
@@ -266,21 +247,14 @@ export function DevCrewPanel({ projectPath, lastMessage }: DevCrewPanelProps) {
 	const [activeClaims, setActiveClaims] = useState<Map<string, ActiveClaimInfo>>(new Map());
 	const [loading, setLoading] = useState(false);
 	const [error, setError] = useState<string | null>(null);
-	const [featureDisabled, setFeatureDisabled] = useState(false);
-
 	// Load slots + initial claim state from HTTP endpoint
 	const loadData = useCallback(async () => {
 		if (!projectPath) return;
 		setLoading(true);
 		setError(null);
-		setFeatureDisabled(false);
 		try {
 			const url = buildApiUrl(`/project-roles?projectPath=${encodeURIComponent(projectPath)}`);
 			const res = await fetch(url);
-			if (res.status === 403) {
-				setFeatureDisabled(true);
-				return;
-			}
 			if (!res.ok) throw new Error(`HTTP ${res.status}`);
 			const json = await res.json();
 			if (!json.success) throw new Error(json.error ?? 'Unknown error');
@@ -319,6 +293,7 @@ export function DevCrewPanel({ projectPath, lastMessage }: DevCrewPanelProps) {
 				next.set(msg.role, {
 					projectPath: msg.projectPath,
 					role: msg.role,
+					projectItemId: msg.projectItemId,
 					issueNumber: msg.issueNumber,
 					issueTitle: msg.issueTitle,
 					claimedAt: msg.claimedAt,
@@ -342,16 +317,6 @@ export function DevCrewPanel({ projectPath, lastMessage }: DevCrewPanelProps) {
 				style={{ padding: '24px', textAlign: 'center', color: colors.textDim, fontSize: '13px' }}
 			>
 				Open a project to view the Dev Crew.
-			</div>
-		);
-	}
-
-	if (featureDisabled) {
-		return (
-			<div
-				style={{ padding: '24px', textAlign: 'center', color: colors.textDim, fontSize: '13px' }}
-			>
-				Dev Crew requires the Agent Dispatch Encore Feature to be enabled.
 			</div>
 		);
 	}

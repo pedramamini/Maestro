@@ -429,8 +429,8 @@ function AppStandaloneModalsInner({
 					</Suspense>
 				)}
 
-			{/* --- AGENT DISPATCH MODAL (lazy-loaded, Encore Feature) --- */}
-			{encoreFeatures.agentDispatch && agentDispatchOpen && (
+			{/* --- MAESTRO BOARD MODAL (lazy-loaded) --- */}
+			{agentDispatchOpen && (
 				<Suspense fallback={null}>
 					<AgentDispatchModal
 						theme={theme}

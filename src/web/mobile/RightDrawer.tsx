@@ -13,6 +13,7 @@ import { triggerHaptic, HAPTIC_PATTERNS } from './constants';
 import { GitStatusPanel } from './GitStatusPanel';
 import { DocumentCard } from './AutoRunDocumentCard';
 import { DevCrewPanel } from './DevCrewPanel';
+import { MaestroBoardPanel } from './MaestroBoardPanel';
 import { useAutoRun } from '../hooks/useAutoRun';
 import type {
 	AutoRunState,
@@ -25,7 +26,7 @@ import type { UseGitStatusReturn } from '../hooks/useGitStatus';
 /**
  * Tab identifiers for the drawer
  */
-export type RightDrawerTab = 'files' | 'history' | 'autorun' | 'git' | 'dev-crew';
+export type RightDrawerTab = 'board' | 'files' | 'history' | 'autorun' | 'git' | 'dev-crew';
 
 /**
  * Props for RightDrawer component
@@ -56,6 +57,7 @@ export interface RightDrawerProps {
  * Base tab configuration (always visible)
  */
 const BASE_TABS: { id: RightDrawerTab; label: string }[] = [
+	{ id: 'board', label: 'Board' },
 	{ id: 'files', label: 'Files' },
 	{ id: 'history', label: 'History' },
 	{ id: 'autorun', label: 'Auto Run' },
@@ -254,6 +256,7 @@ export function RightDrawer({
 							projectPath={projectPath}
 						/>
 					)}
+					{currentTab === 'board' && <MaestroBoardPanel projectPath={projectPath} />}
 					{currentTab === 'history' && (
 						<HistoryTabContent sessionId={sessionId} projectPath={projectPath} />
 					)}

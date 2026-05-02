@@ -3673,7 +3673,7 @@ interface MaestroAPI {
 		epicList: (req?: PmCommandRequest) => Promise<PmCommandResponse>;
 		/** /PM epic-show <id> — full epic detail including tasks */
 		epicShow: (req: PmCommandRequest) => Promise<PmCommandResponse>;
-		/** /PM epic-sync <id> — GitHub sync via Delivery Planner */
+		/** /PM epic-sync <id> — local Work Graph / mirror sync via Delivery Planner */
 		epicSync: (req: PmCommandRequest) => Promise<PmCommandResponse>;
 		/** /PM epic-start <id> — kick Planning Pipeline for the epic */
 		epicStart: (req: PmCommandRequest) => Promise<PmCommandResponse>;

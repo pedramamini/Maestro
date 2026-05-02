@@ -11,6 +11,7 @@ import { useThemeColors } from '../components/ThemeProvider';
 import { GitStatusPanel } from './GitStatusPanel';
 import { FilesTabContent, HistoryTabContent, AutoRunTabContent } from './RightDrawer';
 import { DevCrewPanel } from './DevCrewPanel';
+import { MaestroBoardPanel } from './MaestroBoardPanel';
 import { useSwipeGestures } from '../hooks/useSwipeGestures';
 import { triggerHaptic, HAPTIC_PATTERNS } from './constants';
 import type {
@@ -47,6 +48,7 @@ export interface RightPanelProps {
 }
 
 const BASE_TABS: { id: RightDrawerTab; label: string }[] = [
+	{ id: 'board', label: 'Board' },
 	{ id: 'files', label: 'Files' },
 	{ id: 'history', label: 'History' },
 	{ id: 'autorun', label: 'Auto Run' },
@@ -286,6 +288,7 @@ export function RightPanel({
 							projectPath={projectPath}
 						/>
 					)}
+					{currentTab === 'board' && <MaestroBoardPanel projectPath={projectPath} />}
 					{currentTab === 'history' && (
 						<HistoryTabContent sessionId={sessionId} projectPath={projectPath} />
 					)}

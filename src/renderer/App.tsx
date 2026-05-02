@@ -468,10 +468,6 @@ function MaestroConsoleInner() {
 	}, [encoreFeatures.maestroCue, setCueModalOpen, closeCueYamlEditor]);
 
 	useEffect(() => {
-		if (!encoreFeatures.agentDispatch) setAgentDispatchOpen(false);
-	}, [encoreFeatures.agentDispatch, setAgentDispatchOpen]);
-
-	useEffect(() => {
 		if (!encoreFeatures.deliveryPlanner) setDeliveryPlannerOpen(false);
 	}, [encoreFeatures.deliveryPlanner, setDeliveryPlannerOpen]);
 
@@ -2948,9 +2944,7 @@ function MaestroConsoleInner() {
 					}
 					onOpenMaestroCue={encoreFeatures.maestroCue ? () => setCueModalOpen(true) : undefined}
 					onConfigureCue={encoreFeatures.maestroCue ? handleConfigureCue : undefined}
-					onOpenAgentDispatch={
-						encoreFeatures.agentDispatch ? () => setAgentDispatchOpen(true) : undefined
-					}
+					onOpenAgentDispatch={() => setAgentDispatchOpen(true)}
 					onOpenDeliveryPlanner={
 						encoreFeatures.deliveryPlanner ? () => setDeliveryPlannerOpen(true) : undefined
 					}

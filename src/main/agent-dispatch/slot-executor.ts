@@ -57,6 +57,7 @@ let _onClaimStarted:
 	| ((e: {
 			projectPath: string;
 			role: string;
+			projectItemId?: string;
 			issueNumber?: number;
 			issueTitle?: string;
 			claimedAt: string;
@@ -74,6 +75,7 @@ export function setSlotExecutorWebBroadcasts(
 	onClaimStarted: (e: {
 		projectPath: string;
 		role: string;
+		projectItemId?: string;
 		issueNumber?: number;
 		issueTitle?: string;
 		claimedAt: string;
@@ -382,6 +384,7 @@ export async function executeSlot(ctx: SlotExecutorContext): Promise<SlotExecuto
 		role,
 		agentId,
 		sessionId: dispatchSessionId,
+		projectItemId: workItem.id,
 		issueNumber: workItem.github?.issueNumber,
 		issueTitle: workItem.title,
 		claimedAt,
@@ -391,6 +394,7 @@ export async function executeSlot(ctx: SlotExecutorContext): Promise<SlotExecuto
 	_onClaimStarted?.({
 		projectPath: workItem.projectPath,
 		role,
+		projectItemId: workItem.id,
 		issueNumber: workItem.github?.issueNumber,
 		issueTitle: workItem.title,
 		claimedAt,

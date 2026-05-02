@@ -553,6 +553,7 @@ export interface AgentDispatchClaimStartedMessage extends ServerMessage {
 	type: 'agent_dispatch_claim_started';
 	projectPath: string;
 	role: string;
+	projectItemId?: string;
 	issueNumber?: number;
 	issueTitle?: string;
 	claimedAt: string;

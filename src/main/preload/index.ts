@@ -233,7 +233,7 @@ contextBridge.exposeInMainWorld('maestro', {
 	// Per-project role slot roster API (#429)
 	projectRoles: createProjectRolesApi(),
 
-	// Delivery Planner API (PRD/Epic/Task lifecycle, GitHub sync, progress)
+	// Delivery Planner API (PRD/Epic/Task lifecycle, local mirror sync, progress)
 	deliveryPlanner: createDeliveryPlannerApi(),
 
 	// Planning Pipeline API (dashboard snapshot)

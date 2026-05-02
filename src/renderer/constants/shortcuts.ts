@@ -86,7 +86,7 @@ export const DEFAULT_SHORTCUTS: Record<string, Shortcut> = {
 	},
 	openAgentDispatch: {
 		id: 'openAgentDispatch',
-		label: 'Agent Dispatch',
+		label: 'Maestro Board',
 		keys: ['Alt', 'd'],
 	},
 	openDeliveryPlanner: {

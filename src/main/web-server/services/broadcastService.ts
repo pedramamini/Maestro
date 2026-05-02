@@ -553,6 +553,7 @@ export class BroadcastService {
 	broadcastClaimStarted(event: {
 		projectPath: string;
 		role: string;
+		projectItemId?: string;
 		issueNumber?: number;
 		issueTitle?: string;
 		claimedAt: string;

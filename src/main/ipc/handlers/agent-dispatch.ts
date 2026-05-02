@@ -48,6 +48,7 @@ export interface AgentDispatchHandlerDependencies {
 export interface AgentDispatchClaimStartedEvent {
 	projectPath: string;
 	role: string;
+	projectItemId?: string;
 	issueNumber: number;
 	issueTitle: string;
 	claimedAt: string;
@@ -93,11 +94,6 @@ export function registerAgentDispatchHandlers(deps: AgentDispatchHandlerDependen
 	// only calls getBoard for initial hydration.
 	// -------------------------------------------------------------------------
 	ipcMain.handle('agentDispatch:getBoard', async (_event) => {
-		const gateError = gate();
-		if (gateError) {
-			logger.debug('agentDispatch flag off — rejecting getBoard', LOG_CONTEXT);
-			return gateError;
-		}
 		try {
 			const claims = getClaimTracker().getAll();
 			// Shape: { items: ClaimInfo[], total: number } — matches board expectation
@@ -114,11 +110,6 @@ export function registerAgentDispatchHandlers(deps: AgentDispatchHandlerDependen
 	// Returns all current fleet entries from the in-memory FleetRegistry.
 	// -------------------------------------------------------------------------
 	ipcMain.handle('agentDispatch:getFleet', async (_event) => {
-		const gateError = gate();
-		if (gateError) {
-			logger.debug('agentDispatch flag off — rejecting getFleet', LOG_CONTEXT);
-			return gateError;
-		}
 		try {
 			const runtime = deps.getRuntime();
 			const data: AgentDispatchFleetEntry[] = runtime ? runtime.fleetRegistry.getEntries() : [];

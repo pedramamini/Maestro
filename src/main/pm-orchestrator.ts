@@ -28,7 +28,7 @@
  *   pm:epic-edit     — /PM epic-edit <id>          open Delivery Planner edit mode
  *   pm:epic-list     — /PM epic-list               table of all epics
  *   pm:epic-show     — /PM epic-show <id>          full epic detail + tasks
- *   pm:epic-sync     — /PM epic-sync <id>          GitHub sync via Delivery Planner
+ *   pm:epic-sync     — /PM epic-sync <id>          Work Graph / mirror sync via Delivery Planner
  *   pm:epic-start    — /PM epic-start <id>         kick Planning Pipeline
  *   pm:issue-start   — /PM issue-start <task-id>   manual claim → Agent Dispatch
  *   pm:issue-show    — /PM issue-show <task-id>    full task detail
@@ -513,7 +513,7 @@ export function registerPmOrchestratorHandlers(deps: PmOrchestratorDependencies)
 					[
 						`**Syncing epic with GitHub: ${item.title}**`,
 						'',
-						'The Delivery Planner is opening to run the GitHub sync.',
+						'The Delivery Planner is opening to run the local Work Graph sync.',
 					].join('\n'),
 					{ epicId: id }
 				);

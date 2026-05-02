@@ -209,7 +209,7 @@ const DEFAULT_ENCORE_FEATURES: EncoreFeatureFlags = {
 	usageStats: true,
 	symphony: true,
 	maestroCue: false,
-	agentDispatch: false,
+	agentDispatch: true,
 	deliveryPlanner: false,
 	planningPipeline: false,
 	conversationalPrd: false,

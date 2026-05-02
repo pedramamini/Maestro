@@ -4,18 +4,12 @@
  * Exposes the per-project role slot config and live claim state over HTTP so
  * the mobile/web Dev Crew panel can read the same data available via IPC.
  *
- * All routes are gated by the `agentDispatch` encore feature flag.  When the
- * flag is off every endpoint returns HTTP 403:
- *
- *   { success: false, code: "FEATURE_DISABLED", feature: "agentDispatch" }
- *
  * Route map:
  *   GET  /$TOKEN/api/project-roles?projectPath=<path>
  *     → { slots: ProjectRoleSlots, claims: ClaimInfo[] }
  */
 
-import { FastifyInstance, FastifyReply } from 'fastify';
-import { requireEncoreFeature } from '../../utils/requireEncoreFeature';
+import { FastifyInstance } from 'fastify';
 import type { ProjectRoleSlots } from '../../../shared/project-roles-types';
 import type { ClaimInfo } from '../../agent-dispatch/claim-tracker';
 import type { SettingsStoreInterface } from '../../stores/types';
@@ -44,16 +38,6 @@ export function registerProjectRolesRoutes(
 	rateLimitConfig: RateLimitConfig,
 	deps: ProjectRolesRouteDependencies
 ): void {
-	/** Return 403 with a feature-disabled body when the encore flag is off. */
-	const replyFeatureDisabled = (reply: FastifyReply) => {
-		return reply.code(403).send({
-			success: false,
-			code: 'FEATURE_DISABLED',
-			feature: 'agentDispatch',
-			timestamp: Date.now(),
-		});
-	};
-
 	// ---------------------------------------------------------------------------
 	// GET /api/project-roles?projectPath=<path>
 	//
@@ -71,12 +55,6 @@ export function registerProjectRolesRoutes(
 			},
 		},
 		async (request, reply) => {
-			const gateError = requireEncoreFeature(deps.settingsStore, 'agentDispatch');
-			if (gateError) {
-				logger.debug('agentDispatch flag off — rejecting GET project-roles', LOG_CONTEXT);
-				return replyFeatureDisabled(reply);
-			}
-
 			const { projectPath } = request.query as { projectPath?: string };
 			if (!projectPath) {
 				return reply.code(400).send({
