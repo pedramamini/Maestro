@@ -158,6 +158,42 @@ describe('DeliveryPlannerGithubSync', () => {
 			undefined
 		);
 	});
+
+	it('creates project single-select fields with GraphQL object syntax', async () => {
+		const calls: string[][] = [];
+		const exec = vi.fn(async (_command: string, args: string[]) => {
+			calls.push(args);
+			if (args[0] === 'project' && args[1] === 'view') {
+				return ok(JSON.stringify({ id: 'project-9', title: 'HumpfAI_2ndBrain AI Project' }));
+			}
+			if (args[0] === 'project' && args[1] === 'field-list') {
+				return ok(JSON.stringify({ fields: [] }));
+			}
+			if (args[0] === 'api' && args[1] === 'graphql') {
+				return ok('{}');
+			}
+			return ok('{}');
+		});
+		const sync = new DeliveryPlannerGithubSync({
+			exec,
+			projectOwner: 'HumpfTech',
+			projectNumber: 9,
+			projectTitle: 'HumpfAI_2ndBrain AI Project',
+		});
+
+		const result = await sync.initProjectFields();
+
+		expect(result.errors).toEqual([]);
+		expect(result.created).toContain('AI Status');
+		const statusMutation = calls
+			.filter((args) => args[0] === 'api' && args[1] === 'graphql')
+			.map((args) => args.find((arg) => arg.startsWith('query=')) ?? '')
+			.find((query) => query.includes('name: "AI Status"'));
+		expect(statusMutation).toContain('singleSelectOptions: [{ name: "Backlog"');
+		expect(statusMutation).toContain('color: GRAY');
+		expect(statusMutation).not.toContain('"name":');
+		expect(statusMutation).not.toContain('"color":');
+	});
 });
 
 function textField(name: string, id: string) {

@@ -3769,6 +3769,8 @@ interface MaestroAPI {
 		run: (opts?: {
 			/** Override the staleness threshold in milliseconds. Default: 5 minutes. */
 			staleClaimMs?: number;
+			/** Project path used to resolve per-project GitHub Projects v2 coordinates. */
+			projectPath?: string;
 			/**
 			 * Per-project role slot map (role → agentId).
 			 * When omitted, the ORPHANED_SLOT_AGENT check is skipped.
