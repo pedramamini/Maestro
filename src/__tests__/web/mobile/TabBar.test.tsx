@@ -1526,6 +1526,51 @@ describe('TabBar', () => {
 			expect(screen.getByText('Unread')).toBeInTheDocument();
 		});
 
+		it('does not flash a single-tab bar when the last unread settles', () => {
+			// When activity clears in the same render where the bell is still on,
+			// the synchronously-derived effectiveShowUnreadOnly should disable the
+			// filter immediately rather than waiting for the cleanup effect.
+			const tabs = [
+				createTab({ id: 'tab-1', name: 'Active' }),
+				createTab({ id: 'tab-2', name: 'Quiet' }),
+				createTab({ id: 'tab-3', name: 'Unread', hasUnread: true }),
+			];
+			const { rerender } = render(
+				<TabBar
+					tabs={tabs}
+					activeTabId="tab-1"
+					onSelectTab={mockOnSelectTab}
+					onNewTab={mockOnNewTab}
+					onCloseTab={mockOnCloseTab}
+				/>
+			);
+
+			fireEvent.click(screen.getByLabelText('Filter unread tabs'));
+			expect(screen.queryByText('Quiet')).not.toBeInTheDocument();
+
+			// Rerender with no unread tabs — without the synchronous derivation
+			// the filter would still be applied for one frame, hiding "Quiet".
+			rerender(
+				<TabBar
+					tabs={[
+						createTab({ id: 'tab-1', name: 'Active' }),
+						createTab({ id: 'tab-2', name: 'Quiet' }),
+						createTab({ id: 'tab-3', name: 'Unread', hasUnread: false }),
+					]}
+					activeTabId="tab-1"
+					onSelectTab={mockOnSelectTab}
+					onNewTab={mockOnNewTab}
+					onCloseTab={mockOnCloseTab}
+				/>
+			);
+
+			// All tabs should be visible immediately after the rerender, with no
+			// pending-effect frame where only "Active" shows.
+			expect(screen.getByText('Active')).toBeInTheDocument();
+			expect(screen.getByText('Quiet')).toBeInTheDocument();
+			expect(screen.getByText('Unread')).toBeInTheDocument();
+		});
+
 		it('reorder math uses the unfiltered tab index when bell is on', () => {
 			// First tab is active (always visible), second is hidden, third is unread.
 			// The visible "Unread" tab is the third in the original array (index 2).

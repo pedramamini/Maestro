@@ -6,7 +6,7 @@
  * Long-press on a tab shows a popover with rename, star, and move actions.
  */
 
-import React, { useState, useCallback, useRef, useEffect } from 'react';
+import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import { useThemeColors } from '../components/ThemeProvider';
 import { useLongPress } from '../hooks/useLongPress';
 import { triggerHaptic, HAPTIC_PATTERNS } from './constants';
@@ -592,17 +592,30 @@ export function TabBar({
 	// indicator dot should appear on the bell button.
 	const hasUnreadTabs = tabs.some(tabHasUnreadActivity);
 
-	// Auto-disable the filter when nothing is left to show, so the user doesn't
-	// end up with a single-tab bar after the unread tabs settle.
+	// Derive the effective filter synchronously so there is no between-paint
+	// frame where only the active tab is visible while the cleanup effect below
+	// is still pending.
+	const effectiveShowUnreadOnly = showUnreadOnly && hasUnreadTabs;
+
+	// Keep the persisted toggle in sync — once activity settles, flip the
+	// state back off so the bell button visually returns to its idle look.
 	useEffect(() => {
 		if (showUnreadOnly && !hasUnreadTabs) {
 			setShowUnreadOnly(false);
 		}
 	}, [showUnreadOnly, hasUnreadTabs]);
 
-	const visibleTabs = showUnreadOnly
+	const visibleTabs = effectiveShowUnreadOnly
 		? tabs.filter((tab) => tab.id === activeTabId || tabHasUnreadActivity(tab))
 		: tabs;
+
+	// Pre-build an id→index map so the render loop's lookup of the original
+	// (unfiltered) tab index stays O(1) instead of O(n) per tab.
+	const tabIndexById = useMemo(() => {
+		const map = new Map<string, number>();
+		tabs.forEach((tab, index) => map.set(tab.id, index));
+		return map;
+	}, [tabs]);
 
 	const canClose = tabs.length > 1;
 
@@ -631,7 +644,7 @@ export function TabBar({
 						triggerHaptic(HAPTIC_PATTERNS.tap);
 						setShowUnreadOnly((prev) => !prev);
 					}}
-					disabled={!showUnreadOnly && !hasUnreadTabs}
+					disabled={!effectiveShowUnreadOnly && !hasUnreadTabs}
 					style={{
 						position: 'relative',
 						display: 'flex',
@@ -640,17 +653,17 @@ export function TabBar({
 						width: '28px',
 						height: '28px',
 						borderRadius: '14px',
-						border: `1px solid ${showUnreadOnly ? colors.accent : colors.border}`,
-						backgroundColor: showUnreadOnly ? colors.accent : colors.bgMain,
-						color: showUnreadOnly ? '#fff' : colors.textDim,
-						cursor: !showUnreadOnly && !hasUnreadTabs ? 'default' : 'pointer',
-						opacity: !showUnreadOnly && !hasUnreadTabs ? 0.4 : 1,
+						border: `1px solid ${effectiveShowUnreadOnly ? colors.accent : colors.border}`,
+						backgroundColor: effectiveShowUnreadOnly ? colors.accent : colors.bgMain,
+						color: effectiveShowUnreadOnly ? '#fff' : colors.textDim,
+						cursor: !effectiveShowUnreadOnly && !hasUnreadTabs ? 'default' : 'pointer',
+						opacity: !effectiveShowUnreadOnly && !hasUnreadTabs ? 0.4 : 1,
 						marginBottom: '4px',
 						padding: 0,
 					}}
-					aria-pressed={showUnreadOnly}
-					aria-label={showUnreadOnly ? 'Showing unread tabs only' : 'Filter unread tabs'}
-					title={showUnreadOnly ? 'Showing unread tabs only' : 'Filter unread tabs'}
+					aria-pressed={effectiveShowUnreadOnly}
+					aria-label={effectiveShowUnreadOnly ? 'Showing unread tabs only' : 'Filter unread tabs'}
+					title={effectiveShowUnreadOnly ? 'Showing unread tabs only' : 'Filter unread tabs'}
 				>
 					<svg
 						width="14"
@@ -665,7 +678,7 @@ export function TabBar({
 						<path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
 						<path d="M13.73 21a2 2 0 0 1-3.46 0" />
 					</svg>
-					{hasUnreadTabs && !showUnreadOnly && (
+					{hasUnreadTabs && !effectiveShowUnreadOnly && (
 						<span
 							style={{
 								position: 'absolute',
@@ -859,7 +872,7 @@ export function TabBar({
 				{visibleTabs.map((tab) => {
 					// Keep tabIndex aligned with the unfiltered tabs array so
 					// Move Left / Move Right reorder math stays correct.
-					const tabIndex = tabs.indexOf(tab);
+					const tabIndex = tabIndexById.get(tab.id) ?? -1;
 					return (
 						<Tab
 							key={tab.id}
