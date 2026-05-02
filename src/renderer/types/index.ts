@@ -56,6 +56,28 @@ export type {
 	AgentDispatchSettings,
 	AgentDispatchSuggestedDefaults,
 } from '../../shared/agent-dispatch-types';
+export type {
+	AgentReadyWorkGraphTag,
+	DeliveryPlannerConcept,
+	DeliveryPlannerConceptWorkItemType,
+	DeliveryPlannerDashboardFilters,
+	DeliveryPlannerDashboardSnapshot,
+	DeliveryPlannerDependencyHint,
+	DeliveryPlannerDependencyPreview,
+	DeliveryPlannerDependencyPreviewRequest,
+	DeliveryPlannerDecompositionRequest,
+	DeliveryPlannerDecompositionResult,
+	DeliveryPlannerConflictHint,
+	DeliveryPlannerGithubSyncSummary,
+	DeliveryPlannerPrdCreateRequest,
+	DeliveryPlannerPrdCreateResult,
+	DeliveryPlannerWorkGraphContractRequest,
+} from '../../shared/delivery-planner-types';
+export {
+	DELIVERY_PLANNER_CONCEPT_TO_WORK_ITEM_TYPE,
+	DELIVERY_PLANNER_DEFAULT_STATUS_BY_CONCEPT,
+	DELIVERY_PLANNER_WORK_GRAPH_CONTRACT_REQUESTS,
+} from '../../shared/delivery-planner-types';
 
 // Re-export types from shared location
 export type {

@@ -4,6 +4,41 @@
  * This file makes the window.maestro API available throughout the renderer.
  */
 
+import type {
+	DeliveryPlannerBugFollowUpRequest,
+	DeliveryPlannerCreatePrdRequest,
+	DeliveryPlannerDecomposeEpicRequest,
+	DeliveryPlannerDecomposePrdRequest,
+	DeliveryPlannerPathResolutionRequest,
+	DeliveryPlannerPathResolutionResult,
+	DeliveryPlannerProgressComment,
+	DeliveryPlannerProgressCommentRequest,
+	DeliveryPlannerProgressEvent,
+	DeliveryPlannerProgressSnapshot,
+	DeliveryPlannerPromoteDocGapRequest,
+	DeliveryPlannerPromoteDocGapResult,
+	DeliveryPlannerSyncRequest,
+} from '../shared/delivery-planner-types';
+import type {
+	AgentReadyWorkFilter,
+	TagDefinition,
+	WorkGraphBroadcastEnvelope,
+	WorkGraphImportInput,
+	WorkGraphImportSummary,
+	WorkGraphListResult,
+	WorkItem,
+	WorkItemClaim,
+	WorkItemClaimCompleteInput,
+	WorkItemClaimInput,
+	WorkItemClaimReleaseInput,
+	WorkItemClaimRenewInput,
+	WorkItemCreateInput,
+	WorkItemEvent,
+	WorkItemFilters,
+	WorkItemSearchFilters,
+	WorkItemUpdateInput,
+} from '../shared/work-graph-types';
+
 // Vite raw imports for .md files
 declare module '*.md?raw' {
 	const content: string;
@@ -3399,6 +3434,38 @@ interface MaestroAPI {
 			inProgress?: unknown[];
 			error?: string;
 		}>;
+	};
+
+	deliveryPlanner: {
+		createPrd: (input: DeliveryPlannerCreatePrdRequest) => Promise<IpcDataResponse<WorkItem>>;
+		decomposePrd: (input: DeliveryPlannerDecomposePrdRequest) => Promise<IpcDataResponse<WorkItem>>;
+		decomposeEpic: (
+			input: DeliveryPlannerDecomposeEpicRequest
+		) => Promise<IpcDataResponse<unknown>>;
+		dashboard: (filters?: {
+			projectPath?: string;
+			gitPath?: string;
+		}) => Promise<
+			IpcDataResponse<import('../shared/delivery-planner-types').DeliveryPlannerDashboardSnapshot>
+		>;
+		sync: (input: DeliveryPlannerSyncRequest) => Promise<IpcDataResponse<WorkItem>>;
+		createBugFollowUp: (
+			input: DeliveryPlannerBugFollowUpRequest
+		) => Promise<IpcDataResponse<WorkItem>>;
+		addProgressComment: (
+			input: DeliveryPlannerProgressCommentRequest
+		) => Promise<IpcDataResponse<{ item: WorkItem; comment: DeliveryPlannerProgressComment }>>;
+		resolvePaths: (
+			input?: DeliveryPlannerPathResolutionRequest
+		) => Promise<IpcDataResponse<DeliveryPlannerPathResolutionResult>>;
+		getProgress: (
+			id: string
+		) => Promise<IpcDataResponse<DeliveryPlannerProgressSnapshot | undefined>>;
+		listProgress: () => Promise<IpcDataResponse<DeliveryPlannerProgressSnapshot[]>>;
+		promoteDocGap: (
+			input: DeliveryPlannerPromoteDocGapRequest
+		) => Promise<IpcDataResponse<DeliveryPlannerPromoteDocGapResult>>;
+		onProgress: (handler: (event: DeliveryPlannerProgressEvent) => void) => () => void;
 	};
 }
 
