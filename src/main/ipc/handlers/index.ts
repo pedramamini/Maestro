@@ -413,7 +413,7 @@ export function registerAllHandlers(deps: HandlerDependencies): void {
 	registerPmHeartbeatHandlers({ settingsStore: deps.settingsStore });
 	// Register PM Init handlers (#445): pm:initRepo idempotent field bootstrap
 	registerPmInitHandlers({ settingsStore: deps.settingsStore });
-	// Register PM Resolve GitHub Project handlers (#447): pm:resolveGithubProject per-project mapping
+	// Register legacy PM Resolve GitHub Project handler (#447): compatibility no-op, no discovery
 	registerPmResolveGithubProjectHandlers({ settingsStore: deps.settingsStore });
 	// Register PM Commands handler: pm:loadCommands for customAICommands dispatch path
 	registerPmCommandsHandlers();

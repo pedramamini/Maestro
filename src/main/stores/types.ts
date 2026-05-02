@@ -97,7 +97,7 @@ export interface MaestroSettings {
 	};
 	// Per-project GitHub project mapping (#447).
 	// Maps projectPath → discovered GitHub Projects v2 coordinates.
-	// This is the persistent cache populated by pm:resolveGithubProject.
+	// Legacy persistent cache formerly populated by pm:resolveGithubProject.
 	projectGithubMap: Record<
 		string,
 		{

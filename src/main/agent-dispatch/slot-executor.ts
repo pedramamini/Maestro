@@ -288,12 +288,12 @@ export async function executeSlot(ctx: SlotExecutorContext): Promise<SlotExecuto
 	const workItemId = workItem.id;
 	const agentId = slotAssignment.agentId;
 
-	// Legacy-label warning: agent:* labels are ignored — AI Status field is the source of truth.
+	// Legacy-label warning: agent:* labels are ignored; Work Graph state is authoritative.
 	const legacyLabels = LEGACY_AGENT_LABEL_NAMES.filter((l) => workItem.tags?.includes(l));
 	if (legacyLabels.length > 0) {
 		logger.warn(
 			`Legacy label(s) detected on issue/item "${workItemId}": [${legacyLabels.join(', ')}]. ` +
-				`These are ignored. Use /PM migrate-labels to convert legacy labels to AI Status field values.`,
+				`These are ignored. Use local Work Graph status/role instead.`,
 			LOG_CONTEXT
 		);
 	}

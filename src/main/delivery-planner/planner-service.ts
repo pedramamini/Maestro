@@ -8,9 +8,9 @@ import type {
 	WorkItemCreateInput,
 	WorkItemDependency,
 	WorkItemFilters,
+	WorkItemGithubReference,
 	WorkItemStatus,
 	WorkItemUpdateInput,
-	WorkItemGithubReference,
 } from '../../shared/work-graph-types';
 import { WORK_GRAPH_READY_TAG } from '../../shared/work-graph-types';
 import { listDeliveryPlannerDashboard, type DeliveryPlannerDashboard } from './dashboard-queries';
@@ -92,16 +92,6 @@ export interface DeliveryPlannerExternalMirror {
 	): Promise<{ mirrorHash?: string }>;
 }
 
-export interface DeliveryPlannerGithubSyncAdapter {
-	syncIssue(item: WorkItem): Promise<{ github: WorkItemGithubReference; created: boolean }>;
-	syncStatus?(item: WorkItem): Promise<void>;
-	addProgressComment?(item: WorkItem, body: string): Promise<void>;
-	createLinkedBugIssue?(input: {
-		bug: WorkItem;
-		related?: WorkItem;
-	}): Promise<WorkItemGithubReference>;
-}
-
 export interface CreatePrdInput {
 	title: string;
 	description?: string;
@@ -151,7 +141,6 @@ export interface DeliveryPlannerServiceOptions {
 	decomposer?: DeliveryPlannerDecomposer;
 	progress?: DeliveryPlannerProgressStore;
 	externalMirror?: DeliveryPlannerExternalMirror;
-	githubSync?: DeliveryPlannerGithubSyncAdapter;
 }
 
 const COMPLETED_STATUSES: WorkItemStatus[] = ['done', 'canceled'];
@@ -162,7 +151,6 @@ export class DeliveryPlannerService {
 	private readonly decomposer?: DeliveryPlannerDecomposer;
 	private readonly progress: DeliveryPlannerProgressStore;
 	private readonly externalMirror?: DeliveryPlannerExternalMirror;
-	private readonly githubSync?: DeliveryPlannerGithubSyncAdapter;
 
 	constructor(options: DeliveryPlannerServiceOptions) {
 		this.workGraph = options.workGraph;
@@ -170,7 +158,6 @@ export class DeliveryPlannerService {
 		this.decomposer = options.decomposer;
 		this.progress = options.progress ?? new InMemoryDeliveryPlannerProgressStore();
 		this.externalMirror = options.externalMirror;
-		this.githubSync = options.githubSync;
 	}
 
 	async createPrd(input: CreatePrdInput): Promise<WorkItem> {
@@ -347,8 +334,9 @@ export class DeliveryPlannerService {
 	}
 
 	async syncGithubIssue(id: string): Promise<WorkItem> {
-		const item = await this.requireItem(id);
-		return this.syncGithub(item);
+		// Compatibility shim for older UI/API callers. GitHub issue sync is no longer part
+		// of PM execution; write the local mirror and keep Work Graph authoritative.
+		return this.syncExternalMirror(id);
 	}
 
 	async updateStatus(
@@ -366,9 +354,6 @@ export class DeliveryPlannerService {
 		});
 
 		await this.events?.publish('workGraph.item.statusChanged', { item });
-		if (this.githubSync?.syncStatus && item.github?.issueNumber) {
-			await this.githubSync.syncStatus(item);
-		}
 		await this.refreshAgentReadyTags(item.projectPath, item.gitPath, actor);
 		return item;
 	}
@@ -402,10 +387,6 @@ export class DeliveryPlannerService {
 				},
 			},
 		});
-		if (this.githubSync?.addProgressComment && updated.github?.issueNumber) {
-			await this.githubSync.addProgressComment(updated, body);
-		}
-
 		return { item: updated, comment };
 	}
 
@@ -421,7 +402,7 @@ export class DeliveryPlannerService {
 		const related = input.relatedWorkItemId
 			? await this.requireItem(input.relatedWorkItemId)
 			: undefined;
-		let item = await this.createWorkItem(
+		const item = await this.createWorkItem(
 			{
 				type: 'bug',
 				status: 'planned',
@@ -440,14 +421,7 @@ export class DeliveryPlannerService {
 			input.actor
 		);
 
-		if (this.githubSync?.createLinkedBugIssue) {
-			const github = await this.githubSync.createLinkedBugIssue({ bug: item, related });
-			item = await this.updateWorkItem({
-				id: item.id,
-				actor: input.actor,
-				patch: { github },
-			});
-		}
+		void related;
 
 		await this.refreshAgentReadyTags(item.projectPath, item.gitPath, input.actor);
 		return this.requireItem(item.id);
@@ -656,43 +630,6 @@ export class DeliveryPlannerService {
 				throw error;
 			}
 			throw new DeliveryPlannerMirrorConflictError('External mirror sync failed', error);
-		}
-	}
-
-	private async syncGithub(item: WorkItem): Promise<WorkItem> {
-		if (!this.githubSync) {
-			return item;
-		}
-
-		const operation = this.progress.start('github-sync', { workItemId: item.id }, 3);
-		try {
-			this.progress.update(operation.id, {
-				message: 'Syncing GitHub issue',
-				completedSteps: 1,
-			});
-			const result = await this.githubSync.syncIssue(item);
-			let syncedItem = item;
-			if (
-				result.github.issueNumber !== item.github?.issueNumber ||
-				result.github.url !== item.github?.url
-			) {
-				syncedItem = await this.updateWorkItem({
-					id: item.id,
-					patch: { github: result.github },
-				});
-			}
-			this.progress.update(operation.id, {
-				message: 'Syncing GitHub issue status',
-				completedSteps: 2,
-			});
-			if (this.githubSync.syncStatus && syncedItem.github?.issueNumber) {
-				await this.githubSync.syncStatus(syncedItem);
-			}
-			this.progress.complete(operation.id, 'GitHub sync completed');
-			return syncedItem;
-		} catch (error) {
-			this.progress.fail(operation.id, error instanceof Error ? error : String(error), true);
-			throw new DeliveryPlannerGithubError('GitHub sync failed', error);
 		}
 	}
 

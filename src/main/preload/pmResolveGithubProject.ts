@@ -1,7 +1,7 @@
 /**
- * Preload API for the pm:resolveGithubProject IPC channel (#447).
+ * Preload API for the legacy pm:resolveGithubProject IPC channel (#447).
  *
- * Exposes window.maestro.pmResolveGithubProject.resolve() so the renderer
+ * Exposes window.maestro.pmResolveGithubProject.resolve() for compatibility.
  * can look up (or discover) the GitHub project mapping for a project path.
  */
 

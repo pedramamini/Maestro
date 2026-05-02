@@ -4,10 +4,6 @@ import type { Theme } from '../../../types';
 import type { Session } from '../../../types';
 import type { DispatchRole, RoleSlotAssignment } from '../../../../shared/project-roles-types';
 import { DISPATCH_ROLE_LABELS } from '../../../../shared/project-roles-types';
-import {
-	LEGACY_HUMPFTECH_OWNER,
-	LEGACY_HUMPFTECH_REPO,
-} from '../../../../shared/legacy-humpftech-fallback';
 
 // Role icons + brand colors — match the sidebar SessionItem icons exactly.
 const ROLE_ICON_COMPONENT: Record<
@@ -32,6 +28,7 @@ export interface ActiveClaimInfo {
 	role: string;
 	agentId: string;
 	sessionId: string;
+	projectItemId?: string;
 	issueNumber?: number;
 	issueTitle?: string;
 	claimedAt: string;
@@ -64,10 +61,6 @@ export interface SlotCardProps {
 	 * eligible agents for the picker.
 	 */
 	activeRemoteId: string | null;
-	/** GitHub owner for the active project (from projectGithubMap). */
-	githubOwner?: string;
-	/** GitHub repo for the active project (from projectGithubMap). */
-	githubRepo?: string;
 }
 
 /** Normalise a path for comparison (trailing slash removed, lower-case on case-insensitive OSes). */
@@ -84,8 +77,6 @@ export function SlotCard({
 	sessions,
 	activeProjectRoot,
 	activeRemoteId,
-	githubOwner,
-	githubRepo,
 	readOnly = false,
 }: SlotCardProps) {
 	// -----------------------------------------------------------------------
@@ -170,8 +161,7 @@ export function SlotCard({
 	// -----------------------------------------------------------------------
 	// Status badge helpers
 	// -----------------------------------------------------------------------
-	const githubNumber = activeClaim?.issueNumber;
-	const workItemDisplayId = githubNumber ? `#${githubNumber}` : undefined;
+	const workItemDisplayId = activeClaim?.projectItemId ?? activeClaim?.issueTitle;
 
 	type StatusVariant = 'on-available' | 'on-busy' | 'off-draining' | 'off-idle';
 	const statusVariant: StatusVariant | null = assignment
@@ -183,15 +173,6 @@ export function SlotCard({
 				? 'off-draining'
 				: 'off-idle'
 		: null;
-
-	const openGithub = useCallback(() => {
-		if (!githubNumber) return;
-		const owner = githubOwner ?? LEGACY_HUMPFTECH_OWNER;
-		const repo = githubRepo ?? LEGACY_HUMPFTECH_REPO;
-		void window.maestro.shell.openExternal(
-			`https://github.com/${owner}/${repo}/issues/${githubNumber}`
-		);
-	}, [githubNumber, githubOwner, githubRepo]);
 
 	// -----------------------------------------------------------------------
 	// Shared styles
@@ -270,14 +251,13 @@ export function SlotCard({
 								<>
 									{'On (Busy: '}
 									{activeClaim ? (
-										<button
-											className="underline bg-transparent border-none p-0 cursor-pointer"
+										<span
+											className="font-mono"
 											style={{ color: theme.colors.warning, fontSize: 'inherit' }}
-											onClick={openGithub}
 											title={activeClaim?.issueTitle ?? ''}
 										>
 											{workItemDisplayId}
-										</button>
+										</span>
 									) : null}
 									{')'}
 								</>
@@ -286,14 +266,13 @@ export function SlotCard({
 								<>
 									{'Off (Draining: '}
 									{activeClaim ? (
-										<button
-											className="underline bg-transparent border-none p-0 cursor-pointer"
+										<span
+											className="font-mono"
 											style={{ color: theme.colors.warning, fontSize: 'inherit' }}
-											onClick={openGithub}
 											title={activeClaim?.issueTitle ?? ''}
 										>
 											{workItemDisplayId}
-										</button>
+										</span>
 									) : null}
 									{')'}
 								</>

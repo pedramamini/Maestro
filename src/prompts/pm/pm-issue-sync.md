@@ -2,40 +2,26 @@
 
 # /PM issue-sync
 
-GitHub roundtrip sync for a specific task.
+Local PM sync for a specific task.
 
 Task ID: {{ARGS}}
 
 ## What this does
 
-Performs a bidirectional sync between the local Work Graph and GitHub Issues:
+Reconciles local task files, Work Graph item state, and Maestro Board metadata.
 
-**Local → GitHub** (push):
+**Local files → Work Graph**:
 
-- Updates the Issue title and description if changed locally
-- Syncs the status (maps Work Graph status to GitHub Issue state and project board column)
-- Updates labels to reflect current type and priority
-- Posts a progress comment if the status changed since last sync
+- Updates the Work Graph item title and description if changed locally
+- Syncs Work Graph status, type, priority, dependencies, and role
+- Records a Work Graph event if status changed
 
-**GitHub → Local** (pull):
+**Work Graph → local files**:
 
-- If the GitHub Issue has been edited externally, fetches those changes
-- Applies any new comments as Work Graph events
+- Reflects current status and metadata in the local task file if needed
 - Updates the sync timestamp
-
-## Status mapping
-
-| Work Graph Status | GitHub Issue State | Board Column |
-| ----------------- | ------------------ | ------------ |
-| planned / ready   | open               | To Do        |
-| in_progress       | open               | In Progress  |
-| review            | open               | In Review    |
-| blocked           | open               | Blocked      |
-| done              | closed             | Done         |
 
 ## After sync
 
-Confirm what was pushed and what was pulled.
+Confirm what changed in Work Graph and local files.
 If there are conflicts (both sides changed the same field), show a diff and ask which version to keep.
-
-If the task has no GitHub Issue yet, offer to create one.

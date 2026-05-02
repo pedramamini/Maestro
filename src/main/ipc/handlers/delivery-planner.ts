@@ -16,7 +16,6 @@ import { WORK_GRAPH_READY_TAG } from '../../../shared/work-graph-types';
 import type { WorkItem } from '../../../shared/work-graph-types';
 import {
 	DeliveryPlannerDecomposer,
-	DeliveryPlannerGithubSync,
 	DeliveryPlannerService,
 	StructuredDeliveryPlannerDecompositionGateway,
 	indexPlanningArtifacts,
@@ -129,16 +128,8 @@ export function registerDeliveryPlannerHandlers(
 		return createIpcDataHandler(
 			{ context: LOG_CONTEXT, operation: 'sync' },
 			async (i: DeliveryPlannerSyncRequest) => {
-				const target = i.target ?? 'all';
-				let item =
-					target === 'github'
-						? await service.syncGithubIssue(i.workItemId)
-						: await service.syncExternalMirror(i.workItemId);
-				if (target === 'all') {
-					item = await service.syncGithubIssue(item.id);
-					item = await service.syncExternalMirror(item.id);
-				}
-				return item;
+				void i.target;
+				return service.syncExternalMirror(i.workItemId);
 			}
 		)(_event, input);
 	});
@@ -236,7 +227,6 @@ function createDeliveryPlannerService(
 		workGraph,
 		decomposer: new DeliveryPlannerDecomposer(new StructuredDeliveryPlannerDecompositionGateway()),
 		progress,
-		githubSync: new DeliveryPlannerGithubSync(),
 		externalMirror: {
 			syncPrd: (item) => syncExternalMirrorItem(item, 'prd'),
 			syncEpic: (item) => syncExternalMirrorItem(item, 'epic'),

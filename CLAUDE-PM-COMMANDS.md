@@ -4,12 +4,12 @@ The `/PM` slash-command surface has been simplified to two commands: `/PM` (ente
 
 ## Two-Command Surface
 
-| Command                 | Handler           | Purpose                                                                                             |
-| ----------------------- | ----------------- | --------------------------------------------------------------------------------------------------- |
-| `/PM [direction]`       | `builtin:pm-mode` | Enter PM mode. Agent greets as PM, asks what to work on, and drives the conversation.               |
-| `/PM-init [owner/repo]` | `ipc:pm:initRepo` | One-time idempotent setup: discover GitHub project, ensure AI custom fields exist, persist mapping. |
+| Command                 | Handler           | Purpose                                                                               |
+| ----------------------- | ----------------- | ------------------------------------------------------------------------------------- |
+| `/PM [direction]`       | `builtin:pm-mode` | Enter PM mode. Agent greets as PM, asks what to work on, and drives the conversation. |
+| `/PM-init [owner/repo]` | `ipc:pm:initRepo` | One-time idempotent setup: initialize local Maestro Board / Work Graph PM state.      |
 
-There is also `/PM migrate-labels` (`ipc:pm:migrateLegacyLabels`) for one-off migration of legacy `agent:*` labels to the `AI Status` custom field.
+There is also `/PM migrate-labels` (`ipc:pm:migrateLegacyLabels`) as a compatibility endpoint. It no longer calls GitHub because Work Graph is authoritative PM state.
 
 ## How /PM Mode Works
 
@@ -22,27 +22,21 @@ When the user types `/PM` (with or without trailing text):
 The agent in PM mode knows:
 
 - **Persona**: experienced engineering PM — concise, skeptical of scope creep, one question at a time
-- **Workflows**: Plan → Conv-PRD → Epic decompose → GitHub issues → Dispatch claim → PR → merge
-- **State truth**: `AI Status` custom field, never labels
-- **Tools**: `gh` CLI for project queries/edits, Maestro IPC for Conv-PRD, Delivery Planner, Agent Dispatch
+- **Workflows**: Plan → Conv-PRD → Epic decompose → Work Graph tasks → Dispatch claim → PR → merge
+- **State truth**: Maestro Board / Work Graph status and claim rows, never GitHub labels or Project fields
+- **Tools**: Maestro IPC for Conv-PRD, Delivery Planner, Agent Dispatch, and local PM state
 - **When to ask vs. act**: asks for ambiguous/irreversible actions, acts immediately for read-only/bounded requests
 
 ## /PM-init
 
-`/PM-init` is a **real IPC action** (not a prompt). It calls `window.maestro.pmInit.initRepo()` directly in the renderer (`useInputProcessing.ts`) and idempotently creates the following GitHub Projects v2 custom fields:
+`/PM-init` is a **real IPC action** (not a prompt). It calls `window.maestro.pmInit.initRepo()` directly in the renderer (`useInputProcessing.ts`) and idempotently initializes local Maestro Board / Work Graph PM state:
 
-| Field              | Type          | Options                                                                                  |
-| ------------------ | ------------- | ---------------------------------------------------------------------------------------- |
-| AI Status          | Single-select | Backlog, Idea, PRD Draft, Refinement, Tasks Ready, In Progress, In Review, Blocked, Done |
-| AI Role            | Single-select | runner, fixer, reviewer, merger                                                          |
-| AI Stage           | Single-select | prd, epic, task                                                                          |
-| AI Priority        | Single-select | P0, P1, P2, P3                                                                           |
-| AI Parent PRD      | Text          | —                                                                                        |
-| AI Parent Epic     | Text          | —                                                                                        |
-| AI Assigned Slot   | Text          | —                                                                                        |
-| AI Last Heartbeat  | Text          | —                                                                                        |
-| AI Project         | Text          | —                                                                                        |
-| External Mirror ID | Text          | —                                                                                        |
+| Local artifact    | Purpose                                                            |
+| ----------------- | ------------------------------------------------------------------ |
+| `agent-ready` tag | Marks unblocked work eligible for dispatch                         |
+| `maestro-pm` tag  | Marks Work Graph items managed by Maestro Board                    |
+| Work Graph claims | Durable runner/fixer/reviewer/merger ownership and heartbeat state |
+| Work Graph status | Canonical lifecycle state for PM and dispatch                      |
 
 Run once per repo before using `/PM` or any other project management workflows.
 
@@ -102,12 +96,12 @@ The following files in `src/prompts/pm/` are NOT registered slash commands. They
 - `pm-epic-edit.md` — editing an epic
 - `pm-epic-list.md` — listing epics
 - `pm-epic-show.md` — full epic detail
-- `pm-epic-sync.md` — syncing an epic to GitHub
+- `pm-epic-sync.md` — syncing an epic into local Work Graph state
 - `pm-epic-start.md` — kicking the Planning Pipeline
 - `pm-issue-start.md` — manually claiming a task
 - `pm-issue-show.md` — task detail
 - `pm-issue-status.md` — quick task status
-- `pm-issue-sync.md` — GitHub roundtrip for a task
+- `pm-issue-sync.md` — local Work Graph/file reconciliation for a task
 - `pm-next.md` — next eligible work item
 - `pm-status.md` — board snapshot
 - `pm-standup.md` — standup summary

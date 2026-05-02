@@ -378,7 +378,7 @@ export function registerDeliveryPlannerRoutes(
 
 	// ---------------------------------------------------------------------------
 	// POST /api/delivery-planner/sync-github
-	// Trigger GitHub issue sync for a work item.  Body: { workItemId }.
+	// Legacy compatibility route. Writes the local mirror; no GitHub calls.
 	// ---------------------------------------------------------------------------
 	server.post(
 		`/${token}/api/delivery-planner/sync-github`,
@@ -409,7 +409,7 @@ export function registerDeliveryPlannerRoutes(
 			try {
 				const service = deps.getService();
 				if (!service) throw new Error('Delivery Planner service is not running');
-				const data = await service.syncGithubIssue(workItemId);
+				const data = await service.syncExternalMirror(workItemId);
 				return { success: true, data, timestamp: Date.now() };
 			} catch (err) {
 				return handleRouteError(reply, 'POST sync-github', err);
@@ -461,7 +461,7 @@ export function registerDeliveryPlannerRoutes(
 
 	// ---------------------------------------------------------------------------
 	// POST /api/delivery-planner/sync
-	// Trigger combined sync (github + mirror) for a work item.
+	// Trigger local mirror sync for a work item.
 	// Body: DeliveryPlannerSyncRequest — must include workItemId; optional target.
 	// ---------------------------------------------------------------------------
 	server.post(
@@ -494,15 +494,8 @@ export function registerDeliveryPlannerRoutes(
 				const service = deps.getService();
 				if (!service) throw new Error('Delivery Planner service is not running');
 
-				const target = input.target ?? 'all';
-				let item =
-					target === 'github'
-						? await service.syncGithubIssue(input.workItemId)
-						: await service.syncExternalMirror(input.workItemId);
-				if (target === 'all') {
-					item = await service.syncGithubIssue(item.id);
-					item = await service.syncExternalMirror(item.id);
-				}
+				void input.target;
+				const item = await service.syncExternalMirror(input.workItemId);
 				return { success: true, data: item, timestamp: Date.now() };
 			} catch (err) {
 				return handleRouteError(reply, 'POST sync', err);

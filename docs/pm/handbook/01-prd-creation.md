@@ -1,6 +1,6 @@
 # 01 — PRD Creation
 
-A PRD (Product Requirements Document) captures the _what_ and _why_ before any code is written. In Maestro's pipeline, a PRD is a markdown file on disk plus a GitHub Projects v2 item. The file is the spec; the project item tracks its lifecycle.
+A PRD (Product Requirements Document) captures the _what_ and _why_ before any code is written. In Maestro's pipeline, a PRD is a markdown file on disk plus a Work Graph item. The file is the spec; Maestro Board tracks its lifecycle.
 
 ---
 
@@ -12,8 +12,8 @@ The user says any of: "plan X", "I want to build X", "create a PRD for X", "let'
 
 ## Preflight Checks
 
-1. Run `gh auth status`. If unauthenticated, stop and tell the user to run `gh auth login`.
-2. Verify `projectGithubMap` is configured for this project. If not: "GitHub project not configured. Run `/PM-init` first, then come back."
+1. Verify local PM is initialized. If not: "Maestro Board is not initialized for this project. Run `/PM-init` first, then come back."
+2. PM planning and dispatch do not require GitHub auth or project-board access.
 3. Check if `docs/pm/prds/<slug>.md` already exists. If yes: "PRD `<slug>` already exists. Do you want to edit it instead?"
 4. Ensure `docs/pm/prds/` directory exists. Create it if not: `mkdir -p docs/pm/prds/`.
 
@@ -120,54 +120,30 @@ created: <ISO-8601 from: date -u +"%Y-%m-%dT%H:%M:%SZ">
 
 ---
 
-## Creating the GitHub Project Item
+## Creating the Work Graph Item
 
-After writing the file, create a project item and set its initial state:
+After writing the file, create a local Work Graph item and set its initial state:
 
-```bash
-# Step 1: Create a draft item in the project
-gh project item-create <PROJECT_NUMBER> \
-  --owner <OWNER> \
-  --title "<Feature Name>"
-# Returns: item ID
-
-# Step 2: Get field IDs if you don't have them cached
-gh project field-list <PROJECT_NUMBER> --owner <OWNER> --format json \
-  | jq '.fields[] | select(.name | startswith("AI")) | {name, id, options}'
-
-# Step 3: Set AI Status = PRD Draft
-gh project item-edit \
-  --id <ITEM_ID> \
-  --project-id <PROJECT_ID> \
-  --field-id <AI_STATUS_FIELD_ID> \
-  --single-select-option-id <PRD_DRAFT_OPTION_ID>
-
-# Step 4: Set AI Stage = prd
-gh project item-edit \
-  --id <ITEM_ID> \
-  --project-id <PROJECT_ID> \
-  --field-id <AI_STAGE_FIELD_ID> \
-  --single-select-option-id <PRD_OPTION_ID>
-```
+Use Maestro PM tooling to create a `document` Work Graph item tagged for PM/PRD tracking. Set status to `planned` until the epic decomposition is ready.
 
 ### After creation
 
 Confirm to the user:
 
 - "PRD written to `docs/pm/prds/<slug>.md`."
-- "Project item created with AI Status=PRD Draft."
+- "Maestro Board item created with status=planned."
 - "Ready to decompose? Say: `decompose <slug>`."
 
 ---
 
 ## Status Transitions for PRD Items
 
-| Trigger                           | AI Status transition |
-| --------------------------------- | -------------------- |
-| PRD file written + item created   | → PRD Draft          |
-| User finishes reviewing PRD       | → Refinement         |
-| Epic decomposition confirmed      | → Tasks Ready        |
-| Something blocking PRD completion | → Blocked            |
+| Trigger                           | Work Graph status |
+| --------------------------------- | ----------------- |
+| PRD file written + item created   | `planned`         |
+| User finishes reviewing PRD       | `planned`         |
+| Epic decomposition confirmed      | `ready`           |
+| Something blocking PRD completion | `blocked`         |
 
 ---
 
@@ -185,9 +161,9 @@ When the user asks to edit a PRD:
 
 ## File Location Reference
 
-| Artifact               | Path                                     |
-| ---------------------- | ---------------------------------------- |
-| PRD file               | `docs/pm/prds/<slug>.md`                 |
-| Epic file              | `docs/pm/epics/<slug>/epic.md`           |
-| Task file              | `docs/pm/epics/<slug>/<N>.md` (numbered) |
-| GitHub project mapping | Maestro settings → `projectGithubMap`    |
+| Artifact       | Path                                     |
+| -------------- | ---------------------------------------- |
+| PRD file       | `docs/pm/prds/<slug>.md`                 |
+| Epic file      | `docs/pm/epics/<slug>/epic.md`           |
+| Task file      | `docs/pm/epics/<slug>/<N>.md` (numbered) |
+| PM board state | Maestro Board / Work Graph               |

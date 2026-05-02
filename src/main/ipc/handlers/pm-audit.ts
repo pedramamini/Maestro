@@ -23,7 +23,7 @@ const LOG_CONTEXT = '[PmAudit]';
 export interface PmAuditRunOptions {
 	/** Override the staleness threshold in milliseconds. Default: 5 minutes. */
 	staleClaimMs?: number;
-	/** Project path used to resolve per-project GitHub Projects v2 coordinates. */
+	/** Project path used to scope the local Maestro Board / Work Graph audit. */
 	projectPath?: string;
 	/**
 	 * Per-project role slot map (role → agentId). When omitted, check

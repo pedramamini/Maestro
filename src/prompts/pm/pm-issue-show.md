@@ -18,13 +18,13 @@ Created: YYYY-MM-DD | Updated: YYYY-MM-DD
 
 ### Fields
 
-| Field        | Value                   |
-| ------------ | ----------------------- |
-| Source       | <source>                |
-| Priority     | <priority or —>         |
-| Claimed by   | <agent-id or unclaimed> |
-| Claimed at   | YYYY-MM-DD HH:MM or —   |
-| GitHub Issue | #<number> or —          |
+| Field      | Value                   |
+| ---------- | ----------------------- |
+| Source     | <source>                |
+| Priority   | <priority or —>         |
+| Claimed by | <agent-id or unclaimed> |
+| Claimed at | YYYY-MM-DD HH:MM or —   |
+| Trace ID   | Work Graph/Maestro ID   |
 
 ### Description
 

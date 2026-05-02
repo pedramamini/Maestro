@@ -96,7 +96,7 @@ export const SLASH_COMMAND_REGISTRY: SlashCommandDefinition[] = [
 	// Repo bootstrap verb (real IPC action, not a prompt)
 	{
 		verb: '/PM-init',
-		description: 'Bootstrap GitHub Projects v2 AI custom fields for this repo (idempotent)',
+		description: 'Bootstrap local Maestro Board / Work Graph PM state for this repo (idempotent)',
 		args: '[owner/repo]',
 		surfaces: ['desktop', 'web'],
 		aiOnly: true,
@@ -104,10 +104,10 @@ export const SLASH_COMMAND_REGISTRY: SlashCommandDefinition[] = [
 		handler: 'ipc:pm:initRepo',
 	},
 
-	// Label migration (real IPC action — migrates legacy agent:* labels to AI Status field)
+	// Label migration compatibility action for older workflows.
 	{
 		verb: '/PM migrate-labels',
-		description: 'Migrate legacy agent:* labels to AI Status custom field (run once per repo)',
+		description: 'Migrate legacy agent:* labels to local PM state (run once per repo)',
 		surfaces: ['desktop', 'web'],
 		aiOnly: true,
 		encoreFlag: 'pmSuite',

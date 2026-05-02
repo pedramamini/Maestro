@@ -1,10 +1,10 @@
 ---
 title: Delivery Planner
-description: Turn a PRD into tracked GitHub issues and agent-ready tasks using the PRD wizard, decomposition flow, and external mirror.
+description: Turn a PRD into local Work Graph tasks using the PRD wizard, decomposition flow, and external mirror.
 icon: map
 ---
 
-Delivery Planner turns a Product Requirements Document into tracked GitHub issues and agent-ready tasks. Write a PRD in the wizard, decompose it into an epic and tasks, sync each task to GitHub, and watch the dashboard update in real time as agents pick up and complete work.
+Delivery Planner turns a Product Requirements Document into local Work Graph tasks. Write a PRD in the wizard, decompose it into an epic and tasks, and watch the dashboard update in real time as agents pick up and complete work.
 
 > **Note (issue #411 — migration):** Mirror files were previously written to `.claude/ccpm/` (a CCPM-compatible path, which collided with Claude Code's own session-storage directory). The default mirror root has moved to `.maestro/external-mirror/` and the underlying code identifiers have been renamed from `ccpm*` to `externalMirror*` / `mirror*`. Slash commands remain `/ccpm …` by user-facing convention.
 
@@ -89,34 +89,34 @@ Tasks that cannot start until another finishes are linked as dependencies. The d
 
 ---
 
-## GitHub Sync
+## Local Mirror Sync
 
-Sync any Work Graph item to a GitHub issue in one click.
+Sync any Work Graph item to the local markdown mirror in one click. GitHub is not required for Delivery Planner or dispatch state.
 
 ### Syncing a Task
 
 1. Open the task detail view in the dashboard or kanban board.
-2. Click **Sync to GitHub**.
-3. Maestro creates or updates a GitHub issue, writes back the `issueNumber` and URL to the Work Graph item, and sets the following project fields:
+2. Click **Sync Mirror**.
+3. Maestro writes the item to `.maestro/external-mirror` and keeps the Work Graph item authoritative:
 
-| Field                | Value                             |
-| -------------------- | --------------------------------- |
-| `Work Item Type`     | `task`                            |
-| `External Mirror ID` | e.g. `delivery-planner#task-3`    |
-| `Agent Pickup`       | `Ready` / `Claimed` / `Not Ready` |
-| `Parent Work Item`   | Epic work item ID                 |
+| Field        | Value                                                |
+| ------------ | ---------------------------------------------------- |
+| Work item ID | Maestro / Work Graph item ID                         |
+| Mirror path  | `.maestro/external-mirror/epics/<slug>/tasks/<n>.md` |
+| Status       | Local Work Graph status                              |
+| Parent       | Epic Work Graph item ID                              |
 
-Labels `delivery-planner` and `agent-ready` are applied automatically when the task is marked agent-ready.
+The `delivery-planner` and `agent-ready` tags are local Work Graph tags.
 
 ### Progress Comments
 
-After GitHub sync, you can post progress updates directly to the issue without leaving Maestro:
+You can post progress updates directly to the Work Graph item without leaving Maestro:
 
 1. Open the task detail view.
 2. Type a message in the **Progress Comment** field.
 3. Click **Post Comment**.
 
-The comment is appended to the Work Graph item's metadata and posted to the linked GitHub issue.
+The comment is appended to the Work Graph item's metadata.
 
 ### Bug Follow-Ups
 
@@ -126,7 +126,7 @@ When a task uncovers a defect worth tracking:
 2. Click **New Bug Follow-Up**.
 3. Fill in the title and description.
 
-Maestro creates a `bug` Work Graph item linked to the parent task, creates a GitHub issue with the `bug-follow-up` label, and cross-references both issues.
+Maestro creates a `bug` Work Graph item linked to the parent task.
 
 ### Slash Command
 
@@ -242,9 +242,9 @@ A path slug contains an absolute path or `..` segments that would resolve outsid
 
 If the on-disk external mirror file was modified after the last Delivery Planner write, you'll see a **Mirror Conflict** notice in the task detail view. Choose **Overwrite**, **Skip**, or open the diff view to merge. Work Graph state is always preserved regardless of which option you pick.
 
-### GitHub sync creates duplicate issues
+### Traceability references look wrong
 
-Delivery Planner checks `WorkItem.github.issueNumber` before creating a new issue. Duplicates can appear if the `issueNumber` field was cleared manually. Open the task detail view and enter the existing issue number in the **GitHub Issue** field before syncing again.
+Delivery Planner uses the Work Graph/Maestro item ID for PM traceability. Commits and PRs should reference that ID. GitHub issue numbers are not required for PM execution.
 
 ### Task not appearing in Agent Dispatch
 

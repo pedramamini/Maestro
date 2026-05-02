@@ -207,9 +207,9 @@ Size: <xs | s | m | l | xl> — estimated <N> hours
 
 Show the task table from the epic file. Then ask:
 
-"Does this look right? Say **confirm** to create the epic and task issues in GitHub, or tell me what to change."
+"Does this look right? Say **confirm** to create the epic and task items in Work Graph, or tell me what to change."
 
-Do not create any files or GitHub items until the user confirms. The confirmation is the gate.
+Do not create any files or Work Graph items until the user confirms. The confirmation is the gate.
 
 ---
 
@@ -217,8 +217,8 @@ Do not create any files or GitHub items until the user confirms. The confirmatio
 
 1. Write `docs/pm/epics/<slug>/epic.md`.
 2. Write `docs/pm/epics/<slug>/001.md`, `002.md`, ... for each task.
-3. Proceed to GitHub sync (see handbook/04-github-sync.md).
-4. Set `AI Status = Tasks Ready` on each task item and on the parent PRD item.
+3. Create/update Work Graph task items for each task.
+4. Set dispatchable tasks to `ready` and update the parent PRD/epic item.
 
 ---
 

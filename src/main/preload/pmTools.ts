@@ -13,7 +13,7 @@ import { ipcRenderer } from 'electron';
 export function createPmToolsApi() {
 	return {
 		/**
-		 * Update the Projects v2 Status field for the agent's currently-claimed work item.
+		 * Update the Work Graph status metadata for the agent's currently-claimed work item.
 		 * @param agentSessionId - the calling agent's session ID (used to look up its claim)
 		 * @param status - one of: Idea | PRD Draft | Refinement | Tasks Ready | In Progress | In Review | Blocked | Done
 		 */
@@ -21,7 +21,7 @@ export function createPmToolsApi() {
 			ipcRenderer.invoke('pm:setStatus', { agentSessionId, status }),
 
 		/**
-		 * Update the Projects v2 Role field for the agent's currently-claimed work item.
+		 * Update the Work Graph role metadata for the agent's currently-claimed work item.
 		 * @param agentSessionId - the calling agent's session ID
 		 * @param role - one of: runner | fixer | reviewer | merger
 		 */
@@ -29,10 +29,9 @@ export function createPmToolsApi() {
 			ipcRenderer.invoke('pm:setRole', { agentSessionId, role }),
 
 		/**
-		 * Set the work item to Blocked status, update the Projects v2 Status field,
-		 * and post a GitHub comment with the reason.
+		 * Set the work item to Blocked status and record the reason locally.
 		 * @param agentSessionId - the calling agent's session ID
-		 * @param reason - human-readable explanation (posted as a GitHub comment)
+		 * @param reason - human-readable explanation
 		 */
 		setBlocked: (agentSessionId: string, reason: string) =>
 			ipcRenderer.invoke('pm:setBlocked', { agentSessionId, reason }),

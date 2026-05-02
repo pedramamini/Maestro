@@ -4,34 +4,33 @@ Agent Dispatch documentation for the Maestro codebase. For the main guide, see [
 
 ---
 
-## State Source-of-Truth: AI Status Custom Field, NOT Legacy Labels
+## State Source-of-Truth: Work Graph, NOT GitHub Labels Or Project Fields
 
-**This project uses GitHub Projects v2 custom fields as the sole source of truth for all dispatch state.**
+**This project uses Maestro Board / Work Graph as the source of truth for all dispatch state.**
 
-| Custom field        | Purpose                                            |
-| ------------------- | -------------------------------------------------- |
-| `AI Status`         | Work item lifecycle (Tasks Ready → Done)           |
-| `AI Role`           | Pipeline role (runner / fixer / reviewer / merger) |
-| `AI Stage`          | Planning stage (prd / epic / task)                 |
-| `AI Priority`       | Priority tier (P0–P3)                              |
-| `AI Assigned Slot`  | Which slot owns the current claim                  |
-| `AI Last Heartbeat` | Liveness timestamp for stale-claim detection       |
+| Work Graph state | Purpose                                            |
+| ---------------- | -------------------------------------------------- |
+| `status`         | Work item lifecycle (`ready` → `done`)             |
+| `pipeline`       | Pipeline role (runner / fixer / reviewer / merger) |
+| `priority`       | Dispatch ordering                                  |
+| active claim row | Which slot owns the current claim                  |
+| heartbeat/expiry | Liveness data for stale-claim detection            |
 
 ### Legacy `agent:*` labels
 
-The old Symphony fork-runner used GitHub **labels** (`agent:ready`, `agent:running`, `agent:review`, `agent:failed-validation`) to represent dispatch state. **These labels are decorative and completely ignored by this dispatch system.** The AI Status custom field is the only value the engine reads and writes.
+The old Symphony fork-runner used GitHub **labels** (`agent:ready`, `agent:running`, `agent:review`, `agent:failed-validation`) to represent dispatch state. **These labels are decorative and completely ignored by this dispatch system.** Work Graph status and claim rows are the values the engine reads and writes.
 
 If a repository still has issues labelled with `agent:*` labels:
 
 - The dispatch engine logs a console warning (does NOT fail the dispatch).
-- Run **`/PM migrate-labels`** once per repo to convert legacy labels to the corresponding AI Status values and remove the labels from issues:
+- Run **`/PM migrate-labels`** once per repo to convert legacy labels to the corresponding Work Graph status values and remove the labels from issues:
 
-  | Legacy label              | AI Status value |
-  | ------------------------- | --------------- |
-  | `agent:ready`             | `Tasks Ready`   |
-  | `agent:running`           | `In Progress`   |
-  | `agent:review`            | `In Review`     |
-  | `agent:failed-validation` | `Blocked`       |
+  | Legacy label              | Work Graph status |
+  | ------------------------- | ----------------- |
+  | `agent:ready`             | `ready`           |
+  | `agent:running`           | `in_progress`     |
+  | `agent:review`            | `review`          |
+  | `agent:failed-validation` | `blocked`         |
 
 - After migration, the `agent:*` labels can be deleted from the repo's label list entirely.
 
@@ -41,7 +40,7 @@ Implemented in `src/main/ipc/handlers/pm-migrate-labels.ts`.
 
 ---
 
-Agent Dispatch is the subsystem that selects an agent session, claims a GitHub issue, runs Auto Run documents, and releases the claim when work is done. It lives entirely inside the **Symphony** feature.
+Agent Dispatch is the subsystem that selects an agent session, claims a Work Graph item, runs Auto Run documents, and releases the claim when work is done.
 
 > **v2 simpler 4-slot model (post-#429):** The per-project Roles tab implements the canonical 1-slot-per-role design. Each slot references an existing Left Bar agent by its `Session.id` (`agentId`-based). When a work item is claimed, `executeSlot()` in `src/main/agent-dispatch/slot-executor.ts` resolves that session's config and spawns a fresh process via ProcessManager — mirroring the Cue executor pattern. FleetRegistry's complex eligibility queries are dead code slated for removal in #433.
 
@@ -64,29 +63,30 @@ Agent Dispatch is the subsystem that selects an agent session, claims a GitHub i
 
 ---
 
-## #444 — GitHub-as-Truth Refactor (completed)
+## Local Maestro Board Dispatch
 
-The local SQLite work-graph mirror has been removed as the durable state layer for Agent Dispatch. GitHub Projects v2 (AI-prefixed custom fields) is now the sole source of truth for claim state. The local in-memory `ClaimTracker` and a JSONL audit log replace what was in SQLite.
+Work Graph is the durable state layer for Agent Dispatch. GitHub Projects may exist as an external mirror, but dispatch must not depend on GitHub reads/writes at runtime. The local in-memory `ClaimTracker` is a live cache over Work Graph claims and a JSONL audit log records transitions.
 
 ### What changed
 
-| Before (#443)                                     | After (#444)                                                           |
-| ------------------------------------------------- | ---------------------------------------------------------------------- |
-| SQLite `work_item_claims` table                   | In-memory `ClaimTracker` (`Map<agentSessionId, Map<role, ClaimInfo>>`) |
-| `pm-reverse-sync/` poller syncing GitHub → SQLite | **Deleted** — no local DB to sync to                                   |
-| `workGraph:*` IPC namespace                       | **Removed** — preload/workGraph.ts deleted                             |
-| `renderer/services/workGraph.ts`                  | **Stubbed** (returns empty results) — callers migrate in follow-up     |
-| Heartbeat written to DB column                    | `ClaimTracker.renewHeartbeat(projectItemId)` in-memory only            |
-| pm-audit reads SQLite                             | Queries `client.listProjectItems()` from GitHub                        |
-| RolesPanel polls `getBoard()` every 10 s          | Subscribes to `agentDispatch:claimStarted/claimEnded` IPC events       |
+| Runtime concern            | Current behavior                                                       |
+| -------------------------- | ---------------------------------------------------------------------- |
+| Durable PM state           | Work Graph items, statuses, claims, events                             |
+| Live renderer state        | In-memory `ClaimTracker` (`Map<agentSessionId, Map<role, ClaimInfo>>`) |
+| Dispatch pickup            | `createLocalPmAutoPickupCoordinator()` over `LocalPmService`           |
+| `/PM-init`                 | Initializes local PM tags/conventions                                  |
+| pm tools                   | `setLocalPmStatus`, `setLocalPmRole`, `setLocalPmBlocked`              |
+| heartbeat/stale recovery   | Renews/releases Work Graph claims                                      |
+| Optional GitHub visibility | Mirror/sync layer only; never required for dispatch runtime            |
 
 ### New source files
 
-| File                                            | Role                                                                |
-| ----------------------------------------------- | ------------------------------------------------------------------- |
-| `src/main/agent-dispatch/github-client.ts`      | TTL-cached `gh` CLI wrapper for GitHub Projects v2 reads/writes     |
-| `src/main/agent-dispatch/claim-tracker.ts`      | In-memory claim state (`ClaimTracker` singleton + `ClaimInfo` type) |
-| `src/main/agent-dispatch/dispatch-audit-log.ts` | Appends JSONL to `<userData>/dispatch-audit.jsonl`                  |
+| File                                              | Role                                                                |
+| ------------------------------------------------- | ------------------------------------------------------------------- |
+| `src/main/local-pm/service.ts`                    | Work Graph-backed local PM service                                  |
+| `src/main/agent-dispatch/local-pm-auto-pickup.ts` | Dispatch adapter over the local PM service                          |
+| `src/main/agent-dispatch/claim-tracker.ts`        | In-memory claim state (`ClaimTracker` singleton + `ClaimInfo` type) |
+| `src/main/agent-dispatch/dispatch-audit-log.ts`   | Appends JSONL to `<userData>/dispatch-audit.jsonl`                  |
 
 ### ClaimInfo shape
 
@@ -97,30 +97,30 @@ interface ClaimInfo {
 	role: string;
 	issueNumber: number;
 	issueTitle: string;
-	projectItemId: string; // GitHub Projects v2 item ID (for writes)
-	projectId: string; // GitHub node-ID of the project
+	projectItemId: string; // Work Graph item ID
+	projectId: string; // compatibility project identifier
 	agentSessionId: string; // Left Bar session that owns the claim
 	claimedAt: string; // ISO timestamp
 	lastHeartbeatAt: string; // ISO timestamp (updated by pm:heartbeat)
 }
 ```
 
-### Renderer live-update flow (post-#444)
+### Renderer live-update flow
 
 1. `DispatchEngine` calls `emitClaimStarted(mainWindow, claimInfo)` / `emitClaimEnded(mainWindow, { projectPath, role })` via `BrowserWindow.webContents.send()`.
 2. `src/main/preload/agentDispatch.ts` exposes `onClaimStarted(handler)` / `onClaimEnded(handler)` — each returns an unsubscribe function.
 3. `RolesPanel.tsx` subscribes on mount; maintains a renderer-local `Map<role, ActiveClaimInfo>` state; passes `activeClaim` to each `SlotCard`.
 4. Initial hydration: single `getBoard()` call on mount (reads ClaimTracker snapshot). No polling.
 
-### Startup reconciliation
+### Startup resilience
 
-`reconcileStaleGithubClaims()` runs once after app start (in `src/main/index.ts`). It calls `client.listProjectItems({ statusIn: ['in_progress'] })` and clears `AI Assigned Slot` for any item whose slot value is not in the current `ClaimTracker`. This releases claims from crashed or restarted sessions before auto-pickup resumes.
+Dispatch polling rehydrates in-flight Work Graph claims into `ClaimTracker` at startup, and the stale-claim sweeper releases claims whose heartbeat expires. No GitHub Project read is required for startup recovery.
 
 ### Files NOT deleted (callers not yet migrated)
 
-- `src/main/work-graph/` — still used by `delivery-planner`, `planning-pipeline`, `pm-orchestrator`, `mcp/work-graph-tools`, `runtime.ts`, web server routes. Migration tracked in follow-up issues.
+- `src/main/work-graph/` — durable PM state used by local PM, delivery-planner, planning-pipeline, pm-orchestrator, MCP tooling, runtime, and web server routes.
 - `src/shared/work-graph-types.ts` — imported by 30+ files; kept as a pure type file.
-- `src/renderer/services/workGraph.ts` — stubbed, returns empty results for all methods.
+- `src/renderer/services/workGraph.ts` — renderer IPC placeholder until a dedicated Work Graph board read API is re-exposed.
 
 ---
 
@@ -191,7 +191,7 @@ State change: (none) → status: "running"   [created fresh in active list]
 4. `git config user.{name,email}` — set Maestro Symphony identity
 5. `git commit --allow-empty` — creates a commit so the branch can be pushed
 6. `git push -u origin <branchName>`
-7. `gh pr create --draft …` — the PR body contains `Closes #<issueNumber>`, which is the **atomic claim**. Any concurrent contributor that refreshes the GitHub issue list will see the PR and treat the issue as `in_progress`.
+7. `gh pr create --draft …` — the PR body references the Work Graph/Maestro item ID for traceability. If an external tracker mirror already exists, the PR may also include its reference, but external tracker items are not required for PM execution.
 
 **Fork support**: When the user lacks push access to the upstream repo, `ensureForkSetup()` forks the repo, re-points `origin` at the fork, and passes `--repo <upstreamSlug>` plus `--head <forkOwner>:<branchName>` to `gh pr create` so the PR targets the upstream.
 

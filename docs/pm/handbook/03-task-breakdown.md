@@ -1,6 +1,6 @@
 # 03 — Task Breakdown
 
-Tasks are the atomic unit of delivery in the Maestro pipeline. Each task maps 1:1 to a GitHub issue, a branch, and a PR. This file covers how to size tasks correctly, write acceptance criteria that are actually useful to an agent, and avoid the most common breakdown mistakes.
+Tasks are the atomic unit of delivery in the Maestro pipeline. Each task maps 1:1 to a Work Graph item, and implementation work should reference that item in branches, commits, and PRs. This file covers how to size tasks correctly, write acceptance criteria that are actually useful to an agent, and avoid the most common breakdown mistakes.
 
 ---
 
@@ -119,7 +119,7 @@ When assigning to slots: parallel tasks with the same role can be dispatched to 
 In the task file frontmatter:
 
 ```yaml
-depends_on: [1, 2] # task numbers (before sync) or issue numbers (after sync)
+depends_on: [1, 2] # draft task numbers before sync; Work Graph item IDs after sync
 ```
 
 In the task body:
@@ -130,7 +130,7 @@ In the task body:
 Blocked by: #42 (Configure Passport strategies), #43 (Add /auth routes)
 ```
 
-After GitHub sync, replace task numbers with GitHub issue numbers. The Dispatch Engine reads `depends_on` from the project item's AI dependencies field (if configured) or from the issue body.
+After task creation, replace draft task numbers with Work Graph item IDs. The Dispatch Engine reads dependencies from Work Graph relationships and task metadata.
 
 ---
 
@@ -158,9 +158,9 @@ If you're decomposing a PRD for a feature where some tasks already exist in the 
 
 ---
 
-## Task Checklist Before Creating GitHub Issues
+## Task Checklist Before Creating Work Graph Items
 
-Run through this before calling `gh issue create`:
+Run through this before creating dispatchable Work Graph items:
 
 - [ ] Title is imperative verb + noun
 - [ ] Size is xs, s, m, or l (no xl)
@@ -170,4 +170,4 @@ Run through this before calling `gh issue create`:
 - [ ] Parallel flag is correct
 - [ ] Technical notes are specific enough for an agent to start without questions
 
-Once all tasks pass this checklist, proceed to handbook/04-github-sync.md.
+Once all tasks pass this checklist, proceed to handbook/04-github-sync.md for local mirror and git traceability guidance.

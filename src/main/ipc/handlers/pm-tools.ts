@@ -4,14 +4,13 @@
  * Exposes three channels that agents call at workflow transitions to self-update
  * their claimed work item in Maestro Board / Work Graph:
  *
- *   pm:setStatus  → updates AI Status field for the agent's claimed item
- *   pm:setRole    → updates AI Role field for the agent's claimed item
- *   pm:setBlocked → sets AI Status=Blocked + posts a comment with the reason
+ *   pm:setStatus  → updates local status for the agent's claimed item
+ *   pm:setRole    → updates local role for the agent's claimed item
+ *   pm:setBlocked → marks the item blocked and records the local reason
  *
  * Each handler:
  *  1. Resolves the calling agent's currently-claimed work item via in-memory ClaimTracker.
  *  2. Enforces ownership — agents cannot update items they don't own.
- *  3. Persists the new field value to GitHub Projects v2 via the project coordinator
  *  3. Persists the new PM value to Work Graph.
  *  4. Records an audit event in the local JSONL audit log.
  *
@@ -32,19 +31,19 @@ const LOG_CONTEXT = '[PmTools]';
 export interface PmToolsSetStatusInput {
 	/** The agent's own session ID — used to look up its current claim. */
 	agentSessionId: string;
-	/** Target status value — must match an AI Status field option name. */
+	/** Target local PM status value. */
 	status: string;
 }
 
 export interface PmToolsSetRoleInput {
 	agentSessionId: string;
-	/** Target role value — must match an AI Role field option name. */
+	/** Target local PM role value. */
 	role: string;
 }
 
 export interface PmToolsSetBlockedInput {
 	agentSessionId: string;
-	/** Human-readable reason posted as a GitHub comment and recorded in the audit log. */
+	/** Human-readable reason recorded in local PM state and the audit log. */
 	reason: string;
 }
 
@@ -90,7 +89,7 @@ export function registerPmToolsHandlers(deps: PmToolsHandlerDependencies): void 
 				actor: input.agentSessionId,
 				workItemId: claim.projectItemId,
 				priorState: { role: claim.role },
-				newState: { 'AI Status': input.status },
+				newState: { status: input.status },
 			});
 
 			logger.info(
@@ -184,8 +183,8 @@ export function registerPmToolsHandlers(deps: PmToolsHandlerDependencies): void 
 			auditLog('blocked', {
 				actor: input.agentSessionId,
 				workItemId: claim.projectItemId,
-				priorState: { 'AI Status': 'In Progress' },
-				newState: { 'AI Status': 'Blocked' },
+				priorState: { status: 'in_progress' },
+				newState: { status: 'blocked' },
 				reason: input.reason,
 			});
 

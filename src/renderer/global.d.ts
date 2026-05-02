@@ -3712,7 +3712,7 @@ interface MaestroAPI {
 	// pm-tools API — agent-callable project management tools (#430)
 	pmTools: {
 		/**
-		 * Update the Projects v2 Status field for the agent's currently-claimed work item.
+		 * Update local Work Graph status metadata for the agent's currently-claimed work item.
 		 * Scoped to the calling agent's own claim — cannot update items it doesn't own.
 		 * @param agentSessionId - the calling agent's session ID
 		 * @param status - one of: Idea | PRD Draft | Refinement | Tasks Ready | In Progress | In Review | Blocked | Done
@@ -3722,7 +3722,7 @@ interface MaestroAPI {
 			status: string
 		) => Promise<IpcDataResponse<{ workItemId: string; field: string; value: string }>>;
 		/**
-		 * Update the Projects v2 Role field for the agent's currently-claimed work item.
+		 * Update local Work Graph role metadata for the agent's currently-claimed work item.
 		 * @param agentSessionId - the calling agent's session ID
 		 * @param role - one of: runner | fixer | reviewer | merger
 		 */
@@ -3731,10 +3731,9 @@ interface MaestroAPI {
 			role: string
 		) => Promise<IpcDataResponse<{ workItemId: string; field: string; value: string }>>;
 		/**
-		 * Set the work item to Blocked status, update the Projects v2 Status field,
-		 * and post a GitHub comment with the reason.
+		 * Set the work item to Blocked status and record the reason locally.
 		 * @param agentSessionId - the calling agent's session ID
-		 * @param reason - human-readable explanation (posted as a GitHub comment)
+		 * @param reason - human-readable explanation
 		 */
 		setBlocked: (
 			agentSessionId: string,
@@ -3769,7 +3768,7 @@ interface MaestroAPI {
 		run: (opts?: {
 			/** Override the staleness threshold in milliseconds. Default: 5 minutes. */
 			staleClaimMs?: number;
-			/** Project path used to resolve per-project GitHub Projects v2 coordinates. */
+			/** Project path used to scope the local Maestro Board / Work Graph audit. */
 			projectPath?: string;
 			/**
 			 * Per-project role slot map (role → agentId).
@@ -3800,10 +3799,10 @@ interface MaestroAPI {
 		>;
 	};
 
-	// pm-resolveGithubProject API — per-project GitHub project mapping (#447)
+	// pm-resolveGithubProject API — optional external GitHub mirror mapping (#447)
 	pmResolveGithubProject: {
 		/**
-		 * Resolve (or discover) the GitHub Projects v2 mapping for a project path.
+		 * Resolve (or discover) the optional external project-board mirror mapping for a project path.
 		 * Returns a cached result if one exists in settings; runs discovery otherwise.
 		 *
 		 * Pass `sshRemoteId` when the session's project lives on an SSH remote so

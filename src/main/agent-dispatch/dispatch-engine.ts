@@ -282,7 +282,7 @@ export class AgentDispatchEngine {
 		}
 
 		// Legacy-label warning: agent:* labels are ignored by this dispatch system.
-		// The AI Status custom field on GitHub Projects v2 is the only source of truth.
+		// Work Graph status and claim rows are the source of truth.
 		// If a work item still carries legacy labels in its tags, warn but do not fail.
 		warnIfLegacyLabels(input.workItemId, input.workItem.tags);
 

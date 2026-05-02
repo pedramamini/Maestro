@@ -2,22 +2,22 @@
 
 Architecture and implementation guide for the Delivery Planner feature. For the main guide, see [[CLAUDE.md]].
 
-**Status:** Core modules are merged and tested. The service, external mirror, GitHub sync, IPC handlers, and web routes are all canonical. Desktop UI components (PRD Wizard, Epic View, Dashboard) and web/mobile surfaces remain follow-up work. The epic task graph is in `.claude/epics/delivery-planner/`.
+**Status:** Core modules are merged and tested. The service, external mirror, local PM integration, IPC handlers, and web routes are all canonical. Desktop UI components (PRD Wizard, Epic View, Dashboard) and web/mobile surfaces remain follow-up work. The epic task graph is in `.claude/epics/delivery-planner/`.
 
-> **v2 state model updates:** GitHub state now lives exclusively in Projects v2 custom fields (per #430), not labels. The mirror subsystem has been renamed from `ccpm-mirror/` to `external-mirror` (per #411); default path moved to `.maestro/external-mirror/`. All `ccpm-*` identifiers in source are now `mirror*` / `ExternalMirror*`. See issue #425 rollout tracker for status.
+> **v2 state model updates:** PM state now lives in local Work Graph / Maestro Board, not GitHub labels or Project fields. The mirror subsystem has been renamed from `ccpm-mirror/` to `external-mirror` (per #411); default path moved to `.maestro/external-mirror/`. All `ccpm-*` identifiers in source are now `mirror*` / `ExternalMirror*`. See issue #425 rollout tracker for status.
 
 ---
 
 ## Overview
 
-Delivery Planner lifts the PRD → Epic → Tasks → GitHub Issues → agent-ready workflow into Maestro as a first-class UI feature. It is backed by Work Graph and mirrors planning state to `.maestro/external-mirror/` files.
+Delivery Planner lifts the PRD → Epic → Tasks → Work Graph → agent-ready workflow into Maestro as a first-class UI feature. It is backed by Work Graph and mirrors planning state to `.maestro/external-mirror/` files.
 
 The product name is **Delivery Planner**. The on-disk mirror is a read-friendly snapshot only; Work Graph is the canonical source of truth.
 
 ### Core Principles
 
 1. **Work Graph is the source of truth.** Delivery Planner adds planner-specific services and views; disk files are a read-friendly mirror only.
-2. **GitHub sync is explicit, fork-only.** All issue and PR operations target `HumpfTech/Maestro`. Upstream (`RunMaestro/Maestro`) operations are rejected before any network call.
+2. **GitHub is for git hosting, not PM state.** Branch, commit, PR, review, and merge operations may use GitHub; issue/task state stays local.
 3. **No agent spawning.** Delivery Planner creates structured work and marks tasks `agent-ready`; Agent Dispatch owns capability matching, claim, heartbeat, and pickup.
 4. **Planning must not launch Maestro or start implementation.** Decomposition and sync are planning-only operations.
 
@@ -65,18 +65,17 @@ service.decomposeEpicToTasks({ epicId })
   → createDraftDependencies (WorkGraph.addDependency edges)
   → externalMirror.syncTask × N (writes .maestro/external-mirror/epics/<slug>/tasks/)
 
-service.syncGithubIssue(id)
-  → DeliveryPlannerGithubSync.syncIssue (gh issue create/view)
-  → WorkGraph.updateItem (patch: { github })
-  → DeliveryPlannerGithubSync.syncStatus (close/reopen)
+service.syncExternalMirror(id)
+  → externalMirror.syncItem (writes local markdown mirror)
+  → WorkGraph.recordEvent (traceability update)
 
 service.addProgressComment(id, body)
   → WorkGraph.updateItem (appends to metadata.deliveryPlannerProgressComments)
-  → DeliveryPlannerGithubSync.addProgressComment (gh issue comment)
+  → WorkGraph.recordEvent (local progress comment)
 
 service.createBugFollowUp({ title, relatedWorkItemId })
   → WorkGraph.createItem (type='bug', tags=['delivery-planner','bug-follow-up'])
-  → DeliveryPlannerGithubSync.createLinkedBugIssue
+  → WorkGraph.addDependency (links follow-up to the related item)
 ```
 
 ### Item Hierarchy
@@ -258,11 +257,11 @@ const hash = markdownMirrorHash(markdownString);
 
 ---
 
-## GitHub Sync (Fork-Only)
+## Legacy GitHub Sync Code
 
 **File:** `src/main/delivery-planner/github-sync.ts`
 
-All GitHub issue operations target `HumpfTech/Maestro`. This is enforced before any `gh` CLI invocation by `assertDeliveryPlannerGithubRepository` in `github-safety.ts`.
+This file is legacy mirror code. PM execution, dispatch, status, heartbeat, audit, and `/PM` commands must not call it. GitHub is only used for git hosting mechanics such as branches, commits, PRs, reviews, and merges.
 
 ### Fork Safety Constants
 
@@ -275,9 +274,9 @@ import {
 } from '../delivery-planner/github-safety';
 ```
 
-Any call to `gh` with `-R RunMaestro/Maestro` (or any non-fork repo) throws `DeliveryPlannerGithubSafetyError` immediately, before any network call.
+If this legacy code is explicitly re-enabled later, any call to `gh` with `-R RunMaestro/Maestro` (or any non-fork repo) must throw `DeliveryPlannerGithubSafetyError` immediately, before any network call.
 
-### DeliveryPlannerGithubSync Class
+### DeliveryPlannerGithubSync Class (Legacy)
 
 ```typescript
 import { DeliveryPlannerGithubSync } from '../delivery-planner/github-sync';
@@ -285,7 +284,7 @@ import { DeliveryPlannerGithubSync } from '../delivery-planner/github-sync';
 const sync = new DeliveryPlannerGithubSync();
 // optionally: new DeliveryPlannerGithubSync({ exec: customExec, cwd: '/path' })
 
-// Sync or create a GitHub issue for a Work Item
+// Legacy only. Do not use for PM execution.
 const result = await sync.syncIssue(workItem);
 // result.github   — WorkItemGithubReference with issueNumber + url
 // result.created  — true if the issue was newly created
@@ -318,44 +317,43 @@ Labels applied: `delivery-planner`, plus any of `external-mirror`, `symphony`, `
 
 ---
 
-## GitHub State Model (#430, #438)
+## Maestro Board / Work Graph State Model
 
-> **AI Status is NOT in labels — status IS in Projects v2 custom fields with `AI ` prefix.**
+> **Runtime state is NOT in labels or GitHub Projects fields — status lives in Work Graph.**
 
-Starting with issue #430 and expanded in #438, work item state is tracked exclusively in GitHub Projects v2 custom fields with an `AI ` prefix to distinguish Maestro-driven fields from human kanban. This section documents the authoritative state model.
+Work item state is tracked in local Work Graph / Maestro Board. GitHub is used for git hosting mechanics such as branches, commits, PRs, reviews, and merges; dispatch and PM commands must not depend on external tracker items or project boards.
 
-### Custom Fields (Projects v2)
+### Local PM Fields
 
-On first sync to project #7, `DeliveryPlannerGithubSync.ensureProjectFields()` idempotently creates these fields via the `createProjectV2Field` GraphQL mutation if they do not already exist:
+`/PM-init` idempotently initializes local PM tags and conventions. Core state:
 
-| Field                | Type            | Options                                                                                         |
-| -------------------- | --------------- | ----------------------------------------------------------------------------------------------- |
-| `AI Status`          | `SINGLE_SELECT` | `Idea`, `PRD Draft`, `Refinement`, `Tasks Ready`, `In Progress`, `In Review`, `Blocked`, `Done` |
-| `AI Role`            | `SINGLE_SELECT` | `runner`, `fixer`, `reviewer`, `merger`                                                         |
-| `AI Stage`           | `SINGLE_SELECT` | `prd`, `epic`, `task`                                                                           |
-| `AI Priority`        | `SINGLE_SELECT` | `P0`, `P1`, `P2`, `P3`                                                                          |
-| `AI Parent PRD`      | `TEXT`          | (work-item id or issue link)                                                                    |
-| `AI Parent Epic`     | `TEXT`          | (work-item id or issue link)                                                                    |
-| `AI Assigned Slot`   | `TEXT`          | (agent id)                                                                                      |
-| `AI Last Heartbeat`  | `TEXT`          | (timestamp)                                                                                     |
-| `AI Project`         | `TEXT`          | (project root path)                                                                             |
-| `External Mirror ID` | `TEXT`          | (free-form, e.g. `delivery-planner#task-3`)                                                     |
+| Work Graph state                 | Purpose                                                                                                  |
+| -------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| `status`                         | Lifecycle state: `discovered`, `planned`, `ready`, `claimed`, `in_progress`, `review`, `blocked`, `done` |
+| `pipeline.currentRole`           | Dispatch role: `runner`, `fixer`, `reviewer`, `merger`                                                   |
+| `priority`                       | Dispatch ordering                                                                                        |
+| active claim row                 | Current owner and lease                                                                                  |
+| `agent-ready` tag                | Marks unblocked work eligible for pickup                                                                 |
+| `parentPrdId` / dependency edge  | PRD traceability                                                                                         |
+| `parentEpicId` / dependency edge | Epic traceability                                                                                        |
+| `projectPath`                    | Project root path                                                                                        |
+| `externalMirrorId`               | Optional local mirror id, e.g. `delivery-planner#task-3`                                                 |
 
-Field updates use the `updateProjectV2ItemFieldValue` GraphQL mutation (via `gh project item-edit --single-select-option-id` for single-select fields, or `--text` for text fields).
+Field updates are local Work Graph mutations. They do not call GitHub Projects, GraphQL, or external tracker APIs.
 
-### AI Status Mapping (WorkItemStatus → AI Status field)
+### Status Mapping
 
-| `WorkItem.status` | Projects v2 `AI Status` field |
-| ----------------- | ----------------------------- |
-| `backlog`         | `Backlog`                     |
-| `discovered`      | `Idea`                        |
-| `planned`         | `PRD Draft`                   |
-| `ready`           | `Tasks Ready`                 |
-| `claimed`         | `In Progress`                 |
-| `in_progress`     | `In Progress`                 |
-| `blocked`         | `Blocked`                     |
-| `review`          | `In Review`                   |
-| `done`            | `Done`                        |
+| Work Graph status | Meaning                    |
+| ----------------- | -------------------------- |
+| `backlog`         | Not eligible for pickup    |
+| `discovered`      | Captured idea              |
+| `planned`         | PRD or plan drafted        |
+| `ready`           | Eligible for dispatch      |
+| `claimed`         | Lease acquired             |
+| `in_progress`     | Agent is actively working  |
+| `blocked`         | Needs intervention         |
+| `review`          | Ready for review/PR checks |
+| `done`            | Completed                  |
 
 > **#439 — Backlog gate:** items with `status === 'backlog'` are excluded from both auto-pickup and manual assignment; promote them (via `/PM prd-new` finalise or planner decompose) before assigning.
 
@@ -363,11 +361,11 @@ Field updates use the `updateProjectV2ItemFieldValue` GraphQL mutation (via `gh 
 
 Agents update their own work item fields mid-workflow using three IPC channels (Track B, #430):
 
-| Channel         | Renderer API                                                | Effect                                                          |
-| --------------- | ----------------------------------------------------------- | --------------------------------------------------------------- |
-| `pm:setStatus`  | `window.maestro.pmTools.setStatus(agentSessionId, status)`  | Updates AI Status field for the agent's claimed item            |
-| `pm:setRole`    | `window.maestro.pmTools.setRole(agentSessionId, role)`      | Updates AI Role field for the agent's claimed item              |
-| `pm:setBlocked` | `window.maestro.pmTools.setBlocked(agentSessionId, reason)` | Sets AI Status=Blocked + posts a GitHub comment with the reason |
+| Channel         | Renderer API                                                | Effect                                              |
+| --------------- | ----------------------------------------------------------- | --------------------------------------------------- |
+| `pm:setStatus`  | `window.maestro.pmTools.setStatus(agentSessionId, status)`  | Updates local status for the agent's claimed item   |
+| `pm:setRole`    | `window.maestro.pmTools.setRole(agentSessionId, role)`      | Updates local role for the agent's claimed item     |
+| `pm:setBlocked` | `window.maestro.pmTools.setBlocked(agentSessionId, reason)` | Marks the item blocked and records the local reason |
 
 **Ownership enforcement:** each channel resolves the calling agent's active claim via `workGraph.listItems({ ownerId: agentSessionId })` and throws if no active claim is found. Agents cannot update items they don't own.
 
@@ -380,16 +378,9 @@ Implementation files:
 
 **DO NOT** wire slash commands here — that is #428's job.
 
-### Legacy Label Migration (Track D)
+### Legacy Label Migration
 
-When a project with legacy `status:*` labels is synced for the first time after #430 ships, `migrateStatusLabels()` runs automatically (no flag needed):
-
-1. Reads the issue's current labels.
-2. Finds any `status:*` label (e.g. `status:in-progress` → `In Progress`).
-3. Calls `gh project item-edit --single-select-option-id` to set the AI Status field.
-4. Removes only the legacy state labels; user-defined labels are untouched.
-
-Recognized legacy labels: `status:idea`, `status:prd-draft`, `status:refinement`, `status:tasks-ready`, `status:in-progress`, `status:in-review`, `status:blocked`, `status:done`.
+`/PM migrate-labels` is now a compatibility no-op. Legacy GitHub labels are not part of PM state, and local Work Graph status is authoritative.
 
 ---
 
@@ -414,11 +405,7 @@ A push channel `deliveryPlanner:progress` is sent from main to renderer whenever
 
 Shared request/response types live in `src/shared/delivery-planner-types.ts`.
 
-The `deliveryPlanner:sync` channel accepts `{ workItemId, target? }`:
-
-- `target: 'github'` — GitHub sync only (`syncGithubIssue`)
-- `target: 'external-mirror'` — external mirror only (`syncExternalMirror`)
-- `target: 'all'` or omitted — GitHub sync then external mirror
+The `deliveryPlanner:sync` channel accepts `{ workItemId, target? }` and writes local mirror artifacts only. GitHub tracker sync is not required for PM execution.
 
 ---
 
@@ -426,15 +413,15 @@ The `deliveryPlanner:sync` channel accepts `{ workItemId, target? }`:
 
 Delivery Planner REST endpoints are integrated into `src/main/web-server/routes/apiRoutes.ts`. All routes are prefixed with a security token: `/<token>/api/…`. (A dedicated `deliveryPlannerRoutes.ts` file is planned but not yet extracted on this branch.)
 
-| Method | Path                                          | Description                                                           |
-| ------ | --------------------------------------------- | --------------------------------------------------------------------- |
-| `GET`  | `/<token>/api/work-graph/items`               | List Work Graph items (accepts `WorkItemFilters` query params)        |
-| `GET`  | `/<token>/api/work-graph/item/:id`            | Fetch a single Work Graph item by ID                                  |
-| `GET`  | `/<token>/api/delivery-planner/dashboard`     | Epic/task summary (`projectPath?`, `gitPath?`)                        |
-| `GET`  | `/<token>/api/delivery-planner/progress`      | List all in-flight operation snapshots                                |
-| `POST` | `/<token>/api/delivery-planner/item/:id/sync` | GitHub sync for a single item; requires `{ confirmed: true }` in body |
+| Method | Path                                          | Description                                                                 |
+| ------ | --------------------------------------------- | --------------------------------------------------------------------------- |
+| `GET`  | `/<token>/api/work-graph/items`               | List Work Graph items (accepts `WorkItemFilters` query params)              |
+| `GET`  | `/<token>/api/work-graph/item/:id`            | Fetch a single Work Graph item by ID                                        |
+| `GET`  | `/<token>/api/delivery-planner/dashboard`     | Epic/task summary (`projectPath?`, `gitPath?`)                              |
+| `GET`  | `/<token>/api/delivery-planner/progress`      | List all in-flight operation snapshots                                      |
+| `POST` | `/<token>/api/delivery-planner/item/:id/sync` | Local mirror sync for a single item; requires `{ confirmed: true }` in body |
 
-The `POST .../sync` endpoint requires `confirmed: true` in the request body. Without it, the server returns `400 Bad Request`. Only `target: 'github'` is accepted; external-mirror-only sync is not exposed over web.
+The `POST .../sync` endpoint requires `confirmed: true` in the request body. Without it, the server returns `400 Bad Request`.
 
 Web/mobile consumers subscribe to Work Graph broadcast events for live item updates rather than polling.
 
@@ -450,7 +437,7 @@ Web/mobile consumers subscribe to Work Graph broadcast events for live item upda
 
 **File:** `src/main/delivery-planner/progress.ts`
 
-All long-running service operations — decomposition, external mirror sync, GitHub sync — emit progress snapshots through `InMemoryDeliveryPlannerProgressStore`.
+All long-running service operations — decomposition and external mirror sync — emit progress snapshots through `InMemoryDeliveryPlannerProgressStore`.
 
 ```typescript
 import { InMemoryDeliveryPlannerProgressStore } from '../delivery-planner/progress';
@@ -544,7 +531,7 @@ The following must NOT be run during planning. They require a running app shell 
 1. **PRD creation:** open Delivery Planner → New PRD wizard → verify Work Graph item is created and disk mirror appears at `.maestro/external-mirror/prds/<slug>.md`.
 2. **Decomposition:** from a PRD, invoke `decomposePrd` → epic is created → invoke `decomposeEpic` → task items appear with `deps[]` populated and external mirror task files written to `.maestro/external-mirror/epics/<slug>/tasks/`.
 3. **Dashboard refresh:** status changes broadcast via Work Graph events and the dashboard refreshes without polling.
-4. **GitHub sync:** call `syncGithubIssue` on a task → one issue appears on `HumpfTech/Maestro`, `WorkItem.github.issueNumber` is written back, Project fields are populated, no issue appears on `RunMaestro/Maestro`.
+4. **Traceability:** commits and PRs reference the Work Graph/Maestro item ID; GitHub issue numbers are optional historical mirrors only.
 5. **Web sync:** `POST /<token>/api/delivery-planner/item/:id/sync` with `{ confirmed: true }` → item synced, response contains updated `WorkItem`.
 6. **Fork safety:** attempt to call `assertDeliveryPlannerGithubRepository('RunMaestro/Maestro')` — must throw `DeliveryPlannerGithubSafetyError` before any `gh` call.
 
@@ -552,16 +539,16 @@ The following must NOT be run during planning. They require a running app shell 
 
 ## Epic Task References
 
-| Task                                           | GitHub Issue                                          | File                                                            |
+| Task                                           | Traceability                                          | File                                                            |
 | ---------------------------------------------- | ----------------------------------------------------- | --------------------------------------------------------------- |
-| 001 — Contract alignment                       | [#60](https://github.com/HumpfTech/Maestro/issues/60) | `.claude/epics/delivery-planner/001-contract-alignment.md`      |
-| 002 — External mirror path resolver + mirror   | [#61](https://github.com/HumpfTech/Maestro/issues/61) | `.claude/epics/delivery-planner/002-ccpm-mirror.md`             |
-| 003 — Main-process services                    | [#62](https://github.com/HumpfTech/Maestro/issues/62) | `.claude/epics/delivery-planner/003-main-services.md`           |
-| 004 — Desktop IPC + preload                    | [#63](https://github.com/HumpfTech/Maestro/issues/63) | `.claude/epics/delivery-planner/004-desktop-api.md`             |
+| 001 — Contract alignment                       | Historical mirror #60                                 | `.claude/epics/delivery-planner/001-contract-alignment.md`      |
+| 002 — External mirror path resolver + mirror   | Historical mirror #61                                 | `.claude/epics/delivery-planner/002-ccpm-mirror.md`             |
+| 003 — Main-process services                    | Historical mirror #62                                 | `.claude/epics/delivery-planner/003-main-services.md`           |
+| 004 — Desktop IPC + preload                    | Historical mirror #63                                 | `.claude/epics/delivery-planner/004-desktop-api.md`             |
 | 005 — PRD wizard                               | [#64](https://github.com/HumpfTech/Maestro/issues/64) | `.claude/epics/delivery-planner/005-prd-wizard-desktop.md`      |
 | 006 — Decomposition workflow                   | [#65](https://github.com/HumpfTech/Maestro/issues/65) | `.claude/epics/delivery-planner/006-decomposition-workflow.md`  |
 | 007 — Desktop dashboard                        | [#66](https://github.com/HumpfTech/Maestro/issues/66) | `.claude/epics/delivery-planner/007-desktop-dashboard.md`       |
-| 008 — GitHub sync                              | [#67](https://github.com/HumpfTech/Maestro/issues/67) | `.claude/epics/delivery-planner/008-github-sync.md`             |
+| 008 — Historical GitHub sync task              | [#67](https://github.com/HumpfTech/Maestro/issues/67) | `.claude/epics/delivery-planner/008-github-sync.md`             |
 | 009 — Slash commands + bridges                 | [#68](https://github.com/HumpfTech/Maestro/issues/68) | `.claude/epics/delivery-planner/009-slash-and-bridges.md`       |
 | 010 — Web/mobile surface                       | [#69](https://github.com/HumpfTech/Maestro/issues/69) | `.claude/epics/delivery-planner/010-web-mobile.md`              |
 | 011 — Living Wiki + Agent Dispatch integration | [#70](https://github.com/HumpfTech/Maestro/issues/70) | `.claude/epics/delivery-planner/011-cross-major-integration.md` |

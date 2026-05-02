@@ -20,7 +20,7 @@ Triggers the Planning Pipeline to:
 Verify before starting:
 
 - [ ] The epic has at least one task in `ready` status
-- [ ] GitHub sync is current (run `/PM epic-sync {{ARGS}}` first if unsure)
+- [ ] Work Graph / local mirror state is current (run `/PM epic-sync {{ARGS}}` first if unsure)
 - [ ] The agent fleet has at least one idle `runner` available
 
 ## Pipeline behavior

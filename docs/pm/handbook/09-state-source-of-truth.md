@@ -50,3 +50,17 @@ The old Symphony fork-runner used `agent:*` labels:
 - `agent:failed-validation`
 
 These labels are ignored. Convert them to Work Graph state instead of using them for dispatch.
+
+---
+
+## Commit And PR Traceability
+
+Every agent commit and PR must reference the local Work Graph item it worked on. External tracker items are not required for issue work.
+
+Use this rule:
+
+- Always include the Work Graph/Maestro item ID, for example `Maestro: <workItemId>` or `Work-Graph: <workItemId>`.
+- If the item happens to have an external tracker mirror, the commit or PR may also include that reference.
+- Do not require or create external tracker items for dispatch or PM execution. GitHub is for git hosting mechanics: branches, commits, PRs, reviews, and merges.
+
+This keeps local PM resilient while preserving GitHub history when a mirror exists.
