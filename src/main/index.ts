@@ -80,6 +80,7 @@ import {
 	registerDeliveryPlannerHandlers,
 	registerPlanningPipelineHandlers,
 	registerConversationalPrdHandlers,
+	registerWorkGraphHandlers,
 	registerPmToolsHandlers,
 	registerPmAuditHandlers,
 	registerPmHeartbeatHandlers,
@@ -1598,6 +1599,9 @@ function setupIpcHandlers() {
 
 	// Planning Pipeline — stage machine dashboard
 	registerPlanningPipelineHandlers({ settingsStore: store });
+
+	// Work Graph — durable local PM/Maestro Board state
+	registerWorkGraphHandlers({ getMainWindow: () => mainWindow });
 
 	// pm-tools — agent-callable pm:setStatus / pm:setRole / pm:setBlocked (#430)
 	registerPmToolsHandlers({ settingsStore: store });

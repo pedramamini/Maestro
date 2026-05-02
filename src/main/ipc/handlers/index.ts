@@ -172,6 +172,7 @@ export { registerDeliveryPlannerHandlers };
 export type { DeliveryPlannerHandlerDependencies };
 export { registerPlanningPipelineHandlers };
 export type { PlanningPipelineHandlerDependencies };
+export { registerWorkGraphHandlers };
 export { registerPmToolsHandlers };
 export type { PmToolsHandlerDependencies };
 export { registerPmAuditHandlers };
