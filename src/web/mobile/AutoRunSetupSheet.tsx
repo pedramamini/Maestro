@@ -509,7 +509,7 @@ export function AutoRunSetupSheet({
 							color: colors.textMain,
 						}}
 					>
-						Configure Auto Run
+						Auto Run Configuration
 					</h2>
 					<button
 						onClick={handleClose}

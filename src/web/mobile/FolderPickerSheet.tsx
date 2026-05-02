@@ -145,6 +145,14 @@ export function FolderPickerSheet({
 		setSelected(path);
 	}, []);
 
+	// Typeable path: keep `selected` as the source of truth so the footer button,
+	// keyboard shortcut, and tree highlight all stay in sync. Trim trailing
+	// slashes on confirm to match how the tree's `node.path` values are returned
+	// (no trailing separator), but preserve them while the user is mid-edit.
+	const handlePathInputChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+		setSelected(e.target.value);
+	}, []);
+
 	const handleConfirm = useCallback(async () => {
 		if (!selected || submitting) return;
 		setSubmitting(true);
@@ -370,6 +378,43 @@ export function FolderPickerSheet({
 						</svg>
 					</button>
 				</header>
+
+				{/* Typeable path input — mirrors desktop's `FormInput` in
+				    AutoRunSetupModal so users who know the path can paste/type
+				    it instead of clicking through the tree. The tree below stays
+				    as the secondary "Browse" affordance. */}
+				<div
+					style={{
+						display: 'flex',
+						gap: '8px',
+						padding: '12px 16px',
+						borderBottom: `1px solid ${colors.border}`,
+						flexShrink: 0,
+					}}
+				>
+					<input
+						type="text"
+						value={selected ?? ''}
+						onChange={handlePathInputChange}
+						placeholder={startPath || 'Type or paste a folder path'}
+						spellCheck={false}
+						autoCorrect="off"
+						autoCapitalize="off"
+						aria-label="Auto Run folder path"
+						style={{
+							flex: 1,
+							minWidth: 0,
+							padding: '10px 12px',
+							borderRadius: '8px',
+							border: `1px solid ${colors.border}`,
+							backgroundColor: colors.bgSidebar,
+							color: colors.textMain,
+							fontSize: '13px',
+							fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
+							outline: 'none',
+						}}
+					/>
+				</div>
 
 				{/* Body — folder tree */}
 				<div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '8px' }}>

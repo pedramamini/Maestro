@@ -3453,6 +3453,9 @@ export default function MobileApp() {
 						panelRef={isMobile ? undefined : rightPanelResize.panelRef}
 						width={isMobile ? undefined : rightPanelResize.width}
 						onResizeStart={isMobile ? undefined : rightPanelResize.onResizeStart}
+						// Inline desktop panel needs to reserve room for the fixed
+						// CommandInputBar; mobile/full-screen mode sits above it via z-index.
+						inputBarHeight={isMobile ? undefined : inputBarHeight}
 					/>
 				)}
 			</div>
