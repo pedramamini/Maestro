@@ -136,6 +136,15 @@ export function registerPmResolveGithubProjectHandlers(
 					LOG_CONTEXT
 				);
 
+				const cachedMapping = map[projectPath];
+				if (cachedMapping && isTransientGithubProjectDiscoveryError(code, message, detail)) {
+					logger.warn(
+						`Using cached GitHub project mapping for "${projectPath}" after transient discovery failure [${code}].`,
+						LOG_CONTEXT
+					);
+					return { success: true, data: cachedMapping, fromCache: true };
+				}
+
 				// Fallback: if projectGithubMap is completely empty and the path looks like
 				// the HumpfTech/Maestro fork, return the legacy values rather than hard-failing.
 				// Only applies for non-actionable infrastructure errors (not auth/missing-cli).
@@ -186,4 +195,22 @@ export function registerPmResolveGithubProjectHandlers(
 function isLikelyLegacyRepo(projectPath: string): boolean {
 	const lower = projectPath.toLowerCase();
 	return lower.includes('maestro') || lower.includes('humpf');
+}
+
+function isTransientGithubProjectDiscoveryError(
+	code: DiscoveryErrorCode,
+	message: string,
+	detail?: string
+): boolean {
+	if (code !== 'GH_CLI_OUTPUT_UNRECOGNIZED' && code !== 'GH_PERMISSION_DENIED') {
+		return false;
+	}
+
+	const text = `${message} ${detail ?? ''}`.toLowerCase();
+	return (
+		text.includes('rate limit') ||
+		text.includes('rate-limit') ||
+		text.includes('api rate limit') ||
+		text.includes('unknown owner type')
+	);
 }
