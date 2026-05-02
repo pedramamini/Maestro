@@ -363,6 +363,7 @@ export interface SettingsStoreState {
 	wakatimeDetailedTracking: boolean;
 	useNativeTitleBar: boolean;
 	autoHideMenuBar: boolean;
+	showAgentName: boolean;
 	showSessionIdPill: boolean;
 	showSessionCostPill: boolean;
 	showWorktreePill: boolean;
@@ -469,6 +470,7 @@ export interface SettingsStoreActions {
 	setWakatimeDetailedTracking: (value: boolean) => void;
 	setUseNativeTitleBar: (value: boolean) => void;
 	setAutoHideMenuBar: (value: boolean) => void;
+	setShowAgentName: (value: boolean) => void;
 	setShowSessionIdPill: (value: boolean) => void;
 	setShowSessionCostPill: (value: boolean) => void;
 	setShowWorktreePill: (value: boolean) => void;
@@ -655,6 +657,7 @@ export const useSettingsStore = create<SettingsStore>()((set, get) => {
 		wakatimeDetailedTracking: false,
 		useNativeTitleBar: isWindowsPlatform(),
 		autoHideMenuBar: false,
+		showAgentName: true,
 		showSessionIdPill: false,
 		showSessionCostPill: true,
 		showWorktreePill: true,
@@ -666,7 +669,7 @@ export const useSettingsStore = create<SettingsStore>()((set, get) => {
 		lastSelectedPromptId: null,
 		spellCheck: false,
 		annotatorPenColor: '#9146FF',
-		annotatorPenSize: 16,
+		annotatorPenSize: 10,
 		annotatorThinning: 0.5,
 		annotatorSmoothing: 0.5,
 		annotatorStreamline: 0.5,
@@ -1196,6 +1199,11 @@ export const useSettingsStore = create<SettingsStore>()((set, get) => {
 		setAutoHideMenuBar: (value) => {
 			set({ autoHideMenuBar: value });
 			window.maestro.settings.set('autoHideMenuBar', value);
+		},
+
+		setShowAgentName: (value) => {
+			set({ showAgentName: value });
+			window.maestro.settings.set('showAgentName', value);
 		},
 
 		setShowSessionIdPill: (value) => {
@@ -2318,6 +2326,9 @@ export async function loadAllSettings(): Promise<void> {
 		if (allSettings['autoHideMenuBar'] !== undefined)
 			patch.autoHideMenuBar = allSettings['autoHideMenuBar'] as boolean;
 
+		if (allSettings['showAgentName'] !== undefined)
+			patch.showAgentName = allSettings['showAgentName'] as boolean;
+
 		if (allSettings['showSessionIdPill'] !== undefined)
 			patch.showSessionIdPill = allSettings['showSessionIdPill'] as boolean;
 
@@ -2487,6 +2498,7 @@ export function getSettingsActions() {
 		setWakatimeDetailedTracking: state.setWakatimeDetailedTracking,
 		setUseNativeTitleBar: state.setUseNativeTitleBar,
 		setAutoHideMenuBar: state.setAutoHideMenuBar,
+		setShowAgentName: state.setShowAgentName,
 		setShowSessionIdPill: state.setShowSessionIdPill,
 		setShowSessionCostPill: state.setShowSessionCostPill,
 		setShowWorktreePill: state.setShowWorktreePill,

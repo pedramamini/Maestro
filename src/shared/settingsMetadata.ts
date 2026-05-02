@@ -133,6 +133,12 @@ export const SETTINGS_METADATA: Record<string, SettingMetadata> = {
 		default: false,
 		category: 'appearance',
 	},
+	showAgentName: {
+		description: 'Show the agent name in the main header.',
+		type: 'boolean',
+		default: true,
+		category: 'appearance',
+	},
 	showSessionIdPill: {
 		description:
 			'Show the provider session ID pill (short hash, e.g. "B778BF42") in the main header.',
@@ -180,7 +186,7 @@ export const SETTINGS_METADATA: Record<string, SettingMetadata> = {
 	annotatorPenSize: {
 		description: 'Default pen size (in pixels) for the image annotator stroke.',
 		type: 'number',
-		default: 16,
+		default: 10,
 		category: 'appearance',
 	},
 	annotatorThinning: {
