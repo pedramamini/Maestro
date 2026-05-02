@@ -26,6 +26,7 @@ import {
 import { useSettings } from '../../../hooks';
 import type { Theme } from '../../../types';
 import { ToggleButtonGroup } from '../../ToggleButtonGroup';
+import { WorktreePill } from '../../ui/WorktreePill';
 import { FontConfigurationPanel } from '../../FontConfigurationPanel';
 import { IgnorePatternsSection } from '../IgnorePatternsSection';
 import { FilePanelSettingsSection } from '../FilePanelSettingsSection';
@@ -465,11 +466,14 @@ export function DisplayTab({ theme }: DisplayTabProps) {
 					{/* Show WORKTREE pill */}
 					<div className="flex items-center justify-between">
 						<div>
-							<p className="text-sm" style={{ color: theme.colors.textMain }}>
-								Show WORKTREE pill in left panel agent list
+							<p
+								className="text-sm flex items-center gap-2"
+								style={{ color: theme.colors.textMain }}
+							>
+								Show <WorktreePill theme={theme} /> pill in left panel agent list
 							</p>
 							<p className="text-xs opacity-50 mt-0.5">
-								Display the WORKTREE badge next to worktree child agents in the left panel.
+								Display the worktree badge next to worktree child agents in the left panel.
 							</p>
 						</div>
 						<button
@@ -481,7 +485,7 @@ export function DisplayTab({ theme }: DisplayTabProps) {
 							}}
 							role="switch"
 							aria-checked={showWorktreePill}
-							aria-label="Show WORKTREE pill in left panel agent list"
+							aria-label="Show worktree pill in left panel agent list"
 						>
 							<span
 								className={`absolute left-0 top-0.5 w-4 h-4 rounded-full bg-white transition-transform ${

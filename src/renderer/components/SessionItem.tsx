@@ -11,6 +11,7 @@ import {
 	ChevronRight,
 } from 'lucide-react';
 import { GhostIconButton } from './ui/GhostIconButton';
+import { WorktreePill } from './ui/WorktreePill';
 import { useSettingsStore } from '../stores/settingsStore';
 import type { Session, Group, Theme } from '../types';
 
@@ -302,18 +303,7 @@ export const SessionItem = memo(function SessionItem({
 							</span>
 						)}
 						{/* Worktree badge to visually mark worktree children */}
-						{variant === 'worktree' && showWorktreePill && (
-							<span
-								className="text-[9px] font-medium uppercase tracking-wider px-1 py-0.5 rounded shrink-0"
-								style={{
-									backgroundColor: theme.colors.accent + '33',
-									border: `1px solid ${theme.colors.accent}66`,
-									color: theme.colors.accent,
-								}}
-							>
-								Worktree
-							</span>
-						)}
+						{variant === 'worktree' && showWorktreePill && <WorktreePill theme={theme} />}
 					</div>
 				)}
 
