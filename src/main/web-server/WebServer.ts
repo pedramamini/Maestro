@@ -1290,6 +1290,7 @@ export class WebServer {
 				this.agentDispatchDeps?.settingsStore ??
 				this.planningPipelineDeps?.settingsStore ??
 				this.conversationalPrdDeps?.settingsStore ??
+				this.projectRolesDeps?.settingsStore ??
 				null,
 		};
 	}
