@@ -1,10 +1,9 @@
 /**
  * In-Memory Claim Tracker — #444
  *
- * Replaces the SQLite work_item_claims table as the authoritative runtime
- * source of claim state. Persists nothing — the ground truth is GitHub
- * Projects v2 (AI Assigned Slot field). On restart the reconciler in
- * main/index.ts releases any stale GitHub claims before pickup resumes.
+ * Live runtime cache of Work Graph claims currently held by dispatch slots.
+ * Work Graph is durable state; this tracker keeps renderer events, heartbeat,
+ * and slot cleanup cheap while the app is running.
  *
  * Used by:
  *   - DispatchEngine  (claim / release)
@@ -21,9 +20,9 @@ export interface ClaimInfo {
 	role: string;
 	issueNumber: number;
 	issueTitle: string;
-	/** GitHub Projects v2 item ID */
+	/** Work Graph item ID */
 	projectItemId: string;
-	/** GitHub node-ID of the project (for writes) */
+	/** Compatibility project identifier for older claim surfaces */
 	projectId: string;
 	/** The agentDispatch slot agent session ID that owns this claim */
 	agentSessionId: string;
@@ -107,7 +106,7 @@ export class ClaimTracker {
 	}
 
 	/**
-	 * Find a claim by projectItemId (GitHub item ID).
+	 * Find a claim by projectItemId / Work Graph item ID.
 	 */
 	getByProjectItemId(projectItemId: string): ClaimInfo | undefined {
 		for (const byRole of this.claims.values()) {

@@ -1,30 +1,24 @@
-> **State source-of-truth**: This project uses GitHub **Projects v2 custom fields** (`AI Status`, `AI Role`, `AI Stage`, `AI Priority`, `AI Assigned Slot`, etc.) for all dispatch state. Do NOT read or write `agent:*` labels (e.g., `agent:ready`, `agent:running`, `agent:failed-validation`) — those are legacy and meaningless to this system. Query field values via `gh project item-list` or the Maestro IPC. Update field values via `gh project item-edit` or via `pm:setStatus` IPC.
+> **State source-of-truth**: This project uses Maestro Board/Work Graph for all PM and dispatch state. Do NOT use GitHub labels or GitHub Projects fields as runtime state. Query and update state through Maestro PM IPC/commands such as `pm:setStatus`.
 
 # /PM-init
 
-Bootstrap the GitHub Projects v2 custom fields required by the Maestro delivery pipeline.
+Bootstrap the local Maestro Board / Work Graph PM state required by the Maestro delivery pipeline.
 
 Run this once per repository before using `/PM`, `/dispatch`, or any other project-management commands.
 
 ## What it does
 
-Idempotently creates the following AI-prefixed fields on the active project if they do not already exist:
+Idempotently ensures the local PM tags and board conventions exist for the active project:
 
-| Field              | Type          | Options                                                                                  |
-| ------------------ | ------------- | ---------------------------------------------------------------------------------------- |
-| AI Status          | Single-select | Backlog, Idea, PRD Draft, Refinement, Tasks Ready, In Progress, In Review, Blocked, Done |
-| AI Role            | Single-select | runner, fixer, reviewer, merger                                                          |
-| AI Stage           | Single-select | prd, epic, task                                                                          |
-| AI Priority        | Single-select | P0, P1, P2, P3                                                                           |
-| AI Parent PRD      | Text          | —                                                                                        |
-| AI Parent Epic     | Text          | —                                                                                        |
-| AI Assigned Slot   | Text          | —                                                                                        |
-| AI Last Heartbeat  | Text          | —                                                                                        |
-| AI Project         | Text          | —                                                                                        |
-| External Mirror ID | Text          | —                                                                                        |
+| Local PM artifact | Purpose                                                            |
+| ----------------- | ------------------------------------------------------------------ |
+| `agent-ready` tag | Marks unblocked work eligible for dispatch pickup                  |
+| `maestro-pm` tag  | Marks Work Graph items managed by Maestro Board                    |
+| Work Graph claims | Durable runner/fixer/reviewer/merger ownership and heartbeat state |
+| Work Graph status | Canonical lifecycle state for PM and dispatch                      |
 
-Running `/PM-init` a second time is safe — existing fields are left untouched.
+Running `/PM-init` a second time is safe — existing local PM state is left untouched.
 
 ## Errors
 
-If `gh auth login` has not been run, the command surfaces a clear auth error and exits without making any changes.
+If Work Graph initialization fails, the command returns the local error without touching GitHub.

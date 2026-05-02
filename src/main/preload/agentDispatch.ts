@@ -8,8 +8,8 @@
  * - Claim lifecycle events: onClaimStarted, onClaimEnded (renderer subscribes)
  * - MCP/slash-command registry: listAgents, listEligible, assign, release, pause, resume, createSubtask, status
  *
- * #444: workGraph namespace removed — GitHub Projects v2 is the sole durable state.
- * Board data now comes from the in-memory ClaimTracker via IPC events.
+ * Board data is local-first: Work Graph is durable state, with ClaimTracker
+ * providing the live renderer snapshot.
  */
 
 import { ipcRenderer } from 'electron';
@@ -29,7 +29,7 @@ export function createAgentDispatchApi() {
 		/** Manually assign a work item to an agent (userInitiated must be true). */
 		assignManually: (input: unknown) => ipcRenderer.invoke('agentDispatch:assignManually', input),
 
-		/** Release an active claim on a work item (clears AI Assigned Slot on GitHub). */
+		/** Release an active Work Graph claim on a work item. */
 		releaseClaim: (input: unknown) => ipcRenderer.invoke('agentDispatch:releaseClaim', input),
 
 		/** Pause auto-pickup for an agent (in-memory only, resets on restart). */

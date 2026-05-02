@@ -161,15 +161,14 @@ import { WakaTimeManager } from './wakatime-manager';
 import { MaestroCliManager } from './maestro-cli-manager';
 import type { TemplateContext } from '../shared/templateVariables';
 import { startBranchHygieneCron } from './pm-branch-hygiene/cron';
-// pm-reverse-sync poller removed (#444): GitHub-as-truth, no local DB to sync to
+// Maestro Board is the local Work Graph source of truth for PM + dispatch.
 import { startStaleClaimSweeper } from './pm-heartbeat/stale-sweeper';
 import { startDispatchPoller, stopDispatchPoller } from './agent-dispatch/dispatch-poller';
-import { createGithubAutoPickupCoordinator } from './agent-dispatch/github-auto-pickup';
-import { getGithubProjectCoordinator } from './agent-dispatch/github-project-coordinator';
-import { flushPendingWrites } from './agent-dispatch/github-pending-writes';
+import { createLocalPmAutoPickupCoordinator } from './agent-dispatch/local-pm-auto-pickup';
 import { getClaimTracker } from './agent-dispatch/claim-tracker';
 import { auditLog } from './agent-dispatch/dispatch-audit-log';
 import { executeSlot } from './agent-dispatch/slot-executor';
+import { createLocalPmService } from './local-pm';
 import type { ProjectRoleSlots } from '../shared/project-roles-types';
 
 // ============================================================================
@@ -813,28 +812,11 @@ app.whenReady().then(async () => {
 					return Object.keys(slotsMap).map((projectPath) => ({ projectPath }));
 				},
 				runAutoPickup: async (projectPath: string) => {
-					// (#443) Real auto-pickup: query GitHub for eligible work items and
-					// claim them via the configured runner slot.
+					// (#443) Auto-pickup: query Maestro Board / Work Graph for eligible
+					// work items and claim them via the configured runner slot.
 					const LOG = '[DispatchPoller]';
 
-					// 1. Look up per-project GitHub coordinates from the settings cache.
-					//    Without a mapping we cannot query Projects v2 — skip silently and
-					//    let the next tick retry (discovery happens via /PM-init or the
-					//    pm:resolveGithubProject IPC handler).
-					const githubMap = store.get('projectGithubMap', {}) as Record<
-						string,
-						{ owner: string; projectNumber: number; projectTitle?: string }
-					>;
-					const projectCoords = githubMap[projectPath];
-					if (!projectCoords) {
-						logger.debug(
-							`${LOG} No GitHub project mapping for "${projectPath}" — skipping tick`,
-							'Startup'
-						);
-						return;
-					}
-
-					// 2. Resolve runner slot configuration for this project.
+					// 1. Resolve runner slot configuration for this project.
 					const slotsMap = store.get('projectRoleSlots', {}) as Record<string, ProjectRoleSlots>;
 					const slots: ProjectRoleSlots = slotsMap[projectPath] ?? {};
 					const runnerSlot = slots.runner;
@@ -853,25 +835,21 @@ app.whenReady().then(async () => {
 						return;
 					}
 
-					// 3. Query GitHub Projects v2 through the dispatch GitHub
-					//    coordinator. This keeps GitHub reads/writes out of the
-					//    poller startup path.
-					const githubAutoPickup = createGithubAutoPickupCoordinator({
-						...projectCoords,
-						projectPath,
-					});
+					// 2. Query local Work Graph through the Maestro Board coordinator.
+					const localPm = createLocalPmService();
+					const localAutoPickup = createLocalPmAutoPickupCoordinator({ projectPath }, localPm);
 					let eligibleItems;
 					let inFlightItems;
 					try {
-						eligibleItems = await githubAutoPickup.listTasksReadyUnassigned();
+						eligibleItems = await localAutoPickup.listTasksReadyUnassigned();
 						// Also pull items already In Progress so we can rehydrate the
 						// in-memory claim tracker after a maestro restart and re-emit
 						// claimStarted to the renderer (otherwise the role icon stops
-						// flashing even though the runner is still alive remotely).
-						inFlightItems = await githubAutoPickup.listInProgressAssignedToSlot(runnerSlot.agentId);
+						// flashing even though the runner is still alive in Work Graph).
+						inFlightItems = await localAutoPickup.listInProgressAssignedToSlot(runnerSlot.agentId);
 					} catch (err) {
 						logger.warn(
-							`${LOG} GitHub query failed for "${projectPath}": ${err instanceof Error ? err.message : String(err)}`,
+							`${LOG} Work Graph query failed for "${projectPath}": ${err instanceof Error ? err.message : String(err)}`,
 							'Startup'
 						);
 						return;
@@ -887,7 +865,7 @@ app.whenReady().then(async () => {
 								claimId: `rehydrate-${item.id}`,
 								projectPath,
 								role: 'runner',
-								issueNumber: item.issueNumber ?? 0,
+								issueNumber: item.github?.issueNumber ?? 0,
 								issueTitle: item.title ?? item.id,
 								projectItemId: item.id,
 								projectId: '',
@@ -902,13 +880,13 @@ app.whenReady().then(async () => {
 									role: 'runner',
 									agentId: runnerSlot.agentId,
 									sessionId: `dispatch-runner-${item.id}`,
-									issueNumber: item.issueNumber,
+									issueNumber: item.github?.issueNumber,
 									issueTitle: item.title,
 									claimedAt,
 								});
 							}
 							logger.info(
-								`${LOG} Rehydrated in-flight claim for item ${item.id} (#${item.issueNumber ?? '?'}) — slot icon should resume flashing`,
+								`${LOG} Rehydrated in-flight Maestro Board claim for item ${item.id} — slot icon should resume flashing`,
 								'Startup'
 							);
 						}
@@ -961,8 +939,8 @@ app.whenReady().then(async () => {
 
 						let projectId: string;
 						try {
-							// Durable GitHub claim: assign runner slot and mark In Progress.
-							({ projectId } = await githubAutoPickup.claimRunnerSlot(item.id, runnerSlot.agentId));
+							// Durable local claim: assign runner slot in Work Graph.
+							({ projectId } = await localAutoPickup.claimRunnerSlot(item.id, runnerSlot.agentId));
 						} catch (err) {
 							logger.warn(
 								`${LOG} Failed to claim item ${item.id}: ${err instanceof Error ? err.message : String(err)}`,
@@ -978,7 +956,7 @@ app.whenReady().then(async () => {
 							claimId: `poller-${item.id}`,
 							projectPath,
 							role: 'runner',
-							issueNumber: item.issueNumber ?? 0,
+							issueNumber: item.github?.issueNumber ?? 0,
 							issueTitle: item.title ?? item.id,
 							projectItemId: item.id,
 							projectId,
@@ -1005,23 +983,12 @@ app.whenReady().then(async () => {
 							title: item.title ?? `Work item ${item.id}`,
 							projectPath,
 							gitPath: projectPath,
-							source: 'github' as const,
+							source: 'agent-dispatch' as const,
 							readonly: false,
 							tags: ['agent-ready'],
 							version: 0,
 							createdAt: claimedAt,
 							updatedAt: claimedAt,
-							github: item.issueNumber
-								? {
-										owner: projectCoords.owner,
-										repo: item.fields?.['Repository'] ?? '',
-										repository: `${projectCoords.owner}/${item.fields?.['Repository'] ?? ''}`,
-										issueNumber: item.issueNumber,
-										projectOwner: projectCoords.owner,
-										projectNumber: projectCoords.projectNumber,
-										projectItemId: item.id,
-									}
-								: undefined,
 						};
 
 						const sessionConfig = {
@@ -1053,7 +1020,7 @@ app.whenReady().then(async () => {
 							sshStore,
 							releaseClaim: async (workItemId, opts) => {
 								try {
-									await githubAutoPickup.releaseRunnerSlot(workItemId);
+									await localAutoPickup.releaseRunnerSlot(workItemId);
 									claimTracker.removeClaim(runnerSlot.agentId, 'runner');
 									auditLog('release', {
 										actor: opts?.actor ? String(opts.actor.id) : 'dispatch-poller',
@@ -1116,20 +1083,12 @@ app.whenReady().then(async () => {
 		}
 	}
 
-	// pm-reverse-sync poller removed (#444): GitHub Projects v2 is now the sole durable
-	// state; there is no local DB to sync to.
+	// Maestro Board / Work Graph is the durable PM state. GitHub mirror work must
+	// never run in the dispatch startup path.
 
-	// Start stale-claim sweeper (#435, #444): auto-releases claims with no heartbeat for >5 min.
-	// #444: uses in-memory ClaimTracker + GithubClient instead of work-graph SQLite.
+	// Start stale-claim sweeper (#435): auto-releases local claims with no heartbeat for >5 min.
 	// Not gated — sweeper is lightweight and handles absence of deliveryPlanner gracefully.
 	startStaleClaimSweeper();
-
-	// Self-healing on startup (#444): release any GitHub AI Assigned Slot entries that
-	// point at this Maestro install from a previous run (in-memory state was lost on
-	// restart; those claims are stale by definition).
-	if (encoreFeatures.agentDispatch || encoreFeatures.deliveryPlanner) {
-		void recoverGithubProjectStateOnStartup();
-	}
 
 	// Start Cue engine if the Encore Feature flag is enabled
 	if (encoreFeatures.maestroCue && cueEngine) {
@@ -1732,106 +1691,5 @@ function setupProcessListeners() {
 
 		// WakaTime heartbeat listener (query-complete → heartbeat, exit → cleanup)
 		setupWakaTimeListener(processManager, wakatimeManager, store);
-	}
-}
-
-// ---------------------------------------------------------------------------
-// Self-healing reconciliation (#444)
-// ---------------------------------------------------------------------------
-
-async function recoverGithubProjectStateOnStartup(): Promise<void> {
-	await flushPendingGithubWritesOnStartup();
-	await reconcileStaleGithubClaims();
-}
-
-async function flushPendingGithubWritesOnStartup(): Promise<void> {
-	const LOG = '[GithubPendingWrites]';
-	try {
-		const flushed = await flushPendingWrites(getGithubProjectCoordinator());
-		if (flushed.length > 0) {
-			logger.info(`Startup flushed ${flushed.length} pending GitHub Project write(s)`, LOG);
-		}
-	} catch (err) {
-		logger.warn(
-			`Startup pending GitHub write flush failed: ${err instanceof Error ? err.message : String(err)}`,
-			LOG
-		);
-	}
-}
-
-/**
- * On startup, release any GitHub Projects v2 items whose AI Assigned Slot
- * points at this Maestro install from a previous run.  In-memory state
- * (ClaimTracker) was lost on restart, so those claims are stale by definition.
- *
- * Strategy: query all project items. For any item where AI Assigned Slot is
- * non-empty AND not already in the in-memory ClaimTracker, clear the slot and
- * reset AI Status to "Tasks Ready".
- *
- * This runs once, fire-and-forget, after setupIpcHandlers() completes.
- */
-async function reconcileStaleGithubClaims(): Promise<void> {
-	const LOG = '[StartupReconcile]';
-	try {
-		const githubMap = store.get('projectGithubMap', {}) as Record<
-			string,
-			{ owner: string; projectNumber: number; projectTitle?: string }
-		>;
-		const projects = Object.entries(githubMap);
-		if (projects.length === 0) {
-			logger.info('Startup reconcile: no GitHub project mappings found', LOG);
-			return;
-		}
-
-		const coordinator = getGithubProjectCoordinator();
-		const tracker = getClaimTracker();
-		let found = 0;
-		let released = 0;
-
-		for (const [projectPath, mapping] of projects) {
-			const project = {
-				projectOwner: mapping.owner,
-				projectNumber: mapping.projectNumber,
-				projectPath,
-			};
-			const snapshot = await coordinator.getBoardSnapshot(project);
-			const assignedItems = snapshot.items.filter(
-				(item) => (item.fields['AI Assigned Slot'] ?? '') !== ''
-			);
-			found += assignedItems.length;
-
-			for (const item of assignedItems) {
-				// If we already have an in-memory claim for this item, it's active — skip
-				if (tracker.getByProjectItemId(item.id)) continue;
-
-				// No in-memory claim → stale from previous run → release
-				try {
-					await coordinator.releaseItem(project, item.id, 'Tasks Ready');
-					auditLog('reconcile_stale', {
-						actor: 'startup-reconcile',
-						workItemId: item.id,
-						reason: `Startup: AI Assigned Slot was "${item.fields['AI Assigned Slot']}" but no in-memory claim — cleared`,
-					});
-					released++;
-				} catch (err) {
-					logger.warn(
-						`Startup reconcile: failed to release item ${item.id}: ${err instanceof Error ? err.message : String(err)}`,
-						LOG
-					);
-				}
-			}
-		}
-
-		if (found === 0) {
-			logger.info('Startup reconcile: no assigned slots found — nothing to release', LOG);
-			return;
-		}
-
-		logger.info(`Startup reconcile: released ${released}/${found} stale claim(s)`, LOG);
-	} catch (err) {
-		logger.warn(
-			`Startup reconcile: failed — ${err instanceof Error ? err.message : String(err)}`,
-			'[StartupReconcile]'
-		);
 	}
 }

@@ -5,10 +5,10 @@
  * the renderer via strongly-typed IPC channels.
  *
  * Channel conventions:
- *   agentDispatch:getBoard        → in-memory claim state (GitHub-backed, #444)
+ *   agentDispatch:getBoard        → in-memory claim state backed by Work Graph claims
  *   agentDispatch:getFleet        → current fleet entries from FleetRegistry
  *   agentDispatch:assignManually  → manual claim via AgentDispatchEngine
- *   agentDispatch:releaseClaim    → release a claim on GitHub via ClaimTracker
+ *   agentDispatch:releaseClaim    → release a Work Graph claim via ClaimTracker
  *   agentDispatch:pauseAgent      → pause auto-pickup for an agent
  *   agentDispatch:resumeAgent     → resume auto-pickup for an agent
  *
@@ -16,8 +16,8 @@
  *   agentDispatch:claimStarted    → { projectPath, role, issueNumber, issueTitle, claimedAt }
  *   agentDispatch:claimEnded      → { projectPath, role }
  *
- * #444: work-graph SQLite removed. Board data now comes from the in-memory
- * ClaimTracker, which is populated by DispatchEngine on claim/release.
+ * Board data comes from the in-memory ClaimTracker, rehydrated from Work Graph
+ * during dispatch polling and updated by claim/release events.
  *
  * Pause/resume are implemented through FleetRegistry.pause()/resume() which
  * flip a local in-memory pause flag. They do NOT persist across restarts.
@@ -35,10 +35,8 @@ import type { AgentDispatchRuntime } from '../../agent-dispatch/runtime';
 import type { SettingsStoreInterface } from '../../stores/types';
 import { logger } from '../../utils/logger';
 import { getClaimTracker } from '../../agent-dispatch/claim-tracker';
-import { getGithubClient } from '../../agent-dispatch/github-client';
-import { getGithubProjectCoordinator } from '../../agent-dispatch/github-project-coordinator';
-import { getProjectReferenceForPath } from '../../agent-dispatch/github-project-mapping';
 import { auditLog } from '../../agent-dispatch/dispatch-audit-log';
+import { createLocalPmService } from '../../local-pm';
 
 const LOG_CONTEXT = '[AgentDispatch]';
 
@@ -90,7 +88,7 @@ export function registerAgentDispatchHandlers(deps: AgentDispatchHandlerDependen
 	// agentDispatch:getBoard
 	//
 	// Returns in-memory claim state as a board-shaped response.
-	// #444: no longer queries work-graph SQLite — uses ClaimTracker instead.
+	// Uses ClaimTracker instead of querying the board on every render.
 	// The renderer subscribes to claimStarted/Ended events for live updates and
 	// only calls getBoard for initial hydration.
 	// -------------------------------------------------------------------------
@@ -157,9 +155,8 @@ export function registerAgentDispatchHandlers(deps: AgentDispatchHandlerDependen
 	// -------------------------------------------------------------------------
 	// agentDispatch:releaseClaim
 	//
-	// Releases an active claim: clears AI Assigned Slot on GitHub and removes
+	// Releases an active claim in Work Graph and removes it
 	// from the in-memory ClaimTracker.
-	// #444: no longer touches work-graph SQLite.
 	// -------------------------------------------------------------------------
 	ipcMain.handle(
 		'agentDispatch:releaseClaim',
@@ -178,24 +175,13 @@ export function registerAgentDispatchHandlers(deps: AgentDispatchHandlerDependen
 						error: `No active claim for projectItemId: ${input.projectItemId}`,
 					};
 				}
-				const project = getProjectReferenceForPath(deps.settingsStore, claim.projectPath);
-				if (project) {
-					await getGithubProjectCoordinator().releaseItem(project, claim.projectItemId);
-				} else {
-					const client = getGithubClient();
-					await client.setItemFieldValue(
-						claim.projectId,
-						claim.projectItemId,
-						'AI Assigned Slot',
-						''
-					);
-					await client.setItemFieldValue(
-						claim.projectId,
-						claim.projectItemId,
-						'AI Status',
-						'Tasks Ready'
-					);
-				}
+				await createLocalPmService().releaseClaim({
+					projectPath: claim.projectPath,
+					workItemId: claim.projectItemId,
+					agentId: claim.agentSessionId,
+					revertStatusTo: 'ready',
+					note: 'manual release via IPC',
+				});
 				tracker.removeClaim(claim.agentSessionId, claim.role);
 				auditLog('release', {
 					actor: input.agentSessionId ?? 'user',

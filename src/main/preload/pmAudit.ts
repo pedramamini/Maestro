@@ -6,20 +6,19 @@
  */
 
 import { ipcRenderer } from 'electron';
-import type { PmAuditRunOptions } from '../ipc/handlers/pm-audit';
-import type { AuditReport } from '../pm-audit/audit-runner';
+import type { PmAuditRunOptions, PmAuditRunResult } from '../ipc/handlers/pm-audit';
 
 export function createPmAuditApi() {
 	return {
 		/**
-		 * Run the full 7-check audit sweep over all non-archived work items.
+		 * Run the local PM audit sweep over active Work Graph claims.
 		 *
 		 * @param opts - Optional overrides (staleClaimMs, projectRoleSlots).
-		 * @returns A structured AuditReport with autoFixed and needsAttention findings.
+		 * @returns A structured report with autoFixed and needsAttention findings.
 		 */
 		run: (
 			opts?: PmAuditRunOptions
-		): Promise<{ success: true; data: AuditReport } | { success: false; error: string }> =>
+		): Promise<PmAuditRunResult | { success: false; error: string }> =>
 			ipcRenderer.invoke('pmAudit:run', opts ?? {}),
 	};
 }

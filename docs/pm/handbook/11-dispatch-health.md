@@ -120,7 +120,7 @@ If the slot agent for runner is mis-configured (wrong host), the runner can't se
 
 ### What this means for "check the dispatch end-to-end"
 
-A PM agent reading this handbook from a runner on a remote host **cannot** verify the maestro main server is up, the poller is ticking, or the IPC bus is alive. The contract is: GitHub is the source of truth, and the maestro main server is responsible for keeping GitHub in sync with reality. If GitHub looks healthy, the dispatch _is_ healthy — that's the whole point of the GitHub-as-truth refactor (#444). If you suspect maestro itself is wedged, that's a question for the user to answer from their own shell on the maestro host (e.g. `systemctl status maestro-headless`); don't try to answer it from PM mode.
+A PM agent reading this handbook from a runner on a remote host **cannot** verify the maestro main server is up, the poller is ticking, or the IPC bus is alive. The contract is: Maestro Board / Work Graph is the source of truth, and the maestro main server is responsible for keeping local claims, heartbeats, and board state current. If Work Graph claim/status state looks healthy, dispatch is healthy. If you suspect maestro itself is wedged, that's a question for the user to answer from their own shell on the maestro host (e.g. `systemctl status maestro-headless`); don't try to answer it from PM mode.
 
 ## Handoff actions you can offer the user
 

@@ -228,7 +228,6 @@ contextBridge.exposeInMainWorld('maestro', {
 	memory: createMemoryApi(),
 
 	// Agent Dispatch API (fleet, board, assign, release, pause/resume + MCP registry)
-	// #444: workGraph namespace removed — GitHub Projects v2 is the sole durable state.
 	agentDispatch: createAgentDispatchApi(),
 
 	// Per-project role slot roster API (#429)

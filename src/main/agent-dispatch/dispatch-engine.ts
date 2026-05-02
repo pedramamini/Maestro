@@ -617,11 +617,11 @@ function uniqueSorted(values: string[]): string[] {
 
 /**
  * Emit a console warning when a work item's tags contain legacy Symphony-runner
- * `agent:*` labels.  These labels are ignored by this dispatch system — the
- * AI Status custom field on GitHub Projects v2 is the sole source of truth.
+ * `agent:*` labels. These labels are ignored by this dispatch system; Work
+ * Graph status and claims are the source of truth.
  *
- * Run `/PM migrate-labels` once per repo to convert legacy labels to AI Status
- * field values and remove the labels from the issues.
+ * Run `/PM migrate-labels` once per repo to convert legacy labels to local PM
+ * state and remove the labels from the issues.
  */
 const LEGACY_AGENT_LABELS = [
 	'agent:ready',
@@ -636,8 +636,8 @@ function warnIfLegacyLabels(workItemId: string, tags: string[]): void {
 	if (found.length === 0) return;
 	logger.warn(
 		`Legacy label(s) detected on issue/item "${workItemId}": [${found.join(', ')}]. ` +
-			`These are ignored — the AI Status custom field on GitHub Projects v2 is the source of truth. ` +
-			`Run /PM migrate-labels to convert legacy labels to AI Status field values.`,
+			`These are ignored — Work Graph status and claims are the source of truth. ` +
+			`Run /PM migrate-labels to convert legacy labels to local PM state.`,
 		'DispatchEngine'
 	);
 }

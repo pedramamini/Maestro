@@ -13,12 +13,9 @@
 
 import { ipcMain } from 'electron';
 import { requireEncoreFeature } from '../../utils/requireEncoreFeature';
-import { runAudit } from '../../pm-audit/audit-runner';
-import type { AuditReport } from '../../pm-audit/audit-runner';
+import { runLocalPmAudit, type LocalPmAuditReport } from '../../local-pm/pm-tools';
 import type { SettingsStoreInterface } from '../../stores/types';
 import { logger } from '../../utils/logger';
-import { getProjectReferenceForPath } from '../../agent-dispatch/github-project-mapping';
-import type { GithubProjectReference } from '../../agent-dispatch/github-project-coordinator';
 
 const LOG_CONTEXT = '[PmAudit]';
 
@@ -37,7 +34,7 @@ export interface PmAuditRunOptions {
 
 export interface PmAuditRunResult {
 	success: true;
-	data: AuditReport;
+	data: LocalPmAuditReport;
 }
 
 export interface PmAuditHandlerDependencies {
@@ -56,23 +53,21 @@ export function registerPmAuditHandlers(deps: PmAuditHandlerDependencies): void 
 		}
 
 		try {
-			const project = opts.projectPath
-				? getProjectReferenceForPath(deps.settingsStore, opts.projectPath)
-				: getOnlyProjectReference(deps.settingsStore);
-
-			const report = await runAudit({
-				now: Date.now(),
+			const report = await runLocalPmAudit({
 				staleClaimMs: opts.staleClaimMs ?? 5 * 60 * 1000,
+				projectPath: opts.projectPath,
 				projectRoleSlots: opts.projectRoleSlots,
-				...(project && { project }),
 			});
+			if (!report.success) {
+				return report;
+			}
 
 			logger.info(
-				`pmAudit:run complete — audited=${report.totalAudited} autoFixed=${report.autoFixed.length} needsAttention=${report.needsAttention.length} errors=${report.errors.length}`,
+				`pmAudit:run complete — audited=${report.data.totalAudited} autoFixed=${report.data.autoFixed.length} needsAttention=${report.data.needsAttention.length} errors=${report.data.errors.length}`,
 				LOG_CONTEXT
 			);
 
-			return { success: true, data: report } satisfies PmAuditRunResult;
+			return { success: true, data: report.data } satisfies PmAuditRunResult;
 		} catch (err) {
 			const message = err instanceof Error ? err.message : String(err);
 			logger.error(`pmAudit:run failed: ${message}`, LOG_CONTEXT);
@@ -81,14 +76,4 @@ export function registerPmAuditHandlers(deps: PmAuditHandlerDependencies): void 
 	});
 
 	logger.info('PM Audit IPC handlers registered', LOG_CONTEXT);
-}
-
-function getOnlyProjectReference(
-	settingsStore: SettingsStoreInterface
-): GithubProjectReference | undefined {
-	const map = settingsStore.get<Record<string, unknown>>('projectGithubMap', {});
-	const entries = Object.entries(map);
-	if (entries.length !== 1) return undefined;
-	const [projectPath] = entries[0];
-	return getProjectReferenceForPath(settingsStore, projectPath);
 }

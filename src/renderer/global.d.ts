@@ -3472,8 +3472,8 @@ interface MaestroAPI {
 		) => Promise<{ success: boolean; path?: string; error?: string }>;
 	};
 
-	// #444: workGraph namespace removed — GitHub Projects v2 is the sole durable state.
-	// Renderer uses agentDispatch.onClaimStarted/onClaimEnded for live updates.
+	// Work Graph is durable PM state. Renderer uses agentDispatch.onClaimStarted/onClaimEnded
+	// for live claim updates.
 
 	// Agent Dispatch API (fleet, board, assign, release, pause/resume, claim events)
 	// #444: getBoard returns in-memory ClaimTracker state; workGraph namespace eliminated.
@@ -3854,7 +3854,7 @@ interface MaestroAPI {
 	// pm-init API — /PM-init idempotent field bootstrap (#445)
 	pmInit: {
 		/**
-		 * Idempotently ensure all AI-prefixed Projects v2 custom fields exist.
+		 * Idempotently initialize local Maestro Board / Work Graph PM state.
 		 * Gated by the `deliveryPlanner` encore feature flag.
 		 *
 		 * @param input - Optional { repo } override (reserved for future use).

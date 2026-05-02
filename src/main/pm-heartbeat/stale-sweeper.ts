@@ -3,13 +3,8 @@
  *
  * Runs on a configurable interval (default: 30 s). Iterates the in-memory
  * ClaimTracker looking for claims whose lastHeartbeatAt is older than
- * staleMs (default: 5 min). If found, releases the claim on GitHub by:
- *   1. Clearing AI Assigned Slot on the project item
- *   2. Setting AI Status = "Tasks Ready"
- *   3. Posting a comment on the linked GitHub issue
- *
- * #444: work-graph SQLite removed. The sweeper uses the ClaimTracker (in-memory)
- * and the GitHub project coordinator (GitHub as truth) instead of the DB.
+ * staleMs (default: 5 min). If found, releases the matching Work Graph claim
+ * and returns the item to Ready.
  *
  * This is intentionally separate from the pmAudit on-demand runner (#434):
  *   - sweeper = continuous background auto-release
@@ -17,16 +12,9 @@
  */
 
 import { getClaimTracker, type ClaimInfo } from '../agent-dispatch/claim-tracker';
-import { getGithubClient } from '../agent-dispatch/github-client';
-import { getGithubProjectCoordinator } from '../agent-dispatch/github-project-coordinator';
-import {
-	getProjectReferenceForPath,
-	getProjectRepoSlug,
-} from '../agent-dispatch/github-project-mapping';
 import { auditLog } from '../agent-dispatch/dispatch-audit-log';
 import { logger } from '../utils/logger';
-import { DELIVERY_PLANNER_GITHUB_REPOSITORY } from '../delivery-planner/github-safety';
-import { getSettingsStore } from '../stores';
+import { createLocalPmService } from '../local-pm';
 
 const LOG_CONTEXT = '[StaleSweeper]';
 
@@ -82,26 +70,16 @@ async function releaseStale(claim: ClaimInfo): Promise<void> {
 	const tracker = getClaimTracker();
 
 	try {
-		// 1. Clear AI Assigned Slot and reset AI Status on GitHub
-		const settingsStore = getSettingsStore();
-		const project = getProjectReferenceForPath(settingsStore, claim.projectPath);
-		if (project) {
-			await getGithubProjectCoordinator().releaseItem(project, claim.projectItemId);
-		} else {
-			const client = getGithubClient();
-			await client.setItemFieldValue(claim.projectId, claim.projectItemId, 'AI Assigned Slot', '');
-			await client.setItemFieldValue(
-				claim.projectId,
-				claim.projectItemId,
-				'AI Status',
-				'Tasks Ready'
-			);
-		}
+		await createLocalPmService().releaseClaim({
+			projectPath: claim.projectPath,
+			workItemId: claim.projectItemId,
+			agentId: claim.agentSessionId,
+			revertStatusTo: 'ready',
+			note: `Auto-released after missing heartbeat (agentSessionId=${claim.agentSessionId} role=${claim.role})`,
+		});
 
-		// 2. Remove from in-memory tracker
 		tracker.removeClaim(claim.agentSessionId, claim.role);
 
-		// 3. Audit log
 		auditLog('heartbeat_stale', {
 			actor: 'stale-sweeper',
 			workItemId: claim.projectItemId,
@@ -112,18 +90,6 @@ async function releaseStale(claim: ClaimInfo): Promise<void> {
 			`Stale-claim auto-released: projectItem=${claim.projectItemId} role=${claim.role}`,
 			LOG_CONTEXT
 		);
-
-		// 4. Post a comment on the GitHub issue (best-effort)
-		if (claim.issueNumber) {
-			await postStaleComment(claim).catch((err) => {
-				logger.warn(
-					`Stale sweep: GitHub comment failed for issue #${claim.issueNumber}: ${
-						err instanceof Error ? err.message : String(err)
-					}`,
-					LOG_CONTEXT
-				);
-			});
-		}
 	} catch (err) {
 		logger.warn(
 			`Stale sweep: failed to release claim for projectItem=${claim.projectItemId}: ${
@@ -132,22 +98,4 @@ async function releaseStale(claim: ClaimInfo): Promise<void> {
 			LOG_CONTEXT
 		);
 	}
-}
-
-async function postStaleComment(claim: ClaimInfo): Promise<void> {
-	const settingsStore = getSettingsStore();
-	const project = getProjectReferenceForPath(settingsStore, claim.projectPath);
-	const repoSlug = getProjectRepoSlug(settingsStore, claim.projectPath);
-	const body =
-		'**Agent timeout** — claim auto-released after missing heartbeat. Item returned to Tasks Ready.';
-	if (project && repoSlug) {
-		await getGithubProjectCoordinator().addItemComment(project, claim.issueNumber, repoSlug, body);
-		return;
-	}
-
-	await getGithubClient().addItemComment(
-		claim.issueNumber,
-		DELIVERY_PLANNER_GITHUB_REPOSITORY,
-		body
-	);
 }

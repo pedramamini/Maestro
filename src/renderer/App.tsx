@@ -497,10 +497,9 @@ function MaestroConsoleInner() {
 	// sessionsLoaded moved to useQueueProcessing hook
 	const activeSession = useActiveSession();
 
-	// --- Claim heartbeat loop (#435, #444) ---
+	// --- Claim heartbeat loop (#435) ---
 	// Keeps the stale-claim sweeper from auto-releasing our claim while the agent is running.
-	// #444: workGraph.listItems removed — use agentDispatch:getBoard (in-memory ClaimTracker).
-	// The heartbeat now identifies a claim by projectItemId, not workItemId.
+	// The renderer uses agentDispatch:getBoard as the live ClaimTracker snapshot.
 	const [activeClaimProjectItemId, setActiveClaimProjectItemId] = React.useState<string | null>(
 		null
 	);

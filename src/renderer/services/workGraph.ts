@@ -1,11 +1,9 @@
 /**
- * Work Graph renderer service — STUBBED (#444)
+ * Work Graph renderer service — IPC bridge placeholder
  *
- * The local work-graph SQLite DB and workGraph IPC namespace have been
- * removed in #444 (GitHub-as-truth refactor). This file is kept to avoid
- * breaking delivery-planner, kanban board, and other callers that still
- * reference workGraphService. Those callers will be migrated to GitHub-direct
- * queries in follow-up issues.
+ * Local PM/dispatch now uses Work Graph as durable state in the main process.
+ * This renderer service remains a placeholder until a dedicated Work Graph
+ * read IPC is re-exposed for UI boards and inspectors.
  *
  * All methods return empty results or no-ops so callers degrade gracefully
  * rather than crashing at runtime.
@@ -26,35 +24,35 @@ export const workGraphService = {
 	getItem: (_id: string): Promise<WorkItem | undefined> => Promise.resolve(undefined),
 
 	createItem: (_input: unknown): Promise<WorkItem> =>
-		Promise.reject(new Error('workGraph removed (#444) — use GitHub directly')),
+		Promise.reject(new Error('Work Graph renderer write IPC is not exposed yet')),
 
 	updateItem: (_input: unknown): Promise<WorkItem> =>
-		Promise.reject(new Error('workGraph removed (#444) — use GitHub directly')),
+		Promise.reject(new Error('Work Graph renderer write IPC is not exposed yet')),
 
 	deleteItem: (_id: string): Promise<boolean> =>
-		Promise.reject(new Error('workGraph removed (#444) — use GitHub directly')),
+		Promise.reject(new Error('Work Graph renderer write IPC is not exposed yet')),
 
 	claimItem: (_input: unknown): Promise<unknown> =>
-		Promise.reject(new Error('workGraph removed (#444) — use GitHub directly')),
+		Promise.reject(new Error('Work Graph renderer claim IPC is not exposed yet')),
 
 	renewClaim: (_input: unknown): Promise<unknown> =>
-		Promise.reject(new Error('workGraph removed (#444) — use GitHub directly')),
+		Promise.reject(new Error('Work Graph renderer claim IPC is not exposed yet')),
 
 	releaseClaim: (_input: unknown): Promise<unknown> =>
-		Promise.reject(new Error('workGraph removed (#444) — use GitHub directly')),
+		Promise.reject(new Error('Work Graph renderer claim IPC is not exposed yet')),
 
 	completeClaim: (_input: unknown): Promise<unknown> =>
-		Promise.reject(new Error('workGraph removed (#444) — use GitHub directly')),
+		Promise.reject(new Error('Work Graph renderer claim IPC is not exposed yet')),
 
 	listEvents: (_workItemId: string): Promise<unknown[]> => Promise.resolve([]),
 
 	listTags: (): Promise<unknown[]> => Promise.resolve([]),
 
 	upsertTag: (_definition: unknown): Promise<unknown> =>
-		Promise.reject(new Error('workGraph removed (#444) — use GitHub directly')),
+		Promise.reject(new Error('Work Graph renderer tag IPC is not exposed yet')),
 
 	importItems: (_input: unknown): Promise<unknown> =>
-		Promise.reject(new Error('workGraph removed (#444) — use GitHub directly')),
+		Promise.reject(new Error('Work Graph renderer import IPC is not exposed yet')),
 
 	getUnblockedAgentReadyWork: (_filters?: unknown): Promise<WorkGraphListResult> =>
 		Promise.resolve(EMPTY_LIST),

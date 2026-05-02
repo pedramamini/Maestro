@@ -11,7 +11,7 @@ import type { PmInitInput, PmInitResult } from '../ipc/handlers/pm-init';
 export function createPmInitApi() {
 	return {
 		/**
-		 * Idempotently ensure all AI-prefixed Projects v2 custom fields exist.
+		 * Idempotently initialize the local Maestro Board / Work Graph PM surface.
 		 * Returns { created, existing, errors }.
 		 */
 		initRepo: (input: PmInitInput = {}): Promise<PmInitResult> =>

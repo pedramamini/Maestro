@@ -2,7 +2,7 @@
  * pm-tools IPC handlers — agent-callable project management tools (#430).
  *
  * Exposes three channels that agents call at workflow transitions to self-update
- * their claimed work item in the Projects v2 custom fields:
+ * their claimed work item in Maestro Board / Work Graph:
  *
  *   pm:setStatus  → updates AI Status field for the agent's claimed item
  *   pm:setRole    → updates AI Role field for the agent's claimed item
@@ -12,10 +12,8 @@
  *  1. Resolves the calling agent's currently-claimed work item via in-memory ClaimTracker.
  *  2. Enforces ownership — agents cannot update items they don't own.
  *  3. Persists the new field value to GitHub Projects v2 via the project coordinator
- *     when per-project mapping exists, with the legacy GithubClient path as fallback.
+ *  3. Persists the new PM value to Work Graph.
  *  4. Records an audit event in the local JSONL audit log.
- *
- * #444: work-graph SQLite removed — GitHub Projects v2 is the sole durable state.
  *
  * Gated by the `deliveryPlanner` encore feature flag (same gate as delivery-planner handlers).
  */
@@ -24,16 +22,9 @@ import { ipcMain } from 'electron';
 import { requireEncoreFeature } from '../../utils/requireEncoreFeature';
 import type { SettingsStoreInterface } from '../../stores/types';
 import { getClaimTracker } from '../../agent-dispatch/claim-tracker';
-import type { ClaimInfo } from '../../agent-dispatch/claim-tracker';
-import { getGithubClient } from '../../agent-dispatch/github-client';
-import { getGithubProjectCoordinator } from '../../agent-dispatch/github-project-coordinator';
-import {
-	getProjectReferenceForPath,
-	getProjectRepoSlug,
-} from '../../agent-dispatch/github-project-mapping';
 import { auditLog } from '../../agent-dispatch/dispatch-audit-log';
 import { sweepMergedBranches } from '../../pm-branch-hygiene/branch-cleaner';
-import { DELIVERY_PLANNER_GITHUB_REPOSITORY } from '../../delivery-planner/github-safety';
+import { setLocalPmBlocked, setLocalPmRole, setLocalPmStatus } from '../../local-pm/pm-tools';
 import { logger } from '../../utils/logger';
 
 const LOG_CONTEXT = '[PmTools]';
@@ -85,7 +76,15 @@ export function registerPmToolsHandlers(deps: PmToolsHandlerDependencies): void 
 				};
 			}
 
-			await setClaimItemFieldValue(deps.settingsStore, claim, 'AI Status', input.status);
+			const result = await setLocalPmStatus({
+				agentSessionId: input.agentSessionId,
+				status: input.status,
+				projectPath: claim.projectPath,
+				workItemId: claim.projectItemId,
+			});
+			if (!result.success) {
+				return result;
+			}
 
 			auditLog('status_change', {
 				actor: input.agentSessionId,
@@ -106,11 +105,7 @@ export function registerPmToolsHandlers(deps: PmToolsHandlerDependencies): void 
 
 			return {
 				success: true,
-				data: {
-					workItemId: claim.projectItemId,
-					field: 'AI Status',
-					value: input.status,
-				} satisfies PmToolsResult,
+				data: result.data satisfies PmToolsResult,
 			};
 		} catch (err) {
 			const message = err instanceof Error ? err.message : String(err);
@@ -133,7 +128,15 @@ export function registerPmToolsHandlers(deps: PmToolsHandlerDependencies): void 
 				};
 			}
 
-			await setClaimItemFieldValue(deps.settingsStore, claim, 'AI Role', input.role);
+			const result = await setLocalPmRole({
+				agentSessionId: input.agentSessionId,
+				role: input.role,
+				projectPath: claim.projectPath,
+				workItemId: claim.projectItemId,
+			});
+			if (!result.success) {
+				return result;
+			}
 
 			auditLog('role_change', {
 				actor: input.agentSessionId,
@@ -145,11 +148,7 @@ export function registerPmToolsHandlers(deps: PmToolsHandlerDependencies): void 
 			logger.info(`pm:setRole projectItem=${claim.projectItemId} role=${input.role}`, LOG_CONTEXT);
 			return {
 				success: true,
-				data: {
-					workItemId: claim.projectItemId,
-					field: 'AI Role',
-					value: input.role,
-				} satisfies PmToolsResult,
+				data: result.data satisfies PmToolsResult,
 			};
 		} catch (err) {
 			const message = err instanceof Error ? err.message : String(err);
@@ -172,12 +171,14 @@ export function registerPmToolsHandlers(deps: PmToolsHandlerDependencies): void 
 				};
 			}
 
-			// 1. Set AI Status → Blocked on GitHub Projects v2
-			await setClaimItemFieldValue(deps.settingsStore, claim, 'AI Status', 'Blocked');
-
-			// 2. Post a comment on the GitHub issue if we have the issue number
-			if (claim.issueNumber) {
-				await addClaimItemComment(deps.settingsStore, claim, `**Blocked** — ${input.reason}`);
+			const result = await setLocalPmBlocked({
+				agentSessionId: input.agentSessionId,
+				reason: input.reason,
+				projectPath: claim.projectPath,
+				workItemId: claim.projectItemId,
+			});
+			if (!result.success) {
+				return result;
 			}
 
 			auditLog('blocked', {
@@ -194,11 +195,7 @@ export function registerPmToolsHandlers(deps: PmToolsHandlerDependencies): void 
 			);
 			return {
 				success: true,
-				data: {
-					workItemId: claim.projectItemId,
-					field: 'AI Status',
-					value: 'Blocked',
-				} satisfies PmToolsResult,
+				data: result.data satisfies PmToolsResult,
 			};
 		} catch (err) {
 			const message = err instanceof Error ? err.message : String(err);
@@ -206,47 +203,6 @@ export function registerPmToolsHandlers(deps: PmToolsHandlerDependencies): void 
 			return { success: false, error: message };
 		}
 	});
-}
-
-// ── GitHub project gateway helpers ─────────────────────────────────────────
-
-async function setClaimItemFieldValue(
-	settingsStore: SettingsStoreInterface,
-	claim: ClaimInfo,
-	fieldName: string,
-	value: string
-): Promise<void> {
-	const project = getProjectReferenceForPath(settingsStore, claim.projectPath);
-	if (project) {
-		await getGithubProjectCoordinator().setItemFieldValue(
-			project,
-			claim.projectItemId,
-			fieldName,
-			value
-		);
-		return;
-	}
-
-	await getGithubClient().setItemFieldValue(claim.projectId, claim.projectItemId, fieldName, value);
-}
-
-async function addClaimItemComment(
-	settingsStore: SettingsStoreInterface,
-	claim: ClaimInfo,
-	body: string
-): Promise<void> {
-	const project = getProjectReferenceForPath(settingsStore, claim.projectPath);
-	const repoSlug = getProjectRepoSlug(settingsStore, claim.projectPath);
-	if (project && repoSlug) {
-		await getGithubProjectCoordinator().addItemComment(project, claim.issueNumber, repoSlug, body);
-		return;
-	}
-
-	await getGithubClient().addItemComment(
-		claim.issueNumber,
-		DELIVERY_PLANNER_GITHUB_REPOSITORY,
-		body
-	);
 }
 
 // ── Branch cleanup helper ──────────────────────────────────────────────────
