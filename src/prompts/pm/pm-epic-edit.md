@@ -1,4 +1,4 @@
-> **State source-of-truth**: This project uses Maestro Board/Work Graph for all PM and dispatch state. Do NOT use GitHub labels or GitHub Projects fields as runtime state. Query and update state through Maestro PM IPC/commands such as `pm:setStatus`.
+> **State source-of-truth**: Work Graph is the canonical PM data model; Maestro Board is the UI for that data. Use concrete local actions such as `/PM status`, `/PM prd-list`, `/PM epic-list`, `/PM issue-show <id>`, `/PM issue-status <id>`, `/PM epic-sync <id>`, `/PM issue-sync <id>`, `/PM issue-start <id>`, or the app IPC channels listed in `pm-mode-system.md`. Shell agents can inspect dispatch with `maestro-cli fleet board --project <path> --json` and `maestro-cli fleet list --json`. Do NOT use GitHub labels, GitHub issues, or GitHub Projects fields as runtime PM state.
 
 # /PM epic-edit
 
@@ -32,4 +32,4 @@ Present the current state of this epic and its tasks, then help the user make ta
 - When adding tasks, check for duplicate intent before creating
 - Warn if a new dependency would create a circular chain
 
-When edits are confirmed, suggest `/PM epic-sync {{ARGS}}` to push changes to GitHub.
+When edits are confirmed, suggest `/PM epic-sync {{ARGS}}` to update Work Graph and the local markdown mirror.

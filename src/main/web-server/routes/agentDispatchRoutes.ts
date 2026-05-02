@@ -79,8 +79,8 @@ export function registerAgentDispatchRoutes(
 		},
 		async (request, reply) => {
 			try {
-				// Accept optional filters as a JSON body or ignore if not provided
-				const filters = (request.body as WorkItemFilters | undefined) ?? {};
+				const query = request.query as Record<string, unknown> | undefined;
+				const filters = normalizeBoardFilters(query);
 				const result = await workGraph.listItems(filters);
 				return { success: true, data: result, timestamp: Date.now() };
 			} catch (err) {
@@ -289,4 +289,22 @@ export function registerAgentDispatchRoutes(
 	);
 
 	logger.debug('Agent Dispatch routes registered', LOG_CONTEXT);
+}
+
+function normalizeBoardFilters(query: Record<string, unknown> | undefined): WorkItemFilters {
+	if (!query) return {};
+	const filters: WorkItemFilters = {};
+	if (typeof query.projectPath === 'string' && query.projectPath.trim()) {
+		filters.projectPath = query.projectPath;
+	}
+	if (typeof query.gitPath === 'string' && query.gitPath.trim()) {
+		filters.gitPath = query.gitPath;
+	}
+	if (typeof query.limit === 'string') {
+		const parsed = Number.parseInt(query.limit, 10);
+		if (Number.isFinite(parsed) && parsed > 0) filters.limit = parsed;
+	} else if (typeof query.limit === 'number' && query.limit > 0) {
+		filters.limit = query.limit;
+	}
+	return filters;
 }

@@ -267,13 +267,13 @@ export const MODAL_PRIORITIES = {
 	DELIVERY_PLANNER: 709,
 
 	/** Agent Dispatch fleet/kanban modal */
-	AGENT_DISPATCH: 708,
+	AGENT_DISPATCH: 704,
 
 	/** Planning Pipeline dashboard modal */
-	PLANNING_PIPELINE: 707,
+	PLANNING_PIPELINE: 703,
 
 	/** Conversational PRD Planner modal */
-	CONVERSATIONAL_PRD: 706,
+	CONVERSATIONAL_PRD: 702,
 } as const;
 
 /**

@@ -43,6 +43,7 @@ import {
 	registerPlanningPipelineRoutes,
 	registerConversationalPrdRoutes,
 	registerProjectRolesRoutes,
+	registerWorkGraphRoutes,
 } from './routes';
 import type {
 	AgentDispatchRouteDependencies,
@@ -811,6 +812,9 @@ export class WebServer {
 				this.getEncoreFeaturesCallback ? this.getEncoreFeaturesCallback() : {},
 		});
 		this.apiRoutes.registerRoutes(this.server);
+
+		// Register local Work Graph routes for CLI and agent-accessible board updates.
+		registerWorkGraphRoutes(this.server, this.securityToken, this.rateLimitConfig);
 
 		// Register Agent Dispatch routes when deps have been supplied
 		if (this.agentDispatchDeps) {

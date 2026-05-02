@@ -1,5 +1,10 @@
 import type { WorkItemGithubReference } from '../../shared/work-graph-types';
 import type { SettingsStoreInterface } from '../stores/types';
+import {
+	LEGACY_HUMPFTECH_OWNER,
+	LEGACY_HUMPFTECH_REPO,
+	LEGACY_HUMPFTECH_REPOSITORY,
+} from '../../shared/legacy-humpftech-fallback';
 
 // ---------------------------------------------------------------------------
 // Config interface + lookup
@@ -130,16 +135,22 @@ export function makeDeliveryPlannerGithubReferenceWithConfig(
 
 /** @deprecated Use `getDeliveryPlannerGithubConfig` + config-driven helpers instead. */
 export function assertDeliveryPlannerGithubRepository(_repository: string): void {
-	// No-op: hardcoded owner/repo assertion removed. Migrate to
-	// `assertDeliveryPlannerGithubRepositoryWithConfig` once #447 lands.
+	assertDeliveryPlannerGithubRepositoryWithConfig(_repository, {
+		owner: LEGACY_HUMPFTECH_OWNER,
+		repo: LEGACY_HUMPFTECH_REPO,
+		upstream: 'RunMaestro/Maestro',
+	});
 }
 
 /** @deprecated Use `assertDeliveryPlannerGithubReferenceWithConfig` instead. */
 export function assertDeliveryPlannerGithubReference(
 	_reference: WorkItemGithubReference | undefined
 ): void {
-	// No-op: hardcoded owner/repo assertion removed. Migrate to
-	// `assertDeliveryPlannerGithubReferenceWithConfig` once #447 lands.
+	assertDeliveryPlannerGithubReferenceWithConfig(_reference, {
+		owner: LEGACY_HUMPFTECH_OWNER,
+		repo: LEGACY_HUMPFTECH_REPO,
+		upstream: 'RunMaestro/Maestro',
+	});
 }
 
 /** @deprecated Use `makeDeliveryPlannerGithubReferenceWithConfig` instead. */
@@ -153,12 +164,12 @@ export function makeDeliveryPlannerGithubReference(input: {
 	// Returns a reference with placeholder values. github-sync.ts (PR #447)
 	// will be updated to pass real config-driven coordinates.
 	return {
-		owner: '',
-		repo: '',
-		repository: '',
+		owner: LEGACY_HUMPFTECH_OWNER,
+		repo: LEGACY_HUMPFTECH_REPO,
+		repository: LEGACY_HUMPFTECH_REPOSITORY,
 		...input,
 	};
 }
 
 /** @deprecated Constant retained only for github-sync.ts; use config instead. */
-export const DELIVERY_PLANNER_GITHUB_REPOSITORY = '' as string;
+export const DELIVERY_PLANNER_GITHUB_REPOSITORY = LEGACY_HUMPFTECH_REPOSITORY as string;

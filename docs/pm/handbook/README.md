@@ -1,6 +1,6 @@
 # Maestro PM Handbook
 
-This is the **Maestro PM Handbook** — the authoritative reference for the Maestro `/PM` mode delivery pipeline. It describes, step by step, how to move work from raw idea to merged PR using Maestro Board / Work Graph as the source of truth.
+This is the **Maestro PM Handbook** — the authoritative reference for the Maestro `/PM` mode delivery pipeline. Work Graph is the canonical PM data model; Maestro Board is the UI for viewing and manipulating it. The handbook describes how to move work from raw idea to merged PR by creating and updating Work Graph items, not by treating markdown files, GitHub issues, or GitHub project boards as PM state.
 
 The `/PM` mode system prompt loads `pm-mode-system.md` and appends the paths to these files so the agent can read them on demand. You should read the relevant file when you need procedure-level detail rather than relying on the summary in the system prompt.
 
@@ -30,13 +30,13 @@ The `/PM` mode system prompt loads `pm-mode-system.md` and appends the paths to 
 User idea
     │
     ▼
-PRD (docs/pm/prds/<slug>.md)          Work Graph status = planned
+PRD file + Work Graph item             Work Graph status = planned
     │
     ▼
-Epic decomposition                     Work Graph status = ready
+Epic decomposition + Work Graph items  Work Graph status = ready
     │
     ▼
-Task work items                         Work Graph status = ready
+Task Work Graph items                   Work Graph status = ready
     │
     ▼
 Dispatch Engine claims work             Work Graph status = claimed/in_progress
@@ -62,6 +62,18 @@ Before any PM operations can run, the following must be configured:
 2. **Role slots** (for automated dispatch): `projectRoleSlots[projectPath]` should define `runner`, `fixer`, `reviewer`, and `merger` slots. Each slot is `{ agentId, modelOverride?, effortOverride?, enabled? }`. Set via Maestro Symphony → Roles tab.
 
 3. **Local app running**: Maestro main/headless process must be running so `/PM` commands can read and write Work Graph state.
+
+---
+
+## Concrete PM Surfaces
+
+Use these concrete surfaces for local Work Graph reads and writes:
+
+- **Slash commands in Maestro chat**: `/PM status`, `/PM standup`, `/PM next`, `/PM prd-list`, `/PM epic-list`, `/PM epic-show <id>`, `/PM issue-show <id>`, `/PM issue-status <id>`, `/PM epic-sync <id>`, `/PM issue-sync <id>`, `/PM issue-start <id>`.
+- **Shell dispatch inspection**: `maestro-cli fleet board --project <path> --json`, `maestro-cli fleet list --json`, `maestro-cli fleet claim <workItemId> --to <fleetEntryId> --json`, `maestro-cli fleet release <workItemId> --json`.
+- **App/preload IPC channels**: use the named `pm:*`, `delivery-planner:*`, and `agentDispatch:*` channels documented in the relevant prompt or preload surface when running inside Maestro.
+
+Markdown under `docs/pm/` is a readable local mirror/spec. Creating or editing markdown alone does not create PM work; the corresponding Work Graph item must also be created or updated.
 
 ---
 

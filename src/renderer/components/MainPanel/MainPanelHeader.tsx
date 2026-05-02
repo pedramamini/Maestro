@@ -646,11 +646,11 @@ export const MainPanelHeader = React.memo(function MainPanelHeader({
 						</div>
 					)}
 
-				{/* Memory Viewer Button - only show if agent maintains per-project memory */}
+				{/* Maestro Board opens the local Work Graph surface. */}
 				<button
 					onClick={() => setAgentDispatchOpen(true)}
 					className="p-2 rounded hover:bg-white/5"
-					title={`Open Maestro Board (${formatShortcutKeys(shortcuts.openAgentDispatch.keys)})`}
+					title={`Open Maestro Board (${formatShortcutKeys(shortcuts.openAgentDispatch?.keys ?? ['Meta', 'Shift', 'b'])})`}
 					data-tour="maestro-board-button"
 				>
 					<LayoutDashboard className="w-4 h-4" style={{ color: theme.colors.textDim }} />

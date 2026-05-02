@@ -61,8 +61,8 @@ Agents renew their Work Graph claim while running. A stale claim is one whose he
 
 Recovery path:
 
-1. Run PM audit/health.
-2. Release stale Work Graph claims.
+1. Run PM audit/health in Maestro, or inspect from a shell with `maestro-cli fleet board --project <path> --json`.
+2. Release stale Work Graph claims in Maestro or with `maestro-cli fleet release <workItemId> --json`.
 3. Return unfinished items to `ready`.
 4. Leave a Work Graph event explaining the release.
 

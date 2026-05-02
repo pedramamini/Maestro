@@ -1,6 +1,6 @@
 # 03 — Task Breakdown
 
-Tasks are the atomic unit of delivery in the Maestro pipeline. Each task maps 1:1 to a Work Graph item, and implementation work should reference that item in branches, commits, and PRs. This file covers how to size tasks correctly, write acceptance criteria that are actually useful to an agent, and avoid the most common breakdown mistakes.
+Tasks are the atomic unit of delivery in the Maestro pipeline. Each task maps 1:1 to a Work Graph item, and implementation work should reference that item in branches, commits, and PRs. A task markdown file is not enough for dispatch; create or update the Work Graph item through `/PM epic-sync <id>`, `/PM issue-sync <id>`, or the Delivery Planner sync IPC. This file covers how to size tasks correctly, write acceptance criteria that are actually useful to an agent, and avoid the most common breakdown mistakes.
 
 ---
 
@@ -170,4 +170,4 @@ Run through this before creating dispatchable Work Graph items:
 - [ ] Parallel flag is correct
 - [ ] Technical notes are specific enough for an agent to start without questions
 
-Once all tasks pass this checklist, proceed to handbook/04-github-sync.md for local mirror and git traceability guidance.
+Once all tasks pass this checklist, create/update the Work Graph items with `/PM epic-sync <id>` or the Delivery Planner sync IPC, then proceed to handbook/04-github-sync.md for local mirror and git traceability guidance.

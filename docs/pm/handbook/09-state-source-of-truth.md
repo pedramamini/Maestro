@@ -1,14 +1,14 @@
 # 09 — State Source Of Truth
 
-The most important rule in the Maestro PM system: **Maestro Board / Work Graph is the source of truth for all dispatch and lifecycle state**. Not GitHub labels. Not GitHub Projects fields. Not issue comments.
+The most important rule in the Maestro PM system: **Work Graph is the canonical data model for all dispatch and lifecycle state; Maestro Board is the UI for it**. Not GitHub labels. Not GitHub Projects fields. Not issue comments. Not markdown files by themselves.
 
-GitHub may be mirrored later for external visibility, but dispatch must continue to work when GitHub Projects is unavailable or rate limited.
+GitHub may be mirrored later for external visibility, but dispatch must continue to work when GitHub issues or GitHub Projects are unavailable or rate limited.
 
 ---
 
 ## The Rule
 
-> Read and write Work Graph item status, pipeline role, priority, parent links, and claim rows.
+> Read and write Work Graph item status, pipeline role, priority, parent links, and claim rows through concrete local commands: `/PM status`, `/PM issue-show <id>`, `/PM issue-status <id>`, `/PM epic-sync <id>`, `/PM issue-sync <id>`, `/PM issue-start <id>`, `maestro-cli fleet board --project <path> --json`, `maestro-cli fleet claim <workItemId> --to <fleetEntryId> --json`, `maestro-cli fleet release <workItemId> --json`, or the named Maestro IPC channels.
 >
 > Do NOT read or write GitHub labels or GitHub Projects fields for runtime PM state.
 

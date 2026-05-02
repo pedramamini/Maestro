@@ -42,3 +42,4 @@ export {
 	ConversationalPrdRouteDependencies,
 } from './conversationalPrdRoutes';
 export { registerProjectRolesRoutes, ProjectRolesRouteDependencies } from './projectRolesRoutes';
+export { registerWorkGraphRoutes } from './workGraphRoutes';

@@ -65,6 +65,7 @@ import {
 	convPrdFinalize,
 	convPrdArchive,
 } from './commands/conv-prd';
+import { pmWorkList, pmWorkCreate, pmWorkUpdate } from './commands/pm-work';
 
 // Injected at build time by scripts/build-cli.mjs via esbuild `define`.
 // The typeof guard keeps non-esbuild execution paths (ts-node, plain tsc output) from
@@ -604,6 +605,110 @@ planner
 	.action((id, options) =>
 		plannerSync(id, {
 			target: options.target as 'github' | 'mirror' | 'all',
+			json: options.json,
+		})
+	);
+
+// PM commands - local Maestro Board / Work Graph access for project agents.
+const pm = program
+	.command('pm')
+	.description('Manage local PM surfaces backed by Maestro Board / Work Graph');
+
+const pmWork = pm.command('work').description('List, create, and update local Work Graph items');
+
+pmWork
+	.command('list')
+	.description('List local Maestro Board work items')
+	.option('-p, --project <path>', 'Filter by project root path')
+	.option('--git-path <path>', 'Filter by Git repository root')
+	.option(
+		'--status <status...>',
+		'Filter by status; accepts repeated values or comma-separated lists'
+	)
+	.option(
+		'--type <type...>',
+		'Filter by item type; accepts repeated values or comma-separated lists'
+	)
+	.option('--tag <tag...>', 'Require tag; accepts repeated values or comma-separated lists')
+	.option(
+		'--source <source...>',
+		'Filter by source; accepts repeated values or comma-separated lists'
+	)
+	.option('--limit <count>', 'Maximum number of items to return')
+	.option('--json', 'Output as JSON (for scripting)')
+	.action((options) =>
+		pmWorkList({
+			project: options.project,
+			gitPath: options.gitPath,
+			status: options.status,
+			type: options.type,
+			tag: options.tag,
+			source: options.source,
+			limit: options.limit,
+			json: options.json,
+		})
+	);
+
+pmWork
+	.command('create')
+	.description('Create a local Maestro Board work item')
+	.requiredOption('-t, --title <title>', 'Work item title')
+	.option('-p, --project <path>', 'Project root path (defaults to current directory)')
+	.option('--git-path <path>', 'Git repository root (defaults to --project)')
+	.option('--type <type>', 'Work item type (default: task)', 'task')
+	.option('--status <status>', 'Initial work item status')
+	.option('--source <source>', 'Work item source (default: manual)', 'manual')
+	.option('-d, --description <text>', 'Optional description')
+	.option('--tag <tag...>', 'Tag to attach; accepts repeated values or comma-separated lists')
+	.option('--file <path...>', 'Artifact path to attach in metadata.files')
+	.option('--metadata <key=value...>', 'Metadata entry; value may be JSON')
+	.option('--parent <id>', 'Parent Work Graph item ID')
+	.option('--priority <number>', 'Numeric priority')
+	.option('--json', 'Output as JSON (for scripting)')
+	.action((options) =>
+		pmWorkCreate({
+			title: options.title,
+			project: options.project,
+			gitPath: options.gitPath,
+			type: options.type,
+			status: options.status,
+			source: options.source,
+			description: options.description,
+			tag: options.tag,
+			file: options.file,
+			metadata: options.metadata,
+			parent: options.parent,
+			priority: options.priority,
+			json: options.json,
+		})
+	);
+
+pmWork
+	.command('update <id>')
+	.description('Update a local Maestro Board work item')
+	.option('-t, --title <title>', 'New title')
+	.option('-d, --description <text>', 'New description')
+	.option('--status <status>', 'New status')
+	.option('--type <type>', 'New work item type')
+	.option('--tag <tag...>', 'Replace tags; accepts repeated values or comma-separated lists')
+	.option('--file <path...>', 'Replace metadata.files with artifact path(s)')
+	.option('--metadata <key=value...>', 'Merge metadata entry; value may be JSON')
+	.option('--parent <id>', 'Set parent Work Graph item ID; pass empty string to clear')
+	.option('--priority <number>', 'Numeric priority')
+	.option('--expected-version <number>', 'Optimistic lock version')
+	.option('--json', 'Output as JSON (for scripting)')
+	.action((id, options) =>
+		pmWorkUpdate(id, {
+			title: options.title,
+			description: options.description,
+			status: options.status,
+			type: options.type,
+			tag: options.tag,
+			file: options.file,
+			metadata: options.metadata,
+			parent: options.parent,
+			priority: options.priority,
+			expectedVersion: options.expectedVersion,
 			json: options.json,
 		})
 	);

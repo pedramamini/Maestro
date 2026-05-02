@@ -161,7 +161,9 @@ export function SlotCard({
 	// -----------------------------------------------------------------------
 	// Status badge helpers
 	// -----------------------------------------------------------------------
-	const workItemDisplayId = activeClaim?.projectItemId ?? activeClaim?.issueTitle;
+	const workItemDisplayId =
+		activeClaim?.projectItemId ??
+		(activeClaim?.issueNumber ? `#${activeClaim.issueNumber}` : activeClaim?.issueTitle);
 
 	type StatusVariant = 'on-available' | 'on-busy' | 'off-draining' | 'off-idle';
 	const statusVariant: StatusVariant | null = assignment

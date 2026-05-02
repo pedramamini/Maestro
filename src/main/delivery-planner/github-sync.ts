@@ -647,7 +647,7 @@ export class DeliveryPlannerGithubSync {
 			'labels',
 		]);
 		const parsed = parseJson<GhIssueLabels>(result.stdout, 'GitHub issue labels response');
-		const labelNames = parsed.labels.map((l) => l.name);
+		const labelNames = (parsed.labels ?? []).map((l) => l.name);
 
 		const legacyMatches = labelNames.filter((l) => l in LEGACY_STATUS_LABELS);
 		if (legacyMatches.length === 0) {

@@ -1669,11 +1669,11 @@ describe('MobileApp', () => {
 				]);
 			});
 
-			fireEvent.click(screen.getByLabelText('Files & History'));
+			fireEvent.click(screen.getByLabelText('Work panel'));
 
 			const panel = screen.getByTestId('right-panel');
 			expect(panel).toBeInTheDocument();
-			expect(panel).toHaveAttribute('data-active-tab', 'files');
+			expect(panel).toHaveAttribute('data-active-tab', 'board');
 		});
 
 		it('closes right panel', async () => {
@@ -1685,7 +1685,7 @@ describe('MobileApp', () => {
 				]);
 			});
 
-			fireEvent.click(screen.getByLabelText('Files & History'));
+			fireEvent.click(screen.getByLabelText('Work panel'));
 			expect(screen.getByTestId('right-panel')).toBeInTheDocument();
 
 			fireEvent.click(screen.getByTestId('close-right-panel'));
@@ -1702,17 +1702,17 @@ describe('MobileApp', () => {
 			});
 
 			// Open right panel
-			fireEvent.click(screen.getByLabelText('Files & History'));
+			fireEvent.click(screen.getByLabelText('Work panel'));
 			const panel = screen.getByTestId('right-panel');
 			expect(panel).toBeInTheDocument();
-			expect(panel).toHaveAttribute('data-active-tab', 'files');
+			expect(panel).toHaveAttribute('data-active-tab', 'board');
 
 			// Close panel
 			fireEvent.click(screen.getByTestId('close-right-panel'));
 			expect(screen.queryByTestId('right-panel')).not.toBeInTheDocument();
 
 			// Reopen
-			fireEvent.click(screen.getByLabelText('Files & History'));
+			fireEvent.click(screen.getByLabelText('Work panel'));
 			expect(screen.getByTestId('right-panel')).toBeInTheDocument();
 		});
 
@@ -1726,11 +1726,11 @@ describe('MobileApp', () => {
 			});
 
 			// Open right panel
-			fireEvent.click(screen.getByLabelText('Files & History'));
+			fireEvent.click(screen.getByLabelText('Work panel'));
 			expect(screen.getByTestId('right-panel')).toBeInTheDocument();
 
 			// Toggle off via same button
-			fireEvent.click(screen.getByLabelText('Files & History'));
+			fireEvent.click(screen.getByLabelText('Work panel'));
 			expect(screen.queryByTestId('right-panel')).not.toBeInTheDocument();
 		});
 	});

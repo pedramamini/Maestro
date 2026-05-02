@@ -30,6 +30,12 @@ describe('DeliveryPlannerGithubSync', () => {
 							textField('Parent Work Item', 'field-parent'),
 							textField('External Mirror ID', 'field-external-mirror'),
 							textField('Agent Pickup', 'field-pickup'),
+							textField('AI Status', 'field-status'),
+							textField('AI Role', 'field-role'),
+							textField('AI Stage', 'field-stage'),
+							textField('AI Priority', 'field-priority'),
+							textField('AI Parent Epic', 'field-parent-epic'),
+							textField('AI Project', 'field-project'),
 						],
 					})
 				);
@@ -84,6 +90,12 @@ describe('DeliveryPlannerGithubSync', () => {
 							textField('Parent Work Item', 'field-parent'),
 							textField('External Mirror ID', 'field-external-mirror'),
 							textField('Agent Pickup', 'field-pickup'),
+							textField('AI Status', 'field-status'),
+							textField('AI Role', 'field-role'),
+							textField('AI Stage', 'field-stage'),
+							textField('AI Priority', 'field-priority'),
+							textField('AI Parent Epic', 'field-parent-epic'),
+							textField('AI Project', 'field-project'),
 						],
 					})
 				);

@@ -252,6 +252,10 @@ export const KanbanBoard = memo(function KanbanBoard({ theme, projectPath }: Kan
 	const [selectedItem, setSelectedItem] = useState<WorkItem | null>(null);
 	const [draggingId, setDraggingId] = useState<string | null>(null);
 	const [dropTargetStatus, setDropTargetStatus] = useState<WorkItemStatus | null>(null);
+	const effectiveProjectPath =
+		projectPath === undefined
+			? (activeSession?.projectRoot ?? activeSession?.cwd ?? null)
+			: projectPath;
 
 	// ---------------------------------------------------------------------------
 	// Data fetching
@@ -262,8 +266,9 @@ export const KanbanBoard = memo(function KanbanBoard({ theme, projectPath }: Kan
 		setError(null);
 		try {
 			const [boardResult, fleetResult] = await Promise.all([
-				// #444: getBoard() takes no filters — returns in-memory ClaimTracker state.
-				agentDispatchService.getBoard(),
+				workGraphService.listItems(
+					effectiveProjectPath ? { projectPath: effectiveProjectPath } : {}
+				),
 				agentDispatchService.getFleet(),
 			]);
 			setAllItems(boardResult.items as WorkItem[]);
@@ -273,7 +278,7 @@ export const KanbanBoard = memo(function KanbanBoard({ theme, projectPath }: Kan
 		} finally {
 			setLoading(false);
 		}
-	}, []);
+	}, [effectiveProjectPath]);
 
 	useEffect(() => {
 		void load();
@@ -283,8 +288,6 @@ export const KanbanBoard = memo(function KanbanBoard({ theme, projectPath }: Kan
 	// Derived data
 	// ---------------------------------------------------------------------------
 
-	const effectiveProjectPath =
-		projectPath === undefined ? (activeSession?.projectRoot ?? null) : projectPath;
 	const projectItems = useMemo(() => {
 		if (!effectiveProjectPath) return allItems;
 		return allItems.filter((item) => item.projectPath === effectiveProjectPath);

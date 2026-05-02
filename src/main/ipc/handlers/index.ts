@@ -82,6 +82,7 @@ import {
 	registerPlanningPipelineHandlers,
 	PlanningPipelineHandlerDependencies,
 } from './planning-pipeline';
+import { registerWorkGraphHandlers } from './work-graph';
 // PM Orchestrator — /PM slash-command handlers (pm:orchestrate, pm:prd-new, etc.)
 import { registerPmOrchestratorHandlers } from '../../pm-orchestrator';
 // pm-tools — agent-callable pm:setStatus / pm:setRole / pm:setBlocked (#430)
@@ -400,6 +401,8 @@ export function registerAllHandlers(deps: HandlerDependencies): void {
 	registerConversationalPrdHandlers({ plannerService, settingsStore: deps.settingsStore });
 	// Register Planning Pipeline handlers (gated by planningPipeline encore flag)
 	registerPlanningPipelineHandlers({ settingsStore: deps.settingsStore });
+	// Register Work Graph handlers (durable local PM/Maestro Board state)
+	registerWorkGraphHandlers({ getMainWindow: deps.getMainWindow });
 	// Register PM Orchestrator handlers (/PM slash-command suite, gated by conversationalPrd flag)
 	registerPmOrchestratorHandlers({
 		settingsStore: deps.settingsStore,

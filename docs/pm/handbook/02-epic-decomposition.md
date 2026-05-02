@@ -107,7 +107,7 @@ status: backlog
 created: <ISO-8601>
 progress: 0%
 prd: docs/pm/prds/<slug>.md
-github: (will be set on sync)
+trace: Work Graph item ID after sync
 ---
 
 # Epic: <Feature Name>
@@ -167,7 +167,7 @@ name: <Task Title>
 status: open
 created: <ISO-8601>
 updated: <same as created>
-github: (will be set on sync)
+trace: Work Graph item ID after sync
 depends_on: []
 parallel: true
 conflicts_with: []
@@ -209,7 +209,7 @@ Show the task table from the epic file. Then ask:
 
 "Does this look right? Say **confirm** to create the epic and task items in Work Graph, or tell me what to change."
 
-Do not create any files or Work Graph items until the user confirms. The confirmation is the gate.
+Do not create any files or Work Graph items until the user confirms. The confirmation is the gate. After confirmation, markdown files are only the local mirror/spec; the dispatchable work exists only after the matching Work Graph items are created.
 
 ---
 
@@ -217,7 +217,7 @@ Do not create any files or Work Graph items until the user confirms. The confirm
 
 1. Write `docs/pm/epics/<slug>/epic.md`.
 2. Write `docs/pm/epics/<slug>/001.md`, `002.md`, ... for each task.
-3. Create/update Work Graph task items for each task.
+3. Create/update Work Graph task items for each task via `/PM epic-sync <id>` or the Delivery Planner sync IPC.
 4. Set dispatchable tasks to `ready` and update the parent PRD/epic item.
 
 ---

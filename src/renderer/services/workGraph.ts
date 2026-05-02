@@ -1,65 +1,79 @@
-/**
- * Work Graph renderer service — IPC bridge placeholder
- *
- * Local PM/dispatch now uses Work Graph as durable state in the main process.
- * This renderer service remains a placeholder until a dedicated Work Graph
- * read IPC is re-exposed for UI boards and inspectors.
- *
- * All methods return empty results or no-ops so callers degrade gracefully
- * rather than crashing at runtime.
- *
- * TODO(#444-follow-up): remove this file once all callers are migrated.
- */
+import type {
+	AgentReadyWorkFilter,
+	TagDefinition,
+	WorkGraphBroadcastEnvelope,
+	WorkGraphImportInput,
+	WorkGraphImportSummary,
+	WorkGraphListResult,
+	WorkItem,
+	WorkItemClaim,
+	WorkItemClaimCompleteInput,
+	WorkItemClaimInput,
+	WorkItemClaimReleaseInput,
+	WorkItemClaimRenewInput,
+	WorkItemCreateInput,
+	WorkItemEvent,
+	WorkItemFilters,
+	WorkItemSearchFilters,
+	WorkItemUpdateInput,
+} from '../../shared/work-graph-types';
 
-import type { WorkGraphListResult, WorkItem, WorkItemFilters } from '../../shared/work-graph-types';
+type IpcResult<T> = { success: true; data: T } | { success: false; error: string };
 
-const EMPTY_LIST: WorkGraphListResult = { items: [], total: 0 };
+function unwrap<T>(result: IpcResult<T>): T {
+	if (!result.success) {
+		throw new Error(result.error);
+	}
+	return result.data;
+}
 
 export const workGraphService = {
-	listItems: (_filters?: WorkItemFilters): Promise<WorkGraphListResult> =>
-		Promise.resolve(EMPTY_LIST),
+	listItems: async (filters?: WorkItemFilters): Promise<WorkGraphListResult> =>
+		unwrap(await window.maestro.workGraph.listItems(filters)),
 
-	searchItems: (_filters: unknown): Promise<WorkGraphListResult> => Promise.resolve(EMPTY_LIST),
+	searchItems: async (filters: WorkItemSearchFilters): Promise<WorkGraphListResult> =>
+		unwrap(await window.maestro.workGraph.searchItems(filters)),
 
-	getItem: (_id: string): Promise<WorkItem | undefined> => Promise.resolve(undefined),
+	getItem: async (id: string): Promise<WorkItem | undefined> =>
+		unwrap(await window.maestro.workGraph.getItem(id)),
 
-	createItem: (_input: unknown): Promise<WorkItem> =>
-		Promise.reject(new Error('Work Graph renderer write IPC is not exposed yet')),
+	createItem: async (input: WorkItemCreateInput): Promise<WorkItem> =>
+		unwrap(await window.maestro.workGraph.createItem(input)),
 
-	updateItem: (_input: unknown): Promise<WorkItem> =>
-		Promise.reject(new Error('Work Graph renderer write IPC is not exposed yet')),
+	updateItem: async (input: WorkItemUpdateInput): Promise<WorkItem> =>
+		unwrap(await window.maestro.workGraph.updateItem(input)),
 
-	deleteItem: (_id: string): Promise<boolean> =>
-		Promise.reject(new Error('Work Graph renderer write IPC is not exposed yet')),
+	deleteItem: async (id: string): Promise<boolean> =>
+		unwrap(await window.maestro.workGraph.deleteItem(id)),
 
-	claimItem: (_input: unknown): Promise<unknown> =>
-		Promise.reject(new Error('Work Graph renderer claim IPC is not exposed yet')),
+	claimItem: async (input: WorkItemClaimInput): Promise<WorkItemClaim> =>
+		unwrap(await window.maestro.workGraph.claimItem(input)),
 
-	renewClaim: (_input: unknown): Promise<unknown> =>
-		Promise.reject(new Error('Work Graph renderer claim IPC is not exposed yet')),
+	renewClaim: async (input: WorkItemClaimRenewInput): Promise<WorkItemClaim> =>
+		unwrap(await window.maestro.workGraph.renewClaim(input)),
 
-	releaseClaim: (_input: unknown): Promise<unknown> =>
-		Promise.reject(new Error('Work Graph renderer claim IPC is not exposed yet')),
+	releaseClaim: async (input: WorkItemClaimReleaseInput): Promise<WorkItemClaim | undefined> =>
+		unwrap(await window.maestro.workGraph.releaseClaim(input)),
 
-	completeClaim: (_input: unknown): Promise<unknown> =>
-		Promise.reject(new Error('Work Graph renderer claim IPC is not exposed yet')),
+	completeClaim: async (input: WorkItemClaimCompleteInput): Promise<WorkItemClaim | undefined> =>
+		unwrap(await window.maestro.workGraph.completeClaim(input)),
 
-	listEvents: (_workItemId: string): Promise<unknown[]> => Promise.resolve([]),
+	listEvents: async (workItemId: string, limit?: number): Promise<WorkItemEvent[]> =>
+		unwrap(await window.maestro.workGraph.listEvents(workItemId, limit)),
 
-	listTags: (): Promise<unknown[]> => Promise.resolve([]),
+	listTags: async (): Promise<TagDefinition[]> => unwrap(await window.maestro.workGraph.listTags()),
 
-	upsertTag: (_definition: unknown): Promise<unknown> =>
-		Promise.reject(new Error('Work Graph renderer tag IPC is not exposed yet')),
+	upsertTag: async (definition: TagDefinition): Promise<TagDefinition> =>
+		unwrap(await window.maestro.workGraph.upsertTag(definition)),
 
-	importItems: (_input: unknown): Promise<unknown> =>
-		Promise.reject(new Error('Work Graph renderer import IPC is not exposed yet')),
+	importItems: async (input: WorkGraphImportInput): Promise<WorkGraphImportSummary> =>
+		unwrap(await window.maestro.workGraph.importItems(input)),
 
-	getUnblockedAgentReadyWork: (_filters?: unknown): Promise<WorkGraphListResult> =>
-		Promise.resolve(EMPTY_LIST),
+	getUnblockedAgentReadyWork: async (
+		filters?: AgentReadyWorkFilter
+	): Promise<WorkGraphListResult> =>
+		unwrap(await window.maestro.workGraph.getUnblockedAgentReadyWork(filters)),
 
-	/** No-op: workGraph:changed events are gone (#444). Returns empty unsubscribe. */
-	onChanged:
-		(_handler: (event: unknown) => void): (() => void) =>
-		() =>
-			undefined,
+	onChanged: (handler: (event: WorkGraphBroadcastEnvelope) => void): (() => void) =>
+		window.maestro.workGraph.onChanged((event) => handler(event as WorkGraphBroadcastEnvelope)),
 };

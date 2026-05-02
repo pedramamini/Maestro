@@ -6,7 +6,7 @@ Two common PM requests are "what's the board look like" and "give me a standup".
 
 ## Fetching Live State
 
-Always query local PM / Work Graph state. Never reconstruct status from conversation history, external tracker labels, or project boards.
+Always query local PM / Work Graph state. Use `/PM status`, `/PM standup`, `/PM next`, or from a shell `maestro-cli fleet board --project <path> --json`. Never reconstruct status from conversation history, markdown files alone, external tracker labels, GitHub issues, or project boards.
 
 Useful groupings:
 

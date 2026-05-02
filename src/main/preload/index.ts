@@ -61,7 +61,7 @@ import { createProjectRolesApi } from './projectRoles';
 import { createDeliveryPlannerApi } from './deliveryPlanner';
 import { createPlanningPipelineApi } from './planningPipeline';
 import { createConversationalPrdApi } from './conversationalPrd';
-// #444: createWorkGraphApi removed — workGraph namespace eliminated
+import { createWorkGraphApi } from './workGraph';
 import { createPmToolsApi } from './pmTools';
 import { createPmAuditApi } from './pmAudit';
 import { createPmHeartbeatApi } from './pmHeartbeat';
@@ -241,6 +241,9 @@ contextBridge.exposeInMainWorld('maestro', {
 
 	// Conversational PRD Planner API (planning conversations → PRD items)
 	conversationalPrd: createConversationalPrdApi(),
+
+	// Work Graph API (durable local PM/Maestro Board state)
+	workGraph: createWorkGraphApi(),
 
 	// pm-tools API (agent-callable status/role/blocked field updates, #430)
 	pmTools: createPmToolsApi(),
@@ -604,7 +607,10 @@ export type {
 	PromptsApi,
 	CorePromptData,
 } from './prompts';
-// #444: WorkGraphApi removed — workGraph namespace eliminated
+export type {
+	// From workGraph
+	WorkGraphApi,
+} from './workGraph';
 export type {
 	// From agentDispatch
 	AgentDispatchApi,

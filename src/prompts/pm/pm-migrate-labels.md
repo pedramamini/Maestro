@@ -1,16 +1,16 @@
-> **State source-of-truth**: This project uses Maestro Board/Work Graph for all PM and dispatch state. Do NOT use GitHub labels or GitHub Projects fields as runtime state. Query and update state through Maestro PM IPC/commands such as `pm:setStatus`.
+> **State source-of-truth**: Work Graph is the canonical PM data model; Maestro Board is the UI for that data. Use concrete local actions such as `/PM status`, `/PM prd-list`, `/PM epic-list`, `/PM issue-show <id>`, `/PM issue-status <id>`, `/PM epic-sync <id>`, `/PM issue-sync <id>`, `/PM issue-start <id>`, or the app IPC channels listed in `pm-mode-system.md`. Shell agents can inspect dispatch with `maestro-cli fleet board --project <path> --json` and `maestro-cli fleet list --json`. Do NOT use GitHub labels, GitHub issues, or GitHub Projects fields as runtime PM state.
 
 # /PM migrate-labels
 
-Migrate legacy Symphony-runner `agent:*` labels to the corresponding local Maestro Board / Work Graph status.
+Compatibility check for legacy Symphony-runner `agent:*` labels. Modern PM state is already local in Work Graph.
 
 Run this once per repository after adopting the Maestro dispatch system.
 
 ## What it does
 
-For each open issue in the repository that has one or more legacy `agent:*` labels:
+For older repositories that still mention legacy `agent:*` labels:
 
-1. Finds legacy `agent:*` labels from older repository issue workflows.
+1. Acknowledges that legacy `agent:*` labels came from older repository issue workflows.
 2. Maps the legacy label to the corresponding Work Graph status:
 
    | Legacy label              | Work Graph status |
@@ -20,8 +20,8 @@ For each open issue in the repository that has one or more legacy `agent:*` labe
    | `agent:review`            | `review`          |
    | `agent:failed-validation` | `blocked`         |
 
-3. Updates local PM state through Maestro PM tooling.
-4. Removes the legacy `agent:*` label from the issue.
+3. Leaves runtime PM state in Work Graph; the compatibility endpoint does not call GitHub.
+4. Reports that the labels are obsolete and ignored by dispatch.
 
 ## Result
 
@@ -35,6 +35,6 @@ Legacy `agent:*` labels are decorative and can be deleted from the repo's label 
 
 ## Notes
 
-- Safe to run multiple times — already-migrated issues have no `agent:*` labels and are skipped.
-- Does not touch issues that are already `closed`.
+- Safe to run multiple times.
+- Does not create, close, label, or edit GitHub issues.
 - Does not change any other field (AI Role, AI Stage, AI Priority, etc.).

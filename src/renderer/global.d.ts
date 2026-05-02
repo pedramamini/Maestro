@@ -125,8 +125,7 @@ type UsageStats = import('../shared/types').UsageStats;
 
 type HistoryEntryType = import('../shared/types').HistoryEntryType;
 
-// Types from work-graph-types still needed by delivery-planner and agent-dispatch UIs
-// #444: workGraph namespace removed; WorkItem and related still used by delivery-planner components
+// Types from work-graph-types used by delivery-planner, Maestro Board, and agent-dispatch UIs
 type WorkGraphListResult = import('../shared/work-graph-types').WorkGraphListResult;
 type WorkGraphActor = import('../shared/work-graph-types').WorkGraphActor;
 
@@ -3472,11 +3471,34 @@ interface MaestroAPI {
 		) => Promise<{ success: boolean; path?: string; error?: string }>;
 	};
 
-	// Work Graph is durable PM state. Renderer uses agentDispatch.onClaimStarted/onClaimEnded
-	// for live claim updates.
+	// Work Graph API (durable local PM / Maestro Board state)
+	workGraph: {
+		listItems: (filters?: WorkItemFilters) => Promise<IpcDataResponse<WorkGraphListResult>>;
+		searchItems: (filters: WorkItemSearchFilters) => Promise<IpcDataResponse<WorkGraphListResult>>;
+		getItem: (id: string) => Promise<IpcDataResponse<WorkItem | undefined>>;
+		createItem: (input: WorkItemCreateInput) => Promise<IpcDataResponse<WorkItem>>;
+		updateItem: (input: WorkItemUpdateInput) => Promise<IpcDataResponse<WorkItem>>;
+		deleteItem: (id: string) => Promise<IpcDataResponse<boolean>>;
+		claimItem: (input: WorkItemClaimInput) => Promise<IpcDataResponse<WorkItemClaim>>;
+		renewClaim: (input: WorkItemClaimRenewInput) => Promise<IpcDataResponse<WorkItemClaim>>;
+		releaseClaim: (
+			input: WorkItemClaimReleaseInput
+		) => Promise<IpcDataResponse<WorkItemClaim | undefined>>;
+		completeClaim: (
+			input: WorkItemClaimCompleteInput
+		) => Promise<IpcDataResponse<WorkItemClaim | undefined>>;
+		listEvents: (workItemId: string, limit?: number) => Promise<IpcDataResponse<WorkItemEvent[]>>;
+		listTags: () => Promise<IpcDataResponse<TagDefinition[]>>;
+		upsertTag: (definition: TagDefinition) => Promise<IpcDataResponse<TagDefinition>>;
+		importItems: (input: WorkGraphImportInput) => Promise<IpcDataResponse<WorkGraphImportSummary>>;
+		getUnblockedAgentReadyWork: (
+			filters?: AgentReadyWorkFilter
+		) => Promise<IpcDataResponse<WorkGraphListResult>>;
+		onChanged: (handler: (event: WorkGraphBroadcastEnvelope) => void) => () => void;
+	};
 
 	// Agent Dispatch API (fleet, board, assign, release, pause/resume, claim events)
-	// #444: getBoard returns in-memory ClaimTracker state; workGraph namespace eliminated.
+	// getBoard returns in-memory ClaimTracker state; use workGraph for durable board items.
 	agentDispatch: {
 		getBoard: () => Promise<IpcDataResponse<{ items: unknown[]; total: number }>>;
 		getFleet: () => Promise<IpcDataResponse<AgentDispatchFleetEntry[]>>;

@@ -28,6 +28,8 @@ import { webLogger } from '../utils/logger';
 import { AllSessionsView } from './AllSessionsView';
 import { type RightDrawerTab } from './RightDrawer';
 import { RightPanel } from './RightPanel';
+import { MaestroBoardPanel } from './MaestroBoardPanel';
+import { DevCrewPanel } from './DevCrewPanel';
 import { LeftPanel } from './LeftPanel';
 import { useIsMobile } from '../hooks/useIsMobile';
 import { useGitStatus } from '../hooks/useGitStatus';
@@ -396,8 +398,8 @@ function MobileHeader({
 				<button
 					onClick={onRightDrawerTap}
 					style={headerIconButton(colors, isRightPanelOpen)}
-					aria-label="Files & History"
-					title="Files / History / Git"
+					aria-label="Work panel"
+					title="Work / Files / History / Git"
 				>
 					<svg
 						width="14"
@@ -1158,7 +1160,8 @@ export default function MobileApp() {
 	// Bell filter state is lifted so it survives LeftPanel unmount/remount on mobile.
 	const [showUnreadAgentsOnly, setShowUnreadAgentsOnly] = useState(false);
 	const [showRightDrawer, setShowRightDrawer] = useState(false);
-	const [rightDrawerTab, setRightDrawerTab] = useState<RightDrawerTab>('files');
+	const [rightDrawerTab, setRightDrawerTab] = useState<RightDrawerTab>('board');
+	const [showFullBoard, setShowFullBoard] = useState(false);
 	// Latest claim lifecycle message forwarded to DevCrewPanel for live updates (#448).
 	const [lastClaimMessage, setLastClaimMessage] = useState<
 		| import('../hooks/useWebSocket').AgentDispatchClaimStartedMessage
@@ -2014,11 +2017,32 @@ export default function MobileApp() {
 	}, [cue]);
 
 	// Handle opening the right drawer on a specific tab
-	const handleOpenRightDrawer = useCallback((tab: RightDrawerTab = 'files') => {
+	const handleOpenRightDrawer = useCallback((tab: RightDrawerTab = 'board') => {
 		setRightDrawerTab(tab);
 		setShowRightDrawer(true);
 		triggerHaptic(HAPTIC_PATTERNS.tap);
 	}, []);
+
+	const handleOpenFullBoard = useCallback(() => {
+		setShowFullBoard(true);
+		triggerHaptic(HAPTIC_PATTERNS.tap);
+	}, []);
+
+	const handleCloseFullBoard = useCallback(() => {
+		setShowFullBoard(false);
+		triggerHaptic(HAPTIC_PATTERNS.tap);
+	}, []);
+
+	useEffect(() => {
+		if (!showFullBoard) return;
+		const handleKeyDown = (event: KeyboardEvent) => {
+			if (event.key === 'Escape') {
+				handleCloseFullBoard();
+			}
+		};
+		document.addEventListener('keydown', handleKeyDown);
+		return () => document.removeEventListener('keydown', handleKeyDown);
+	}, [handleCloseFullBoard, showFullBoard]);
 
 	// Handle closing the right drawer
 	const handleCloseRightDrawer = useCallback(() => {
@@ -2356,7 +2380,7 @@ export default function MobileApp() {
 				edgeSwipeRef.current = null;
 				if (edge === 'right' && deltaX < 0) {
 					// Swipe left from right edge — open right drawer
-					handleOpenRightDrawer('files');
+					handleOpenRightDrawer('board');
 				} else if (edge === 'left' && deltaX > 0) {
 					// Swipe right from left edge — open left panel
 					setShowLeftPanel(true);
@@ -2431,7 +2455,7 @@ export default function MobileApp() {
 					<rect x="14" y="14" width="7" height="7" rx="1" />
 				</svg>
 			),
-			action: () => handleOpenRightDrawer('board'),
+			action: handleOpenFullBoard,
 		});
 		acts.push({
 			id: 'nav-files',
@@ -2959,6 +2983,7 @@ export default function MobileApp() {
 		activeGroupChats.length,
 		settingsHook,
 		agentManagement,
+		handleOpenFullBoard,
 		handleOpenRightDrawer,
 		handleOpenAutoRunPanel,
 		handleModeToggle,
@@ -3300,7 +3325,7 @@ export default function MobileApp() {
 					if (showRightDrawer) {
 						handleCloseRightDrawer();
 					} else {
-						handleOpenRightDrawer('files');
+						handleOpenRightDrawer('board');
 					}
 				}}
 				isRightPanelOpen={showRightDrawer}
@@ -3547,6 +3572,61 @@ export default function MobileApp() {
 				/>
 			)}
 
+			{showFullBoard && (
+				<div
+					style={{
+						position: 'fixed',
+						inset: 0,
+						zIndex: 420,
+						display: 'flex',
+						flexDirection: 'column',
+						backgroundColor: colors.bgMain,
+						color: colors.textMain,
+					}}
+					role="dialog"
+					aria-label="Maestro Board"
+				>
+					<div
+						style={{
+							display: 'flex',
+							alignItems: 'center',
+							justifyContent: 'space-between',
+							padding: 'max(12px, env(safe-area-inset-top)) 14px 10px',
+							borderBottom: `1px solid ${colors.border}`,
+							backgroundColor: colors.bgSidebar,
+							flexShrink: 0,
+						}}
+					>
+						<div>
+							<div style={{ fontSize: '15px', fontWeight: 750 }}>Maestro Board</div>
+							<div style={{ fontSize: '11px', color: colors.textDim }}>
+								{activeSession?.cwd ?? 'No project selected'}
+							</div>
+						</div>
+						<button
+							onClick={handleCloseFullBoard}
+							style={{
+								border: `1px solid ${colors.border}`,
+								borderRadius: '8px',
+								backgroundColor: colors.bgMain,
+								color: colors.textMain,
+								padding: '7px 10px',
+								fontSize: '12px',
+								fontWeight: 650,
+							}}
+						>
+							Close
+						</button>
+					</div>
+					<div style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden' }}>
+						<MaestroBoardPanel projectPath={activeSession?.cwd} displayMode="full" />
+						<div style={{ borderTop: `1px solid ${colors.border}` }}>
+							<DevCrewPanel projectPath={activeSession?.cwd} lastMessage={lastClaimMessage} />
+						</div>
+					</div>
+				</div>
+			)}
+
 			{/* Horizontal layout: main content + optional right panel */}
 			<div
 				style={{
@@ -3644,6 +3724,7 @@ export default function MobileApp() {
 						onResizeStart={isMobile ? undefined : rightPanelResize.onResizeStart}
 						devCrewEnabled={true}
 						lastClaimMessage={lastClaimMessage}
+						onOpenFullBoard={handleOpenFullBoard}
 					/>
 				)}
 			</div>

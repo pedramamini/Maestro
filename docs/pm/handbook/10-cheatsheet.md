@@ -1,6 +1,6 @@
 # 10 — PM Cheatsheet
 
-Use Maestro Board / Work Graph for PM state. Use git hosting only for branches, commits, PRs, reviews, and merges.
+Use Work Graph for PM state; Maestro Board is the UI for it. Use git hosting only for branches, commits, PRs, reviews, and merges.
 
 ---
 
@@ -41,4 +41,30 @@ gh pr create --draft
 gh pr merge <number> --squash --delete-branch
 ```
 
-Do not use external project-board fields as PM state.
+Do not use GitHub issues, labels, or project-board fields as PM state.
+
+---
+
+## Concrete Local Commands
+
+```bash
+# Board and standup from Maestro chat
+/PM status
+/PM standup
+/PM next
+
+# Item detail and local Work Graph sync from Maestro chat
+/PM epic-list
+/PM epic-show <id>
+/PM issue-show <id>
+/PM issue-status <id>
+/PM epic-sync <id>
+/PM issue-sync <id>
+/PM issue-start <id>
+
+# Shell dispatch inspection/repair
+maestro-cli fleet board --project <path> --json
+maestro-cli fleet list --json
+maestro-cli fleet claim <workItemId> --to <fleetEntryId> --json
+maestro-cli fleet release <workItemId> --json
+```
