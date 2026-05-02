@@ -77,16 +77,6 @@ const REQUIRED_PROJECT_FIELDS: Record<string, string[] | null> = {
 	'External Mirror ID': null,
 };
 
-function gqlString(value: string): string {
-	return JSON.stringify(value);
-}
-
-function renderSingleSelectOptions(options: string[]): string {
-	return `[${options
-		.map((name) => `{ name: ${gqlString(name)}, color: GRAY, description: ${gqlString('')} }`)
-		.join(', ')}]`;
-}
-
 // Label names that carried status before #430. Migration copies them to the Status field and removes them.
 const LEGACY_STATUS_LABELS: Record<string, string> = {
 	'status:idea': 'Idea',
@@ -287,11 +277,13 @@ export class DeliveryPlannerGithubSync {
 			}
 			try {
 				if (options !== null) {
-					const singleSelectOptions = renderSingleSelectOptions(options);
-					const mutation = `mutation { createProjectV2Field(input: { projectId: ${gqlString(project.id)}, dataType: SINGLE_SELECT, name: ${gqlString(fieldName)}, singleSelectOptions: ${singleSelectOptions} }) { projectV2Field { ... on ProjectV2SingleSelectField { id name } } } }`;
+					const singleSelectOptionsJson = JSON.stringify(
+						options.map((name) => ({ name, color: 'GRAY', description: '' }))
+					);
+					const mutation = `mutation { createProjectV2Field(input: { projectId: "${project.id}", dataType: SINGLE_SELECT, name: "${fieldName}", singleSelectOptions: ${singleSelectOptionsJson} }) { projectV2Field { ... on ProjectV2SingleSelectField { id name } } } }`;
 					await this.runGhGraphql(mutation);
 				} else {
-					const mutation = `mutation { createProjectV2Field(input: { projectId: ${gqlString(project.id)}, dataType: TEXT, name: ${gqlString(fieldName)} }) { projectV2Field { ... on ProjectV2Field { id name } } } }`;
+					const mutation = `mutation { createProjectV2Field(input: { projectId: "${project.id}", dataType: TEXT, name: "${fieldName}" }) { projectV2Field { ... on ProjectV2Field { id name } } } }`;
 					await this.runGhGraphql(mutation);
 				}
 				created.push(fieldName);
@@ -612,12 +604,14 @@ export class DeliveryPlannerGithubSync {
 
 			if (options !== null) {
 				// Single-select field with named options.
-				const singleSelectOptions = renderSingleSelectOptions(options);
-				const mutation = `mutation { createProjectV2Field(input: { projectId: ${gqlString(projectId)}, dataType: SINGLE_SELECT, name: ${gqlString(fieldName)}, singleSelectOptions: ${singleSelectOptions} }) { projectV2Field { ... on ProjectV2SingleSelectField { id name } } } }`;
+				const singleSelectOptionsJson = JSON.stringify(
+					options.map((name) => ({ name, color: 'GRAY', description: '' }))
+				);
+				const mutation = `mutation { createProjectV2Field(input: { projectId: "${projectId}", dataType: SINGLE_SELECT, name: "${fieldName}", singleSelectOptions: ${singleSelectOptionsJson} }) { projectV2Field { ... on ProjectV2SingleSelectField { id name } } } }`;
 				await this.runGhGraphql(mutation);
 			} else {
 				// Text field.
-				const mutation = `mutation { createProjectV2Field(input: { projectId: ${gqlString(projectId)}, dataType: TEXT, name: ${gqlString(fieldName)} }) { projectV2Field { ... on ProjectV2Field { id name } } } }`;
+				const mutation = `mutation { createProjectV2Field(input: { projectId: "${projectId}", dataType: TEXT, name: "${fieldName}" }) { projectV2Field { ... on ProjectV2Field { id name } } } }`;
 				await this.runGhGraphql(mutation);
 			}
 		}

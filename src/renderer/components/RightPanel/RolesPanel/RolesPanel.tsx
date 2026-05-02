@@ -17,7 +17,6 @@
  */
 
 import { useState, useEffect, useCallback } from 'react';
-import { Loader2, ShieldCheck } from 'lucide-react';
 import type { Theme, Session } from '../../../types';
 import type {
 	DispatchRole,
@@ -30,7 +29,6 @@ import {
 	selectClaimsForProject,
 	useDispatchClaimsStore,
 } from '../../../stores/dispatchClaimsStore';
-import { notifyToast } from '../../../stores/notificationStore';
 import { SlotCard } from './SlotCard';
 
 /** Resolved GitHub project info, shown in the panel header (#447). */
@@ -142,8 +140,6 @@ export function RolesPanel({
 	const [githubProject, setGithubProject] = useState<GithubProjectInfo | null>(null);
 	const [githubProjectLoading, setGithubProjectLoading] = useState(false);
 	const [githubProjectError, setGithubProjectError] = useState<GithubProjectError | null>(null);
-	const [auditRunning, setAuditRunning] = useState(false);
-	const [auditSummary, setAuditSummary] = useState<string | null>(null);
 	// When MULTIPLE_MATCHES: the user-selected candidate (null = not yet picked)
 	const [pickedCandidate, setPickedCandidate] = useState<ProjectCandidate | null>(null);
 
@@ -247,54 +243,6 @@ export function RolesPanel({
 		return activeClaims?.get(role);
 	}
 
-	const handleRunAudit = useCallback(() => {
-		if (!projectPath || auditRunning) return;
-		const auditRoleSlots = Object.fromEntries(
-			Object.entries(slots).map(([role, assignment]) => [role, assignment.agentId])
-		);
-		setAuditRunning(true);
-		setAuditSummary(null);
-		window.maestro.pmAudit
-			.run({
-				projectPath,
-				projectRoleSlots: auditRoleSlots,
-				staleClaimMs: 5 * 60 * 1000,
-			})
-			.then((res) => {
-				if (!res.success) {
-					setAuditSummary('Audit failed');
-					notifyToast({
-						color: 'red',
-						title: 'Project audit failed',
-						message: res.error,
-						dismissible: true,
-					});
-					return;
-				}
-
-				const { totalAudited, autoFixed, needsAttention, errors } = res.data;
-				const summary = `${totalAudited} checked · ${autoFixed.length} fixed · ${needsAttention.length} attention · ${errors.length} errors`;
-				setAuditSummary(summary);
-				notifyToast({
-					color: errors.length > 0 ? 'orange' : needsAttention.length > 0 ? 'yellow' : 'green',
-					title: 'Project audit complete',
-					message: summary,
-					dismissible: needsAttention.length > 0 || errors.length > 0,
-				});
-			})
-			.catch((err: unknown) => {
-				const message = err instanceof Error ? err.message : String(err);
-				setAuditSummary('Audit failed');
-				notifyToast({
-					color: 'red',
-					title: 'Project audit failed',
-					message,
-					dismissible: true,
-				});
-			})
-			.finally(() => setAuditRunning(false));
-	}, [auditRunning, projectPath, slots]);
-
 	if (!projectPath) {
 		return (
 			<div className="p-4">
@@ -314,40 +262,12 @@ export function RolesPanel({
 				>
 					Dev Crew Status
 				</span>
-				<div className="flex items-center gap-2">
-					{loading && (
-						<span className="text-[10px]" style={{ color: theme.colors.textDim }}>
-							Loading…
-						</span>
-					)}
-					<button
-						type="button"
-						className="inline-flex items-center gap-1 rounded px-2 py-1 text-[10px] font-medium"
-						style={{
-							color: theme.colors.textMain,
-							backgroundColor: `${theme.colors.textDim}18`,
-							border: `1px solid ${theme.colors.textDim}35`,
-							opacity: auditRunning ? 0.7 : 1,
-						}}
-						title="Audit this project's runners and GitHub work items"
-						disabled={auditRunning}
-						onClick={handleRunAudit}
-					>
-						{auditRunning ? (
-							<Loader2 size={12} className="animate-spin" />
-						) : (
-							<ShieldCheck size={12} />
-						)}
-						<span>Audit</span>
-					</button>
-				</div>
+				{loading && (
+					<span className="text-[10px]" style={{ color: theme.colors.textDim }}>
+						Loading…
+					</span>
+				)}
 			</div>
-
-			{auditSummary && (
-				<div className="mb-3 px-2 text-[10px]" style={{ color: theme.colors.textDim }}>
-					Last audit: {auditSummary}
-				</div>
-			)}
 
 			{/* GitHub project header (#447) */}
 			<div
