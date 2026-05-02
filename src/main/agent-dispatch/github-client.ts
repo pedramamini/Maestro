@@ -136,6 +136,7 @@ export class GithubClient {
 		if (await this.isRateLimited(now)) {
 			if (cached) return cached.data;
 			if (rootCached) return this.applyFilters(rootCached.data, filters);
+			throw new Error('GitHub Projects GraphQL rate-limited and no cached project items available');
 		}
 
 		const raw = await this.fetchAllProjectItems();
