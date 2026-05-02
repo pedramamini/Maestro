@@ -57,6 +57,10 @@ vi.mock('../../../renderer/utils/sentry', () => ({
 	captureException: vi.fn(),
 }));
 
+vi.mock('../../../renderer/hooks/input/useInputProcessing', () => ({
+	DEFAULT_IMAGE_ONLY_PROMPT: 'Describe this image.',
+}));
+
 // ============================================================================
 // Now import the hook and stores
 // ============================================================================
@@ -456,5 +460,84 @@ describe('useRemoteHandlers - remote command stdin flags (integration)', () => {
 		expect(spawnCall.images).toEqual(images);
 		// hasImages=true switches the stream-json branch on (when supported).
 		expect(spawnCall.sendPromptViaStdin).toBe(true);
+	});
+
+	it('injects the image-only default prompt when the web client sends images with no text', async () => {
+		// Image-only sends (paste an image, hit send without typing) reach the
+		// renderer with command=''. Forwarding that empty string straight to the
+		// agent CLI crashes Claude Code (`--print ''` exits code 1). The remote
+		// handler must inject the user-customizable image-only default prompt,
+		// mirroring the desktop input path. Regression test for IMG-03 in
+		// PR #942.
+		(window as any).maestro.agents.get.mockResolvedValue({
+			id: 'claude-code',
+			command: 'claude',
+			path: '/usr/bin/claude',
+			args: [],
+			capabilities: { supportsStreamJsonInput: true },
+		});
+
+		const session = createMockSession();
+		const deps = createMockDeps({
+			sessionsRef: { current: [session] },
+		});
+
+		renderHook(() => useRemoteHandlers(deps));
+		const handler = getRemoteCommandHandler();
+
+		const images = ['data:image/png;base64,abc'];
+		await act(async () => {
+			await handler(
+				new CustomEvent('maestro:remoteCommand', {
+					detail: {
+						sessionId: 'session-1',
+						command: '',
+						inputMode: 'ai',
+						images,
+					},
+				})
+			);
+		});
+
+		expect((window as any).maestro.process.spawn).toHaveBeenCalled();
+		const spawnCall = (window as any).maestro.process.spawn.mock.calls[0][0];
+		// Empty command + images must be replaced with the default prompt.
+		expect(spawnCall.prompt).toBe('Describe this image.');
+		expect(spawnCall.images).toEqual(images);
+	});
+
+	it('preserves a user-supplied prompt when images are also present', async () => {
+		// Sanity check: the image-only fallback must not clobber a real prompt.
+		(window as any).maestro.agents.get.mockResolvedValue({
+			id: 'claude-code',
+			command: 'claude',
+			path: '/usr/bin/claude',
+			args: [],
+			capabilities: { supportsStreamJsonInput: true },
+		});
+
+		const session = createMockSession();
+		const deps = createMockDeps({
+			sessionsRef: { current: [session] },
+		});
+
+		renderHook(() => useRemoteHandlers(deps));
+		const handler = getRemoteCommandHandler();
+
+		await act(async () => {
+			await handler(
+				new CustomEvent('maestro:remoteCommand', {
+					detail: {
+						sessionId: 'session-1',
+						command: 'what do you see?',
+						inputMode: 'ai',
+						images: ['data:image/png;base64,abc'],
+					},
+				})
+			);
+		});
+
+		const spawnCall = (window as any).maestro.process.spawn.mock.calls[0][0];
+		expect(spawnCall.prompt).toBe('what do you see?');
 	});
 });

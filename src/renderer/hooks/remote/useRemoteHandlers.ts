@@ -23,6 +23,7 @@ import { gitService } from '../../services/git';
 import { captureException } from '../../utils/sentry';
 import { filterYoloArgs } from '../../utils/agentArgs';
 import { getStdinFlags, prepareMaestroSystemPrompt } from '../../utils/spawnHelpers';
+import { DEFAULT_IMAGE_ONLY_PROMPT } from '../input/useInputProcessing';
 import { logger } from '../../utils/logger';
 
 // ============================================================================
@@ -377,6 +378,14 @@ export function useRemoteHandlers(deps: UseRemoteHandlersDeps): UseRemoteHandler
 					);
 					return;
 				}
+			}
+
+			// Image-only sends (web/mobile composer paste with no text) arrive
+			// with an empty command. Inject the user-customizable image-only
+			// default prompt so the agent CLI doesn't crash on an empty --print
+			// arg, mirroring the desktop input path in useInputProcessing.
+			if (!promptToSend.trim() && images && images.length > 0) {
+				promptToSend = DEFAULT_IMAGE_ONLY_PROMPT;
 			}
 
 			try {
