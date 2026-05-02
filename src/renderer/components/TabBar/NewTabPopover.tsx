@@ -1,6 +1,6 @@
 import { useState, useRef, useCallback, useEffect, memo } from 'react';
 import { createPortal } from 'react-dom';
-import { FilePlus, Globe, Plus, Terminal } from 'lucide-react';
+import { FilePlus, Globe, MessageSquareText, Plus, Terminal } from 'lucide-react';
 import type { Theme } from '../../types';
 import { formatShortcutKeys } from '../../utils/shortcutFormatter';
 
@@ -10,6 +10,7 @@ interface NewTabPopoverProps {
 	onNewFileTab?: () => void;
 	onNewBrowserTab?: () => void;
 	onNewTerminalTab?: () => void;
+	onOpenPmChat?: () => void;
 	/** Shortcut keys config for new tab */
 	newTabKeys: string[];
 	/** Shortcut keys config for new file tab */
@@ -33,6 +34,7 @@ export const NewTabPopover = memo(function NewTabPopover({
 	onNewFileTab,
 	onNewBrowserTab,
 	onNewTerminalTab,
+	onOpenPmChat,
 	newTabKeys,
 	fileTabKeys,
 	browserTabKeys,
@@ -67,7 +69,7 @@ export const NewTabPopover = memo(function NewTabPopover({
 	}, [popoverOpen]);
 
 	const handleClick = useCallback(() => {
-		if (!onNewTerminalTab && !onNewBrowserTab && !onNewFileTab) {
+		if (!onNewTerminalTab && !onNewBrowserTab && !onNewFileTab && !onOpenPmChat) {
 			onNewTab();
 			return;
 		}
@@ -76,7 +78,7 @@ export const NewTabPopover = memo(function NewTabPopover({
 		const rect = btn.getBoundingClientRect();
 		setPopoverPos({ top: rect.bottom + 4, left: rect.left });
 		setPopoverOpen((open) => !open);
-	}, [onNewFileTab, onNewBrowserTab, onNewTerminalTab, onNewTab]);
+	}, [onNewFileTab, onNewBrowserTab, onNewTerminalTab, onOpenPmChat, onNewTab]);
 
 	const closeAndDo = useCallback((action: () => void) => {
 		setPopoverOpen(false);
@@ -156,6 +158,19 @@ export const NewTabPopover = memo(function NewTabPopover({
 								<span className="ml-auto text-xs" style={{ color: theme.colors.textDim }}>
 									{formatShortcutKeys(browserTabKeys)}
 								</span>
+							</button>
+						)}
+						{onOpenPmChat && (
+							<button
+								className="flex items-center gap-2 w-full px-3 py-2 text-sm text-left hover:bg-white/10 transition-colors"
+								style={{ color: theme.colors.textMain }}
+								onClick={() => closeAndDo(onOpenPmChat)}
+							>
+								<MessageSquareText
+									className="w-3.5 h-3.5"
+									style={{ color: theme.colors.textDim }}
+								/>
+								Open PM Chat
 							</button>
 						)}
 						<button

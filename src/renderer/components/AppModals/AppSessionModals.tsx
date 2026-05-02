@@ -62,7 +62,8 @@ export interface AppSessionModalsProps {
 			remoteId: string | null;
 			workingDirOverride?: string;
 		},
-		dispatchProfile?: AgentDispatchProfile
+		dispatchProfile?: AgentDispatchProfile,
+		aiWikiEnabled?: boolean
 	) => void;
 	editAgentSession: Session | null;
 

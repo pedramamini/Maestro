@@ -118,6 +118,7 @@ const prepareSessionForPersistence = (session: Session): Session => {
 		agentErrorPaused: _agentErrorPaused,
 		agentErrorTabId: _agentErrorTabId,
 		sshConnectionFailed: _sshConnectionFailed,
+		aiWikiUpdating: _aiWikiUpdating,
 		filePreviewHistory: _filePreviewHistory,
 		...sessionWithoutRuntimeFields
 	} = session;

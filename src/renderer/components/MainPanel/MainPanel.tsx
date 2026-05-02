@@ -21,6 +21,7 @@ import { useUIStore } from '../../stores/uiStore';
 import { useSessionStore } from '../../stores/sessionStore';
 import { useTabStore } from '../../stores/tabStore';
 import { useSettingsStore } from '../../stores/settingsStore';
+import { getModalActions } from '../../stores/modalStore';
 import { useTerminalMounting } from '../../hooks/terminal/useTerminalMounting';
 import { getTerminalTabDisplayName } from '../../utils/terminalTabHelpers';
 import { useSshRemoteName } from '../../hooks/mainPanel/useSshRemoteName';
@@ -144,6 +145,7 @@ export const MainPanel = React.memo(
 			(s) => s.contextManagementSettings.contextWarningRedThreshold ?? 80
 		);
 		const showUnreadOnly = useUIStore((s) => s.showUnreadOnly);
+		const { setAgentDispatchOpen } = getModalActions();
 
 		// isCurrentSessionAutoMode: THIS session has active batch run (for all UI indicators)
 		const isCurrentSessionAutoMode = currentSessionBatchState?.isRunning || false;
@@ -230,6 +232,21 @@ export const MainPanel = React.memo(
 
 		// Get agent capabilities for conditional feature rendering
 		const { hasCapability } = useAgentCapabilities(activeSession?.toolType);
+
+		const handleOpenPmChat = useCallback(() => {
+			if (!activeSession) return;
+
+			const projectPath = activeSession.projectRoot ?? activeSession.cwd ?? null;
+			const sshRemoteId = activeSession.sessionSshRemoteConfig?.enabled
+				? activeSession.sessionSshRemoteConfig.remoteId
+				: (activeSession.sshRemoteId ?? null);
+
+			setAgentDispatchOpen(true, {
+				projectPath,
+				sshRemoteId,
+				mode: 'pm-chat',
+			});
+		}, [activeSession, setAgentDispatchOpen]);
 
 		// Model/Effort pills: available options, current values, and agent-level defaults
 		const [pillModels, setPillModels] = useState<string[]>([]);
@@ -748,6 +765,7 @@ export const MainPanel = React.memo(
 									onFileTabClose={onFileTabClose}
 									onNewFileTab={onNewFileTab}
 									onNewBrowserTab={onNewBrowserTab}
+									onOpenPmChat={handleOpenPmChat}
 									onBrowserTabSelect={onBrowserTabSelect}
 									onBrowserTabClose={onBrowserTabClose}
 									// Terminal tab props (Phase 8)

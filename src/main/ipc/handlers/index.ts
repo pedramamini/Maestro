@@ -83,6 +83,7 @@ import {
 	PlanningPipelineHandlerDependencies,
 } from './planning-pipeline';
 import { registerWorkGraphHandlers } from './work-graph';
+import { registerAiWikiHandlers, AiWikiHandlerDependencies } from './ai-wiki';
 // PM Orchestrator — /PM slash-command handlers (pm:orchestrate, pm:prd-new, etc.)
 import { registerPmOrchestratorHandlers } from '../../pm-orchestrator';
 // pm-tools — agent-callable pm:setStatus / pm:setRole / pm:setBlocked (#430)
@@ -173,6 +174,8 @@ export type { DeliveryPlannerHandlerDependencies };
 export { registerPlanningPipelineHandlers };
 export type { PlanningPipelineHandlerDependencies };
 export { registerWorkGraphHandlers };
+export { registerAiWikiHandlers };
+export type { AiWikiHandlerDependencies };
 export { registerPmToolsHandlers };
 export type { PmToolsHandlerDependencies };
 export { registerPmAuditHandlers };
@@ -405,6 +408,8 @@ export function registerAllHandlers(deps: HandlerDependencies): void {
 	registerPlanningPipelineHandlers({ settingsStore: deps.settingsStore });
 	// Register Work Graph handlers (durable local PM/Maestro Board state)
 	registerWorkGraphHandlers({ getMainWindow: deps.getMainWindow });
+	// Register AI Wiki handlers (project memory/context storage under userData)
+	registerAiWikiHandlers({ app: deps.app });
 	// Register PM Orchestrator handlers (/PM slash-command suite, gated by conversationalPrd flag)
 	registerPmOrchestratorHandlers({
 		settingsStore: deps.settingsStore,

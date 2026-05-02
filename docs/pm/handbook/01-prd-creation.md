@@ -1,6 +1,6 @@
 # 01 — PRD Creation
 
-A PRD (Product Requirements Document) captures the _what_ and _why_ before any code is written. In Maestro's pipeline, the PRD markdown file is the readable spec and the Work Graph item is the canonical PM record. Maestro Board is the UI for that Work Graph item and tracks its lifecycle.
+A PRD (Product Requirements Document) captures the _what_ and _why_ before any code is written. In Maestro's pipeline, the Work Graph item is the canonical PM record and Maestro Board is the UI for that item. The PRD markdown file is optional readable mirror/context, not PM truth.
 
 ---
 
@@ -14,8 +14,9 @@ The user says any of: "plan X", "I want to build X", "create a PRD for X", "let'
 
 1. Verify local PM is initialized. If not: "Maestro Board is not initialized for this project. Run `/PM-init` first, then come back."
 2. PM planning and dispatch do not require GitHub auth, GitHub issues, or GitHub project-board access.
-3. Check if `docs/pm/prds/<slug>.md` already exists. If yes: "PRD `<slug>` already exists. Do you want to edit it instead?"
-4. Ensure `docs/pm/prds/` directory exists. Create it if not: `mkdir -p docs/pm/prds/`.
+3. Check Work Graph for an existing PRD item (`type=document`, tag `prd`, matching title/slug) before creating a new one.
+4. If you plan to write the optional mirror, check if `docs/pm/prds/<slug>.md` already exists. If yes: "PRD `<slug>` already exists. Do you want to edit it instead?"
+5. If you plan to write the optional mirror, ensure `docs/pm/prds/` exists: `mkdir -p docs/pm/prds/`.
 
 ---
 
@@ -50,7 +51,7 @@ Examples:
 
 ## PRD Output Template
 
-Write to `docs/pm/prds/<slug>.md`:
+After the Work Graph PRD item exists, optionally write to `docs/pm/prds/<slug>.md`:
 
 ```markdown
 ---
@@ -122,16 +123,26 @@ created: <ISO-8601 from: date -u +"%Y-%m-%dT%H:%M:%SZ">
 
 ## Creating the Work Graph Item
 
-After writing the file, create or update the local Work Graph item and set its initial state. Do not stop after creating markdown.
+Create or update the local Work Graph item first and set its initial state. Do not stop after creating markdown, and do not create markdown as a substitute for a board item.
 
-Use the concrete local PM surface available in your context: `/PM prd-new <slug>` / `/PM prd-status <id>` in Maestro chat, the Conversational PRD "Commit to Work Graph" flow, or the app IPC path that creates the Delivery Planner PRD item. Set status to `planned` until the epic decomposition is ready.
+Use the concrete local PM surface available in your context: `{{MAESTRO_CLI_PATH}} pm work create --kind prd --project <path> --title "<title>" --json`, `window.maestro.workGraph.createItem`, the Conversational PRD "Commit to Work Graph" flow, or the app IPC path that creates the Delivery Planner PRD item. Set status to `planned` until epic decomposition is ready.
+
+Work Graph mapping:
+
+| Field                                 | Value                                                       |
+| ------------------------------------- | ----------------------------------------------------------- |
+| `type`                                | `document`                                                  |
+| `status`                              | `planned`                                                   |
+| `tags`                                | `prd`, `maestro-pm`                                         |
+| `metadata.localPm.fields["AI Stage"]` | `prd`                                                       |
+| `metadata.files`                      | Optional mirror path after writing `docs/pm/prds/<slug>.md` |
 
 ### After creation
 
 Confirm to the user:
 
-- "PRD written to `docs/pm/prds/<slug>.md`."
-- "Maestro Board item created with status=planned."
+- "Maestro Board PRD item `<id>` created with status=planned."
+- If a mirror was written: "Mirror written to `docs/pm/prds/<slug>.md`."
 - "Ready to decompose? Say: `decompose <slug>`."
 
 ---
@@ -163,7 +174,7 @@ When the user asks to edit a PRD:
 
 | Artifact       | Path                                     |
 | -------------- | ---------------------------------------- |
-| PRD file       | `docs/pm/prds/<slug>.md`                 |
+| PRD mirror     | `docs/pm/prds/<slug>.md`                 |
 | Epic file      | `docs/pm/epics/<slug>/epic.md`           |
 | Task file      | `docs/pm/epics/<slug>/<N>.md` (numbered) |
 | PM board state | Maestro Board / Work Graph               |

@@ -22,7 +22,7 @@ import { useUnreadBadge } from '../hooks/useUnreadBadge';
 import { useOfflineQueue } from '../hooks/useOfflineQueue';
 import { useMobileSessionManagement } from '../hooks/useMobileSessionManagement';
 import { useOfflineStatus, useDesktopTheme } from '../main';
-import { buildApiUrl } from '../utils/config';
+import { buildApiUrl, getDashboardUrl } from '../utils/config';
 import { triggerHaptic, HAPTIC_PATTERNS } from './constants';
 import { webLogger } from '../utils/logger';
 import { AllSessionsView } from './AllSessionsView';
@@ -1159,9 +1159,12 @@ export default function MobileApp() {
 	const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
 	// Bell filter state is lifted so it survives LeftPanel unmount/remount on mobile.
 	const [showUnreadAgentsOnly, setShowUnreadAgentsOnly] = useState(false);
+	const pathParts = window.location.pathname.split('/').filter(Boolean);
+	const isBoardRoute = pathParts[1] === 'board';
+	const routeProjectPath = new URLSearchParams(window.location.search).get('projectPath');
 	const [showRightDrawer, setShowRightDrawer] = useState(false);
 	const [rightDrawerTab, setRightDrawerTab] = useState<RightDrawerTab>('board');
-	const [showFullBoard, setShowFullBoard] = useState(false);
+	const [showFullBoard, setShowFullBoard] = useState(isBoardRoute);
 	// Latest claim lifecycle message forwarded to DevCrewPanel for live updates (#448).
 	const [lastClaimMessage, setLastClaimMessage] = useState<
 		| import('../hooks/useWebSocket').AgentDispatchClaimStartedMessage
@@ -2037,9 +2040,13 @@ export default function MobileApp() {
 	}, []);
 
 	const handleCloseFullBoard = useCallback(() => {
+		if (isBoardRoute) {
+			window.location.href = getDashboardUrl();
+			return;
+		}
 		setShowFullBoard(false);
 		triggerHaptic(HAPTIC_PATTERNS.tap);
-	}, []);
+	}, [isBoardRoute]);
 
 	useEffect(() => {
 		if (!showFullBoard) return;
@@ -3608,7 +3615,7 @@ export default function MobileApp() {
 						<div>
 							<div style={{ fontSize: '15px', fontWeight: 750 }}>Maestro Board</div>
 							<div style={{ fontSize: '11px', color: colors.textDim }}>
-								{activeSession?.cwd ?? 'No project selected'}
+								{routeProjectPath ?? activeSession?.cwd ?? 'No project selected'}
 							</div>
 						</div>
 						<button
@@ -3627,9 +3634,15 @@ export default function MobileApp() {
 						</button>
 					</div>
 					<div style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden' }}>
-						<MaestroBoardPanel projectPath={activeSession?.cwd} displayMode="full" />
+						<MaestroBoardPanel
+							projectPath={routeProjectPath ?? activeSession?.cwd}
+							displayMode="full"
+						/>
 						<div style={{ borderTop: `1px solid ${colors.border}` }}>
-							<DevCrewPanel projectPath={activeSession?.cwd} lastMessage={lastClaimMessage} />
+							<DevCrewPanel
+								projectPath={routeProjectPath ?? activeSession?.cwd}
+								lastMessage={lastClaimMessage}
+							/>
 						</div>
 					</div>
 				</div>

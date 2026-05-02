@@ -171,6 +171,8 @@ import { auditLog } from './agent-dispatch/dispatch-audit-log';
 import { executeSlot } from './agent-dispatch/slot-executor';
 import { createLocalPmService } from './local-pm';
 import type { ProjectRoleSlots } from '../shared/project-roles-types';
+import { AiWikiService } from './ai-wiki/service';
+import { startAiWikiPoller, stopAiWikiPoller } from './ai-wiki/poller';
 
 // ============================================================================
 // Data Directory Configuration (MUST happen before any Store initialization)
@@ -340,6 +342,7 @@ let webServer: WebServer | null = null;
 let agentDetector: AgentDetector | null = null;
 let cueEngine: CueEngine | null = null;
 let dispatchPollerTimer: NodeJS.Timeout | null = null;
+let aiWikiPollerTimer: NodeJS.Timeout | null = null;
 
 // Create safeSend with dependency injection (Phase 2 refactoring)
 const safeSend = createSafeSend(() => mainWindow);
@@ -374,6 +377,7 @@ const windowManager = createWindowManager({
 // Create web server factory with dependency injection (Phase 2 refactoring)
 const createWebServer = createWebServerFactory({
 	settingsStore: store,
+	userDataPath: app.getPath('userData'),
 	sessionsStore,
 	groupsStore,
 	getMainWindow: () => mainWindow,
@@ -1088,6 +1092,20 @@ app.whenReady().then(async () => {
 	// Maestro Board / Work Graph is the durable PM state. GitHub mirror work must
 	// never run in the dispatch startup path.
 
+	try {
+		const aiWikiService = new AiWikiService({ userDataPath: app.getPath('userData') });
+		aiWikiPollerTimer = startAiWikiPoller({
+			service: aiWikiService,
+			getSessions: () => sessionsStore.get('sessions', []) as Array<Record<string, unknown>>,
+			logger,
+		});
+	} catch (err) {
+		logger.warn(
+			`AI Wiki poller failed to start: ${err instanceof Error ? err.message : String(err)}`,
+			'Startup'
+		);
+	}
+
 	// Start stale-claim sweeper (#435): auto-releases local claims with no heartbeat for >5 min.
 	// Not gated — sweeper is lightweight and handles absence of deliveryPlanner gracefully.
 	startStaleClaimSweeper();
@@ -1258,6 +1276,10 @@ const quitHandler = createQuitHandler({
 		if (dispatchPollerTimer !== null) {
 			stopDispatchPoller(dispatchPollerTimer);
 			dispatchPollerTimer = null;
+		}
+		if (aiWikiPollerTimer !== null) {
+			stopAiWikiPoller(aiWikiPollerTimer);
+			aiWikiPollerTimer = null;
 		}
 	},
 	stopSettingsWatcher: () => settingsWatcher.stop(),

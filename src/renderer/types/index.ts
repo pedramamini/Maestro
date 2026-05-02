@@ -865,6 +865,14 @@ export interface Session {
 	// Per-session Agent Dispatch profile overrides
 	// fleetEnabled controls whether this agent is eligible for fleet dispatch
 	dispatchProfile?: AgentDispatchProfile;
+
+	// Project Wiki & PM opt-in. When true, Maestro may maintain AI Wiki and PM
+	// context for this agent's project root on the main Maestro server. The
+	// state is project-scoped by projectRoot + sshRemoteId, not agent-scoped.
+	aiWikiEnabled?: boolean;
+	// Runtime UI signal used to pulse the sidebar wiki/PM icon while the
+	// project wiki writer/updater is active.
+	aiWikiUpdating?: boolean;
 }
 
 // AgentConfigOption, AgentCapabilities, and AgentConfig are re-exported from shared/types above

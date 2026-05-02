@@ -18,13 +18,24 @@ export interface AgentDispatchModalProps {
 	theme: Theme;
 	isOpen: boolean;
 	onClose: () => void;
+	projectPath?: string | null;
+	sshRemoteId?: string | null;
+	mode?: 'board' | 'pm-chat';
 }
 
-export function AgentDispatchModal({ theme, isOpen, onClose }: AgentDispatchModalProps) {
+export function AgentDispatchModal({
+	theme,
+	isOpen,
+	onClose,
+	projectPath,
+	sshRemoteId,
+	mode = 'board',
+}: AgentDispatchModalProps) {
 	const onCloseRef = useRef(onClose);
 	onCloseRef.current = onClose;
+	const title = mode === 'pm-chat' ? 'Project Wiki & PM' : 'Maestro Board';
 
-	useModalLayer(MODAL_PRIORITIES.AGENT_DISPATCH, 'Maestro Board', () => onCloseRef.current(), {
+	useModalLayer(MODAL_PRIORITIES.AGENT_DISPATCH, title, () => onCloseRef.current(), {
 		enabled: isOpen,
 	});
 
@@ -59,7 +70,7 @@ export function AgentDispatchModal({ theme, isOpen, onClose }: AgentDispatchModa
 				>
 					<div className="flex items-center gap-3">
 						<span className="text-sm font-bold" style={{ color: theme.colors.textMain }}>
-							Maestro Board
+							{title}
 						</span>
 					</div>
 					<button
@@ -74,7 +85,12 @@ export function AgentDispatchModal({ theme, isOpen, onClose }: AgentDispatchModa
 
 				{/* Content */}
 				<div className="flex-1 overflow-hidden">
-					<KanbanBoard theme={theme} />
+					<KanbanBoard
+						theme={theme}
+						projectPath={projectPath}
+						sshRemoteId={sshRemoteId}
+						mode={mode}
+					/>
 				</div>
 			</div>
 		</div>,

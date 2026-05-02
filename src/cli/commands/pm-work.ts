@@ -4,7 +4,7 @@
 //
 // Sub-command tree:
 //   maestro-cli pm work list [--project <path>] [--json]
-//   maestro-cli pm work create --title <title> [--project <path>] [--file <path>...] [--json]
+//   maestro-cli pm work create --title <title> [--kind prd|epic|task] [--project <path>] [--file <path>...] [--json]
 //   maestro-cli pm work update <id> [--status <status>] [--file <path>...] [--json]
 
 import path from 'path';
@@ -19,6 +19,8 @@ import type {
 	WorkItemType,
 	WorkItemUpdateInput,
 } from '../../shared/work-graph-types';
+
+export type PmWorkKind = 'prd' | 'epic' | 'task';
 
 interface PmWorkApiError {
 	success: false;
@@ -49,6 +51,7 @@ export interface PmWorkCreateOptions {
 	title: string;
 	project?: string;
 	gitPath?: string;
+	kind?: PmWorkKind;
 	type?: WorkItemType;
 	status?: WorkItemStatus;
 	source?: WorkItemSource;
@@ -151,31 +154,12 @@ export async function pmWorkCreate(options: PmWorkCreateOptions): Promise<void> 
 		exitWithError('--title is required', options.json);
 	}
 
-	const projectPath = path.resolve(options.project ?? process.cwd());
-	const gitPath = path.resolve(options.gitPath ?? projectPath);
-	let metadata: Record<string, unknown>;
-	let priority: number | undefined;
+	let body: WorkItemCreateInput;
 	try {
-		metadata = buildMetadata(options.metadata, options.file, projectPath);
-		priority = parseOptionalInt(options.priority, '--priority', options.json);
+		body = buildWorkItemCreateInput(options);
 	} catch (err) {
 		exitWithError(err instanceof Error ? err.message : String(err), options.json);
 	}
-
-	const body: WorkItemCreateInput = {
-		title: options.title,
-		type: options.type ?? 'task',
-		source: options.source ?? 'manual',
-		projectPath,
-		gitPath,
-		readonly: false,
-		...(options.status ? { status: options.status } : {}),
-		...(options.description ? { description: options.description } : {}),
-		...(options.tag ? { tags: normalizeRepeatable(options.tag) } : {}),
-		...(options.parent ? { parentWorkItemId: options.parent } : {}),
-		...(priority === undefined ? {} : { priority }),
-		...(Object.keys(metadata).length === 0 ? {} : { metadata }),
-	};
 
 	let result: PmWorkApiResult<WorkItem>;
 	try {
@@ -278,6 +262,34 @@ export async function pmWorkUpdate(id: string, options: PmWorkUpdateOptions): Pr
 	console.log(`  Version: ${result.data.version}`);
 }
 
+export function buildWorkItemCreateInput(options: PmWorkCreateOptions): WorkItemCreateInput {
+	const projectPath = path.resolve(options.project ?? process.cwd());
+	const gitPath = path.resolve(options.gitPath ?? projectPath);
+	const kindDefaults = getKindDefaults(options.kind);
+	const status = options.status ?? kindDefaults.status;
+	const metadata = withKindMetadata(
+		buildMetadata(options.metadata, options.file, projectPath),
+		kindDefaults.stage
+	);
+	const priority = parseOptionalInt(options.priority, '--priority', options.json);
+	const tags = mergeTags(options.tag, kindDefaults.tags, status);
+
+	return {
+		title: options.title,
+		type: options.type ?? kindDefaults.type,
+		source: options.source ?? 'manual',
+		projectPath,
+		gitPath,
+		readonly: false,
+		...(status ? { status } : {}),
+		...(options.description ? { description: options.description } : {}),
+		...(tags.length > 0 ? { tags } : {}),
+		...(options.parent ? { parentWorkItemId: options.parent } : {}),
+		...(priority === undefined ? {} : { priority }),
+		...(Object.keys(metadata).length === 0 ? {} : { metadata }),
+	};
+}
+
 async function getWorkItem(id: string, json?: boolean): Promise<WorkItem> {
 	let result: PmWorkApiResult<WorkItem>;
 	try {
@@ -346,6 +358,61 @@ function buildMetadata(
 	}
 
 	return metadata;
+}
+
+function getKindDefaults(kind: PmWorkKind | undefined): {
+	type: WorkItemType;
+	status?: WorkItemStatus;
+	tags: string[];
+	stage?: string;
+} {
+	switch (kind) {
+		case 'prd':
+			return { type: 'document', status: 'planned', tags: ['maestro-pm', 'prd'], stage: 'prd' };
+		case 'epic':
+			return { type: 'feature', status: 'planned', tags: ['maestro-pm', 'epic'], stage: 'epic' };
+		case 'task':
+			return { type: 'task', status: 'ready', tags: ['maestro-pm', 'task'], stage: 'task' };
+		case undefined:
+			return { type: 'task', tags: [] };
+		default:
+			throw new Error(`Unsupported --kind value "${kind}". Use prd, epic, or task.`);
+	}
+}
+
+function mergeTags(
+	userTags: string[] | undefined,
+	defaultTags: string[],
+	status: WorkItemStatus | undefined
+): string[] {
+	const tags = normalizeRepeatable(userTags);
+	if (status === 'ready') tags.push('agent-ready');
+	return [...new Set([...defaultTags, ...tags])];
+}
+
+function withKindMetadata(
+	metadata: Record<string, unknown>,
+	stage: string | undefined
+): Record<string, unknown> {
+	if (!stage) return metadata;
+	const localPm =
+		typeof metadata.localPm === 'object' && metadata.localPm !== null
+			? (metadata.localPm as Record<string, unknown>)
+			: {};
+	const fields =
+		typeof localPm.fields === 'object' && localPm.fields !== null
+			? (localPm.fields as Record<string, unknown>)
+			: {};
+	return {
+		...metadata,
+		localPm: {
+			...localPm,
+			fields: {
+				...fields,
+				'AI Stage': stage,
+			},
+		},
+	};
 }
 
 function parseMetadataValue(value: string): unknown {

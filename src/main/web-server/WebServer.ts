@@ -44,6 +44,7 @@ import {
 	registerConversationalPrdRoutes,
 	registerProjectRolesRoutes,
 	registerWorkGraphRoutes,
+	registerAiWikiRoutes,
 	type WorkGraphRouteDependencies,
 } from './routes';
 import type {
@@ -52,6 +53,7 @@ import type {
 	PlanningPipelineRouteDependencies,
 	ConversationalPrdRouteDependencies,
 	ProjectRolesRouteDependencies,
+	AiWikiRouteDependencies,
 } from './routes';
 import { LiveSessionManager, CallbackRegistry } from './managers';
 
@@ -196,6 +198,9 @@ export class WebServer {
 
 	// Optional Project Roles route dependencies (set before start())
 	private projectRolesDeps: ProjectRolesRouteDependencies | null = null;
+
+	// Optional AI Wiki route dependencies (set before start())
+	private aiWikiDeps: AiWikiRouteDependencies | null = null;
 
 	// Callback for reading current encore feature flags (injected by web-server-factory)
 	private getEncoreFeaturesCallback: (() => Record<string, boolean>) | null = null;
@@ -693,6 +698,10 @@ export class WebServer {
 		this.projectRolesDeps = deps;
 	}
 
+	setAiWikiDeps(deps: AiWikiRouteDependencies): void {
+		this.aiWikiDeps = deps;
+	}
+
 	/**
 	 * Inject a callback for reading the current encore feature flags.
 	 * Used by /api/slash-commands to filter commands by their encoreFlag.
@@ -821,6 +830,11 @@ export class WebServer {
 			this.rateLimitConfig,
 			this.getWorkGraphRouteDeps()
 		);
+
+		// Register AI Wiki routes when deps have been supplied.
+		if (this.aiWikiDeps) {
+			registerAiWikiRoutes(this.server, this.securityToken, this.rateLimitConfig, this.aiWikiDeps);
+		}
 
 		// Register Agent Dispatch routes when deps have been supplied
 		if (this.agentDispatchDeps) {

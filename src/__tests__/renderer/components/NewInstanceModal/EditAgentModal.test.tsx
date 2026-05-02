@@ -301,7 +301,8 @@ describe('EditAgentModal', () => {
 				autoPickupEnabled: false,
 				fleetEnabled: false,
 				maxConcurrentClaims: 1,
-			})
+			}),
+			false // Project Wiki & PM disabled by default
 		);
 		expect(onClose).toHaveBeenCalled();
 	});
@@ -531,7 +532,8 @@ describe('EditAgentModal', () => {
 				autoPickupEnabled: false,
 				fleetEnabled: false,
 				maxConcurrentClaims: 1,
-			})
+			}),
+			false // Project Wiki & PM disabled by default
 		);
 	});
 
@@ -601,7 +603,8 @@ describe('EditAgentModal', () => {
 				autoPickupEnabled: false,
 				fleetEnabled: false,
 				maxConcurrentClaims: 1,
-			})
+			}),
+			false // Project Wiki & PM disabled by default
 		);
 	});
 
@@ -677,7 +680,8 @@ describe('EditAgentModal', () => {
 				autoPickupEnabled: false,
 				fleetEnabled: false,
 				maxConcurrentClaims: 1,
-			})
+			}),
+			false // Project Wiki & PM disabled by default
 		);
 	});
 

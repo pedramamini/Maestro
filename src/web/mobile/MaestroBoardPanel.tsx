@@ -241,11 +241,17 @@ export function MaestroBoardPanel({
 		setError(null);
 		try {
 			const res = await fetch(
-				buildApiUrl(`/agent-dispatch/board?projectPath=${encodeURIComponent(projectPath)}`)
+				buildApiUrl(`/work-graph/items?projectPath=${encodeURIComponent(projectPath)}`)
 			);
-			if (!res.ok) throw new Error(`HTTP ${res.status}`);
 			const json = await res.json();
-			if (!json.success) throw new Error(json.error ?? 'Unable to load Maestro Board');
+			if (!res.ok || !json.success) {
+				if (res.status === 403 && json.code === 'FEATURE_DISABLED') {
+					throw new Error(
+						`Feature flag is off for ${json.feature ?? 'this board surface'}. Work Graph read access did not complete.`
+					);
+				}
+				throw new Error(json.error ?? `HTTP ${res.status}`);
+			}
 			const data = json.data as BoardResponse;
 			setItems(data.items.filter((item) => item.projectPath === projectPath).sort(sortWorkItems));
 		} catch (err: unknown) {
@@ -407,12 +413,25 @@ export function MaestroBoardPanel({
 
 			{loading && <p style={{ color: colors.textDim, fontSize: '13px' }}>Loading...</p>}
 			{error && (
-				<p style={{ color: colors.error, fontSize: '13px', margin: '0 0 12px' }}>{error}</p>
+				<div
+					style={{
+						border: `1px solid ${colors.error}55`,
+						borderRadius: '8px',
+						backgroundColor: `${colors.error}12`,
+						color: colors.error,
+						fontSize: '13px',
+						margin: '0 0 12px',
+						padding: '10px',
+					}}
+				>
+					<div style={{ fontWeight: 700 }}>Unable to load Work Graph items</div>
+					<div style={{ marginTop: '4px', color: colors.textMain }}>{error}</div>
+				</div>
 			)}
 			{!loading && !error && items.length === 0 && (
 				<p style={{ color: colors.textDim, fontSize: '13px' }}>
-					No Work Graph items for this project yet. Run `/PM-init`, then create tasks from PM or
-					Delivery Planner.
+					The board loaded successfully, but Work Graph has no items for this project yet. Run
+					`/PM-init`, then create tasks from PM or Delivery Planner.
 				</p>
 			)}
 

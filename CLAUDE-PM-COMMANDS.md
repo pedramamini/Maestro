@@ -23,7 +23,7 @@ The agent in PM mode knows:
 
 - **Persona**: experienced engineering PM — concise, skeptical of scope creep, one question at a time
 - **Workflows**: Plan → Conv-PRD → Epic decompose → Work Graph tasks → Dispatch claim → PR → merge
-- **State truth**: Maestro Board / Work Graph status and claim rows, never GitHub labels or Project fields
+- **State truth**: Work Graph is the canonical data model; Maestro Board is the UI. Create/update board items first; markdown planning files are optional mirror/context only. Never use GitHub labels or Project fields as PM truth.
 - **Tools**: Maestro IPC for Conv-PRD, Delivery Planner, Agent Dispatch, and local PM state
 - **When to ask vs. act**: asks for ambiguous/irreversible actions, acts immediately for read-only/bounded requests
 
@@ -52,6 +52,8 @@ Run once per repo before using `/PM` or any other project management workflows.
 | `src/prompts/pm/pm-init.md`                      | /PM-init bootstrap description (displayed by agent when explaining the command)                  |
 | `src/prompts/pm/pm-*.md`                         | Reference prompts — on disk for agent to read mid-conversation, NOT registered as slash commands |
 | `src/main/ipc/handlers/pm-commands.ts`           | Loads pm-mode-system.md via `pm:loadCommands` IPC channel                                        |
+| `src/main/ipc/handlers/work-graph.ts`            | `workGraph:createItem/updateItem/listItems/getItem` for direct Work Graph/Maestro Board writes   |
+| `src/cli/commands/pm-work.ts`                    | `maestro-cli pm work create --kind prd\|epic\|task` for agent-visible board item creation        |
 | `src/renderer/services/pm.ts`                    | Renderer service calling `pm:loadCommands`                                                       |
 | `src/renderer/hooks/ui/useAppInitialization.ts`  | Loads PM commands at startup, puts them in `pmCommands`                                          |
 | `src/renderer/App.tsx`                           | Maps `pmCommands` → `allCustomCommands` for autocomplete dispatch                                |

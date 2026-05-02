@@ -62,6 +62,7 @@ import { createDeliveryPlannerApi } from './deliveryPlanner';
 import { createPlanningPipelineApi } from './planningPipeline';
 import { createConversationalPrdApi } from './conversationalPrd';
 import { createWorkGraphApi } from './workGraph';
+import { createAiWikiApi } from './aiWiki';
 import { createPmToolsApi } from './pmTools';
 import { createPmAuditApi } from './pmAudit';
 import { createPmHeartbeatApi } from './pmHeartbeat';
@@ -245,6 +246,9 @@ contextBridge.exposeInMainWorld('maestro', {
 	// Work Graph API (durable local PM/Maestro Board state)
 	workGraph: createWorkGraphApi(),
 
+	// AI Wiki API (project memory/context storage)
+	aiWiki: createAiWikiApi(),
+
 	// pm-tools API (agent-callable status/role/blocked field updates, #430)
 	pmTools: createPmToolsApi(),
 
@@ -350,6 +354,8 @@ export {
 	createMemoryApi,
 	// Agent Dispatch (#444: createWorkGraphApi removed)
 	createAgentDispatchApi,
+	// AI Wiki
+	createAiWikiApi,
 	// Project Roles
 	createProjectRolesApi,
 	// Delivery Planner

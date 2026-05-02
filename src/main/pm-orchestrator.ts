@@ -33,7 +33,7 @@
  *   pm:issue-start   — /PM issue-start <task-id>   manual claim → Agent Dispatch
  *   pm:issue-show    — /PM issue-show <task-id>    full task detail
  *   pm:issue-status  — /PM issue-status <task-id>  quick task status
- *   pm:issue-sync    — /PM issue-sync <task-id>    GitHub roundtrip for a task
+ *   pm:issue-sync    — /PM issue-sync <task-id>    local Work Graph / mirror sync for a task
  *
  * Feature gate
  * ------------
@@ -511,9 +511,9 @@ export function registerPmOrchestratorHandlers(deps: PmOrchestratorDependencies)
 
 				return ok(
 					[
-						`**Syncing epic with GitHub: ${item.title}**`,
+						`**Syncing epic into local Work Graph: ${item.title}**`,
 						'',
-						'The Delivery Planner is opening to run the local Work Graph sync.',
+						'The Delivery Planner is opening to run local Work Graph sync. Markdown and external trackers are mirror/context only.',
 					].join('\n'),
 					{ epicId: id }
 				);
@@ -702,9 +702,9 @@ export function registerPmOrchestratorHandlers(deps: PmOrchestratorDependencies)
 
 				return ok(
 					[
-						`**Syncing task with GitHub: ${task.title}**`,
+						`**Syncing task into local Work Graph: ${task.title}**`,
 						'',
-						'The Delivery Planner will perform a GitHub roundtrip for this task.',
+						'The Delivery Planner will reconcile the local Work Graph item first. Markdown and external trackers are mirror/context only.',
 					].join('\n'),
 					{ taskId }
 				);

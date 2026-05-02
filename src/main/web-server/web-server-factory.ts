@@ -41,6 +41,8 @@ interface GroupsStore {
 export interface WebServerFactoryDependencies {
 	/** Settings store for reading web interface configuration */
 	settingsStore: SettingsStore;
+	/** Electron userData path used for app-owned local files */
+	userDataPath?: string;
 	/** Sessions store for reading session data */
 	sessionsStore: SessionsStore;
 	/** Groups store for reading group data */
@@ -103,6 +105,10 @@ export function createWebServerFactory(deps: WebServerFactoryDependencies) {
 		}
 
 		const server = new WebServer(port, securityToken);
+
+		if (deps.userDataPath) {
+			server.setAiWikiDeps({ userDataPath: deps.userDataPath });
+		}
 
 		// Set up callback for web server to fetch sessions list
 		server.setGetSessionsCallback(() => {

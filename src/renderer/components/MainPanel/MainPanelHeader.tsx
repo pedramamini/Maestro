@@ -648,9 +648,17 @@ export const MainPanelHeader = React.memo(function MainPanelHeader({
 
 				{/* Maestro Board opens the local Work Graph surface. */}
 				<button
-					onClick={() => setAgentDispatchOpen(true)}
+					onClick={() =>
+						setAgentDispatchOpen(true, {
+							projectPath: activeSession.projectRoot ?? activeSession.cwd ?? null,
+							sshRemoteId: activeSession.sessionSshRemoteConfig?.enabled
+								? activeSession.sessionSshRemoteConfig.remoteId
+								: (activeSession.sshRemoteId ?? null),
+							mode: 'board',
+						})
+					}
 					className="p-2 rounded hover:bg-white/5"
-					title={`Open Maestro Board (${formatShortcutKeys(shortcuts.openAgentDispatch?.keys ?? ['Meta', 'Shift', 'b'])})`}
+					title={`Open Maestro Board (${formatShortcutKeys(shortcuts.openAgentDispatch?.keys ?? ['Alt', 'd'])})`}
 					data-tour="maestro-board-button"
 				>
 					<LayoutDashboard className="w-4 h-4" style={{ color: theme.colors.textDim }} />

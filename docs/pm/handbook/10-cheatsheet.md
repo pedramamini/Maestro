@@ -62,6 +62,12 @@ Do not use GitHub issues, labels, or project-board fields as PM state.
 /PM issue-sync <id>
 /PM issue-start <id>
 
+# Shell Work Graph item creation/update
+{{MAESTRO_CLI_PATH}} pm work create --project <path> --kind prd --title "<PRD title>" --json
+{{MAESTRO_CLI_PATH}} pm work create --project <path> --kind epic --parent <prdId> --title "<Epic title>" --json
+{{MAESTRO_CLI_PATH}} pm work create --project <path> --kind task --parent <epicId> --title "<Task title>" --json
+{{MAESTRO_CLI_PATH}} pm work update <workItemId> --status in_progress --json
+
 # Shell dispatch inspection/repair
 {{MAESTRO_CLI_PATH}} fleet board --project <path> --json
 {{MAESTRO_CLI_PATH}} fleet list --json

@@ -20,6 +20,11 @@ import type {
 	DeliveryPlannerSyncRequest,
 } from '../shared/delivery-planner-types';
 import type {
+	AiWikiContextPacket,
+	AiWikiProjectRequest,
+	AiWikiSourceSnapshot,
+} from '../shared/ai-wiki-types';
+import type {
 	AgentReadyWorkFilter,
 	TagDefinition,
 	WorkGraphBroadcastEnvelope,
@@ -3495,6 +3500,15 @@ interface MaestroAPI {
 			filters?: AgentReadyWorkFilter
 		) => Promise<IpcDataResponse<WorkGraphListResult>>;
 		onChanged: (handler: (event: WorkGraphBroadcastEnvelope) => void) => () => void;
+	};
+
+	// AI Wiki API (project memory/context storage under Electron userData)
+	aiWiki: {
+		status: (request: AiWikiProjectRequest) => Promise<IpcDataResponse<AiWikiSourceSnapshot>>;
+		refresh: (request: AiWikiProjectRequest) => Promise<IpcDataResponse<AiWikiSourceSnapshot>>;
+		getContextPacket: (
+			request: AiWikiProjectRequest
+		) => Promise<IpcDataResponse<AiWikiContextPacket>>;
 	};
 
 	// Agent Dispatch API (fleet, board, assign, release, pause/resume, claim events)

@@ -2,7 +2,8 @@
  * Preload API for the legacy pm:resolveGithubProject IPC channel (#447).
  *
  * Exposes window.maestro.pmResolveGithubProject.resolve() for compatibility.
- * can look up (or discover) the GitHub project mapping for a project path.
+ * This is cache-only now; it must not discover, create, or update GitHub
+ * Projects during normal PM/dispatch UI rendering.
  */
 
 import { ipcRenderer } from 'electron';
@@ -14,11 +15,11 @@ import type {
 export function createPmResolveGithubProjectApi() {
 	return {
 		/**
-		 * Resolve the GitHub Projects v2 mapping for a project path.
-		 * Returns cached result if available; runs discovery otherwise.
+		 * Resolve a cached external GitHub Project mapping for a project path.
+		 * Returns a compatibility error when no cache entry exists.
 		 *
 		 * Pass `sshRemoteId` when the session's project lives on an SSH remote so
-		 * git commands are run on that host rather than the Maestro install machine.
+		 * older callers can keep their input shape; no remote GitHub discovery runs.
 		 */
 		resolve: (input: ResolveGithubProjectInput): Promise<ResolveGithubProjectResult> =>
 			ipcRenderer.invoke('pm:resolveGithubProject', input),

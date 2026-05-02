@@ -173,6 +173,7 @@ export interface MainPanelProps {
 	onFileTabClose?: (tabId: string) => void;
 	onNewFileTab?: () => void;
 	onNewBrowserTab?: () => void;
+	onOpenPmChat?: () => void;
 	onBrowserTabSelect?: (tabId: string) => void;
 	onBrowserTabClose?: (tabId: string) => void;
 	onBrowserTabUpdate?: (sessionId: string, tabId: string, updates: Partial<BrowserTab>) => void;

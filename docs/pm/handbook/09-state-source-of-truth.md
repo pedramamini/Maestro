@@ -8,7 +8,7 @@ GitHub may be mirrored later for external visibility, but dispatch must continue
 
 ## The Rule
 
-> Read and write Work Graph item status, pipeline role, priority, parent links, and claim rows through concrete local commands: `/PM status`, `/PM issue-show <id>`, `/PM issue-status <id>`, `/PM epic-sync <id>`, `/PM issue-sync <id>`, `/PM issue-start <id>`, `{{MAESTRO_CLI_PATH}} fleet board --project <path> --json`, `{{MAESTRO_CLI_PATH}} fleet claim <workItemId> --to <fleetEntryId> --json`, `{{MAESTRO_CLI_PATH}} fleet release <workItemId> --json`, or the named Maestro IPC channels.
+> Read and write Work Graph item status, pipeline role, priority, parent links, and claim rows through concrete local commands: `/PM status`, `/PM issue-show <id>`, `/PM issue-status <id>`, `/PM epic-sync <id>`, `/PM issue-sync <id>`, `/PM issue-start <id>`, `{{MAESTRO_CLI_PATH}} pm work create --kind prd|epic|task ...`, `{{MAESTRO_CLI_PATH}} pm work update <id> ...`, `{{MAESTRO_CLI_PATH}} fleet board --project <path> --json`, `{{MAESTRO_CLI_PATH}} fleet claim <workItemId> --to <fleetEntryId> --json`, `{{MAESTRO_CLI_PATH}} fleet release <workItemId> --json`, or the named Maestro IPC channels.
 >
 > Do NOT read or write GitHub labels or GitHub Projects fields for runtime PM state.
 

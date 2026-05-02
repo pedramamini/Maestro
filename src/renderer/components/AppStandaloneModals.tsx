@@ -260,6 +260,7 @@ function AppStandaloneModalsInner({
 		cueYamlEditorProjectRoot,
 		closeCueYamlEditor,
 		agentDispatchOpen,
+		agentDispatchData,
 		setAgentDispatchOpen,
 		deliveryPlannerOpen,
 		setDeliveryPlannerOpen,
@@ -435,6 +436,9 @@ function AppStandaloneModalsInner({
 					<AgentDispatchModal
 						theme={theme}
 						isOpen={agentDispatchOpen}
+						projectPath={agentDispatchData?.projectPath}
+						sshRemoteId={agentDispatchData?.sshRemoteId}
+						mode={agentDispatchData?.mode}
 						onClose={() => setAgentDispatchOpen(false)}
 					/>
 				</Suspense>

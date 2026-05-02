@@ -12,15 +12,16 @@ User says: "decompose <slug>", "break down the <slug> PRD", "create tasks for <s
 
 ## Preflight
 
-1. Verify `docs/pm/prds/<slug>.md` exists and has valid frontmatter.
-2. Check if `docs/pm/epics/<slug>/` already exists with task files. If yes: "Epic already decomposed. Do you want to regenerate tasks or edit specific ones?"
-3. Ensure `docs/pm/epics/<slug>/` directory: `mkdir -p docs/pm/epics/<slug>/`.
+1. Verify the PRD exists in Work Graph first (`type=document`, tag `prd`). Use the markdown mirror only as supporting detail if it exists.
+2. Check Work Graph for an existing epic item (`type=feature`, tag `epic`, parent PRD ID) before creating a new one.
+3. If you plan to write optional mirrors, check if `docs/pm/epics/<slug>/` already exists with task files. If yes: "Epic already decomposed. Do you want to regenerate tasks or edit specific ones?"
+4. If you plan to write optional mirrors, ensure `docs/pm/epics/<slug>/` exists: `mkdir -p docs/pm/epics/<slug>/`.
 
 ---
 
 ## Reading the PRD
 
-Read the full PRD before producing any output. Key sections to extract:
+Read the Work Graph PRD item before producing any output. If a markdown mirror is attached in `metadata.files`, read it as supporting detail. Key sections to extract:
 
 - **Functional Requirements** — each requirement likely maps to one or more tasks
 - **User Stories** — each story should be deliverable independently if possible
@@ -98,7 +99,7 @@ State dependencies explicitly in each task file: "Depends on: task A, task B".
 
 ## Epic File Format
 
-Write `docs/pm/epics/<slug>/epic.md`:
+After creating the Work Graph epic item, optionally write `docs/pm/epics/<slug>/epic.md`:
 
 ```markdown
 ---

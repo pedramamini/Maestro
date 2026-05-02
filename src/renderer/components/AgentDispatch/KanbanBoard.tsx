@@ -10,7 +10,7 @@
 
 import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
-import { Inbox, Loader2, RefreshCw, ServerCrash } from 'lucide-react';
+import { AlertTriangle, Inbox, Loader2, RefreshCw, ServerCrash } from 'lucide-react';
 import type { Theme, WorkItem, WorkItemStatus } from '../../types';
 import type { AgentDispatchFleetEntry } from '../../../shared/agent-dispatch-types';
 import { agentDispatchService } from '../../services/agentDispatch';
@@ -239,14 +239,25 @@ export interface KanbanBoardProps {
 	 * Null intentionally shows all projects.
 	 */
 	projectPath?: string | null;
+	sshRemoteId?: string | null;
+	mode?: 'board' | 'pm-chat';
 }
 
-export const KanbanBoard = memo(function KanbanBoard({ theme, projectPath }: KanbanBoardProps) {
+export const KanbanBoard = memo(function KanbanBoard({
+	theme,
+	projectPath,
+	sshRemoteId,
+	mode = 'board',
+}: KanbanBoardProps) {
 	const activeSession = useSessionStore(selectActiveSession);
 	const [allItems, setAllItems] = useState<WorkItem[]>([]);
 	const [fleet, setFleet] = useState<AgentDispatchFleetEntry[]>([]);
 	const [loading, setLoading] = useState(true);
 	const [error, setError] = useState<string | null>(null);
+	const [fleetWarning, setFleetWarning] = useState<string | null>(null);
+	const [wikiContextStatus, setWikiContextStatus] = useState<
+		'idle' | 'loading' | 'ready' | 'unavailable'
+	>('idle');
 	const [filters, setFilters] = useState<KanbanFilters>(EMPTY_FILTERS);
 	const [filtersOpen, setFiltersOpen] = useState(false);
 	const [selectedItem, setSelectedItem] = useState<WorkItem | null>(null);
@@ -256,6 +267,12 @@ export const KanbanBoard = memo(function KanbanBoard({ theme, projectPath }: Kan
 		projectPath === undefined
 			? (activeSession?.projectRoot ?? activeSession?.cwd ?? null)
 			: projectPath;
+	const effectiveSshRemoteId =
+		sshRemoteId === undefined
+			? activeSession?.sessionSshRemoteConfig?.enabled
+				? activeSession.sessionSshRemoteConfig.remoteId
+				: (activeSession?.sshRemoteId ?? null)
+			: sshRemoteId;
 
 	// ---------------------------------------------------------------------------
 	// Data fetching
@@ -264,15 +281,20 @@ export const KanbanBoard = memo(function KanbanBoard({ theme, projectPath }: Kan
 	const load = useCallback(async () => {
 		setLoading(true);
 		setError(null);
+		setFleetWarning(null);
 		try {
-			const [boardResult, fleetResult] = await Promise.all([
-				workGraphService.listItems(
-					effectiveProjectPath ? { projectPath: effectiveProjectPath } : {}
-				),
-				agentDispatchService.getFleet(),
-			]);
+			const boardResult = await workGraphService.listItems(
+				effectiveProjectPath ? { projectPath: effectiveProjectPath } : {}
+			);
 			setAllItems(boardResult.items as WorkItem[]);
-			setFleet(fleetResult);
+
+			try {
+				const fleetResult = await agentDispatchService.getFleet();
+				setFleet(fleetResult);
+			} catch (err) {
+				setFleet([]);
+				setFleetWarning(err instanceof Error ? err.message : 'Agent Dispatch fleet is unavailable');
+			}
 		} catch (err) {
 			setError(err instanceof Error ? err.message : String(err));
 		} finally {
@@ -283,6 +305,35 @@ export const KanbanBoard = memo(function KanbanBoard({ theme, projectPath }: Kan
 	useEffect(() => {
 		void load();
 	}, [load]);
+
+	useEffect(() => {
+		if (mode !== 'pm-chat' || !effectiveProjectPath) {
+			setWikiContextStatus('idle');
+			return;
+		}
+
+		let cancelled = false;
+		setWikiContextStatus('loading');
+
+		// PM Chat context stays server-backed: AI Wiki is fetched by
+		// projectRoot + sshRemoteId, while Work Graph items are loaded above
+		// with the projectPath filter.
+		void window.maestro.aiWiki
+			.getContextPacket({
+				projectRoot: effectiveProjectPath,
+				sshRemoteId: effectiveSshRemoteId ?? null,
+			})
+			.then((result) => {
+				if (!cancelled) setWikiContextStatus(result.success ? 'ready' : 'unavailable');
+			})
+			.catch(() => {
+				if (!cancelled) setWikiContextStatus('unavailable');
+			});
+
+		return () => {
+			cancelled = true;
+		};
+	}, [mode, effectiveProjectPath, effectiveSshRemoteId]);
 
 	// ---------------------------------------------------------------------------
 	// Derived data
@@ -354,33 +405,8 @@ export const KanbanBoard = memo(function KanbanBoard({ theme, projectPath }: Kan
 			);
 			setDraggingId(null);
 
-			// If dropped on the claimed column, we attempt a manual assign to a ready agent
-			if (targetStatus === 'claimed') {
-				const readyAgent = fleet.find((a) => a.readiness === 'ready' || a.readiness === 'idle');
-				const droppedItem = projectItems.find((i) => i.id === workItemId);
-				if (readyAgent && droppedItem) {
-					try {
-						await agentDispatchService.assignManually({
-							workItemId,
-							workItem: droppedItem,
-							agent: readyAgent,
-							userInitiated: true,
-						});
-					} catch (err) {
-						notifyToast({
-							color: 'red',
-							title: 'Auto-assign failed',
-							message: err instanceof Error ? err.message : String(err),
-							dismissible: true,
-						});
-						// Revert optimistic update
-						void load();
-					}
-					return;
-				}
-			}
-
-			// Status-only update via Work Graph
+			// Status-only update via Work Graph. Agent claims are explicit actions
+			// in the detail panel so board state stays Work Graph-authoritative.
 			try {
 				await workGraphService.updateItem({ id: workItemId, patch: { status: targetStatus } });
 			} catch (err) {
@@ -393,7 +419,7 @@ export const KanbanBoard = memo(function KanbanBoard({ theme, projectPath }: Kan
 				void load();
 			}
 		},
-		[projectItems, fleet, load]
+		[projectItems, load]
 	);
 
 	const handleDragEnd = useCallback(() => {
@@ -428,13 +454,27 @@ export const KanbanBoard = memo(function KanbanBoard({ theme, projectPath }: Kan
 			>
 				<div className="flex items-center gap-2">
 					<span className="text-sm font-bold" style={{ color: theme.colors.textMain }}>
-						Maestro Board
+						{mode === 'pm-chat' ? 'Project Wiki & PM' : 'Maestro Board'}
 					</span>
 					<span className="text-xs" style={{ color: theme.colors.textDim }}>
 						{effectiveProjectPath
 							? `${filteredItems.length !== projectItems.length ? `${filteredItems.length} / ` : ''}${projectItems.length} project items`
 							: `${filteredItems.length !== allItems.length ? `${filteredItems.length} / ` : ''}${allItems.length} items`}
 					</span>
+					{effectiveProjectPath && (
+						<span
+							className="max-w-[220px] truncate text-[10px]"
+							style={{ color: theme.colors.textDim }}
+							title={effectiveProjectPath}
+						>
+							{effectiveProjectPath}
+						</span>
+					)}
+					{mode === 'pm-chat' && wikiContextStatus !== 'idle' && (
+						<span className="text-[10px]" style={{ color: theme.colors.textDim }}>
+							Wiki context {wikiContextStatus === 'ready' ? 'ready' : wikiContextStatus}
+						</span>
+					)}
 				</div>
 				<div className="flex items-center gap-2">
 					<button
@@ -480,6 +520,29 @@ export const KanbanBoard = memo(function KanbanBoard({ theme, projectPath }: Kan
 				/>
 			)}
 
+			{fleetWarning && !error && (
+				<div
+					className="flex items-start gap-2 border-b px-4 py-2 text-xs"
+					style={{
+						borderColor: theme.colors.border,
+						backgroundColor: `${theme.colors.warning}12`,
+						color: theme.colors.textDim,
+					}}
+				>
+					<AlertTriangle
+						className="mt-0.5 h-3.5 w-3.5 shrink-0"
+						style={{ color: theme.colors.warning }}
+					/>
+					<div>
+						<span className="font-semibold" style={{ color: theme.colors.warning }}>
+							Dev Crew controls unavailable.
+						</span>{' '}
+						Work Graph items are still loaded. Claims and auto-assignment require Dev Crew
+						Automation. {fleetWarning}
+					</div>
+				</div>
+			)}
+
 			{/* Error */}
 			{error && (
 				<EmptyState
@@ -507,8 +570,8 @@ export const KanbanBoard = memo(function KanbanBoard({ theme, projectPath }: Kan
 									title="No work items yet"
 									description={
 										effectiveProjectPath
-											? 'No local Work Graph items for the active project yet.'
-											: 'Add tasks to the Work Graph to start dispatching.'
+											? `The board loaded successfully, but Work Graph has no items for this project: ${effectiveProjectPath}`
+											: 'The board loaded successfully, but Work Graph has no items yet. Select an agent with a project or create Work Graph tasks.'
 									}
 									helpHref="https://docs.runmaestro.ai"
 									helpLabel="Learn about Maestro"

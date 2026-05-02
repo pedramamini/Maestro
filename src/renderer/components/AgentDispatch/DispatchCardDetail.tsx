@@ -24,7 +24,7 @@ import {
 	extractDeliveryPlannerLineage,
 	extractLivingWikiReference,
 } from '../../../shared/agent-dispatch-lineage';
-import { agentDispatchService } from '../../services/agentDispatch';
+import { workGraphService } from '../../services/workGraph';
 import { notifyToast } from '../../stores/notificationStore';
 
 // ---------------------------------------------------------------------------
@@ -103,12 +103,11 @@ export const DispatchCardDetail = memo(function DispatchCardDetail({
 		if (!item.claim) return;
 		setReleasing(true);
 		try {
-			// #444: releaseClaim now takes { projectItemId, agentSessionId, role }.
-			// item.id is the GitHub project item ID; claim owner/role may not be on the WorkItem shape.
-			await agentDispatchService.releaseClaim({
-				projectItemId: item.id,
-				agentSessionId: item.claim?.owner?.id ?? '',
-				role: '',
+			await workGraphService.releaseClaim({
+				workItemId: item.id,
+				claimId: item.claim.id,
+				owner: item.claim.owner,
+				note: 'Released from Maestro Board',
 			});
 			notifyToast({ color: 'green', title: 'Claim released', message: item.title });
 			onRefresh();
@@ -129,11 +128,18 @@ export const DispatchCardDetail = memo(function DispatchCardDetail({
 		if (!agent) return;
 		setAssigning(true);
 		try {
-			await agentDispatchService.assignManually({
+			await workGraphService.claimItem({
 				workItemId: item.id,
-				workItem: item,
-				agent,
-				userInitiated: true,
+				source: 'manual',
+				owner: {
+					type: 'agent',
+					id: agent.sessionId ?? agent.agentId,
+					name: agent.displayName,
+					agentId: agent.agentId,
+					providerSessionId: agent.providerSessionId,
+					capabilities: agent.dispatchCapabilities,
+				},
+				note: 'Assigned from Maestro Board',
 			});
 			notifyToast({
 				color: 'green',

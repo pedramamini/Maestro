@@ -13,6 +13,7 @@ import {
 	buildApiUrl,
 	buildWebSocketUrl,
 	getDashboardUrl,
+	getBoardUrl,
 	getSessionUrl,
 	type MaestroConfig,
 } from '../../../web/utils/config';
@@ -605,6 +606,29 @@ describe('config.ts', () => {
 
 			const result = getDashboardUrl();
 			expect(result).toBe('http://localhost:3000/return-token');
+		});
+	});
+
+	describe('getBoardUrl()', () => {
+		beforeEach(() => {
+			window.__MAESTRO_CONFIG__ = {
+				securityToken: 'board-token',
+				sessionId: null,
+				apiBase: '/board-token/api',
+				wsUrl: '/board-token/ws',
+			};
+		});
+
+		it('should return full-screen board URL with security token', () => {
+			const result = getBoardUrl();
+			expect(result).toBe('http://localhost:3000/board-token/board');
+		});
+
+		it('should include encoded projectPath when provided', () => {
+			const result = getBoardUrl('/opt/Maestro fork');
+			expect(result).toBe(
+				'http://localhost:3000/board-token/board?projectPath=%2Fopt%2FMaestro%20fork'
+			);
 		});
 	});
 

@@ -69,7 +69,8 @@ export interface SessionLifecycleReturn {
 			syncHistory?: boolean;
 			shareHistoryToProjectDir?: boolean;
 		},
-		dispatchProfile?: AgentDispatchProfile
+		dispatchProfile?: AgentDispatchProfile,
+		aiWikiEnabled?: boolean
 	) => void;
 	/** Rename the currently-selected tab (persists to agent session storage + history) */
 	handleRenameTab: (newName: string) => void;
@@ -135,7 +136,8 @@ export function useSessionLifecycle(deps: SessionLifecycleDeps): SessionLifecycl
 				syncHistory?: boolean;
 				shareHistoryToProjectDir?: boolean;
 			},
-			dispatchProfile?: AgentDispatchProfile
+			dispatchProfile?: AgentDispatchProfile,
+			aiWikiEnabled?: boolean
 		) => {
 			useSessionStore.getState().setSessions((prev) =>
 				prev.map((s) => {
@@ -152,6 +154,7 @@ export function useSessionLifecycle(deps: SessionLifecycleDeps): SessionLifecycl
 						customContextWindow,
 						sessionSshRemoteConfig,
 						dispatchProfile,
+						aiWikiEnabled,
 					};
 
 					// If provider changed, reset tabs and provider-specific config

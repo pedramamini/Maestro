@@ -95,9 +95,10 @@ export interface MaestroSettings {
 		 */
 		upstream?: { owner: string; repo: string };
 	};
-	// Per-project GitHub project mapping (#447).
-	// Maps projectPath → discovered GitHub Projects v2 coordinates.
-	// Legacy persistent cache formerly populated by pm:resolveGithubProject.
+	// Per-project external GitHub Project mapping (#447).
+	// Legacy cache retained only for compatibility with older callers. Maestro
+	// Board / Work Graph is the PM source of truth and no longer populates this
+	// cache during normal PM/dispatch flows.
 	projectGithubMap: Record<
 		string,
 		{

@@ -139,6 +139,12 @@ export interface CueYamlEditorData {
 	projectRoot: string;
 }
 
+export interface AgentDispatchModalData {
+	projectPath?: string | null;
+	sshRemoteId?: string | null;
+	mode?: 'board' | 'pm-chat';
+}
+
 /** Worktree modal data (create/delete/PR) */
 export interface WorktreeModalData {
 	session: Session;
@@ -293,6 +299,7 @@ export interface ModalDataMap {
 	directorNotes: DirectorNotesData;
 	cueModal: CueModalData;
 	cueYamlEditor: CueYamlEditorData;
+	agentDispatch: AgentDispatchModalData;
 	quitConfirm: QuitConfirmModalData;
 }
 
@@ -830,8 +837,8 @@ export function getModalActions() {
 		closeCueYamlEditor: () => closeModal('cueYamlEditor'),
 
 		// Agent Dispatch Modal
-		setAgentDispatchOpen: (open: boolean) =>
-			open ? openModal('agentDispatch') : closeModal('agentDispatch'),
+		setAgentDispatchOpen: (open: boolean, data?: AgentDispatchModalData) =>
+			open ? openModal('agentDispatch', data) : closeModal('agentDispatch'),
 
 		// Delivery Planner Modal
 		setDeliveryPlannerOpen: (open: boolean) =>
@@ -942,6 +949,7 @@ export function useModalActions() {
 	const cueYamlEditorOpen = useModalStore(selectModalOpen('cueYamlEditor'));
 	const cueYamlEditorData = useModalStore(selectModalData('cueYamlEditor'));
 	const agentDispatchOpen = useModalStore(selectModalOpen('agentDispatch'));
+	const agentDispatchData = useModalStore(selectModalData('agentDispatch'));
 	const deliveryPlannerOpen = useModalStore(selectModalOpen('deliveryPlanner'));
 	const planningPipelineOpen = useModalStore(selectModalOpen('planningPipeline'));
 	const conversationalPrdOpen = useModalStore(selectModalOpen('conversationalPrd'));
@@ -1134,6 +1142,7 @@ export function useModalActions() {
 
 		// Agent Dispatch Modal
 		agentDispatchOpen,
+		agentDispatchData,
 
 		// Delivery Planner Modal
 		deliveryPlannerOpen,
