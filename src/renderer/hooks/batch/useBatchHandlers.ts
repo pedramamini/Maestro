@@ -535,8 +535,13 @@ export function useBatchHandlers(deps: UseBatchHandlersDeps): UseBatchHandlersRe
 		onProcessQueueAfterCompletion: (sessionId) => {
 			const currentSessions = useSessionStore.getState().sessions;
 			const session = currentSessions.find((s) => s.id === sessionId);
-			if (session && session.executionQueue.length > 0 && processQueuedItemRef.current) {
-				const [nextItem, ...remainingQueue] = session.executionQueue;
+			const nextRunnableIndex = session?.executionQueue.findIndex((item) => !item.paused) ?? -1;
+			if (session && nextRunnableIndex !== -1 && processQueuedItemRef.current) {
+				const nextItem = session.executionQueue[nextRunnableIndex];
+				const remainingQueue = [
+					...session.executionQueue.slice(0, nextRunnableIndex),
+					...session.executionQueue.slice(nextRunnableIndex + 1),
+				];
 
 				useSessionStore.getState().setSessions((prev) =>
 					prev.map((s) => {

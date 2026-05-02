@@ -224,6 +224,10 @@ export interface QueuedItem {
 	tabName?: string; // Tab name at time of queuing (for display)
 	// Read-only mode tracking (for parallel execution bypass)
 	readOnlyMode?: boolean; // True if queued from a read-only tab
+	// Hold/pause state — paused items remain in the queue but are skipped
+	// during dispatch. The user can resume them at any time. Used when a
+	// queued message needs to wait for an answer to an earlier turn.
+	paused?: boolean;
 }
 
 export interface WorkLogItem {

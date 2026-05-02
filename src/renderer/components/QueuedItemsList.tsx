@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useRef, memo } from 'react';
-import { X, ChevronDown, ChevronUp, GripVertical } from 'lucide-react';
+import { X, ChevronDown, ChevronUp, GripVertical, Pause, Play } from 'lucide-react';
 import type { Theme, QueuedItem } from '../types';
 
 // ============================================================================
@@ -11,6 +11,7 @@ interface QueuedItemsListProps {
 	theme: Theme;
 	onRemoveQueuedItem?: (itemId: string) => void;
 	onReorderItems?: (fromIndex: number, toIndex: number) => void;
+	onTogglePauseItem?: (itemId: string) => void;
 	activeTabId?: string; // If provided, only show queued items for this tab
 }
 
@@ -29,6 +30,7 @@ export const QueuedItemsList = memo(
 		theme,
 		onRemoveQueuedItem,
 		onReorderItems,
+		onTogglePauseItem,
 		activeTabId,
 	}: QueuedItemsListProps) => {
 		// Filter to only show items for the active tab if activeTabId is provided
@@ -138,6 +140,7 @@ export const QueuedItemsList = memo(
 					const isQueuedExpanded = expandedQueuedMessages.has(item.id);
 					const isDragging = dragIndex === index;
 					const isDropTarget = dropIndex === index;
+					const isPaused = !!item.paused;
 
 					return (
 						<div
@@ -149,12 +152,19 @@ export const QueuedItemsList = memo(
 							onDragLeave={handleDragLeave}
 							className="mx-6 mb-2 p-3 rounded-lg relative group transition-all"
 							style={{
-								backgroundColor:
-									item.type === 'command'
+								backgroundColor: isPaused
+									? theme.colors.warning + '15'
+									: item.type === 'command'
 										? theme.colors.success + '20'
 										: theme.colors.accent + '20',
-								borderLeft: `3px solid ${item.type === 'command' ? theme.colors.success : theme.colors.accent}`,
-								opacity: isDragging ? 0.4 : 0.6,
+								borderLeft: `3px ${isPaused ? 'dashed' : 'solid'} ${
+									isPaused
+										? theme.colors.warning
+										: item.type === 'command'
+											? theme.colors.success
+											: theme.colors.accent
+								}`,
+								opacity: isDragging ? 0.4 : isPaused ? 0.45 : 0.6,
 								transform: isDropTarget ? 'translateY(4px)' : 'none',
 								boxShadow: isDropTarget ? `0 -2px 0 0 ${theme.colors.accent}` : 'none',
 								cursor: canDrag ? 'grab' : 'default',
@@ -180,9 +190,41 @@ export const QueuedItemsList = memo(
 								<X className="w-4 h-4" />
 							</button>
 
-							{/* Item content */}
+							{/* Pause/Resume button */}
+							{onTogglePauseItem && (
+								<button
+									onClick={() => onTogglePauseItem(item.id)}
+									className="absolute top-2 right-9 p-1 rounded hover:bg-black/20 transition-colors"
+									style={{ color: isPaused ? theme.colors.warning : theme.colors.textDim }}
+									title={
+										isPaused
+											? 'Resume — let this message run when its turn comes up'
+											: 'Hold — keep this message in the queue but skip it during dispatch'
+									}
+								>
+									{isPaused ? <Play className="w-4 h-4" /> : <Pause className="w-4 h-4" />}
+								</button>
+							)}
+
+							{/* HELD badge for paused items */}
+							{isPaused && (
+								<div
+									className="absolute top-2 left-2 px-1.5 py-0.5 rounded text-[10px] font-bold tracking-wider"
+									style={{
+										backgroundColor: theme.colors.warning + '30',
+										color: theme.colors.warning,
+									}}
+								>
+									HELD
+								</div>
+							)}
+
+							{/* Item content — extra right padding to clear stacked X + Pause buttons,
+							    and a top spacer when the HELD badge is shown */}
 							<div
-								className={`text-sm pr-8 whitespace-pre-wrap break-words ${canDrag ? 'pl-4' : ''}`}
+								className={`text-sm pr-16 whitespace-pre-wrap break-words ${canDrag ? 'pl-4' : ''} ${
+									isPaused ? 'pt-5' : ''
+								}`}
 								style={{ color: theme.colors.textMain }}
 							>
 								{item.type === 'command' && (

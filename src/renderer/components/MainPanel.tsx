@@ -156,6 +156,7 @@ interface MainPanelProps {
 	setActiveSessionId: (id: string) => void;
 	onDeleteLog?: (logId: string) => number | null;
 	onRemoveQueuedItem?: (itemId: string) => void;
+	onTogglePauseQueuedItem?: (itemId: string) => void;
 	onOpenQueueBrowser?: () => void;
 
 	// Auto mode props
@@ -381,6 +382,7 @@ export const MainPanel = React.memo(
 			currentSessionBatchState,
 			onStopBatchRun,
 			onRemoveQueuedItem,
+			onTogglePauseQueuedItem,
 			onOpenQueueBrowser,
 			isMobileLandscape = false,
 			showFlashNotification,
@@ -1685,6 +1687,7 @@ export const MainPanel = React.memo(
 											maxOutputLines={maxOutputLines}
 											onDeleteLog={props.onDeleteLog}
 											onRemoveQueuedItem={onRemoveQueuedItem}
+											onTogglePauseQueuedItem={onTogglePauseQueuedItem}
 											onInterrupt={handleInterrupt}
 											onScrollPositionChange={props.onScrollPositionChange}
 											onAtBottomChange={props.onAtBottomChange}

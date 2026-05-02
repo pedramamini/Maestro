@@ -258,15 +258,19 @@ export function useAgentExecution(deps: UseAgentExecutionDeps): UseAgentExecutio
 										console.warn('[spawnAgentForSession] Failed to record query stats:', err);
 									});
 
-								// Check for queued items BEFORE updating state (using sessionsRef for latest state)
+								// Check for queued items BEFORE updating state (using sessionsRef for latest state).
+								// Paused items remain in the queue but are skipped during dispatch.
 								const currentSession = sessionsRef.current.find((s) => s.id === sessionId);
 								let queuedItemToProcess: { sessionId: string; item: QueuedItem } | null = null;
-								const hasQueuedItems = currentSession && currentSession.executionQueue.length > 0;
+								const nextRunnableItem = currentSession?.executionQueue.find(
+									(item) => !item.paused
+								);
+								const hasQueuedItems = !!(currentSession && nextRunnableItem);
 
 								if (hasQueuedItems) {
 									queuedItemToProcess = {
 										sessionId: sessionId,
-										item: currentSession!.executionQueue[0],
+										item: nextRunnableItem!,
 									};
 								}
 
@@ -275,8 +279,13 @@ export function useAgentExecution(deps: UseAgentExecutionDeps): UseAgentExecutio
 									prev.map((s) => {
 										if (s.id !== sessionId) return s;
 
-										if (s.executionQueue.length > 0) {
-											const [nextItem, ...remainingQueue] = s.executionQueue;
+										const nextRunnableIndex = s.executionQueue.findIndex((item) => !item.paused);
+										if (nextRunnableIndex !== -1) {
+											const nextItem = s.executionQueue[nextRunnableIndex];
+											const remainingQueue = [
+												...s.executionQueue.slice(0, nextRunnableIndex),
+												...s.executionQueue.slice(nextRunnableIndex + 1),
+											];
 											const targetTab =
 												s.aiTabs.find((tab) => tab.id === nextItem.tabId) || getActiveTab(s);
 
@@ -365,11 +374,12 @@ export function useAgentExecution(deps: UseAgentExecutionDeps): UseAgentExecutio
 									// The queue is processed sequentially, so we wait until session becomes idle
 									const waitForQueueDrain = () => {
 										const checkSession = sessionsRef.current.find((s) => s.id === sessionId);
-										if (
-											!checkSession ||
-											checkSession.state === 'idle' ||
-											checkSession.executionQueue.length === 0
-										) {
+										// "Drained" means no runnable items left — paused items are
+										// held by the user and shouldn't block batch progress.
+										const hasRunnableLeft = checkSession?.executionQueue.some(
+											(item) => !item.paused
+										);
+										if (!checkSession || checkSession.state === 'idle' || !hasRunnableLeft) {
 											// Queue drained or session idle - safe to continue batch
 											resolve({
 												success: true,

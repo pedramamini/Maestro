@@ -1056,6 +1056,7 @@ interface TerminalOutputProps {
 	maxOutputLines: number;
 	onDeleteLog?: (logId: string) => number | null; // Returns the index to scroll to after deletion
 	onRemoveQueuedItem?: (itemId: string) => void; // Callback to remove a queued item from execution queue
+	onTogglePauseQueuedItem?: (itemId: string) => void; // Callback to toggle the held/paused state of a queued item
 	onInterrupt?: () => void; // Callback to interrupt the current process
 	onScrollPositionChange?: (scrollTop: number) => void; // Callback to save scroll position
 	onAtBottomChange?: (isAtBottom: boolean) => void; // Callback when user scrolls to/away from bottom
@@ -1100,6 +1101,7 @@ export const TerminalOutput = memo(
 			maxOutputLines,
 			onDeleteLog,
 			onRemoveQueuedItem,
+			onTogglePauseQueuedItem,
 			onInterrupt: _onInterrupt,
 			onScrollPositionChange,
 			onAtBottomChange,
@@ -1847,6 +1849,7 @@ export const TerminalOutput = memo(
 								executionQueue={session.executionQueue}
 								theme={theme}
 								onRemoveQueuedItem={onRemoveQueuedItem}
+								onTogglePauseItem={onTogglePauseQueuedItem}
 								activeTabId={activeTabId || undefined}
 							/>
 						)}

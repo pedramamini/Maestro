@@ -158,6 +158,7 @@ export interface UseMainPanelPropsDeps {
 	handleStopBatchRun: (sessionId?: string) => void;
 	handleDeleteLog: (logId: string) => number | null;
 	handleRemoveQueuedItem: (itemId: string) => void;
+	handleTogglePauseQueuedItem: (itemId: string) => void;
 	handleOpenQueueBrowser: () => void;
 
 	// Tab management handlers
@@ -343,6 +344,7 @@ export function useMainPanelProps(deps: UseMainPanelPropsDeps) {
 			onStopBatchRun: deps.handleStopBatchRun,
 			onDeleteLog: deps.handleDeleteLog,
 			onRemoveQueuedItem: deps.handleRemoveQueuedItem,
+			onTogglePauseQueuedItem: deps.handleTogglePauseQueuedItem,
 			onOpenQueueBrowser: deps.handleOpenQueueBrowser,
 			// Tab management handlers
 			onTabSelect: deps.handleTabSelect,
@@ -544,6 +546,7 @@ export function useMainPanelProps(deps: UseMainPanelPropsDeps) {
 			deps.handleStopBatchRun,
 			deps.handleDeleteLog,
 			deps.handleRemoveQueuedItem,
+			deps.handleTogglePauseQueuedItem,
 			deps.handleOpenQueueBrowser,
 			deps.handleTabSelect,
 			deps.handleTabClose,

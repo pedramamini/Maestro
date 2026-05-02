@@ -145,8 +145,14 @@ export function useQuickActionsHandlers(
 	}, [activeSessionId, refreshGitFileState]);
 
 	const handleQuickActionsDebugReleaseQueuedItem = useCallback(() => {
-		if (!activeSession || activeSession.executionQueue.length === 0) return;
-		const [nextItem, ...remainingQueue] = activeSession.executionQueue;
+		if (!activeSession) return;
+		const nextRunnableIndex = activeSession.executionQueue.findIndex((item) => !item.paused);
+		if (nextRunnableIndex === -1) return;
+		const nextItem = activeSession.executionQueue[nextRunnableIndex];
+		const remainingQueue = [
+			...activeSession.executionQueue.slice(0, nextRunnableIndex),
+			...activeSession.executionQueue.slice(nextRunnableIndex + 1),
+		];
 		// Update state to remove item from queue
 		setSessions((prev) =>
 			prev.map((s) => {
